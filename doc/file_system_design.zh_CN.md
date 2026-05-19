@@ -41,7 +41,8 @@ rust-common/
 - 能力声明：`FileSystemCapabilities`
 - 错误模型：`FsError`、`FsErrorKind`
 - provider SPI：`FileSystemSpec`、`FileSystemProvider`、`FileSystemRegistry`
-- 便利解析：`FileSystemResolver`
+- singleton 门面：`FileSystems`
+- 资源对象：`FileResource`
 
 具体实现放在后端 crate 中：
 
@@ -197,7 +198,8 @@ MVP 推荐先做同步、对象安全的核心 trait，异步 API 作为后续�
 pub trait FileSystem: std::fmt::Debug + Send + Sync {
     fn capabilities(&self) -> FileSystemCapabilities;
 
-    fn metadata(&self, path: &FsPath) -> FsResult<FileMetadata>;
+    fn metadata(&self) -> FileSystemMetadata;
+    fn path_metadata(&self, path: &FsPath) -> FsResult<FileMetadata>;
     fn exists(&self, path: &FsPath) -> FsResult<bool>;
     fn list(&self, path: &FsPath, options: &ListOptions) -> FsResult<Box<dyn DirectoryStream>>;
 
@@ -439,7 +441,8 @@ let mut registry = FileSystemRegistry::new();
 registry.register(LocalFileSystemProvider)?;
 registry.register(OssFileSystemProvider)?;
 
-let fs = registry.open("oss://bucket/reports/2026/a.csv")?;
+let fs = registry.fs("oss://bucket/reports/2026/a.csv")?;
+let resource = registry.resource("oss://bucket/reports/2026/a.csv")?;
 ```
 
 ### 10.3 显式发现 vs 自动发现
@@ -452,7 +455,7 @@ let fs = registry.open("oss://bucket/reports/2026/a.csv")?;
 
 如果后续确实需要“依赖了后端 crate 就自动注册”，建议在 `qubit-fs` 或单独 `qubit-fs-inventory` feature 中叠加 `inventory` / `linkme`，不要把自动发现作为核心唯一机制。
 
-## 11. Registry 与 Resolver
+## 11. Registry、FileSystems 与 FileResource
 
 `FileSystemRegistry` 是 `ProviderRegistry<FileSystemSpec>` 的薄封装：
 
@@ -468,14 +471,40 @@ pub struct FileSystemRegistry {
 - 通过 scheme 解析 provider。
 - 根据 `FsUri` 构造 `FileSystemConfig`。
 - 调用 `create_arc` 返回 `Arc<dyn FileSystem>`。
+- 通过 `resource(uri)` 返回绑定文件系统和 provider-local path 的 `FileResource`。
 - 将 `ProviderRegistryError` 映射成 `FsError`。
 
-`FileSystemResolver` 负责把完整 URI 拆成文件系统实例与 provider-local path：
+`FileSystems` 是进程级 singleton 门面，定义为不可实例化的 namespace enum：
 
 ```rust
-pub struct ResolvedPath {
-    pub filesystem: Arc<dyn FileSystem>,
-    pub path: FsPath,
+pub enum FileSystems {}
+```
+
+推荐应用侧通过 `FileSystems` 暴露静态方法：
+
+```rust
+impl FileSystems {
+    pub fn register<P>(provider: P) -> FsResult<()>;
+    pub fn fs(uri: &str) -> FsResult<Arc<dyn FileSystem>>;
+    pub fn resource(uri: &str) -> FsResult<FileResource>;
+}
+```
+
+`FileResource` 负责把完整 URI 拆成文件系统实例与 provider-local path 后形成资源对象：
+
+```rust
+pub struct FileResource {
+    fs: Arc<dyn FileSystem>,
+    path: FsPath,
+}
+
+impl FileResource {
+    pub fn fs(&self) -> &dyn FileSystem;
+    pub fn path(&self) -> &FsPath;
+    pub fn exists(&self) -> FsResult<bool>;
+    pub fn metadata(&self) -> FsResult<FileMetadata>;
+    pub fn read_all(&self) -> FsResult<Vec<u8>>;
+    pub fn write_all(&self, bytes: &[u8]) -> FsResult<WriteOutcome>;
 }
 ```
 
@@ -1277,7 +1306,7 @@ pub struct CopyDirStats {
 `qubit-fs` 不应依赖 `qubit-local-fs`。依赖方向仍然是 `qubit-fs-local` 同时依赖 `qubit-fs` 和 `qubit-local-fs`。
 
 - `server_side=Required` 时，如果无法服务端复制，必须返回 `UnsupportedOperation`。
-- 跨 provider 复制不放进基础 `FileSystem::copy`；由上层 `FileSystemResolver` 或 `FsOperations` 做 stream copy。
+- 跨 provider 复制不放进基础 `FileSystem::copy`；由上层基于 `FileSystems::resource()` 或 `FsOperations` 做 stream copy。
 
 ## 24. 目录流与分页
 
@@ -1336,7 +1365,7 @@ provider selector 与 URI scheme 的关系：
 
 - 默认 selector 等于 scheme。
 - provider descriptor 可以声明 alias，例如 `local` provider 的 alias 包含 `file`。
-- `FileSystemRegistry::open_uri` 先按 scheme 匹配 provider alias。
+- `FileSystemRegistry::fs_for_uri` 先按 scheme 匹配 provider alias。
 - 如果 URI query 或外部配置明确指定 provider selector，则必须校验该 provider 是否声明支持对应 scheme。
 
 不要允许 `provider=local` 打开 `oss://bucket/key` 这类语义错配，除非这是后续明确设计的 adapter 场景。
