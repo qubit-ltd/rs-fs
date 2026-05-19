@@ -10,16 +10,16 @@
 //! SPI-backed filesystem provider registry.
 
 mod credential_ref;
+mod file_resource;
 mod file_system_config;
 mod file_system_registry;
-mod file_system_resolver;
 mod file_system_spec;
-mod resolved_path;
+mod file_systems;
 
 pub use credential_ref::CredentialRef;
+pub use file_resource::FileResource;
 pub use file_system_config::FileSystemConfig;
 pub use file_system_registry::FileSystemProvider;
 pub use file_system_registry::FileSystemRegistry;
-pub use file_system_resolver::FileSystemResolver;
 pub use file_system_spec::FileSystemSpec;
-pub use resolved_path::ResolvedPath;
+pub use file_systems::FileSystems;

@@ -1,0 +1,140 @@
+/*******************************************************************************
+ *
+ *    Copyright (c) 2026 Haixing Hu.
+ *
+ *    SPDX-License-Identifier: Apache-2.0
+ *
+ *    Licensed under the Apache License, Version 2.0.
+ *
+ ******************************************************************************/
+//! Global filesystem registry facade.
+
+use std::sync::{
+    Arc,
+    OnceLock,
+    RwLock,
+};
+
+use qubit_spi::ServiceProvider;
+
+use crate::{
+    FileResource,
+    FileSystem,
+    FileSystemProvider,
+    FileSystemRegistry,
+    FileSystemSpec,
+    FsResult,
+};
+
+static GLOBAL_REGISTRY: OnceLock<RwLock<FileSystemRegistry>> = OnceLock::new();
+
+/// Global filesystem registry facade.
+///
+/// `FileSystems` is an uninhabited namespace type. It cannot be instantiated
+/// and only exposes static methods backed by a process-wide registry.
+pub enum FileSystems {}
+
+impl FileSystems {
+    fn registry() -> &'static RwLock<FileSystemRegistry> {
+        GLOBAL_REGISTRY.get_or_init(|| RwLock::new(FileSystemRegistry::new()))
+    }
+
+    /// Registers a filesystem provider in the global registry.
+    ///
+    /// # Parameters
+    /// - `provider`: Filesystem provider to register.
+    ///
+    /// # Errors
+    /// Returns an error when a provider with the same descriptor already exists.
+    ///
+    /// # Panics
+    /// Panics when the global registry lock is poisoned.
+    pub fn register<P>(provider: P) -> FsResult<()>
+    where
+        P: ServiceProvider<FileSystemSpec> + 'static,
+    {
+        let mut registry = Self::registry()
+            .write()
+            .expect("global filesystem registry lock should not be poisoned");
+        registry.register(provider)
+    }
+
+    /// Registers a shared filesystem provider in the global registry.
+    ///
+    /// # Parameters
+    /// - `provider`: Shared filesystem provider to register.
+    ///
+    /// # Errors
+    /// Returns an error when a provider with the same descriptor already exists.
+    ///
+    /// # Panics
+    /// Panics when the global registry lock is poisoned.
+    pub fn register_shared(provider: Arc<FileSystemProvider>) -> FsResult<()> {
+        let mut registry = Self::registry()
+            .write()
+            .expect("global filesystem registry lock should not be poisoned");
+        registry.register_shared(provider)
+    }
+
+    /// Resolves a URI into a filesystem instance from the global registry.
+    ///
+    /// # Parameters
+    /// - `uri`: Filesystem URI.
+    ///
+    /// # Returns
+    /// A filesystem instance created by the matching provider.
+    ///
+    /// # Errors
+    /// Returns an error when the URI cannot be parsed or no provider can create
+    /// a filesystem for the URI scheme.
+    ///
+    /// # Panics
+    /// Panics when the global registry lock is poisoned.
+    pub fn fs(uri: &str) -> FsResult<Arc<dyn FileSystem>> {
+        let registry = Self::registry()
+            .read()
+            .expect("global filesystem registry lock should not be poisoned");
+        registry.fs(uri)
+    }
+
+    /// Resolves a URI into a bound file resource from the global registry.
+    ///
+    /// # Parameters
+    /// - `uri`: Filesystem URI.
+    ///
+    /// # Returns
+    /// A file resource containing the matching filesystem and filesystem-local
+    /// path.
+    ///
+    /// # Errors
+    /// Returns an error when the URI cannot be parsed or no provider can create
+    /// a filesystem for the URI scheme.
+    ///
+    /// # Panics
+    /// Panics when the global registry lock is poisoned.
+    pub fn resource(uri: &str) -> FsResult<FileResource> {
+        let registry = Self::registry()
+            .read()
+            .expect("global filesystem registry lock should not be poisoned");
+        registry.resource(uri)
+    }
+
+    /// Lists provider names registered in the global registry.
+    ///
+    /// # Returns
+    /// Registered provider names.
+    ///
+    /// # Panics
+    /// Panics when the global registry lock is poisoned.
+    #[must_use]
+    pub fn provider_names() -> Vec<String> {
+        let registry = Self::registry()
+            .read()
+            .expect("global filesystem registry lock should not be poisoned");
+        registry
+            .provider_names()
+            .into_iter()
+            .map(str::to_owned)
+            .collect()
+    }
+}

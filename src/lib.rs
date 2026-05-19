@@ -70,12 +70,12 @@ pub use path::{
 };
 pub use provider::{
     CredentialRef,
+    FileResource,
     FileSystemConfig,
     FileSystemProvider,
     FileSystemRegistry,
-    FileSystemResolver,
     FileSystemSpec,
-    ResolvedPath,
+    FileSystems,
 };
 pub use temp::{
     ManagedTempDir,

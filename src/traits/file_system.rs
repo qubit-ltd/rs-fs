@@ -36,7 +36,7 @@ pub trait FileSystem: Debug + Send + Sync {
     ///
     /// # Returns
     /// Filesystem metadata.
-    fn filesystem_metadata(&self) -> FileSystemMetadata;
+    fn metadata(&self) -> FileSystemMetadata;
 
     /// Gets capability hints for this filesystem.
     ///
@@ -44,7 +44,7 @@ pub trait FileSystem: Debug + Send + Sync {
     /// Static capability hints.
     #[inline]
     fn capabilities(&self) -> FileSystemCapabilities {
-        self.filesystem_metadata().capabilities
+        self.metadata().capabilities
     }
 
     /// Reads metadata for a path.
@@ -57,7 +57,7 @@ pub trait FileSystem: Debug + Send + Sync {
     ///
     /// # Errors
     /// Returns [`crate::FsError`] when metadata cannot be read.
-    fn metadata(&self, path: &FsPath) -> FsResult<FileMetadata>;
+    fn path_metadata(&self, path: &FsPath) -> FsResult<FileMetadata>;
 
     /// Checks whether a path exists.
     ///

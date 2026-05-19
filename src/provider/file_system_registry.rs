@@ -18,6 +18,7 @@ use qubit_spi::{
 };
 
 use crate::{
+    FileResource,
     FileSystem,
     FileSystemConfig,
     FileSystemSpec,
@@ -80,7 +81,7 @@ impl FileSystemRegistry {
             .map_err(map_provider_error)
     }
 
-    /// Opens a filesystem from a URI string.
+    /// Resolves a URI string into a filesystem instance.
     ///
     /// # Parameters
     /// - `uri`: Filesystem URI.
@@ -91,12 +92,12 @@ impl FileSystemRegistry {
     /// # Errors
     /// Returns [`FsError`] when URI parsing, provider resolution, or provider
     /// creation fails.
-    pub fn open(&self, uri: &str) -> FsResult<Arc<dyn FileSystem>> {
+    pub fn fs(&self, uri: &str) -> FsResult<Arc<dyn FileSystem>> {
         let uri = FsUri::parse(uri)?;
-        self.open_uri(uri)
+        self.fs_for_uri(uri)
     }
 
-    /// Opens a filesystem from a parsed URI.
+    /// Resolves a parsed URI into a filesystem instance.
     ///
     /// # Parameters
     /// - `uri`: Parsed filesystem URI.
@@ -106,12 +107,46 @@ impl FileSystemRegistry {
     ///
     /// # Errors
     /// Returns [`FsError`] when provider resolution or creation fails.
-    pub fn open_uri(&self, uri: FsUri) -> FsResult<Arc<dyn FileSystem>> {
+    pub fn fs_for_uri(&self, uri: FsUri) -> FsResult<Arc<dyn FileSystem>> {
         let selector = uri.scheme.clone();
         let config = FileSystemConfig::new(uri);
         self.providers
             .create_arc(&selector, &config)
             .map_err(map_provider_error)
+    }
+
+    /// Resolves a URI string into a bound file resource.
+    ///
+    /// # Parameters
+    /// - `uri`: Filesystem URI.
+    ///
+    /// # Returns
+    /// A file resource containing the matching filesystem and filesystem-local
+    /// path.
+    ///
+    /// # Errors
+    /// Returns [`FsError`] when URI parsing, provider resolution, or provider
+    /// creation fails.
+    pub fn resource(&self, uri: &str) -> FsResult<FileResource> {
+        let uri = FsUri::parse(uri)?;
+        self.resource_for_uri(uri)
+    }
+
+    /// Resolves a parsed URI into a bound file resource.
+    ///
+    /// # Parameters
+    /// - `uri`: Parsed filesystem URI.
+    ///
+    /// # Returns
+    /// A file resource containing the matching filesystem and filesystem-local
+    /// path.
+    ///
+    /// # Errors
+    /// Returns [`FsError`] when provider resolution or creation fails.
+    pub fn resource_for_uri(&self, uri: FsUri) -> FsResult<FileResource> {
+        let path = uri.path.clone();
+        let fs = self.fs_for_uri(uri)?;
+        Ok(FileResource::new(fs, path))
     }
 
     /// Gets registered provider names in registration order.

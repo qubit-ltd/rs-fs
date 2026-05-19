@@ -30,14 +30,15 @@ use qubit_fs::{
     DirectoryStreamExt,
     FileMetadata,
     FileReader,
+    FileResource,
     FileSystem,
     FileSystemCapabilities,
     FileSystemConfig,
     FileSystemExt,
     FileSystemMetadata,
     FileSystemRegistry,
-    FileSystemResolver,
     FileSystemSpec,
+    FileSystems,
     FileType,
     FsAuthority,
     FsError,
@@ -55,7 +56,6 @@ use qubit_fs::{
     ProgressPolicy,
     ReadOptions,
     RenameOptions,
-    ResolvedPath,
     ServerSidePreference,
     TempDir,
     TempDirOptions,
@@ -105,7 +105,7 @@ impl MockFs {
 }
 
 impl FileSystem for MockFs {
-    fn filesystem_metadata(&self) -> FileSystemMetadata {
+    fn metadata(&self) -> FileSystemMetadata {
         let mut metadata = FileSystemMetadata::new("mock");
         metadata.schemes.push("mock".to_owned());
         metadata.capabilities = FileSystemCapabilities {
@@ -130,7 +130,7 @@ impl FileSystem for MockFs {
         metadata
     }
 
-    fn metadata(&self, path: &FsPath) -> FsResult<FileMetadata> {
+    fn path_metadata(&self, path: &FsPath) -> FsResult<FileMetadata> {
         let state = self.state.lock().expect("state lock should succeed");
         if state.dirs.contains(path.as_str()) {
             Ok(FileMetadata::new(FileType::Directory))
@@ -731,7 +731,7 @@ fn test_filesystem_traits_and_registry_work_together() {
     );
     assert_eq!(
         4,
-        fs.metadata(&path)
+        fs.path_metadata(&path)
             .expect("metadata should exist")
             .len
             .unwrap()
@@ -776,18 +776,90 @@ fn test_filesystem_traits_and_registry_work_together() {
         .register(MockProvider { fs: fs.clone() })
         .expect("provider should register");
     assert_eq!(vec!["mock"], registry.provider_names());
-    let opened = registry.open("mem:///file.txt").expect("alias should open");
+    let opened = registry.fs("mem:///file.txt").expect("alias should open");
     assert!(opened.capabilities().directories);
-    assert!(registry.open("missing:///file.txt").is_err());
+    assert!(registry.fs("missing:///file.txt").is_err());
 
-    let resolver = FileSystemResolver::new(Arc::new(registry));
-    let resolved = resolver
-        .resolve("mock:///file.txt")
+    let resource = registry
+        .resource("mock:///file.txt")
         .expect("URI should resolve");
-    assert_eq!("/file.txt", resolved.path.as_str());
-    let ResolvedPath { filesystem, path } = resolved;
-    assert!(filesystem.exists(&path).expect("resolved fs should work"));
-    assert!(resolver.resolve("not a uri").is_err());
+    let _: FileResource = resource.clone();
+    assert_eq!("/file.txt", resource.path().as_str());
+    assert!(resource.fs().capabilities().directories);
+    assert!(resource.write_all(b"data").is_ok());
+    assert!(resource.exists().expect("resolved fs should work"));
+    assert_eq!(
+        Some(4),
+        resource.metadata().expect("metadata should load").len
+    );
+    let mut reader = resource
+        .open_reader(&ReadOptions::default())
+        .expect("reader should open");
+    let mut direct_read = Vec::new();
+    reader
+        .read_to_end(&mut direct_read)
+        .expect("reader should read");
+    assert_eq!(b"data".to_vec(), direct_read);
+    let mut writer = resource
+        .open_writer(&WriteOptions::default())
+        .expect("writer should open");
+    writer.write_all(b"data").expect("writer should write");
+    assert_eq!(
+        Some(4),
+        writer.commit().expect("writer should commit").bytes_written
+    );
+    assert_eq!(
+        b"data".to_vec(),
+        resource.read_all().expect("resource should read")
+    );
+    let entries = resource
+        .list(&ListOptions::default())
+        .expect("resource list should start")
+        .collect_entries()
+        .expect("resource list should collect");
+    assert_eq!(1, entries.len());
+    let copied = resource
+        .copy_to(
+            &FsPath::parse("/copy.txt").expect("path should parse"),
+            &CopyOptions::file(),
+        )
+        .expect("resource should copy");
+    assert_eq!(1, copied.stats.files);
+    resource
+        .rename_to(
+            &FsPath::parse("/renamed.txt").expect("path should parse"),
+            &RenameOptions::default(),
+        )
+        .expect("resource should rename");
+    let dir = registry
+        .resource_for_uri(FsUri::parse("mock:///dir").expect("URI should parse"))
+        .expect("directory resource should resolve");
+    dir.create_dir(&CreateDirOptions::default())
+        .expect("resource directory should create");
+    assert!(dir.exists().expect("directory should exist"));
+    dir.delete(&DeleteOptions::default())
+        .expect("resource directory should delete");
+    assert!(registry.resource("not a uri").is_err());
+
+    FileSystems::register(MockProvider { fs: fs.clone() })
+        .expect("global provider should register");
+    let shared_global: Arc<dyn ServiceProvider<FileSystemSpec>> = Arc::new(FailingCreateProvider {
+        id: "global-shared",
+        error: ProviderCreateError::failed("unused"),
+    });
+    FileSystems::register_shared(shared_global).expect("global shared provider should register");
+    let global_names = FileSystems::provider_names();
+    assert!(global_names.iter().any(|name| name == "mock"));
+    assert!(global_names.iter().any(|name| name == "global-shared"));
+    assert!(
+        FileSystems::fs("mem:///global.txt")
+            .expect("global fs should resolve")
+            .capabilities()
+            .directories
+    );
+    let global_resource =
+        FileSystems::resource("mock:///global.txt").expect("global resource should resolve");
+    assert_eq!("/global.txt", global_resource.path().as_str());
 
     let config = FileSystemConfig {
         uri: FsUri::parse("mock:///file.txt").expect("URI should parse"),
@@ -879,7 +951,7 @@ fn test_registry_maps_spi_errors() {
     assert_eq!(
         FsErrorKind::ProviderUnavailable,
         unavailable_registry
-            .open("offline:///file.txt")
+            .fs("offline:///file.txt")
             .expect_err("unavailable provider should fail")
             .kind()
     );
@@ -894,16 +966,16 @@ fn test_registry_maps_spi_errors() {
     assert_eq!(
         FsErrorKind::Other,
         broken_registry
-            .open("broken:///file.txt")
+            .fs("broken:///file.txt")
             .expect_err("broken provider should fail")
             .kind()
     );
 
-    let empty_resolver = FileSystemResolver::new(Arc::new(FileSystemRegistry::new()));
-    assert!(empty_resolver.resolve("missing:///file.txt").is_err());
+    let empty_registry = FileSystemRegistry::new();
+    assert!(empty_registry.resource("missing:///file.txt").is_err());
     assert!(
-        empty_resolver
-            .resolve_uri(FsUri::parse("missing:///file.txt").expect("URI should parse"))
+        empty_registry
+            .resource_for_uri(FsUri::parse("missing:///file.txt").expect("URI should parse"))
             .is_err()
     );
 }
