@@ -1,0 +1,51 @@
+[package]
+name = "qubit-fs"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+authors = ["Haixing Hu <starfish.hu@gmail.com>"]
+license = "Apache-2.0"
+repository = "https://github.com/qubit-ltd/rs-fs"
+description = "Pluggable filesystem abstraction for Rust"
+homepage = "https://github.com/qubit-ltd/rs-fs"
+documentation = "https://docs.rs/qubit-fs"
+readme = "README.md"
+keywords = ["filesystem", "storage", "spi", "path", "qubit"]
+categories = ["filesystem", "rust-patterns"]
+include = [
+    "/Cargo.toml",
+    "/LICENSE",
+    "/README.md",
+    "/README.zh_CN.md",
+    "/RUST_CODING_STYLE.md",
+    "/RUST_CODING_STYLE.zh_CN.md",
+    "/doc/**",
+    "/examples/**",
+    "/resources/**",
+    "/src/**",
+    "/tests/**",
+]
+
+[lib]
+name = "qubit_fs"
+doctest = true
+
+[dependencies]
+log = "0.4"
+qubit-io = { version = "0.2", path = "../rs-io" }
+qubit-metadata = { version = "0.5", path = "../rs-metadata" }
+qubit-spi = { version = "0.3", path = "../rs-spi" }
+thiserror = "2.0"
+url = "2.5"
+
+[features]
+default = []
+registry-cache = ["dep:qubit-atomic"]
+
+[dependencies.qubit-atomic]
+version = "0.13"
+path = "../rs-atomic"
+optional = true
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)'] }

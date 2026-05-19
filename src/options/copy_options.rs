@@ -1,0 +1,88 @@
+/*******************************************************************************
+ *
+ *    Copyright (c) 2026 Haixing Hu.
+ *
+ *    SPDX-License-Identifier: Apache-2.0
+ *
+ *    Licensed under the Apache License, Version 2.0.
+ *
+ ******************************************************************************/
+//! Copy operation options and policy types.
+
+use qubit_metadata::MetadataFilter;
+
+use crate::{
+    CopyConflictPolicy,
+    CopyMode,
+    MetadataPreservePolicy,
+    ProgressPolicy,
+    ServerSidePreference,
+};
+
+/// Options controlling file, object, or tree copy operations.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CopyOptions {
+    /// Copy source interpretation mode.
+    pub mode: CopyMode,
+    /// Destination conflict policy.
+    pub conflict: CopyConflictPolicy,
+    /// Metadata preservation policy.
+    pub preserve_metadata: MetadataPreservePolicy,
+    /// Server-side copy preference.
+    pub server_side: ServerSidePreference,
+    /// Whether symbolic links should be followed.
+    pub follow_symlinks: bool,
+    /// Whether missing destination parents should be created.
+    pub create_parent: bool,
+    /// Whether tree copy should continue after per-entry failures.
+    pub continue_on_error: bool,
+    /// Optional metadata filter for tree copy.
+    pub filter: Option<MetadataFilter>,
+    /// Progress collection policy.
+    pub progress: ProgressPolicy,
+}
+
+impl CopyOptions {
+    /// Creates options for copying one file-like resource.
+    ///
+    /// # Returns
+    /// Copy options with `mode` set to [`CopyMode::File`].
+    #[inline]
+    #[must_use]
+    pub fn file() -> Self {
+        Self {
+            mode: CopyMode::File,
+            ..Self::default()
+        }
+    }
+
+    /// Creates options for copying a resource tree.
+    ///
+    /// # Returns
+    /// Copy options with `mode` set to [`CopyMode::Tree`].
+    #[inline]
+    #[must_use]
+    pub fn tree() -> Self {
+        Self {
+            mode: CopyMode::Tree,
+            ..Self::default()
+        }
+    }
+}
+
+impl Default for CopyOptions {
+    #[inline]
+    fn default() -> Self {
+        Self {
+            mode: CopyMode::Auto,
+            conflict: CopyConflictPolicy::Fail,
+            preserve_metadata: MetadataPreservePolicy::Portable,
+            server_side: ServerSidePreference::Prefer,
+            follow_symlinks: false,
+            create_parent: false,
+            continue_on_error: false,
+            filter: None,
+            progress: ProgressPolicy::CountOnly,
+        }
+    }
+}
