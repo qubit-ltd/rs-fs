@@ -32,11 +32,12 @@ doctest = true
 
 [dependencies]
 log = "0.4"
-qubit-io = { version = "0.2", path = "../rs-io" }
-qubit-metadata = { version = "0.5", path = "../rs-metadata" }
-qubit-spi = { version = "0.3", path = "../rs-spi" }
 thiserror = "2.0"
 url = "2.5"
+
+qubit-io = "0.2"
+qubit-spi ="0.3"
+qubit-metadata = "0.5"
 
 [features]
 default = []
@@ -44,7 +45,6 @@ registry-cache = ["dep:qubit-atomic"]
 
 [dependencies.qubit-atomic]
 version = "0.13"
-path = "../rs-atomic"
 optional = true
 
 [lints.rust]

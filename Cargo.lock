@@ -381,6 +381,8 @@ dependencies = [
 [[package]]
 name = "qubit-atomic"
 version = "0.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a73d8857128657c66cba1fa6e2b6ec27d86e00d34d6add8638718462f04de871"
 dependencies = [
  "arc-swap",
  "portable-atomic",
@@ -417,10 +419,14 @@ dependencies = [
 [[package]]
 name = "qubit-io"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "110abf9c3dabc719a66294acdf55efc18c0ba36711935751e8964674d3f9e3d5"
 
 [[package]]
 name = "qubit-metadata"
 version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c8bb6b42239f56f4a628795169ec81b899ca6dab78c411bdddb192daa383bc29"
 dependencies = [
  "bigdecimal",
  "chrono",
@@ -435,6 +441,8 @@ dependencies = [
 [[package]]
 name = "qubit-spi"
 version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b1299220b8c7abd7074efdd5785be07a75d60bcf3c0af5df81de99ecab77f01"
 dependencies = [
  "log",
  "thiserror",
