@@ -37,7 +37,7 @@ rust-common/
 
 - 路径与 URI：`FsPath`、`FsUri`、`FsAuthority`
 - 文件系统 trait：`FileSystem`、`FileReader`、`FileWriter`
-- 元信息：`FileMetadata`、`FileType`、`DirEntry`
+- 元信息：`FileMetadata`、`FileKind`、`DirEntry`
 - 能力声明：`FileSystemCapabilities`
 - 错误模型：`FsError`、`FsErrorKind`
 - provider SPI：`FileSystemSpec`、`FileSystemProvider`、`FileSystemRegistry`
@@ -302,7 +302,7 @@ pub struct FileSystemCapabilities {
 
 ```rust
 pub struct FileMetadata {
-    pub file_type: FileType,
+    pub kind: FileKind,
     pub len: Option<u64>,
     pub modified_at: Option<SystemTime>,
     pub created_at: Option<SystemTime>,
@@ -323,10 +323,10 @@ pub struct FileMetadata {
 - `provider_metadata` 表示后端返回的诊断信息，例如 OSS storage class、HDFS replication、FTP permissions。
 - 如果某些 metadata 需要 schema 校验，可以复用 `MetadataSchema`。
 
-`FileType` 建议：
+`FileKind` 建议：
 
 ```rust
-pub enum FileType {
+pub enum FileKind {
     File,
     Directory,
     Symlink,
@@ -1220,7 +1220,7 @@ MVP 不需要修改 `qubit-spi`。如果将来要自动发现 provider，可以�
 
 - `FsPath`、`FsUri` 解析与规范化。
 - `FsError`、`FsErrorKind`、`FsResult`。
-- `FileMetadata`、`FileType`、`DirEntry`。
+- `FileMetadata`、`FileKind`、`DirEntry`。
 - `FileSystemCapabilities`。
 - 同步 `FileSystem` trait。
 - `FileReader`、`FileWriter`。
@@ -1273,7 +1273,7 @@ src/
     path_semantics.rs
   metadata/
     file_metadata.rs
-    file_type.rs
+    file_kind.rs
     dir_entry.rs
     checksum.rs
   error/
@@ -1670,7 +1670,7 @@ pub trait DirectoryStreamExt {
 pub struct DirEntry {
     pub path: FsPath,
     pub name: String,
-    pub file_type: FileType,
+    pub kind: FileKind,
     pub metadata: Option<FileMetadata>,
 }
 ```

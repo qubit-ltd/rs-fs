@@ -355,7 +355,7 @@ fn replace_if_version_matches(fs: &dyn FileSystem, etag: String) -> FsResult<()>
 ### 5.5 Metadata 和 exists
 
 ```rust
-use qubit_fs::{FileSystem, FileType, FsPath, FsResult};
+use qubit_fs::{FileSystem, FileKind, FsPath, FsResult};
 
 fn inspect(fs: &dyn FileSystem) -> FsResult<()> {
     let path = FsPath::parse("/data/input.csv")?;
@@ -365,11 +365,11 @@ fn inspect(fs: &dyn FileSystem) -> FsResult<()> {
     }
 
     let metadata = fs.path_metadata(&path)?;
-    match metadata.file_type {
-        FileType::File | FileType::Object => println!("file-like resource"),
-        FileType::Directory | FileType::Prefix => println!("container-like resource"),
-        FileType::Symlink => println!("symbolic link"),
-        FileType::Other(_) => println!("provider-specific resource"),
+    match metadata.kind {
+        FileKind::File | FileKind::Object => println!("file-like resource"),
+        FileKind::Directory | FileKind::Prefix => println!("container-like resource"),
+        FileKind::Symlink => println!("symbolic link"),
+        FileKind::Other(_) => println!("provider-specific resource"),
     }
 
     if let Some(len) = metadata.len {
@@ -794,7 +794,7 @@ provider 实现应尽量用 `FsError::with_source()` 保留底层错误，并附
 
 | 字段 | 含义 |
 | --- | --- |
-| `file_type` | `File`、`Directory`、`Symlink`、`Object`、`Prefix` 或 `Other` |
+| `kind` | `File`、`Directory`、`Symlink`、`Object`、`Prefix` 或 `Other` |
 | `len` | 可选内容长度 |
 | `modified_at`、`created_at`、`accessed_at` | 可选时间戳 |
 | `etag` | 可选 provider version 或 entity tag |
@@ -806,11 +806,11 @@ provider 实现应尽量用 `FsError::with_source()` 保留底层错误，并附
 示例：
 
 ```rust
-use qubit_fs::{FileMetadata, FileType};
+use qubit_fs::{FileMetadata, FileKind};
 
 fn is_container(metadata: &FileMetadata) -> bool {
     metadata.is_directory_like()
-        || matches!(metadata.file_type, FileType::Directory | FileType::Prefix)
+        || matches!(metadata.kind, FileKind::Directory | FileKind::Prefix)
 }
 ```
 
@@ -895,7 +895,7 @@ struct MemoryState {
 
 ```rust
 use qubit_fs::{
-    FileMetadata, FileSystem, FileSystemCapabilities, FileSystemMetadata, FileType,
+    FileMetadata, FileSystem, FileSystemCapabilities, FileSystemMetadata, FileKind,
     FsError, FsErrorKind, FsOperation, FsPath, FsResult,
 };
 
@@ -933,7 +933,7 @@ impl FileSystem for MemoryFileSystem {
                 .with_provider("memory"));
         };
 
-        let mut metadata = FileMetadata::new(FileType::File);
+        let mut metadata = FileMetadata::new(FileKind::File);
         metadata.len = Some(bytes.len() as u64);
         Ok(metadata)
     }
@@ -1094,7 +1094,7 @@ impl FileSystem for MemoryFileSystem {
         let entries = state.files.keys()
             .filter(|key| key.starts_with(&prefix))
             .filter_map(|key| FsPath::parse(key).ok())
-            .map(|path| DirEntry::new(path, FileType::File))
+            .map(|path| DirEntry::new(path, FileKind::File))
             .collect();
 
         Ok(Box::new(MemoryDirectoryStream { entries }))

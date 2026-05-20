@@ -35,10 +35,10 @@ pub use metadata::{
     Checksum,
     ChecksumAlgorithm,
     DirEntry,
+    FileKind,
     FileMetadata,
     FileSystemCapabilities,
     FileSystemMetadata,
-    FileType,
     WriteOutcome,
 };
 pub use options::{

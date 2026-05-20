@@ -2,7 +2,7 @@ use qubit_fs::{
     DirEntry,
     DirectoryStream,
     DirectoryStreamExt,
-    FileType,
+    FileKind,
     FsPath,
 };
 
@@ -17,7 +17,7 @@ fn test_collect_entries_collects_all_entries() {
     let entries = (Box::new(MockDirectoryStream {
         entries: vec![DirEntry::new(
             FsPath::parse("/a.txt").expect("path should parse"),
-            FileType::File,
+            FileKind::File,
         )],
     }) as Box<dyn DirectoryStream>)
         .collect_entries()
@@ -48,7 +48,7 @@ fn test_collect_entries_returns_errors_from_stream() {
         (Box::new(PartiallyFailingDirectoryStream {
             entry: Some(DirEntry::new(
                 FsPath::parse("/partial.txt").expect("path should parse"),
-                FileType::File,
+                FileKind::File,
             )),
         }) as Box<dyn DirectoryStream>)
             .collect_entries()

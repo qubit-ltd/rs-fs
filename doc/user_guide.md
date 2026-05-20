@@ -351,7 +351,7 @@ Providers should return `FsErrorKind::PreconditionFailed` when the condition doe
 ### 5.5 Metadata and existence
 
 ```rust
-use qubit_fs::{FileSystem, FileType, FsPath, FsResult};
+use qubit_fs::{FileSystem, FileKind, FsPath, FsResult};
 
 fn inspect(fs: &dyn FileSystem) -> FsResult<()> {
     let path = FsPath::parse("/data/input.csv")?;
@@ -361,11 +361,11 @@ fn inspect(fs: &dyn FileSystem) -> FsResult<()> {
     }
 
     let metadata = fs.path_metadata(&path)?;
-    match metadata.file_type {
-        FileType::File | FileType::Object => println!("file-like resource"),
-        FileType::Directory | FileType::Prefix => println!("container-like resource"),
-        FileType::Symlink => println!("symbolic link"),
-        FileType::Other(_) => println!("provider-specific resource"),
+    match metadata.kind {
+        FileKind::File | FileKind::Object => println!("file-like resource"),
+        FileKind::Directory | FileKind::Prefix => println!("container-like resource"),
+        FileKind::Symlink => println!("symbolic link"),
+        FileKind::Other(_) => println!("provider-specific resource"),
     }
 
     if let Some(len) = metadata.len {
@@ -788,7 +788,7 @@ Provider implementations should preserve source errors with `FsError::with_sourc
 
 Common fields include:
 
-- `file_type`: `File`, `Directory`, `Symlink`, `Object`, `Prefix`, or provider-specific `Other`
+- `kind`: `File`, `Directory`, `Symlink`, `Object`, `Prefix`, or provider-specific `Other`
 - `len`: optional byte length
 - `modified_at`, `created_at`, `accessed_at`: optional timestamps
 - `etag`: optional provider version or entity tag
@@ -800,11 +800,11 @@ Common fields include:
 Example:
 
 ```rust
-use qubit_fs::{FileMetadata, FileType};
+use qubit_fs::{FileMetadata, FileKind};
 
 fn is_container(metadata: &FileMetadata) -> bool {
     metadata.is_directory_like()
-        || matches!(metadata.file_type, FileType::Directory | FileType::Prefix)
+        || matches!(metadata.kind, FileKind::Directory | FileKind::Prefix)
 }
 ```
 
@@ -889,7 +889,7 @@ A production backend would hold an SDK client, connection pool, root configurati
 
 ```rust
 use qubit_fs::{
-    FileMetadata, FileSystem, FileSystemCapabilities, FileSystemMetadata, FileType,
+    FileMetadata, FileSystem, FileSystemCapabilities, FileSystemMetadata, FileKind,
     FsError, FsErrorKind, FsOperation, FsPath, FsResult,
 };
 
@@ -927,7 +927,7 @@ impl FileSystem for MemoryFileSystem {
                 .with_provider("memory"));
         };
 
-        let mut metadata = FileMetadata::new(FileType::File);
+        let mut metadata = FileMetadata::new(FileKind::File);
         metadata.len = Some(bytes.len() as u64);
         Ok(metadata)
     }
@@ -1086,7 +1086,7 @@ impl FileSystem for MemoryFileSystem {
         let entries = state.files.keys()
             .filter(|key| key.starts_with(&prefix))
             .filter_map(|key| FsPath::parse(key).ok())
-            .map(|path| DirEntry::new(path, FileType::File))
+            .map(|path| DirEntry::new(path, FileKind::File))
             .collect();
 
         Ok(Box::new(MemoryDirectoryStream { entries }))

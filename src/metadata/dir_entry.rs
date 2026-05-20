@@ -10,8 +10,8 @@
 //! Directory entry model.
 
 use crate::{
+    FileKind,
     FileMetadata,
-    FileType,
     FsPath,
 };
 
@@ -22,8 +22,8 @@ pub struct DirEntry {
     pub path: FsPath,
     /// Final path component.
     pub name: String,
-    /// Provider-neutral resource type.
-    pub file_type: FileType,
+    /// Provider-neutral resource kind.
+    pub kind: FileKind,
     /// Optional metadata loaded with the entry.
     pub metadata: Option<FileMetadata>,
 }
@@ -33,17 +33,17 @@ impl DirEntry {
     ///
     /// # Parameters
     /// - `path`: Provider-local entry path.
-    /// - `file_type`: Provider-neutral resource type.
+    /// - `kind`: Provider-neutral resource kind.
     ///
     /// # Returns
     /// New entry with no loaded metadata.
     #[must_use]
-    pub fn new(path: FsPath, file_type: FileType) -> Self {
+    pub fn new(path: FsPath, kind: FileKind) -> Self {
         let name = path.file_name().unwrap_or("").to_owned();
         Self {
             path,
             name,
-            file_type,
+            kind,
             metadata: None,
         }
     }

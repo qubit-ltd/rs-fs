@@ -7,11 +7,11 @@
  *    Licensed under the Apache License, Version 2.0.
  *
  ******************************************************************************/
-//! File type model.
+//! File kind model.
 
-/// Provider-neutral resource type.
+/// Provider-neutral resource kind.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum FileType {
+pub enum FileKind {
     /// Regular file.
     File,
     /// Directory with hierarchical semantics.

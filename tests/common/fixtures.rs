@@ -20,6 +20,7 @@ use qubit_fs::{
     DeleteOptions,
     DirEntry,
     DirectoryStream,
+    FileKind,
     FileMetadata,
     FileReader,
     FileSystem,
@@ -27,7 +28,6 @@ use qubit_fs::{
     FileSystemConfig,
     FileSystemMetadata,
     FileSystemSpec,
-    FileType,
     FileWriter,
     FsError,
     FsErrorKind,
@@ -113,9 +113,9 @@ impl FileSystem for MockFs {
     fn path_metadata(&self, path: &FsPath) -> FsResult<FileMetadata> {
         let state = self.state.lock().expect("state lock should succeed");
         if state.dirs.contains(path.as_str()) {
-            Ok(FileMetadata::new(FileType::Directory))
+            Ok(FileMetadata::new(FileKind::Directory))
         } else if state.files.contains(path.as_str()) {
-            let mut metadata = FileMetadata::new(FileType::File);
+            let mut metadata = FileMetadata::new(FileKind::File);
             metadata.len = Some(4);
             metadata.etag = Some("v1".to_owned());
             Ok(metadata)
@@ -134,7 +134,7 @@ impl FileSystem for MockFs {
 
     fn list(&self, _path: &FsPath, _options: &ListOptions) -> FsResult<Box<dyn DirectoryStream>> {
         Ok(Box::new(MockDirectoryStream {
-            entries: vec![DirEntry::new(FsPath::parse("/a.txt")?, FileType::File)],
+            entries: vec![DirEntry::new(FsPath::parse("/a.txt")?, FileKind::File)],
         }))
     }
 

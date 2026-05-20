@@ -15,14 +15,14 @@ use qubit_metadata::Metadata;
 
 use crate::{
     Checksum,
-    FileType,
+    FileKind,
 };
 
 /// Stable and extensible metadata for one filesystem resource.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FileMetadata {
-    /// Provider-neutral resource type.
-    pub file_type: FileType,
+    /// Provider-neutral resource kind.
+    pub kind: FileKind,
     /// Byte length when known.
     pub len: Option<u64>,
     /// Last modification time when known.
@@ -44,18 +44,18 @@ pub struct FileMetadata {
 }
 
 impl FileMetadata {
-    /// Creates metadata with only a file type.
+    /// Creates metadata with only a file kind.
     ///
     /// # Parameters
-    /// - `file_type`: Provider-neutral resource type.
+    /// - `kind`: Provider-neutral resource kind.
     ///
     /// # Returns
     /// Metadata value with unknown optional fields.
     #[inline]
     #[must_use]
-    pub fn new(file_type: FileType) -> Self {
+    pub fn new(kind: FileKind) -> Self {
         Self {
-            file_type,
+            kind,
             len: None,
             modified_at: None,
             created_at: None,
@@ -75,6 +75,6 @@ impl FileMetadata {
     #[inline]
     #[must_use]
     pub fn is_directory_like(&self) -> bool {
-        matches!(self.file_type, FileType::Directory | FileType::Prefix)
+        matches!(self.kind, FileKind::Directory | FileKind::Prefix)
     }
 }
