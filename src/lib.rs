@@ -85,6 +85,7 @@ pub use temp::{
     TempDirOptions,
     TempFile,
     TempFileOptions,
+    TempResource,
     TempResourceFactory,
     TempResources,
 };

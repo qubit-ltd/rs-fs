@@ -25,6 +25,7 @@ use crate::{
     PersistOptions,
     RenameOptions,
     TempFile,
+    TempResource,
     WriteOutcome,
 };
 
@@ -69,7 +70,12 @@ impl ManagedTempFile {
     }
 }
 
-impl TempFile for ManagedTempFile {
+impl TempResource for ManagedTempFile {
+    #[inline]
+    fn fs(&self) -> Arc<dyn FileSystem> {
+        self.fs.clone()
+    }
+
     #[inline]
     fn path(&self) -> &FsPath {
         &self.path
@@ -89,6 +95,12 @@ impl TempFile for ManagedTempFile {
         result
     }
 
+    fn keep(mut self: Box<Self>) -> FsResult<FsPath> {
+        Ok(self.detach())
+    }
+}
+
+impl TempFile for ManagedTempFile {
     fn persist(
         mut self: Box<Self>,
         target: &FsPath,
@@ -134,10 +146,6 @@ impl TempFile for ManagedTempFile {
             }
             Err(error) => Err(error),
         }
-    }
-
-    fn keep(mut self: Box<Self>) -> FsResult<FsPath> {
-        Ok(self.detach())
     }
 }
 

@@ -9,28 +9,76 @@
  ******************************************************************************/
 //! Temporary file handle trait.
 
-use std::fmt::Debug;
-
 use crate::{
+    FileReader,
+    FileSystemExt,
+    FileWriter,
     FsPath,
     FsResult,
     PersistOptions,
+    ReadOptions,
+    TempResource,
+    WriteOptions,
     WriteOutcome,
 };
 
 /// Temporary file handle with cleanup responsibility.
-pub trait TempFile: Debug + Send {
-    /// Gets the temporary file path.
+pub trait TempFile: TempResource {
+    /// Opens the temporary file for reading.
+    ///
+    /// # Parameters
+    /// - `options`: Read options.
     ///
     /// # Returns
-    /// Provider-local path of the temporary file.
-    fn path(&self) -> &FsPath;
-
-    /// Explicitly cleans up the temporary file.
+    /// Reader handle opened by the owning filesystem.
     ///
     /// # Errors
-    /// Returns [`crate::FsError`] when cleanup fails.
-    fn cleanup(self: Box<Self>) -> FsResult<()>;
+    /// Returns [`crate::FsError`] when the owning filesystem cannot open the
+    /// temporary file for reading.
+    fn open_reader(&self, options: &ReadOptions) -> FsResult<Box<dyn FileReader>> {
+        self.fs().as_ref().open_reader(self.path(), options)
+    }
+
+    /// Opens the temporary file for writing.
+    ///
+    /// # Parameters
+    /// - `options`: Write options.
+    ///
+    /// # Returns
+    /// Writer handle opened by the owning filesystem.
+    ///
+    /// # Errors
+    /// Returns [`crate::FsError`] when the owning filesystem cannot open the
+    /// temporary file for writing.
+    fn open_writer(&self, options: &WriteOptions) -> FsResult<Box<dyn FileWriter>> {
+        self.fs().as_ref().open_writer(self.path(), options)
+    }
+
+    /// Reads the whole temporary file into memory.
+    ///
+    /// # Returns
+    /// Complete temporary file bytes.
+    ///
+    /// # Errors
+    /// Returns [`crate::FsError`] when opening or reading fails.
+    fn read_all(&self) -> FsResult<Vec<u8>> {
+        self.fs().as_ref().read_all(self.path())
+    }
+
+    /// Writes all bytes to the temporary file and commits the writer.
+    ///
+    /// # Parameters
+    /// - `bytes`: Bytes to write.
+    ///
+    /// # Returns
+    /// Write outcome reported by the owning filesystem.
+    ///
+    /// # Errors
+    /// Returns [`crate::FsError`] when opening, writing, aborting, or committing
+    /// fails.
+    fn write_all(&self, bytes: &[u8]) -> FsResult<WriteOutcome> {
+        self.fs().as_ref().write_all(self.path(), bytes)
+    }
 
     /// Persists the temporary file to a target path.
     ///
@@ -48,14 +96,4 @@ pub trait TempFile: Debug + Send {
         target: &FsPath,
         options: &PersistOptions,
     ) -> FsResult<WriteOutcome>;
-
-    /// Keeps the temporary file and disables automatic cleanup.
-    ///
-    /// # Returns
-    /// Path of the retained temporary file.
-    ///
-    /// # Errors
-    /// Returns [`crate::FsError`] when the provider cannot release cleanup
-    /// responsibility.
-    fn keep(self: Box<Self>) -> FsResult<FsPath>;
 }

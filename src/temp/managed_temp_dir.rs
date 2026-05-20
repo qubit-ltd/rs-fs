@@ -24,6 +24,7 @@ use crate::{
     PersistOptions,
     RenameOptions,
     TempDir,
+    TempResource,
 };
 
 /// Default temporary directory backed by an [`Arc`] filesystem and path.
@@ -67,7 +68,12 @@ impl ManagedTempDir {
     }
 }
 
-impl TempDir for ManagedTempDir {
+impl TempResource for ManagedTempDir {
+    #[inline]
+    fn fs(&self) -> Arc<dyn FileSystem> {
+        self.fs.clone()
+    }
+
     #[inline]
     fn path(&self) -> &FsPath {
         &self.path
@@ -88,6 +94,12 @@ impl TempDir for ManagedTempDir {
         result
     }
 
+    fn keep(mut self: Box<Self>) -> FsResult<FsPath> {
+        Ok(self.detach())
+    }
+}
+
+impl TempDir for ManagedTempDir {
     fn persist(mut self: Box<Self>, target: &FsPath, options: &PersistOptions) -> FsResult<()> {
         let rename_options = RenameOptions {
             overwrite: options.overwrite,
@@ -123,10 +135,6 @@ impl TempDir for ManagedTempDir {
             }
             Err(error) => Err(error),
         }
-    }
-
-    fn keep(mut self: Box<Self>) -> FsResult<FsPath> {
-        Ok(self.detach())
     }
 }
 
