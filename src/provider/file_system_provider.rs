@@ -7,14 +7,11 @@
  *    Licensed under the Apache License, Version 2.0.
  *
  ******************************************************************************/
-//! Error types used by filesystem abstractions.
+//! Filesystem provider trait object alias.
 
-mod fs_error;
-mod fs_error_kind;
-mod fs_operation;
-mod fs_result;
+use qubit_spi::ServiceProvider;
 
-pub use fs_error::FsError;
-pub use fs_error_kind::FsErrorKind;
-pub use fs_operation::FsOperation;
-pub use fs_result::FsResult;
+use super::file_system_spec::FileSystemSpec;
+
+/// Filesystem provider trait object type.
+pub type FileSystemProvider = dyn ServiceProvider<FileSystemSpec>;

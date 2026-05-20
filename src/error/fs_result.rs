@@ -7,14 +7,9 @@
  *    Licensed under the Apache License, Version 2.0.
  *
  ******************************************************************************/
-//! Error types used by filesystem abstractions.
+//! Filesystem result type alias.
 
-mod fs_error;
-mod fs_error_kind;
-mod fs_operation;
-mod fs_result;
+use super::fs_error::FsError;
 
-pub use fs_error::FsError;
-pub use fs_error_kind::FsErrorKind;
-pub use fs_operation::FsOperation;
-pub use fs_result::FsResult;
+/// Result type used by filesystem APIs.
+pub type FsResult<T> = Result<T, FsError>;

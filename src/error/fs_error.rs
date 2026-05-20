@@ -22,9 +22,6 @@ use crate::{
     FsPath,
 };
 
-/// Result type used by filesystem APIs.
-pub type FsResult<T> = Result<T, FsError>;
-
 /// Provider-neutral filesystem error with operation and path context.
 #[derive(Debug)]
 pub struct FsError {

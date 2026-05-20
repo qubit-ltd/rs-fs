@@ -21,6 +21,7 @@ use crate::{
     FileResource,
     FileSystem,
     FileSystemConfig,
+    FileSystemProvider,
     FileSystemSpec,
     FsError,
     FsErrorKind,
@@ -28,9 +29,6 @@ use crate::{
     FsResult,
     FsUri,
 };
-
-/// Filesystem provider trait object type.
-pub type FileSystemProvider = dyn ServiceProvider<FileSystemSpec>;
 
 /// Registry of filesystem providers.
 #[derive(Debug, Default)]
