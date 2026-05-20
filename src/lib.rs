@@ -80,10 +80,12 @@ pub use provider::{
 pub use temp::{
     ManagedTempDir,
     ManagedTempFile,
+    ManagedTempResourceFactory,
     TempDir,
     TempDirOptions,
     TempFile,
     TempFileOptions,
+    TempResourceFactory,
     TempResources,
 };
 pub use traits::{

@@ -181,6 +181,23 @@ impl FsPath {
             self.normalized.rsplit('/').next()
         }
     }
+
+    /// Gets the final path component extension.
+    ///
+    /// # Returns
+    /// `Some` extension without the dot when the final path component has a
+    /// non-empty extension, or `None` for root, extensionless names, hidden
+    /// names such as `.profile`, and names ending with a dot.
+    #[must_use]
+    pub fn file_extension(&self) -> Option<&str> {
+        let file_name = self.file_name()?;
+        let index = file_name.rfind('.')?;
+        if index == 0 || index + 1 == file_name.len() {
+            None
+        } else {
+            Some(&file_name[index + 1..])
+        }
+    }
 }
 
 impl Display for FsPath {

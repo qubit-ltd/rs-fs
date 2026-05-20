@@ -40,6 +40,7 @@ use qubit_fs::{
     FileSystemSpec,
     FileSystems,
     FileType,
+    FileWriter,
     FsAuthority,
     FsError,
     FsErrorKind,
@@ -61,6 +62,7 @@ use qubit_fs::{
     TempDirOptions,
     TempFile,
     TempFileOptions,
+    TempResourceFactory,
     TempResources,
     WriteMode,
     WriteOptions,
@@ -359,6 +361,175 @@ impl DirectoryStream for PartiallyFailingDirectoryStream {
 }
 
 #[derive(Debug)]
+struct NativeTempFileHandle {
+    path: FsPath,
+}
+
+impl TempFile for NativeTempFileHandle {
+    fn path(&self) -> &FsPath {
+        &self.path
+    }
+
+    fn cleanup(self: Box<Self>) -> FsResult<()> {
+        Ok(())
+    }
+
+    fn persist(
+        self: Box<Self>,
+        _target: &FsPath,
+        _options: &PersistOptions,
+    ) -> FsResult<WriteOutcome> {
+        Ok(WriteOutcome::default())
+    }
+
+    fn keep(self: Box<Self>) -> FsResult<FsPath> {
+        Ok(self.path)
+    }
+}
+
+#[derive(Debug)]
+struct NativeTempDirHandle {
+    path: FsPath,
+}
+
+impl TempDir for NativeTempDirHandle {
+    fn path(&self) -> &FsPath {
+        &self.path
+    }
+
+    fn cleanup(self: Box<Self>) -> FsResult<()> {
+        Ok(())
+    }
+
+    fn persist(self: Box<Self>, _target: &FsPath, _options: &PersistOptions) -> FsResult<()> {
+        Ok(())
+    }
+
+    fn keep(self: Box<Self>) -> FsResult<FsPath> {
+        Ok(self.path)
+    }
+}
+
+#[derive(Debug)]
+struct NativeTempResourceFactory;
+
+static NATIVE_TEMP_RESOURCE_FACTORY: NativeTempResourceFactory = NativeTempResourceFactory;
+
+impl TempResourceFactory for NativeTempResourceFactory {
+    fn create_file(
+        &self,
+        _owner: Arc<dyn FileSystem>,
+        options: &TempFileOptions,
+    ) -> FsResult<Box<dyn TempFile>> {
+        let path =
+            self.make_temp_path(options.parent.as_ref(), &options.prefix, &options.suffix)?;
+        Ok(Box::new(NativeTempFileHandle { path }))
+    }
+
+    fn create_dir(
+        &self,
+        _owner: Arc<dyn FileSystem>,
+        options: &TempDirOptions,
+    ) -> FsResult<Box<dyn TempDir>> {
+        let path =
+            self.make_temp_path(options.parent.as_ref(), &options.prefix, &options.suffix)?;
+        Ok(Box::new(NativeTempDirHandle { path }))
+    }
+}
+
+#[derive(Debug)]
+struct NativeTempFs;
+
+impl FileSystem for NativeTempFs {
+    fn metadata(&self) -> FileSystemMetadata {
+        let mut metadata = FileSystemMetadata::new("native-temp");
+        metadata.capabilities.temp_file = true;
+        metadata.capabilities.temp_dir = true;
+        metadata
+    }
+
+    fn temp_resource_factory(&self) -> &dyn TempResourceFactory {
+        &NATIVE_TEMP_RESOURCE_FACTORY
+    }
+
+    fn path_metadata(&self, _path: &FsPath) -> FsResult<FileMetadata> {
+        Err(FsError::new(
+            FsErrorKind::UnsupportedOperation,
+            FsOperation::Metadata,
+            "not used",
+        ))
+    }
+
+    fn exists(&self, _path: &FsPath) -> FsResult<bool> {
+        Err(FsError::new(
+            FsErrorKind::UnsupportedOperation,
+            FsOperation::Exists,
+            "not used",
+        ))
+    }
+
+    fn list(&self, _path: &FsPath, _options: &ListOptions) -> FsResult<Box<dyn DirectoryStream>> {
+        Err(FsError::new(
+            FsErrorKind::UnsupportedOperation,
+            FsOperation::List,
+            "not used",
+        ))
+    }
+
+    fn open_reader(&self, _path: &FsPath, _options: &ReadOptions) -> FsResult<Box<dyn FileReader>> {
+        Err(FsError::new(
+            FsErrorKind::UnsupportedOperation,
+            FsOperation::OpenReader,
+            "not used",
+        ))
+    }
+
+    fn open_writer(
+        &self,
+        _path: &FsPath,
+        _options: &WriteOptions,
+    ) -> FsResult<Box<dyn FileWriter>> {
+        Err(FsError::new(
+            FsErrorKind::UnsupportedOperation,
+            FsOperation::OpenWriter,
+            "not used",
+        ))
+    }
+
+    fn create_dir(&self, _path: &FsPath, _options: &CreateDirOptions) -> FsResult<()> {
+        Err(FsError::new(
+            FsErrorKind::UnsupportedOperation,
+            FsOperation::CreateDir,
+            "not used",
+        ))
+    }
+
+    fn delete(&self, _path: &FsPath, _options: &DeleteOptions) -> FsResult<()> {
+        Err(FsError::new(
+            FsErrorKind::UnsupportedOperation,
+            FsOperation::Delete,
+            "not used",
+        ))
+    }
+
+    fn rename(&self, _from: &FsPath, _to: &FsPath, _options: &RenameOptions) -> FsResult<()> {
+        Err(FsError::new(
+            FsErrorKind::UnsupportedOperation,
+            FsOperation::Rename,
+            "not used",
+        ))
+    }
+
+    fn copy(&self, _from: &FsPath, _to: &FsPath, _options: &CopyOptions) -> FsResult<CopyOutcome> {
+        Err(FsError::new(
+            FsErrorKind::UnsupportedOperation,
+            FsOperation::Copy,
+            "not used",
+        ))
+    }
+}
+
+#[derive(Debug)]
 struct MockProvider {
     fs: MockFs,
 }
@@ -433,11 +604,31 @@ fn test_path_and_uri_models_cover_core_branches() {
     assert_eq!("/", root.as_str());
     assert_eq!(None, root.parent());
     assert_eq!(None, root.file_name());
+    assert_eq!(None, root.file_extension());
     assert_eq!("/", root.to_string());
 
     let path = FsPath::parse("/a//b/./c").expect("path should parse");
     assert_eq!("/a/b/c", path.as_str());
     assert_eq!(Some("c"), path.file_name());
+    assert_eq!(None, path.file_extension());
+    assert_eq!(
+        Some("gz"),
+        FsPath::parse("/a/archive.tar.gz")
+            .expect("path should parse")
+            .file_extension()
+    );
+    assert_eq!(
+        None,
+        FsPath::parse("/a/.profile")
+            .expect("path should parse")
+            .file_extension()
+    );
+    assert_eq!(
+        None,
+        FsPath::parse("/a/trailing.")
+            .expect("path should parse")
+            .file_extension()
+    );
     assert_eq!(
         "/a/b",
         path.parent().expect("path should have parent").as_str()
@@ -1113,6 +1304,34 @@ fn test_temporary_resources_cover_custom_paths_and_failure_branches() {
     fs.create_dir(&parent, &CreateDirOptions::default())
         .expect("parent should be created");
 
+    let default_file =
+        TempResources::create_default_file(fs.clone()).expect("default temp file should create");
+    assert!(default_file.path().as_str().starts_with("/.tmp-"));
+    default_file
+        .cleanup()
+        .expect("default temp file should clean");
+
+    let prefixed_file = TempResources::create_file_with_prefix(fs.clone(), "prefix-")
+        .expect("prefixed temp file should create");
+    assert!(prefixed_file.path().as_str().starts_with("/prefix-"));
+    prefixed_file
+        .cleanup()
+        .expect("prefixed temp file should clean");
+
+    let default_dir =
+        TempResources::create_default_dir(fs.clone()).expect("default temp dir should create");
+    assert!(default_dir.path().as_str().starts_with("/.tmp-dir-"));
+    default_dir
+        .cleanup()
+        .expect("default temp dir should clean");
+
+    let prefixed_dir = TempResources::create_dir_with_prefix(fs.clone(), "dir-prefix-")
+        .expect("prefixed temp dir should create");
+    assert!(prefixed_dir.path().as_str().starts_with("/dir-prefix-"));
+    prefixed_dir
+        .cleanup()
+        .expect("prefixed temp dir should clean");
+
     let temp_file = TempResources::create_file(
         fs.clone(),
         &TempFileOptions {
@@ -1165,6 +1384,33 @@ fn test_temporary_resources_cover_custom_paths_and_failure_branches() {
     let create_dir_error_fs: Arc<dyn FileSystem> =
         Arc::new(MockFs::with_state(create_dir_error_state));
     assert!(TempResources::create_dir(create_dir_error_fs, &TempDirOptions::default()).is_err());
+
+    let native_fs: Arc<dyn FileSystem> = Arc::new(NativeTempFs);
+    let native_parent = FsPath::parse("/native").expect("path should parse");
+    let native_file = TempResources::create_file(
+        native_fs.clone(),
+        &TempFileOptions {
+            parent: Some(native_parent.clone()),
+            prefix: "file-".to_owned(),
+            suffix: ".tmp".to_owned(),
+        },
+    )
+    .expect("native temp file should be created");
+    assert!(native_file.path().as_str().starts_with("/native/file-"));
+    assert!(native_file.path().as_str().ends_with(".tmp"));
+    native_file.keep().expect("native temp file should keep");
+    let native_dir = TempResources::create_dir(
+        native_fs,
+        &TempDirOptions {
+            parent: Some(native_parent),
+            prefix: "dir-".to_owned(),
+            suffix: ".work".to_owned(),
+        },
+    )
+    .expect("native temp dir should be created");
+    assert!(native_dir.path().as_str().starts_with("/native/dir-"));
+    assert!(native_dir.path().as_str().ends_with(".work"));
+    native_dir.keep().expect("native temp dir should keep");
 
     let cleanup_file = FsPath::parse("/cleanup-error.tmp").expect("path should parse");
     fs.write_all(&cleanup_file, b"data")

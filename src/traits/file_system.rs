@@ -25,8 +25,10 @@ use crate::{
     FsPath,
     FsResult,
     ListOptions,
+    ManagedTempResourceFactory,
     ReadOptions,
     RenameOptions,
+    TempResourceFactory,
     WriteOptions,
 };
 
@@ -45,6 +47,19 @@ pub trait FileSystem: Debug + Send + Sync {
     #[inline]
     fn capabilities(&self) -> FileSystemCapabilities {
         self.metadata().capabilities
+    }
+
+    /// Gets the temporary resource factory for this filesystem instance.
+    ///
+    /// If the specified filesystem does not provide its specific implementation,
+    /// a default `ManagedTempResourceFactory` will be returned.
+    ///
+    /// # Returns
+    /// Factory used to create temporary files and directories owned by this
+    /// filesystem instance.
+    #[inline]
+    fn temp_resource_factory(&self) -> &dyn TempResourceFactory {
+        ManagedTempResourceFactory::shared()
     }
 
     /// Reads metadata for a path.
