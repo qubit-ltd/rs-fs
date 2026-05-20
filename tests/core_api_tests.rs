@@ -967,12 +967,15 @@ fn test_filesystem_traits_and_registry_work_together() {
         .register(MockProvider { fs: fs.clone() })
         .expect("provider should register");
     assert_eq!(vec!["mock"], registry.provider_names());
-    let opened = registry.fs("mem:///file.txt").expect("alias should open");
+    let mem_uri = FsUri::parse("mem:///file.txt").expect("URI should parse");
+    let opened = registry.fs(&mem_uri).expect("alias should open");
     assert!(opened.capabilities().directories);
-    assert!(registry.fs("missing:///file.txt").is_err());
+    let missing_uri = FsUri::parse("missing:///file.txt").expect("URI should parse");
+    assert!(registry.fs(&missing_uri).is_err());
 
+    let resource_uri = FsUri::parse("mock:///file.txt").expect("URI should parse");
     let resource = registry
-        .resource("mock:///file.txt")
+        .resource(&resource_uri)
         .expect("URI should resolve");
     let _: FileResource = resource.clone();
     assert_eq!("/file.txt", resource.path().as_str());
@@ -1022,15 +1025,15 @@ fn test_filesystem_traits_and_registry_work_together() {
             &RenameOptions::default(),
         )
         .expect("resource should rename");
+    let dir_uri = FsUri::parse("mock:///dir").expect("URI should parse");
     let dir = registry
-        .resource_for_uri(FsUri::parse("mock:///dir").expect("URI should parse"))
+        .resource(&dir_uri)
         .expect("directory resource should resolve");
     dir.create_dir(&CreateDirOptions::default())
         .expect("resource directory should create");
     assert!(dir.exists().expect("directory should exist"));
     dir.delete(&DeleteOptions::default())
         .expect("resource directory should delete");
-    assert!(registry.resource("not a uri").is_err());
 
     FileSystems::register(MockProvider { fs: fs.clone() })
         .expect("global provider should register");
@@ -1042,15 +1045,35 @@ fn test_filesystem_traits_and_registry_work_together() {
     let global_names = FileSystems::provider_names();
     assert!(global_names.iter().any(|name| name == "mock"));
     assert!(global_names.iter().any(|name| name == "global-shared"));
+    let global_uri = FsUri::parse("mem:///global.txt").expect("URI should parse");
     assert!(
         FileSystems::fs("mem:///global.txt")
             .expect("global fs should resolve")
             .capabilities()
             .directories
     );
+    assert!(
+        FileSystems::fs_for_uri(&global_uri)
+            .expect("global fs from URI should resolve")
+            .capabilities()
+            .directories
+    );
+    assert!(
+        FileSystems::fs_for_scheme("mem")
+            .expect("global fs from scheme should resolve")
+            .capabilities()
+            .directories
+    );
     let global_resource =
         FileSystems::resource("mock:///global.txt").expect("global resource should resolve");
     assert_eq!("/global.txt", global_resource.path().as_str());
+    let global_resource_uri =
+        FsUri::parse("mock:///global-from-uri.txt").expect("URI should parse");
+    let global_resource = FileSystems::resource_for_uri(&global_resource_uri)
+        .expect("global resource from URI should resolve");
+    assert_eq!("/global-from-uri.txt", global_resource.path().as_str());
+    assert!(FileSystems::resource("not a uri").is_err());
+    assert!(FileSystems::fs_for_scheme("bad scheme").is_err());
 
     let config = FileSystemConfig {
         uri: FsUri::parse("mock:///file.txt").expect("URI should parse"),
@@ -1142,7 +1165,7 @@ fn test_registry_maps_spi_errors() {
     assert_eq!(
         FsErrorKind::ProviderUnavailable,
         unavailable_registry
-            .fs("offline:///file.txt")
+            .fs(&FsUri::parse("offline:///file.txt").expect("URI should parse"))
             .expect_err("unavailable provider should fail")
             .kind()
     );
@@ -1157,18 +1180,15 @@ fn test_registry_maps_spi_errors() {
     assert_eq!(
         FsErrorKind::Other,
         broken_registry
-            .fs("broken:///file.txt")
+            .fs(&FsUri::parse("broken:///file.txt").expect("URI should parse"))
             .expect_err("broken provider should fail")
             .kind()
     );
 
     let empty_registry = FileSystemRegistry::new();
-    assert!(empty_registry.resource("missing:///file.txt").is_err());
-    assert!(
-        empty_registry
-            .resource_for_uri(FsUri::parse("missing:///file.txt").expect("URI should parse"))
-            .is_err()
-    );
+    let missing_uri = FsUri::parse("missing:///file.txt").expect("URI should parse");
+    assert!(empty_registry.resource(&missing_uri).is_err());
+    assert!(empty_registry.fs(&missing_uri).is_err());
 }
 
 #[test]

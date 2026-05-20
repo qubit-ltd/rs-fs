@@ -81,22 +81,6 @@ impl FileSystemRegistry {
             .map_err(map_provider_error)
     }
 
-    /// Resolves a URI string into a filesystem instance.
-    ///
-    /// # Parameters
-    /// - `uri`: Filesystem URI.
-    ///
-    /// # Returns
-    /// Shared filesystem instance created by the selected provider.
-    ///
-    /// # Errors
-    /// Returns [`FsError`] when URI parsing, provider resolution, or provider
-    /// creation fails.
-    pub fn fs(&self, uri: &str) -> FsResult<Arc<dyn FileSystem>> {
-        let uri = FsUri::parse(uri)?;
-        self.fs_for_uri(uri)
-    }
-
     /// Resolves a parsed URI into a filesystem instance.
     ///
     /// # Parameters
@@ -107,29 +91,12 @@ impl FileSystemRegistry {
     ///
     /// # Errors
     /// Returns [`FsError`] when provider resolution or creation fails.
-    pub fn fs_for_uri(&self, uri: FsUri) -> FsResult<Arc<dyn FileSystem>> {
+    pub fn fs(&self, uri: &FsUri) -> FsResult<Arc<dyn FileSystem>> {
         let selector = uri.scheme.clone();
-        let config = FileSystemConfig::new(uri);
+        let config = FileSystemConfig::new(uri.clone());
         self.providers
             .create_arc(&selector, &config)
             .map_err(map_provider_error)
-    }
-
-    /// Resolves a URI string into a bound file resource.
-    ///
-    /// # Parameters
-    /// - `uri`: Filesystem URI.
-    ///
-    /// # Returns
-    /// A file resource containing the matching filesystem and filesystem-local
-    /// path.
-    ///
-    /// # Errors
-    /// Returns [`FsError`] when URI parsing, provider resolution, or provider
-    /// creation fails.
-    pub fn resource(&self, uri: &str) -> FsResult<FileResource> {
-        let uri = FsUri::parse(uri)?;
-        self.resource_for_uri(uri)
     }
 
     /// Resolves a parsed URI into a bound file resource.
@@ -143,9 +110,9 @@ impl FileSystemRegistry {
     ///
     /// # Errors
     /// Returns [`FsError`] when provider resolution or creation fails.
-    pub fn resource_for_uri(&self, uri: FsUri) -> FsResult<FileResource> {
+    pub fn resource(&self, uri: &FsUri) -> FsResult<FileResource> {
         let path = uri.path.clone();
-        let fs = self.fs_for_uri(uri)?;
+        let fs = self.fs(uri)?;
         Ok(FileResource::new(fs, path))
     }
 

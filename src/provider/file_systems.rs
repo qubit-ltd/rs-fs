@@ -9,7 +9,10 @@
  ******************************************************************************/
 //! Global filesystem registry facade.
 
-use std::sync::{Arc, OnceLock};
+use std::sync::{
+    Arc,
+    OnceLock,
+};
 
 use parking_lot::RwLock;
 use qubit_spi::ServiceProvider;
@@ -21,6 +24,7 @@ use crate::{
     FileSystemRegistry,
     FileSystemSpec,
     FsResult,
+    FsUri,
 };
 
 static GLOBAL_REGISTRY: OnceLock<RwLock<FileSystemRegistry>> = OnceLock::new();
@@ -75,8 +79,44 @@ impl FileSystems {
     /// Returns an error when the URI cannot be parsed or no provider can create
     /// a filesystem for the URI scheme.
     pub fn fs(uri: &str) -> FsResult<Arc<dyn FileSystem>> {
+        let uri = FsUri::parse(uri)?;
+        Self::fs_for_uri(&uri)
+    }
+
+    /// Resolves a parsed URI into a filesystem instance from the global registry.
+    ///
+    /// # Parameters
+    /// - `uri`: Parsed filesystem URI.
+    ///
+    /// # Returns
+    /// A filesystem instance created by the matching provider.
+    ///
+    /// # Errors
+    /// Returns an error when no provider can create a filesystem for the URI
+    /// scheme.
+    pub fn fs_for_uri(uri: &FsUri) -> FsResult<Arc<dyn FileSystem>> {
         let registry = Self::registry().read();
         registry.fs(uri)
+    }
+
+    /// Resolves a filesystem instance from a URI scheme.
+    ///
+    /// This is equivalent to resolving the minimal URI `{scheme}:///`. It is
+    /// only suitable for providers that can be created from default authority,
+    /// root path, and default options.
+    ///
+    /// # Parameters
+    /// - `scheme`: URI scheme used to select a provider.
+    ///
+    /// # Returns
+    /// A filesystem instance created by the matching provider.
+    ///
+    /// # Errors
+    /// Returns an error when the scheme cannot form a valid URI or no provider
+    /// can create a filesystem from the minimal URI.
+    pub fn fs_for_scheme(scheme: &str) -> FsResult<Arc<dyn FileSystem>> {
+        let uri = FsUri::parse(&format!("{scheme}:///"))?;
+        Self::fs_for_uri(&uri)
     }
 
     /// Resolves a URI into a bound file resource from the global registry.
@@ -92,6 +132,23 @@ impl FileSystems {
     /// Returns an error when the URI cannot be parsed or no provider can create
     /// a filesystem for the URI scheme.
     pub fn resource(uri: &str) -> FsResult<FileResource> {
+        let uri = FsUri::parse(uri)?;
+        Self::resource_for_uri(&uri)
+    }
+
+    /// Resolves a parsed URI into a bound file resource from the global registry.
+    ///
+    /// # Parameters
+    /// - `uri`: Parsed filesystem URI.
+    ///
+    /// # Returns
+    /// A file resource containing the matching filesystem and filesystem-local
+    /// path.
+    ///
+    /// # Errors
+    /// Returns an error when no provider can create a filesystem for the URI
+    /// scheme.
+    pub fn resource_for_uri(uri: &FsUri) -> FsResult<FileResource> {
         let registry = Self::registry().read();
         registry.resource(uri)
     }
