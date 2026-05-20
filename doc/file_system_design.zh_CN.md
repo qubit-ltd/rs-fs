@@ -442,8 +442,9 @@ let mut registry = FileSystemRegistry::new();
 registry.register(LocalFileSystemProvider)?;
 registry.register(OssFileSystemProvider)?;
 
-let fs = registry.fs("oss://bucket/reports/2026/a.csv")?;
-let resource = registry.resource("oss://bucket/reports/2026/a.csv")?;
+let uri = FsUri::parse("oss://bucket/reports/2026/a.csv")?;
+let fs = registry.fs(&uri)?;
+let resource = registry.resource(&uri)?;
 ```
 
 ### 10.3 显式发现 vs 自动发现
@@ -472,7 +473,7 @@ pub struct FileSystemRegistry {
 - 通过 scheme 解析 provider。
 - 根据 `FsUri` 构造 `FileSystemConfig`。
 - 调用 `create_arc` 返回 `Arc<dyn FileSystem>`。
-- 通过 `resource(uri)` 返回绑定文件系统和 provider-local path 的 `FileResource`。
+- 通过 `resource(&FsUri)` 返回绑定文件系统和 provider-local path 的 `FileResource`。
 - 将 `ProviderRegistryError` 映射成 `FsError`。
 
 `FileSystems` 是进程级 singleton 门面，定义为不可实例化的 namespace enum：
@@ -487,7 +488,10 @@ pub enum FileSystems {}
 impl FileSystems {
     pub fn register<P>(provider: P) -> FsResult<()>;
     pub fn fs(uri: &str) -> FsResult<Arc<dyn FileSystem>>;
+    pub fn fs_for_uri(uri: &FsUri) -> FsResult<Arc<dyn FileSystem>>;
+    pub fn fs_for_scheme(scheme: &str) -> FsResult<Arc<dyn FileSystem>>;
     pub fn resource(uri: &str) -> FsResult<FileResource>;
+    pub fn resource_for_uri(uri: &FsUri) -> FsResult<FileResource>;
 }
 ```
 
@@ -1429,7 +1433,7 @@ provider selector 与 URI scheme 的关系：
 
 - 默认 selector 等于 scheme。
 - provider descriptor 可以声明 alias，例如 `local` provider 的 alias 包含 `file`。
-- `FileSystemRegistry::fs_for_uri` 先按 scheme 匹配 provider alias。
+- `FileSystemRegistry::fs(&FsUri)` 先按 scheme 匹配 provider alias。
 - 如果 URI query 或外部配置明确指定 provider selector，则必须校验该 provider 是否声明支持对应 scheme。
 
 不要允许 `provider=local` 打开 `oss://bucket/key` 这类语义错配，除非这是后续明确设计的 adapter 场景。

@@ -175,7 +175,7 @@ fn configure_filesystems() -> FsResult<()> {
 }
 ```
 
-如果你只需要根据 URI 得到文件系统实例，使用 `FileSystems::fs()`：
+如果你只需要根据 URI 字符串得到文件系统实例，使用 `FileSystems::fs()`：
 
 ```rust
 use qubit_fs::{FileSystems, FsResult};
@@ -187,6 +187,10 @@ fn open_filesystem() -> FsResult<()> {
     Ok(())
 }
 ```
+
+如果已经有解析后的 URI，使用 `FileSystems::fs_for_uri()`。如果只有 scheme，
+使用 `FileSystems::fs_for_scheme()` 解析最小 URI `{scheme}:///`；这只适用于能
+基于默认 authority、root path 和默认 options 创建文件系统的 provider。
 
 如果你需要同时得到文件系统实例和 provider-local path，使用 `FileSystems::resource()`。
 这是更常用的资源导向 API：
@@ -200,15 +204,19 @@ fn resolve_and_check() -> FsResult<bool> {
 }
 ```
 
-`FileSystemRegistry` 仍然保留，用于测试、插件运行时或嵌入式场景里的隔离 registry：
+如果已经有解析后的 URI，使用 `FileSystems::resource_for_uri()`。
+
+`FileSystemRegistry` 仍然保留，用于测试、插件运行时或嵌入式场景里的隔离 registry。
+它只接收解析后的 `FsUri`：
 
 ```rust
-use qubit_fs::{FileSystemRegistry, FsResult};
+use qubit_fs::{FileSystemRegistry, FsResult, FsUri};
 
 fn isolated_registry() -> FsResult<()> {
     let mut registry = FileSystemRegistry::new();
     // registry.register(MemoryFileSystemProvider::new())?;
-    let resource = registry.resource("mem:///hello.txt")?;
+    let uri = FsUri::parse("mem:///hello.txt")?;
+    let resource = registry.resource(&uri)?;
     println!("{}", resource.path().as_str());
     Ok(())
 }
@@ -1196,13 +1204,14 @@ pub fn register_provider(registry: &mut qubit_fs::FileSystemRegistry) -> qubit_f
 应用侧使用：
 
 ```rust
-use qubit_fs::{FileSystemRegistry, FsResult};
+use qubit_fs::{FileSystemRegistry, FsResult, FsUri};
 
 fn main() -> FsResult<()> {
     let mut registry = FileSystemRegistry::new();
     qubit_fs_memory::register_provider(&mut registry)?;
 
-    let resource = registry.resource("mem:///hello.txt")?;
+    let uri = FsUri::parse("mem:///hello.txt")?;
+    let resource = registry.resource(&uri)?;
 
     resource.write_all(b"hello")?;
     let bytes = resource.read_all()?;
@@ -1446,7 +1455,7 @@ provider 测试至少应覆盖：
 1. 引入 `qubit-fs` 和一个或多个 provider crate。
 2. 创建 `FileSystemRegistry`。
 3. 显式注册 provider。
-4. 用 `FileSystems::resource()` 或 `FileSystemRegistry::resource()` 解析 URI。
+4. 用 `FileSystems::resource()` 解析 URI 字符串；用 `FileSystemRegistry::resource()` 处理已解析的 `FsUri`。
 5. 优先使用 `FileResource` 执行资源导向操作；底层实现仍然使用 `FileSystem` + `FsPath`。
 6. 依赖高级行为前检查 capabilities。
 7. 按 `FsErrorKind` 处理错误，不直接依赖 provider-native error。

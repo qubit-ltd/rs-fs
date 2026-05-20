@@ -170,7 +170,7 @@ fn configure_filesystems() -> FsResult<()> {
 }
 ```
 
-Use `FileSystems::fs()` when you want the filesystem selected from a URI:
+Use `FileSystems::fs()` when you want the filesystem selected from a URI string:
 
 ```rust
 use qubit_fs::{FileSystems, FsResult};
@@ -182,6 +182,11 @@ fn open_filesystem() -> FsResult<()> {
     Ok(())
 }
 ```
+
+If the URI has already been parsed, use `FileSystems::fs_for_uri()`.
+If only a scheme is available, `FileSystems::fs_for_scheme()` resolves the
+minimal URI `{scheme}:///`; this only works for providers that can be created
+from default authority, root path, and default options.
 
 Use `FileSystems::resource()` when you need both the filesystem and the
 provider-local path. This is the common resource-oriented API:
@@ -195,16 +200,19 @@ fn resolve_and_check() -> FsResult<bool> {
 }
 ```
 
+If the URI has already been parsed, use `FileSystems::resource_for_uri()`.
+
 `FileSystemRegistry` is still available for isolated registries in tests,
-plugins, or embedded runtimes:
+plugins, or embedded runtimes. It only accepts parsed `FsUri` values:
 
 ```rust
-use qubit_fs::{FileSystemRegistry, FsResult};
+use qubit_fs::{FileSystemRegistry, FsResult, FsUri};
 
 fn isolated_registry() -> FsResult<()> {
     let mut registry = FileSystemRegistry::new();
     // registry.register(MemoryFileSystemProvider::new())?;
-    let resource = registry.resource("mem:///hello.txt")?;
+    let uri = FsUri::parse("mem:///hello.txt")?;
+    let resource = registry.resource(&uri)?;
     println!("{}", resource.path().as_str());
     Ok(())
 }
@@ -1188,13 +1196,14 @@ pub fn register_provider(registry: &mut qubit_fs::FileSystemRegistry) -> qubit_f
 Application usage:
 
 ```rust
-use qubit_fs::{FileSystemRegistry, FsResult};
+use qubit_fs::{FileSystemRegistry, FsResult, FsUri};
 
 fn main() -> FsResult<()> {
     let mut registry = FileSystemRegistry::new();
     qubit_fs_memory::register_provider(&mut registry)?;
 
-    let resource = registry.resource("mem:///hello.txt")?;
+    let uri = FsUri::parse("mem:///hello.txt")?;
+    let resource = registry.resource(&uri)?;
 
     resource.write_all(b"hello")?;
     let bytes = resource.read_all()?;
@@ -1439,7 +1448,7 @@ For application developers:
 1. Add `qubit-fs` and one or more provider crates.
 2. Create a `FileSystemRegistry`.
 3. Register provider crates explicitly.
-4. Resolve URIs with `FileSystems::resource()` or `FileSystemRegistry::resource()`.
+4. Resolve URI strings with `FileSystems::resource()`, or parsed `FsUri` values with `FileSystemRegistry::resource()`.
 5. Use `FileResource` for resource-oriented operations or `FileSystem` with `FsPath` for lower-level code.
 6. Check capabilities before relying on advanced behavior.
 7. Treat errors by `FsErrorKind`, not provider-native error types.
