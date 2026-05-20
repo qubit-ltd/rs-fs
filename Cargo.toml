@@ -32,6 +32,7 @@ doctest = true
 
 [dependencies]
 log = "0.4"
+parking_lot = "0.12"
 thiserror = "2.0"
 url = "2.5"
 

@@ -9,12 +9,9 @@
  ******************************************************************************/
 //! Global filesystem registry facade.
 
-use std::sync::{
-    Arc,
-    OnceLock,
-    RwLock,
-};
+use std::sync::{Arc, OnceLock};
 
+use parking_lot::RwLock;
 use qubit_spi::ServiceProvider;
 
 use crate::{
@@ -46,16 +43,11 @@ impl FileSystems {
     ///
     /// # Errors
     /// Returns an error when a provider with the same descriptor already exists.
-    ///
-    /// # Panics
-    /// Panics when the global registry lock is poisoned.
     pub fn register<P>(provider: P) -> FsResult<()>
     where
         P: ServiceProvider<FileSystemSpec> + 'static,
     {
-        let mut registry = Self::registry()
-            .write()
-            .expect("global filesystem registry lock should not be poisoned");
+        let mut registry = Self::registry().write();
         registry.register(provider)
     }
 
@@ -66,13 +58,8 @@ impl FileSystems {
     ///
     /// # Errors
     /// Returns an error when a provider with the same descriptor already exists.
-    ///
-    /// # Panics
-    /// Panics when the global registry lock is poisoned.
     pub fn register_shared(provider: Arc<FileSystemProvider>) -> FsResult<()> {
-        let mut registry = Self::registry()
-            .write()
-            .expect("global filesystem registry lock should not be poisoned");
+        let mut registry = Self::registry().write();
         registry.register_shared(provider)
     }
 
@@ -87,13 +74,8 @@ impl FileSystems {
     /// # Errors
     /// Returns an error when the URI cannot be parsed or no provider can create
     /// a filesystem for the URI scheme.
-    ///
-    /// # Panics
-    /// Panics when the global registry lock is poisoned.
     pub fn fs(uri: &str) -> FsResult<Arc<dyn FileSystem>> {
-        let registry = Self::registry()
-            .read()
-            .expect("global filesystem registry lock should not be poisoned");
+        let registry = Self::registry().read();
         registry.fs(uri)
     }
 
@@ -109,13 +91,8 @@ impl FileSystems {
     /// # Errors
     /// Returns an error when the URI cannot be parsed or no provider can create
     /// a filesystem for the URI scheme.
-    ///
-    /// # Panics
-    /// Panics when the global registry lock is poisoned.
     pub fn resource(uri: &str) -> FsResult<FileResource> {
-        let registry = Self::registry()
-            .read()
-            .expect("global filesystem registry lock should not be poisoned");
+        let registry = Self::registry().read();
         registry.resource(uri)
     }
 
@@ -123,14 +100,9 @@ impl FileSystems {
     ///
     /// # Returns
     /// Registered provider names.
-    ///
-    /// # Panics
-    /// Panics when the global registry lock is poisoned.
     #[must_use]
     pub fn provider_names() -> Vec<String> {
-        let registry = Self::registry()
-            .read()
-            .expect("global filesystem registry lock should not be poisoned");
+        let registry = Self::registry().read();
         registry
             .provider_names()
             .into_iter()
