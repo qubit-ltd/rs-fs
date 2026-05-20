@@ -101,6 +101,7 @@ fn main() -> qubit_fs::FsResult<()> {
     let path = FsPath::parse("/a//b/./c.txt")?;
     assert_eq!("/a/b/c.txt", path.as_str());
     assert_eq!(Some("c.txt"), path.file_name());
+    assert_eq!(Some("txt"), path.file_extension());
 
     let parent = path.parent().expect("parent should exist");
     assert_eq!("/a/b", parent.as_str());
@@ -593,22 +594,81 @@ A production cross-filesystem copier should also support checksums, progress rep
 
 Temporary resources model ownership and cleanup responsibility. They are useful because they provide `Drop` best-effort cleanup in addition to explicit methods.
 
-### 7.1 Create a managed temporary file
+### 7.1 Create temporary files and directories
 
 ```rust
 use std::sync::Arc;
-use qubit_fs::{FileSystem, FsPath, FsResult, PersistOptions, TempFileOptions, TempResources};
+use qubit_fs::{
+    FileSystem,
+    FileSystemExt,
+    FsPath,
+    FsResult,
+    PersistOptions,
+    TempDir,
+    TempDirOptions,
+    TempFile,
+    TempFileOptions,
+    TempResources,
+};
 
 fn temp_file_publish(fs: Arc<dyn FileSystem>) -> FsResult<()> {
-    let temp = TempResources::create_file(fs, &TempFileOptions::default())?;
-    let target = FsPath::parse("/published/final.txt")?;
+    let temp: Box<dyn TempFile> =
+        TempResources::create_file(fs.clone(), &TempFileOptions::default())?;
 
+    let staging_path = temp.path().clone();
+    fs.write_all(&staging_path, b"generated report\n")?;
+
+    let target = FsPath::parse("/published/final.txt")?;
     temp.persist(&target, &PersistOptions::default())?;
+
+    Ok(())
+}
+
+fn temp_dir_workspace(fs: Arc<dyn FileSystem>) -> FsResult<()> {
+    let workspace: Box<dyn TempDir> =
+        TempResources::create_dir(fs.clone(), &TempDirOptions::default())?;
+
+    let part_file = workspace.path().join("part-0001.csv")?;
+    fs.write_all(&part_file, b"id,value\n1,42\n")?;
+
+    let target = FsPath::parse("/published/report-parts")?;
+    workspace.persist(&target, &PersistOptions::default())?;
     Ok(())
 }
 ```
 
-`ManagedTempFile` uses the underlying filesystem to reserve a temporary path. If the handle is dropped before `cleanup()`, `persist()`, or `keep()`, it attempts best-effort cleanup.
+`TempResources::create_file(fs, options)` works as follows:
+
+- It first asks the current `FileSystem` instance for `fs.temp_resource_factory()`.
+- It calls `create_file(fs, options)` on that factory, allowing the filesystem to return either a native `TempFile` or a core fallback.
+- The default factory is `ManagedTempResourceFactory`: it generates a temporary path, reserves an empty file with `open_writer(..., CreateNew)`, and returns `ManagedTempFile`.
+- Factory implementations may reuse `TempResourceFactory::make_temp_path()` for the common naming format, or use provider-specific naming rules.
+
+`TempResources::create_dir(fs, options)` follows the same rule:
+
+- It first asks the current `FileSystem` instance for `fs.temp_resource_factory()`.
+- It calls `create_dir(fs, options)` on that factory, allowing the filesystem to return either a native `TempDir` or a core fallback.
+- The default factory is `ManagedTempResourceFactory`: it generates a temporary path, creates the directory with `create_dir(..., recursive=true)`, and returns `ManagedTempDir`.
+- Factory implementations may reuse `TempResourceFactory::make_temp_path()` for the common naming format, or use provider-specific naming rules.
+
+`TempResources` also provides convenience helpers:
+
+```rust
+let file1 = TempResources::create_default_file(fs.clone())?;
+let file2 = TempResources::create_file_with_prefix(fs.clone(), "upload-")?;
+
+let dir1 = TempResources::create_default_dir(fs.clone())?;
+let dir2 = TempResources::create_dir_with_prefix(fs.clone(), "job-")?;
+```
+
+`TempFile` and `TempDir` share the same usage pattern:
+
+- Create a cleanup-owning handle with `TempResources::create_file()` or `TempResources::create_dir()`.
+- Get the temporary path with `path()`, then write content or child files through normal `FileSystem` APIs.
+- Call `persist()` to publish the resource to its final target.
+- If the resource should not be published, call `cleanup()` explicitly or call `keep()` to disable automatic cleanup and transfer the temporary path to another component.
+
+`ManagedTempFile` and `ManagedTempDir` are the fallback default implementations. They use the underlying filesystem to reserve temporary paths. If the handle is dropped before `cleanup()`, `persist()`, or `keep()`, it attempts best-effort cleanup.
 
 ### 7.2 Custom temporary file name
 

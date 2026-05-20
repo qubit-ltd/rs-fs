@@ -105,6 +105,7 @@ fn main() -> qubit_fs::FsResult<()> {
     let path = FsPath::parse("/a//b/./c.txt")?;
     assert_eq!("/a/b/c.txt", path.as_str());
     assert_eq!(Some("c.txt"), path.file_name());
+    assert_eq!(Some("txt"), path.file_extension());
 
     let parent = path.parent().expect("parent should exist");
     assert_eq!("/a/b", parent.as_str());
@@ -595,24 +596,83 @@ fn copy_between(from_uri: &str, to_uri: &str) -> FsResult<()> {
 
 ## 7. 临时资源
 
-临时资源表示“拥有清理责任的句柄”。它们有意义的关键点是：除了显式 `cleanup()`、`persist()`、`keep()`，还提供 `Drop` best-effort cleanup。
+临时资源表示“拥有清理责任的句柄”。它们有意义的关键点是：除了显式 `cleanup()`、`persist()`、`keep()`，还提供 `Drop` 尽力清理。
 
-### 7.1 创建托管临时文件
+### 7.1 创建临时文件和临时目录
 
 ```rust
 use std::sync::Arc;
-use qubit_fs::{FileSystem, FsPath, FsResult, PersistOptions, TempFileOptions, TempResources};
+use qubit_fs::{
+    FileSystem,
+    FileSystemExt,
+    FsPath,
+    FsResult,
+    PersistOptions,
+    TempDir,
+    TempDirOptions,
+    TempFile,
+    TempFileOptions,
+    TempResources,
+};
 
 fn temp_file_publish(fs: Arc<dyn FileSystem>) -> FsResult<()> {
-    let temp = TempResources::create_file(fs, &TempFileOptions::default())?;
-    let target = FsPath::parse("/published/final.txt")?;
+    let temp: Box<dyn TempFile> =
+        TempResources::create_file(fs.clone(), &TempFileOptions::default())?;
 
+    let staging_path = temp.path().clone();
+    fs.write_all(&staging_path, b"generated report\n")?;
+
+    let target = FsPath::parse("/published/final.txt")?;
     temp.persist(&target, &PersistOptions::default())?;
+
+    Ok(())
+}
+
+fn temp_dir_workspace(fs: Arc<dyn FileSystem>) -> FsResult<()> {
+    let workspace: Box<dyn TempDir> =
+        TempResources::create_dir(fs.clone(), &TempDirOptions::default())?;
+
+    let part_file = workspace.path().join("part-0001.csv")?;
+    fs.write_all(&part_file, b"id,value\n1,42\n")?;
+
+    let target = FsPath::parse("/published/report-parts")?;
+    workspace.persist(&target, &PersistOptions::default())?;
     Ok(())
 }
 ```
 
-`ManagedTempFile` 会通过底层文件系统预留一个临时路径。如果句柄在 `cleanup()`、`persist()` 或 `keep()` 之前被 drop，会尝试 best-effort cleanup。
+`TempResources::create_file(fs, options)` 的实际行为是：
+
+- 先从当前 `FileSystem` 实例取得 `fs.temp_resource_factory()`。
+- 调用该 factory 的 `create_file(fs, options)`，由当前文件系统决定返回 native `TempFile`，还是使用核心层 fallback。
+- 默认 factory 是 `ManagedTempResourceFactory`：它会生成临时路径，使用 `open_writer(..., CreateNew)` 预留空文件，然后返回 `ManagedTempFile`。
+- factory 实现可以复用 `TempResourceFactory::make_temp_path()` 生成统一格式的临时路径，也可以按后端需要使用自己的命名格式。
+
+`TempResources::create_dir(fs, options)` 同理：
+
+- 先从当前 `FileSystem` 实例取得 `fs.temp_resource_factory()`。
+- 调用该 factory 的 `create_dir(fs, options)`，由当前文件系统决定返回 native `TempDir`，还是使用核心层 fallback。
+- 默认 factory 是 `ManagedTempResourceFactory`：它会生成临时路径，调用 `create_dir(..., recursive=true)` 创建目录，然后返回 `ManagedTempDir`。
+- factory 实现可以复用 `TempResourceFactory::make_temp_path()` 生成统一格式的临时路径，也可以按后端需要使用自己的命名格式。
+
+`TempResources` 还提供常用便捷入口：
+
+```rust
+let file1 = TempResources::create_default_file(fs.clone())?;
+let file2 = TempResources::create_file_with_prefix(fs.clone(), "upload-")?;
+
+let dir1 = TempResources::create_default_dir(fs.clone())?;
+let dir2 = TempResources::create_dir_with_prefix(fs.clone(), "job-")?;
+```
+
+`TempFile` 和 `TempDir` 的共同使用方式是：
+
+- 通过 `TempResources::create_file()` 或 `TempResources::create_dir()` 创建拥有清理责任的句柄。
+- 通过 `path()` 得到临时路径，再用普通 `FileSystem` API 写入内容或子文件。
+- 成功后调用 `persist()` 发布到目标路径。
+- 如果不想发布，调用 `cleanup()` 显式清理，或调用 `keep()` 放弃自动清理并把临时路径交给外部组件。
+
+`ManagedTempFile` 和 `ManagedTempDir` 是 fallback 默认实现，会通过底层文件系统预留临时路径。如果句柄在 `cleanup()`、`persist()` 或 `keep()` 之前被 drop，会尝试尽力清理。
 
 ### 7.2 自定义临时文件路径模式
 
@@ -1233,7 +1293,7 @@ WebDAV provider 可按如下方式映射：
 - `Content-Type` 映射到 `FileMetadata.content_type`。
 - WebDAV 自定义属性放入 `provider_metadata`。
 - `Depth` 行为要文档化，因为不同服务器差异较大。
-- `MOVE` 和 `COPY` 可能只是 best-effort，不一定 atomic。
+- `MOVE` 和 `COPY` 可能只是尽力执行，不一定 atomic。
 - HTTP 401、403、404、405、409、412、423、507 要仔细映射到统一错误类型。
 
 骨架示例：

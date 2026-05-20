@@ -177,8 +177,9 @@ impl FsPath {
     pub fn is_absolute(&self) -> bool;
     pub fn as_str(&self) -> &str;
     pub fn join(&self, child: &str) -> Result<Self, FsError>;
-    pub fn parent(&self) -> Option<&FsPath>;
+    pub fn parent(&self) -> Option<FsPath>;
     pub fn file_name(&self) -> Option<&str>;
+    pub fn file_extension(&self) -> Option<&str>;
 }
 ```
 
@@ -639,8 +640,8 @@ WebDAV 错误映射建议：
 - `write_all` / `open_writer` + `commit`
 - `create_dir`
 - `delete`
-- `rename` best-effort
-- `copy` best-effort
+- `rename` 尽力执行
+- `copy` 尽力执行
 
 暂不进入 MVP 的 WebDAV 能力：
 
@@ -655,7 +656,7 @@ WebDAV 错误映射建议：
 
 如果没有自动清理语义，调用 `TempFile::cleanup()` 与调用 `FileSystem::delete(path)` 区别不大，`TempFile` / `TempDir` 的抽象价值会明显下降。因此核心层应明确以下语义：
 
-- `Drop` 时执行 best-effort cleanup。
+- `Drop` 时执行 尽力清理。
 - `cleanup()` 显式清理，并把失败返回给调用方。
 - `persist()` 把临时资源转为正式资源，并解除临时清理责任。
 - `keep()` 解除自动清理责任，把临时路径交还给调用方。
@@ -689,7 +690,7 @@ pub trait TempFile: std::fmt::Debug + Send {
 - `cleanup()` 删除临时文件，并清理 provider 相关状态，例如 multipart upload、临时 object、WebDAV 临时资源或锁。
 - `persist()` 将临时文件提交到正式路径。后端可优先使用 atomic rename / MOVE；不支持时按 `PersistOptions` 决定是否允许 copy + delete 降级。
 - `keep()` 表示调用方决定保留临时文件，临时句柄放弃后续清理责任。
-- `Drop` 中如果句柄仍持有清理责任，应执行 best-effort cleanup。
+- `Drop` 中如果句柄仍持有清理责任，应执行 尽力清理。
 
 不建议要求 `TempFile: Write`。原因是本地临时文件可以天然持有打开的 `std::fs::File`，但 OSS/WebDAV/HDFS 中的临时文件可能只是临时 key、临时路径或 multipart 会话。统一写入应继续通过 `FileSystem::open_writer(temp.path(), ...)` 完成。
 
@@ -740,7 +741,7 @@ pub struct ManagedTempFile {
 - `persist()` 优先调用 `fs.rename(temp, target, RenameOptions { atomic: Required, .. })`。
 - 如果 `PersistOptions` 允许降级，则可在 atomic rename 不支持时使用 `copy + delete`。
 - `keep()` 将 `cleanup_on_drop` 置为 `false` 并返回 path。
-- `Drop` 中如果 `cleanup_on_drop=true`，执行 best-effort delete。
+- `Drop` 中如果 `cleanup_on_drop=true`，执行 尽力删除。
 
 `ManagedTempFile` 的价值是让大多数后端无需从零实现临时文件生命周期。后端只要实现了 `FileSystem` 的基础操作，就能获得默认临时文件能力。
 
@@ -762,15 +763,54 @@ pub struct ManagedTempDir {
 - `cleanup()` 调用递归 `delete`。
 - `persist()` 优先使用 rename。
 - 不支持 atomic rename 时，是否允许 copy + delete 由 `PersistOptions` 决定。
-- `Drop` 中执行 best-effort recursive delete。
+- `Drop` 中执行 尽力递归删除。
 
 对于对象存储，`ManagedTempDir` 只有在 provider 明确支持目录或 prefix 递归操作时才应启用。否则 `FileSystemCapabilities.temp_dir=false`。
 
 ### 16.5 创建入口
 
-不建议把默认托管创建强塞进 `FileSystem::create_temp_file(&self)`，因为 `ManagedTempFile` 需要保存 `Arc<dyn FileSystem>`，单独的 `&self` 不足以表达共享所有权。
+`FileSystem` 应提供当前实例的临时资源 factory：
 
-建议提供独立 helper：
+```rust
+pub trait FileSystem {
+    fn temp_resource_factory(&self) -> &dyn TempResourceFactory;
+}
+```
+
+`TempResourceFactory` 只提供最强接口，直接接收完整 options 对象：
+
+```rust
+pub trait TempResourceFactory: std::fmt::Debug + Send + Sync {
+    fn create_file(
+        &self,
+        owner: Arc<dyn FileSystem>,
+        options: &TempFileOptions,
+    ) -> FsResult<Box<dyn TempFile>>;
+
+    fn create_dir(
+        &self,
+        owner: Arc<dyn FileSystem>,
+        options: &TempDirOptions,
+    ) -> FsResult<Box<dyn TempDir>>;
+
+    fn make_temp_path(
+        &self,
+        parent: Option<&FsPath>,
+        prefix: &str,
+        suffix: &str,
+    ) -> FsResult<FsPath>;
+}
+```
+
+语义：
+
+- `FileSystem` 实例自己决定返回 native factory 还是核心层默认 factory。
+- 默认实现返回 `ManagedTempResourceFactory::shared()`。
+- Local / OSS / WebDAV / HDFS 可以返回自己的 native factory。
+- `TempResourceFactory` 不提供 prefix-only、default 等便捷方法；这些属于门面层。
+- `TempResourceFactory::make_temp_path()` 提供默认临时路径命名格式，native factory 可以复用，也可以按 provider 语义自行生成。
+
+同时提供独立 helper 作为推荐创建入口：
 
 ```rust
 pub struct TempResources;
@@ -788,7 +828,31 @@ impl TempResources {
 }
 ```
 
-后端如果有更强实现，可以提供自己的 temp 创建方法：
+`TempResources::create_file()` / `create_dir()` 的行为：
+
+1. 先调用 `fs.temp_resource_factory()`。
+2. 再把 `Arc<dyn FileSystem>` 和完整 options 传给 factory。
+3. 具体 factory 决定返回 native `TempFile` / `TempDir`，还是创建 `ManagedTempFile` / `ManagedTempDir`。
+
+`TempResources` 可以提供便捷方法，例如：
+
+```rust
+impl TempResources {
+    pub fn create_default_file(fs: Arc<dyn FileSystem>) -> FsResult<Box<dyn TempFile>>;
+    pub fn create_file_with_prefix(
+        fs: Arc<dyn FileSystem>,
+        prefix: &str,
+    ) -> FsResult<Box<dyn TempFile>>;
+
+    pub fn create_default_dir(fs: Arc<dyn FileSystem>) -> FsResult<Box<dyn TempDir>>;
+    pub fn create_dir_with_prefix(
+        fs: Arc<dyn FileSystem>,
+        prefix: &str,
+    ) -> FsResult<Box<dyn TempDir>>;
+}
+```
+
+后端如果有更强实现，可以覆盖 `temp_resource_factory()`：
 
 - Local 后端可以适配 `qubit-local-fs` 的本地临时文件和临时目录。
 - WebDAV 后端可以使用临时资源路径，`persist()` 时执行 `MOVE`。
@@ -1474,7 +1538,7 @@ pub enum CredentialRef {
 - read/write/list/delete/rename/copy 基本行为。
 - atomic replace 不产生半写文件。
 - `LocalTempFile` / `LocalTempDir` 能适配抽象层 `TempFile` / `TempDir`。
-- `Drop` best-effort cleanup 不 panic。
+- `Drop` 尽力清理 不 panic。
 - `cleanup()` 能返回真实删除错误。
 - `persist()` 后不会再次清理目标路径。
 - `keep()` 后不会在 drop 时删除资源。
@@ -1488,7 +1552,7 @@ pub enum CredentialRef {
 
 - 临时路径生成不冲突。
 - `cleanup()` 调用底层 `delete`，并传递错误。
-- `Drop` 对未持久化资源执行 best-effort cleanup。
+- `Drop` 对未持久化资源执行 尽力清理。
 - `persist()` 成功后解除清理责任。
 - `keep()` 成功后解除清理责任并返回路径。
 - rename atomic required 不支持时返回 `UnsupportedOperation`。
@@ -1520,8 +1584,8 @@ pub enum CredentialRef {
 - `PUT` 到 writer commit 的映射。
 - `MKCOL` 创建目录。
 - `DELETE` 删除资源。
-- `MOVE` rename best-effort。
-- `COPY` copy best-effort。
+- `MOVE` 的 rename 语义是尽力执行。
+- `COPY` 的 copy 语义是尽力执行。
 - HTTP 401/403/404/405/409/412/423/507 到统一错误类型的映射。
 - ETag 到 `FileMetadata.etag` 的映射。
 
@@ -1565,7 +1629,7 @@ pub enum CredentialRef {
 - 不定义 `FsKind` 固定枚举，provider id 和 URI scheme 由 `qubit-spi` 管理。
 - `FileSystem` trait 应保持对象安全，避免泛型方法污染核心接口。
 - 写入接口需要显式 `commit` / `abort`，否则远端 multipart/object write 很难表达正确生命周期。
-- `TempFile` / `TempDir` 应表示拥有清理责任的临时资源句柄，保留 `Drop` best-effort cleanup、显式 `cleanup()`、`persist()` 和 `keep()` 语义。
+- `TempFile` / `TempDir` 应表示拥有清理责任的临时资源句柄，保留 `Drop` 尽力清理、显式 `cleanup()`、`persist()` 和 `keep()` 语义。
 - `ManagedTempFile` / `ManagedTempDir` 可以由核心层基于 `Arc<dyn FileSystem>` 和 `FsPath` 实现，后端只在需要更强语义时覆盖。
 - `CopyOptions` / `CopyStats` / `CopyOutcome` 应成为 `rs-fs` 的通用复制模型；`rs-local-fs` 的 `CopyDirOptions` / `CopyDirStats` 后续可映射或重命名为本地专用类型。
 - 能力差异必须显式建模，不要让所有后端假装支持 POSIX。
