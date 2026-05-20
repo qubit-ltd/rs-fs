@@ -1333,7 +1333,7 @@ Recommended local provider rules:
 - handle symlink policy explicitly
 - use atomic replace for `WriteMode::ReplaceAtomic`
 - map `std::io::ErrorKind` to `FsErrorKind`
-- use `qubit-local-fs` for atomic writes, recursive copy, and local temporary resources where appropriate
+- use `qubit-local-files` for atomic writes, recursive copy, and local temporary resources where appropriate
 
 Example mapping helper:
 

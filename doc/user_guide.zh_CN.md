@@ -1342,7 +1342,7 @@ impl FileSystem for WebDavFileSystem {
 | symlink policy | 显式定义是否跟随 symlink |
 | atomic replace | `WriteMode::ReplaceAtomic` 使用本地 atomic write |
 | 错误映射 | 将 `std::io::ErrorKind` 映射到 `FsErrorKind` |
-| 复用工具 | 适合复用 `qubit-local-fs` 的 atomic write、递归复制和本地临时资源能力 |
+| 复用工具 | 适合复用 `qubit-local-files` 的 atomic write、递归复制和本地临时资源能力 |
 
 路径映射 helper 示例：
 

@@ -17,7 +17,7 @@
 - 新增后端应通过新 crate 实现并注册 provider，不要求修改 `rs-fs` 核心接口。
 - 统一路径模型不能直接等同于 `std::path::Path`，但本地后端内部可以继续使用 `Path` / `PathBuf`。
 - 统一接口要能表达本地文件、远端对象、目录、前缀、符号链接、能力缺失、条件写入、原子替换等差异。
-- MVP 优先复用现有 Qubit crate：`qubit-spi`、`qubit-io`、`qubit-metadata`、`qubit-local-fs`，必要时再引入 `qubit-atomic`。
+- MVP 优先复用现有 Qubit crate：`qubit-spi`、`qubit-io`、`qubit-metadata`、`qubit-local-files`，必要时再引入 `qubit-atomic`。
 
 ## 2. 仓库与 crate 分层
 
@@ -46,7 +46,7 @@ rust-common/
 
 具体实现放在后端 crate 中：
 
-- `qubit-fs-local` 依赖 `qubit-fs` 和 `qubit-local-fs`
+- `qubit-fs-local` 依赖 `qubit-fs` 和 `qubit-local-files`
 - `qubit-fs-webdev` 依赖 `qubit-fs` 和 WebDAV HTTP client，用于实现 WebDAV 协议文件系统
 - `qubit-fs-oss` 依赖 `qubit-fs` 和 OSS SDK
 - `qubit-fs-hdfs` 依赖 `qubit-fs` 和 HDFS client
@@ -191,7 +191,7 @@ impl FsPath {
 
 ## 6. 核心 trait 设计
 
-MVP 推荐先做同步、对象安全的核心 trait，异步 API 作为后续平行 trait 或 feature。原因是现有 `qubit-io` 提供的是 `std::io` 能力组合，`qubit-local-fs` 也是同步工具；如果一开始强制 tokio，会把核心抽象和运行时绑定过早。
+MVP 推荐先做同步、对象安全的核心 trait，异步 API 作为后续平行 trait 或 feature。原因是现有 `qubit-io` 提供的是 `std::io` 能力组合，`qubit-local-files` 也是同步工具；如果一开始强制 tokio，会把核心抽象和运行时绑定过早。
 
 ### 6.1 `FileSystem`
 
@@ -293,7 +293,7 @@ pub struct FileSystemCapabilities {
 | range read | 是 | 不稳定 | 是 | 是 |
 | append | 是 | 取决于服务端 | 通常否 | 取决于配置 |
 | atomic rename | 同卷通常是 | 取决于服务端 | 否 | 是 |
-| atomic replace | `qubit-local-fs` 可支持 | 取决于服务端 | 条件 put 替代 | 取决于配置 |
+| atomic replace | `qubit-local-files` 可支持 | 取决于服务端 | 条件 put 替代 | 取决于配置 |
 | server-side copy | 否 | 否 | 是 | 取决于实现 |
 
 ## 8. 元信息模型
@@ -523,7 +523,7 @@ impl FileResource {
 
 ## 12. 本地文件系统实现边界
 
-`qubit-fs-local` 应复用 `qubit-local-fs`：
+`qubit-fs-local` 应复用 `qubit-local-files`：
 
 - `Files::ensure_parent` 用于写文件前创建父目录。
 - `Files::atomic_write` / `atomic_write_with` 用于 durable same-directory atomic replace。
@@ -536,7 +536,7 @@ impl FileResource {
 - root sandbox：`LocalFileSystem::new(root: PathBuf)`，所有 `FsPath` 映射到 root 下。
 - explicit absolute mode：只有 `file:///abs/path` 或明确配置时允许绝对路径。
 - 防目录穿越：规范化后不得逃出 root。
-- symlink policy：默认不跟随删除目录中的 symlink；与 `qubit-local-fs` 现有策略对齐。
+- symlink policy：默认不跟随删除目录中的 symlink；与 `qubit-local-files` 现有策略对齐。
 - atomic replace：优先用 `Files::atomic_write`。
 
 ## 13. 对象存储实现边界
@@ -654,78 +654,335 @@ WebDAV 错误映射建议：
 - ACL 完整模型。
 - 服务端特定属性 schema。
 
-## 16. 临时资源抽象
+## 16. 临时资源抽象与资源边界决策
 
 `TempFile` 和 `TempDir` 应作为 `rs-fs` 抽象层的一等接口存在，但它们的核心语义不是“某个路径的薄包装”，而是“拥有清理责任的临时资源句柄”。
 
 如果没有自动清理语义，调用 `TempFile::cleanup()` 与调用 `FileSystem::delete(path)` 区别不大，`TempFile` / `TempDir` 的抽象价值会明显下降。因此核心层应明确以下语义：
 
-- `Drop` 时执行 尽力清理。
-- `cleanup()` 显式清理，并把失败返回给调用方。
+- 临时资源创建后由句柄拥有清理责任。
+- 显式 `cleanup()` 释放资源。
+- `Drop` 兜底执行尽力清理。
 - `persist()` 把临时资源转为正式资源，并解除临时清理责任。
 - `keep()` 解除自动清理责任，把临时路径交还给调用方。
-- `Drop` cleanup 不是强一致保证；正确性敏感场景必须显式调用 `cleanup()` 或 `persist()`。
+- 临时资源可以携带后端 native 状态，例如本地文件句柄、multipart upload id、WebDAV lock token、HDFS lease 或内存 entry id。
 
-远端后端的 `Drop` cleanup 可能发生网络失败、认证失败或运行时已经关闭。由于 `Drop` 不能返回错误，provider 只能记录日志或交给后台 janitor 重试，不能把 `Drop` 当作业务正确性的唯一保障。
+### 16.1 为什么引入 `TempResource`
 
-### 16.1 `TempFile`
-
-建议接口：
+`TempFile` 和 `TempDir` 有明显的公共生命周期语义：
 
 ```rust
-pub trait TempFile: std::fmt::Debug + Send {
+pub trait TempResource: std::fmt::Debug + Send + Sync {
+    fn fs(&self) -> Arc<dyn FileSystem>;
     fn path(&self) -> &FsPath;
 
+    fn resource(&self) -> FileResource {
+        FileResource::new(self.fs(), self.path().clone())
+    }
+
+    fn exists(&self) -> FsResult<bool> {
+        self.fs().exists(self.path())
+    }
+
+    fn metadata(&self) -> FsResult<FileMetadata> {
+        self.fs().path_metadata(self.path())
+    }
+
     fn cleanup(self: Box<Self>) -> FsResult<()>;
+    fn keep(self: Box<Self>) -> FsResult<FsPath>;
+}
+```
+
+`TempResource` 的职责是承载“临时资源共有行为”，包括：
+
+- 返回所属 `FileSystem`。
+- 返回 provider-local `FsPath`。
+- 转为普通 `FileResource`。
+- 查询存在性和元数据。
+- 执行显式清理。
+- 放弃清理责任并保留路径。
+
+`fs()` 返回 `Arc<dyn FileSystem>`，而不是 `&dyn FileSystem`，是为了让默认方法可以构造 `FileResource`，也便于调用方把临时资源转换为普通资源后继续使用。
+
+### 16.2 为什么不把 `TempFile` 和 `TempDir` 完全合并
+
+不建议只保留一个统一的 `TempResource` 类型来同时表示文件和目录。原因是两者的 `persist()` 结果不同：
+
+```rust
+pub trait TempFile: TempResource {
+    fn persist(
+        self: Box<Self>,
+        target: &FsPath,
+        options: &PersistOptions,
+    ) -> FsResult<WriteOutcome>;
+}
+
+pub trait TempDir: TempResource {
+    fn persist(
+        self: Box<Self>,
+        target: &FsPath,
+        options: &PersistOptions,
+    ) -> FsResult<()>;
+}
+```
+
+如果强行合并，通常需要引入：
+
+```rust
+pub enum TempResourceKind {
+    File,
+    Directory,
+}
+
+pub enum TempPersistOutcome {
+    File(WriteOutcome),
+    Directory,
+}
+```
+
+这会让调用方在已经知道自己创建的是临时文件时，仍然被迫处理目录结果分支，类型语义反而变弱。
+
+推荐结构是：
+
+```rust
+pub trait TempResource: std::fmt::Debug + Send + Sync {
+    // 公共生命周期能力
+}
+
+pub trait TempFile: TempResource {
+    // 文件专属能力
+}
+
+pub trait TempDir: TempResource {
+    // 目录专属能力
+}
+```
+
+这样既消除 `path()`、`cleanup()`、`keep()` 等重复定义，又保留文件和目录在编译期的语义边界。
+
+### 16.3 `TempFile` 的便利读写方法
+
+`TempFile` 不应要求实现 `std::io::Write`。原因是本地临时文件可以天然持有打开的 `std::fs::File`，但 OSS/WebDAV/HDFS 中的临时文件可能只是临时 key、临时路径、multipart 会话或远端锁。把 `TempFile` 直接建模成 `Write` 会把不同后端的生命周期语义压扁。
+
+但 `TempFile` 应提供常用读写便利方法。这些方法默认委托给所属 `FileSystem`，具体后端可以在有收益时覆盖：
+
+```rust
+pub trait TempFile: TempResource {
+    fn open_reader(&self, options: &ReadOptions) -> FsResult<Box<dyn FileReader>> {
+        self.fs().open_reader(self.path(), options)
+    }
+
+    fn open_writer(&self, options: &WriteOptions) -> FsResult<Box<dyn FileWriter>> {
+        self.fs().open_writer(self.path(), options)
+    }
+
+    fn read_all(&self) -> FsResult<Vec<u8>> {
+        self.fs().read_all(self.path())
+    }
+
+    fn write_all(&self, bytes: &[u8]) -> FsResult<WriteOutcome> {
+        self.fs().write_all(self.path(), bytes)
+    }
 
     fn persist(
         self: Box<Self>,
         target: &FsPath,
         options: &PersistOptions,
     ) -> FsResult<WriteOutcome>;
-
-    fn keep(self: Box<Self>) -> FsResult<FsPath>;
 }
 ```
 
-语义：
-
-- `path()` 返回临时文件所在路径。
-- `cleanup()` 删除临时文件，并清理 provider 相关状态，例如 multipart upload、临时 object、WebDAV 临时资源或锁。
-- `persist()` 将临时文件提交到正式路径。后端可优先使用 atomic rename / MOVE；不支持时按 `PersistOptions` 决定是否允许 copy + delete 降级。
-- `keep()` 表示调用方决定保留临时文件，临时句柄放弃后续清理责任。
-- `Drop` 中如果句柄仍持有清理责任，应执行 尽力清理。
-
-不建议要求 `TempFile: Write`。原因是本地临时文件可以天然持有打开的 `std::fs::File`，但 OSS/WebDAV/HDFS 中的临时文件可能只是临时 key、临时路径或 multipart 会话。统一写入应继续通过 `FileSystem::open_writer(temp.path(), ...)` 完成。
-
-### 16.2 `TempDir`
-
-建议接口：
+这样调用方可以直接写：
 
 ```rust
-pub trait TempDir: std::fmt::Debug + Send {
-    fn path(&self) -> &FsPath;
+let temp = TempResources::create_default_file(fs.clone())?;
+temp.write_all(b"hello")?;
+let output = temp.read_all()?;
+temp.persist(&FsPath::parse("/final.txt")?, &PersistOptions::default())?;
+```
 
-    fn cleanup(self: Box<Self>) -> FsResult<()>;
+而不是每次都写：
+
+```rust
+fs.write_all(temp.path(), b"hello")?;
+```
+
+设计边界是：`TempFile` 提供临时文件最常用的文件操作便利方法，但不替代完整的 `FileSystem`。复杂复制、重命名、删除等普通资源操作仍然可以通过 `temp.resource()` 转成 `FileResource` 后执行。
+
+### 16.4 `TempDir` 的便利目录方法
+
+`TempDir` 应提供目录相关便利方法，默认同样委托给所属 `FileSystem`：
+
+```rust
+pub trait TempDir: TempResource {
+    fn list(&self, options: &ListOptions) -> FsResult<Box<dyn DirectoryStream>> {
+        self.fs().list(self.path(), options)
+    }
+
+    fn child(&self, name: &str) -> FsResult<FileResource> {
+        Ok(FileResource::new(self.fs(), self.path().join(name)?))
+    }
+
+    fn create_child_dir(
+        &self,
+        name: &str,
+        options: &CreateDirOptions,
+    ) -> FsResult<FileResource> {
+        let child = self.child(name)?;
+        child.create_dir(options)?;
+        Ok(child)
+    }
 
     fn persist(
         self: Box<Self>,
         target: &FsPath,
         options: &PersistOptions,
     ) -> FsResult<()>;
-
-    fn keep(self: Box<Self>) -> FsResult<FsPath>;
 }
 ```
 
-语义：
+`TempDir` 的核心价值是临时目录树的生命周期管理。对象存储后端未必支持真正的空目录，因此 `TempDir` 能力必须通过 `FileSystemCapabilities.temp_dir` 声明。
 
-- `cleanup()` 递归删除临时目录或等价资源。
-- `persist()` 将临时目录移动为正式目录；如果后端没有真实目录语义，则需要按 provider 能力决定是否支持。
-- `keep()` 解除自动清理责任。
-- 对象存储后端未必支持真正的空目录，`TempDir` 能力必须通过 `FileSystemCapabilities.temp_dir` 声明。
+### 16.5 为什么 `FileResource` 暂不拆成 `FsFile` / `FsDir`
 
-### 16.3 `ManagedTempFile`
+`FileResource` 表示“已经通过 registry 解析出来的文件系统资源”，不是“确定存在的普通文件”。它可能对应：
+
+- 普通文件。
+- 目录。
+- symlink。
+- 对象存储 object。
+- 对象存储 prefix。
+- WebDAV collection。
+- 还不存在但准备写入的路径。
+
+在很多后端上，URI 本身不能静态决定资源类型。比如 `oss://bucket/a/b` 可能是 object、prefix，也可能不存在。如果把 `FileResource` 拆成 `FsFile` / `FsDir`，解析阶段要么提前做 metadata I/O，要么暴露额外的运行时转换 API，反而增加复杂度。
+
+因此 MVP 保持：
+
+```rust
+pub struct FileResource {
+    fs: Arc<dyn FileSystem>,
+    path: FsPath,
+}
+```
+
+如果后续确实需要强类型资源，可以在 `FileResource` 上增加校验型转换，而不是替代它：
+
+```rust
+impl FileResource {
+    pub fn require_file(&self) -> FsResult<FsFile>;
+    pub fn require_dir(&self) -> FsResult<FsDir>;
+}
+```
+
+这些方法应通过 `metadata()` 验证类型，因此属于增强 API，不应成为基础解析路径。
+
+### 16.6 为什么 `FileResource` 暂不 trait 化
+
+不建议把 `FileResource` 设计成 trait 并要求每个后端提供 native resource 实现。原因是 `FileResource` 当前只是定位器和委托器：
+
+```text
+FileResource = Arc<dyn FileSystem> + FsPath
+```
+
+它通常不拥有独立生命周期，也不携带创建过程状态。把它 trait 化会带来额外成本：
+
+- `FileSystems::resource()` 返回 trait object 后，clone、debug、路径访问和普通使用都会更重。
+- 每个 `FileSystem` 都要额外考虑 resource factory，但大多数实现只是转调 `FileSystem`。
+- 如果 native resource 缓存 metadata，会马上遇到缓存失效、并发可见性和条件写入语义问题。
+- 普通资源的优化空间更适合沉到 `FileSystem` 方法内部，而不是扩展成第二套 resource trait。
+
+因此推荐保持：
+
+```rust
+FileResource = concrete wrapper
+TempResource = common lifecycle trait
+TempFile = temp file trait
+TempDir = temp dir trait
+```
+
+### 16.7 为什么 `TempFile` / `TempDir` 仍然值得保留为 trait
+
+`TempFile` / `TempDir` 和 `FileResource` 的关键区别是：临时资源可能携带后端 native 状态。这些状态不是 `FsPath` 能表达的。
+
+典型例子：
+
+| 后端 | 临时资源可能携带的 native 状态 |
+| --- | --- |
+| Local | 文件句柄、真实临时路径、是否保留、是否执行 drop 清理 |
+| OSS/S3/MinIO | multipart upload id、bucket/key、已上传 parts、etag、临时 object key |
+| HDFS | write lease、block size、replication、临时目录提交协议状态 |
+| FTP/SFTP | 连接池 session、远端错误码上下文、server-side rename 能力 |
+| WebDAV | lock token、etag、collection marker、临时资源 URI |
+| Memory FS | entry id、buffer handle、内部 map slot |
+
+这些状态会直接影响清理、提交和性能。因此 `TempResourceFactory` 返回 `Box<dyn TempFile>` / `Box<dyn TempDir>` 是有实际收益的。
+
+### 16.8 具体后端可以覆盖哪些方法
+
+默认实现已经能覆盖大多数后端：
+
+- 通过 `FileSystem::open_writer()` 写入临时路径。
+- 通过 `FileSystem::delete()` 清理临时资源。
+- 通过 `FileSystem::rename()` 优先提交。
+- 必要时按 `PersistOptions` 降级到 `copy + delete`。
+
+后端只有在能提供更低成本、更安全或更原子的语义时才需要覆盖。
+
+Local 后端可以优化：
+
+- `TempFile::open_writer()` 复用创建临时文件时已经打开的 `std::fs::File`，避免按路径重新打开。
+- `TempFile::persist()` 使用同目录 `rename` 实现真正原子发布。
+- `TempFile::cleanup()` 使用本地临时文件句柄和真实路径做清理。
+- `TempDir::persist()` 使用本地目录 rename，避免递归 copy。
+
+OSS/S3/MinIO 后端可以优化：
+
+- `TempFile::open_writer()` 直接开启 multipart upload session。
+- `TempFile::write_all()` 小文件直接 `PutObject` 到临时 object，大文件自动 multipart。
+- `TempFile::persist()` 使用服务端 `CopyObject` 从临时 object 复制到目标，然后删除临时 object。
+- `TempFile::cleanup()` 如果 multipart 未完成，调用 `AbortMultipartUpload`，而不是只删除 object。
+- `TempDir::cleanup()` 批量删除 prefix 下对象，避免逐个普通 delete。
+
+HDFS 后端可以优化：
+
+- `TempFile::open_writer()` 用 HDFS create API 创建临时文件并持有写 lease。
+- `TempFile::persist()` 在同一 namespace 内使用 HDFS rename，通常是 metadata 操作。
+- `TempDir::persist()` rename 整个目录树，避免递归 copy。
+- `cleanup()` 删除临时路径并释放可能存在的 lease。
+
+FTP/SFTP 后端可以优化：
+
+- `TempFile::open_writer()` 复用连接池 session 执行 `STOR temp_path`。
+- `persist()` 使用 FTP `RNFR/RNTO` 或 SFTP rename。
+- `cleanup()` 使用 `DELE` / `RMD`，并把服务端错误码映射为更准确的 `FsErrorKind`。
+- `TempDir::list()` 复用同一连接做目录列举，避免重复建连和认证。
+
+WebDAV 后端可以优化：
+
+- `TempFile::persist()` 使用 WebDAV `MOVE`，避免下载再上传。
+- `TempFile::cleanup()` 带 lock token 解锁并删除临时资源。
+- `TempDir::list()` 使用 `PROPFIND` 一次性获取目录项和属性。
+- `metadata()` 复用创建或写入时获得的 ETag / Last-Modified。
+
+MemoryFileSystem 后端可以优化：
+
+- `TempFile::read_all()` 直接 clone 内部 buffer，不走 reader trait object。
+- `TempFile::write_all()` 直接替换内存 entry。
+- `persist()` 直接移动 map entry，不复制字节。
+- `cleanup()` 通过内部 entry id 删除，避免 path 再查找。
+
+真正最值得覆盖的方法是：
+
+- `TempFile::open_writer()`
+- `TempFile::write_all()`
+- `TempFile::persist()`
+- `TempFile::cleanup()`
+- `TempDir::list()`
+- `TempDir::persist()`
+- `TempDir::cleanup()`
+
+### 16.9 `ManagedTempFile` 与 `ManagedTempDir`
 
 `ManagedTempFile` 是 `rs-fs` 核心层可直接提供的默认实现。它不依赖本地文件系统，而是在内部保存文件系统实例和临时路径：
 
@@ -739,17 +996,14 @@ pub struct ManagedTempFile {
 
 默认行为：
 
+- 实现 `TempResource` 和 `TempFile`。
 - 创建时由核心 helper 生成临时路径。
-- 写入时调用方通过 `fs.open_writer(temp.path(), ...)` 写入。
+- 写入便利方法默认委托给 `FileSystemExt::write_all()`。
 - `cleanup()` 调用 `fs.delete(path, DeleteOptions { missing_ok: true, .. })`。
 - `persist()` 优先调用 `fs.rename(temp, target, RenameOptions { atomic: Required, .. })`。
 - 如果 `PersistOptions` 允许降级，则可在 atomic rename 不支持时使用 `copy + delete`。
 - `keep()` 将 `cleanup_on_drop` 置为 `false` 并返回 path。
-- `Drop` 中如果 `cleanup_on_drop=true`，执行 尽力删除。
-
-`ManagedTempFile` 的价值是让大多数后端无需从零实现临时文件生命周期。后端只要实现了 `FileSystem` 的基础操作，就能获得默认临时文件能力。
-
-### 16.4 `ManagedTempDir`
+- `Drop` 中如果 `cleanup_on_drop=true`，执行尽力删除。
 
 `ManagedTempDir` 与 `ManagedTempFile` 类似：
 
@@ -763,15 +1017,18 @@ pub struct ManagedTempDir {
 
 默认行为：
 
+- 实现 `TempResource` 和 `TempDir`。
 - 创建时调用 `fs.create_dir(temp_path, ...)`。
 - `cleanup()` 调用递归 `delete`。
 - `persist()` 优先使用 rename。
 - 不支持 atomic rename 时，是否允许 copy + delete 由 `PersistOptions` 决定。
-- `Drop` 中执行 尽力递归删除。
+- `Drop` 中执行尽力递归删除。
+
+`ManagedTempFile` / `ManagedTempDir` 的价值是让大多数后端无需从零实现临时资源生命周期。后端只要实现了 `FileSystem` 的基础操作，就能获得默认临时资源能力。
 
 对于对象存储，`ManagedTempDir` 只有在 provider 明确支持目录或 prefix 递归操作时才应启用。否则 `FileSystemCapabilities.temp_dir=false`。
 
-### 16.5 创建入口
+### 16.10 创建入口
 
 `FileSystem` 应提供当前实例的临时资源 factory：
 
@@ -858,16 +1115,17 @@ impl TempResources {
 
 后端如果有更强实现，可以覆盖 `temp_resource_factory()`：
 
-- Local 后端可以适配 `qubit-local-fs` 的本地临时文件和临时目录。
+- Local 后端可以适配 `qubit-local-files` 的本地临时文件和临时目录。
 - WebDAV 后端可以使用临时资源路径，`persist()` 时执行 `MOVE`。
 - OSS 后端可以使用临时 object key 或 multipart upload session。
 - HDFS 后端可以使用临时目录 + atomic rename 作为提交协议。
 
-### 16.6 与 `qubit-local-fs` 的命名关系
+### 16.11 与 `qubit-local-files` 的命名关系
 
 抽象层应占用通用名称：
 
 ```rust
+qubit_fs::TempResource
 qubit_fs::TempFile
 qubit_fs::TempDir
 qubit_fs::ManagedTempFile
@@ -877,19 +1135,21 @@ qubit_fs::ManagedTempDir
 本地工具 crate 中现有的 `TempFile` / `TempDir` 后续可以改名为：
 
 ```rust
-qubit_local_fs::LocalTempFile
-qubit_local_fs::LocalTempDir
+qubit_local_files::LocalTempFile
+qubit_local_files::LocalTempDir
 ```
 
 如果保留三层结构：
 
 ```text
 qubit-fs
-qubit-local-fs
+qubit-local-files
 qubit-fs-local
 ```
 
-则可以先不立刻重命名 `qubit-local-fs` 的现有类型，在 `qubit-fs-local` 中适配并导出 `LocalTempFile` / `LocalTempDir`。等 `qubit-fs` API 稳定后，再做 `qubit-local-fs` 的破坏性重命名。
+则 `qubit-local-files` 继续提供本地专用的 `LocalTempFile` / `LocalTempDir`，
+`qubit-fs-local` 只负责适配并导出后端实现。等 `qubit-fs` API 稳定后，
+再评估是否需要进一步的破坏性重命名。
 
 ## 17. 异步 API 规划
 
@@ -897,7 +1157,7 @@ MVP 不建议把 `FileSystem` 直接定义为 async trait，原因：
 
 - Rust 原生 async trait 的对象安全和生命周期设计仍需要包装。
 - `async_trait` 会引入装箱 Future，后续很难无痛调整。
-- `qubit-io` 和 `qubit-local-fs` 当前是同步 std I/O 体系。
+- `qubit-io` 和 `qubit-local-files` 当前是同步 std I/O 体系。
 - 很多业务场景可以先用同步 trait + executor 隔离阻塞操作。
 
 后续可以新增平行 trait：
@@ -927,7 +1187,7 @@ MVP 不需要修改 `qubit-spi`。如果将来要自动发现 provider，可以�
 - `Streams::copy_at_most`、`Streams::content_eq` 可作为默认扩展方法实现的基础。
 - `LimitReader`、`CountingReader` 等 wrapper 可用于 `read_all`、限流读取和统计。
 
-### `qubit-local-fs`
+### `qubit-local-files`
 
 用于本地后端的 durable atomic write、临时文件、目录递归复制、清理和文件名 helper。
 
@@ -964,7 +1224,7 @@ MVP 不需要修改 `qubit-spi`。如果将来要自动发现 provider，可以�
 - `FileSystemCapabilities`。
 - 同步 `FileSystem` trait。
 - `FileReader`、`FileWriter`。
-- `TempFile`、`TempDir` 抽象接口。
+- `TempResource`、`TempFile`、`TempDir` 抽象接口。
 - `ManagedTempFile`、`ManagedTempDir` 默认托管实现。
 - `CopyOptions`、`CopyStats`、`CopyOutcome` 以及复制相关策略类型。
 - `FileSystemSpec`、`FileSystemRegistry`。
@@ -1036,6 +1296,7 @@ src/
     directory_stream.rs
     file_system_ext.rs
   temp/
+    temp_resource.rs
     temp_file.rs
     temp_dir.rs
     managed_temp_file.rs
@@ -1107,7 +1368,7 @@ pub enum WriteMode {
 - `CreateNew`：目标存在则返回 `AlreadyExists`。
 - `CreateOrTruncate`：目标存在则覆盖，不承诺 atomic。
 - `Append`：仅在后端声明支持 append 时可用。
-- `ReplaceAtomic`：后端必须承诺不可观察到半写状态；本地实现用 `qubit-local-fs` 的 atomic write，OSS 可根据条件写或临时 key + commit 策略决定是否支持。
+- `ReplaceAtomic`：后端必须承诺不可观察到半写状态；本地实现用 `qubit-local-files` 的 atomic write，OSS 可根据条件写或临时 key + commit 策略决定是否支持。
 - `ConditionalReplace`：版本匹配才替换，失败返回 `PreconditionFailed`。
 
 ### 22.3 `ListOptions`
@@ -1171,7 +1432,7 @@ pub enum AtomicityRequirement {
 
 ## 23. 复制模型
 
-`rs-fs` 应把复制操作建模成通用资源复制，而不是本地目录复制。`rs-local-fs` 现有的 `CopyDirOptions` 和 `CopyDirStats` 可以作为起点，但上提到抽象层时需要扩展成完整跨后端模型。
+`rs-fs` 应把复制操作建模成通用资源复制，而不是本地目录复制。`rs-local-files` 现有的 `CopyDirOptions` 和 `CopyDirStats` 可以作为起点，但上提到抽象层时需要扩展成完整跨后端模型。
 
 核心类型建议：
 
@@ -1221,11 +1482,11 @@ pub enum CopyConflictPolicy {
 - `Overwrite`：允许覆盖已有目标。
 - `Skip`：目标存在时跳过该条目并增加 `CopyStats.skipped`。
 
-这比单个 `overwrite: bool` 更完整。`rs-local-fs` 现有 `overwrite=true` 可映射为 `Overwrite`，`overwrite=false` 可映射为 `Fail`。
+这比单个 `overwrite: bool` 更完整。`rs-local-files` 现有 `overwrite=true` 可映射为 `Overwrite`，`overwrite=false` 可映射为 `Fail`。
 
 ### 23.3 `MetadataPreservePolicy`
 
-`rs-local-fs` 的 `preserve_permissions` 只适用于本地文件权限，不适合作为跨后端核心字段。抽象层应使用更通用的 metadata 保留策略：
+`rs-local-files` 的 `preserve_permissions` 只适用于本地文件权限，不适合作为跨后端核心字段。抽象层应使用更通用的 metadata 保留策略：
 
 ```rust
 pub enum MetadataPreservePolicy {
@@ -1316,7 +1577,7 @@ pub struct CopyStats {
 - `skipped`：因冲突策略、过滤条件或 provider 策略跳过的条目数量。
 - `failed`：`continue_on_error=true` 时失败但继续处理的条目数量。
 
-`rs-local-fs` 现有 `CopyDirStats { files, directories, bytes }` 可以无损映射到新版 `CopyStats` 的子集。
+`rs-local-files` 现有 `CopyDirStats { files, directories, bytes }` 可以无损映射到新版 `CopyStats` 的子集。
 
 ### 23.8 `CopyOutcome`
 
@@ -1337,7 +1598,7 @@ pub enum CopyMethod {
 
 语义：
 
-- `Local`：本地后端内部复制，例如 `qubit-local-fs` 递归复制。
+- `Local`：本地后端内部复制，例如 `qubit-local-files` 递归复制。
 - `ServerSide`：完全由服务端完成，例如 WebDAV `COPY` 或 OSS server-side copy。
 - `Stream`：通过 `open_reader` + `open_writer` 由客户端流式复制。
 - `Mixed`：树复制中部分条目使用服务端复制，部分条目降级为 stream copy。
@@ -1345,9 +1606,9 @@ pub enum CopyMethod {
 
 `FileSystem::copy` 建议返回 `FsResult<CopyOutcome>`，而不是只返回 `CopyStats`。这样上层可以知道复制是如何完成的，并做审计或性能分析。
 
-### 23.9 与 `rs-local-fs` 的迁移关系
+### 23.9 与 `rs-local-files` 的迁移关系
 
-现有 `rs-local-fs`：
+现有 `rs-local-files`：
 
 ```rust
 pub struct CopyDirOptions {
@@ -1371,7 +1632,7 @@ pub struct CopyDirStats {
 - `CopyDirStats` 映射到 `CopyStats`，未涉及字段填 0。
 - 后续可以把本地类型改名为 `LocalCopyDirOptions` / `LocalCopyDirStats`，或在 `qubit-fs-local` 中做适配。
 
-`qubit-fs` 不应依赖 `qubit-local-fs`。依赖方向仍然是 `qubit-fs-local` 同时依赖 `qubit-fs` 和 `qubit-local-fs`。
+`qubit-fs` 不应依赖 `qubit-local-files`。依赖方向仍然是 `qubit-fs-local` 同时依赖 `qubit-fs` 和 `qubit-local-files`。
 
 - `server_side=Required` 时，如果无法服务端复制，必须返回 `UnsupportedOperation`。
 - 跨 provider 复制不放进基础 `FileSystem::copy`；由上层基于 `FileSystems::resource()` 或 `FsOperations` 做 stream copy。
@@ -1491,7 +1752,7 @@ pub enum CredentialRef {
 - 增加 `Close` / `Commit` 类生命周期 trait 的讨论，但不一定放入 `qubit-io`。
 - 增加异步 I/O wrapper 时，应该在独立 async crate 中处理，避免污染同步 API。
 
-### 27.3 `qubit-local-fs`
+### 27.3 `qubit-local-files`
 
 可能需要的增强：
 
@@ -1576,7 +1837,7 @@ pub enum CredentialRef {
 - `ServerSidePreference::Disable` 强制使用 stream copy。
 - `MetadataPreservePolicy` 能区分 portable、user metadata 和 provider-native metadata。
 - `continue_on_error=true` 时失败条目计入 `failed` 并继续处理。
-- `rs-local-fs` 的 `CopyDirStats` 子集可以无损映射到 `CopyStats`。
+- `rs-local-files` 的 `CopyDirStats` 子集可以无损映射到 `CopyStats`。
 
 ### 28.6 WebDAV provider 合约测试
 
@@ -1633,8 +1894,9 @@ pub enum CredentialRef {
 - 不定义 `FsKind` 固定枚举，provider id 和 URI scheme 由 `qubit-spi` 管理。
 - `FileSystem` trait 应保持对象安全，避免泛型方法污染核心接口。
 - 写入接口需要显式 `commit` / `abort`，否则远端 multipart/object write 很难表达正确生命周期。
+- `TempResource` 应抽取临时资源共有生命周期能力，`TempFile` / `TempDir` 继续保留文件和目录的类型语义。
 - `TempFile` / `TempDir` 应表示拥有清理责任的临时资源句柄，保留 `Drop` 尽力清理、显式 `cleanup()`、`persist()` 和 `keep()` 语义。
 - `ManagedTempFile` / `ManagedTempDir` 可以由核心层基于 `Arc<dyn FileSystem>` 和 `FsPath` 实现，后端只在需要更强语义时覆盖。
-- `CopyOptions` / `CopyStats` / `CopyOutcome` 应成为 `rs-fs` 的通用复制模型；`rs-local-fs` 的 `CopyDirOptions` / `CopyDirStats` 后续可映射或重命名为本地专用类型。
+- `CopyOptions` / `CopyStats` / `CopyOutcome` 应成为 `rs-fs` 的通用复制模型；`rs-local-files` 的 `CopyDirOptions` / `CopyDirStats` 后续可映射或重命名为本地专用类型。
 - 能力差异必须显式建模，不要让所有后端假装支持 POSIX。
-- `qubit-spi`、`qubit-io`、`qubit-local-fs`、`qubit-metadata` 当前已经足够支撑 MVP 方案；`qubit-atomic` 可作为实现细节 feature，而不是核心 API 前提。
+- `qubit-spi`、`qubit-io`、`qubit-local-files`、`qubit-metadata` 当前已经足够支撑 MVP 方案；`qubit-atomic` 可作为实现细节 feature，而不是核心 API 前提。
