@@ -1,5 +1,7 @@
 # Qubit FS
 
+[![Rust CI](https://github.com/qubit-ltd/rs-fs/actions/workflows/ci.yml/badge.svg)](https://github.com/qubit-ltd/rs-fs/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https://qubit-ltd.github.io/rs-fs/coverage-badge.json)](https://qubit-ltd.github.io/rs-fs/coverage/)
 Qubit FS 是一个 Rust 抽象文件系统层，用于以统一接口访问本地文件系统、WebDAV、
 FTP、OSS、HDFS 以及后续扩展的存储后端。
 

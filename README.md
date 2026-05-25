@@ -1,5 +1,7 @@
 # Qubit FS
 
+[![Rust CI](https://github.com/qubit-ltd/rs-fs/actions/workflows/ci.yml/badge.svg)](https://github.com/qubit-ltd/rs-fs/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https://qubit-ltd.github.io/rs-fs/coverage-badge.json)](https://qubit-ltd.github.io/rs-fs/coverage/)
 Qubit FS is a pluggable filesystem abstraction for Rust.
 
 It defines provider-neutral contracts for local filesystems, WebDAV, FTP, OSS,
