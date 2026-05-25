@@ -160,10 +160,6 @@ impl FileSystems {
     #[must_use]
     pub fn provider_names() -> Vec<String> {
         let registry = Self::registry().read();
-        registry
-            .provider_names()
-            .into_iter()
-            .map(str::to_owned)
-            .collect()
+        registry.provider_names().into_iter().map(str::to_owned).collect()
     }
 }

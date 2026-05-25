@@ -43,13 +43,8 @@ impl ManagedTempResourceFactory {
 }
 
 impl TempResourceFactory for ManagedTempResourceFactory {
-    fn create_file(
-        &self,
-        owner: Arc<dyn FileSystem>,
-        options: &TempFileOptions,
-    ) -> FsResult<Box<dyn TempFile>> {
-        let path =
-            self.make_temp_path(options.parent.as_ref(), &options.prefix, &options.suffix)?;
+    fn create_file(&self, owner: Arc<dyn FileSystem>, options: &TempFileOptions) -> FsResult<Box<dyn TempFile>> {
+        let path = self.make_temp_path(options.parent.as_ref(), &options.prefix, &options.suffix)?;
         let writer_options = WriteOptions {
             create_parent: true,
             mode: WriteMode::CreateNew,
@@ -59,13 +54,8 @@ impl TempResourceFactory for ManagedTempResourceFactory {
         Ok(Box::new(ManagedTempFile::new(owner, path)))
     }
 
-    fn create_dir(
-        &self,
-        owner: Arc<dyn FileSystem>,
-        options: &TempDirOptions,
-    ) -> FsResult<Box<dyn TempDir>> {
-        let path =
-            self.make_temp_path(options.parent.as_ref(), &options.prefix, &options.suffix)?;
+    fn create_dir(&self, owner: Arc<dyn FileSystem>, options: &TempDirOptions) -> FsResult<Box<dyn TempDir>> {
+        let path = self.make_temp_path(options.parent.as_ref(), &options.prefix, &options.suffix)?;
         owner.create_dir(
             &path,
             &CreateDirOptions {

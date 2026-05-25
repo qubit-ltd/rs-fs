@@ -22,8 +22,7 @@ fn test_file_system_capabilities_exist_and_path_metadata_work() {
 
     assert!(fs.capabilities().directories);
     assert!(!fs.exists(&path).expect("exists should succeed"));
-    fs.write_all(&path, b"data")
-        .expect("write_all should succeed");
+    fs.write_all(&path, b"data").expect("write_all should succeed");
     assert!(fs.exists(&path).expect("exists should succeed"));
     assert_eq!(
         4,

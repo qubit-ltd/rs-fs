@@ -40,9 +40,7 @@ fn test_registry_registers_provider_and_resolves_alias() {
 fn test_registry_returns_error_for_missing_provider() {
     let mut registry = FileSystemRegistry::new();
     registry
-        .register(MockProvider {
-            fs: MockFs::default(),
-        })
+        .register(MockProvider { fs: MockFs::default() })
         .expect("provider should register");
 
     let missing_uri = FsUri::parse("missing:///file.txt").expect("URI should parse");
@@ -95,9 +93,7 @@ fn test_registry_maps_spi_descriptor_errors() {
 #[test]
 fn test_register_shared_accepts_arc_provider() {
     let mut registry = FileSystemRegistry::new();
-    let shared: Arc<dyn ServiceProvider<FileSystemSpec>> = Arc::new(MockProvider {
-        fs: MockFs::default(),
-    });
+    let shared: Arc<dyn ServiceProvider<FileSystemSpec>> = Arc::new(MockProvider { fs: MockFs::default() });
 
     registry
         .register_shared(shared)

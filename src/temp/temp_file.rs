@@ -91,9 +91,5 @@ pub trait TempFile: TempResource {
     ///
     /// # Errors
     /// Returns [`crate::FsError`] when persistence fails.
-    fn persist(
-        self: Box<Self>,
-        target: &FsPath,
-        options: &PersistOptions,
-    ) -> FsResult<WriteOutcome>;
+    fn persist(self: Box<Self>, target: &FsPath, options: &PersistOptions) -> FsResult<WriteOutcome>;
 }

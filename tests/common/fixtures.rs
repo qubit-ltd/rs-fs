@@ -120,10 +120,7 @@ impl FileSystem for MockFs {
             metadata.etag = Some("v1".to_owned());
             Ok(metadata)
         } else {
-            Err(
-                FsError::new(FsErrorKind::NotFound, FsOperation::Metadata, "missing")
-                    .with_path(path.clone()),
-            )
+            Err(FsError::new(FsErrorKind::NotFound, FsOperation::Metadata, "missing").with_path(path.clone()))
         }
     }
 
@@ -139,28 +136,15 @@ impl FileSystem for MockFs {
     }
 
     fn open_reader(&self, _path: &FsPath, _options: &ReadOptions) -> FsResult<Box<dyn FileReader>> {
-        if self
-            .state
-            .lock()
-            .expect("state lock should succeed")
-            .fail_read
-        {
+        if self.state.lock().expect("state lock should succeed").fail_read {
             return Ok(Box::new(ErrorReader));
         }
         Ok(Box::new(Cursor::new(b"data".to_vec())))
     }
 
     fn open_writer(&self, path: &FsPath, _options: &WriteOptions) -> FsResult<Box<dyn FileWriter>> {
-        let fail_write = self
-            .state
-            .lock()
-            .expect("state lock should succeed")
-            .fail_write;
-        let fail_commit = self
-            .state
-            .lock()
-            .expect("state lock should succeed")
-            .fail_commit;
+        let fail_write = self.state.lock().expect("state lock should succeed").fail_write;
+        let fail_commit = self.state.lock().expect("state lock should succeed").fail_commit;
         Ok(Box::new(MockWriter {
             state: self.state.clone(),
             path: path.clone(),
@@ -187,11 +171,7 @@ impl FileSystem for MockFs {
         let mut state = self.state.lock().expect("state lock should succeed");
         state.deletes.push(path.as_str().to_owned());
         if state.fail_delete {
-            return Err(FsError::new(
-                FsErrorKind::Io,
-                FsOperation::Delete,
-                "delete failed",
-            ));
+            return Err(FsError::new(FsErrorKind::Io, FsOperation::Delete, "delete failed"));
         }
         state.files.remove(path.as_str());
         state.dirs.remove(path.as_str());
@@ -207,9 +187,7 @@ impl FileSystem for MockFs {
                 "rename unsupported",
             ));
         }
-        state
-            .renames
-            .push((from.as_str().to_owned(), to.as_str().to_owned()));
+        state.renames.push((from.as_str().to_owned(), to.as_str().to_owned()));
         if state.files.remove(from.as_str()) {
             state.files.insert(to.as_str().to_owned());
         }
@@ -221,9 +199,7 @@ impl FileSystem for MockFs {
 
     fn copy(&self, from: &FsPath, to: &FsPath, _options: &CopyOptions) -> FsResult<CopyOutcome> {
         let mut state = self.state.lock().expect("state lock should succeed");
-        state
-            .copies
-            .push((from.as_str().to_owned(), to.as_str().to_owned()));
+        state.copies.push((from.as_str().to_owned(), to.as_str().to_owned()));
         state.files.insert(to.as_str().to_owned());
         let stats = CopyStats {
             files: 1,
@@ -260,11 +236,7 @@ impl Write for MockWriter {
 impl FileWriter for MockWriter {
     fn commit(self: Box<Self>) -> FsResult<WriteOutcome> {
         if self.fail_commit {
-            return Err(FsError::new(
-                FsErrorKind::Io,
-                FsOperation::OpenWriter,
-                "commit failed",
-            ));
+            return Err(FsError::new(FsErrorKind::Io, FsOperation::OpenWriter, "commit failed"));
         }
         let mut state = self.state.lock().expect("state lock should succeed");
         state.files.insert(self.path.as_str().to_owned());
@@ -307,11 +279,7 @@ pub(crate) struct FailingDirectoryStream;
 
 impl DirectoryStream for FailingDirectoryStream {
     fn next_entry(&mut self) -> FsResult<Option<DirEntry>> {
-        Err(FsError::new(
-            FsErrorKind::Io,
-            FsOperation::List,
-            "list failed",
-        ))
+        Err(FsError::new(FsErrorKind::Io, FsOperation::List, "list failed"))
     }
 }
 
@@ -325,11 +293,7 @@ impl DirectoryStream for PartiallyFailingDirectoryStream {
         if let Some(entry) = self.entry.take() {
             Ok(Some(entry))
         } else {
-            Err(FsError::new(
-                FsErrorKind::Io,
-                FsOperation::List,
-                "list failed",
-            ))
+            Err(FsError::new(FsErrorKind::Io, FsOperation::List, "list failed"))
         }
     }
 }
@@ -359,11 +323,7 @@ impl TempResource for NativeTempFileHandle {
 }
 
 impl TempFile for NativeTempFileHandle {
-    fn persist(
-        self: Box<Self>,
-        _target: &FsPath,
-        _options: &PersistOptions,
-    ) -> FsResult<WriteOutcome> {
+    fn persist(self: Box<Self>, _target: &FsPath, _options: &PersistOptions) -> FsResult<WriteOutcome> {
         Ok(WriteOutcome::default())
     }
 }
@@ -404,23 +364,13 @@ pub(crate) struct NativeTempResourceFactory;
 static NATIVE_TEMP_RESOURCE_FACTORY: NativeTempResourceFactory = NativeTempResourceFactory;
 
 impl TempResourceFactory for NativeTempResourceFactory {
-    fn create_file(
-        &self,
-        owner: Arc<dyn FileSystem>,
-        options: &TempFileOptions,
-    ) -> FsResult<Box<dyn TempFile>> {
-        let path =
-            self.make_temp_path(options.parent.as_ref(), &options.prefix, &options.suffix)?;
+    fn create_file(&self, owner: Arc<dyn FileSystem>, options: &TempFileOptions) -> FsResult<Box<dyn TempFile>> {
+        let path = self.make_temp_path(options.parent.as_ref(), &options.prefix, &options.suffix)?;
         Ok(Box::new(NativeTempFileHandle { fs: owner, path }))
     }
 
-    fn create_dir(
-        &self,
-        owner: Arc<dyn FileSystem>,
-        options: &TempDirOptions,
-    ) -> FsResult<Box<dyn TempDir>> {
-        let path =
-            self.make_temp_path(options.parent.as_ref(), &options.prefix, &options.suffix)?;
+    fn create_dir(&self, owner: Arc<dyn FileSystem>, options: &TempDirOptions) -> FsResult<Box<dyn TempDir>> {
+        let path = self.make_temp_path(options.parent.as_ref(), &options.prefix, &options.suffix)?;
         Ok(Box::new(NativeTempDirHandle { fs: owner, path }))
     }
 }
@@ -472,11 +422,7 @@ impl FileSystem for NativeTempFs {
         ))
     }
 
-    fn open_writer(
-        &self,
-        _path: &FsPath,
-        _options: &WriteOptions,
-    ) -> FsResult<Box<dyn FileWriter>> {
+    fn open_writer(&self, _path: &FsPath, _options: &WriteOptions) -> FsResult<Box<dyn FileWriter>> {
         Err(FsError::new(
             FsErrorKind::UnsupportedOperation,
             FsOperation::OpenWriter,
@@ -527,10 +473,7 @@ impl ServiceProvider<FileSystemSpec> for MockProvider {
         ProviderDescriptor::new("mock")?.with_aliases(&["mem"])
     }
 
-    fn create_box(
-        &self,
-        _config: &FileSystemConfig,
-    ) -> Result<Box<dyn FileSystem>, ProviderCreateError> {
+    fn create_box(&self, _config: &FileSystemConfig) -> Result<Box<dyn FileSystem>, ProviderCreateError> {
         Ok(Box::new(self.fs.clone()))
     }
 }
@@ -545,10 +488,7 @@ impl ServiceProvider<FileSystemSpec> for DescriptorErrorProvider {
         Err(self.error.clone())
     }
 
-    fn create_box(
-        &self,
-        _config: &FileSystemConfig,
-    ) -> Result<Box<dyn FileSystem>, ProviderCreateError> {
+    fn create_box(&self, _config: &FileSystemConfig) -> Result<Box<dyn FileSystem>, ProviderCreateError> {
         Err(ProviderCreateError::failed("descriptor failed"))
     }
 }
@@ -566,17 +506,12 @@ impl ServiceProvider<FileSystemSpec> for FailingCreateProvider {
 
     fn availability(&self, _config: &FileSystemConfig) -> ProviderAvailability {
         match &self.error {
-            ProviderCreateError::Unavailable { reason, .. } => {
-                ProviderAvailability::unavailable(reason)
-            }
+            ProviderCreateError::Unavailable { reason, .. } => ProviderAvailability::unavailable(reason),
             ProviderCreateError::Failed { .. } => ProviderAvailability::Available,
         }
     }
 
-    fn create_box(
-        &self,
-        _config: &FileSystemConfig,
-    ) -> Result<Box<dyn FileSystem>, ProviderCreateError> {
+    fn create_box(&self, _config: &FileSystemConfig) -> Result<Box<dyn FileSystem>, ProviderCreateError> {
         Err(self.error.clone())
     }
 }

@@ -10,9 +10,7 @@ fn test_write_options_full_configuration_is_usable() {
     let checksum = Checksum::new(ChecksumAlgorithm::Sha256, "abc");
     let options = WriteOptions {
         create_parent: true,
-        mode: WriteMode::ConditionalReplace {
-            etag: "v1".to_owned(),
-        },
+        mode: WriteMode::ConditionalReplace { etag: "v1".to_owned() },
         content_type: Some("text/plain".to_owned()),
         user_metadata: qubit_metadata::Metadata::new(),
         checksum: Some(checksum),

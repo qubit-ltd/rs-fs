@@ -44,10 +44,7 @@ impl FsPath {
     /// to escape above its root with `..`.
     pub fn parse(path: &str) -> FsResult<Self> {
         if path.is_empty() {
-            return Err(FsError::invalid_path(
-                FsOperation::ParsePath,
-                "path must not be empty",
-            ));
+            return Err(FsError::invalid_path(FsOperation::ParsePath, "path must not be empty"));
         }
         if path.contains('\0') {
             return Err(FsError::invalid_path(
@@ -86,10 +83,7 @@ impl FsPath {
                 "relative path must not normalize to empty",
             ));
         }
-        Ok(Self {
-            absolute,
-            normalized,
-        })
+        Ok(Self { absolute, normalized })
     }
 
     /// Creates the absolute root path.

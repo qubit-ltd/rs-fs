@@ -47,11 +47,7 @@ pub trait TempResourceFactory: Debug + Send + Sync {
     ///
     /// # Errors
     /// Returns [`crate::FsError`] when the temporary file cannot be created.
-    fn create_file(
-        &self,
-        owner: Arc<dyn FileSystem>,
-        options: &TempFileOptions,
-    ) -> FsResult<Box<dyn TempFile>>;
+    fn create_file(&self, owner: Arc<dyn FileSystem>, options: &TempFileOptions) -> FsResult<Box<dyn TempFile>>;
 
     /// Creates a temporary directory.
     ///
@@ -65,11 +61,7 @@ pub trait TempResourceFactory: Debug + Send + Sync {
     /// # Errors
     /// Returns [`crate::FsError`] when the temporary directory cannot be
     /// created.
-    fn create_dir(
-        &self,
-        owner: Arc<dyn FileSystem>,
-        options: &TempDirOptions,
-    ) -> FsResult<Box<dyn TempDir>>;
+    fn create_dir(&self, owner: Arc<dyn FileSystem>, options: &TempDirOptions) -> FsResult<Box<dyn TempDir>>;
 
     /// Builds a temporary resource path using the common rs-fs naming format.
     ///
@@ -87,12 +79,7 @@ pub trait TempResourceFactory: Debug + Send + Sync {
     ///
     /// # Errors
     /// Returns [`crate::FsError`] when the generated path is invalid.
-    fn make_temp_path(
-        &self,
-        parent: Option<&FsPath>,
-        prefix: &str,
-        suffix: &str,
-    ) -> FsResult<FsPath> {
+    fn make_temp_path(&self, parent: Option<&FsPath>, prefix: &str, suffix: &str) -> FsResult<FsPath> {
         let parent = parent.cloned().unwrap_or_else(FsPath::root);
         let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
         let nanos = SystemTime::now()

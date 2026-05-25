@@ -50,13 +50,11 @@ fn test_file_systems_facade_resolves_fs_and_resources() {
             .directories,
     );
 
-    let global_resource =
-        FileSystems::resource("mock:///global.txt").expect("global resource should resolve");
+    let global_resource = FileSystems::resource("mock:///global.txt").expect("global resource should resolve");
     assert_eq!("/global.txt", global_resource.path().as_str());
-    let global_resource_uri =
-        FsUri::parse("mock:///global-from-uri.txt").expect("URI should parse");
-    let global_resource = FileSystems::resource_for_uri(&global_resource_uri)
-        .expect("global resource from URI should resolve");
+    let global_resource_uri = FsUri::parse("mock:///global-from-uri.txt").expect("URI should parse");
+    let global_resource =
+        FileSystems::resource_for_uri(&global_resource_uri).expect("global resource from URI should resolve");
     assert_eq!("/global-from-uri.txt", global_resource.path().as_str());
     assert!(FileSystems::resource("not a uri").is_err());
     assert!(FileSystems::fs_for_scheme("bad scheme").is_err());

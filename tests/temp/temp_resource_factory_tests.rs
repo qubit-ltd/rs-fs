@@ -18,9 +18,5 @@ fn test_make_temp_path_uses_parent_prefix_and_suffix() {
 
 #[test]
 fn test_make_temp_path_rejects_invalid_prefix() {
-    assert!(
-        NativeTempResourceFactory
-            .make_temp_path(None, "../", "")
-            .is_err()
-    );
+    assert!(NativeTempResourceFactory.make_temp_path(None, "../", "").is_err());
 }

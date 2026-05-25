@@ -28,9 +28,7 @@ fn test_collect_entries_collects_all_entries() {
 
 #[test]
 fn test_collect_entries_returns_empty_vec_for_empty_stream() {
-    let entries = (Box::new(MockDirectoryStream {
-        entries: Vec::new(),
-    }) as Box<dyn DirectoryStream>)
+    let entries = (Box::new(MockDirectoryStream { entries: Vec::new() }) as Box<dyn DirectoryStream>)
         .collect_entries()
         .expect("empty stream should collect");
 

@@ -60,9 +60,7 @@ impl FileSystemRegistry {
     where
         P: ServiceProvider<FileSystemSpec> + 'static,
     {
-        self.providers
-            .register(provider)
-            .map_err(map_provider_error)
+        self.providers.register(provider).map_err(map_provider_error)
     }
 
     /// Registers a shared filesystem provider.
@@ -74,9 +72,7 @@ impl FileSystemRegistry {
     /// Returns [`FsError`] when provider metadata is invalid or conflicts with
     /// an existing provider.
     pub fn register_shared(&mut self, provider: Arc<FileSystemProvider>) -> FsResult<()> {
-        self.providers
-            .register_shared(provider)
-            .map_err(map_provider_error)
+        self.providers.register_shared(provider).map_err(map_provider_error)
     }
 
     /// Resolves a parsed URI into a filesystem instance.

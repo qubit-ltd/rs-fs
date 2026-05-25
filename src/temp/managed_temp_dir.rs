@@ -110,10 +110,7 @@ impl TempDir for ManagedTempDir {
                 self.cleanup_on_drop = false;
                 Ok(())
             }
-            Err(error)
-                if error.kind() == FsErrorKind::UnsupportedOperation
-                    && options.allow_copy_delete =>
-            {
+            Err(error) if error.kind() == FsErrorKind::UnsupportedOperation && options.allow_copy_delete => {
                 let mut copy_options = CopyOptions::tree();
                 copy_options.conflict = if options.overwrite {
                     CopyConflictPolicy::Overwrite
@@ -150,10 +147,7 @@ impl Drop for ManagedTempDir {
                 },
             );
             if let Err(error) = result {
-                warn!(
-                    "failed to cleanup temporary directory '{}': {error}",
-                    self.path
-                );
+                warn!("failed to cleanup temporary directory '{}': {error}", self.path);
             }
         }
     }

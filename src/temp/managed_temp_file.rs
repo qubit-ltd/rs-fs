@@ -101,11 +101,7 @@ impl TempResource for ManagedTempFile {
 }
 
 impl TempFile for ManagedTempFile {
-    fn persist(
-        mut self: Box<Self>,
-        target: &FsPath,
-        options: &PersistOptions,
-    ) -> FsResult<WriteOutcome> {
+    fn persist(mut self: Box<Self>, target: &FsPath, options: &PersistOptions) -> FsResult<WriteOutcome> {
         let rename_options = RenameOptions {
             overwrite: options.overwrite,
             atomic: options.atomic,
@@ -115,10 +111,7 @@ impl TempFile for ManagedTempFile {
                 self.cleanup_on_drop = false;
                 Ok(WriteOutcome::default())
             }
-            Err(error)
-                if error.kind() == FsErrorKind::UnsupportedOperation
-                    && options.allow_copy_delete =>
-            {
+            Err(error) if error.kind() == FsErrorKind::UnsupportedOperation && options.allow_copy_delete => {
                 let mut copy_options = CopyOptions::file();
                 copy_options.conflict = if options.overwrite {
                     CopyConflictPolicy::Overwrite
