@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Managed temporary resource factory.
 
 use std::sync::Arc;
@@ -43,8 +41,16 @@ impl ManagedTempResourceFactory {
 }
 
 impl TempResourceFactory for ManagedTempResourceFactory {
-    fn create_file(&self, owner: Arc<dyn FileSystem>, options: &TempFileOptions) -> FsResult<Box<dyn TempFile>> {
-        let path = self.make_temp_path(options.parent.as_ref(), &options.prefix, &options.suffix)?;
+    fn create_file(
+        &self,
+        owner: Arc<dyn FileSystem>,
+        options: &TempFileOptions,
+    ) -> FsResult<Box<dyn TempFile>> {
+        let path = self.make_temp_path(
+            options.parent.as_ref(),
+            &options.prefix,
+            &options.suffix,
+        )?;
         let writer_options = WriteOptions {
             create_parent: true,
             mode: WriteMode::CreateNew,
@@ -54,8 +60,16 @@ impl TempResourceFactory for ManagedTempResourceFactory {
         Ok(Box::new(ManagedTempFile::new(owner, path)))
     }
 
-    fn create_dir(&self, owner: Arc<dyn FileSystem>, options: &TempDirOptions) -> FsResult<Box<dyn TempDir>> {
-        let path = self.make_temp_path(options.parent.as_ref(), &options.prefix, &options.suffix)?;
+    fn create_dir(
+        &self,
+        owner: Arc<dyn FileSystem>,
+        options: &TempDirOptions,
+    ) -> FsResult<Box<dyn TempDir>> {
+        let path = self.make_temp_path(
+            options.parent.as_ref(),
+            &options.prefix,
+            &options.suffix,
+        )?;
         owner.create_dir(
             &path,
             &CreateDirOptions {

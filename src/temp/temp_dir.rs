@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Temporary directory handle trait.
 
 use crate::{
@@ -33,7 +31,10 @@ pub trait TempDir: TempResource {
     /// # Errors
     /// Returns [`crate::FsError`] when the owning filesystem cannot list this
     /// temporary directory.
-    fn list(&self, options: &ListOptions) -> FsResult<Box<dyn DirectoryStream>> {
+    fn list(
+        &self,
+        options: &ListOptions,
+    ) -> FsResult<Box<dyn DirectoryStream>> {
         self.fs().as_ref().list(self.path(), options)
     }
 
@@ -63,7 +64,11 @@ pub trait TempDir: TempResource {
     /// # Errors
     /// Returns [`crate::FsError`] when the child path cannot be joined or the
     /// directory cannot be created.
-    fn create_child_dir(&self, name: &str, options: &CreateDirOptions) -> FsResult<FileResource> {
+    fn create_child_dir(
+        &self,
+        name: &str,
+        options: &CreateDirOptions,
+    ) -> FsResult<FileResource> {
         let child = self.child(name)?;
         child.create_dir(options)?;
         Ok(child)
@@ -77,5 +82,9 @@ pub trait TempDir: TempResource {
     ///
     /// # Errors
     /// Returns [`crate::FsError`] when persistence fails.
-    fn persist(self: Box<Self>, target: &FsPath, options: &PersistOptions) -> FsResult<()>;
+    fn persist(
+        self: Box<Self>,
+        target: &FsPath,
+        options: &PersistOptions,
+    ) -> FsResult<()>;
 }

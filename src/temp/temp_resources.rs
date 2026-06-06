@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Facade helpers for temporary resources.
 
 use std::sync::Arc;
@@ -36,7 +34,10 @@ impl TempResources {
     /// # Errors
     /// Returns [`crate::FsError`] when native temporary file creation fails or
     /// the managed fallback cannot reserve the temporary file.
-    pub fn create_file(fs: Arc<dyn FileSystem>, options: &TempFileOptions) -> FsResult<Box<dyn TempFile>> {
+    pub fn create_file(
+        fs: Arc<dyn FileSystem>,
+        options: &TempFileOptions,
+    ) -> FsResult<Box<dyn TempFile>> {
         fs.temp_resource_factory().create_file(fs.clone(), options)
     }
 
@@ -50,7 +51,9 @@ impl TempResources {
     ///
     /// # Errors
     /// Returns [`crate::FsError`] when the temporary file cannot be created.
-    pub fn create_default_file(fs: Arc<dyn FileSystem>) -> FsResult<Box<dyn TempFile>> {
+    pub fn create_default_file(
+        fs: Arc<dyn FileSystem>,
+    ) -> FsResult<Box<dyn TempFile>> {
         Self::create_file(fs, &TempFileOptions::default())
     }
 
@@ -65,7 +68,10 @@ impl TempResources {
     ///
     /// # Errors
     /// Returns [`crate::FsError`] when the temporary file cannot be created.
-    pub fn create_file_with_prefix(fs: Arc<dyn FileSystem>, prefix: &str) -> FsResult<Box<dyn TempFile>> {
+    pub fn create_file_with_prefix(
+        fs: Arc<dyn FileSystem>,
+        prefix: &str,
+    ) -> FsResult<Box<dyn TempFile>> {
         Self::create_file(
             fs,
             &TempFileOptions {
@@ -85,9 +91,12 @@ impl TempResources {
     /// Native or managed temporary directory handle.
     ///
     /// # Errors
-    /// Returns [`crate::FsError`] when native temporary directory creation fails
-    /// or the managed fallback cannot create the temporary directory.
-    pub fn create_dir(fs: Arc<dyn FileSystem>, options: &TempDirOptions) -> FsResult<Box<dyn TempDir>> {
+    /// Returns [`crate::FsError`] when native temporary directory creation
+    /// fails or the managed fallback cannot create the temporary directory.
+    pub fn create_dir(
+        fs: Arc<dyn FileSystem>,
+        options: &TempDirOptions,
+    ) -> FsResult<Box<dyn TempDir>> {
         fs.temp_resource_factory().create_dir(fs.clone(), options)
     }
 
@@ -102,7 +111,9 @@ impl TempResources {
     /// # Errors
     /// Returns [`crate::FsError`] when the temporary directory cannot be
     /// created.
-    pub fn create_default_dir(fs: Arc<dyn FileSystem>) -> FsResult<Box<dyn TempDir>> {
+    pub fn create_default_dir(
+        fs: Arc<dyn FileSystem>,
+    ) -> FsResult<Box<dyn TempDir>> {
         Self::create_dir(fs, &TempDirOptions::default())
     }
 
@@ -118,7 +129,10 @@ impl TempResources {
     /// # Errors
     /// Returns [`crate::FsError`] when the temporary directory cannot be
     /// created.
-    pub fn create_dir_with_prefix(fs: Arc<dyn FileSystem>, prefix: &str) -> FsResult<Box<dyn TempDir>> {
+    pub fn create_dir_with_prefix(
+        fs: Arc<dyn FileSystem>,
+        prefix: &str,
+    ) -> FsResult<Box<dyn TempDir>> {
         Self::create_dir(
             fs,
             &TempDirOptions {

@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Managed temporary file implementation.
 
 use std::sync::Arc;
@@ -101,7 +99,11 @@ impl TempResource for ManagedTempFile {
 }
 
 impl TempFile for ManagedTempFile {
-    fn persist(mut self: Box<Self>, target: &FsPath, options: &PersistOptions) -> FsResult<WriteOutcome> {
+    fn persist(
+        mut self: Box<Self>,
+        target: &FsPath,
+        options: &PersistOptions,
+    ) -> FsResult<WriteOutcome> {
         let rename_options = RenameOptions {
             overwrite: options.overwrite,
             atomic: options.atomic,
@@ -111,7 +113,10 @@ impl TempFile for ManagedTempFile {
                 self.cleanup_on_drop = false;
                 Ok(WriteOutcome::default())
             }
-            Err(error) if error.kind() == FsErrorKind::UnsupportedOperation && options.allow_copy_delete => {
+            Err(error)
+                if error.kind() == FsErrorKind::UnsupportedOperation
+                    && options.allow_copy_delete =>
+            {
                 let mut copy_options = CopyOptions::file();
                 copy_options.conflict = if options.overwrite {
                     CopyConflictPolicy::Overwrite
@@ -120,9 +125,11 @@ impl TempFile for ManagedTempFile {
                 };
                 copy_options.preserve_metadata = options.preserve_metadata;
                 if matches!(options.atomic, AtomicityRequirement::Required) {
-                    copy_options.server_side = crate::ServerSidePreference::Require;
+                    copy_options.server_side =
+                        crate::ServerSidePreference::Require;
                 }
-                let outcome = self.fs.copy(&self.path, target, &copy_options)?;
+                let outcome =
+                    self.fs.copy(&self.path, target, &copy_options)?;
                 self.fs.delete(
                     &self.path,
                     &DeleteOptions {
@@ -153,7 +160,10 @@ impl Drop for ManagedTempFile {
                 },
             );
             if let Err(error) = result {
-                warn!("failed to cleanup temporary file '{}': {error}", self.path);
+                warn!(
+                    "failed to cleanup temporary file '{}': {error}",
+                    self.path
+                );
             }
         }
     }

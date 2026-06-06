@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Temporary resource factory trait.
 
 use std::fmt::Debug;
@@ -47,7 +45,11 @@ pub trait TempResourceFactory: Debug + Send + Sync {
     ///
     /// # Errors
     /// Returns [`crate::FsError`] when the temporary file cannot be created.
-    fn create_file(&self, owner: Arc<dyn FileSystem>, options: &TempFileOptions) -> FsResult<Box<dyn TempFile>>;
+    fn create_file(
+        &self,
+        owner: Arc<dyn FileSystem>,
+        options: &TempFileOptions,
+    ) -> FsResult<Box<dyn TempFile>>;
 
     /// Creates a temporary directory.
     ///
@@ -61,13 +63,18 @@ pub trait TempResourceFactory: Debug + Send + Sync {
     /// # Errors
     /// Returns [`crate::FsError`] when the temporary directory cannot be
     /// created.
-    fn create_dir(&self, owner: Arc<dyn FileSystem>, options: &TempDirOptions) -> FsResult<Box<dyn TempDir>>;
+    fn create_dir(
+        &self,
+        owner: Arc<dyn FileSystem>,
+        options: &TempDirOptions,
+    ) -> FsResult<Box<dyn TempDir>>;
 
     /// Builds a temporary resource path using the common rs-fs naming format.
     ///
-    /// The default format is `{prefix}{process_id}-{unix_epoch_nanos}-{counter}{suffix}`.
-    /// Implementations may use this helper to share the common format, or ignore
-    /// it and apply provider-specific naming rules.
+    /// The default format is
+    /// `{prefix}{process_id}-{unix_epoch_nanos}-{counter}{suffix}`.
+    /// Implementations may use this helper to share the common format, or
+    /// ignore it and apply provider-specific naming rules.
     ///
     /// # Parameters
     /// - `parent`: Optional parent path. Root is used when absent.
@@ -79,14 +86,20 @@ pub trait TempResourceFactory: Debug + Send + Sync {
     ///
     /// # Errors
     /// Returns [`crate::FsError`] when the generated path is invalid.
-    fn make_temp_path(&self, parent: Option<&FsPath>, prefix: &str, suffix: &str) -> FsResult<FsPath> {
+    fn make_temp_path(
+        &self,
+        parent: Option<&FsPath>,
+        prefix: &str,
+        suffix: &str,
+    ) -> FsResult<FsPath> {
         let parent = parent.cloned().unwrap_or_else(FsPath::root);
         let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_nanos();
-        let name = format!("{prefix}{}-{nanos}-{counter}{suffix}", process::id());
+        let name =
+            format!("{prefix}{}-{nanos}-{counter}{suffix}", process::id());
         parent.join(&name)
     }
 }

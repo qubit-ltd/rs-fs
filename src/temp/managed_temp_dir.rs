@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Managed temporary directory implementation.
 
 use std::sync::Arc;
@@ -100,7 +98,11 @@ impl TempResource for ManagedTempDir {
 }
 
 impl TempDir for ManagedTempDir {
-    fn persist(mut self: Box<Self>, target: &FsPath, options: &PersistOptions) -> FsResult<()> {
+    fn persist(
+        mut self: Box<Self>,
+        target: &FsPath,
+        options: &PersistOptions,
+    ) -> FsResult<()> {
         let rename_options = RenameOptions {
             overwrite: options.overwrite,
             atomic: options.atomic,
@@ -110,7 +112,10 @@ impl TempDir for ManagedTempDir {
                 self.cleanup_on_drop = false;
                 Ok(())
             }
-            Err(error) if error.kind() == FsErrorKind::UnsupportedOperation && options.allow_copy_delete => {
+            Err(error)
+                if error.kind() == FsErrorKind::UnsupportedOperation
+                    && options.allow_copy_delete =>
+            {
                 let mut copy_options = CopyOptions::tree();
                 copy_options.conflict = if options.overwrite {
                     CopyConflictPolicy::Overwrite
@@ -147,7 +152,10 @@ impl Drop for ManagedTempDir {
                 },
             );
             if let Err(error) = result {
-                warn!("failed to cleanup temporary directory '{}': {error}", self.path);
+                warn!(
+                    "failed to cleanup temporary directory '{}': {error}",
+                    self.path
+                );
             }
         }
     }

@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Temporary file handle trait.
 
 use crate::{
@@ -35,7 +33,10 @@ pub trait TempFile: TempResource {
     /// # Errors
     /// Returns [`crate::FsError`] when the owning filesystem cannot open the
     /// temporary file for reading.
-    fn open_reader(&self, options: &ReadOptions) -> FsResult<Box<dyn FileReader>> {
+    fn open_reader(
+        &self,
+        options: &ReadOptions,
+    ) -> FsResult<Box<dyn FileReader>> {
         self.fs().as_ref().open_reader(self.path(), options)
     }
 
@@ -50,7 +51,10 @@ pub trait TempFile: TempResource {
     /// # Errors
     /// Returns [`crate::FsError`] when the owning filesystem cannot open the
     /// temporary file for writing.
-    fn open_writer(&self, options: &WriteOptions) -> FsResult<Box<dyn FileWriter>> {
+    fn open_writer(
+        &self,
+        options: &WriteOptions,
+    ) -> FsResult<Box<dyn FileWriter>> {
         self.fs().as_ref().open_writer(self.path(), options)
     }
 
@@ -74,8 +78,8 @@ pub trait TempFile: TempResource {
     /// Write outcome reported by the owning filesystem.
     ///
     /// # Errors
-    /// Returns [`crate::FsError`] when opening, writing, aborting, or committing
-    /// fails.
+    /// Returns [`crate::FsError`] when opening, writing, aborting, or
+    /// committing fails.
     fn write_all(&self, bytes: &[u8]) -> FsResult<WriteOutcome> {
         self.fs().as_ref().write_all(self.path(), bytes)
     }
@@ -91,5 +95,9 @@ pub trait TempFile: TempResource {
     ///
     /// # Errors
     /// Returns [`crate::FsError`] when persistence fails.
-    fn persist(self: Box<Self>, target: &FsPath, options: &PersistOptions) -> FsResult<WriteOutcome>;
+    fn persist(
+        self: Box<Self>,
+        target: &FsPath,
+        options: &PersistOptions,
+    ) -> FsResult<WriteOutcome>;
 }
