@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Provider-local filesystem path model.
 
 use std::fmt::{
@@ -40,11 +38,14 @@ impl FsPath {
     /// Normalized provider-local path.
     ///
     /// # Errors
-    /// Returns [`FsError`] when the path is empty, contains a NUL byte, or tries
-    /// to escape above its root with `..`.
+    /// Returns [`FsError`] when the path is empty, contains a NUL byte, or
+    /// tries to escape above its root with `..`.
     pub fn parse(path: &str) -> FsResult<Self> {
         if path.is_empty() {
-            return Err(FsError::invalid_path(FsOperation::ParsePath, "path must not be empty"));
+            return Err(FsError::invalid_path(
+                FsOperation::ParsePath,
+                "path must not be empty",
+            ));
         }
         if path.contains('\0') {
             return Err(FsError::invalid_path(
@@ -83,7 +84,10 @@ impl FsPath {
                 "relative path must not normalize to empty",
             ));
         }
-        Ok(Self { absolute, normalized })
+        Ok(Self {
+            absolute,
+            normalized,
+        })
     }
 
     /// Creates the absolute root path.
