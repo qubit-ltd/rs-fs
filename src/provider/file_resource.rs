@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Bound filesystem resource.
 
 use std::sync::Arc;
@@ -111,7 +109,10 @@ impl FileResource {
     /// # Errors
     /// Returns an error when the owning filesystem cannot open a directory
     /// stream for the resource path.
-    pub fn list(&self, options: &ListOptions) -> FsResult<Box<dyn DirectoryStream>> {
+    pub fn list(
+        &self,
+        options: &ListOptions,
+    ) -> FsResult<Box<dyn DirectoryStream>> {
         self.fs.list(&self.path, options)
     }
 
@@ -126,7 +127,10 @@ impl FileResource {
     /// # Errors
     /// Returns an error when the owning filesystem cannot open the resource for
     /// reading.
-    pub fn open_reader(&self, options: &ReadOptions) -> FsResult<Box<dyn FileReader>> {
+    pub fn open_reader(
+        &self,
+        options: &ReadOptions,
+    ) -> FsResult<Box<dyn FileReader>> {
         self.fs.open_reader(&self.path, options)
     }
 
@@ -141,7 +145,10 @@ impl FileResource {
     /// # Errors
     /// Returns an error when the owning filesystem cannot open the resource for
     /// writing.
-    pub fn open_writer(&self, options: &WriteOptions) -> FsResult<Box<dyn FileWriter>> {
+    pub fn open_writer(
+        &self,
+        options: &WriteOptions,
+    ) -> FsResult<Box<dyn FileWriter>> {
         self.fs.open_writer(&self.path, options)
     }
 
@@ -166,8 +173,8 @@ impl FileResource {
     /// Write outcome reported by the owning filesystem.
     ///
     /// # Errors
-    /// Returns an error when the owning filesystem cannot open, write, flush, or
-    /// commit the resource.
+    /// Returns an error when the owning filesystem cannot open, write, flush,
+    /// or commit the resource.
     pub fn write_all(&self, bytes: &[u8]) -> FsResult<WriteOutcome> {
         self.fs.write_all(&self.path, bytes)
     }
@@ -202,7 +209,11 @@ impl FileResource {
     ///
     /// # Errors
     /// Returns an error when the owning filesystem cannot rename the resource.
-    pub fn rename_to(&self, target: &FsPath, options: &RenameOptions) -> FsResult<()> {
+    pub fn rename_to(
+        &self,
+        target: &FsPath,
+        options: &RenameOptions,
+    ) -> FsResult<()> {
         self.fs.rename(&self.path, target, options)
     }
 
@@ -217,7 +228,11 @@ impl FileResource {
     ///
     /// # Errors
     /// Returns an error when the owning filesystem cannot copy the resource.
-    pub fn copy_to(&self, target: &FsPath, options: &CopyOptions) -> FsResult<CopyOutcome> {
+    pub fn copy_to(
+        &self,
+        target: &FsPath,
+        options: &CopyOptions,
+    ) -> FsResult<CopyOutcome> {
         self.fs.copy(&self.path, target, options)
     }
 }

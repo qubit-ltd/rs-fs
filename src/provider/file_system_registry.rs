@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Filesystem provider registry.
 
 use std::sync::Arc;
@@ -60,7 +58,9 @@ impl FileSystemRegistry {
     where
         P: ServiceProvider<FileSystemSpec> + 'static,
     {
-        self.providers.register(provider).map_err(map_provider_error)
+        self.providers
+            .register(provider)
+            .map_err(map_provider_error)
     }
 
     /// Registers a shared filesystem provider.
@@ -71,8 +71,13 @@ impl FileSystemRegistry {
     /// # Errors
     /// Returns [`FsError`] when provider metadata is invalid or conflicts with
     /// an existing provider.
-    pub fn register_shared(&mut self, provider: Arc<FileSystemProvider>) -> FsResult<()> {
-        self.providers.register_shared(provider).map_err(map_provider_error)
+    pub fn register_shared(
+        &mut self,
+        provider: Arc<FileSystemProvider>,
+    ) -> FsResult<()> {
+        self.providers
+            .register_shared(provider)
+            .map_err(map_provider_error)
     }
 
     /// Resolves a parsed URI into a filesystem instance.
@@ -133,11 +138,15 @@ fn map_provider_error(error: ProviderRegistryError) -> FsError {
         ProviderRegistryError::EmptyProviderName
         | ProviderRegistryError::InvalidProviderName { .. }
         | ProviderRegistryError::DuplicateProviderName { .. }
-        | ProviderRegistryError::DuplicateProviderCandidate { .. } => FsErrorKind::InvalidPath,
+        | ProviderRegistryError::DuplicateProviderCandidate { .. } => {
+            FsErrorKind::InvalidPath
+        }
         ProviderRegistryError::UnknownProvider { .. }
         | ProviderRegistryError::ProviderUnavailable { .. }
         | ProviderRegistryError::NoAvailableProvider { .. }
-        | ProviderRegistryError::EmptyRegistry => FsErrorKind::ProviderUnavailable,
+        | ProviderRegistryError::EmptyRegistry => {
+            FsErrorKind::ProviderUnavailable
+        }
         ProviderRegistryError::ProviderCreate { .. } => FsErrorKind::Other,
     };
     let message = error.to_string();

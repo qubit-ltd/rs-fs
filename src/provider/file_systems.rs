@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Global filesystem registry facade.
 
 use std::sync::{
@@ -46,7 +44,8 @@ impl FileSystems {
     /// - `provider`: Filesystem provider to register.
     ///
     /// # Errors
-    /// Returns an error when a provider with the same descriptor already exists.
+    /// Returns an error when a provider with the same descriptor already
+    /// exists.
     pub fn register<P>(provider: P) -> FsResult<()>
     where
         P: ServiceProvider<FileSystemSpec> + 'static,
@@ -61,7 +60,8 @@ impl FileSystems {
     /// - `provider`: Shared filesystem provider to register.
     ///
     /// # Errors
-    /// Returns an error when a provider with the same descriptor already exists.
+    /// Returns an error when a provider with the same descriptor already
+    /// exists.
     pub fn register_shared(provider: Arc<FileSystemProvider>) -> FsResult<()> {
         let mut registry = Self::registry().write();
         registry.register_shared(provider)
@@ -83,7 +83,8 @@ impl FileSystems {
         Self::fs_for_uri(&uri)
     }
 
-    /// Resolves a parsed URI into a filesystem instance from the global registry.
+    /// Resolves a parsed URI into a filesystem instance from the global
+    /// registry.
     ///
     /// # Parameters
     /// - `uri`: Parsed filesystem URI.
@@ -136,7 +137,8 @@ impl FileSystems {
         Self::resource_for_uri(&uri)
     }
 
-    /// Resolves a parsed URI into a bound file resource from the global registry.
+    /// Resolves a parsed URI into a bound file resource from the global
+    /// registry.
     ///
     /// # Parameters
     /// - `uri`: Parsed filesystem URI.
@@ -160,6 +162,10 @@ impl FileSystems {
     #[must_use]
     pub fn provider_names() -> Vec<String> {
         let registry = Self::registry().read();
-        registry.provider_names().into_iter().map(str::to_owned).collect()
+        registry
+            .provider_names()
+            .into_iter()
+            .map(str::to_owned)
+            .collect()
     }
 }
