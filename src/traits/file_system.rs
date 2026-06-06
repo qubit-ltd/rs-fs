@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Core filesystem trait.
 
 use std::fmt::Debug;
@@ -51,8 +49,9 @@ pub trait FileSystem: Debug + Send + Sync {
 
     /// Gets the temporary resource factory for this filesystem instance.
     ///
-    /// If the specified filesystem does not provide its specific implementation,
-    /// a default `ManagedTempResourceFactory` will be returned.
+    /// If the specified filesystem does not provide its specific
+    /// implementation, a default `ManagedTempResourceFactory` will be
+    /// returned.
     ///
     /// # Returns
     /// Factory used to create temporary files and directories owned by this
@@ -97,7 +96,11 @@ pub trait FileSystem: Debug + Send + Sync {
     ///
     /// # Errors
     /// Returns [`crate::FsError`] when listing cannot be started.
-    fn list(&self, path: &FsPath, options: &ListOptions) -> FsResult<Box<dyn DirectoryStream>>;
+    fn list(
+        &self,
+        path: &FsPath,
+        options: &ListOptions,
+    ) -> FsResult<Box<dyn DirectoryStream>>;
 
     /// Opens a readable resource.
     ///
@@ -110,7 +113,11 @@ pub trait FileSystem: Debug + Send + Sync {
     ///
     /// # Errors
     /// Returns [`crate::FsError`] when the reader cannot be opened.
-    fn open_reader(&self, path: &FsPath, options: &ReadOptions) -> FsResult<Box<dyn FileReader>>;
+    fn open_reader(
+        &self,
+        path: &FsPath,
+        options: &ReadOptions,
+    ) -> FsResult<Box<dyn FileReader>>;
 
     /// Opens a writable resource.
     ///
@@ -123,7 +130,11 @@ pub trait FileSystem: Debug + Send + Sync {
     ///
     /// # Errors
     /// Returns [`crate::FsError`] when the writer cannot be opened.
-    fn open_writer(&self, path: &FsPath, options: &WriteOptions) -> FsResult<Box<dyn FileWriter>>;
+    fn open_writer(
+        &self,
+        path: &FsPath,
+        options: &WriteOptions,
+    ) -> FsResult<Box<dyn FileWriter>>;
 
     /// Creates a directory, collection, or equivalent container.
     ///
@@ -133,7 +144,11 @@ pub trait FileSystem: Debug + Send + Sync {
     ///
     /// # Errors
     /// Returns [`crate::FsError`] when the container cannot be created.
-    fn create_dir(&self, path: &FsPath, options: &CreateDirOptions) -> FsResult<()>;
+    fn create_dir(
+        &self,
+        path: &FsPath,
+        options: &CreateDirOptions,
+    ) -> FsResult<()>;
 
     /// Deletes a resource.
     ///
@@ -154,7 +169,12 @@ pub trait FileSystem: Debug + Send + Sync {
     ///
     /// # Errors
     /// Returns [`crate::FsError`] when rename fails.
-    fn rename(&self, from: &FsPath, to: &FsPath, options: &RenameOptions) -> FsResult<()>;
+    fn rename(
+        &self,
+        from: &FsPath,
+        to: &FsPath,
+        options: &RenameOptions,
+    ) -> FsResult<()>;
 
     /// Copies a resource within this filesystem.
     ///
@@ -168,5 +188,10 @@ pub trait FileSystem: Debug + Send + Sync {
     ///
     /// # Errors
     /// Returns [`crate::FsError`] when copy fails.
-    fn copy(&self, from: &FsPath, to: &FsPath, options: &CopyOptions) -> FsResult<CopyOutcome>;
+    fn copy(
+        &self,
+        from: &FsPath,
+        to: &FsPath,
+        options: &CopyOptions,
+    ) -> FsResult<CopyOutcome>;
 }
