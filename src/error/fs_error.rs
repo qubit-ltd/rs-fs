@@ -1,12 +1,10 @@
-/*******************************************************************************
- *
- *    Copyright (c) 2026 Haixing Hu.
- *
- *    SPDX-License-Identifier: Apache-2.0
- *
- *    Licensed under the Apache License, Version 2.0.
- *
- ******************************************************************************/
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Concrete filesystem error type.
 
 use std::error::Error;
@@ -52,7 +50,11 @@ impl FsError {
     /// # Returns
     /// New filesystem error.
     #[inline]
-    pub fn new(kind: FsErrorKind, operation: FsOperation, message: &str) -> Self {
+    pub fn new(
+        kind: FsErrorKind,
+        operation: FsOperation,
+        message: &str,
+    ) -> Self {
         Self {
             kind,
             operation,
@@ -75,7 +77,12 @@ impl FsError {
     /// # Returns
     /// New filesystem error with source context.
     #[inline]
-    pub fn with_source<E>(kind: FsErrorKind, operation: FsOperation, message: &str, source: E) -> Self
+    pub fn with_source<E>(
+        kind: FsErrorKind,
+        operation: FsOperation,
+        message: &str,
+        source: E,
+    ) -> Self
     where
         E: Error + Send + Sync + 'static,
     {
@@ -165,6 +172,8 @@ impl Display for FsError {
 impl Error for FsError {
     #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        self.source.as_deref().map(|source| source as &(dyn Error + 'static))
+        self.source
+            .as_deref()
+            .map(|source| source as &(dyn Error + 'static))
     }
 }
