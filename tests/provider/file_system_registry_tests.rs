@@ -40,10 +40,13 @@ fn test_registry_registers_provider_and_resolves_alias() {
 fn test_registry_returns_error_for_missing_provider() {
     let mut registry = FileSystemRegistry::new();
     registry
-        .register(MockProvider { fs: MockFs::default() })
+        .register(MockProvider {
+            fs: MockFs::default(),
+        })
         .expect("provider should register");
 
-    let missing_uri = FsUri::parse("missing:///file.txt").expect("URI should parse");
+    let missing_uri =
+        FsUri::parse("missing:///file.txt").expect("URI should parse");
     assert!(registry.fs(&missing_uri).is_err());
 }
 
@@ -73,7 +76,10 @@ fn test_registry_maps_spi_descriptor_errors() {
             source: ProviderCreateError::failed("broken"),
         },
         ProviderRegistryError::NoAvailableProvider {
-            failures: vec![ProviderFailure::unknown("missing").expect("failure should be valid")],
+            failures: vec![
+                ProviderFailure::unknown("missing")
+                    .expect("failure should be valid"),
+            ],
         },
         ProviderRegistryError::EmptyRegistry,
     ];
@@ -85,7 +91,9 @@ fn test_registry_maps_spi_descriptor_errors() {
             .expect_err("descriptor error should be mapped");
         assert!(matches!(
             mapped.kind(),
-            FsErrorKind::InvalidPath | FsErrorKind::ProviderUnavailable | FsErrorKind::Other,
+            FsErrorKind::InvalidPath
+                | FsErrorKind::ProviderUnavailable
+                | FsErrorKind::Other,
         ));
     }
 }
@@ -93,7 +101,10 @@ fn test_registry_maps_spi_descriptor_errors() {
 #[test]
 fn test_register_shared_accepts_arc_provider() {
     let mut registry = FileSystemRegistry::new();
-    let shared: Arc<dyn ServiceProvider<FileSystemSpec>> = Arc::new(MockProvider { fs: MockFs::default() });
+    let shared: Arc<dyn ServiceProvider<FileSystemSpec>> =
+        Arc::new(MockProvider {
+            fs: MockFs::default(),
+        });
 
     registry
         .register_shared(shared)
@@ -138,7 +149,8 @@ fn test_registry_maps_provider_create_errors() {
 #[test]
 fn test_empty_registry_returns_errors_for_fs_and_resource() {
     let registry = FileSystemRegistry::new();
-    let missing_uri = FsUri::parse("missing:///file.txt").expect("URI should parse");
+    let missing_uri =
+        FsUri::parse("missing:///file.txt").expect("URI should parse");
 
     assert!(registry.resource(&missing_uri).is_err());
     assert!(registry.fs(&missing_uri).is_err());

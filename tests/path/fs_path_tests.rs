@@ -41,7 +41,10 @@ fn test_parent_and_join_handle_root_absolute_and_relative_paths() {
     let root = FsPath::root();
     let path = FsPath::parse("/a//b/./c").expect("path should parse");
 
-    assert_eq!("/a/b", path.parent().expect("path should have parent").as_str());
+    assert_eq!(
+        "/a/b",
+        path.parent().expect("path should have parent").as_str()
+    );
     assert_eq!(
         "/a/b/d",
         path.parent()
@@ -56,7 +59,12 @@ fn test_parent_and_join_handle_root_absolute_and_relative_paths() {
             .expect("absolute child should replace base")
             .as_str(),
     );
-    assert_eq!("/child", root.join("child").expect("root join should succeed").as_str(),);
+    assert_eq!(
+        "/child",
+        root.join("child")
+            .expect("root join should succeed")
+            .as_str(),
+    );
     assert_eq!(
         "/",
         FsPath::parse("/a")

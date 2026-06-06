@@ -27,14 +27,16 @@ fn test_temp_resources_create_managed_file_and_dir_with_default_options() {
     let fs: Arc<dyn FileSystem> = Arc::new(MockFs::default());
 
     let temp_file =
-        TempResources::create_file(fs.clone(), &TempFileOptions::default()).expect("temp file should be created");
+        TempResources::create_file(fs.clone(), &TempFileOptions::default())
+            .expect("temp file should be created");
     let temp_path = temp_file.path().clone();
     assert!(fs.exists(&temp_path).expect("temp file should exist"));
     temp_file.cleanup().expect("cleanup should succeed");
     assert!(!fs.exists(&temp_path).expect("temp file should be gone"));
 
     let temp_dir =
-        TempResources::create_dir(fs.clone(), &TempDirOptions::default()).expect("temp dir should be created");
+        TempResources::create_dir(fs.clone(), &TempDirOptions::default())
+            .expect("temp dir should be created");
     let temp_dir_path = temp_dir.path().clone();
     assert!(fs.exists(&temp_dir_path).expect("temp dir should exist"));
     temp_dir.cleanup().expect("cleanup should succeed");
@@ -42,26 +44,39 @@ fn test_temp_resources_create_managed_file_and_dir_with_default_options() {
 }
 
 #[test]
-fn test_temp_resources_convenience_methods_create_default_and_prefixed_resources() {
+fn test_temp_resources_convenience_methods_create_default_and_prefixed_resources()
+ {
     let fs: Arc<dyn FileSystem> = Arc::new(MockFs::default());
 
-    let default_file = TempResources::create_default_file(fs.clone()).expect("default temp file should create");
+    let default_file = TempResources::create_default_file(fs.clone())
+        .expect("default temp file should create");
     assert!(default_file.path().as_str().starts_with("/.tmp-"));
-    default_file.cleanup().expect("default temp file should clean");
+    default_file
+        .cleanup()
+        .expect("default temp file should clean");
 
     let prefixed_file =
-        TempResources::create_file_with_prefix(fs.clone(), "prefix-").expect("prefixed temp file should create");
+        TempResources::create_file_with_prefix(fs.clone(), "prefix-")
+            .expect("prefixed temp file should create");
     assert!(prefixed_file.path().as_str().starts_with("/prefix-"));
-    prefixed_file.cleanup().expect("prefixed temp file should clean");
+    prefixed_file
+        .cleanup()
+        .expect("prefixed temp file should clean");
 
-    let default_dir = TempResources::create_default_dir(fs.clone()).expect("default temp dir should create");
+    let default_dir = TempResources::create_default_dir(fs.clone())
+        .expect("default temp dir should create");
     assert!(default_dir.path().as_str().starts_with("/.tmp-dir-"));
-    default_dir.cleanup().expect("default temp dir should clean");
+    default_dir
+        .cleanup()
+        .expect("default temp dir should clean");
 
     let prefixed_dir =
-        TempResources::create_dir_with_prefix(fs.clone(), "dir-prefix-").expect("prefixed temp dir should create");
+        TempResources::create_dir_with_prefix(fs.clone(), "dir-prefix-")
+            .expect("prefixed temp dir should create");
     assert!(prefixed_dir.path().as_str().starts_with("/dir-prefix-"));
-    prefixed_dir.cleanup().expect("prefixed temp dir should clean");
+    prefixed_dir
+        .cleanup()
+        .expect("prefixed temp dir should clean");
 }
 
 #[test]
@@ -99,7 +114,8 @@ fn test_temp_resources_create_custom_paths_with_parent_prefix_and_suffix() {
 }
 
 #[test]
-fn test_temp_resources_return_errors_from_invalid_paths_and_creation_failures() {
+fn test_temp_resources_return_errors_from_invalid_paths_and_creation_failures()
+{
     let fs: Arc<dyn FileSystem> = Arc::new(MockFs::default());
     assert!(
         TempResources::create_file(
@@ -117,19 +133,34 @@ fn test_temp_resources_return_errors_from_invalid_paths_and_creation_failures() 
         fail_commit: true,
         ..MockState::default()
     }));
-    let commit_error_fs: Arc<dyn FileSystem> = Arc::new(MockFs::with_state(commit_error_state));
-    assert!(TempResources::create_file(commit_error_fs, &TempFileOptions::default()).is_err());
+    let commit_error_fs: Arc<dyn FileSystem> =
+        Arc::new(MockFs::with_state(commit_error_state));
+    assert!(
+        TempResources::create_file(
+            commit_error_fs,
+            &TempFileOptions::default()
+        )
+        .is_err()
+    );
 
     let create_dir_error_state = Arc::new(Mutex::new(MockState {
         fail_create_dir: true,
         ..MockState::default()
     }));
-    let create_dir_error_fs: Arc<dyn FileSystem> = Arc::new(MockFs::with_state(create_dir_error_state));
-    assert!(TempResources::create_dir(create_dir_error_fs, &TempDirOptions::default()).is_err());
+    let create_dir_error_fs: Arc<dyn FileSystem> =
+        Arc::new(MockFs::with_state(create_dir_error_state));
+    assert!(
+        TempResources::create_dir(
+            create_dir_error_fs,
+            &TempDirOptions::default()
+        )
+        .is_err()
+    );
 }
 
 #[test]
-fn test_temp_resources_uses_native_temp_factory_when_file_system_provides_one() {
+fn test_temp_resources_uses_native_temp_factory_when_file_system_provides_one()
+{
     let native_fs: Arc<dyn FileSystem> = Arc::new(NativeTempFs);
     let native_parent = FsPath::parse("/native").expect("path should parse");
 
@@ -164,9 +195,13 @@ fn test_temp_resources_uses_native_temp_factory_when_file_system_provides_one() 
 fn test_temp_resources_required_copy_fallback_succeeds_when_allowed() {
     let state = Arc::new(Mutex::new(MockState::default()));
     let fs: Arc<dyn FileSystem> = Arc::new(MockFs::with_state(state.clone()));
-    state.lock().expect("state lock should succeed").fail_rename_unsupported = true;
+    state
+        .lock()
+        .expect("state lock should succeed")
+        .fail_rename_unsupported = true;
     let path = FsPath::parse("/required-copy.tmp").expect("path should parse");
-    fs.write_all(&path, b"data").expect("file should be created");
+    fs.write_all(&path, b"data")
+        .expect("file should be created");
 
     Box::new(ManagedTempFile::new(fs.clone(), path))
         .persist(

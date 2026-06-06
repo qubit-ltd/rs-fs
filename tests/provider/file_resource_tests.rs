@@ -30,29 +30,43 @@ fn test_file_resource_delegates_operations_to_resolved_file_system() {
     registry
         .register(MockProvider { fs })
         .expect("provider should register");
-    let resource_uri = FsUri::parse("mock:///file.txt").expect("URI should parse");
-    let resource = registry.resource(&resource_uri).expect("URI should resolve");
+    let resource_uri =
+        FsUri::parse("mock:///file.txt").expect("URI should parse");
+    let resource = registry
+        .resource(&resource_uri)
+        .expect("URI should resolve");
     let _: FileResource = resource.clone();
 
     assert_eq!("/file.txt", resource.path().as_str());
     assert!(resource.fs().capabilities().directories);
     assert!(resource.write_all(b"data").is_ok());
     assert!(resource.exists().expect("resolved fs should work"));
-    assert_eq!(Some(4), resource.metadata().expect("metadata should load").len);
+    assert_eq!(
+        Some(4),
+        resource.metadata().expect("metadata should load").len
+    );
 
     let mut reader = resource
         .open_reader(&ReadOptions::default())
         .expect("reader should open");
     let mut direct_read = Vec::new();
-    reader.read_to_end(&mut direct_read).expect("reader should read");
+    reader
+        .read_to_end(&mut direct_read)
+        .expect("reader should read");
     assert_eq!(b"data".to_vec(), direct_read);
 
     let mut writer = resource
         .open_writer(&WriteOptions::default())
         .expect("writer should open");
     writer.write_all(b"data").expect("writer should write");
-    assert_eq!(Some(4), writer.commit().expect("writer should commit").bytes_written,);
-    assert_eq!(b"data".to_vec(), resource.read_all().expect("resource should read"));
+    assert_eq!(
+        Some(4),
+        writer.commit().expect("writer should commit").bytes_written,
+    );
+    assert_eq!(
+        b"data".to_vec(),
+        resource.read_all().expect("resource should read")
+    );
 
     let entries = resource
         .list(&ListOptions::default())
@@ -85,7 +99,9 @@ fn test_file_resource_delegates_directory_create_and_delete() {
         .register(MockProvider { fs })
         .expect("provider should register");
     let dir_uri = FsUri::parse("mock:///dir").expect("URI should parse");
-    let dir = registry.resource(&dir_uri).expect("directory resource should resolve");
+    let dir = registry
+        .resource(&dir_uri)
+        .expect("directory resource should resolve");
 
     dir.create_dir(&CreateDirOptions::default())
         .expect("resource directory should create");

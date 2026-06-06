@@ -19,8 +19,12 @@ fn test_read_all_and_write_all_success_paths() {
     let fs = MockFs::with_state(state);
     let path = FsPath::parse("/file.txt").expect("path should parse");
 
-    fs.write_all(&path, b"data").expect("write_all should succeed");
-    assert_eq!(b"data".to_vec(), fs.read_all(&path).expect("read_all should succeed"),);
+    fs.write_all(&path, b"data")
+        .expect("write_all should succeed");
+    assert_eq!(
+        b"data".to_vec(),
+        fs.read_all(&path).expect("read_all should succeed"),
+    );
 }
 
 #[test]

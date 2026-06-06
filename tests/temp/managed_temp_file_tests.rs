@@ -60,16 +60,22 @@ fn test_managed_temp_file_persist_renames_when_supported() {
         .expect("persist should rename");
 
     assert!(
-        fs.exists(&FsPath::parse("/renamed-file.txt").expect("path should parse"))
-            .expect("target should exist"),
+        fs.exists(
+            &FsPath::parse("/renamed-file.txt").expect("path should parse")
+        )
+        .expect("target should exist"),
     );
 }
 
 #[test]
-fn test_managed_temp_file_persist_copy_deletes_when_rename_unsupported_and_allowed() {
+fn test_managed_temp_file_persist_copy_deletes_when_rename_unsupported_and_allowed()
+ {
     let state = Arc::new(Mutex::new(MockState::default()));
     let fs: Arc<dyn FileSystem> = Arc::new(MockFs::with_state(state.clone()));
-    state.lock().expect("state lock should succeed").fail_rename_unsupported = true;
+    state
+        .lock()
+        .expect("state lock should succeed")
+        .fail_rename_unsupported = true;
     let path = FsPath::parse("/copy-file.tmp").expect("path should parse");
     fs.write_all(&path, b"data").expect("write should succeed");
 
@@ -100,8 +106,10 @@ fn test_managed_temp_file_drop_runs_best_effort_cleanup() {
 fn test_managed_temp_file_cleanup_and_persist_return_errors() {
     let state = Arc::new(Mutex::new(MockState::default()));
     let fs: Arc<dyn FileSystem> = Arc::new(MockFs::with_state(state.clone()));
-    let cleanup_path = FsPath::parse("/cleanup-error.tmp").expect("path should parse");
-    fs.write_all(&cleanup_path, b"data").expect("file should be created");
+    let cleanup_path =
+        FsPath::parse("/cleanup-error.tmp").expect("path should parse");
+    fs.write_all(&cleanup_path, b"data")
+        .expect("file should be created");
     state.lock().expect("state lock should succeed").fail_delete = true;
     assert!(
         Box::new(ManagedTempFile::new(fs.clone(), cleanup_path))
@@ -110,14 +118,19 @@ fn test_managed_temp_file_cleanup_and_persist_return_errors() {
     );
     state.lock().expect("state lock should succeed").fail_delete = false;
 
-    state.lock().expect("state lock should succeed").fail_rename_unsupported = true;
-    let unsupported_path = FsPath::parse("/unsupported-file.tmp").expect("path should parse");
+    state
+        .lock()
+        .expect("state lock should succeed")
+        .fail_rename_unsupported = true;
+    let unsupported_path =
+        FsPath::parse("/unsupported-file.tmp").expect("path should parse");
     fs.write_all(&unsupported_path, b"data")
         .expect("file should be created");
     assert!(
         Box::new(ManagedTempFile::new(fs.clone(), unsupported_path))
             .persist(
-                &FsPath::parse("/unsupported-file.txt").expect("path should parse"),
+                &FsPath::parse("/unsupported-file.txt")
+                    .expect("path should parse"),
                 &PersistOptions::default(),
             )
             .is_err(),
