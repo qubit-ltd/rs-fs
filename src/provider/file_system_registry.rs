@@ -10,13 +10,24 @@
 use std::sync::Arc;
 
 use qubit_spi::{
-    FallbackPolicy, ProviderDescriptor, ProviderRegistry, ProviderRegistryBuilder,
-    ProviderResolver, RegistrationError, ResolutionError, ResolutionErrorKind, ServiceProvider,
+    FallbackPolicy,
+    ProviderRegistry,
+    ProviderResolver,
+    ResolutionError,
+    ResolutionErrorKind,
 };
 
 use crate::{
-    FileResource, FileSystem, FileSystemConfig, FileSystemSpec, FsError, FsErrorKind, FsOperation,
-    FsResult, FsUri,
+    FileResource,
+    FileSystem,
+    FileSystemConfig,
+    FileSystemRegistryBuilder,
+    FileSystemSpec,
+    FsError,
+    FsErrorKind,
+    FsOperation,
+    FsResult,
+    FsUri,
 };
 
 /// Registry of filesystem providers.
@@ -33,7 +44,8 @@ impl FileSystemRegistry {
     #[inline]
     #[must_use]
     pub fn new(providers: ProviderRegistry<FileSystemSpec>) -> Self {
-        let resolver = ProviderResolver::new(providers, FallbackPolicy::OnAbsence);
+        let resolver =
+            ProviderResolver::new(providers, FallbackPolicy::OnAbsence);
         Self { resolver }
     }
 
@@ -93,60 +105,12 @@ impl FileSystemRegistry {
     }
 }
 
-/// Startup-only builder for an immutable filesystem registry.
-#[derive(Default)]
-pub struct FileSystemRegistryBuilder {
-    /// Typed SPI builder retaining registrations until startup completes.
-    providers: ProviderRegistryBuilder<FileSystemSpec>,
-}
-
-impl FileSystemRegistryBuilder {
-    /// Creates an empty filesystem provider builder.
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Registers a filesystem provider and its external identity metadata.
-    ///
-    /// Returns [`FsError`] if the descriptor conflicts with a prior provider.
-    pub fn register<P>(&mut self, descriptor: ProviderDescriptor, provider: P) -> FsResult<()>
-    where
-        P: ServiceProvider<FileSystemSpec>,
-    {
-        self.providers
-            .register(descriptor, provider)
-            .map_err(map_registration_error)
-    }
-
-    /// Builds the immutable filesystem registry used at runtime.
-    #[must_use]
-    pub fn build(self) -> FileSystemRegistry {
-        FileSystemRegistry::new(self.providers.build())
-    }
-}
-
-/// Maps SPI registration errors into filesystem errors.
-///
-/// # Parameters
-/// - `error`: SPI registry error.
-///
-/// # Returns
-/// Filesystem error preserving provider diagnostic text.
-fn map_registration_error(error: RegistrationError) -> FsError {
-    let message = error.to_string();
-    FsError::with_source(
-        FsErrorKind::InvalidPath,
-        FsOperation::Provider,
-        &message,
-        error,
-    )
-}
-
 /// Maps SPI resolution errors into filesystem errors.
 fn map_resolution_error(error: ResolutionError) -> FsError {
     let kind = match error.kind() {
-        ResolutionErrorKind::UnknownProvider => FsErrorKind::ProviderUnavailable,
+        ResolutionErrorKind::UnknownProvider => {
+            FsErrorKind::ProviderUnavailable
+        }
         ResolutionErrorKind::NoProviderSucceeded => {
             if error.attempts().iter().all(|attempt| {
                 matches!(

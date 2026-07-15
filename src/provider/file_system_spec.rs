@@ -11,7 +11,10 @@ use std::sync::Arc;
 
 use qubit_spi::ServiceSpec;
 
-use crate::{FileSystem, FileSystemConfig};
+use crate::{
+    FileSystem,
+    FileSystemConfig,
+};
 
 /// Service specification for filesystem providers.
 #[derive(Debug)]

@@ -1,17 +1,34 @@
-use std::io::{Read, Write};
-
-use qubit_fs::{
-    CopyOptions, CreateDirOptions, DeleteOptions, DirectoryStreamExt, FileResource,
-    FileSystemRegistry, FsPath, FsUri, ListOptions, ReadOptions, RenameOptions, WriteOptions,
+use std::io::{
+    Read,
+    Write,
 };
 
-use crate::common::{MockFs, MockProvider};
+use qubit_fs::{
+    CopyOptions,
+    CreateDirOptions,
+    DeleteOptions,
+    DirectoryStreamExt,
+    FileResource,
+    FileSystemRegistry,
+    FsPath,
+    FsUri,
+    ListOptions,
+    ReadOptions,
+    RenameOptions,
+    WriteOptions,
+};
+
+use crate::common::{
+    MockFs,
+    MockProvider,
+};
 
 #[test]
 fn test_file_resource_delegates_operations_to_resolved_file_system() {
     let fs = MockFs::default();
     let registry = registry_with_mock(MockProvider { fs });
-    let resource_uri = FsUri::parse("mock:///file.txt").expect("URI should parse");
+    let resource_uri =
+        FsUri::parse("mock:///file.txt").expect("URI should parse");
     let resource = registry
         .resource(&resource_uri)
         .expect("URI should resolve");

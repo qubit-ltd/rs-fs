@@ -10,9 +10,23 @@
 use std::sync::Arc;
 
 use crate::{
-    CopyOptions, CopyOutcome, CreateDirOptions, DeleteOptions, DirectoryStream, FileMetadata,
-    FileReader, FileSystem, FileSystemExt, FileWriter, FsPath, FsResult, ListOptions, ReadOptions,
-    RenameOptions, WriteOptions, WriteOutcome,
+    CopyOptions,
+    CopyOutcome,
+    CreateDirOptions,
+    DeleteOptions,
+    DirectoryStream,
+    FileMetadata,
+    FileReader,
+    FileSystem,
+    FileSystemExt,
+    FileWriter,
+    FsPath,
+    FsResult,
+    ListOptions,
+    ReadOptions,
+    RenameOptions,
+    WriteOptions,
+    WriteOutcome,
 };
 
 /// A filesystem path bound to the filesystem that owns it.
@@ -94,7 +108,10 @@ impl FileResource {
     /// # Errors
     /// Returns an error when the owning filesystem cannot open a directory
     /// stream for the resource path.
-    pub fn list(&self, options: &ListOptions) -> FsResult<Box<dyn DirectoryStream>> {
+    pub fn list(
+        &self,
+        options: &ListOptions,
+    ) -> FsResult<Box<dyn DirectoryStream>> {
         self.fs.list(&self.path, options)
     }
 
@@ -109,7 +126,10 @@ impl FileResource {
     /// # Errors
     /// Returns an error when the owning filesystem cannot open the resource for
     /// reading.
-    pub fn open_reader(&self, options: &ReadOptions) -> FsResult<Box<dyn FileReader>> {
+    pub fn open_reader(
+        &self,
+        options: &ReadOptions,
+    ) -> FsResult<Box<dyn FileReader>> {
         self.fs.open_reader(&self.path, options)
     }
 
@@ -124,7 +144,10 @@ impl FileResource {
     /// # Errors
     /// Returns an error when the owning filesystem cannot open the resource for
     /// writing.
-    pub fn open_writer(&self, options: &WriteOptions) -> FsResult<Box<dyn FileWriter>> {
+    pub fn open_writer(
+        &self,
+        options: &WriteOptions,
+    ) -> FsResult<Box<dyn FileWriter>> {
         self.fs.open_writer(&self.path, options)
     }
 
@@ -185,7 +208,11 @@ impl FileResource {
     ///
     /// # Errors
     /// Returns an error when the owning filesystem cannot rename the resource.
-    pub fn rename_to(&self, target: &FsPath, options: &RenameOptions) -> FsResult<()> {
+    pub fn rename_to(
+        &self,
+        target: &FsPath,
+        options: &RenameOptions,
+    ) -> FsResult<()> {
         self.fs.rename(&self.path, target, options)
     }
 
@@ -200,7 +227,11 @@ impl FileResource {
     ///
     /// # Errors
     /// Returns an error when the owning filesystem cannot copy the resource.
-    pub fn copy_to(&self, target: &FsPath, options: &CopyOptions) -> FsResult<CopyOutcome> {
+    pub fn copy_to(
+        &self,
+        target: &FsPath,
+        options: &CopyOptions,
+    ) -> FsResult<CopyOutcome> {
         self.fs.copy(&self.path, target, options)
     }
 }

@@ -1,7 +1,21 @@
-use qubit_fs::{FileSystemRegistry, FileSystemSpec, FsErrorKind, FsUri};
-use qubit_spi::{ProviderDescriptor, ProviderError, ProviderId, ProviderRegistry};
+use qubit_fs::{
+    FileSystemRegistry,
+    FileSystemSpec,
+    FsErrorKind,
+    FsUri,
+};
+use qubit_spi::{
+    ProviderDescriptor,
+    ProviderError,
+    ProviderId,
+    ProviderRegistry,
+};
 
-use crate::common::{FailingCreateProvider, MockFs, MockProvider};
+use crate::common::{
+    FailingCreateProvider,
+    MockFs,
+    MockProvider,
+};
 
 #[test]
 fn test_registry_registers_provider_and_resolves_alias() {
@@ -23,7 +37,8 @@ fn test_registry_returns_error_for_missing_provider() {
         },
     );
 
-    let missing_uri = FsUri::parse("missing:///file.txt").expect("URI should parse");
+    let missing_uri =
+        FsUri::parse("missing:///file.txt").expect("URI should parse");
     assert!(registry.fs(&missing_uri).is_err());
 }
 
@@ -61,7 +76,8 @@ fn test_registry_maps_provider_create_errors() {
 #[test]
 fn test_empty_registry_returns_errors_for_fs_and_resource() {
     let registry = FileSystemRegistry::new(ProviderRegistry::builder().build());
-    let missing_uri = FsUri::parse("missing:///file.txt").expect("URI should parse");
+    let missing_uri =
+        FsUri::parse("missing:///file.txt").expect("URI should parse");
 
     assert!(registry.resource(&missing_uri).is_err());
     assert!(registry.fs(&missing_uri).is_err());
@@ -72,9 +88,11 @@ fn test_registry_uses_explicit_resolver_with_arc_output() {
     let mut providers = ProviderRegistry::<FileSystemSpec>::builder();
     providers
         .register(
-            ProviderDescriptor::new(ProviderId::new("mock").expect("valid provider ID"))
-                .with_aliases(["mem"])
-                .expect("valid aliases"),
+            ProviderDescriptor::new(
+                ProviderId::new("mock").expect("valid provider ID"),
+            )
+            .with_aliases(["mem"])
+            .expect("valid aliases"),
             MockProvider {
                 fs: MockFs::default(),
             },
@@ -92,7 +110,10 @@ fn test_registry_uses_explicit_resolver_with_arc_output() {
     );
 }
 
-fn registry_with<P>(descriptor: ProviderDescriptor, provider: P) -> FileSystemRegistry
+fn registry_with<P>(
+    descriptor: ProviderDescriptor,
+    provider: P,
+) -> FileSystemRegistry
 where
     P: qubit_spi::ServiceProvider<FileSystemSpec>,
 {
