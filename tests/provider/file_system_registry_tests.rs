@@ -1,36 +1,14 @@
-use std::sync::Arc;
+use qubit_fs::{FileSystemRegistry, FileSystemSpec, FsErrorKind, FsUri};
+use qubit_spi::{ProviderDescriptor, ProviderError, ProviderId, ProviderRegistry};
 
-use qubit_fs::{
-    FileSystemRegistry,
-    FileSystemSpec,
-    FsErrorKind,
-    FsUri,
-};
-use qubit_spi::{
-    ProviderCreateError,
-    ProviderFailure,
-    ProviderRegistryError,
-    ServiceProvider,
-};
-
-use crate::common::{
-    DescriptorErrorProvider,
-    FailingCreateProvider,
-    MockFs,
-    MockProvider,
-    provider_name,
-};
+use crate::common::{FailingCreateProvider, MockFs, MockProvider};
 
 #[test]
 fn test_registry_registers_provider_and_resolves_alias() {
     let fs = MockFs::default();
-    let mut registry = FileSystemRegistry::new();
+    let registry = registry_with(mock_descriptor(), MockProvider { fs });
 
-    registry
-        .register(MockProvider { fs })
-        .expect("provider should register");
-
-    assert_eq!(vec!["mock"], registry.provider_names());
+    assert_eq!(vec!["mock"], registry.provider_ids());
     let uri = FsUri::parse("mem:///file.txt").expect("URI should parse");
     let opened = registry.fs(&uri).expect("alias should resolve");
     assert!(opened.capabilities().directories);
@@ -38,90 +16,25 @@ fn test_registry_registers_provider_and_resolves_alias() {
 
 #[test]
 fn test_registry_returns_error_for_missing_provider() {
-    let mut registry = FileSystemRegistry::new();
-    registry
-        .register(MockProvider {
+    let registry = registry_with(
+        mock_descriptor(),
+        MockProvider {
             fs: MockFs::default(),
-        })
-        .expect("provider should register");
+        },
+    );
 
-    let missing_uri =
-        FsUri::parse("missing:///file.txt").expect("URI should parse");
+    let missing_uri = FsUri::parse("missing:///file.txt").expect("URI should parse");
     assert!(registry.fs(&missing_uri).is_err());
 }
 
 #[test]
-fn test_registry_maps_spi_descriptor_errors() {
-    let descriptor_errors = vec![
-        ProviderRegistryError::EmptyProviderName,
-        ProviderRegistryError::InvalidProviderName {
-            name: "bad name".to_owned(),
-            reason: "contains whitespace".to_owned(),
-        },
-        ProviderRegistryError::DuplicateProviderName {
-            name: provider_name("duplicate"),
-        },
-        ProviderRegistryError::DuplicateProviderCandidate {
-            name: provider_name("duplicate"),
-        },
-        ProviderRegistryError::UnknownProvider {
-            name: provider_name("missing"),
-        },
-        ProviderRegistryError::ProviderUnavailable {
-            name: provider_name("offline"),
-            source: ProviderCreateError::unavailable("offline"),
-        },
-        ProviderRegistryError::ProviderCreate {
-            name: provider_name("broken"),
-            source: ProviderCreateError::failed("broken"),
-        },
-        ProviderRegistryError::NoAvailableProvider {
-            failures: vec![
-                ProviderFailure::unknown("missing")
-                    .expect("failure should be valid"),
-            ],
-        },
-        ProviderRegistryError::EmptyRegistry,
-    ];
-
-    for error in descriptor_errors {
-        let mut registry = FileSystemRegistry::new();
-        let mapped = registry
-            .register(DescriptorErrorProvider { error })
-            .expect_err("descriptor error should be mapped");
-        assert!(matches!(
-            mapped.kind(),
-            FsErrorKind::InvalidPath
-                | FsErrorKind::ProviderUnavailable
-                | FsErrorKind::Other,
-        ));
-    }
-}
-
-#[test]
-fn test_register_shared_accepts_arc_provider() {
-    let mut registry = FileSystemRegistry::new();
-    let shared: Arc<dyn ServiceProvider<FileSystemSpec>> =
-        Arc::new(MockProvider {
-            fs: MockFs::default(),
-        });
-
-    registry
-        .register_shared(shared)
-        .expect("shared provider should register");
-
-    assert_eq!(vec!["mock"], registry.provider_names());
-}
-
-#[test]
 fn test_registry_maps_provider_create_errors() {
-    let mut unavailable_registry = FileSystemRegistry::new();
-    unavailable_registry
-        .register(FailingCreateProvider {
-            id: "offline",
-            error: ProviderCreateError::unavailable("offline"),
-        })
-        .expect("provider should register");
+    let unavailable_registry = registry_with(
+        failing_descriptor("offline"),
+        FailingCreateProvider {
+            error: ProviderError::unavailable("offline"),
+        },
+    );
     assert_eq!(
         FsErrorKind::ProviderUnavailable,
         unavailable_registry
@@ -130,13 +43,12 @@ fn test_registry_maps_provider_create_errors() {
             .kind(),
     );
 
-    let mut broken_registry = FileSystemRegistry::new();
-    broken_registry
-        .register(FailingCreateProvider {
-            id: "broken",
-            error: ProviderCreateError::failed("broken"),
-        })
-        .expect("provider should register");
+    let broken_registry = registry_with(
+        failing_descriptor("broken"),
+        FailingCreateProvider {
+            error: ProviderError::initialization_failed("broken"),
+        },
+    );
     assert_eq!(
         FsErrorKind::Other,
         broken_registry
@@ -148,10 +60,55 @@ fn test_registry_maps_provider_create_errors() {
 
 #[test]
 fn test_empty_registry_returns_errors_for_fs_and_resource() {
-    let registry = FileSystemRegistry::new();
-    let missing_uri =
-        FsUri::parse("missing:///file.txt").expect("URI should parse");
+    let registry = FileSystemRegistry::new(ProviderRegistry::builder().build());
+    let missing_uri = FsUri::parse("missing:///file.txt").expect("URI should parse");
 
     assert!(registry.resource(&missing_uri).is_err());
     assert!(registry.fs(&missing_uri).is_err());
+}
+
+#[test]
+fn test_registry_uses_explicit_resolver_with_arc_output() {
+    let mut providers = ProviderRegistry::<FileSystemSpec>::builder();
+    providers
+        .register(
+            ProviderDescriptor::new(ProviderId::new("mock").expect("valid provider ID"))
+                .with_aliases(["mem"])
+                .expect("valid aliases"),
+            MockProvider {
+                fs: MockFs::default(),
+            },
+        )
+        .expect("provider should register");
+    let registry = FileSystemRegistry::new(providers.build());
+
+    let uri = FsUri::parse("mem:///file.txt").expect("URI should parse");
+    assert!(
+        registry
+            .fs(&uri)
+            .expect("alias should resolve")
+            .capabilities()
+            .directories
+    );
+}
+
+fn registry_with<P>(descriptor: ProviderDescriptor, provider: P) -> FileSystemRegistry
+where
+    P: qubit_spi::ServiceProvider<FileSystemSpec>,
+{
+    let mut providers = ProviderRegistry::<FileSystemSpec>::builder();
+    providers
+        .register(descriptor, provider)
+        .expect("provider should register");
+    FileSystemRegistry::new(providers.build())
+}
+
+fn mock_descriptor() -> ProviderDescriptor {
+    ProviderDescriptor::new(ProviderId::new("mock").expect("valid provider ID"))
+        .with_aliases(["mem"])
+        .expect("valid aliases")
+}
+
+fn failing_descriptor(id: &str) -> ProviderDescriptor {
+    ProviderDescriptor::new(ProviderId::new(id).expect("valid provider ID"))
 }

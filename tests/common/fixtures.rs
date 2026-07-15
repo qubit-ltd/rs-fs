@@ -1,60 +1,17 @@
 use std::collections::HashSet;
 use std::fmt::Debug;
-use std::io::{
-    Cursor,
-    Read,
-    Result as IoResult,
-    Write,
-};
-use std::sync::{
-    Arc,
-    Mutex,
-};
+use std::io::{Cursor, Read, Result as IoResult, Write};
+use std::sync::{Arc, Mutex};
 
 use qubit_fs::{
-    CopyMethod,
-    CopyOptions,
-    CopyOutcome,
-    CopyStats,
-    CreateDirOptions,
-    DeleteOptions,
-    DirEntry,
-    DirectoryStream,
-    FileKind,
-    FileMetadata,
-    FileReader,
-    FileSystem,
-    FileSystemCapabilities,
-    FileSystemConfig,
-    FileSystemMetadata,
-    FileSystemSpec,
-    FileWriter,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    FsPath,
-    FsResult,
-    ListOptions,
-    PersistOptions,
-    ReadOptions,
-    RenameOptions,
-    TempDir,
-    TempDirOptions,
-    TempFile,
-    TempFileOptions,
-    TempResource,
-    TempResourceFactory,
-    WriteOptions,
-    WriteOutcome,
+    CopyMethod, CopyOptions, CopyOutcome, CopyStats, CreateDirOptions, DeleteOptions, DirEntry,
+    DirectoryStream, FileKind, FileMetadata, FileReader, FileSystem, FileSystemCapabilities,
+    FileSystemConfig, FileSystemMetadata, FileSystemSpec, FileWriter, FsError, FsErrorKind,
+    FsOperation, FsPath, FsResult, ListOptions, PersistOptions, ReadOptions, RenameOptions,
+    TempDir, TempDirOptions, TempFile, TempFileOptions, TempResource, TempResourceFactory,
+    WriteOptions, WriteOutcome,
 };
-use qubit_spi::{
-    ProviderAvailability,
-    ProviderCreateError,
-    ProviderDescriptor,
-    ProviderName,
-    ProviderRegistryError,
-    ServiceProvider,
-};
+use qubit_spi::{ProviderError, ServiceProvider};
 
 #[derive(Debug, Default)]
 pub(crate) struct MockState {
@@ -120,39 +77,25 @@ impl FileSystem for MockFs {
             metadata.etag = Some("v1".to_owned());
             Ok(metadata)
         } else {
-            Err(FsError::new(
-                FsErrorKind::NotFound,
-                FsOperation::Metadata,
-                "missing",
+            Err(
+                FsError::new(FsErrorKind::NotFound, FsOperation::Metadata, "missing")
+                    .with_path(path.clone()),
             )
-            .with_path(path.clone()))
         }
     }
 
     fn exists(&self, path: &FsPath) -> FsResult<bool> {
         let state = self.state.lock().expect("state lock should succeed");
-        Ok(state.files.contains(path.as_str())
-            || state.dirs.contains(path.as_str()))
+        Ok(state.files.contains(path.as_str()) || state.dirs.contains(path.as_str()))
     }
 
-    fn list(
-        &self,
-        _path: &FsPath,
-        _options: &ListOptions,
-    ) -> FsResult<Box<dyn DirectoryStream>> {
+    fn list(&self, _path: &FsPath, _options: &ListOptions) -> FsResult<Box<dyn DirectoryStream>> {
         Ok(Box::new(MockDirectoryStream {
-            entries: vec![DirEntry::new(
-                FsPath::parse("/a.txt")?,
-                FileKind::File,
-            )],
+            entries: vec![DirEntry::new(FsPath::parse("/a.txt")?, FileKind::File)],
         }))
     }
 
-    fn open_reader(
-        &self,
-        _path: &FsPath,
-        _options: &ReadOptions,
-    ) -> FsResult<Box<dyn FileReader>> {
+    fn open_reader(&self, _path: &FsPath, _options: &ReadOptions) -> FsResult<Box<dyn FileReader>> {
         if self
             .state
             .lock()
@@ -164,11 +107,7 @@ impl FileSystem for MockFs {
         Ok(Box::new(Cursor::new(b"data".to_vec())))
     }
 
-    fn open_writer(
-        &self,
-        path: &FsPath,
-        _options: &WriteOptions,
-    ) -> FsResult<Box<dyn FileWriter>> {
+    fn open_writer(&self, path: &FsPath, _options: &WriteOptions) -> FsResult<Box<dyn FileWriter>> {
         let fail_write = self
             .state
             .lock()
@@ -188,11 +127,7 @@ impl FileSystem for MockFs {
         }))
     }
 
-    fn create_dir(
-        &self,
-        path: &FsPath,
-        _options: &CreateDirOptions,
-    ) -> FsResult<()> {
+    fn create_dir(&self, path: &FsPath, _options: &CreateDirOptions) -> FsResult<()> {
         let mut state = self.state.lock().expect("state lock should succeed");
         if state.fail_create_dir {
             return Err(FsError::new(
@@ -220,12 +155,7 @@ impl FileSystem for MockFs {
         Ok(())
     }
 
-    fn rename(
-        &self,
-        from: &FsPath,
-        to: &FsPath,
-        _options: &RenameOptions,
-    ) -> FsResult<()> {
+    fn rename(&self, from: &FsPath, to: &FsPath, _options: &RenameOptions) -> FsResult<()> {
         let mut state = self.state.lock().expect("state lock should succeed");
         if state.fail_rename_unsupported {
             return Err(FsError::new(
@@ -246,12 +176,7 @@ impl FileSystem for MockFs {
         Ok(())
     }
 
-    fn copy(
-        &self,
-        from: &FsPath,
-        to: &FsPath,
-        _options: &CopyOptions,
-    ) -> FsResult<CopyOutcome> {
+    fn copy(&self, from: &FsPath, to: &FsPath, _options: &CopyOptions) -> FsResult<CopyOutcome> {
         let mut state = self.state.lock().expect("state lock should succeed");
         state
             .copies
@@ -425,11 +350,7 @@ impl TempResource for NativeTempDirHandle {
 }
 
 impl TempDir for NativeTempDirHandle {
-    fn persist(
-        self: Box<Self>,
-        _target: &FsPath,
-        _options: &PersistOptions,
-    ) -> FsResult<()> {
+    fn persist(self: Box<Self>, _target: &FsPath, _options: &PersistOptions) -> FsResult<()> {
         Ok(())
     }
 }
@@ -437,8 +358,7 @@ impl TempDir for NativeTempDirHandle {
 #[derive(Debug)]
 pub(crate) struct NativeTempResourceFactory;
 
-static NATIVE_TEMP_RESOURCE_FACTORY: NativeTempResourceFactory =
-    NativeTempResourceFactory;
+static NATIVE_TEMP_RESOURCE_FACTORY: NativeTempResourceFactory = NativeTempResourceFactory;
 
 impl TempResourceFactory for NativeTempResourceFactory {
     fn create_file(
@@ -446,11 +366,8 @@ impl TempResourceFactory for NativeTempResourceFactory {
         owner: Arc<dyn FileSystem>,
         options: &TempFileOptions,
     ) -> FsResult<Box<dyn TempFile>> {
-        let path = self.make_temp_path(
-            options.parent.as_ref(),
-            &options.prefix,
-            &options.suffix,
-        )?;
+        let path =
+            self.make_temp_path(options.parent.as_ref(), &options.prefix, &options.suffix)?;
         Ok(Box::new(NativeTempFileHandle { fs: owner, path }))
     }
 
@@ -459,11 +376,8 @@ impl TempResourceFactory for NativeTempResourceFactory {
         owner: Arc<dyn FileSystem>,
         options: &TempDirOptions,
     ) -> FsResult<Box<dyn TempDir>> {
-        let path = self.make_temp_path(
-            options.parent.as_ref(),
-            &options.prefix,
-            &options.suffix,
-        )?;
+        let path =
+            self.make_temp_path(options.parent.as_ref(), &options.prefix, &options.suffix)?;
         Ok(Box::new(NativeTempDirHandle { fs: owner, path }))
     }
 }
@@ -499,11 +413,7 @@ impl FileSystem for NativeTempFs {
         ))
     }
 
-    fn list(
-        &self,
-        _path: &FsPath,
-        _options: &ListOptions,
-    ) -> FsResult<Box<dyn DirectoryStream>> {
+    fn list(&self, _path: &FsPath, _options: &ListOptions) -> FsResult<Box<dyn DirectoryStream>> {
         Err(FsError::new(
             FsErrorKind::UnsupportedOperation,
             FsOperation::List,
@@ -511,11 +421,7 @@ impl FileSystem for NativeTempFs {
         ))
     }
 
-    fn open_reader(
-        &self,
-        _path: &FsPath,
-        _options: &ReadOptions,
-    ) -> FsResult<Box<dyn FileReader>> {
+    fn open_reader(&self, _path: &FsPath, _options: &ReadOptions) -> FsResult<Box<dyn FileReader>> {
         Err(FsError::new(
             FsErrorKind::UnsupportedOperation,
             FsOperation::OpenReader,
@@ -535,11 +441,7 @@ impl FileSystem for NativeTempFs {
         ))
     }
 
-    fn create_dir(
-        &self,
-        _path: &FsPath,
-        _options: &CreateDirOptions,
-    ) -> FsResult<()> {
+    fn create_dir(&self, _path: &FsPath, _options: &CreateDirOptions) -> FsResult<()> {
         Err(FsError::new(
             FsErrorKind::UnsupportedOperation,
             FsOperation::CreateDir,
@@ -555,12 +457,7 @@ impl FileSystem for NativeTempFs {
         ))
     }
 
-    fn rename(
-        &self,
-        _from: &FsPath,
-        _to: &FsPath,
-        _options: &RenameOptions,
-    ) -> FsResult<()> {
+    fn rename(&self, _from: &FsPath, _to: &FsPath, _options: &RenameOptions) -> FsResult<()> {
         Err(FsError::new(
             FsErrorKind::UnsupportedOperation,
             FsOperation::Rename,
@@ -568,12 +465,7 @@ impl FileSystem for NativeTempFs {
         ))
     }
 
-    fn copy(
-        &self,
-        _from: &FsPath,
-        _to: &FsPath,
-        _options: &CopyOptions,
-    ) -> FsResult<CopyOutcome> {
+    fn copy(&self, _from: &FsPath, _to: &FsPath, _options: &CopyOptions) -> FsResult<CopyOutcome> {
         Err(FsError::new(
             FsErrorKind::UnsupportedOperation,
             FsOperation::Copy,
@@ -588,66 +480,18 @@ pub(crate) struct MockProvider {
 }
 
 impl ServiceProvider<FileSystemSpec> for MockProvider {
-    fn descriptor(&self) -> Result<ProviderDescriptor, ProviderRegistryError> {
-        ProviderDescriptor::new("mock")?.with_aliases(&["mem"])
-    }
-
-    fn create_box(
-        &self,
-        _config: &FileSystemConfig,
-    ) -> Result<Box<dyn FileSystem>, ProviderCreateError> {
-        Ok(Box::new(self.fs.clone()))
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct DescriptorErrorProvider {
-    pub(crate) error: ProviderRegistryError,
-}
-
-impl ServiceProvider<FileSystemSpec> for DescriptorErrorProvider {
-    fn descriptor(&self) -> Result<ProviderDescriptor, ProviderRegistryError> {
-        Err(self.error.clone())
-    }
-
-    fn create_box(
-        &self,
-        _config: &FileSystemConfig,
-    ) -> Result<Box<dyn FileSystem>, ProviderCreateError> {
-        Err(ProviderCreateError::failed("descriptor failed"))
+    fn create(&self, _config: &FileSystemConfig) -> Result<Arc<dyn FileSystem>, ProviderError> {
+        Ok(Arc::new(self.fs.clone()))
     }
 }
 
 #[derive(Debug)]
 pub(crate) struct FailingCreateProvider {
-    pub(crate) id: &'static str,
-    pub(crate) error: ProviderCreateError,
+    pub(crate) error: ProviderError,
 }
 
 impl ServiceProvider<FileSystemSpec> for FailingCreateProvider {
-    fn descriptor(&self) -> Result<ProviderDescriptor, ProviderRegistryError> {
-        ProviderDescriptor::new(self.id)
-    }
-
-    fn availability(&self, _config: &FileSystemConfig) -> ProviderAvailability {
-        match &self.error {
-            ProviderCreateError::Unavailable { reason, .. } => {
-                ProviderAvailability::unavailable(reason)
-            }
-            ProviderCreateError::Failed { .. } => {
-                ProviderAvailability::Available
-            }
-        }
-    }
-
-    fn create_box(
-        &self,
-        _config: &FileSystemConfig,
-    ) -> Result<Box<dyn FileSystem>, ProviderCreateError> {
+    fn create(&self, _config: &FileSystemConfig) -> Result<Arc<dyn FileSystem>, ProviderError> {
         Err(self.error.clone())
     }
-}
-
-pub(crate) fn provider_name(name: &str) -> ProviderName {
-    ProviderName::new(name).expect("provider name should be valid")
 }

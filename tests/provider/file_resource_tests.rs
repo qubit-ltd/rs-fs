@@ -1,37 +1,17 @@
-use std::io::{
-    Read,
-    Write,
-};
+use std::io::{Read, Write};
 
 use qubit_fs::{
-    CopyOptions,
-    CreateDirOptions,
-    DeleteOptions,
-    DirectoryStreamExt,
-    FileResource,
-    FileSystemRegistry,
-    FsPath,
-    FsUri,
-    ListOptions,
-    ReadOptions,
-    RenameOptions,
-    WriteOptions,
+    CopyOptions, CreateDirOptions, DeleteOptions, DirectoryStreamExt, FileResource,
+    FileSystemRegistry, FsPath, FsUri, ListOptions, ReadOptions, RenameOptions, WriteOptions,
 };
 
-use crate::common::{
-    MockFs,
-    MockProvider,
-};
+use crate::common::{MockFs, MockProvider};
 
 #[test]
 fn test_file_resource_delegates_operations_to_resolved_file_system() {
     let fs = MockFs::default();
-    let mut registry = FileSystemRegistry::new();
-    registry
-        .register(MockProvider { fs })
-        .expect("provider should register");
-    let resource_uri =
-        FsUri::parse("mock:///file.txt").expect("URI should parse");
+    let registry = registry_with_mock(MockProvider { fs });
+    let resource_uri = FsUri::parse("mock:///file.txt").expect("URI should parse");
     let resource = registry
         .resource(&resource_uri)
         .expect("URI should resolve");
@@ -94,10 +74,7 @@ fn test_file_resource_delegates_operations_to_resolved_file_system() {
 #[test]
 fn test_file_resource_delegates_directory_create_and_delete() {
     let fs = MockFs::default();
-    let mut registry = FileSystemRegistry::new();
-    registry
-        .register(MockProvider { fs })
-        .expect("provider should register");
+    let registry = registry_with_mock(MockProvider { fs });
     let dir_uri = FsUri::parse("mock:///dir").expect("URI should parse");
     let dir = registry
         .resource(&dir_uri)
@@ -108,4 +85,19 @@ fn test_file_resource_delegates_directory_create_and_delete() {
     assert!(dir.exists().expect("directory should exist"));
     dir.delete(&DeleteOptions::default())
         .expect("resource directory should delete");
+}
+
+fn registry_with_mock(provider: MockProvider) -> FileSystemRegistry {
+    let mut builder = FileSystemRegistry::builder();
+    builder
+        .register(
+            qubit_spi::ProviderDescriptor::new(
+                qubit_spi::ProviderId::new("mock").expect("valid provider ID"),
+            )
+            .with_aliases(["mem"])
+            .expect("valid aliases"),
+            provider,
+        )
+        .expect("provider should register");
+    builder.build()
 }
