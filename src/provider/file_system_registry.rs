@@ -10,74 +10,38 @@
 use std::sync::Arc;
 
 use qubit_spi::{
-    ProviderRegistry,
-    ProviderRegistryError,
+    FallbackPolicy, ProviderDescriptor, ProviderRegistry, ProviderRegistryBuilder,
+    ProviderResolver, ProviderSelection, RegistrationError, ResolutionError, ResolutionErrorKind,
     ServiceProvider,
 };
 
 use crate::{
-    FileResource,
-    FileSystem,
-    FileSystemConfig,
-    FileSystemProvider,
-    FileSystemSpec,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    FsResult,
-    FsUri,
+    FileResource, FileSystem, FileSystemConfig, FileSystemSpec, FsError, FsErrorKind, FsOperation,
+    FsResult, FsUri,
 };
 
 /// Registry of filesystem providers.
-#[derive(Debug, Default)]
 pub struct FileSystemRegistry {
-    /// Underlying typed SPI registry.
-    providers: ProviderRegistry<FileSystemSpec>,
+    /// Resolver applying the filesystem fallback policy.
+    resolver: ProviderResolver<FileSystemSpec>,
 }
 
 impl FileSystemRegistry {
-    /// Creates an empty filesystem registry.
+    /// Creates a filesystem registry from explicitly assembled providers.
     ///
     /// # Returns
-    /// Empty registry.
+    /// Immutable registry that resolves one provider by the URI scheme.
     #[inline]
     #[must_use]
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(providers: ProviderRegistry<FileSystemSpec>) -> Self {
+        let resolver = ProviderResolver::new(providers, FallbackPolicy::OnAbsence);
+        Self { resolver }
     }
 
-    /// Registers an owned filesystem provider.
-    ///
-    /// # Parameters
-    /// - `provider`: Provider to register.
-    ///
-    /// # Errors
-    /// Returns [`FsError`] when provider metadata is invalid or conflicts with
-    /// an existing provider.
-    pub fn register<P>(&mut self, provider: P) -> FsResult<()>
-    where
-        P: ServiceProvider<FileSystemSpec> + 'static,
-    {
-        self.providers
-            .register(provider)
-            .map_err(map_provider_error)
-    }
-
-    /// Registers a shared filesystem provider.
-    ///
-    /// # Parameters
-    /// - `provider`: Shared provider to register.
-    ///
-    /// # Errors
-    /// Returns [`FsError`] when provider metadata is invalid or conflicts with
-    /// an existing provider.
-    pub fn register_shared(
-        &mut self,
-        provider: Arc<FileSystemProvider>,
-    ) -> FsResult<()> {
-        self.providers
-            .register_shared(provider)
-            .map_err(map_provider_error)
+    /// Creates a mutable builder for startup-only filesystem-provider assembly.
+    #[must_use]
+    pub fn builder() -> FileSystemRegistryBuilder {
+        FileSystemRegistryBuilder::new()
     }
 
     /// Resolves a parsed URI into a filesystem instance.
@@ -91,11 +55,13 @@ impl FileSystemRegistry {
     /// # Errors
     /// Returns [`FsError`] when provider resolution or creation fails.
     pub fn fs(&self, uri: &FsUri) -> FsResult<Arc<dyn FileSystem>> {
-        let selector = uri.scheme.clone();
         let config = FileSystemConfig::new(uri.clone());
-        self.providers
-            .create_arc(&selector, &config)
-            .map_err(map_provider_error)
+        let selection =
+            ProviderSelection::named(uri.scheme.as_str()).map_err(map_registration_error)?;
+        self.resolver
+            .create(&selection, &config)
+            .map(|created| created.into_service())
+            .map_err(map_resolution_error)
     }
 
     /// Resolves a parsed URI into a bound file resource.
@@ -115,39 +81,91 @@ impl FileSystemRegistry {
         Ok(FileResource::new(fs, path))
     }
 
-    /// Gets registered provider names in registration order.
+    /// Gets registered provider IDs in registration order.
     ///
     /// # Returns
-    /// Provider names.
+    /// Canonical provider IDs.
     #[inline]
     #[must_use]
-    pub fn provider_names(&self) -> Vec<&str> {
-        self.providers.provider_names()
+    pub fn provider_ids(&self) -> Vec<&str> {
+        self.resolver
+            .registry()
+            .provider_ids()
+            .map(|id| id.as_str())
+            .collect()
     }
 }
 
-/// Maps SPI registry errors into filesystem errors.
+/// Startup-only builder for an immutable filesystem registry.
+#[derive(Default)]
+pub struct FileSystemRegistryBuilder {
+    /// Typed SPI builder retaining registrations until startup completes.
+    providers: ProviderRegistryBuilder<FileSystemSpec>,
+}
+
+impl FileSystemRegistryBuilder {
+    /// Creates an empty filesystem provider builder.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Registers a filesystem provider and its external identity metadata.
+    ///
+    /// Returns [`FsError`] if the descriptor conflicts with a prior provider.
+    pub fn register<P>(&mut self, descriptor: ProviderDescriptor, provider: P) -> FsResult<()>
+    where
+        P: ServiceProvider<FileSystemSpec>,
+    {
+        self.providers
+            .register(descriptor, provider)
+            .map_err(map_registration_error)
+    }
+
+    /// Builds the immutable filesystem registry used at runtime.
+    #[must_use]
+    pub fn build(self) -> FileSystemRegistry {
+        FileSystemRegistry::new(self.providers.build())
+    }
+}
+
+/// Maps SPI registration errors into filesystem errors.
 ///
 /// # Parameters
 /// - `error`: SPI registry error.
 ///
 /// # Returns
 /// Filesystem error preserving provider diagnostic text.
-fn map_provider_error(error: ProviderRegistryError) -> FsError {
-    let kind = match &error {
-        ProviderRegistryError::EmptyProviderName
-        | ProviderRegistryError::InvalidProviderName { .. }
-        | ProviderRegistryError::DuplicateProviderName { .. }
-        | ProviderRegistryError::DuplicateProviderCandidate { .. } => {
-            FsErrorKind::InvalidPath
+fn map_registration_error(error: RegistrationError) -> FsError {
+    let message = error.to_string();
+    FsError::with_source(
+        FsErrorKind::InvalidPath,
+        FsOperation::Provider,
+        &message,
+        error,
+    )
+}
+
+/// Maps SPI resolution errors into filesystem errors.
+fn map_resolution_error(error: ResolutionError) -> FsError {
+    let kind = match error.kind() {
+        ResolutionErrorKind::UnknownProvider => FsErrorKind::ProviderUnavailable,
+        ResolutionErrorKind::NoProviderSucceeded => {
+            if error.attempts().iter().all(|attempt| {
+                matches!(
+                    attempt.provider_error_kind(),
+                    Some(
+                        qubit_spi::ProviderErrorKind::Unsupported
+                            | qubit_spi::ProviderErrorKind::Unavailable
+                    )
+                )
+            }) {
+                FsErrorKind::ProviderUnavailable
+            } else {
+                FsErrorKind::Other
+            }
         }
-        ProviderRegistryError::UnknownProvider { .. }
-        | ProviderRegistryError::ProviderUnavailable { .. }
-        | ProviderRegistryError::NoAvailableProvider { .. }
-        | ProviderRegistryError::EmptyRegistry => {
-            FsErrorKind::ProviderUnavailable
-        }
-        ProviderRegistryError::ProviderCreate { .. } => FsErrorKind::Other,
+        _ => FsErrorKind::Other,
     };
     let message = error.to_string();
     FsError::with_source(kind, FsOperation::Provider, &message, error)

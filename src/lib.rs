@@ -23,75 +23,26 @@ mod provider;
 mod temp;
 mod traits;
 
-pub use error::{
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    FsResult,
-};
+pub use error::{FsError, FsErrorKind, FsOperation, FsResult};
 pub use metadata::{
-    Checksum,
-    ChecksumAlgorithm,
-    DirEntry,
-    FileKind,
-    FileMetadata,
-    FileSystemCapabilities,
-    FileSystemMetadata,
-    WriteOutcome,
+    Checksum, ChecksumAlgorithm, DirEntry, FileKind, FileMetadata, FileSystemCapabilities,
+    FileSystemMetadata, WriteOutcome,
 };
 pub use options::{
-    AtomicityRequirement,
-    ChecksumPolicy,
-    CopyConflictPolicy,
-    CopyMethod,
-    CopyMode,
-    CopyOptions,
-    CopyOutcome,
-    CopyStats,
-    CreateDirOptions,
-    DeleteOptions,
-    ListOptions,
-    MetadataPreservePolicy,
-    PersistOptions,
-    ProgressPolicy,
-    ReadOptions,
-    RenameOptions,
-    ServerSidePreference,
-    WriteMode,
+    AtomicityRequirement, ChecksumPolicy, CopyConflictPolicy, CopyMethod, CopyMode, CopyOptions,
+    CopyOutcome, CopyStats, CreateDirOptions, DeleteOptions, ListOptions, MetadataPreservePolicy,
+    PersistOptions, ProgressPolicy, ReadOptions, RenameOptions, ServerSidePreference, WriteMode,
     WriteOptions,
 };
-pub use path::{
-    FsAuthority,
-    FsPath,
-    FsUri,
-    PathSemantics,
-};
+pub use path::{FsAuthority, FsPath, FsUri, PathSemantics};
 pub use provider::{
-    CredentialRef,
-    FileResource,
-    FileSystemConfig,
-    FileSystemProvider,
-    FileSystemRegistry,
-    FileSystemSpec,
-    FileSystems,
+    CredentialRef, FileResource, FileSystemConfig, FileSystemProvider, FileSystemRegistry,
+    FileSystemRegistryBuilder, FileSystemSpec,
 };
 pub use temp::{
-    ManagedTempDir,
-    ManagedTempFile,
-    ManagedTempResourceFactory,
-    TempDir,
-    TempDirOptions,
-    TempFile,
-    TempFileOptions,
-    TempResource,
-    TempResourceFactory,
-    TempResources,
+    ManagedTempDir, ManagedTempFile, ManagedTempResourceFactory, TempDir, TempDirOptions, TempFile,
+    TempFileOptions, TempResource, TempResourceFactory, TempResources,
 };
 pub use traits::{
-    DirectoryStream,
-    DirectoryStreamExt,
-    FileReader,
-    FileSystem,
-    FileSystemExt,
-    FileWriter,
+    DirectoryStream, DirectoryStreamExt, FileReader, FileSystem, FileSystemExt, FileWriter,
 };
