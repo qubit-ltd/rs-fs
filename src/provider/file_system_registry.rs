@@ -11,8 +11,7 @@ use std::sync::Arc;
 
 use qubit_spi::{
     FallbackPolicy, ProviderDescriptor, ProviderRegistry, ProviderRegistryBuilder,
-    ProviderResolver, ProviderSelection, RegistrationError, ResolutionError, ResolutionErrorKind,
-    ServiceProvider,
+    ProviderResolver, RegistrationError, ResolutionError, ResolutionErrorKind, ServiceProvider,
 };
 
 use crate::{
@@ -56,10 +55,8 @@ impl FileSystemRegistry {
     /// Returns [`FsError`] when provider resolution or creation fails.
     pub fn fs(&self, uri: &FsUri) -> FsResult<Arc<dyn FileSystem>> {
         let config = FileSystemConfig::new(uri.clone());
-        let selection =
-            ProviderSelection::named(uri.scheme.as_str()).map_err(map_registration_error)?;
         self.resolver
-            .create(&selection, &config)
+            .create_named(uri.scheme.as_str(), &config)
             .map(|created| created.into_service())
             .map_err(map_resolution_error)
     }
