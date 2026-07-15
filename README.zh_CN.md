@@ -31,6 +31,13 @@ fn read_report() -> FsResult<Vec<u8>> {
 }
 ```
 
+## 安装
+
+```toml
+[dependencies]
+qubit-fs = "0.2"
+```
+
 ## 文档
 
 - [User guide](doc/user_guide.md)
