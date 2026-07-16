@@ -162,59 +162,56 @@ pub trait FileSystem: std::fmt::Debug + Send + Sync {
 
 ## 4. 打开文件系统和资源
 
-使用前必须先注册 provider。应用侧通常使用进程级 singleton 门面 `FileSystems`：
+使用前必须先注册 provider。应用应在启动阶段通过 builder 组装 provider，然后共享不可变 registry：
 
 ```rust
-use qubit_fs::{FileSystems, FsResult};
+use qubit_fs::{FileSystemRegistry, FsResult};
 
-fn configure_filesystems() -> FsResult<()> {
-    // 示例。具体 provider 类型来自后端 crate。
-    // FileSystems::register(LocalFileSystemProvider::new())?;
-    // FileSystems::register(OssFileSystemProvider::new())?;
-    Ok(())
+fn configure_filesystems() -> FsResult<FileSystemRegistry> {
+    let mut builder = FileSystemRegistry::builder();
+    // provider 注册函数由后端 crate 提供。
+    // qubit_fs_local::register_provider(&mut builder)?;
+    // qubit_fs_oss::register_provider(&mut builder)?;
+    Ok(builder.build())
 }
 ```
 
-如果你只需要根据 URI 字符串得到文件系统实例，使用 `FileSystems::fs()`：
+先解析 URI，再用 `FileSystemRegistry::fs()` 选择文件系统实例：
 
 ```rust
-use qubit_fs::{FileSystems, FsResult};
+use qubit_fs::{FileSystemRegistry, FsResult, FsUri};
 
-fn open_filesystem() -> FsResult<()> {
-    let fs = FileSystems::fs("file:///var/data/report.csv")?;
+fn open_filesystem(registry: &FileSystemRegistry) -> FsResult<()> {
+    let uri = FsUri::parse("file:///var/data/report.csv")?;
+    let fs = registry.fs(&uri)?;
     let caps = fs.capabilities();
     println!("directories supported: {}", caps.directories);
     Ok(())
 }
 ```
 
-如果已经有解析后的 URI，使用 `FileSystems::fs_for_uri()`。如果只有 scheme，
-使用 `FileSystems::fs_for_scheme()` 解析最小 URI `{scheme}:///`；这只适用于能
-基于默认 authority、root path 和默认 options 创建文件系统的 provider。
-
-如果你需要同时得到文件系统实例和 provider-local path，使用 `FileSystems::resource()`。
-这是更常用的资源导向 API：
+如果需要同时得到文件系统实例和 provider-local path，使用
+`FileSystemRegistry::resource()`；它同样接收解析后的 `FsUri`：
 
 ```rust
-use qubit_fs::{FileSystems, FsResult};
+use qubit_fs::{FileSystemRegistry, FsResult, FsUri};
 
-fn resolve_and_check() -> FsResult<bool> {
-    let resource = FileSystems::resource("oss://bucket/reports/a.csv")?;
+fn resolve_and_check(registry: &FileSystemRegistry) -> FsResult<bool> {
+    let uri = FsUri::parse("oss://bucket/reports/a.csv")?;
+    let resource = registry.resource(&uri)?;
     resource.exists()
 }
 ```
 
-如果已经有解析后的 URI，使用 `FileSystems::resource_for_uri()`。
-
-`FileSystemRegistry` 仍然保留，用于测试、插件运行时或嵌入式场景里的隔离 registry。
-它只接收解析后的 `FsUri`：
+测试、插件运行时或嵌入式场景也可以用同一 builder 模式构造隔离 registry：
 
 ```rust
 use qubit_fs::{FileSystemRegistry, FsResult, FsUri};
 
 fn isolated_registry() -> FsResult<()> {
-    let mut registry = FileSystemRegistry::new();
-    // registry.register(MemoryFileSystemProvider::new())?;
+    let mut builder = FileSystemRegistry::builder();
+    // qubit_fs_memory::register_provider(&mut builder)?;
+    let registry = builder.build();
     let uri = FsUri::parse("mem:///hello.txt")?;
     let resource = registry.resource(&uri)?;
     println!("{}", resource.path().as_str());
@@ -566,11 +563,13 @@ fn server_side_copy_only(fs: &dyn FileSystem) -> FsResult<()> {
 
 ```rust
 use std::io::{Read, Write};
-use qubit_fs::{FileSystems, FsError, FsErrorKind, FsOperation, FsResult, ReadOptions, WriteOptions};
+use qubit_fs::{FileSystemRegistry, FsError, FsErrorKind, FsOperation, FsResult, FsUri, ReadOptions, WriteOptions};
 
-fn copy_between(from_uri: &str, to_uri: &str) -> FsResult<()> {
-    let from = FileSystems::resource(from_uri)?;
-    let to = FileSystems::resource(to_uri)?;
+fn copy_between(registry: &FileSystemRegistry, from_uri: &str, to_uri: &str) -> FsResult<()> {
+    let from_uri = FsUri::parse(from_uri)?;
+    let to_uri = FsUri::parse(to_uri)?;
+    let from = registry.resource(&from_uri)?;
+    let to = registry.resource(&to_uri)?;
 
     let mut reader = from.open_reader(&ReadOptions::default())?;
     let mut writer = to.open_writer(&WriteOptions::default())?;
@@ -1177,27 +1176,37 @@ impl FileSystem for MemoryFileSystem {
 provider 根据 `FileSystemConfig` 创建文件系统实例。
 
 ```rust
-use qubit_fs::{FileSystem, FileSystemConfig, FileSystemSpec};
-use qubit_spi::{ProviderCreateError, ProviderDescriptor, ProviderRegistryError, ServiceProvider};
+use std::sync::Arc;
+
+use qubit_fs::{
+    FileSystem,
+    FileSystemConfig,
+    FileSystemRegistryBuilder,
+    FileSystemSpec,
+    FsResult,
+};
+use qubit_spi::error::ProviderError;
+use qubit_spi::{ProviderDescriptor, ProviderId, ServiceProvider};
 
 #[derive(Debug, Default)]
 pub struct MemoryFileSystemProvider;
 
 impl ServiceProvider<FileSystemSpec> for MemoryFileSystemProvider {
-    fn descriptor(&self) -> Result<ProviderDescriptor, ProviderRegistryError> {
-        ProviderDescriptor::new("memory")?.with_aliases(&["mem"])
-    }
-
-    fn create_box(
+    fn create(
         &self,
         _config: &FileSystemConfig,
-    ) -> Result<Box<dyn FileSystem>, ProviderCreateError> {
-        Ok(Box::new(MemoryFileSystem::default()))
+    ) -> Result<Arc<dyn FileSystem>, ProviderError> {
+        Ok(Arc::new(MemoryFileSystem::default()))
     }
 }
 
-pub fn register_provider(registry: &mut qubit_fs::FileSystemRegistry) -> qubit_fs::FsResult<()> {
-    registry.register(MemoryFileSystemProvider)
+pub fn register_provider(builder: &mut FileSystemRegistryBuilder) -> FsResult<()> {
+    let descriptor = ProviderDescriptor::new(
+        ProviderId::new("memory").expect("memory provider ID should be valid"),
+    )
+    .with_aliases(["mem"])
+    .expect("memory provider aliases should be valid");
+    builder.register(descriptor, MemoryFileSystemProvider)
 }
 ```
 
@@ -1207,8 +1216,9 @@ pub fn register_provider(registry: &mut qubit_fs::FileSystemRegistry) -> qubit_f
 use qubit_fs::{FileSystemRegistry, FsResult, FsUri};
 
 fn main() -> FsResult<()> {
-    let mut registry = FileSystemRegistry::new();
-    qubit_fs_memory::register_provider(&mut registry)?;
+    let mut builder = FileSystemRegistry::builder();
+    qubit_fs_memory::register_provider(&mut builder)?;
+    let registry = builder.build();
 
     let uri = FsUri::parse("mem:///hello.txt")?;
     let resource = registry.resource(&uri)?;
@@ -1453,9 +1463,9 @@ provider 测试至少应覆盖：
 应用开发者建议按以下步骤接入：
 
 1. 引入 `qubit-fs` 和一个或多个 provider crate。
-2. 创建 `FileSystemRegistry`。
-3. 显式注册 provider。
-4. 用 `FileSystems::resource()` 解析 URI 字符串；用 `FileSystemRegistry::resource()` 处理已解析的 `FsUri`。
+2. 通过 `FileSystemRegistry::builder()` 创建 `FileSystemRegistryBuilder`。
+3. 显式注册 provider，然后调用一次 `build()`。
+4. 把 URI 字符串解析成 `FsUri`，再用 `FileSystemRegistry::resource()` 解析资源。
 5. 优先使用 `FileResource` 执行资源导向操作；底层实现仍然使用 `FileSystem` + `FsPath`。
 6. 依赖高级行为前检查 capabilities。
 7. 按 `FsErrorKind` 处理错误，不直接依赖 provider-native error。

@@ -156,61 +156,58 @@ This keeps the core crate open for third-party providers.
 
 ## 4. Opening filesystems and resources
 
-A provider must be registered before a URI can be resolved. Application code
-normally uses the process-wide `FileSystems` facade:
+A provider must be registered before a URI can be resolved. Assemble providers
+through a builder during application startup, then share the immutable registry:
 
 ```rust
-use qubit_fs::{FileSystems, FsResult};
+use qubit_fs::{FileSystemRegistry, FsResult};
 
-fn configure_filesystems() -> FsResult<()> {
-    // Example only. The concrete provider type would come from a backend crate.
-    // FileSystems::register(LocalFileSystemProvider::new())?;
-    // FileSystems::register(OssFileSystemProvider::new())?;
-    Ok(())
+fn configure_filesystems() -> FsResult<FileSystemRegistry> {
+    let mut builder = FileSystemRegistry::builder();
+    // Provider registration functions come from backend crates.
+    // qubit_fs_local::register_provider(&mut builder)?;
+    // qubit_fs_oss::register_provider(&mut builder)?;
+    Ok(builder.build())
 }
 ```
 
-Use `FileSystems::fs()` when you want the filesystem selected from a URI string:
+Parse the URI, then use `FileSystemRegistry::fs()` to select a filesystem:
 
 ```rust
-use qubit_fs::{FileSystems, FsResult};
+use qubit_fs::{FileSystemRegistry, FsResult, FsUri};
 
-fn open_filesystem() -> FsResult<()> {
-    let fs = FileSystems::fs("file:///var/data/report.csv")?;
+fn open_filesystem(registry: &FileSystemRegistry) -> FsResult<()> {
+    let uri = FsUri::parse("file:///var/data/report.csv")?;
+    let fs = registry.fs(&uri)?;
     let caps = fs.capabilities();
     println!("directories supported: {}", caps.directories);
     Ok(())
 }
 ```
 
-If the URI has already been parsed, use `FileSystems::fs_for_uri()`.
-If only a scheme is available, `FileSystems::fs_for_scheme()` resolves the
-minimal URI `{scheme}:///`; this only works for providers that can be created
-from default authority, root path, and default options.
-
-Use `FileSystems::resource()` when you need both the filesystem and the
-provider-local path. This is the common resource-oriented API:
+Use `FileSystemRegistry::resource()` when you need both the filesystem and the
+provider-local path. It also accepts a parsed `FsUri`:
 
 ```rust
-use qubit_fs::{FileSystems, FsResult};
+use qubit_fs::{FileSystemRegistry, FsResult, FsUri};
 
-fn resolve_and_check() -> FsResult<bool> {
-    let resource = FileSystems::resource("oss://bucket/reports/a.csv")?;
+fn resolve_and_check(registry: &FileSystemRegistry) -> FsResult<bool> {
+    let uri = FsUri::parse("oss://bucket/reports/a.csv")?;
+    let resource = registry.resource(&uri)?;
     resource.exists()
 }
 ```
 
-If the URI has already been parsed, use `FileSystems::resource_for_uri()`.
-
-`FileSystemRegistry` is still available for isolated registries in tests,
-plugins, or embedded runtimes. It only accepts parsed `FsUri` values:
+The same builder pattern can create isolated registries for tests, plugins, or
+embedded runtimes:
 
 ```rust
 use qubit_fs::{FileSystemRegistry, FsResult, FsUri};
 
 fn isolated_registry() -> FsResult<()> {
-    let mut registry = FileSystemRegistry::new();
-    // registry.register(MemoryFileSystemProvider::new())?;
+    let mut builder = FileSystemRegistry::builder();
+    // qubit_fs_memory::register_provider(&mut builder)?;
+    let registry = builder.build();
     let uri = FsUri::parse("mem:///hello.txt")?;
     let resource = registry.resource(&uri)?;
     println!("{}", resource.path().as_str());
@@ -562,11 +559,13 @@ If server-side copy is not supported, the provider should return `FsErrorKind::U
 
 ```rust
 use std::io::{Read, Write};
-use qubit_fs::{FileSystems, FsError, FsErrorKind, FsOperation, FsResult, ReadOptions, WriteOptions};
+use qubit_fs::{FileSystemRegistry, FsError, FsErrorKind, FsOperation, FsResult, FsUri, ReadOptions, WriteOptions};
 
-fn copy_between(from_uri: &str, to_uri: &str) -> FsResult<()> {
-    let from = FileSystems::resource(from_uri)?;
-    let to = FileSystems::resource(to_uri)?;
+fn copy_between(registry: &FileSystemRegistry, from_uri: &str, to_uri: &str) -> FsResult<()> {
+    let from_uri = FsUri::parse(from_uri)?;
+    let to_uri = FsUri::parse(to_uri)?;
+    let from = registry.resource(&from_uri)?;
+    let to = registry.resource(&to_uri)?;
 
     let mut reader = from.open_reader(&ReadOptions::default())?;
     let mut writer = to.open_writer(&WriteOptions::default())?;
@@ -1169,27 +1168,37 @@ For object stores, `rename()` is usually copy plus delete and should not claim a
 A provider creates filesystem instances from `FileSystemConfig`.
 
 ```rust
-use qubit_fs::{FileSystem, FileSystemConfig, FileSystemSpec};
-use qubit_spi::{ProviderCreateError, ProviderDescriptor, ProviderRegistryError, ServiceProvider};
+use std::sync::Arc;
+
+use qubit_fs::{
+    FileSystem,
+    FileSystemConfig,
+    FileSystemRegistryBuilder,
+    FileSystemSpec,
+    FsResult,
+};
+use qubit_spi::error::ProviderError;
+use qubit_spi::{ProviderDescriptor, ProviderId, ServiceProvider};
 
 #[derive(Debug, Default)]
 pub struct MemoryFileSystemProvider;
 
 impl ServiceProvider<FileSystemSpec> for MemoryFileSystemProvider {
-    fn descriptor(&self) -> Result<ProviderDescriptor, ProviderRegistryError> {
-        ProviderDescriptor::new("memory")?.with_aliases(&["mem"])
-    }
-
-    fn create_box(
+    fn create(
         &self,
         _config: &FileSystemConfig,
-    ) -> Result<Box<dyn FileSystem>, ProviderCreateError> {
-        Ok(Box::new(MemoryFileSystem::default()))
+    ) -> Result<Arc<dyn FileSystem>, ProviderError> {
+        Ok(Arc::new(MemoryFileSystem::default()))
     }
 }
 
-pub fn register_provider(registry: &mut qubit_fs::FileSystemRegistry) -> qubit_fs::FsResult<()> {
-    registry.register(MemoryFileSystemProvider)
+pub fn register_provider(builder: &mut FileSystemRegistryBuilder) -> FsResult<()> {
+    let descriptor = ProviderDescriptor::new(
+        ProviderId::new("memory").expect("memory provider ID should be valid"),
+    )
+    .with_aliases(["mem"])
+    .expect("memory provider aliases should be valid");
+    builder.register(descriptor, MemoryFileSystemProvider)
 }
 ```
 
@@ -1199,8 +1208,9 @@ Application usage:
 use qubit_fs::{FileSystemRegistry, FsResult, FsUri};
 
 fn main() -> FsResult<()> {
-    let mut registry = FileSystemRegistry::new();
-    qubit_fs_memory::register_provider(&mut registry)?;
+    let mut builder = FileSystemRegistry::builder();
+    qubit_fs_memory::register_provider(&mut builder)?;
+    let registry = builder.build();
 
     let uri = FsUri::parse("mem:///hello.txt")?;
     let resource = registry.resource(&uri)?;
@@ -1446,9 +1456,9 @@ These are expected to be implemented in separate crates or future extension laye
 For application developers:
 
 1. Add `qubit-fs` and one or more provider crates.
-2. Create a `FileSystemRegistry`.
-3. Register provider crates explicitly.
-4. Resolve URI strings with `FileSystems::resource()`, or parsed `FsUri` values with `FileSystemRegistry::resource()`.
+2. Create a `FileSystemRegistryBuilder` with `FileSystemRegistry::builder()`.
+3. Register provider crates explicitly, then call `build()` once.
+4. Parse URI strings as `FsUri` values and resolve them with `FileSystemRegistry::resource()`.
 5. Use `FileResource` for resource-oriented operations or `FileSystem` with `FsPath` for lower-level code.
 6. Check capabilities before relying on advanced behavior.
 7. Treat errors by `FsErrorKind`, not provider-native error types.

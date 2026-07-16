@@ -40,8 +40,8 @@ rust-common/
 - 元信息：`FileMetadata`、`FileKind`、`DirEntry`
 - 能力声明：`FileSystemCapabilities`
 - 错误模型：`FsError`、`FsErrorKind`
-- provider SPI：`FileSystemSpec`、`FileSystemProvider`、`FileSystemRegistry`
-- singleton 门面：`FileSystems`
+- provider SPI：`FileSystemSpec`、`FileSystemProvider`、`FileSystemRegistryBuilder`
+- 不可变运行时 registry：`FileSystemRegistry`
 - 资源对象：`FileResource`
 
 具体实现放在后端 crate 中：
@@ -50,7 +50,7 @@ rust-common/
 - `qubit-fs-webdev` 依赖 `qubit-fs` 和 WebDAV HTTP client，用于实现 WebDAV 协议文件系统
 - `qubit-fs-oss` 依赖 `qubit-fs` 和 OSS SDK
 - `qubit-fs-hdfs` 依赖 `qubit-fs` 和 HDFS client
-- 后端 crate 可以暴露 `register_provider(&mut FileSystemRegistry)`，也可以暴露 provider 类型给应用显式注册
+- 后端 crate 可以暴露 `register_provider(&mut FileSystemRegistryBuilder)`，也可以暴露 provider 类型给应用显式注册
 
 这样新增 `webdav://`、`s3://`、`azblob://` 之类后端时，只新增一个 crate 和 provider，不需要修改 `qubit-fs` 根 crate。
 
@@ -397,7 +397,7 @@ pub struct FileSystemSpec;
 
 impl ServiceSpec for FileSystemSpec {
     type Config = FileSystemConfig;
-    type Service = dyn FileSystem;
+    type Output = Arc<dyn FileSystem>;
 }
 ```
 
@@ -418,18 +418,18 @@ pub struct FileSystemConfig {
 后端 provider 实现 `ServiceProvider<FileSystemSpec>`：
 
 ```rust
+use std::sync::Arc;
+
+use qubit_spi::error::ProviderError;
+
 #[derive(Debug)]
 pub struct LocalFileSystemProvider;
 
 impl ServiceProvider<FileSystemSpec> for LocalFileSystemProvider {
-    fn descriptor(&self) -> Result<ProviderDescriptor, ProviderRegistryError> {
-        ProviderDescriptor::new("local")?.with_aliases(&["file"])
-    }
-
-    fn create_box(
+    fn create(
         &self,
         config: &FileSystemConfig,
-    ) -> Result<Box<dyn FileSystem>, ProviderCreateError> {
+    ) -> Result<Arc<dyn FileSystem>, ProviderError> {
         // 解析 file:// URI，创建 LocalFileSystem
     }
 }
@@ -438,9 +438,10 @@ impl ServiceProvider<FileSystemSpec> for LocalFileSystemProvider {
 注册与使用：
 
 ```rust
-let mut registry = FileSystemRegistry::new();
-registry.register(LocalFileSystemProvider)?;
-registry.register(OssFileSystemProvider)?;
+let mut builder = FileSystemRegistry::builder();
+qubit_fs_local::register_provider(&mut builder)?;
+qubit_fs_oss::register_provider(&mut builder)?;
+let registry = builder.build();
 
 let uri = FsUri::parse("oss://bucket/reports/2026/a.csv")?;
 let fs = registry.fs(&uri)?;
@@ -457,43 +458,38 @@ let resource = registry.resource(&uri)?;
 
 如果后续确实需要“依赖了后端 crate 就自动注册”，建议在 `qubit-fs` 或单独 `qubit-fs-inventory` feature 中叠加 `inventory` / `linkme`，不要把自动发现作为核心唯一机制。
 
-## 11. Registry、FileSystems 与 FileResource
+## 11. Registry builder、Registry 与 FileResource
 
-`FileSystemRegistry` 是 `ProviderRegistry<FileSystemSpec>` 的薄封装：
+`FileSystemRegistry` 是 `ProviderResolver<FileSystemSpec>` 的薄封装：
 
 ```rust
 pub struct FileSystemRegistry {
-    providers: ProviderRegistry<FileSystemSpec>,
+    resolver: ProviderResolver<FileSystemSpec>,
 }
 ```
 
 职责：
 
-- 注册 provider。
+- 持有启动期 builder 已完成的不可变 provider 集合。
 - 通过 scheme 解析 provider。
 - 根据 `FsUri` 构造 `FileSystemConfig`。
-- 调用 `create_arc` 返回 `Arc<dyn FileSystem>`。
+- 调用 `ServiceProvider::create` 获得 `Arc<dyn FileSystem>`。
 - 通过 `resource(&FsUri)` 返回绑定文件系统和 provider-local path 的 `FileResource`。
-- 将 `ProviderRegistryError` 映射成 `FsError`。
+- 将 `ResolutionError` 映射成 `FsError`。
 
-`FileSystems` 是进程级 singleton 门面，定义为不可实例化的 namespace enum：
-
-```rust
-pub enum FileSystems {}
-```
-
-推荐应用侧通过 `FileSystems` 暴露静态方法：
+`FileSystemRegistryBuilder` 只在启动组装阶段可变：
 
 ```rust
-impl FileSystems {
-    pub fn register<P>(provider: P) -> FsResult<()>;
-    pub fn fs(uri: &str) -> FsResult<Arc<dyn FileSystem>>;
-    pub fn fs_for_uri(uri: &FsUri) -> FsResult<Arc<dyn FileSystem>>;
-    pub fn fs_for_scheme(scheme: &str) -> FsResult<Arc<dyn FileSystem>>;
-    pub fn resource(uri: &str) -> FsResult<FileResource>;
-    pub fn resource_for_uri(uri: &FsUri) -> FsResult<FileResource>;
-}
+let mut builder = FileSystemRegistry::builder();
+qubit_fs_local::register_provider(&mut builder)?;
+let registry = builder.build();
+
+let uri = FsUri::parse("file:///tmp/report.csv")?;
+let fs = registry.fs(&uri)?;
+let resource = registry.resource(&uri)?;
 ```
+
+运行期只共享不可变 `FileSystemRegistry`。如果应用需要进程级全局入口，应在应用层持有并初始化该 registry，而不是恢复运行时全局注册。
 
 `FileResource` 负责把完整 URI 拆成文件系统实例与 provider-local path 后形成资源对象：
 
@@ -581,10 +577,13 @@ FTP：
 #[derive(Debug)]
 pub struct WebDavFileSystemProvider;
 
-impl ServiceProvider<FileSystemSpec> for WebDavFileSystemProvider {
-    fn descriptor(&self) -> Result<ProviderDescriptor, ProviderRegistryError> {
-        ProviderDescriptor::new("webdav")?.with_aliases(&["webdavs", "webdev"])
-    }
+pub fn register_provider(builder: &mut FileSystemRegistryBuilder) -> FsResult<()> {
+    let descriptor = ProviderDescriptor::new(
+        ProviderId::new("webdav").expect("WebDAV provider ID should be valid"),
+    )
+    .with_aliases(["webdavs", "webdev"])
+    .expect("WebDAV provider aliases should be valid");
+    builder.register(descriptor, WebDavFileSystemProvider)
 }
 ```
 
@@ -887,7 +886,7 @@ FileResource = Arc<dyn FileSystem> + FsPath
 
 它通常不拥有独立生命周期，也不携带创建过程状态。把它 trait 化会带来额外成本：
 
-- `FileSystems::resource()` 返回 trait object 后，clone、debug、路径访问和普通使用都会更重。
+- `FileSystemRegistry::resource()` 返回 trait object 后，clone、debug、路径访问和普通使用都会更重。
 - 每个 `FileSystem` 都要额外考虑 resource factory，但大多数实现只是转调 `FileSystem`。
 - 如果 native resource 缓存 metadata，会马上遇到缓存失效、并发可见性和条件写入语义问题。
 - 普通资源的优化空间更适合沉到 `FileSystem` 方法内部，而不是扩展成第二套 resource trait。
@@ -1635,7 +1634,7 @@ pub struct CopyDirStats {
 `qubit-fs` 不应依赖 `qubit-local-files`。依赖方向仍然是 `qubit-fs-local` 同时依赖 `qubit-fs` 和 `qubit-local-files`。
 
 - `server_side=Required` 时，如果无法服务端复制，必须返回 `UnsupportedOperation`。
-- 跨 provider 复制不放进基础 `FileSystem::copy`；由上层基于 `FileSystems::resource()` 或 `FsOperations` 做 stream copy。
+- 跨 provider 复制不放进基础 `FileSystem::copy`；由上层基于 `FileSystemRegistry::resource()` 或 `FsOperations` 做 stream copy。
 
 ## 24. 目录流与分页
 
