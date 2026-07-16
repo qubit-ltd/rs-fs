@@ -9,11 +9,7 @@
 
 use std::sync::Arc;
 
-use qubit_spi::error::{
-    AttemptFailure,
-    ProviderErrorKind,
-    ResolutionError,
-};
+use qubit_spi::error::ResolutionError;
 use qubit_spi::{
     FallbackPolicy,
     ProviderRegistry,
@@ -110,29 +106,10 @@ impl FileSystemRegistry {
 
 /// Maps SPI resolution errors into filesystem errors.
 fn map_resolution_error(error: ResolutionError) -> FsError {
-    let kind = match &error {
-        ResolutionError::UnknownProvider { .. } => {
-            FsErrorKind::ProviderUnavailable
-        }
-        ResolutionError::NoProviderSucceeded { attempts }
-            if attempts.iter().all(|attempt| {
-                matches!(
-                    attempt,
-                    AttemptFailure::ProviderError { error, .. }
-                        if matches!(
-                            error.kind(),
-                            ProviderErrorKind::Unsupported
-                                | ProviderErrorKind::Unavailable
-                        )
-                )
-            }) =>
-        {
-            FsErrorKind::ProviderUnavailable
-        }
-        ResolutionError::InvalidSelector { .. }
-        | ResolutionError::EmptySelection
-        | ResolutionError::EmptyRegistry
-        | ResolutionError::NoProviderSucceeded { .. } => FsErrorKind::Other,
+    let kind = if error.is_absence() {
+        FsErrorKind::ProviderUnavailable
+    } else {
+        FsErrorKind::Other
     };
     let message = error.to_string();
     FsError::with_source(kind, FsOperation::Provider, &message, error)
