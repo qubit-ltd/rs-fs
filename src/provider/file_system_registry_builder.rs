@@ -7,10 +7,10 @@
 // =============================================================================
 //! Startup-only filesystem provider registry assembly.
 
+use qubit_spi::error::RegistrationError;
 use qubit_spi::{
     ProviderDescriptor,
     ProviderRegistryBuilder,
-    RegistrationError,
     ServiceProvider,
 };
 

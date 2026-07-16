@@ -4,9 +4,9 @@ use qubit_fs::{
     FsErrorKind,
     FsUri,
 };
+use qubit_spi::error::ProviderError;
 use qubit_spi::{
     ProviderDescriptor,
-    ProviderError,
     ProviderId,
     ProviderRegistry,
 };

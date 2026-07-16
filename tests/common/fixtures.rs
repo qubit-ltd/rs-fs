@@ -47,10 +47,8 @@ use qubit_fs::{
     WriteOptions,
     WriteOutcome,
 };
-use qubit_spi::{
-    ProviderError,
-    ServiceProvider,
-};
+use qubit_spi::ServiceProvider;
+use qubit_spi::error::ProviderError;
 
 #[derive(Debug, Default)]
 pub(crate) struct MockState {

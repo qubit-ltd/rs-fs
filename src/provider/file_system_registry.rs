@@ -9,12 +9,15 @@
 
 use std::sync::Arc;
 
+use qubit_spi::error::{
+    AttemptFailure,
+    ProviderErrorKind,
+    ResolutionError,
+};
 use qubit_spi::{
     FallbackPolicy,
     ProviderRegistry,
     ProviderResolver,
-    ResolutionError,
-    ResolutionErrorKind,
 };
 
 use crate::{
@@ -107,26 +110,29 @@ impl FileSystemRegistry {
 
 /// Maps SPI resolution errors into filesystem errors.
 fn map_resolution_error(error: ResolutionError) -> FsError {
-    let kind = match error.kind() {
-        ResolutionErrorKind::UnknownProvider => {
+    let kind = match &error {
+        ResolutionError::UnknownProvider { .. } => {
             FsErrorKind::ProviderUnavailable
         }
-        ResolutionErrorKind::NoProviderSucceeded => {
-            if error.attempts().iter().all(|attempt| {
+        ResolutionError::NoProviderSucceeded { attempts }
+            if attempts.iter().all(|attempt| {
                 matches!(
-                    attempt.provider_error_kind(),
-                    Some(
-                        qubit_spi::ProviderErrorKind::Unsupported
-                            | qubit_spi::ProviderErrorKind::Unavailable
-                    )
+                    attempt,
+                    AttemptFailure::ProviderError { error, .. }
+                        if matches!(
+                            error.kind(),
+                            ProviderErrorKind::Unsupported
+                                | ProviderErrorKind::Unavailable
+                        )
                 )
-            }) {
-                FsErrorKind::ProviderUnavailable
-            } else {
-                FsErrorKind::Other
-            }
+            }) =>
+        {
+            FsErrorKind::ProviderUnavailable
         }
-        _ => FsErrorKind::Other,
+        ResolutionError::InvalidSelector { .. }
+        | ResolutionError::EmptySelection
+        | ResolutionError::EmptyRegistry
+        | ResolutionError::NoProviderSucceeded { .. } => FsErrorKind::Other,
     };
     let message = error.to_string();
     FsError::with_source(kind, FsOperation::Provider, &message, error)
