@@ -20,14 +20,14 @@ Add `qubit-fs` to `Cargo.toml`:
 
 ```toml
 [dependencies]
-qubit-fs = "0.1"
+qubit-fs = "0.2"
 ```
 
 If you implement or register providers, you will usually also need `qubit-spi`:
 
 ```toml
 [dependencies]
-qubit-fs = "0.1"
+qubit-fs = "0.2"
 qubit-spi = "0.8"
 ```
 
@@ -35,14 +35,14 @@ If your implementation stores rich metadata, use `qubit-metadata`:
 
 ```toml
 [dependencies]
-qubit-metadata = "0.5"
+qubit-metadata = "0.6"
 ```
 
 Optional feature:
 
 ```toml
 [dependencies]
-qubit-fs = { version = "0.1", features = ["registry-cache"] }
+qubit-fs = { version = "0.2", features = ["registry-cache"] }
 ```
 
 The current public API is synchronous and object-safe. Async providers can be built as separate crates or future extension traits, but the core `FileSystem` trait is intentionally not tied to a runtime.
@@ -860,9 +860,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-qubit-fs = "0.1"
+qubit-fs = "0.2"
 qubit-spi = "0.8"
-qubit-metadata = "0.5"
+qubit-metadata = "0.6"
 ```
 
 ### 11.2 Define the filesystem type

@@ -20,14 +20,14 @@
 
 ```toml
 [dependencies]
-qubit-fs = "0.1"
+qubit-fs = "0.2"
 ```
 
 如果你要实现或注册 provider，通常还需要 `qubit-spi`：
 
 ```toml
 [dependencies]
-qubit-fs = "0.1"
+qubit-fs = "0.2"
 qubit-spi = "0.8"
 ```
 
@@ -35,14 +35,14 @@ qubit-spi = "0.8"
 
 ```toml
 [dependencies]
-qubit-metadata = "0.5"
+qubit-metadata = "0.6"
 ```
 
 可选 feature：
 
 ```toml
 [dependencies]
-qubit-fs = { version = "0.1", features = ["registry-cache"] }
+qubit-fs = { version = "0.2", features = ["registry-cache"] }
 ```
 
 当前公开 API 是同步、对象安全的接口。异步 provider 可以通过独立 crate 或后续扩展 trait 实现，核心 `FileSystem` trait 不绑定 tokio 或其他运行时。
@@ -866,9 +866,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-qubit-fs = "0.1"
+qubit-fs = "0.2"
 qubit-spi = "0.8"
-qubit-metadata = "0.5"
+qubit-metadata = "0.6"
 ```
 
 ### 11.2 定义文件系统类型
