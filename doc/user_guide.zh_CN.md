@@ -28,7 +28,7 @@ qubit-fs = "0.1"
 ```toml
 [dependencies]
 qubit-fs = "0.1"
-qubit-spi = "0.3"
+qubit-spi = "0.6"
 ```
 
 如果 provider 需要读写扩展元数据，建议使用 `qubit-metadata`：
@@ -868,7 +868,7 @@ edition = "2024"
 
 [dependencies]
 qubit-fs = "0.1"
-qubit-spi = "0.3"
+qubit-spi = "0.6"
 qubit-metadata = "0.5"
 ```
 
