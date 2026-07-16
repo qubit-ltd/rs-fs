@@ -28,7 +28,7 @@ If you implement or register providers, you will usually also need `qubit-spi`:
 ```toml
 [dependencies]
 qubit-fs = "0.1"
-qubit-spi = "0.7"
+qubit-spi = "0.8"
 ```
 
 If your implementation stores rich metadata, use `qubit-metadata`:
@@ -861,7 +861,7 @@ edition = "2024"
 
 [dependencies]
 qubit-fs = "0.1"
-qubit-spi = "0.7"
+qubit-spi = "0.8"
 qubit-metadata = "0.5"
 ```
 
