@@ -162,17 +162,18 @@ pub trait FileSystem: std::fmt::Debug + Send + Sync {
 
 ## 4. 打开文件系统和资源
 
-使用前必须先注册 provider。应用应在启动阶段通过 builder 组装 provider，然后共享不可变 registry：
+使用前必须先注册 provider。应用可以在启动阶段创建 registry，注册第三方 provider，
+然后把 registry 的 clone 共享给下游库。所有 clone 都能看到后续的运行时注册和默认选择更新：
 
 ```rust
 use qubit_fs::{FileSystemRegistry, FsResult};
 
 fn configure_filesystems() -> FsResult<FileSystemRegistry> {
-    let mut builder = FileSystemRegistry::builder();
+    let registry = FileSystemRegistry::default();
     // provider 注册函数由后端 crate 提供。
-    // qubit_fs_local::register_provider(&mut builder)?;
-    // qubit_fs_oss::register_provider(&mut builder)?;
-    Ok(builder.build())
+    // qubit_fs_local::register_provider(&registry)?;
+    // qubit_fs_oss::register_provider(&registry)?;
+    Ok(registry)
 }
 ```
 
@@ -203,15 +204,14 @@ fn resolve_and_check(registry: &FileSystemRegistry) -> FsResult<bool> {
 }
 ```
 
-测试、插件运行时或嵌入式场景也可以用同一 builder 模式构造隔离 registry：
+测试、插件运行时或嵌入式场景也可以用空 registry 构造隔离 catalog：
 
 ```rust
 use qubit_fs::{FileSystemRegistry, FsResult, FsUri};
 
 fn isolated_registry() -> FsResult<()> {
-    let mut builder = FileSystemRegistry::builder();
-    // qubit_fs_memory::register_provider(&mut builder)?;
-    let registry = builder.build();
+    let registry = FileSystemRegistry::default();
+    // qubit_fs_memory::register_provider(&registry)?;
     let uri = FsUri::parse("mem:///hello.txt")?;
     let resource = registry.resource(&uri)?;
     println!("{}", resource.path().as_str());
@@ -1181,12 +1181,17 @@ use std::sync::Arc;
 use qubit_fs::{
     FileSystem,
     FileSystemConfig,
-    FileSystemRegistryBuilder,
+    FileSystemRegistry,
     FileSystemSpec,
     FsResult,
 };
-use qubit_spi::error::ProviderError;
-use qubit_spi::{ProviderDescriptor, ProviderId, ServiceProvider};
+use qubit_spi::error::ProviderCreationError;
+use qubit_spi::{
+    ProviderDefinition,
+    ProviderDescriptor,
+    ProviderId,
+    ServiceProvider,
+};
 
 #[derive(Debug, Default)]
 pub struct MemoryFileSystemProvider;
@@ -1195,18 +1200,24 @@ impl ServiceProvider<FileSystemSpec> for MemoryFileSystemProvider {
     fn create(
         &self,
         _config: &FileSystemConfig,
-    ) -> Result<Arc<dyn FileSystem>, ProviderError> {
+    ) -> Result<Arc<dyn FileSystem>, ProviderCreationError> {
         Ok(Arc::new(MemoryFileSystem::default()))
     }
 }
 
-pub fn register_provider(builder: &mut FileSystemRegistryBuilder) -> FsResult<()> {
-    let descriptor = ProviderDescriptor::new(
-        ProviderId::new("memory").expect("memory provider ID should be valid"),
-    )
-    .with_aliases(["mem"])
-    .expect("memory provider aliases should be valid");
-    builder.register(descriptor, MemoryFileSystemProvider)
+impl ProviderDefinition<FileSystemSpec> for MemoryFileSystemProvider {
+    fn descriptor(&self) -> ProviderDescriptor {
+        ProviderDescriptor::new(
+            ProviderId::new("memory")
+                .expect("memory provider ID should be valid"),
+        )
+        .with_aliases(["mem"])
+        .expect("memory provider aliases should be valid")
+    }
+}
+
+pub fn register_provider(registry: &FileSystemRegistry) -> FsResult<()> {
+    registry.register(MemoryFileSystemProvider)
 }
 ```
 
@@ -1216,9 +1227,8 @@ pub fn register_provider(builder: &mut FileSystemRegistryBuilder) -> FsResult<()
 use qubit_fs::{FileSystemRegistry, FsResult, FsUri};
 
 fn main() -> FsResult<()> {
-    let mut builder = FileSystemRegistry::builder();
-    qubit_fs_memory::register_provider(&mut builder)?;
-    let registry = builder.build();
+    let registry = FileSystemRegistry::default();
+    qubit_fs_memory::register_provider(&registry)?;
 
     let uri = FsUri::parse("mem:///hello.txt")?;
     let resource = registry.resource(&uri)?;

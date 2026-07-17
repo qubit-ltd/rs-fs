@@ -156,18 +156,20 @@ This keeps the core crate open for third-party providers.
 
 ## 4. Opening filesystems and resources
 
-A provider must be registered before a URI can be resolved. Assemble providers
-through a builder during application startup, then share the immutable registry:
+A provider must be registered before a URI can be resolved. Applications can
+create the registry during startup, register third-party providers, then share
+registry clones with downstream libraries. Every clone observes later runtime
+registrations and default-selection updates:
 
 ```rust
 use qubit_fs::{FileSystemRegistry, FsResult};
 
 fn configure_filesystems() -> FsResult<FileSystemRegistry> {
-    let mut builder = FileSystemRegistry::builder();
+    let registry = FileSystemRegistry::default();
     // Provider registration functions come from backend crates.
-    // qubit_fs_local::register_provider(&mut builder)?;
-    // qubit_fs_oss::register_provider(&mut builder)?;
-    Ok(builder.build())
+    // qubit_fs_local::register_provider(&registry)?;
+    // qubit_fs_oss::register_provider(&registry)?;
+    Ok(registry)
 }
 ```
 
@@ -198,16 +200,15 @@ fn resolve_and_check(registry: &FileSystemRegistry) -> FsResult<bool> {
 }
 ```
 
-The same builder pattern can create isolated registries for tests, plugins, or
-embedded runtimes:
+An empty registry can create an isolated catalog for tests, plugins, or embedded
+runtimes:
 
 ```rust
 use qubit_fs::{FileSystemRegistry, FsResult, FsUri};
 
 fn isolated_registry() -> FsResult<()> {
-    let mut builder = FileSystemRegistry::builder();
-    // qubit_fs_memory::register_provider(&mut builder)?;
-    let registry = builder.build();
+    let registry = FileSystemRegistry::default();
+    // qubit_fs_memory::register_provider(&registry)?;
     let uri = FsUri::parse("mem:///hello.txt")?;
     let resource = registry.resource(&uri)?;
     println!("{}", resource.path().as_str());
@@ -1173,12 +1174,17 @@ use std::sync::Arc;
 use qubit_fs::{
     FileSystem,
     FileSystemConfig,
-    FileSystemRegistryBuilder,
+    FileSystemRegistry,
     FileSystemSpec,
     FsResult,
 };
-use qubit_spi::error::ProviderError;
-use qubit_spi::{ProviderDescriptor, ProviderId, ServiceProvider};
+use qubit_spi::error::ProviderCreationError;
+use qubit_spi::{
+    ProviderDefinition,
+    ProviderDescriptor,
+    ProviderId,
+    ServiceProvider,
+};
 
 #[derive(Debug, Default)]
 pub struct MemoryFileSystemProvider;
@@ -1187,18 +1193,24 @@ impl ServiceProvider<FileSystemSpec> for MemoryFileSystemProvider {
     fn create(
         &self,
         _config: &FileSystemConfig,
-    ) -> Result<Arc<dyn FileSystem>, ProviderError> {
+    ) -> Result<Arc<dyn FileSystem>, ProviderCreationError> {
         Ok(Arc::new(MemoryFileSystem::default()))
     }
 }
 
-pub fn register_provider(builder: &mut FileSystemRegistryBuilder) -> FsResult<()> {
-    let descriptor = ProviderDescriptor::new(
-        ProviderId::new("memory").expect("memory provider ID should be valid"),
-    )
-    .with_aliases(["mem"])
-    .expect("memory provider aliases should be valid");
-    builder.register(descriptor, MemoryFileSystemProvider)
+impl ProviderDefinition<FileSystemSpec> for MemoryFileSystemProvider {
+    fn descriptor(&self) -> ProviderDescriptor {
+        ProviderDescriptor::new(
+            ProviderId::new("memory")
+                .expect("memory provider ID should be valid"),
+        )
+        .with_aliases(["mem"])
+        .expect("memory provider aliases should be valid")
+    }
+}
+
+pub fn register_provider(registry: &FileSystemRegistry) -> FsResult<()> {
+    registry.register(MemoryFileSystemProvider)
 }
 ```
 
@@ -1208,9 +1220,8 @@ Application usage:
 use qubit_fs::{FileSystemRegistry, FsResult, FsUri};
 
 fn main() -> FsResult<()> {
-    let mut builder = FileSystemRegistry::builder();
-    qubit_fs_memory::register_provider(&mut builder)?;
-    let registry = builder.build();
+    let registry = FileSystemRegistry::default();
+    qubit_fs_memory::register_provider(&registry)?;
 
     let uri = FsUri::parse("mem:///hello.txt")?;
     let resource = registry.resource(&uri)?;

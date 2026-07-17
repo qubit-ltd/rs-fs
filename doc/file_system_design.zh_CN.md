@@ -40,8 +40,8 @@ rust-common/
 - 元信息：`FileMetadata`、`FileKind`、`DirEntry`
 - 能力声明：`FileSystemCapabilities`
 - 错误模型：`FsError`、`FsErrorKind`
-- provider SPI：`FileSystemSpec`、`FileSystemProvider`、`FileSystemRegistryBuilder`
-- 不可变运行时 registry：`FileSystemRegistry`
+- provider SPI：`FileSystemSpec`、`FileSystemProvider`、`ProviderDefinition`
+- 运行时可注册且 clone 共享状态的 registry：`FileSystemRegistry`
 - 资源对象：`FileResource`
 
 具体实现放在后端 crate 中：
@@ -50,7 +50,7 @@ rust-common/
 - `qubit-fs-webdev` 依赖 `qubit-fs` 和 WebDAV HTTP client，用于实现 WebDAV 协议文件系统
 - `qubit-fs-oss` 依赖 `qubit-fs` 和 OSS SDK
 - `qubit-fs-hdfs` 依赖 `qubit-fs` 和 HDFS client
-- 后端 crate 可以暴露 `register_provider(&mut FileSystemRegistryBuilder)`，也可以暴露 provider 类型给应用显式注册
+- 后端 crate 可以暴露 `register_provider(&FileSystemRegistry)`，也可以暴露自描述 provider 类型给应用显式注册
 
 这样新增 `webdav://`、`s3://`、`azblob://` 之类后端时，只新增一个 crate 和 provider，不需要修改 `qubit-fs` 根 crate。
 
@@ -420,7 +420,7 @@ pub struct FileSystemConfig {
 ```rust
 use std::sync::Arc;
 
-use qubit_spi::error::ProviderError;
+use qubit_spi::error::ProviderCreationError;
 
 #[derive(Debug)]
 pub struct LocalFileSystemProvider;
@@ -429,8 +429,18 @@ impl ServiceProvider<FileSystemSpec> for LocalFileSystemProvider {
     fn create(
         &self,
         config: &FileSystemConfig,
-    ) -> Result<Arc<dyn FileSystem>, ProviderError> {
+    ) -> Result<Arc<dyn FileSystem>, ProviderCreationError> {
         // 解析 file:// URI，创建 LocalFileSystem
+    }
+}
+
+impl ProviderDefinition<FileSystemSpec> for LocalFileSystemProvider {
+    fn descriptor(&self) -> ProviderDescriptor {
+        ProviderDescriptor::new(
+            ProviderId::new("local").expect("valid provider ID"),
+        )
+        .with_aliases(["file"])
+        .expect("valid provider aliases")
     }
 }
 ```
@@ -438,10 +448,9 @@ impl ServiceProvider<FileSystemSpec> for LocalFileSystemProvider {
 注册与使用：
 
 ```rust
-let mut builder = FileSystemRegistry::builder();
-qubit_fs_local::register_provider(&mut builder)?;
-qubit_fs_oss::register_provider(&mut builder)?;
-let registry = builder.build();
+let registry = FileSystemRegistry::default();
+qubit_fs_local::register_provider(&registry)?;
+qubit_fs_oss::register_provider(&registry)?;
 
 let uri = FsUri::parse("oss://bucket/reports/2026/a.csv")?;
 let fs = registry.fs(&uri)?;
@@ -460,36 +469,39 @@ let resource = registry.resource(&uri)?;
 
 ## 11. Registry builder、Registry 与 FileResource
 
-`FileSystemRegistry` 是 `ProviderResolver<FileSystemSpec>` 的薄封装：
+`FileSystemRegistry` 是 `ProviderRegistry<FileSystemSpec>` 的领域门面：
 
 ```rust
 pub struct FileSystemRegistry {
-    resolver: ProviderResolver<FileSystemSpec>,
+    providers: ProviderRegistry<FileSystemSpec>,
 }
 ```
 
 职责：
 
-- 持有启动期 builder 已完成的不可变 provider 集合。
+- 持有 clone 共享状态的运行时 provider registry。
+- 接受实现 `ProviderDefinition<FileSystemSpec>` 的自描述 provider。
+- 按 `ProviderSelection` 解析出 `ResolvingServiceProvider<FileSystemSpec>`。
 - 通过 scheme 解析 provider。
 - 根据 `FsUri` 构造 `FileSystemConfig`。
 - 调用 `ServiceProvider::create` 获得 `Arc<dyn FileSystem>`。
 - 通过 `resource(&FsUri)` 返回绑定文件系统和 provider-local path 的 `FileResource`。
-- 将 `ResolutionError` 映射成 `FsError`。
+- 分别将 provider 选择错误与 provider 创建错误映射成 `FsError`，并保留原始 source。
 
-`FileSystemRegistryBuilder` 只在启动组装阶段可变：
+`FileSystemRegistryBuilder` 只是可选的流式组装接口；构建出的 registry 仍可在运行时注册：
 
 ```rust
-let mut builder = FileSystemRegistry::builder();
-qubit_fs_local::register_provider(&mut builder)?;
-let registry = builder.build();
+let registry = FileSystemRegistry::default();
+qubit_fs_local::register_provider(&registry)?;
 
 let uri = FsUri::parse("file:///tmp/report.csv")?;
 let fs = registry.fs(&uri)?;
 let resource = registry.resource(&uri)?;
 ```
 
-运行期只共享不可变 `FileSystemRegistry`。如果应用需要进程级全局入口，应在应用层持有并初始化该 registry，而不是恢复运行时全局注册。
+应用可以把 `FileSystemRegistry` 放入进程级全局入口，并在启动时注册 provider。
+下游库持有的 registry clone 会观察到相同注册结果，但通用 `qubit-fs` crate
+不强制采用某一种全局单体实现。
 
 `FileResource` 负责把完整 URI 拆成文件系统实例与 provider-local path 后形成资源对象：
 
@@ -577,13 +589,19 @@ FTP：
 #[derive(Debug)]
 pub struct WebDavFileSystemProvider;
 
-pub fn register_provider(builder: &mut FileSystemRegistryBuilder) -> FsResult<()> {
-    let descriptor = ProviderDescriptor::new(
-        ProviderId::new("webdav").expect("WebDAV provider ID should be valid"),
-    )
-    .with_aliases(["webdavs", "webdev"])
-    .expect("WebDAV provider aliases should be valid");
-    builder.register(descriptor, WebDavFileSystemProvider)
+impl ProviderDefinition<FileSystemSpec> for WebDavFileSystemProvider {
+    fn descriptor(&self) -> ProviderDescriptor {
+        ProviderDescriptor::new(
+            ProviderId::new("webdav")
+                .expect("WebDAV provider ID should be valid"),
+        )
+        .with_aliases(["webdavs", "webdev"])
+        .expect("WebDAV provider aliases should be valid")
+    }
+}
+
+pub fn register_provider(registry: &FileSystemRegistry) -> FsResult<()> {
+    registry.register(WebDavFileSystemProvider)
 }
 ```
 
@@ -1174,9 +1192,8 @@ pub trait AsyncFileSystem: std::fmt::Debug + Send + Sync {
 
 ### `qubit-spi`
 
-用于 provider 注册、别名、优先级、fallback 和错误聚合。
-
-MVP 不需要修改 `qubit-spi`。如果将来要自动发现 provider，可以在 `qubit-fs` 之上增加 inventory feature，而不是立刻改动 SPI 核心。
+用于自描述 provider 注册、别名、优先级、`ProviderSelection`、创建 fallback
+和错误聚合。选择 provider 与用配置创建 service 是两个独立阶段。
 
 ### `qubit-io`
 
@@ -1306,7 +1323,6 @@ src/
     file_system_config.rs
     file_system_provider.rs
     file_system_registry.rs
-    file_system_resolver.rs
 ```
 
 导出策略：
@@ -1314,7 +1330,7 @@ src/
 - crate root 只重导出主要公开 API。
 - 具体文件显式导入依赖，避免通过 `mod.rs` + `use super::*` 隐式共享名称。
 - `prelude` 暂不建议加入 MVP；等 API 稳定后再决定是否需要。
-- 所有 provider 相关类型放在 `provider` 模块，但 `FileSystemProvider` 应作为 `ServiceProvider<FileSystemSpec>` 的类型别名或薄包装暴露。
+- 所有 provider 相关类型放在 `provider` 模块，`FileSystemProvider` 作为 `ProviderDefinition<FileSystemSpec>` 的 trait object alias 暴露。
 
 ## 22. 操作 option 设计
 
@@ -1729,15 +1745,15 @@ pub enum CredentialRef {
 
 ## 27. 与工具 crate 的潜在改造点
 
-当前文档方案不要求立即修改参考 crate。但如果实现过程中发现能力缺口，可以按以下方向做破坏性变更。
+当前 SPI 已支持运行时注册和选择、创建两阶段错误。如果实现过程中发现新的能力缺口，可以按以下方向继续演进。
 
 ### 27.1 `qubit-spi`
 
 可能需要的增强：
 
 - `ProviderDescriptor` 增加 typed attributes，用于声明支持的 URI scheme、capability tags。
-- `ProviderRegistry` 增加 read-only descriptor lookup API，便于 resolver 在创建前筛选 provider。
-- 增加 registry snapshot / clone 支持，方便热更新 provider 集合。
+- `ProviderDescriptor` 增加 typed attributes 后，可让领域门面在创建前筛选 provider。
+- 为 registry 增加显式注销或替换语义，但必须先定义并发快照与现有消费者的可见性。
 
 不建议的改造：
 
