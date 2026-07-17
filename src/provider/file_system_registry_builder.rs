@@ -5,28 +5,26 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Startup-only filesystem provider registry assembly.
+//! Fluent filesystem provider registry assembly.
 
-use qubit_spi::error::RegistrationError;
 use qubit_spi::{
-    ProviderDescriptor,
+    ProviderDefinition,
     ProviderRegistryBuilder,
-    ServiceProvider,
 };
 
 use crate::{
     FileSystemRegistry,
     FileSystemSpec,
-    FsError,
-    FsErrorKind,
-    FsOperation,
     FsResult,
 };
 
-/// Startup-only builder for an immutable filesystem registry.
+use super::file_system_registry::map_registration_error;
+
+/// Fluent builder for a runtime-mutable filesystem registry.
 #[derive(Default)]
 pub struct FileSystemRegistryBuilder {
-    /// Typed SPI builder retaining registrations until startup completes.
+    /// Typed SPI builder retaining registrations until this builder is
+    /// consumed.
     providers: ProviderRegistryBuilder<FileSystemSpec>,
 }
 
@@ -36,18 +34,18 @@ impl FileSystemRegistryBuilder {
     /// # Returns
     ///
     /// A builder containing no provider registrations.
-    #[inline]
+    #[inline(always)]
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Registers a filesystem provider and its external identity metadata.
+    /// Registers a self-described filesystem provider.
     ///
     /// # Arguments
     ///
-    /// * `descriptor` - Canonical provider identity, aliases, and priority.
-    /// * `provider` - Provider factory moved into registry storage.
+    /// * `provider` - Self-described provider factory moved into registry
+    ///   storage.
     ///
     /// # Returns
     ///
@@ -55,46 +53,26 @@ impl FileSystemRegistryBuilder {
     ///
     /// # Errors
     ///
-    /// Returns [`FsError`] if the descriptor conflicts with a prior provider.
-    pub fn register<P>(
-        &mut self,
-        descriptor: ProviderDescriptor,
-        provider: P,
-    ) -> FsResult<()>
+    /// Returns [`crate::FsError`] if the provider descriptor conflicts with a
+    /// prior registration.
+    #[inline(always)]
+    pub fn register<P>(&mut self, provider: P) -> FsResult<()>
     where
-        P: ServiceProvider<FileSystemSpec>,
+        P: ProviderDefinition<FileSystemSpec>,
     {
         self.providers
-            .register(descriptor, provider)
+            .register(provider)
             .map_err(map_registration_error)
     }
 
-    /// Builds the immutable filesystem registry used at runtime.
+    /// Builds a filesystem registry that remains mutable at runtime.
     ///
     /// # Returns
     ///
-    /// The immutable registry containing all accepted registrations.
+    /// The shared registry containing all accepted registrations.
+    #[inline(always)]
     #[must_use]
     pub fn build(self) -> FileSystemRegistry {
         FileSystemRegistry::new(self.providers.build())
     }
-}
-
-/// Maps an SPI registration error into the filesystem error model.
-///
-/// # Arguments
-///
-/// * `error` - SPI selector-conflict diagnostic.
-///
-/// # Returns
-///
-/// A filesystem provider error preserving the original source.
-fn map_registration_error(error: RegistrationError) -> FsError {
-    let message = error.to_string();
-    FsError::with_source(
-        FsErrorKind::InvalidPath,
-        FsOperation::Provider,
-        &message,
-        error,
-    )
 }

@@ -7,9 +7,12 @@
 // =============================================================================
 //! Filesystem provider trait object alias.
 
-use qubit_spi::ServiceProvider;
+use qubit_spi::ProviderDefinition;
 
 use super::file_system_spec::FileSystemSpec;
 
-/// Filesystem provider trait object type.
-pub type FileSystemProvider = dyn ServiceProvider<FileSystemSpec>;
+/// Self-described filesystem provider trait object type.
+///
+/// Implementations expose both filesystem creation behavior and the stable
+/// descriptor used when registering them in a [`crate::FileSystemRegistry`].
+pub type FileSystemProvider = dyn ProviderDefinition<FileSystemSpec>;

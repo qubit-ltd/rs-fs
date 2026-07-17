@@ -9,17 +9,24 @@
 
 use std::sync::Arc;
 
-use qubit_spi::error::ResolutionError;
+use qubit_spi::error::{
+    ProviderCreationError,
+    ProviderSelectionError,
+    RegistrationError,
+};
 use qubit_spi::{
-    FallbackPolicy,
+    ProviderDefinition,
     ProviderRegistry,
-    ProviderResolver,
+    ProviderSelection,
+    ResolvingServiceProvider,
+    ServiceProvider,
 };
 
 use crate::{
     FileResource,
     FileSystem,
     FileSystemConfig,
+    FileSystemProvider,
     FileSystemRegistryBuilder,
     FileSystemSpec,
     FsError,
@@ -29,83 +36,282 @@ use crate::{
     FsUri,
 };
 
-/// Registry of filesystem providers.
+/// Shared runtime registry of self-described filesystem providers.
+///
+/// Clones observe the same registrations and default provider selection.
 pub struct FileSystemRegistry {
-    /// Resolver applying the filesystem fallback policy.
-    resolver: ProviderResolver<FileSystemSpec>,
+    /// Typed SPI registry shared by application and downstream consumers.
+    providers: ProviderRegistry<FileSystemSpec>,
 }
 
 impl FileSystemRegistry {
-    /// Creates a filesystem registry from explicitly assembled providers.
+    /// Creates a filesystem registry from a shared SPI registry.
+    ///
+    /// # Arguments
+    ///
+    /// * `providers` - Runtime provider registry to expose through this facade.
     ///
     /// # Returns
-    /// Immutable registry that resolves one provider by the URI scheme.
-    #[inline]
+    ///
+    /// A filesystem registry sharing registrations and default selection with
+    /// `providers`.
+    #[inline(always)]
     #[must_use]
     pub fn new(providers: ProviderRegistry<FileSystemSpec>) -> Self {
-        let resolver =
-            ProviderResolver::new(providers, FallbackPolicy::OnAbsence);
-        Self { resolver }
+        Self { providers }
     }
 
-    /// Creates a mutable builder for startup-only filesystem-provider assembly.
+    /// Creates a builder for fluent filesystem-provider assembly.
+    ///
+    /// # Returns
+    ///
+    /// An empty builder whose result remains runtime mutable.
+    #[inline(always)]
     #[must_use]
     pub fn builder() -> FileSystemRegistryBuilder {
         FileSystemRegistryBuilder::new()
     }
 
-    /// Resolves a parsed URI into a filesystem instance.
+    /// Registers an owned self-described filesystem provider at runtime.
     ///
-    /// # Parameters
-    /// - `uri`: Parsed filesystem URI.
+    /// # Arguments
+    ///
+    /// * `provider` - Provider definition moved into shared registry storage.
     ///
     /// # Returns
+    ///
+    /// `Ok(())` after the provider descriptor and implementation are
+    /// registered.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FsError`] when the provider ID or an alias conflicts with an
+    /// existing registration.
+    #[inline(always)]
+    pub fn register<P>(&self, provider: P) -> FsResult<()>
+    where
+        P: ProviderDefinition<FileSystemSpec>,
+    {
+        self.providers
+            .register(provider)
+            .map_err(map_registration_error)
+    }
+
+    /// Registers an already shared self-described filesystem provider.
+    ///
+    /// # Arguments
+    ///
+    /// * `provider` - Shared provider definition retained by the registry.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` after the provider descriptor and implementation are
+    /// registered.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FsError`] when the provider ID or an alias conflicts with an
+    /// existing registration.
+    #[inline(always)]
+    pub fn register_shared(
+        &self,
+        provider: Arc<FileSystemProvider>,
+    ) -> FsResult<()> {
+        self.providers
+            .register_shared(provider)
+            .map_err(map_registration_error)
+    }
+
+    /// Replaces the selection used by future default resolutions.
+    ///
+    /// # Arguments
+    ///
+    /// * `selection` - Validated provider target and creation fallback policy.
+    #[inline(always)]
+    pub fn set_default_selection(&self, selection: ProviderSelection) {
+        self.providers.set_default_selection(selection);
+    }
+
+    /// Resolves a provider selection without creating a filesystem.
+    ///
+    /// # Arguments
+    ///
+    /// * `selection` - Provider target and creation fallback policy.
+    ///
+    /// # Returns
+    ///
+    /// A composing service provider containing a point-in-time candidate
+    /// snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FsError`] when the selection matches no registered provider.
+    #[inline(always)]
+    pub fn resolve(
+        &self,
+        selection: &ProviderSelection,
+    ) -> FsResult<ResolvingServiceProvider<FileSystemSpec>> {
+        self.providers
+            .resolve(selection)
+            .map_err(map_provider_selection_error)
+    }
+
+    /// Resolves the registry's current default selection without creating a
+    /// filesystem.
+    ///
+    /// # Returns
+    ///
+    /// A composing service provider containing a point-in-time candidate
+    /// snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FsError`] when the default selection matches no registered
+    /// provider.
+    #[inline(always)]
+    pub fn resolve_default(
+        &self,
+    ) -> FsResult<ResolvingServiceProvider<FileSystemSpec>> {
+        self.providers
+            .resolve_default()
+            .map_err(map_provider_selection_error)
+    }
+
+    /// Resolves a parsed URI into a filesystem instance.
+    ///
+    /// # Arguments
+    ///
+    /// * `uri` - Parsed filesystem URI.
+    ///
+    /// # Returns
+    ///
     /// Shared filesystem instance created by the selected provider.
     ///
     /// # Errors
+    ///
     /// Returns [`FsError`] when provider resolution or creation fails.
     pub fn fs(&self, uri: &FsUri) -> FsResult<Arc<dyn FileSystem>> {
         let config = FileSystemConfig::new(uri.clone());
-        self.resolver
-            .create_named(uri.scheme.as_str(), &config)
-            .map(|created| created.into_service())
-            .map_err(map_resolution_error)
+        let selection = ProviderSelection::named(uri.scheme.as_str())
+            .map_err(map_provider_selection_error)?;
+        self.resolve(&selection)?
+            .create(&config)
+            .map_err(map_provider_creation_error)
     }
 
     /// Resolves a parsed URI into a bound file resource.
     ///
-    /// # Parameters
-    /// - `uri`: Parsed filesystem URI.
+    /// # Arguments
+    ///
+    /// * `uri` - Parsed filesystem URI.
     ///
     /// # Returns
+    ///
     /// A file resource containing the matching filesystem and filesystem-local
     /// path.
     ///
     /// # Errors
+    ///
     /// Returns [`FsError`] when provider resolution or creation fails.
+    #[inline]
     pub fn resource(&self, uri: &FsUri) -> FsResult<FileResource> {
         let path = uri.path.clone();
         let fs = self.fs(uri)?;
         Ok(FileResource::new(fs, path))
     }
 
-    /// Gets registered provider IDs in registration order.
+    /// Returns registered provider IDs in registration order.
     ///
     /// # Returns
+    ///
     /// Canonical provider IDs.
     #[inline]
     #[must_use]
-    pub fn provider_ids(&self) -> Vec<&str> {
-        self.resolver
-            .registry()
+    pub fn provider_ids(&self) -> Vec<String> {
+        self.providers
             .provider_ids()
-            .map(|id| id.as_str())
+            .into_iter()
+            .map(|id| id.as_str().to_owned())
             .collect()
     }
 }
 
-/// Maps SPI resolution errors into filesystem errors.
-fn map_resolution_error(error: ResolutionError) -> FsError {
+impl Clone for FileSystemRegistry {
+    /// Clones the registry while retaining the same shared SPI state.
+    ///
+    /// # Returns
+    ///
+    /// Another registry handle observing the same providers and default
+    /// selection.
+    #[inline(always)]
+    fn clone(&self) -> Self {
+        Self::new(self.providers.clone())
+    }
+}
+
+impl Default for FileSystemRegistry {
+    /// Creates an empty runtime filesystem-provider registry.
+    ///
+    /// # Returns
+    ///
+    /// A registry with automatic selection as its default.
+    #[inline(always)]
+    fn default() -> Self {
+        Self::new(ProviderRegistry::default())
+    }
+}
+
+/// Maps an SPI registration error into the filesystem error model.
+///
+/// # Arguments
+///
+/// * `error` - SPI selector-conflict diagnostic.
+///
+/// # Returns
+///
+/// A filesystem provider error preserving the original source.
+#[inline]
+pub(super) fn map_registration_error(error: RegistrationError) -> FsError {
+    let message = error.to_string();
+    FsError::with_source(
+        FsErrorKind::Conflict,
+        FsOperation::Provider,
+        &message,
+        error,
+    )
+}
+
+/// Maps an SPI selection error into a filesystem provider error.
+///
+/// # Arguments
+///
+/// * `error` - Failure produced before any provider creates a service.
+///
+/// # Returns
+///
+/// A provider-unavailable filesystem error preserving the selection failure.
+#[inline]
+fn map_provider_selection_error(error: ProviderSelectionError) -> FsError {
+    let message = error.to_string();
+    FsError::with_source(
+        FsErrorKind::ProviderUnavailable,
+        FsOperation::Provider,
+        &message,
+        error,
+    )
+}
+
+/// Maps an SPI provider-creation error into the filesystem error model.
+///
+/// # Arguments
+///
+/// * `error` - Direct or aggregate provider creation failure.
+///
+/// # Returns
+///
+/// A filesystem provider error classified from the retained SPI diagnostics.
+#[inline]
+fn map_provider_creation_error(error: ProviderCreationError) -> FsError {
     let kind = if error.is_absence() {
         FsErrorKind::ProviderUnavailable
     } else {
