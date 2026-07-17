@@ -1,3 +1,11 @@
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
+
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::io::{
@@ -47,8 +55,15 @@ use qubit_fs::{
     WriteOptions,
     WriteOutcome,
 };
-use qubit_spi::ServiceProvider;
-use qubit_spi::error::ProviderError;
+use qubit_spi::error::{
+    ProviderCreationError,
+    ProviderError,
+};
+use qubit_spi::{
+    ProviderDefinition,
+    ProviderDescriptor,
+    ServiceProvider,
+};
 
 #[derive(Debug, Default)]
 pub(crate) struct MockState {
@@ -578,6 +593,7 @@ impl FileSystem for NativeTempFs {
 
 #[derive(Debug)]
 pub(crate) struct MockProvider {
+    pub(crate) descriptor: ProviderDescriptor,
     pub(crate) fs: MockFs,
 }
 
@@ -585,13 +601,20 @@ impl ServiceProvider<FileSystemSpec> for MockProvider {
     fn create(
         &self,
         _config: &FileSystemConfig,
-    ) -> Result<Arc<dyn FileSystem>, ProviderError> {
+    ) -> Result<Arc<dyn FileSystem>, ProviderCreationError> {
         Ok(Arc::new(self.fs.clone()))
+    }
+}
+
+impl ProviderDefinition<FileSystemSpec> for MockProvider {
+    fn descriptor(&self) -> ProviderDescriptor {
+        self.descriptor.clone()
     }
 }
 
 #[derive(Debug)]
 pub(crate) struct FailingCreateProvider {
+    pub(crate) descriptor: ProviderDescriptor,
     pub(crate) error: ProviderError,
 }
 
@@ -599,7 +622,13 @@ impl ServiceProvider<FileSystemSpec> for FailingCreateProvider {
     fn create(
         &self,
         _config: &FileSystemConfig,
-    ) -> Result<Arc<dyn FileSystem>, ProviderError> {
-        Err(self.error.clone())
+    ) -> Result<Arc<dyn FileSystem>, ProviderCreationError> {
+        Err(self.error.clone().into())
+    }
+}
+
+impl ProviderDefinition<FileSystemSpec> for FailingCreateProvider {
+    fn descriptor(&self) -> ProviderDescriptor {
+        self.descriptor.clone()
     }
 }

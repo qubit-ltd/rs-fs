@@ -1,3 +1,11 @@
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
+
 use std::io::{
     Read,
     Write,
@@ -26,7 +34,10 @@ use crate::common::{
 #[test]
 fn test_file_resource_delegates_operations_to_resolved_file_system() {
     let fs = MockFs::default();
-    let registry = registry_with_mock(MockProvider { fs });
+    let registry = registry_with_mock(MockProvider {
+        descriptor: mock_descriptor(),
+        fs,
+    });
     let resource_uri =
         FsUri::parse("mock:///file.txt").expect("URI should parse");
     let resource = registry
@@ -91,7 +102,10 @@ fn test_file_resource_delegates_operations_to_resolved_file_system() {
 #[test]
 fn test_file_resource_delegates_directory_create_and_delete() {
     let fs = MockFs::default();
-    let registry = registry_with_mock(MockProvider { fs });
+    let registry = registry_with_mock(MockProvider {
+        descriptor: mock_descriptor(),
+        fs,
+    });
     let dir_uri = FsUri::parse("mock:///dir").expect("URI should parse");
     let dir = registry
         .resource(&dir_uri)
@@ -107,14 +121,15 @@ fn test_file_resource_delegates_directory_create_and_delete() {
 fn registry_with_mock(provider: MockProvider) -> FileSystemRegistry {
     let mut builder = FileSystemRegistry::builder();
     builder
-        .register(
-            qubit_spi::ProviderDescriptor::new(
-                qubit_spi::ProviderId::new("mock").expect("valid provider ID"),
-            )
-            .with_aliases(["mem"])
-            .expect("valid aliases"),
-            provider,
-        )
+        .register(provider)
         .expect("provider should register");
     builder.build()
+}
+
+fn mock_descriptor() -> qubit_spi::ProviderDescriptor {
+    qubit_spi::ProviderDescriptor::new(
+        qubit_spi::ProviderId::new("mock").expect("valid provider ID"),
+    )
+    .with_aliases(["mem"])
+    .expect("valid aliases")
 }
