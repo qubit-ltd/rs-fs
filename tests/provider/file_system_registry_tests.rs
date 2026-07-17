@@ -29,7 +29,6 @@ use qubit_spi::{
     FallbackPolicy,
     ProviderDescriptor,
     ProviderId,
-    ProviderRegistry,
     ProviderSelection,
     ServiceProvider,
 };
@@ -165,25 +164,24 @@ fn test_empty_registry_returns_errors_for_fs_and_resource() {
 
 #[test]
 fn test_registry_resolves_explicit_selection_with_its_fallback_policy() {
-    let providers = ProviderRegistry::<FileSystemSpec>::default();
-    providers
+    let registry = FileSystemRegistry::default();
+    registry
         .register(FailingCreateProvider {
             descriptor: failing_descriptor("offline"),
             error: ProviderError::unavailable("offline"),
         })
         .expect("first provider should register");
-    providers
+    registry
         .register(MockProvider {
             descriptor: mock_descriptor(),
             fs: MockFs::default(),
         })
         .expect("fallback provider should register");
-    let registry = FileSystemRegistry::new(providers);
     let selection = ProviderSelection::chain(["offline", "mock"])
         .expect("selection should be valid")
         .with_fallback_policy(FallbackPolicy::OnAbsence);
     let provider = registry
-        .resolve(&selection)
+        .resolve_selected(&selection)
         .expect("selection should resolve both providers");
     let config = FileSystemConfig::new(
         FsUri::parse("mock:///file.txt").expect("URI should parse"),
@@ -191,7 +189,7 @@ fn test_registry_resolves_explicit_selection_with_its_fallback_policy() {
 
     assert!(
         provider
-            .create(&config)
+            .create_configured(&config)
             .expect("absence fallback should reach the mock provider")
             .capabilities()
             .directories
@@ -208,7 +206,7 @@ fn test_registry_resolves_configured_default_provider() {
         ProviderSelection::named("mem").expect("selection should be valid"),
     );
     let provider = registry
-        .resolve_default()
+        .resolve()
         .expect("configured default should resolve");
     let config = FileSystemConfig::new(
         FsUri::parse("mem:///file.txt").expect("URI should parse"),
@@ -216,7 +214,7 @@ fn test_registry_resolves_configured_default_provider() {
 
     assert!(
         provider
-            .create(&config)
+            .create_configured(&config)
             .expect("default provider should create a filesystem")
             .capabilities()
             .directories
@@ -227,11 +225,11 @@ fn registry_with<P>(provider: P) -> FileSystemRegistry
 where
     P: qubit_spi::ProviderDefinition<FileSystemSpec>,
 {
-    let providers = ProviderRegistry::<FileSystemSpec>::default();
-    providers
+    let registry = FileSystemRegistry::default();
+    registry
         .register(provider)
         .expect("provider should register");
-    FileSystemRegistry::new(providers)
+    registry
 }
 
 fn mock_descriptor() -> ProviderDescriptor {

@@ -18,7 +18,7 @@ FTP、OSS、HDFS 以及后续扩展的存储后端。
 - 第三方 provider 实现 `ProviderDefinition<FileSystemSpec>`，由 provider
   自身同时提供创建行为和 descriptor。
 - `FileSystemRegistry` 可在运行时注册；它的 clone 共享注册结果和默认选择更新。
-- 下游代码可调用 `resolve(&ProviderSelection)` 或 `resolve_default()` 获得
+- 下游代码可调用 `resolve(&ProviderSelection)` 或 `resolve()` 获得
   `ResolvingServiceProvider<FileSystemSpec>`，再独立提供 `FileSystemConfig`
   创建文件系统。
 - `fs(&FsUri)` 是领域便捷接口：它按 URI scheme 选择 provider、创建文件系统，

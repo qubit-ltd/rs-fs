@@ -1190,7 +1190,7 @@ use qubit_spi::{
 pub struct MemoryFileSystemProvider;
 
 impl ServiceProvider<FileSystemSpec> for MemoryFileSystemProvider {
-    fn create(
+    fn create_configured(
         &self,
         _config: &FileSystemConfig,
     ) -> Result<Arc<dyn FileSystem>, ProviderCreationError> {
@@ -1467,8 +1467,8 @@ These are expected to be implemented in separate crates or future extension laye
 For application developers:
 
 1. Add `qubit-fs` and one or more provider crates.
-2. Create a `FileSystemRegistryBuilder` with `FileSystemRegistry::builder()`.
-3. Register provider crates explicitly, then call `build()` once.
+2. Create a `FileSystemRegistry` with `FileSystemRegistry::default()`.
+3. Register provider crates explicitly on that registry.
 4. Parse URI strings as `FsUri` values and resolve them with `FileSystemRegistry::resource()`.
 5. Use `FileResource` for resource-oriented operations or `FileSystem` with `FsPath` for lower-level code.
 6. Check capabilities before relying on advanced behavior.

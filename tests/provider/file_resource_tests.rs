@@ -119,11 +119,11 @@ fn test_file_resource_delegates_directory_create_and_delete() {
 }
 
 fn registry_with_mock(provider: MockProvider) -> FileSystemRegistry {
-    let mut builder = FileSystemRegistry::builder();
-    builder
+    let registry = FileSystemRegistry::default();
+    registry
         .register(provider)
         .expect("provider should register");
-    builder.build()
+    registry
 }
 
 fn mock_descriptor() -> qubit_spi::ProviderDescriptor {

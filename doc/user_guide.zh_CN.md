@@ -1197,7 +1197,7 @@ use qubit_spi::{
 pub struct MemoryFileSystemProvider;
 
 impl ServiceProvider<FileSystemSpec> for MemoryFileSystemProvider {
-    fn create(
+    fn create_configured(
         &self,
         _config: &FileSystemConfig,
     ) -> Result<Arc<dyn FileSystem>, ProviderCreationError> {
@@ -1473,8 +1473,8 @@ provider 测试至少应覆盖：
 应用开发者建议按以下步骤接入：
 
 1. 引入 `qubit-fs` 和一个或多个 provider crate。
-2. 通过 `FileSystemRegistry::builder()` 创建 `FileSystemRegistryBuilder`。
-3. 显式注册 provider，然后调用一次 `build()`。
+2. 通过 `FileSystemRegistry::default()` 创建 `FileSystemRegistry`。
+3. 直接在该 registry 上显式注册 provider。
 4. 把 URI 字符串解析成 `FsUri`，再用 `FileSystemRegistry::resource()` 解析资源。
 5. 优先使用 `FileResource` 执行资源导向操作；底层实现仍然使用 `FileSystem` + `FsPath`。
 6. 依赖高级行为前检查 capabilities。

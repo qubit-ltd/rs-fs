@@ -598,7 +598,7 @@ pub(crate) struct MockProvider {
 }
 
 impl ServiceProvider<FileSystemSpec> for MockProvider {
-    fn create(
+    fn create_configured(
         &self,
         _config: &FileSystemConfig,
     ) -> Result<Arc<dyn FileSystem>, ProviderCreationError> {
@@ -619,7 +619,7 @@ pub(crate) struct FailingCreateProvider {
 }
 
 impl ServiceProvider<FileSystemSpec> for FailingCreateProvider {
-    fn create(
+    fn create_configured(
         &self,
         _config: &FileSystemConfig,
     ) -> Result<Arc<dyn FileSystem>, ProviderCreationError> {

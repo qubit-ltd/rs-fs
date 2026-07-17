@@ -72,7 +72,6 @@ pub use provider::{
     FileSystemConfig,
     FileSystemProvider,
     FileSystemRegistry,
-    FileSystemRegistryBuilder,
     FileSystemSpec,
 };
 pub use temp::{

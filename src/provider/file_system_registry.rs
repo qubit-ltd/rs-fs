@@ -27,7 +27,6 @@ use crate::{
     FileSystem,
     FileSystemConfig,
     FileSystemProvider,
-    FileSystemRegistryBuilder,
     FileSystemSpec,
     FsError,
     FsErrorKind,
@@ -45,33 +44,6 @@ pub struct FileSystemRegistry {
 }
 
 impl FileSystemRegistry {
-    /// Creates a filesystem registry from a shared SPI registry.
-    ///
-    /// # Arguments
-    ///
-    /// * `providers` - Runtime provider registry to expose through this facade.
-    ///
-    /// # Returns
-    ///
-    /// A filesystem registry sharing registrations and default selection with
-    /// `providers`.
-    #[inline(always)]
-    #[must_use]
-    pub fn new(providers: ProviderRegistry<FileSystemSpec>) -> Self {
-        Self { providers }
-    }
-
-    /// Creates a builder for fluent filesystem-provider assembly.
-    ///
-    /// # Returns
-    ///
-    /// An empty builder whose result remains runtime mutable.
-    #[inline(always)]
-    #[must_use]
-    pub fn builder() -> FileSystemRegistryBuilder {
-        FileSystemRegistryBuilder::new()
-    }
-
     /// Registers an owned self-described filesystem provider at runtime.
     ///
     /// # Arguments
@@ -147,12 +119,12 @@ impl FileSystemRegistry {
     ///
     /// Returns [`FsError`] when the selection matches no registered provider.
     #[inline(always)]
-    pub fn resolve(
+    pub fn resolve_selected(
         &self,
         selection: &ProviderSelection,
     ) -> FsResult<ResolvingServiceProvider<FileSystemSpec>> {
         self.providers
-            .resolve(selection)
+            .resolve_selected(selection)
             .map_err(map_provider_selection_error)
     }
 
@@ -169,11 +141,11 @@ impl FileSystemRegistry {
     /// Returns [`FsError`] when the default selection matches no registered
     /// provider.
     #[inline(always)]
-    pub fn resolve_default(
+    pub fn resolve(
         &self,
     ) -> FsResult<ResolvingServiceProvider<FileSystemSpec>> {
         self.providers
-            .resolve_default()
+            .resolve()
             .map_err(map_provider_selection_error)
     }
 
@@ -194,8 +166,8 @@ impl FileSystemRegistry {
         let config = FileSystemConfig::new(uri.clone());
         let selection = ProviderSelection::named(uri.scheme.as_str())
             .map_err(map_provider_selection_error)?;
-        self.resolve(&selection)?
-            .create(&config)
+        self.resolve_selected(&selection)?
+            .create_configured(&config)
             .map_err(map_provider_creation_error)
     }
 
@@ -245,7 +217,9 @@ impl Clone for FileSystemRegistry {
     /// selection.
     #[inline(always)]
     fn clone(&self) -> Self {
-        Self::new(self.providers.clone())
+        Self {
+            providers: self.providers.clone(),
+        }
     }
 }
 
@@ -257,7 +231,9 @@ impl Default for FileSystemRegistry {
     /// A registry with automatic selection as its default.
     #[inline(always)]
     fn default() -> Self {
-        Self::new(ProviderRegistry::default())
+        Self {
+            providers: ProviderRegistry::default(),
+        }
     }
 }
 
@@ -271,7 +247,7 @@ impl Default for FileSystemRegistry {
 ///
 /// A filesystem provider error preserving the original source.
 #[inline]
-pub(super) fn map_registration_error(error: RegistrationError) -> FsError {
+fn map_registration_error(error: RegistrationError) -> FsError {
     let message = error.to_string();
     FsError::with_source(
         FsErrorKind::Conflict,

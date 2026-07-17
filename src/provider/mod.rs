@@ -12,7 +12,6 @@ mod file_resource;
 mod file_system_config;
 mod file_system_provider;
 mod file_system_registry;
-mod file_system_registry_builder;
 mod file_system_spec;
 
 pub use credential_ref::CredentialRef;
@@ -20,5 +19,4 @@ pub use file_resource::FileResource;
 pub use file_system_config::FileSystemConfig;
 pub use file_system_provider::FileSystemProvider;
 pub use file_system_registry::FileSystemRegistry;
-pub use file_system_registry_builder::FileSystemRegistryBuilder;
 pub use file_system_spec::FileSystemSpec;

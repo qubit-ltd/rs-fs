@@ -19,7 +19,7 @@ closed `FsKind` enum; concrete backends are registered through `qubit-spi`.
   provider carries both creation behavior and its own descriptor.
 - `FileSystemRegistry` is runtime mutable. Its clones share registrations and
   default-selection updates.
-- Downstream code can call `resolve(&ProviderSelection)` or `resolve_default()`
+- Downstream code can call `resolve(&ProviderSelection)` or `resolve()`
   to obtain a `ResolvingServiceProvider<FileSystemSpec>`, then create a
   filesystem with an independent `FileSystemConfig`.
 - `fs(&FsUri)` is the domain convenience API: it selects by URI scheme, creates

@@ -426,7 +426,7 @@ use qubit_spi::error::ProviderCreationError;
 pub struct LocalFileSystemProvider;
 
 impl ServiceProvider<FileSystemSpec> for LocalFileSystemProvider {
-    fn create(
+    fn create_configured(
         &self,
         config: &FileSystemConfig,
     ) -> Result<Arc<dyn FileSystem>, ProviderCreationError> {
@@ -467,7 +467,7 @@ let resource = registry.resource(&uri)?;
 
 如果后续确实需要“依赖了后端 crate 就自动注册”，建议在 `qubit-fs` 或单独 `qubit-fs-inventory` feature 中叠加 `inventory` / `linkme`，不要把自动发现作为核心唯一机制。
 
-## 11. Registry builder、Registry 与 FileResource
+## 11. Registry 与 FileResource
 
 `FileSystemRegistry` 是 `ProviderRegistry<FileSystemSpec>` 的领域门面：
 
@@ -484,11 +484,11 @@ pub struct FileSystemRegistry {
 - 按 `ProviderSelection` 解析出 `ResolvingServiceProvider<FileSystemSpec>`。
 - 通过 scheme 解析 provider。
 - 根据 `FsUri` 构造 `FileSystemConfig`。
-- 调用 `ServiceProvider::create` 获得 `Arc<dyn FileSystem>`。
+- 调用 `ServiceProvider::create_configured` 获得 `Arc<dyn FileSystem>`。
 - 通过 `resource(&FsUri)` 返回绑定文件系统和 provider-local path 的 `FileResource`。
 - 分别将 provider 选择错误与 provider 创建错误映射成 `FsError`，并保留原始 source。
 
-`FileSystemRegistryBuilder` 只是可选的流式组装接口；构建出的 registry 仍可在运行时注册：
+Registry 从创建起就支持运行时注册，因此直接使用 `FileSystemRegistry::default()` 组装：
 
 ```rust
 let registry = FileSystemRegistry::default();
