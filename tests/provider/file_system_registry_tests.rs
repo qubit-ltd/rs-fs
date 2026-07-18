@@ -8,17 +8,26 @@
 
 use std::{
     error::Error as _,
-    sync::Arc,
+    sync::{
+        Arc,
+        Mutex,
+    },
 };
 
 use qubit_fs::{
+    CredentialRef,
+    FileSystem,
+    FileSystemCapability,
     FileSystemConfig,
     FileSystemProvider,
     FileSystemRegistry,
+    FileSystemResolution,
     FileSystemSpec,
     FsErrorKind,
+    FsPath,
     FsUri,
 };
+use qubit_metadata::Metadata;
 use qubit_spi::error::{
     ProviderCreationError,
     ProviderError,
@@ -30,6 +39,7 @@ use qubit_spi::{
     ProviderDescriptor,
     ProviderId,
     ProviderSelection,
+    ServiceProvider,
 };
 
 use crate::common::{
@@ -54,9 +64,13 @@ fn test_registry_registers_provider_at_runtime_and_shares_updates_with_clones()
     assert_eq!(vec!["mock"], registry.provider_ids());
     let uri = FsUri::parse("mem:///file.txt").expect("URI should parse");
     let opened = consumer_registry
-        .fs(&uri)
+        .file_system_uri(&uri)
         .expect("shared registry clone should resolve the new alias");
-    assert!(opened.capabilities().directories);
+    assert!(
+        opened
+            .capabilities()
+            .contains(FileSystemCapability::CreateDirectory)
+    );
 }
 
 #[test]
@@ -106,9 +120,10 @@ fn test_registry_returns_error_for_missing_provider() {
 
     let missing_uri =
         FsUri::parse("missing:///file.txt").expect("URI should parse");
-    let error = registry
-        .fs(&missing_uri)
-        .expect_err("missing provider should fail selection");
+    let error = match registry.file_system_uri(&missing_uri) {
+        Ok(_) => panic!("missing provider should fail selection"),
+        Err(error) => error,
+    };
 
     assert_eq!(FsErrorKind::ProviderUnavailable, error.kind());
     assert!(
@@ -126,9 +141,12 @@ fn test_registry_maps_provider_create_errors() {
         descriptor: failing_descriptor("offline"),
         error: ProviderError::unavailable("offline"),
     });
-    let unavailable_error = unavailable_registry
-        .fs(&FsUri::parse("offline:///file.txt").expect("URI should parse"))
-        .expect_err("unavailable provider should fail");
+    let unavailable_error = match unavailable_registry.file_system_uri(
+        &FsUri::parse("offline:///file.txt").expect("URI should parse"),
+    ) {
+        Ok(_) => panic!("unavailable provider should fail"),
+        Err(error) => error,
+    };
     assert_eq!(FsErrorKind::ProviderUnavailable, unavailable_error.kind());
     assert!(
         unavailable_error
@@ -142,13 +160,13 @@ fn test_registry_maps_provider_create_errors() {
         descriptor: failing_descriptor("broken"),
         error: ProviderError::initialization_failed("broken"),
     });
-    assert_eq!(
-        FsErrorKind::Other,
-        broken_registry
-            .fs(&FsUri::parse("broken:///file.txt").expect("URI should parse"))
-            .expect_err("broken provider should fail")
-            .kind(),
-    );
+    let broken_error = match broken_registry.file_system_uri(
+        &FsUri::parse("broken:///file.txt").expect("URI should parse"),
+    ) {
+        Ok(_) => panic!("broken provider should fail"),
+        Err(error) => error,
+    };
+    assert_eq!(FsErrorKind::Other, broken_error.kind());
 }
 
 #[test]
@@ -157,8 +175,20 @@ fn test_empty_registry_returns_errors_for_fs_and_resource() {
     let missing_uri =
         FsUri::parse("missing:///file.txt").expect("URI should parse");
 
-    assert!(registry.resource(&missing_uri).is_err());
-    assert!(registry.fs(&missing_uri).is_err());
+    assert!(registry.resource_uri(&missing_uri).is_err());
+    assert!(registry.file_system_uri(&missing_uri).is_err());
+}
+
+#[test]
+fn registry_maps_a_uri_scheme_that_is_not_a_provider_selector() {
+    let registry = FileSystemRegistry::default();
+    let uri = FsUri::parse("mock-:///file.txt").expect("URI should parse");
+    let config = FileSystemConfig::new(uri);
+
+    let error = registry
+        .resolve_config(&config)
+        .expect_err("scheme should fail provider-selector validation");
+    assert_eq!(FsErrorKind::ProviderUnavailable, error.kind());
 }
 
 #[test]
@@ -190,8 +220,9 @@ fn test_registry_resolves_explicit_selection_with_its_fallback_policy() {
         provider
             .create_configured(&config)
             .expect("absence fallback should reach the mock provider")
+            .file_system()
             .capabilities()
-            .directories
+            .contains(FileSystemCapability::CreateDirectory)
     );
 }
 
@@ -215,9 +246,73 @@ fn test_registry_resolves_configured_default_provider() {
         provider
             .create_configured(&config)
             .expect("default provider should create a filesystem")
+            .file_system()
             .capabilities()
-            .directories
+            .contains(FileSystemCapability::CreateDirectory)
     );
+}
+
+#[test]
+fn registry_passes_the_complete_config_and_uses_provider_decoded_path() {
+    let captured = Arc::new(Mutex::new(None));
+    let registry = FileSystemRegistry::default();
+    registry
+        .register(CapturingProvider {
+            descriptor: ProviderDescriptor::new(
+                ProviderId::new("capture").expect("provider id should parse"),
+            ),
+            captured: captured.clone(),
+        })
+        .expect("provider should register");
+    let config = FileSystemConfig::new(
+        FsUri::parse("unrelated:///raw%2Fkey").expect("URI should parse"),
+    )
+    .with_selection(
+        ProviderSelection::named("capture").expect("selection should parse"),
+    )
+    .with_options(Metadata::new().with("region", "test-1".to_owned()))
+    .expect("options should be valid")
+    .with_credentials(CredentialRef::Profile("integration".to_owned()));
+
+    let resource = registry
+        .resource(&config)
+        .expect("complete config should resolve");
+
+    assert_eq!("provider-decoded/%2F", resource.path().as_str());
+    assert_eq!(
+        Some(config),
+        captured.lock().expect("lock should succeed").clone()
+    );
+}
+
+#[derive(Debug)]
+struct CapturingProvider {
+    descriptor: ProviderDescriptor,
+    captured: Arc<Mutex<Option<FileSystemConfig>>>,
+}
+
+impl ServiceProvider<FileSystemSpec> for CapturingProvider {
+    fn create_configured(
+        &self,
+        config: &FileSystemConfig,
+    ) -> Result<FileSystemResolution<dyn FileSystem>, ProviderCreationError>
+    {
+        *self.captured.lock().expect("lock should succeed") =
+            Some(config.clone());
+        let fs: Arc<dyn FileSystem> = Arc::new(MockFs::default());
+        Ok(FileSystemResolution::new(
+            fs,
+            FsPath::parse_literal("provider-decoded/%2F")
+                .expect("provider path should parse"),
+            config.uri().clone(),
+        ))
+    }
+}
+
+impl qubit_spi::ProviderDefinition<FileSystemSpec> for CapturingProvider {
+    fn descriptor(&self) -> ProviderDescriptor {
+        self.descriptor.clone()
+    }
 }
 
 fn registry_with<P>(provider: P) -> FileSystemRegistry

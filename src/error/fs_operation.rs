@@ -15,15 +15,23 @@ pub enum FsOperation {
     /// URI parsing or normalization.
     ParseUri,
     /// Metadata lookup.
-    Metadata,
+    Stat,
     /// Existence check.
     Exists,
     /// Directory listing.
     List,
     /// Reader creation.
     OpenReader,
+    /// Byte transfer from an already-open reader.
+    Read,
     /// Writer creation.
     OpenWriter,
+    /// Byte transfer to an already-open writer.
+    Write,
+    /// Writer publication.
+    CommitWriter,
+    /// Writer cancellation and cleanup.
+    AbortWriter,
     /// Directory creation.
     CreateDir,
     /// File or directory deletion.
@@ -36,6 +44,8 @@ pub enum FsOperation {
     CreateTemp,
     /// Temporary resource cleanup.
     CleanupTemp,
+    /// Temporary-resource ownership transfer to the caller.
+    KeepTemp,
     /// Temporary resource persistence.
     PersistTemp,
     /// Provider registration or service creation.

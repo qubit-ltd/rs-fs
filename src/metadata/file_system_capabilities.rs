@@ -5,43 +5,61 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Filesystem capability declaration.
+//! Filesystem capability guarantees.
 
-/// Static capability hints exposed by one filesystem implementation.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+use crate::{
+    FileSystemCapability,
+    FileSystemLimits,
+};
+
+/// Stable typed capability guarantees for one configured filesystem.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct FileSystemCapabilities {
-    /// Whether the backend has hierarchical path semantics.
-    pub hierarchical_paths: bool,
-    /// Whether the backend supports directories.
-    pub directories: bool,
-    /// Whether the backend can represent empty directories.
-    pub empty_directories: bool,
-    /// Whether the backend supports symbolic links.
-    pub symlinks: bool,
-    /// Whether range reads are supported.
-    pub range_read: bool,
-    /// Whether append writes are supported.
-    pub append: bool,
-    /// Whether random writes are supported.
-    pub random_write: bool,
-    /// Whether rename can be atomic.
-    pub atomic_rename: bool,
-    /// Whether replacement writes can be atomic.
-    pub atomic_replace: bool,
-    /// Whether conditional write operations are supported.
-    pub conditional_write: bool,
-    /// Whether server-side copy is supported.
-    pub server_side_copy: bool,
-    /// Whether recursive delete is supported.
-    pub recursive_delete: bool,
-    /// Whether temporary files are supported.
-    pub temp_file: bool,
-    /// Whether temporary directories are supported.
-    pub temp_dir: bool,
-    /// Whether temporary resource persistence is supported.
-    pub temp_persist: bool,
-    /// Whether temporary resource persistence can be atomic.
-    pub temp_persist_atomic: bool,
-    /// Whether provider-native metadata is exposed.
-    pub native_metadata: bool,
+    flags: u128,
+    limits: FileSystemLimits,
+}
+
+impl FileSystemCapabilities {
+    /// Creates an empty capability set with configured limits.
+    #[inline]
+    #[must_use]
+    pub const fn new(limits: FileSystemLimits) -> Self {
+        Self { flags: 0, limits }
+    }
+
+    /// Returns a copy with one additional guaranteed capability.
+    #[inline]
+    #[must_use]
+    pub const fn with(mut self, capability: FileSystemCapability) -> Self {
+        self.flags |= capability.bit();
+        self
+    }
+
+    /// Inserts one guaranteed capability.
+    #[inline]
+    pub fn insert(&mut self, capability: FileSystemCapability) {
+        self.flags |= capability.bit();
+    }
+
+    /// Returns whether the filesystem guarantees `capability`.
+    #[inline]
+    #[must_use]
+    pub const fn contains(&self, capability: FileSystemCapability) -> bool {
+        self.flags & capability.bit() != 0
+    }
+
+    /// Returns the configured filesystem limits.
+    #[inline]
+    #[must_use]
+    pub const fn limits(&self) -> &FileSystemLimits {
+        &self.limits
+    }
+}
+
+impl Default for FileSystemCapabilities {
+    /// Creates an empty capability set with unknown limits.
+    #[inline]
+    fn default() -> Self {
+        Self::new(FileSystemLimits::default())
+    }
 }

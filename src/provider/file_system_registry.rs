@@ -23,10 +23,12 @@ use qubit_spi::{
 };
 
 use crate::{
+    FileLocation,
     FileResource,
     FileSystem,
     FileSystemConfig,
     FileSystemProvider,
+    FileSystemResolution,
     FileSystemSpec,
     FsError,
     FsErrorKind,
@@ -149,33 +151,49 @@ impl FileSystemRegistry {
             .map_err(map_provider_resolution_error)
     }
 
-    /// Resolves a parsed URI into a filesystem instance.
+    /// Resolves a complete configuration into a provider-decoded result.
     ///
     /// # Arguments
     ///
-    /// * `uri` - Parsed filesystem URI.
+    /// * `config` - URI, optional selection, options, and credential reference.
     ///
     /// # Returns
     ///
-    /// Shared filesystem instance created by the selected provider.
+    /// Filesystem plus provider-decoded path and safe canonical URI.
     ///
     /// # Errors
     ///
     /// Returns [`FsError`] when provider resolution or creation fails.
-    pub fn fs(&self, uri: &FsUri) -> FsResult<Arc<dyn FileSystem>> {
-        let config = FileSystemConfig::new(uri.clone());
-        let selection = ProviderSelection::named(uri.scheme.as_str())
-            .map_err(map_provider_selection_build_error)?;
+    pub fn resolve_config(
+        &self,
+        config: &FileSystemConfig,
+    ) -> FsResult<FileSystemResolution<dyn FileSystem>> {
+        let selection = match config.selection() {
+            Some(selection) => selection.clone(),
+            None => ProviderSelection::named(config.uri().scheme().as_str())
+                .map_err(map_provider_selection_build_error)?,
+        };
         self.resolve_selected(&selection)?
-            .create_configured(&config)
+            .create_configured(config)
             .map_err(map_provider_creation_error)
     }
 
-    /// Resolves a parsed URI into a bound file resource.
+    /// Creates a filesystem from the complete configuration.
+    ///
+    /// # Errors
+    /// Returns a provider resolution or creation error.
+    pub fn file_system(
+        &self,
+        config: &FileSystemConfig,
+    ) -> FsResult<Arc<dyn FileSystem>> {
+        Ok(self.resolve_config(config)?.file_system().clone())
+    }
+
+    /// Resolves a complete configuration into a bound file resource.
     ///
     /// # Arguments
     ///
-    /// * `uri` - Parsed filesystem URI.
+    /// * `config` - URI, selection, options, and credential reference.
     ///
     /// # Returns
     ///
@@ -186,10 +204,36 @@ impl FileSystemRegistry {
     ///
     /// Returns [`FsError`] when provider resolution or creation fails.
     #[inline]
-    pub fn resource(&self, uri: &FsUri) -> FsResult<FileResource> {
-        let path = uri.path.clone();
-        let fs = self.fs(uri)?;
-        Ok(FileResource::new(fs, path))
+    pub fn resource(
+        &self,
+        config: &FileSystemConfig,
+    ) -> FsResult<FileResource> {
+        let resolution = self.resolve_config(config)?;
+        let (fs, path, canonical_uri) = resolution.into_parts();
+        let location = FileLocation::new(fs.info().id().clone(), path)
+            .with_uri(canonical_uri);
+        Ok(FileResource::from_location(fs, location))
+    }
+
+    /// Creates a filesystem using empty options and no credential reference.
+    ///
+    /// # Errors
+    /// Returns a provider resolution or creation error.
+    #[inline]
+    pub fn file_system_uri(
+        &self,
+        uri: &FsUri,
+    ) -> FsResult<Arc<dyn FileSystem>> {
+        self.file_system(&FileSystemConfig::new(uri.clone()))
+    }
+
+    /// Resolves a URI-only convenience configuration into a resource.
+    ///
+    /// # Errors
+    /// Returns a provider resolution, creation, or path-decoding error.
+    #[inline]
+    pub fn resource_uri(&self, uri: &FsUri) -> FsResult<FileResource> {
+        self.resource(&FileSystemConfig::new(uri.clone()))
     }
 
     /// Returns registered provider IDs in registration order.
@@ -257,20 +301,17 @@ fn map_registration_error(error: RegistrationError) -> FsError {
     )
 }
 
-/// Maps an SPI selection-construction error into a filesystem provider error.
+/// Maps an SPI selection error into a filesystem provider error.
 ///
-/// # Parameters
+/// # Arguments
 ///
 /// * `error` - Failure produced before any provider creates a service.
 ///
 /// # Returns
 ///
-/// A provider-unavailable filesystem error preserving the construction
-/// failure.
+/// A provider-unavailable filesystem error preserving the selection failure.
 #[inline]
-fn map_provider_selection_build_error(
-    error: ProviderSelectionBuildError,
-) -> FsError {
+fn map_provider_resolution_error(error: ProviderResolutionError) -> FsError {
     let message = error.to_string();
     FsError::with_source(
         FsErrorKind::ProviderUnavailable,
@@ -280,17 +321,19 @@ fn map_provider_selection_build_error(
     )
 }
 
-/// Maps an SPI provider-resolution error into a filesystem provider error.
+/// Maps invalid provider-selection input into the filesystem error model.
 ///
-/// # Parameters
+/// # Arguments
 ///
-/// * `error` - Failure produced before any provider creates a service.
+/// * `error` - Failure produced while validating a provider selector.
 ///
 /// # Returns
 ///
-/// A provider-unavailable filesystem error preserving the resolution failure.
+/// A provider-unavailable filesystem error preserving the validation failure.
 #[inline]
-fn map_provider_resolution_error(error: ProviderResolutionError) -> FsError {
+fn map_provider_selection_build_error(
+    error: ProviderSelectionBuildError,
+) -> FsError {
     let message = error.to_string();
     FsError::with_source(
         FsErrorKind::ProviderUnavailable,

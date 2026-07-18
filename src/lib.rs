@@ -7,11 +7,13 @@
 // =============================================================================
 //! # Qubit FS
 //!
-//! Pluggable filesystem abstraction for Rust.
+//! Provider-neutral synchronous and asynchronous filesystem abstraction.
 //!
-//! This crate defines provider-neutral filesystem contracts, path and URI
-//! models, metadata, operation options, copy outcomes, temporary resource
-//! handles, and SPI-backed provider registry types.
+//! This crate defines filesystem properties and operation traits, explicit
+//! file handles over [`qubit_io`] streams, distinct URI and provider-local path
+//! models, typed capabilities and outcomes, recoverable writer and temporary
+//! resource lifecycles, and synchronous/asynchronous provider registries. It
+//! contains no concrete storage backend and binds to no asynchronous runtime.
 
 #![deny(missing_docs)]
 
@@ -30,13 +32,22 @@ pub use error::{
     FsResult,
 };
 pub use metadata::{
+    AchievedAtomicity,
     Checksum,
     ChecksumAlgorithm,
     DirEntry,
     FileKind,
+    FileLocation,
     FileMetadata,
     FileSystemCapabilities,
-    FileSystemMetadata,
+    FileSystemCapability,
+    FileSystemId,
+    FileSystemInfo,
+    FileSystemLimits,
+    NonSensitiveMetadata,
+    OpenedFileInfo,
+    PublicationMethod,
+    ResourceVersion,
     WriteOutcome,
 };
 pub use options::{
@@ -56,41 +67,68 @@ pub use options::{
     ProgressPolicy,
     ReadOptions,
     RenameOptions,
+    RenameOutcome,
     ServerSidePreference,
-    WriteMode,
+    WriteDisposition,
     WriteOptions,
+    WritePrecondition,
 };
 pub use path::{
     FsAuthority,
+    FsName,
     FsPath,
+    FsScheme,
     FsUri,
+    FsUriPath,
+    FsUriQuery,
     PathSemantics,
+    RelativeFsPath,
 };
 pub use provider::{
+    AsyncFileResource,
+    AsyncFileSystemProvider,
+    AsyncFileSystemRegistry,
     CredentialRef,
     FileResource,
     FileSystemConfig,
     FileSystemProvider,
     FileSystemRegistry,
+    FileSystemResolution,
     FileSystemSpec,
 };
 pub use temp::{
-    ManagedTempDir,
-    ManagedTempFile,
-    ManagedTempResourceFactory,
+    AsyncTempDir,
+    AsyncTempFile,
+    AsyncTempResourceSession,
+    PersistFailure,
+    PersistFailureState,
+    PersistFuture,
+    PersistOutcome,
     TempDir,
     TempDirOptions,
     TempFile,
     TempFileOptions,
-    TempResource,
-    TempResourceFactory,
-    TempResources,
+    TempResourceSession,
+    TempResourceState,
 };
 pub use traits::{
+    AsyncDirectoryStream,
+    AsyncDirectoryStreamExt,
+    AsyncDirectoryStreamSession,
+    AsyncFileReader,
+    AsyncFileSystem,
+    AsyncFileSystemExt,
+    AsyncFileWriteSession,
+    AsyncFileWriter,
     DirectoryStream,
     DirectoryStreamExt,
+    DirectoryStreamSession,
     FileReader,
     FileSystem,
     FileSystemExt,
+    FileSystemProperties,
+    FileWriteSession,
     FileWriter,
+    FsFuture,
+    WriterState,
 };

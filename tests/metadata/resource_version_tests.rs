@@ -1,0 +1,17 @@
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
+
+use qubit_fs::ResourceVersion;
+
+#[test]
+fn resource_version_preserves_and_displays_opaque_text() {
+    let version = ResourceVersion::new(String::from("etag-42"));
+
+    assert_eq!("etag-42", version.as_str());
+    assert_eq!("etag-42", version.to_string());
+}

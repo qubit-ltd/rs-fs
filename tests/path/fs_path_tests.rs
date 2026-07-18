@@ -1,4 +1,14 @@
-use qubit_fs::FsPath;
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
+use qubit_fs::{
+    FsName,
+    FsPath,
+};
 
 #[test]
 fn test_root_path_reports_root_properties() {
@@ -53,12 +63,7 @@ fn test_parent_and_join_handle_root_absolute_and_relative_paths() {
             .expect("join should succeed")
             .as_str(),
     );
-    assert_eq!(
-        "/absolute",
-        path.join("/absolute")
-            .expect("absolute child should replace base")
-            .as_str(),
-    );
+    assert!(path.join("/absolute").is_err());
     assert_eq!(
         "/child",
         root.join("child")
@@ -108,5 +113,33 @@ fn test_file_extension_returns_last_meaningful_extension() {
         FsPath::parse("/a/trailing.")
             .expect("path should parse")
             .file_extension(),
+    );
+    assert_eq!(None, FsPath::parse("/a/README").unwrap().file_extension());
+}
+
+#[test]
+fn test_literal_path_preserves_object_key_text() {
+    let path = FsPath::parse_literal("/a//./../b").unwrap();
+
+    assert_eq!("/a//./../b", path.as_str());
+    assert_eq!(
+        "/a//./..",
+        path.parent()
+            .expect("literal path should have a lexical parent")
+            .as_str(),
+    );
+    assert!(path.is_absolute());
+    assert!(FsPath::parse_literal("").is_err());
+    assert!(FsPath::parse_literal("bad\nkey").is_err());
+}
+
+#[test]
+fn child_supports_root_and_relative_bases() {
+    let name = FsName::parse("child").unwrap();
+
+    assert_eq!("/child", FsPath::root().child(&name).as_str());
+    assert_eq!(
+        "base/child",
+        FsPath::parse("base").unwrap().child(&name).as_str(),
     );
 }

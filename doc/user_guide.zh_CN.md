@@ -1,1492 +1,453 @@
 # Qubit FS 用户指南
 
-## 1. Qubit FS 是什么
+`qubit-fs` 是应用代码与文件系统 provider 之间的公共契约，适用于本地文件系统、
+对象存储、云盘、远程协议、分布式文件系统、内存实现和 provider-specific 存储服务。
 
-`qubit-fs` 是 Rust 的抽象文件系统核心层。它定义了一组 provider-neutral 的统一接口，用于描述本地文件系统、FTP、WebDAV、OSS、S3、HDFS、内存测试文件系统以及企业私有存储服务。
+核心 crate 不包含具体后端。增加新后端不需要增加枚举分支，也不需要修改应用逻辑；
+应用只需在组装阶段注册所需 provider。
 
-当前 crate 只提供核心抽象，不内置任何具体后端实现。具体实现应放在独立 crate 中，例如：
-
-- `qubit-fs-local`
-- `qubit-fs-webdav`
-- `qubit-fs-oss`
-- `qubit-fs-hdfs`
-- `qubit-fs-memory`
-
-这样设计的核心原因是可扩展性。新增一种文件系统后端时，不应该修改 `qubit-fs` 根 crate，也不应该让下游因为新增 `FsKind` 枚举分支而被迫升级。
-
-## 2. 安装
-
-在 `Cargo.toml` 中加入：
+## 安装
 
 ```toml
 [dependencies]
 qubit-fs = "0.2"
 ```
 
-如果你要实现或注册 provider，通常还需要 `qubit-spi`：
+文件字节流使用 `qubit-io` 的 trait。Provider 实现还会使用 `qubit-spi`，通常也会
+使用 `qubit-metadata`。
 
-```toml
-[dependencies]
-qubit-fs = "0.2"
-qubit-spi = "0.8"
+## 对象模型
+
+文件系统 trait 层次如下：
+
+```rust
+use qubit_fs::{
+    AsyncFileSystem,
+    FileSystem,
+    FileSystemProperties,
+};
 ```
 
-如果 provider 需要读写扩展元数据，建议使用 `qubit-metadata`：
+- `FileSystemProperties` 包含 `info()` 与 `capabilities()`。两者都是构造时确定的
+  稳定快照，getter 绝不能触发 I/O；
+- `FileSystem: FileSystemProperties` 包含同步操作；
+- `AsyncFileSystem: FileSystemProperties` 包含运行时无关的异步操作，方法名统一以
+  `_async` 结尾。
 
-```toml
-[dependencies]
-qubit-metadata = "0.6"
-```
+同一个后端类型可以实现其中一个操作 trait，也可以同时实现两者。同步与异步 registry
+彼此独立，因为 provider 可能只支持一种模式。
 
-可选 feature：
+`stat()` 与 `stat_async()` 是实时操作，可以触发远程 I/O。它们和 `info()` 不同，
+也不同于打开句柄时携带的可选 metadata 快照。
 
-```toml
-[dependencies]
-qubit-fs = { version = "0.2", features = ["registry-cache"] }
-```
+## URI 与 Provider-Local Path
 
-当前公开 API 是同步、对象安全的接口。异步 provider 可以通过独立 crate 或后续扩展 trait 实现，核心 `FileSystem` trait 不绑定 tokio 或其他运行时。
+### `FsUri`
 
-## 3. 核心概念
+`FsUri` 是传输与 provider 选择表示。它会保留核心层不应擅自解释的信息：
 
-### 3.1 `FsUri`
+- 原始 percent-encoded path，包括 `%2F` 这样的编码分隔符；
+- query pair 的顺序与重复 key；
+- 是否使用了 `//` 层次形式，包括 `file:/tmp/a` 与 `file:///tmp/a` 的区别；
+- 可选 authority。
 
-`FsUri` 表示完整资源定位信息。它包含：
-
-| 字段 | 含义 |
-| --- | --- |
-| `scheme` | provider selector，例如 `file`、`oss`、`s3`、`webdav`、`hdfs` |
-| `authority` | 可选的 host、bucket、namespace、endpoint 或 username hint |
-| `path` | provider-local 的 `FsPath` |
-| `query` | 非敏感选项，使用 `qubit_metadata::Metadata` 保存 |
-
-示例：
+Fragment、非法 percent encoding、控制字符、password 和 credential-like query key
+都会被拒绝，其中包括 `x-amz-signature` 等 signed-URL 字段。Query 是非敏感
+provider option，不是凭据通道。Raw path 使用 RFC 3986 encoded syntax；非 ASCII、
+空白、`?` 与 `#` 必须 percent encode。Component builder 还会拒绝序列化后产生歧义的
+authority/path 组合。
 
 ```rust
 use qubit_fs::FsUri;
 
-fn main() -> qubit_fs::FsResult<()> {
-    let uri = FsUri::parse("oss://my-bucket/reports/2026/a.csv?region=cn-hangzhou")?;
+let uri = FsUri::parse(
+    "object://bucket/a%2Fb?tag=first&tag=second",
+)?;
 
-    assert_eq!("oss", uri.scheme);
-    assert_eq!("/reports/2026/a.csv", uri.path.as_str());
-
-    let authority = uri.authority.expect("bucket should exist");
-    assert_eq!("my-bucket", authority.host);
-
-    Ok(())
-}
+assert_eq!("object", uri.scheme().as_str());
+assert_eq!("/a%2Fb", uri.path().as_encoded());
+assert_eq!(vec!["first", "second"], uri.query().get_all("tag"));
+# Ok::<(), qubit_fs::FsError>(())
 ```
 
-不要把 password、access key、secret key、token 放进 URI。凭据应通过 `CredentialRef` 或 provider 自己的安全配置传入。
+核心层绝不会自行把 `FsUriPath` 解码成 `FsPath`。Encoded separator、dot segment、
+object key、drive identifier 和 authority 的语义因后端而异，转换责任属于选中的
+provider。
 
-### 3.2 `FsPath`
+### `FsPath`
 
-`FsPath` 表示某个 `FileSystem` 实例内部的路径。它不是 `std::path::Path`。
-
-`FsPath` 的规则：
-
-| 规则 | 说明 |
-| --- | --- |
-| 字符串 | 使用 UTF-8 字符串 |
-| 分隔符 | 统一使用 `/` |
-| 绝对/相对 | 可区分 absolute 和 relative |
-| 空路径 | 拒绝空 path |
-| NUL 字节 | 拒绝包含 NUL 字节的 path |
-| 规范化 | 规范化重复 `/` 和 `.` |
-| `..` | 拒绝向上逃逸 root 的路径 |
-
-示例：
-
-```rust
-use qubit_fs::FsPath;
-
-fn main() -> qubit_fs::FsResult<()> {
-    let path = FsPath::parse("/a//b/./c.txt")?;
-    assert_eq!("/a/b/c.txt", path.as_str());
-    assert_eq!(Some("c.txt"), path.file_name());
-    assert_eq!(Some("txt"), path.file_extension());
-
-    let parent = path.parent().expect("parent should exist");
-    assert_eq!("/a/b", parent.as_str());
-
-    let joined = parent.join("d.txt")?;
-    assert_eq!("/a/b/d.txt", joined.as_str());
-
-    Ok(())
-}
-```
-
-`std::path::Path` 只适合本地文件系统 provider 内部使用，不适合作为跨后端统一路径模型。原因包括 Windows 盘符、UNC、平台分隔符、Unix 非 UTF-8 路径、对象存储 key 语义等差异。
-
-### 3.3 `FileSystem`
-
-`FileSystem` 是核心 trait：
+`FsPath` 是已经在某个已配置文件系统内部解释过的路径。`parse()` 使用 normalized
+hierarchical semantics；`parse_literal()` 保留 provider-specific object-key 文本。
 
 ```rust
 use qubit_fs::{
-    CopyOptions, CopyOutcome, CreateDirOptions, DeleteOptions, DirectoryStream,
-    FileMetadata, FileReader, FileSystem, FileSystemMetadata, FileWriter, FsPath,
-    FsResult, ListOptions, ReadOptions, RenameOptions, WriteOptions,
+    FsName,
+    FsPath,
+    RelativeFsPath,
 };
 
-pub trait FileSystem: std::fmt::Debug + Send + Sync {
-    fn metadata(&self) -> FileSystemMetadata;
-    fn path_metadata(&self, path: &FsPath) -> FsResult<FileMetadata>;
-    fn exists(&self, path: &FsPath) -> FsResult<bool>;
-    fn list(&self, path: &FsPath, options: &ListOptions) -> FsResult<Box<dyn DirectoryStream>>;
-    fn open_reader(&self, path: &FsPath, options: &ReadOptions) -> FsResult<Box<dyn FileReader>>;
-    fn open_writer(&self, path: &FsPath, options: &WriteOptions) -> FsResult<Box<dyn FileWriter>>;
-    fn create_dir(&self, path: &FsPath, options: &CreateDirOptions) -> FsResult<()>;
-    fn delete(&self, path: &FsPath, options: &DeleteOptions) -> FsResult<()>;
-    fn rename(&self, from: &FsPath, to: &FsPath, options: &RenameOptions) -> FsResult<()>;
-    fn copy(&self, from: &FsPath, to: &FsPath, options: &CopyOptions) -> FsResult<CopyOutcome>;
-}
+let base = FsPath::parse("/work")?;
+let child = base.child(&FsName::parse("result.bin")?);
+let nested = base.join_relative(
+    &RelativeFsPath::parse("2026/july/report.csv")?,
+);
+
+assert_eq!("/work/result.bin", child.as_str());
+assert_eq!("/work/2026/july/report.csv", nested.as_str());
+# Ok::<(), qubit_fs::FsError>(())
 ```
 
-实现者不要把所有后端都伪装成 POSIX 文件系统。不支持的操作应返回 `FsErrorKind::UnsupportedOperation`，并在 `capabilities()` 中声明能力缺失。
+`FsName` 与 `RelativeFsPath` 无法表示绝对路径或向上逃逸。`TempDir::child()` 等 API
+使用这些类型，使词法路径逃逸在类型层面无法表达。
 
-### 3.4 Provider registry
+不要把 `std::path::Path` 当作跨 provider 的统一模型。本地 provider 可以在应用自身
+平台规则与 sandbox 规则后，在内部进行转换。
 
-`qubit-fs` 复用 `qubit-spi` 做 provider 注册，不定义固定 `FsKind` 枚举。
+## Registry 与完整配置
 
-一个 provider 可以声明一个稳定 id 和多个 alias。例如：
-
-| provider id | alias | 可打开 URI |
-| --- | --- | --- |
-| `local` | `file` | `file:///tmp/a.txt` |
-| `memory` | `mem` | `mem:///a.txt` |
-| `webdav` | `webdavs` | `webdavs://host/dav/a.txt` |
-
-这种方式允许第三方后端自然接入，不需要修改核心 crate。
-
-## 4. 打开文件系统和资源
-
-使用前必须先注册 provider。应用可以在启动阶段创建 registry，注册第三方 provider，
-然后把 registry 的 clone 共享给下游库。所有 clone 都能看到后续的运行时注册和默认选择更新：
+应用在组装阶段创建并填充 registry。Registry clone 共享注册结果与默认 provider
+selection。
 
 ```rust
-use qubit_fs::{FileSystemRegistry, FsResult};
+use qubit_fs::{
+    FileSystemRegistry,
+    FsResult,
+};
 
-fn configure_filesystems() -> FsResult<FileSystemRegistry> {
+fn configure() -> FsResult<FileSystemRegistry> {
     let registry = FileSystemRegistry::default();
-    // provider 注册函数由后端 crate 提供。
-    // qubit_fs_local::register_provider(&registry)?;
-    // qubit_fs_oss::register_provider(&registry)?;
+    // 后端 crate 在这里注册自描述 provider。
+    // qubit_fs_local::register(&registry)?;
+    // qubit_fs_object::register(&registry)?;
     Ok(registry)
 }
 ```
 
-先解析 URI，再用 `FileSystemRegistry::fs()` 选择文件系统实例：
-
-```rust
-use qubit_fs::{FileSystemRegistry, FsResult, FsUri};
-
-fn open_filesystem(registry: &FileSystemRegistry) -> FsResult<()> {
-    let uri = FsUri::parse("file:///var/data/report.csv")?;
-    let fs = registry.fs(&uri)?;
-    let caps = fs.capabilities();
-    println!("directories supported: {}", caps.directories);
-    Ok(())
-}
-```
-
-如果需要同时得到文件系统实例和 provider-local path，使用
-`FileSystemRegistry::resource()`；它同样接收解析后的 `FsUri`：
-
-```rust
-use qubit_fs::{FileSystemRegistry, FsResult, FsUri};
-
-fn resolve_and_check(registry: &FileSystemRegistry) -> FsResult<bool> {
-    let uri = FsUri::parse("oss://bucket/reports/a.csv")?;
-    let resource = registry.resource(&uri)?;
-    resource.exists()
-}
-```
-
-测试、插件运行时或嵌入式场景也可以用空 registry 构造隔离 catalog：
-
-```rust
-use qubit_fs::{FileSystemRegistry, FsResult, FsUri};
-
-fn isolated_registry() -> FsResult<()> {
-    let registry = FileSystemRegistry::default();
-    // qubit_fs_memory::register_provider(&registry)?;
-    let uri = FsUri::parse("mem:///hello.txt")?;
-    let resource = registry.resource(&uri)?;
-    println!("{}", resource.path().as_str());
-    Ok(())
-}
-```
-
-## 5. 常用操作
-
-### 5.1 读取完整内容
-
-小文件或中等大小资源可以用 `FileSystemExt::read_all()`：
-
-```rust
-use qubit_fs::{FileSystem, FileSystemExt, FsPath, FsResult};
-
-fn read_config(fs: &dyn FileSystem) -> FsResult<Vec<u8>> {
-    let path = FsPath::parse("/config/app.toml")?;
-    fs.read_all(&path)
-}
-```
-
-大文件建议用 `open_reader()` 流式读取：
-
-```rust
-use std::io::Read;
-use qubit_fs::{FileSystem, FsPath, FsResult, ReadOptions};
-
-fn stream_read(fs: &dyn FileSystem) -> FsResult<Vec<u8>> {
-    let path = FsPath::parse("/large.bin")?;
-    let mut reader = fs.open_reader(&path, &ReadOptions::default())?;
-
-    let mut buf = Vec::new();
-    reader.read_to_end(&mut buf).map_err(|error| {
-        qubit_fs::FsError::with_source(
-            qubit_fs::FsErrorKind::Io,
-            qubit_fs::FsOperation::OpenReader,
-            "failed to read stream",
-            error,
-        ).with_path(path.clone())
-    })?;
-
-    Ok(buf)
-}
-```
-
-### 5.2 范围读取
-
-支持 `range_read` 的 provider 应处理 `ReadOptions.offset` 和 `ReadOptions.length`：
-
-```rust
-use qubit_fs::{FileSystem, FsPath, FsResult, ReadOptions};
-
-fn open_range(fs: &dyn FileSystem) -> FsResult<()> {
-    let path = FsPath::parse("/video.bin")?;
-    let options = ReadOptions {
-        offset: Some(1024),
-        length: Some(4096),
-        ..ReadOptions::default()
-    };
-
-    let _reader = fs.open_reader(&path, &options)?;
-    Ok(())
-}
-```
-
-如果后端无法支持范围读取，应返回 `UnsupportedOperation`，或者在文档中明确说明何时会安全地忽略 range option。
-
-### 5.3 写入完整内容
-
-简单写入使用 `FileSystemExt::write_all()`：
-
-```rust
-use qubit_fs::{FileSystem, FileSystemExt, FsPath, FsResult};
-
-fn write_report(fs: &dyn FileSystem) -> FsResult<()> {
-    let path = FsPath::parse("/reports/today.txt")?;
-    fs.write_all(&path, b"report content")?;
-    Ok(())
-}
-```
-
-高级写入使用 `open_writer()`，写入后必须调用 `commit()`：
-
-```rust
-use std::io::Write;
-use qubit_fs::{FileSystem, FsPath, FsResult, WriteMode, WriteOptions};
-
-fn create_new(fs: &dyn FileSystem) -> FsResult<()> {
-    let path = FsPath::parse("/reports/new.txt")?;
-    let options = WriteOptions {
-        create_parent: true,
-        mode: WriteMode::CreateNew,
-        content_type: Some("text/plain".to_owned()),
-        ..WriteOptions::default()
-    };
-
-    let mut writer = fs.open_writer(&path, &options)?;
-    if let Err(error) = writer.write_all(b"hello") {
-        let _ = writer.abort();
-        return Err(qubit_fs::FsError::with_source(
-            qubit_fs::FsErrorKind::Io,
-            qubit_fs::FsOperation::OpenWriter,
-            "failed to write data",
-            error,
-        ).with_path(path));
-    }
-
-    writer.commit()?;
-    Ok(())
-}
-```
-
-写入句柄必须以 `commit()` 或 `abort()` 结束。远端 provider 可能持有 multipart upload、临时对象或服务端 session。
-
-### 5.4 条件写入
-
-当你只想替换某个确定版本时，使用 `WriteMode::ConditionalReplace`：
-
-```rust
-use qubit_fs::{FileSystem, FsPath, FsResult, WriteMode, WriteOptions};
-
-fn replace_if_version_matches(fs: &dyn FileSystem, etag: String) -> FsResult<()> {
-    let path = FsPath::parse("/state.json")?;
-    let options = WriteOptions {
-        mode: WriteMode::ConditionalReplace { etag },
-        ..WriteOptions::default()
-    };
-
-    let writer = fs.open_writer(&path, &options)?;
-    writer.commit()?;
-    Ok(())
-}
-```
-
-条件不匹配时，provider 应返回 `FsErrorKind::PreconditionFailed`。
-
-### 5.5 Metadata 和 exists
-
-```rust
-use qubit_fs::{FileSystem, FileKind, FsPath, FsResult};
-
-fn inspect(fs: &dyn FileSystem) -> FsResult<()> {
-    let path = FsPath::parse("/data/input.csv")?;
-
-    if !fs.exists(&path)? {
-        return Ok(());
-    }
-
-    let metadata = fs.path_metadata(&path)?;
-    match metadata.kind {
-        FileKind::File | FileKind::Object => println!("file-like resource"),
-        FileKind::Directory | FileKind::Prefix => println!("container-like resource"),
-        FileKind::Symlink => println!("symbolic link"),
-        FileKind::Other(_) => println!("provider-specific resource"),
-    }
-
-    if let Some(len) = metadata.len {
-        println!("size: {len}");
-    }
-    if let Some(etag) = metadata.etag {
-        println!("etag: {etag}");
-    }
-
-    Ok(())
-}
-```
-
-`exists()` 不应吞掉认证失败、权限不足、超时或网络错误。只有后端明确确认资源不存在时，才返回 `Ok(false)`。
-
-### 5.6 列举目录、prefix 或 collection
-
-`list()` 返回 `DirectoryStream`，因此远端后端可以在内部分页：
-
-```rust
-use qubit_fs::{DirectoryStreamExt, FileSystem, FsPath, FsResult, ListOptions};
-
-fn list_once(fs: &dyn FileSystem) -> FsResult<()> {
-    let path = FsPath::parse("/reports")?;
-    let options = ListOptions {
-        include_metadata: true,
-        page_size: Some(100),
-        ..ListOptions::default()
-    };
-
-    let entries = fs.list(&path, &options)?.collect_entries()?;
-    for entry in entries {
-        println!("{}", entry.path);
-    }
-
-    Ok(())
-}
-```
-
-大目录应流式消费：
-
-```rust
-use qubit_fs::{FileSystem, FsPath, FsResult, ListOptions};
-
-fn list_streaming(fs: &dyn FileSystem) -> FsResult<()> {
-    let path = FsPath::parse("/big-prefix")?;
-    let mut stream = fs.list(&path, &ListOptions::default())?;
-
-    while let Some(entry) = stream.next_entry()? {
-        println!("{}", entry.path);
-    }
-
-    Ok(())
-}
-```
-
-### 5.7 创建目录或 collection
-
-```rust
-use qubit_fs::{CreateDirOptions, FileSystem, FsPath, FsResult};
-
-fn create_reports_dir(fs: &dyn FileSystem) -> FsResult<()> {
-    let path = FsPath::parse("/reports/2026")?;
-    fs.create_dir(
-        &path,
-        &CreateDirOptions {
-            recursive: true,
-            exists_ok: true,
-            ..CreateDirOptions::default()
-        },
-    )?;
-    Ok(())
-}
-```
-
-对象存储通常只支持 prefix 视图，未必能真实保留空目录。依赖空目录语义前，应检查 `fs.capabilities().empty_directories`。
-
-### 5.8 删除
-
-```rust
-use qubit_fs::{DeleteOptions, FileSystem, FsPath, FsResult};
-
-fn delete_tree(fs: &dyn FileSystem) -> FsResult<()> {
-    let path = FsPath::parse("/tmp/job-123")?;
-    fs.delete(
-        &path,
-        &DeleteOptions {
-            recursive: true,
-            missing_ok: true,
-            ..DeleteOptions::default()
-        },
-    )?;
-    Ok(())
-}
-```
-
-`missing_ok = true` 只表示“确认不存在也算成功”，不表示吞掉认证、权限、网络错误。
-
-### 5.9 重命名或移动
-
-```rust
-use qubit_fs::{AtomicityRequirement, FileSystem, FsPath, FsResult, RenameOptions};
-
-fn atomic_publish(fs: &dyn FileSystem) -> FsResult<()> {
-    let tmp = FsPath::parse("/out/report.tmp")?;
-    let final_path = FsPath::parse("/out/report.csv")?;
-
-    fs.rename(
-        &tmp,
-        &final_path,
-        &RenameOptions {
-            overwrite: true,
-            atomic: AtomicityRequirement::Required,
-        },
-    )?;
-
-    Ok(())
-}
-```
-
-当 `atomic = Required` 时，如果后端不能保证原子 rename，必须返回 `UnsupportedOperation`，不能偷偷降级。对象存储通常无法提供真正的原子 rename。
-
-## 6. 复制模型
-
-`copy()` 用于同一个 `FileSystem` 实例内部复制文件、对象、目录树、prefix tree 或 WebDAV collection。
-
-### 6.1 复制单个文件或对象
-
-```rust
-use qubit_fs::{CopyConflictPolicy, CopyOptions, FileSystem, FsPath, FsResult};
-
-fn copy_file(fs: &dyn FileSystem) -> FsResult<()> {
-    let from = FsPath::parse("/input/a.csv")?;
-    let to = FsPath::parse("/archive/a.csv")?;
-
-    let mut options = CopyOptions::file();
-    options.conflict = CopyConflictPolicy::Overwrite;
-    options.create_parent = true;
-
-    let outcome = fs.copy(&from, &to, &options)?;
-    println!("copied bytes: {}", outcome.stats.bytes);
-    println!("method: {:?}", outcome.method);
-
-    Ok(())
-}
-```
-
-### 6.2 复制目录树或 prefix tree
-
-```rust
-use qubit_fs::{CopyOptions, FileSystem, FsPath, FsResult, MetadataPreservePolicy};
-
-fn copy_tree(fs: &dyn FileSystem) -> FsResult<()> {
-    let from = FsPath::parse("/dataset")?;
-    let to = FsPath::parse("/backup/dataset")?;
-
-    let mut options = CopyOptions::tree();
-    options.create_parent = true;
-    options.preserve_metadata = MetadataPreservePolicy::Portable;
-    options.continue_on_error = false;
-
-    let outcome = fs.copy(&from, &to, &options)?;
-    println!("files: {}", outcome.stats.files);
-    println!("directories: {}", outcome.stats.directories);
-    println!("objects: {}", outcome.stats.objects);
-    println!("prefixes: {}", outcome.stats.prefixes);
-
-    Ok(())
-}
-```
-
-### 6.3 强制 server-side copy
-
-```rust
-use qubit_fs::{CopyOptions, FileSystem, FsPath, FsResult, ServerSidePreference};
-
-fn server_side_copy_only(fs: &dyn FileSystem) -> FsResult<()> {
-    let from = FsPath::parse("/a.bin")?;
-    let to = FsPath::parse("/b.bin")?;
-
-    let mut options = CopyOptions::file();
-    options.server_side = ServerSidePreference::Require;
-
-    fs.copy(&from, &to, &options)?;
-    Ok(())
-}
-```
-
-如果后端不支持 server-side copy，应返回 `FsErrorKind::UnsupportedOperation`。
-
-### 6.4 跨文件系统复制
-
-`FileSystem::copy()` 只处理同一个文件系统实例内部复制。跨 provider 复制应由更上层把两个 URI 解析成 `FileResource`，然后从源流式读、向目标流式写。
-
-```rust
-use std::io::{Read, Write};
-use qubit_fs::{FileSystemRegistry, FsError, FsErrorKind, FsOperation, FsResult, FsUri, ReadOptions, WriteOptions};
-
-fn copy_between(registry: &FileSystemRegistry, from_uri: &str, to_uri: &str) -> FsResult<()> {
-    let from_uri = FsUri::parse(from_uri)?;
-    let to_uri = FsUri::parse(to_uri)?;
-    let from = registry.resource(&from_uri)?;
-    let to = registry.resource(&to_uri)?;
-
-    let mut reader = from.open_reader(&ReadOptions::default())?;
-    let mut writer = to.open_writer(&WriteOptions::default())?;
-
-    let mut buffer = [0_u8; 64 * 1024];
-    loop {
-        let n = reader.read(&mut buffer).map_err(|error| {
-            FsError::with_source(FsErrorKind::Io, FsOperation::OpenReader, "read failed", error)
-                .with_path(from.path().clone())
-        })?;
-        if n == 0 {
-            break;
-        }
-        if let Err(error) = writer.write_all(&buffer[..n]) {
-            let _ = writer.abort();
-            return Err(FsError::with_source(
-                FsErrorKind::Io,
-                FsOperation::OpenWriter,
-                "write failed",
-                error,
-            ).with_path(to.path().clone()));
-        }
-    }
-
-    writer.commit()?;
-    Ok(())
-}
-```
-
-生产级跨文件系统复制还应处理 checksum、进度、metadata 保留、取消、重试和失败清理。
-
-## 7. 临时资源
-
-临时资源表示“拥有清理责任的句柄”。它们有意义的关键点是：除了显式 `cleanup()`、`persist()`、`keep()`，还提供 `Drop` 尽力清理。
-
-### 7.1 创建临时文件和临时目录
-
-```rust
-use std::sync::Arc;
-use qubit_fs::{
-    FileSystem,
-    FileSystemExt,
-    FsPath,
-    FsResult,
-    PersistOptions,
-    TempDir,
-    TempDirOptions,
-    TempFile,
-    TempFileOptions,
-    TempResources,
-};
-
-fn temp_file_publish(fs: Arc<dyn FileSystem>) -> FsResult<()> {
-    let temp: Box<dyn TempFile> =
-        TempResources::create_file(fs.clone(), &TempFileOptions::default())?;
-
-    let staging_path = temp.path().clone();
-    fs.write_all(&staging_path, b"generated report\n")?;
-
-    let target = FsPath::parse("/published/final.txt")?;
-    temp.persist(&target, &PersistOptions::default())?;
-
-    Ok(())
-}
-
-fn temp_dir_workspace(fs: Arc<dyn FileSystem>) -> FsResult<()> {
-    let workspace: Box<dyn TempDir> =
-        TempResources::create_dir(fs.clone(), &TempDirOptions::default())?;
-
-    let part_file = workspace.path().join("part-0001.csv")?;
-    fs.write_all(&part_file, b"id,value\n1,42\n")?;
-
-    let target = FsPath::parse("/published/report-parts")?;
-    workspace.persist(&target, &PersistOptions::default())?;
-    Ok(())
-}
-```
-
-`TempResources::create_file(fs, options)` 的实际行为是：
-
-- 先从当前 `FileSystem` 实例取得 `fs.temp_resource_factory()`。
-- 调用该 factory 的 `create_file(fs, options)`，由当前文件系统决定返回 native `TempFile`，还是使用核心层 fallback。
-- 默认 factory 是 `ManagedTempResourceFactory`：它会生成临时路径，使用 `open_writer(..., CreateNew)` 预留空文件，然后返回 `ManagedTempFile`。
-- factory 实现可以复用 `TempResourceFactory::make_temp_path()` 生成统一格式的临时路径，也可以按后端需要使用自己的命名格式。
-
-`TempResources::create_dir(fs, options)` 同理：
-
-- 先从当前 `FileSystem` 实例取得 `fs.temp_resource_factory()`。
-- 调用该 factory 的 `create_dir(fs, options)`，由当前文件系统决定返回 native `TempDir`，还是使用核心层 fallback。
-- 默认 factory 是 `ManagedTempResourceFactory`：它会生成临时路径，调用 `create_dir(..., recursive=true)` 创建目录，然后返回 `ManagedTempDir`。
-- factory 实现可以复用 `TempResourceFactory::make_temp_path()` 生成统一格式的临时路径，也可以按后端需要使用自己的命名格式。
-
-`TempResources` 还提供常用便捷入口：
-
-```rust
-let file1 = TempResources::create_default_file(fs.clone())?;
-let file2 = TempResources::create_file_with_prefix(fs.clone(), "upload-")?;
-
-let dir1 = TempResources::create_default_dir(fs.clone())?;
-let dir2 = TempResources::create_dir_with_prefix(fs.clone(), "job-")?;
-```
-
-`TempFile` 和 `TempDir` 的共同使用方式是：
-
-- 通过 `TempResources::create_file()` 或 `TempResources::create_dir()` 创建拥有清理责任的句柄。
-- 通过 `path()` 得到临时路径，再用普通 `FileSystem` API 写入内容或子文件。
-- 成功后调用 `persist()` 发布到目标路径。
-- 如果不想发布，调用 `cleanup()` 显式清理，或调用 `keep()` 放弃自动清理并把临时路径交给外部组件。
-
-`ManagedTempFile` 和 `ManagedTempDir` 是 fallback 默认实现，会通过底层文件系统预留临时路径。如果句柄在 `cleanup()`、`persist()` 或 `keep()` 之前被 drop，会尝试尽力清理。
-
-### 7.2 自定义临时文件路径模式
-
-```rust
-use std::sync::Arc;
-use qubit_fs::{FileSystem, FsPath, FsResult, TempFileOptions, TempResources};
-
-fn create_named_temp(fs: Arc<dyn FileSystem>) -> FsResult<()> {
-    let parent = FsPath::parse("/tmp")?;
-    let options = TempFileOptions {
-        parent: Some(parent),
-        prefix: "upload-".to_owned(),
-        suffix: ".part".to_owned(),
-    };
-
-    let temp = TempResources::create_file(fs, &options)?;
-    println!("temporary path: {}", temp.path());
-    temp.cleanup()?;
-    Ok(())
-}
-```
-
-### 7.3 保留临时目录
-
-```rust
-use std::sync::Arc;
-use qubit_fs::{FileSystem, FsResult, TempDirOptions, TempResources};
-
-fn keep_temp_dir(fs: Arc<dyn FileSystem>) -> FsResult<()> {
-    let temp = TempResources::create_dir(fs, &TempDirOptions::default())?;
-    let retained_path = temp.keep()?;
-    println!("kept temp dir at {}", retained_path);
-    Ok(())
-}
-```
-
-`keep()` 会解除自动清理责任，并返回临时资源路径。适用于有意把所有权转移给其他组件的场景。
-
-### 7.4 使用 copy-delete 作为 persist 降级方案
-
-```rust
-use std::sync::Arc;
-use qubit_fs::{AtomicityRequirement, FileSystem, FsPath, FsResult, PersistOptions, TempResources};
-
-fn persist_with_fallback(fs: Arc<dyn FileSystem>) -> FsResult<()> {
-    let temp = TempResources::create_file(fs, &Default::default())?;
-    let target = FsPath::parse("/final/object.bin")?;
-
-    let options = PersistOptions {
-        overwrite: true,
-        atomic: AtomicityRequirement::BestEffort,
-        allow_copy_delete: true,
-        ..PersistOptions::default()
-    };
-
-    temp.persist(&target, &options)?;
-    Ok(())
-}
-```
-
-如果 `rename()` 返回 `UnsupportedOperation`，且 `allow_copy_delete = true`，`ManagedTempFile` 可以降级为 `copy()` 后 `delete()`。
-
-## 8. 错误处理
-
-大部分操作返回 `FsResult<T>`，即 `Result<T, FsError>`。
-
-常见错误类型：
-
-| Kind | 含义 |
-| --- | --- |
-| `NotFound` | 后端确认资源不存在 |
-| `AlreadyExists` | 创建失败，因为目标已存在 |
-| `InvalidPath` | 路径或 URI 非法 |
-| `PermissionDenied` | 身份有效，但没有权限 |
-| `AuthenticationFailed` | 凭据缺失或无效 |
-| `ProviderUnavailable` | 未注册 provider，或 provider 当前不可用 |
-| `UnsupportedOperation` | 后端模型不支持该操作 |
-| `Conflict` | 状态冲突，例如非递归删除非空目录 |
-| `PreconditionFailed` | ETag 或版本条件不满足 |
-| `Timeout` | 操作超时 |
-| `QuotaExceeded` | 配额或容量不足 |
-| `DataCorruption` | checksum 或完整性验证失败 |
-| `Io` | 本地或流式 I/O 错误 |
-| `Other` | provider-specific fallback |
-
-示例：
-
-```rust
-use qubit_fs::{FileSystem, FsErrorKind, FsPath, FsResult};
-
-fn delete_if_supported(fs: &dyn FileSystem) -> FsResult<()> {
-    let path = FsPath::parse("/old")?;
-    match fs.delete(&path, &Default::default()) {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == FsErrorKind::UnsupportedOperation => {
-            println!("delete is not supported by this backend");
-            Ok(())
-        }
-        Err(error) => Err(error),
-    }
-}
-```
-
-provider 实现应尽量用 `FsError::with_source()` 保留底层错误，并附加 path、target、provider 等上下文。
-
-## 9. Metadata 模型
-
-`FileMetadata` 包含跨后端稳定字段，也包含扩展 metadata。
-
-常见字段：
-
-| 字段 | 含义 |
-| --- | --- |
-| `kind` | `File`、`Directory`、`Symlink`、`Object`、`Prefix` 或 `Other` |
-| `len` | 可选内容长度 |
-| `modified_at`、`created_at`、`accessed_at` | 可选时间戳 |
-| `etag` | 可选 provider version 或 entity tag |
-| `content_type` | 可选 media type |
-| `checksum` | 可选 checksum |
-| `user_metadata` | 用户自定义 metadata |
-| `provider_metadata` | 后端专属 metadata |
-
-示例：
-
-```rust
-use qubit_fs::{FileMetadata, FileKind};
-
-fn is_container(metadata: &FileMetadata) -> bool {
-    metadata.is_directory_like()
-        || matches!(metadata.kind, FileKind::Directory | FileKind::Prefix)
-}
-```
-
-HDFS replication、OSS storage class、FTP 权限文本、WebDAV 自定义属性等字段应放到 `provider_metadata`，不要强行塞进跨后端稳定字段。
-
-## 10. 能力模型
-
-使用高级行为前，应先查看 capabilities：
-
-```rust
-use qubit_fs::FileSystem;
-
-fn explain_capabilities(fs: &dyn FileSystem) {
-    let caps = fs.capabilities();
-
-    println!("directories: {}", caps.directories);
-    println!("range read: {}", caps.range_read);
-    println!("append: {}", caps.append);
-    println!("atomic rename: {}", caps.atomic_rename);
-    println!("server-side copy: {}", caps.server_side_copy);
-    println!("temporary files: {}", caps.temp_file);
-}
-```
-
-capabilities 描述后端模型能力，不表示当前用户一定有权限。例如 provider 支持 recursive delete，但当前账号仍可能对某个路径返回 `PermissionDenied`。
-
-## 11. 如何扩展实现一个新后端
-
-本节用内存文件系统说明如何实现 provider。真实 Local、WebDAV、OSS、HDFS provider 的结构类似。
-
-### 11.1 推荐 crate 结构
-
-```text
-rs-fs-memory/
-  Cargo.toml
-  src/
-    lib.rs
-    memory_file_system.rs
-    memory_provider.rs
-    memory_reader.rs
-    memory_writer.rs
-    memory_directory_stream.rs
-    error_mapping.rs
-  tests/
-    memory_file_system_tests.rs
-```
-
-`Cargo.toml` 示例：
-
-```toml
-[package]
-name = "qubit-fs-memory"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-qubit-fs = "0.2"
-qubit-spi = "0.8"
-qubit-metadata = "0.6"
-```
-
-### 11.2 定义文件系统类型
-
-```rust
-use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex};
-
-#[derive(Debug, Default, Clone)]
-pub struct MemoryFileSystem {
-    state: Arc<Mutex<MemoryState>>,
-}
-
-#[derive(Debug, Default)]
-struct MemoryState {
-    files: BTreeMap<String, Vec<u8>>,
-}
-```
-
-生产级 provider 通常会持有 SDK client、连接池、root 配置、credential handle 和 provider-specific options。
-
-### 11.3 实现 metadata 和 capabilities
+`FileSystemConfig` 是完整的 provider 输入：
+
+- 必需且不含 secret 的 `FsUri`；
+- 可选的显式 `ProviderSelection`；
+- 由 `NonSensitiveMetadata` 承载的已校验非敏感 options；
+- 可选 `CredentialRef`。
+
+`NonSensitiveMetadata` 是 config options、filesystem/file metadata、write/directory
+metadata 与 operation diagnostics 的统一边界。它基于 key 递归检查顶层 field、
+string map 和 JSON object（包括数组内 object），其 Debug 只输出 key。普通 scalar
+内容无法可靠判断是否为 secret，因此 provider 必须只把非敏感值放在普通 key 下，
+所有 secret 都通过 `CredentialRef` 引用。
 
 ```rust
 use qubit_fs::{
-    FileMetadata, FileSystem, FileSystemCapabilities, FileSystemMetadata, FileKind,
-    FsError, FsErrorKind, FsOperation, FsPath, FsResult,
-};
-
-impl FileSystem for MemoryFileSystem {
-    fn metadata(&self) -> FileSystemMetadata {
-        let mut metadata = FileSystemMetadata::new("memory");
-        metadata.schemes.push("mem".to_owned());
-        metadata.capabilities = FileSystemCapabilities {
-            hierarchical_paths: true,
-            directories: true,
-            empty_directories: true,
-            symlinks: false,
-            range_read: true,
-            append: false,
-            random_write: false,
-            atomic_rename: true,
-            atomic_replace: true,
-            conditional_write: false,
-            server_side_copy: false,
-            recursive_delete: true,
-            temp_file: true,
-            temp_dir: true,
-            temp_persist: true,
-            temp_persist_atomic: true,
-            native_metadata: false,
-        };
-        metadata
-    }
-
-    fn path_metadata(&self, path: &FsPath) -> FsResult<FileMetadata> {
-        let state = self.state.lock().expect("memory state should not be poisoned");
-        let Some(bytes) = state.files.get(path.as_str()) else {
-            return Err(FsError::new(FsErrorKind::NotFound, FsOperation::Metadata, "file not found")
-                .with_path(path.clone())
-                .with_provider("memory"));
-        };
-
-        let mut metadata = FileMetadata::new(FileKind::File);
-        metadata.len = Some(bytes.len() as u64);
-        Ok(metadata)
-    }
-
-    fn exists(&self, path: &FsPath) -> FsResult<bool> {
-        let state = self.state.lock().expect("memory state should not be poisoned");
-        Ok(state.files.contains_key(path.as_str()))
-    }
-
-    // 其他 trait 方法见下文。
-}
-```
-
-能力声明原则：
-
-| 原则 | 说明 |
-| --- | --- |
-| 描述模型能力 | capabilities 不是权限检查 |
-| 不支持就报错 | 不要假装支持高级语义 |
-| Required 不能降级 | 调用方要求原子或 server-side 时，不支持必须失败 |
-
-### 11.4 实现读取
-
-`FileReader` 对 `Read + Send` 有 blanket impl，所以 `Cursor<Vec<u8>>` 可以直接作为 reader 返回。
-
-```rust
-use std::io::Cursor;
-use qubit_fs::{FileReader, ReadOptions};
-
-impl MemoryFileSystem {
-    fn read_bytes(&self, path: &FsPath, options: &ReadOptions) -> FsResult<Vec<u8>> {
-        let state = self.state.lock().expect("memory state should not be poisoned");
-        let Some(bytes) = state.files.get(path.as_str()) else {
-            return Err(FsError::new(FsErrorKind::NotFound, FsOperation::OpenReader, "file not found")
-                .with_path(path.clone())
-                .with_provider("memory"));
-        };
-
-        let start = options.offset.unwrap_or(0) as usize;
-        let end = match options.length {
-            Some(length) => start.saturating_add(length as usize).min(bytes.len()),
-            None => bytes.len(),
-        };
-        Ok(bytes.get(start..end).unwrap_or_default().to_vec())
-    }
-}
-
-impl FileSystem for MemoryFileSystem {
-    fn open_reader(&self, path: &FsPath, options: &ReadOptions) -> FsResult<Box<dyn FileReader>> {
-        let bytes = self.read_bytes(path, options)?;
-        Ok(Box::new(Cursor::new(bytes)))
-    }
-
-    // 其他方法略。
-}
-```
-
-真实远端 provider 应把 HTTP、SDK、FTP、HDFS 错误映射到 `FsErrorKind`，必要时把原始错误放入 source。
-
-### 11.5 实现写入
-
-writer 必须支持 `commit()` 和 `abort()`。
-
-```rust
-use std::io::{Result as IoResult, Write};
-use qubit_fs::{FileWriter, WriteOutcome};
-
-#[derive(Debug)]
-struct MemoryWriter {
-    fs: MemoryFileSystem,
-    path: FsPath,
-    buffer: Vec<u8>,
-}
-
-impl Write for MemoryWriter {
-    fn write(&mut self, bytes: &[u8]) -> IoResult<usize> {
-        self.buffer.extend_from_slice(bytes);
-        Ok(bytes.len())
-    }
-
-    fn flush(&mut self) -> IoResult<()> {
-        Ok(())
-    }
-}
-
-impl FileWriter for MemoryWriter {
-    fn commit(self: Box<Self>) -> FsResult<WriteOutcome> {
-        let mut state = self.fs.state.lock().expect("memory state should not be poisoned");
-        let bytes_written = self.buffer.len() as u64;
-        state.files.insert(self.path.as_str().to_owned(), self.buffer);
-
-        Ok(WriteOutcome {
-            bytes_written: Some(bytes_written),
-            etag: None,
-            diagnostics: qubit_metadata::Metadata::new(),
-        })
-    }
-
-    fn abort(self: Box<Self>) -> FsResult<()> {
-        Ok(())
-    }
-}
-```
-
-接入 `open_writer()`：
-
-```rust
-use qubit_fs::{WriteMode, WriteOptions};
-
-impl FileSystem for MemoryFileSystem {
-    fn open_writer(&self, path: &FsPath, options: &WriteOptions) -> FsResult<Box<dyn FileWriter>> {
-        if matches!(options.mode, WriteMode::Append) {
-            return Err(FsError::new(
-                FsErrorKind::UnsupportedOperation,
-                FsOperation::OpenWriter,
-                "append is not supported",
-            ).with_path(path.clone()).with_provider("memory"));
-        }
-
-        Ok(Box::new(MemoryWriter {
-            fs: self.clone(),
-            path: path.clone(),
-            buffer: Vec::new(),
-        }))
-    }
-
-    // 其他方法略。
-}
-```
-
-对象存储 writer 通常会在内部创建 multipart upload，`commit()` 完成 upload，`abort()` 中止 upload。
-
-### 11.6 实现 list
-
-```rust
-use qubit_fs::{DirEntry, DirectoryStream, ListOptions};
-
-#[derive(Debug)]
-struct MemoryDirectoryStream {
-    entries: Vec<DirEntry>,
-}
-
-impl DirectoryStream for MemoryDirectoryStream {
-    fn next_entry(&mut self) -> FsResult<Option<DirEntry>> {
-        Ok(self.entries.pop())
-    }
-}
-
-impl FileSystem for MemoryFileSystem {
-    fn list(&self, path: &FsPath, _options: &ListOptions) -> FsResult<Box<dyn DirectoryStream>> {
-        let state = self.state.lock().expect("memory state should not be poisoned");
-        let prefix = if path.as_str() == "/" {
-            "/".to_owned()
-        } else {
-            format!("{}/", path.as_str().trim_end_matches('/'))
-        };
-
-        let entries = state.files.keys()
-            .filter(|key| key.starts_with(&prefix))
-            .filter_map(|key| FsPath::parse(key).ok())
-            .map(|path| DirEntry::new(path, FileKind::File))
-            .collect();
-
-        Ok(Box::new(MemoryDirectoryStream { entries }))
-    }
-
-    // 其他方法略。
-}
-```
-
-远端 provider 不应一次性加载巨大目录，应该在 `next_entry()` 中按页拉取。
-
-### 11.7 实现 delete、rename、copy
-
-```rust
-use qubit_fs::{CopyMethod, CopyOptions, CopyOutcome, CopyStats, DeleteOptions, RenameOptions};
-
-impl FileSystem for MemoryFileSystem {
-    fn delete(&self, path: &FsPath, options: &DeleteOptions) -> FsResult<()> {
-        let mut state = self.state.lock().expect("memory state should not be poisoned");
-        let existed = state.files.remove(path.as_str()).is_some();
-        if !existed && !options.missing_ok {
-            return Err(FsError::new(FsErrorKind::NotFound, FsOperation::Delete, "file not found")
-                .with_path(path.clone())
-                .with_provider("memory"));
-        }
-        Ok(())
-    }
-
-    fn rename(&self, from: &FsPath, to: &FsPath, options: &RenameOptions) -> FsResult<()> {
-        let mut state = self.state.lock().expect("memory state should not be poisoned");
-        if !options.overwrite && state.files.contains_key(to.as_str()) {
-            return Err(FsError::new(FsErrorKind::AlreadyExists, FsOperation::Rename, "target exists")
-                .with_path(from.clone())
-                .with_target(to.clone())
-                .with_provider("memory"));
-        }
-        let Some(bytes) = state.files.remove(from.as_str()) else {
-            return Err(FsError::new(FsErrorKind::NotFound, FsOperation::Rename, "source not found")
-                .with_path(from.clone())
-                .with_target(to.clone())
-                .with_provider("memory"));
-        };
-        state.files.insert(to.as_str().to_owned(), bytes);
-        Ok(())
-    }
-
-    fn copy(&self, from: &FsPath, to: &FsPath, options: &CopyOptions) -> FsResult<CopyOutcome> {
-        let mut state = self.state.lock().expect("memory state should not be poisoned");
-        if !options.conflict.eq(&qubit_fs::CopyConflictPolicy::Overwrite)
-            && state.files.contains_key(to.as_str())
-        {
-            return Err(FsError::new(FsErrorKind::AlreadyExists, FsOperation::Copy, "target exists")
-                .with_path(from.clone())
-                .with_target(to.clone())
-                .with_provider("memory"));
-        }
-        let Some(bytes) = state.files.get(from.as_str()).cloned() else {
-            return Err(FsError::new(FsErrorKind::NotFound, FsOperation::Copy, "source not found")
-                .with_path(from.clone())
-                .with_target(to.clone())
-                .with_provider("memory"));
-        };
-        let len = bytes.len() as u64;
-        state.files.insert(to.as_str().to_owned(), bytes);
-
-        Ok(CopyOutcome::new(
-            CopyStats { files: 1, bytes: len, ..CopyStats::default() },
-            CopyMethod::Local,
-        ))
-    }
-
-    // 其他方法略。
-}
-```
-
-对象存储的 `rename()` 通常是 copy + delete，不能声明 atomic rename。WebDAV 可映射到 `MOVE`。HDFS 的 rename 往往可作为强 commit 原语。
-
-### 11.8 实现 provider 注册
-
-provider 根据 `FileSystemConfig` 创建文件系统实例。
-
-```rust
-use std::sync::Arc;
-
-use qubit_fs::{
-    FileSystem,
+    CredentialRef,
     FileSystemConfig,
     FileSystemRegistry,
-    FileSystemSpec,
     FsResult,
-};
-use qubit_spi::error::ProviderCreationError;
-use qubit_spi::{
-    ProviderDefinition,
-    ProviderDescriptor,
-    ProviderId,
-    ServiceProvider,
+    FsUri,
 };
 
-#[derive(Debug, Default)]
-pub struct MemoryFileSystemProvider;
+fn open_configured(
+    registry: &FileSystemRegistry,
+) -> FsResult<()> {
+    let config = FileSystemConfig::new(FsUri::parse(
+        "object://bucket/reports/a.csv?region=cn-east-1",
+    )?)
+    .with_credentials(CredentialRef::Profile("reporting".into()));
 
-impl ServiceProvider<FileSystemSpec> for MemoryFileSystemProvider {
-    fn create_configured(
-        &self,
-        _config: &FileSystemConfig,
-    ) -> Result<Arc<dyn FileSystem>, ProviderCreationError> {
-        Ok(Arc::new(MemoryFileSystem::default()))
-    }
-}
-
-impl ProviderDefinition<FileSystemSpec> for MemoryFileSystemProvider {
-    fn descriptor(&self) -> ProviderDescriptor {
-        ProviderDescriptor::new(
-            ProviderId::new("memory")
-                .expect("memory provider ID should be valid"),
-        )
-        .with_aliases(["mem"])
-        .expect("memory provider aliases should be valid")
-    }
-}
-
-pub fn register_provider(registry: &FileSystemRegistry) -> FsResult<()> {
-    registry.register(MemoryFileSystemProvider)
-}
-```
-
-应用侧使用：
-
-```rust
-use qubit_fs::{FileSystemRegistry, FsResult, FsUri};
-
-fn main() -> FsResult<()> {
-    let registry = FileSystemRegistry::default();
-    qubit_fs_memory::register_provider(&registry)?;
-
-    let uri = FsUri::parse("mem:///hello.txt")?;
-    let resource = registry.resource(&uri)?;
-
-    resource.write_all(b"hello")?;
-    let bytes = resource.read_all()?;
-    assert_eq!(b"hello", bytes.as_slice());
-
+    let resource = registry.resource(&config)?;
+    println!("{}", resource.path());
     Ok(())
 }
 ```
 
-### 11.9 Provider 错误映射清单
+没有显式 selection 时，registry 按 URI scheme 选择 provider。Provider 收到完整
+配置，并返回包含以下内容的 `FileSystemResolution`：
 
-真实 provider 应统一映射底层错误：
+- 已配置文件系统对象；
+- provider 解码后的 `FsPath`；
+- canonical、credential-free 的 `FsUri`。
 
-| 底层条件 | 建议 `FsErrorKind` |
-| --- | --- |
-| 404、inode 不存在、object 不存在 | `NotFound` |
-| create-new 目标已存在 | `AlreadyExists` |
-| key/path/URI 非法 | `InvalidPath` |
-| 401 或凭据无效 | `AuthenticationFailed` |
-| 403 或 ACL 拒绝 | `PermissionDenied` |
-| 405 或 SDK 不支持 | `UnsupportedOperation` |
-| 409 conflict | `Conflict` |
-| 412 ETag 不匹配 | `PreconditionFailed` |
-| 423 locked resource | `Conflict` 或 provider-specific mapping |
-| 429 或服务端限流 | 根据语义映射到 `ProviderUnavailable` 或 `Timeout` |
-| checksum 不匹配 | `DataCorruption` |
-| 本地 stream 错误 | `Io` |
+Registry 再把它转换成 `FileResource` 或 `AsyncFileResource`。
+`resource_uri()` 与 `resource_uri_async()` 是 empty-options 便捷方法。
 
-附加上下文示例：
+## 文件身份与 Metadata
+
+`FileReader`、`FileWriter`、`AsyncFileReader` 与 `AsyncFileWriter` 是文件句柄，
+不是任意字节流的别名。Provider 必须用已经打开的流和 `OpenedFileInfo` 显式构造。
+
+每个打开句柄都有固定 `FileLocation`：
+
+- 已配置文件系统的 `FileSystemId`；
+- 打开时捕获的 provider-local path；
+- 可选 canonical、secret-free URI。
+
+`OpenedFileInfo::metadata()` 是可选的 open-time 快照。只有在打开过程中本来就拿到
+metadata 时才应填充，provider 不应为了填字段额外发起远程 `stat`。需要当前状态时，
+调用 `FileSystem::stat()` 或 `AsyncFileSystem::stat_async()`。
+可扩展的 `FileMetadata::user_metadata` 与 `provider_metadata` 字段使用
+`NonSensitiveMetadata`，provider 必须通过受校验转换或对应 builder method 构造。
+
+## 同步读取
+
+内容可以安全放入内存时，可使用 `FileSystemExt::read_all()` 或
+`FileResource::read_all()`。流式读取时，`FileReader` 实现
+`qubit_io::Input<Item = u8>`。
 
 ```rust
-use qubit_fs::{FsError, FsErrorKind, FsOperation, FsPath};
+use qubit_fs::{
+    FileResource,
+    FsError,
+    FsOperation,
+    FsResult,
+    ReadOptions,
+};
+use qubit_io::Input;
 
-fn map_backend_error(path: &FsPath, source: std::io::Error) -> FsError {
-    FsError::with_source(
-        FsErrorKind::Io,
-        FsOperation::OpenReader,
-        "backend read failed",
-        source,
-    )
-    .with_path(path.clone())
-    .with_provider("my-provider")
+fn read_prefix(resource: &FileResource) -> FsResult<Vec<u8>> {
+    let mut reader = resource.open_reader(&ReadOptions::default())?;
+    let mut buffer = [0_u8; 4096];
+    let count = reader.read(&mut buffer).map_err(|error| {
+        FsError::from_io(error, FsOperation::Read)
+            .with_path(resource.path().clone())
+    })?;
+    Ok(buffer[..count].to_vec())
 }
 ```
 
-### 11.10 Provider 能力声明清单
+`ReadOptions` 描述 byte range、version condition 与 checksum policy。调用方要求的
+option 无法满足时，provider 必须返回明确错误，不能静默忽略。
 
-发布 provider 前，应逐项决定并测试能力：
+## 同步写入
 
-| Capability | 需要回答的问题 |
-| --- | --- |
-| `hierarchical_paths` | 是真实目录结构，还是 lexical key? |
-| `directories` | 后端能否表示目录或 collection? |
-| `empty_directories` | 空目录没有子项时能否保留? |
-| `symlinks` | 是否支持读取、复制或创建 symlink? |
-| `range_read` | 是否能高效读取字节范围? |
-| `append` | append 是否原生且安全? |
-| `random_write` | 是否能修改任意 offset? |
-| `atomic_rename` | rename 在命名空间内是否原子? |
-| `atomic_replace` | 替换时是否不会暴露半写内容? |
-| `conditional_write` | 是否支持 ETag、generation 或版本前置条件? |
-| `server_side_copy` | 是否能不经过客户端流式转发完成复制? |
-| `recursive_delete` | 是否能安全删除树? |
-| `temp_file` | 是否能预留临时文件? |
-| `temp_dir` | 是否能预留临时目录? |
-| `temp_persist` | 临时资源是否能持久化到最终路径? |
-| `temp_persist_atomic` | 临时资源持久化是否能原子完成? |
-| `native_metadata` | 是否有值得保留的后端原生 metadata? |
-
-## 12. WebDAV provider 实现建议
-
-WebDAV provider 可按如下方式映射：
-
-| `FileSystem` 操作 | WebDAV 方法 |
-| --- | --- |
-| `metadata` | `PROPFIND Depth: 0` |
-| `list` | `PROPFIND Depth: 1` 或更深分页策略 |
-| `open_reader` | `GET` |
-| `open_writer` | `PUT`，尽可能延迟到 commit |
-| `create_dir` | `MKCOL` |
-| `delete` | `DELETE` |
-| `rename` | `MOVE` |
-| `copy` | `COPY` |
-
-注意事项：
-
-- `ETag` 映射到 `FileMetadata.etag`。
-- `Content-Type` 映射到 `FileMetadata.content_type`。
-- WebDAV 自定义属性放入 `provider_metadata`。
-- `Depth` 行为要文档化，因为不同服务器差异较大。
-- `MOVE` 和 `COPY` 可能只是尽力执行，不一定 atomic。
-- HTTP 401、403、404、405、409、412、423、507 要仔细映射到统一错误类型。
-
-骨架示例：
+`FileWriter` 实现 `qubit_io::Output<Item = u8>`，同时也是 provider publication
+session。写入字节后，必须显式调用 `commit()` 或 `abort()`。
 
 ```rust
-#[derive(Debug)]
-pub struct WebDavFileSystem {
-    endpoint: String,
-    client: reqwest::blocking::Client,
-}
+use qubit_fs::{
+    AtomicityRequirement,
+    FileResource,
+    FsError,
+    FsOperation,
+    FsResult,
+    WriteDisposition,
+    WriteOptions,
+    WriteOutcome,
+};
+use qubit_io::Output;
 
-impl FileSystem for WebDavFileSystem {
-    fn metadata(&self) -> FileSystemMetadata {
-        let mut metadata = FileSystemMetadata::new("webdav");
-        metadata.schemes.push("webdav".to_owned());
-        metadata.schemes.push("webdavs".to_owned());
-        metadata.capabilities.directories = true;
-        metadata.capabilities.empty_directories = true;
-        metadata.capabilities.server_side_copy = true;
-        metadata
+fn replace(
+    resource: &FileResource,
+    bytes: &[u8],
+) -> FsResult<WriteOutcome> {
+    let options = WriteOptions {
+        create_parent: true,
+        disposition: WriteDisposition::CreateOrReplace,
+        atomicity: AtomicityRequirement::Required,
+        ..WriteOptions::default()
+    };
+    let mut writer = resource.open_writer(&options)?;
+    if let Err(error) = writer.write_fully(bytes) {
+        let _ = writer.abort();
+        return Err(FsError::from_io(error, FsOperation::Write)
+            .with_path(resource.path().clone()));
     }
-
-    // 在这里映射 PROPFIND、GET、PUT、MKCOL、DELETE、MOVE、COPY。
+    writer.commit()
 }
 ```
 
-## 13. Local provider 实现建议
+`commit(&mut self)` 有意不消费 handle。确定性失败后 writer 仍为 open，可重试或
+abort。Provider 无法确认 publication 是否发生时，返回
+`FsErrorKind::Indeterminate`，writer 进入 `WriterState::Indeterminate`，同时仍
+保留 session，供调用方显式恢复。
 
-本地 provider 应把 `std::path::PathBuf` 限制在 provider 内部，对外只暴露 `FsPath`。
+仍为 Open 的同步 writer 在 drop 时会 best-effort abort。Indeterminate writer 可能
+已经发生 publication 或 cleanup，因此绝不自动 abort。Drop 无法返回清理错误，
+需要确认清理的调用方必须自己调用 `abort()`。
 
-建议规则：
+## 异步操作
 
-| 规则 | 说明 |
-| --- | --- |
-| root sandbox | 配置一个根目录，所有 `FsPath` 映射到 root 下 |
-| 防逃逸 | 拒绝逃出 root 的路径 |
-| symlink policy | 显式定义是否跟随 symlink |
-| atomic replace | `WriteMode::ReplaceAtomic` 使用本地 atomic write |
-| 错误映射 | 将 `std::io::ErrorKind` 映射到 `FsErrorKind` |
-| 复用工具 | 适合复用 `qubit-local-files` 的 atomic write、递归复制和本地临时资源能力 |
-
-路径映射 helper 示例：
+异步文件系统操作返回 `FsFuture`，核心 crate 不绑定 Tokio、`futures-io` 或其他
+executor。Open 之所以是异步，是因为它可能包含认证、连接、请求协商或 multipart
+初始化。成功 open 后返回已经初始化的异步句柄。
 
 ```rust
-use std::path::PathBuf;
-use qubit_fs::{FsError, FsErrorKind, FsOperation, FsPath, FsResult};
+use qubit_fs::{
+    AsyncFileResource,
+    FsError,
+    FsOperation,
+    FsResult,
+    ReadOptions,
+};
+use qubit_io::AsyncInputExt;
 
-#[derive(Debug)]
-pub struct LocalFileSystem {
-    root: PathBuf,
-}
-
-impl LocalFileSystem {
-    fn to_local_path(&self, path: &FsPath) -> FsResult<PathBuf> {
-        let relative = path.as_str().trim_start_matches('/');
-        let candidate = self.root.join(relative);
-
-        if candidate.components().any(|component| matches!(component, std::path::Component::ParentDir)) {
-            return Err(FsError::new(
-                FsErrorKind::InvalidPath,
-                FsOperation::ParsePath,
-                "path escapes the local root",
-            ).with_path(path.clone()).with_provider("local"));
-        }
-
-        Ok(candidate)
-    }
+async fn read_prefix(
+    resource: &AsyncFileResource,
+) -> FsResult<Vec<u8>> {
+    let mut reader =
+        resource.open_reader_async(ReadOptions::default()).await?;
+    let mut buffer = [0_u8; 4096];
+    let count = reader.read_async(&mut buffer).await.map_err(|error| {
+        FsError::from_io(error, FsOperation::Read)
+            .with_path(resource.path().clone())
+    })?;
+    Ok(buffer[..count].to_vec())
 }
 ```
 
-## 14. 对象存储 provider 实现建议
+Async writer 实现 `AsyncOutput<Item = u8>`：
 
-OSS、S3 这类对象存储不应该伪装成完整 POSIX 文件系统。
+```rust
+use qubit_fs::{
+    AsyncFileResource,
+    FsError,
+    FsOperation,
+    FsResult,
+    WriteOptions,
+    WriteOutcome,
+};
+use qubit_io::AsyncOutputExt;
 
-推荐映射：
+async fn write(
+    resource: &AsyncFileResource,
+    bytes: &[u8],
+) -> FsResult<WriteOutcome> {
+    let mut writer =
+        resource.open_writer_async(WriteOptions::default()).await?;
+    if let Err(error) = writer.write_fully_async(bytes).await {
+        let _ = writer.abort_async().await;
+        return Err(FsError::from_io(error, FsOperation::Write)
+            .with_path(resource.path().clone()));
+    }
+    writer.commit_async().await
+}
+```
 
-| 概念 | 映射 |
-| --- | --- |
-| `FsPath` | 使用规范化 `/` 分隔的 object key |
-| directory | prefix 视图或可选 marker object |
-| empty directory | 通常不支持，除非使用 marker object |
-| `metadata` | HEAD object 或 list 结果补充 |
-| `open_reader` | GET object，可支持 range GET |
-| `open_writer` | PUT object 或 multipart upload |
-| `rename` | copy + delete，不是原子操作 |
-| `copy` | 优先 server-side copy |
-| `etag` | provider ETag、generation 或 version id |
-| user metadata | provider object metadata |
+异步 drop 无法等待远程清理。`AsyncFileWriteSession::cancel_on_drop` 只能执行非阻塞
+本地取消，并且只处理确定仍为 Open 的 writer。commit/abort future 一旦被 poll，若在
+完成前被 drop，writer 就进入 `Indeterminate`；从未 poll 的 future 不改变状态。
+Indeterminate writer 不执行自动取消。只要需要确认清理，就必须 await
+`abort_async()`。
 
-关键规则：
+对确定可放入内存的资源，`AsyncFileSystemExt::read_all_async()`、
+`write_all_async()` 以及 `AsyncFileResource` 上的同名便利方法提供整体读写 helper
+的异步对应形式。
 
-- `atomic_rename` 通常应为 false。
-- 如果支持 object copy，`server_side_copy` 应为 true。
-- `WriteMode::ConditionalReplace` 可映射到 generation 或 ETag precondition。
-- 只要实现了 `open_writer(CreateNew)` 和 `delete()`，`TempResources` 通常就能工作。
-- multipart upload 写入失败时必须 abort。
+## Listing 与 Bound Resource
 
-## 15. Provider 测试建议
+`DirectoryStream::next_entry()` 与
+`AsyncDirectoryStream::next_entry_async()` 支持 provider 内部增量分页。明确接受完整
+listing 内存开销时，可使用 `DirectoryStreamExt::collect_entries()` 或
+`AsyncDirectoryStreamExt::collect_entries_async()`。
 
-provider 测试至少应覆盖：
+`FileResource` 与 `AsyncFileResource` 把 decoded path 绑定到 owning filesystem，
+提供 stat、exists、list、open、create、delete、rename 和 copy 便捷操作。
+`FsPath` 自身不携带 backend 状态，因此仍然轻量、可比较、易测试。
 
-1. URI 解析和 provider 注册。
-2. 基础 write、read、metadata、exists、list、delete。
-3. not found、already exists、permission denied、authentication failed、unsupported operation 的错误映射。
-4. `WriteMode::CreateNew`、`CreateOrTruncate`、`ReplaceAtomic` 和 provider 支持的 conditional mode。
-5. 如果 `range_read = true`，覆盖 `ReadOptions` 的 range 行为。
-6. `RenameOptions.atomic = Required` 的行为。
-7. `CopyOptions` 的 conflict policy 和 server-side preference。
-8. 如果 capabilities 声明支持，测试 `TempResources::create_file()` 和 `create_dir()`。
-9. `ManagedTempFile::persist()`、`cleanup()`、`keep()` 行为。
-10. 大目录 list，包括分页。
-11. metadata preservation 和 provider metadata。
-12. 写入失败、copy-delete fallback 失败后的清理。
+## Capability、Requirement 与 Outcome
 
-建议把最小合约测试写成接收 `Arc<dyn FileSystem>` 的测试函数，这样 Local、WebDAV、OSS、Memory provider 可以复用同一套测试。
+Capability 是类型化保证：
 
-## 16. 最佳实践
+```rust
+use qubit_fs::{
+    FileSystem,
+    FileSystemCapability,
+};
 
-| 主题 | 建议 |
-| --- | --- |
-| Path | 对外统一使用 `FsPath`，provider 内部再转换为 native path 或 key |
-| URI | `FsUri` 用于定位 provider 和初始化，不要每个操作都传完整 URI 字符串 |
-| Secret | 不要把 secret 放入 `FsUri.query`，使用 `CredentialRef` 或 provider 安全配置 |
-| Capabilities | 依赖高级语义前先检查 capabilities |
-| Unsupported | 不支持就返回 `UnsupportedOperation`，不要假装支持 |
-| Writing | writer 必须 commit 或 abort |
-| Temp resources | 用 `cleanup()`、`persist()`、`keep()` 明确所有权转移 |
-| Copy | 用 `CopyOutcome.method` 和 `CopyStats` 做审计和诊断 |
-| Error | 尽量保留 operation、path、target、provider、source error |
-| Provider crate | 具体实现放在独立 crate，通过 `qubit-spi` 注册 |
+fn supports_atomic_rename(fs: &dyn FileSystem) -> bool {
+    fs.capabilities().contains(FileSystemCapability::AtomicRename)
+}
+```
 
-## 17. 当前限制
+Capability 快照描述当前已配置文件系统保证什么，而不是某个泛型 provider 偶尔可能
+尝试什么。`FileSystemLimits` 携带稳定的配置限制。
 
-当前 `qubit-fs` 只提供核心抽象，尚未提供：
+`AtomicityRequirement` 有三种语义：
 
-- 内置 local provider
-- 内置 WebDAV provider
-- 内置 OSS/S3/HDFS provider
-- async trait
-- 全局自动 provider discovery
-- 跨 provider copy orchestration
-- credential resolution 实现
+- `Required`：成功必须满足原子性；无法保证时，在副作用前失败；
+- `Preferred`：优先原子方法，但允许非原子成功，且必须报告；
+- `NotRequired`：调用方不要求原子性，但 provider 仍可使用原子方法。
 
-这些能力应由独立后端 crate 或后续扩展层提供。
+成功的 `WriteOutcome`、`RenameOutcome`、`CopyOutcome` 与 `PersistOutcome` 会报告
+`AchievedAtomicity` 和实际 method。请求策略与完成结果有意使用不同类型。
 
-## 18. 推荐接入路径
+Provider 应在 mutation 前校验 Required guarantee。`ReadOptions`、`WriteOptions`、
+`DeleteOptions`、`RenameOptions`、`CopyOptions` 与 `PersistOptions` 都提供
+`validate_against()` preflight。缺少 range、conditional、checksum、append、原子
+publication、recursive delete 或 server-side copy 保证时，错误会携带对应的 typed
+capability。
+`WriteOptions::validate()` 还会拒绝自身矛盾的请求，例如同时指定 `CreateNew` 与
+`IfMatch`。
 
-应用开发者建议按以下步骤接入：
+## 错误
 
-1. 引入 `qubit-fs` 和一个或多个 provider crate。
-2. 通过 `FileSystemRegistry::default()` 创建 `FileSystemRegistry`。
-3. 直接在该 registry 上显式注册 provider。
-4. 把 URI 字符串解析成 `FsUri`，再用 `FileSystemRegistry::resource()` 解析资源。
-5. 优先使用 `FileResource` 执行资源导向操作；底层实现仍然使用 `FileSystem` + `FsPath`。
-6. 依赖高级行为前检查 capabilities。
-7. 按 `FsErrorKind` 处理错误，不直接依赖 provider-native error。
+`FsError` 携带：
 
-provider 作者建议按以下步骤实现：
+- provider-neutral `FsErrorKind`；
+- `FsOperation`；
+- 可选 source path 与 target path；
+- 可选 provider identity；
+- 可选 required capability；
+- 原始 source error。
 
-1. 为后端实现 `FileSystem`。
-2. 按需实现 `FileReader`、`FileWriter`、`DirectoryStream`。
-3. 准确声明 `FileSystemCapabilities`。
-4. 将后端原生错误映射为 `FsErrorKind`。
-5. 实现 `ServiceProvider<FileSystemSpec>`。
-6. 暴露 `register_provider()` helper。
-7. 编写基于 `Arc<dyn FileSystem>` 的合约测试。
-8. 文档化后端专属语义，尤其是 atomicity、directory、metadata、credential。
+Open、metadata、lifecycle 与 namespace 操作返回 `FsError`。字节传输方法遵循
+`qubit-io`，返回 `std::io::Error`。`FsError::into_io_error()` 与
+`FsError::from_io()` 用于跨越这条边界，并尽可能保留底层 source。
+
+`exists()` 只有在明确 `NotFound` 时才返回 `Ok(false)`。认证、权限、超时与网络错误
+仍然是错误。
+
+## 临时资源
+
+不存在跨后端通用的默认临时目录。本地文件系统、对象存储、云盘与分布式文件系统没有
+共同的安全 namespace、生命周期或 publication strategy。因此 provider 必须显式
+实现 `create_temp_file` / `create_temp_dir` 或异步对应方法，并声明相应 capability。
+
+临时句柄拥有 cleanup responsibility，提供：
+
+- `cleanup`：删除 source 并确认清理；
+- `keep`：把责任转交调用方；
+- `persist`：发布到最终路径，但不消费 handle。
+
+`TempDir::child()` 接收 `FsName`，`descendant()` 接收 `RelativeFsPath`，从而防止
+绝对路径替换与词法 `..` 逃逸。
+
+Persist 失败是类型化的：
+
+| 状态 | 含义 | 调用方动作 |
+| --- | --- | --- |
+| `NotPublished` | target 未发布，handle 仍拥有 source | 修正后重试或清理 |
+| `PublishedSourceRetained` | target 已发布，source 仍需清理 | 不要再次发布；清理 source |
+| `Indeterminate` | provider 无法确认 source/target 最终状态 | 外部对账；禁止自动清理或重试 |
+
+`persist(&mut self, ...)` 会保留 handle，因此失败时不会丢失临时 session。同步 drop
+只对确定 owned 状态执行 best-effort cleanup。异步 cleanup、keep 或 persist future
+一旦被 poll，若在完成前被 drop，handle 就进入 `Indeterminate` 并禁用自动取消；从未
+poll 的 future 不影响生命周期。远程清理必须显式 await。
+
+## 实现 Provider
+
+同步 provider 是自描述的
+`qubit_spi::ProviderDefinition<FileSystemSpec>`，输出
+`FileSystemResolution<dyn FileSystem>`。异步 provider 独立实现
+`AsyncFileSystemProvider`。
+
+Provider 应当：
+
+1. 校验完整 `FileSystemConfig`；
+2. 通过外部 secret source 解析 `CredentialRef`；
+3. 按 provider 语义解码 raw URI path；
+4. 构造 immutable `FileSystemInfo` 与 `FileSystemCapabilities`；
+5. 返回 configured filesystem、decoded `FsPath` 与安全 canonical URI；
+6. 用稳定 identity 创建显式 file/lifecycle handle；
+7. 在副作用前拒绝无法满足的 guarantee；
+8. 报告实际 publication method、atomicity 与 partial progress；
+9. 为错误附加 operation、path、provider、capability 与 source context。
+
+`FileSystemInfo::with_provider_metadata()` 会拒绝顶层、string map 与 JSON object
+内部的 credential-like key，因为该快照可出现在 Debug 输出中。File metadata、
+options 与 outcome diagnostics 也由 `NonSensitiveMetadata` 强制执行同一不变量，自动
+Debug 只暴露 key，不暴露 value。所有 secret value 都必须在核心模型之外解析。
+`FsError` message 也必须预先清洗；它的 `Debug` 与 `Display` 不展开保留的 source
+error，显式诊断仍可通过 `Error::source()` 访问。
+
+可选操作的默认 trait 方法返回 `UnsupportedCapability`。Provider 只应 override 自己
+真正支持的操作。

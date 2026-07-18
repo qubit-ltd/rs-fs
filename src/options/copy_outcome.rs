@@ -10,8 +10,12 @@
 use qubit_metadata::Metadata;
 
 use crate::{
+    AchievedAtomicity,
     CopyMethod,
     CopyStats,
+    FsOperation,
+    FsResult,
+    NonSensitiveMetadata,
 };
 
 /// Outcome returned by copy operations.
@@ -21,8 +25,10 @@ pub struct CopyOutcome {
     pub stats: CopyStats,
     /// Method used to complete the copy.
     pub method: CopyMethod,
-    /// Provider-native diagnostics.
-    pub diagnostics: Metadata,
+    /// Atomicity actually achieved when publishing the destination.
+    pub atomicity: AchievedAtomicity,
+    /// Provider-native non-sensitive diagnostics.
+    pub diagnostics: NonSensitiveMetadata,
 }
 
 impl CopyOutcome {
@@ -31,16 +37,38 @@ impl CopyOutcome {
     /// # Parameters
     /// - `stats`: Copy statistics.
     /// - `method`: Method used to complete the copy.
+    /// - `atomicity`: Atomicity achieved while publishing the destination.
     ///
     /// # Returns
     /// New copy outcome without diagnostics.
     #[inline]
     #[must_use]
-    pub fn new(stats: CopyStats, method: CopyMethod) -> Self {
+    pub fn new(
+        stats: CopyStats,
+        method: CopyMethod,
+        atomicity: AchievedAtomicity,
+    ) -> Self {
         Self {
             stats,
             method,
-            diagnostics: Metadata::new(),
+            atomicity,
+            diagnostics: NonSensitiveMetadata::new(),
         }
+    }
+
+    /// Replaces the provider-native diagnostics after validating their keys.
+    ///
+    /// # Errors
+    ///
+    /// Returns an invalid-options error when a top-level key or a key nested
+    /// in a string map or JSON object resembles credential material.
+    #[inline]
+    pub fn with_diagnostics(mut self, diagnostics: Metadata) -> FsResult<Self> {
+        self.diagnostics = NonSensitiveMetadata::try_from_with_context(
+            diagnostics,
+            FsOperation::Copy,
+            "credential-like copy diagnostic keys are forbidden",
+        )?;
+        Ok(self)
     }
 }

@@ -18,8 +18,12 @@ pub enum FsErrorKind {
     NotDirectory,
     /// The requested operation expected a file but found a directory.
     IsDirectory,
-    /// A path or URI is invalid for the selected filesystem.
+    /// A provider-local path is invalid for the selected filesystem.
     InvalidPath,
+    /// A filesystem URI is malformed or violates the credential boundary.
+    InvalidUri,
+    /// Operation options or provider construction input are inconsistent.
+    InvalidOptions,
     /// The current credentials do not grant the requested operation.
     PermissionDenied,
     /// Authentication failed before authorization could be evaluated.
@@ -28,6 +32,16 @@ pub enum FsErrorKind {
     ProviderUnavailable,
     /// The filesystem model does not support the requested operation.
     UnsupportedOperation,
+    /// A specific stable filesystem capability is not supported.
+    UnsupportedCapability,
+    /// The operation exists but cannot satisfy a required semantic guarantee.
+    RequirementNotMet,
+    /// The handle or resource is not in a state that permits the operation.
+    InvalidState,
+    /// Side effects may have occurred, but their final state is unknown.
+    Indeterminate,
+    /// The operation was cancelled before a definitive result was produced.
+    Cancelled,
     /// The operation conflicts with current filesystem state.
     Conflict,
     /// A conditional operation failed its precondition.
