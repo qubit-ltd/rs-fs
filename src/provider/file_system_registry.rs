@@ -11,7 +11,8 @@ use std::sync::Arc;
 
 use qubit_spi::error::{
     ProviderCreationError,
-    ProviderSelectionError,
+    ProviderResolutionError,
+    ProviderSelectionBuildError,
     RegistrationError,
 };
 use qubit_spi::{
@@ -125,7 +126,7 @@ impl FileSystemRegistry {
     ) -> FsResult<ResolvingServiceProvider<FileSystemSpec>> {
         self.providers
             .resolve_selected(selection)
-            .map_err(map_provider_selection_error)
+            .map_err(map_provider_resolution_error)
     }
 
     /// Resolves the registry's current default selection without creating a
@@ -146,7 +147,7 @@ impl FileSystemRegistry {
     ) -> FsResult<ResolvingServiceProvider<FileSystemSpec>> {
         self.providers
             .resolve()
-            .map_err(map_provider_selection_error)
+            .map_err(map_provider_resolution_error)
     }
 
     /// Resolves a parsed URI into a filesystem instance.
@@ -165,7 +166,7 @@ impl FileSystemRegistry {
     pub fn fs(&self, uri: &FsUri) -> FsResult<Arc<dyn FileSystem>> {
         let config = FileSystemConfig::new(uri.clone());
         let selection = ProviderSelection::named(uri.scheme.as_str())
-            .map_err(map_provider_selection_error)?;
+            .map_err(map_provider_selection_build_error)?;
         self.resolve_selected(&selection)?
             .create_configured(&config)
             .map_err(map_provider_creation_error)
@@ -257,17 +258,40 @@ fn map_registration_error(error: RegistrationError) -> FsError {
     )
 }
 
-/// Maps an SPI selection error into a filesystem provider error.
+/// Maps an SPI selection-construction error into a filesystem provider error.
 ///
-/// # Arguments
+/// # Parameters
 ///
 /// * `error` - Failure produced before any provider creates a service.
 ///
 /// # Returns
 ///
-/// A provider-unavailable filesystem error preserving the selection failure.
+/// A provider-unavailable filesystem error preserving the construction
+/// failure.
 #[inline]
-fn map_provider_selection_error(error: ProviderSelectionError) -> FsError {
+fn map_provider_selection_build_error(
+    error: ProviderSelectionBuildError,
+) -> FsError {
+    let message = error.to_string();
+    FsError::with_source(
+        FsErrorKind::ProviderUnavailable,
+        FsOperation::Provider,
+        &message,
+        error,
+    )
+}
+
+/// Maps an SPI provider-resolution error into a filesystem provider error.
+///
+/// # Parameters
+///
+/// * `error` - Failure produced before any provider creates a service.
+///
+/// # Returns
+///
+/// A provider-unavailable filesystem error preserving the resolution failure.
+#[inline]
+fn map_provider_resolution_error(error: ProviderResolutionError) -> FsError {
     let message = error.to_string();
     FsError::with_source(
         FsErrorKind::ProviderUnavailable,

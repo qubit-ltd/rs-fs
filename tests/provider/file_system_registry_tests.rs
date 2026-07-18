@@ -22,7 +22,7 @@ use qubit_fs::{
 use qubit_spi::error::{
     ProviderCreationError,
     ProviderError,
-    ProviderSelectionError,
+    ProviderResolutionError,
     RegistrationError,
 };
 use qubit_spi::{
@@ -115,9 +115,9 @@ fn test_registry_returns_error_for_missing_provider() {
     assert!(
         error
             .source()
-            .and_then(|source| source.downcast_ref::<ProviderSelectionError>())
+            .and_then(|source| source.downcast_ref::<ProviderResolutionError>())
             .is_some(),
-        "selection failures should retain ProviderSelectionError as source",
+        "selection failures should retain ProviderResolutionError as source",
     );
 }
 
