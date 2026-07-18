@@ -7,43 +7,28 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![中文文档](https://img.shields.io/badge/文档-中文版-blue.svg)](README.zh_CN.md)
 
-Qubit FS is a pluggable filesystem abstraction for Rust.
+Qubit FS is a provider-neutral filesystem abstraction for local, remote, cloud,
+distributed, and virtual storage backends.
 
-It defines provider-neutral contracts for local filesystems, WebDAV, FTP, OSS,
-HDFS, and other storage backends. The root crate intentionally does not define a
-closed `FsKind` enum; concrete backends are registered through `qubit-spi`.
+The crate defines contracts rather than a concrete backend:
 
-## Provider model
+- `FileSystemProperties` exposes construction-time, non-I/O information;
+- `FileSystem` provides synchronous operations;
+- `AsyncFileSystem` provides runtime-neutral asynchronous operations;
+- `FileSystemExt` and `AsyncFileSystemExt` provide bounded whole-resource
+  helpers without expanding provider traits;
+- file handles use `qubit_io::Input` / `Output` and
+  `AsyncInput` / `AsyncOutput`;
+- `FsUri` locates a resource while `FsPath` represents the provider-decoded
+  path inside one configured filesystem;
+- typed capabilities, requirements, outcomes, and errors preserve semantic
+  differences between POSIX filesystems, object stores, cloud drives, and
+  distributed filesystems;
+- sync and async registries pass a complete `FileSystemConfig` to pluggable
+  providers.
 
-- Third-party providers implement `ProviderDefinition<FileSystemSpec>`, so the
-  provider carries both creation behavior and its own descriptor.
-- `FileSystemRegistry` is runtime mutable. Its clones share registrations and
-  default-selection updates.
-- Downstream code can call `resolve(&ProviderSelection)` or `resolve()`
-  to obtain a `ResolvingServiceProvider<FileSystemSpec>`, then create a
-  filesystem with an independent `FileSystemConfig`.
-- `fs(&FsUri)` is the domain convenience API: it selects by URI scheme, creates
-  the filesystem, and maps selection and creation failures separately into
-  `FsError` while preserving their source errors.
-
-## Example
-
-```rust
-use qubit_fs::{FileSystemRegistry, FsResult, FsUri};
-
-fn read_report(registry: &FileSystemRegistry) -> FsResult<Vec<u8>> {
-    let uri = FsUri::parse("file:///var/data/report.csv")?;
-    let resource = registry.resource(&uri)?;
-    resource.read_all()
-}
-
-fn configure() -> FsResult<FileSystemRegistry> {
-    let registry = FileSystemRegistry::default();
-    // A backend crate can register its self-described provider at startup:
-    // qubit_fs_local::register_provider(&registry)?;
-    Ok(registry)
-}
-```
+No local or remote provider is built into this crate. Applications assemble
+backend crates at startup.
 
 ## Installation
 
@@ -52,43 +37,98 @@ fn configure() -> FsResult<FileSystemRegistry> {
 qubit-fs = "0.2"
 ```
 
+## Synchronous Resolution
+
+```rust
+use qubit_fs::{
+    CredentialRef,
+    FileResource,
+    FileSystemConfig,
+    FileSystemRegistry,
+    FsResult,
+    FsUri,
+};
+
+fn resolve_report(
+    registry: &FileSystemRegistry,
+) -> FsResult<FileResource> {
+    let uri = FsUri::parse(
+        "s3://reports/2026/summary.csv?region=us-east-1",
+    )?;
+    let config = FileSystemConfig::new(uri)
+        .with_credentials(CredentialRef::Profile("analytics".into()));
+    registry.resource(&config)
+}
+```
+
+The registry selects by URI scheme unless `FileSystemConfig` contains an
+explicit provider selection. `resource_uri()` is the URI-only convenience
+method.
+
+## Asynchronous Resolution
+
+```rust
+use qubit_fs::{
+    AsyncFileResource,
+    AsyncFileSystemRegistry,
+    FileSystemConfig,
+    FsResult,
+    FsUri,
+};
+
+async fn resolve_report(
+    registry: &AsyncFileSystemRegistry,
+) -> FsResult<AsyncFileResource> {
+    let config = FileSystemConfig::new(
+        FsUri::parse("s3://reports/2026/summary.csv")?,
+    );
+    registry.resource_async(&config).await
+}
+```
+
+Async filesystem methods use `_async` names. Opening is itself asynchronous and
+returns an already-initialized `AsyncFileReader` or `AsyncFileWriter`.
+
+## Semantic Guarantees
+
+`AtomicityRequirement::Required` is a contract: a provider must reject an
+unsupported guarantee before side effects, never silently downgrade it.
+Successful write, rename, copy, and temporary-persist operations report the
+atomicity and concrete publication method actually achieved.
+
+Writers and temporary handles retain their provider sessions after recoverable
+failures. Temporary persistence additionally reports
+`PersistFailureState::{NotPublished, PublishedSourceRetained, Indeterminate}`
+so callers can distinguish retry, cleanup, and reconciliation paths.
+
+`FsUri` preserves the raw encoded path, ordered duplicate query pairs, and the
+difference between `scheme:/path` and `scheme:///path`. Providers own URI-path
+decoding. Literal path characters that require escaping must already be percent
+encoded. Passwords, tokens, and other credential-like values are rejected from
+URIs. `NonSensitiveMetadata` rejects credential-like keys recursively from all
+debug-visible extensible metadata, including config options, filesystem and
+file metadata, and operation diagnostics. Validation covers string maps and
+JSON objects nested in arrays, while its `Debug` output prints keys only.
+Scalar values cannot be classified reliably, so use `CredentialRef` for every
+secret.
+
 ## Documentation
 
 - [User guide](doc/user_guide.md)
 - [用户指南](doc/user_guide.zh_CN.md)
-- [中文设计文档](doc/file_system_design.zh_CN.md)
+- [中文架构设计](doc/file_system_design.zh_CN.md)
+- [API reference](https://docs.rs/qubit-fs)
 
-## Testing
+## Development
 
 ```bash
-# Core API with the default empty feature set
-cargo test --no-default-features
-
-# Core API plus regex validation
-cargo test --all-features
-
-# Project CI checks
-./ci-check.sh
-
-# Check code coverage
-./coverage.sh
+cargo test
+./align-ci.sh
+RS_CI_SKIP_TOOLCHAIN_UPDATE=1 ./ci-check.sh
 ```
 
 ## License
 
-Copyright (c) 2025 - 2026. Haixing Hu. All rights reserved.
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).
 
-Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for the
-full license text.
-
-## Contributing
-
-Contributions are welcome. Please follow the Rust API guidelines, keep public
-API documentation and tests current, and run `./align-ci.sh` to format code and
-`./ci-check.sh` to satisfy CI requirements before submitting a pull request.
-
-## Author
-
-**Haixing Hu** - *Qubit Co. Ltd.*
-
-Repository: [https://github.com/qubit-ltd/rs-fs](https://github.com/qubit-ltd/rs-fs)
+Copyright (c) 2025 - 2026 Haixing Hu.
