@@ -20,7 +20,6 @@ use qubit_spi::{
     ProviderRegistry,
     ProviderSelection,
     ResolvingServiceProvider,
-    ServiceProvider,
 };
 
 use crate::{

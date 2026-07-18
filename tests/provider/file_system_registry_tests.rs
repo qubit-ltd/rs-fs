@@ -30,7 +30,6 @@ use qubit_spi::{
     ProviderDescriptor,
     ProviderId,
     ProviderSelection,
-    ServiceProvider,
 };
 
 use crate::common::{
