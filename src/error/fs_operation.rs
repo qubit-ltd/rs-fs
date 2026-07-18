@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+// qubit-style: allow source-test-pair
 //! Filesystem operation identifiers used in errors.
 
 /// Filesystem operation that produced an error.

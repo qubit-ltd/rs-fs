@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+// qubit-style: allow source-test-pair
 //! Partial-progress states for failed temporary persistence.
 
 /// Provider-confirmed progress when a persist call does not fully complete.

@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+// qubit-style: allow source-test-pair
 //! Temporary resource lifecycle states.
 
 /// Observable lifecycle and recovery state of a temporary resource handle.

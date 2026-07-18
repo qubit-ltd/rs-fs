@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+// qubit-style: allow source-test-pair
 //! SPI service specification for filesystems.
 
 use qubit_spi::ServiceSpec;

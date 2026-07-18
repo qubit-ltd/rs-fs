@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+// qubit-style: allow source-test-pair
 //! Typed filesystem capability identifiers.
 
 /// A stable operation or semantic guarantee advertised by a filesystem.

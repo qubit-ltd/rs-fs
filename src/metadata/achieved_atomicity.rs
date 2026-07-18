@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+// qubit-style: allow source-test-pair
 //! Atomicity actually achieved by a completed operation.
 
 /// Atomicity guarantee actually achieved by a successful operation.

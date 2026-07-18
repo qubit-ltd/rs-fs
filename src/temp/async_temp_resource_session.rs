@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+// qubit-style: allow source-test-pair
 //! Provider-side asynchronous temporary resource lifecycle sessions.
 
 use std::pin::Pin;

@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+// qubit-style: allow source-test-pair
 //! File writer lifecycle states.
 
 /// Observable lifecycle state of a synchronous or asynchronous file writer.
