@@ -113,7 +113,7 @@ version = "0.14.0"
 
 [[package]]
 name = "qubit-metadata"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "qubit-datatype",
  "qubit-value",
