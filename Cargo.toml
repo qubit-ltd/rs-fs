@@ -36,7 +36,6 @@ parking_lot = "0.12"
 thiserror = "2.0"
 url = "2.5"
 
-qubit-io = "0.5"
 qubit-spi = { path = "../rs-spi", version = "0.8" }
 qubit-metadata = { path = "../rs-metadata", version = "0.7" }
 
