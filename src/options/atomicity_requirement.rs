@@ -5,21 +5,23 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Atomicity requirement used by rename and persist operations.
+//! Atomicity requirement used by write, rename, and persist operations.
 
-/// Atomicity requirement for operations that may be downgraded.
+/// Atomicity contract requested by an operation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AtomicityRequirement {
-    /// Use the strongest available implementation but allow downgrade.
-    BestEffort,
-    /// Require atomic behavior or fail with `UnsupportedOperation`.
+    /// Success must be atomic; unsupported guarantees fail before side effects.
     Required,
+    /// Prefer an atomic method but permit a reported non-atomic result.
+    Preferred,
+    /// Do not require atomicity, although an implementation may still use it.
+    NotRequired,
 }
 
 impl Default for AtomicityRequirement {
-    /// Uses best-effort atomicity by default.
+    /// Prefers atomic behavior while permitting an explicit fallback.
     #[inline]
     fn default() -> Self {
-        Self::BestEffort
+        Self::Preferred
     }
 }

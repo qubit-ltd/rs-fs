@@ -12,6 +12,11 @@ use qubit_metadata::MetadataFilter;
 use crate::{
     CopyConflictPolicy,
     CopyMode,
+    FileSystemCapabilities,
+    FileSystemCapability,
+    FsError,
+    FsErrorKind,
+    FsOperation,
     MetadataPreservePolicy,
     ProgressPolicy,
     ServerSidePreference,
@@ -65,6 +70,34 @@ impl CopyOptions {
             mode: CopyMode::Tree,
             ..Self::default()
         }
+    }
+
+    /// Validates required copy semantics before provider side effects.
+    ///
+    /// Preferred server-side copy may fall back and report its actual method.
+    /// Required server-side copy must fail this preflight when the configured
+    /// filesystem does not guarantee it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FsErrorKind::RequirementNotMet`] with
+    /// [`FileSystemCapability::ServerSideCopy`] when required server-side copy
+    /// is unavailable.
+    pub fn validate_against(
+        &self,
+        capabilities: FileSystemCapabilities,
+    ) -> Result<(), FsError> {
+        if self.server_side == ServerSidePreference::Require
+            && !capabilities.contains(FileSystemCapability::ServerSideCopy)
+        {
+            return Err(FsError::new(
+                FsErrorKind::RequirementNotMet,
+                FsOperation::Copy,
+                "server-side copy is required but not guaranteed",
+            )
+            .with_required_capability(FileSystemCapability::ServerSideCopy));
+        }
+        Ok(())
     }
 }
 

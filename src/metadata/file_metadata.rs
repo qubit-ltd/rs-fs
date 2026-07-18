@@ -14,6 +14,9 @@ use qubit_metadata::Metadata;
 use crate::{
     Checksum,
     FileKind,
+    FsOperation,
+    FsResult,
+    NonSensitiveMetadata,
 };
 
 /// Stable and extensible metadata for one filesystem resource.
@@ -35,10 +38,10 @@ pub struct FileMetadata {
     pub content_type: Option<String>,
     /// Content checksum when known.
     pub checksum: Option<Checksum>,
-    /// User-defined metadata.
-    pub user_metadata: Metadata,
-    /// Provider-native metadata.
-    pub provider_metadata: Metadata,
+    /// User-defined metadata with validated non-sensitive structural keys.
+    pub user_metadata: NonSensitiveMetadata,
+    /// Provider-native metadata with validated non-sensitive structural keys.
+    pub provider_metadata: NonSensitiveMetadata,
 }
 
 impl FileMetadata {
@@ -61,9 +64,44 @@ impl FileMetadata {
             etag: None,
             content_type: None,
             checksum: None,
-            user_metadata: Metadata::new(),
-            provider_metadata: Metadata::new(),
+            user_metadata: NonSensitiveMetadata::new(),
+            provider_metadata: NonSensitiveMetadata::new(),
         }
+    }
+
+    /// Replaces user-defined metadata after validating its structural keys.
+    ///
+    /// # Errors
+    ///
+    /// Returns an invalid-options error when a top-level key or a key nested
+    /// in a string map or JSON object resembles credential material.
+    #[inline]
+    pub fn with_user_metadata(mut self, metadata: Metadata) -> FsResult<Self> {
+        self.user_metadata = NonSensitiveMetadata::try_from_with_context(
+            metadata,
+            FsOperation::Stat,
+            "credential-like user metadata keys are forbidden",
+        )?;
+        Ok(self)
+    }
+
+    /// Replaces provider-native metadata after validating its structural keys.
+    ///
+    /// # Errors
+    ///
+    /// Returns an invalid-options error when a top-level key or a key nested
+    /// in a string map or JSON object resembles credential material.
+    #[inline]
+    pub fn with_provider_metadata(
+        mut self,
+        metadata: Metadata,
+    ) -> FsResult<Self> {
+        self.provider_metadata = NonSensitiveMetadata::try_from_with_context(
+            metadata,
+            FsOperation::Stat,
+            "credential-like provider metadata keys are forbidden",
+        )?;
+        Ok(self)
     }
 
     /// Tells whether this metadata describes a directory-like resource.

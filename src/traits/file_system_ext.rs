@@ -7,9 +7,11 @@
 // =============================================================================
 //! Convenience extension methods for [`crate::FileSystem`].
 
-use std::io::{
-    Read,
-    Write,
+use std::io::ErrorKind as IoErrorKind;
+
+use qubit_io::{
+    Input,
+    Output,
 };
 
 use crate::{
@@ -57,27 +59,35 @@ where
     T: FileSystem + ?Sized,
 {
     fn read_all(&self, path: &FsPath) -> FsResult<Vec<u8>> {
-        let mut reader = self.open_reader(path, &ReadOptions::default())?;
+        let mut reader = self.open_reader(path, ReadOptions::default())?;
         let mut bytes = Vec::new();
-        reader.read_to_end(&mut bytes).map_err(|error| {
-            FsError::with_source(
-                FsErrorKind::Io,
-                FsOperation::OpenReader,
-                "failed to read resource",
-                error,
-            )
-            .with_path(path.clone())
-        })?;
+        let mut buffer = [0_u8; 8192];
+        loop {
+            match reader.read(&mut buffer) {
+                Ok(0) => break,
+                Ok(read) => bytes.extend_from_slice(&buffer[..read]),
+                Err(error) if error.kind() == IoErrorKind::Interrupted => {}
+                Err(error) => {
+                    return Err(FsError::with_source(
+                        FsErrorKind::Io,
+                        FsOperation::Read,
+                        "failed to read resource",
+                        error,
+                    )
+                    .with_path(path.clone()));
+                }
+            }
+        }
         Ok(bytes)
     }
 
     fn write_all(&self, path: &FsPath, bytes: &[u8]) -> FsResult<WriteOutcome> {
-        let mut writer = self.open_writer(path, &WriteOptions::default())?;
-        if let Err(error) = writer.write_all(bytes) {
+        let mut writer = self.open_writer(path, WriteOptions::default())?;
+        if let Err(error) = writer.write_fully(bytes) {
             let _ = writer.abort();
             return Err(FsError::with_source(
                 FsErrorKind::Io,
-                FsOperation::OpenWriter,
+                FsOperation::Write,
                 "failed to write resource",
                 error,
             )

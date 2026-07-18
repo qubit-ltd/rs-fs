@@ -5,9 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Core filesystem trait.
-
-use std::fmt::Debug;
+//! Synchronous filesystem operations.
 
 use crate::{
     CopyOptions,
@@ -17,181 +15,241 @@ use crate::{
     DirectoryStream,
     FileMetadata,
     FileReader,
-    FileSystemCapabilities,
-    FileSystemMetadata,
+    FileSystemCapability,
+    FileSystemProperties,
     FileWriter,
+    FsError,
+    FsErrorKind,
+    FsOperation,
     FsPath,
     FsResult,
     ListOptions,
-    ManagedTempResourceFactory,
     ReadOptions,
     RenameOptions,
-    TempResourceFactory,
+    RenameOutcome,
+    TempDir,
+    TempDirOptions,
+    TempFile,
+    TempFileOptions,
     WriteOptions,
 };
 
-/// Provider-neutral filesystem interface.
-pub trait FileSystem: Debug + Send + Sync {
-    /// Gets metadata describing this filesystem instance.
+/// Provider-neutral synchronous filesystem interface.
+pub trait FileSystem: FileSystemProperties {
+    /// Reads current metadata for a provider-local path.
+    ///
+    /// # Parameters
+    /// - `path`: Resource path in this configured filesystem.
     ///
     /// # Returns
-    /// Filesystem metadata.
-    fn metadata(&self) -> FileSystemMetadata;
-
-    /// Gets capability hints for this filesystem.
+    /// Current provider metadata.
     ///
-    /// # Returns
-    /// Static capability hints.
-    #[inline]
-    fn capabilities(&self) -> FileSystemCapabilities {
-        self.metadata().capabilities
-    }
+    /// # Errors
+    /// Returns a filesystem error when metadata cannot be read.
+    fn stat(&self, path: &FsPath) -> FsResult<FileMetadata>;
 
-    /// Gets the temporary resource factory for this filesystem instance.
+    /// Checks whether a path currently exists.
     ///
-    /// If the specified filesystem does not provide its specific
-    /// implementation, a default `ManagedTempResourceFactory` will be
-    /// returned.
-    ///
-    /// # Returns
-    /// Factory used to create temporary files and directories owned by this
-    /// filesystem instance.
-    #[inline]
-    fn temp_resource_factory(&self) -> &dyn TempResourceFactory {
-        ManagedTempResourceFactory::shared()
-    }
-
-    /// Reads metadata for a path.
+    /// Only an explicit [`FsErrorKind::NotFound`] maps to `false`. Permission,
+    /// authentication, network, and timeout failures remain errors. This is an
+    /// observation helper and must not be combined with a later mutation to
+    /// emulate an atomic precondition.
     ///
     /// # Parameters
     /// - `path`: Resource path.
     ///
     /// # Returns
-    /// Resource metadata.
+    /// Whether the resource was observed to exist.
     ///
     /// # Errors
-    /// Returns [`crate::FsError`] when metadata cannot be read.
-    fn path_metadata(&self, path: &FsPath) -> FsResult<FileMetadata>;
+    /// Returns every error other than confirmed absence.
+    #[inline]
+    fn exists(&self, path: &FsPath) -> FsResult<bool> {
+        match self.stat(path) {
+            Ok(_) => Ok(true),
+            Err(error) if error.kind() == FsErrorKind::NotFound => Ok(false),
+            Err(error) => Err(error.with_operation(FsOperation::Exists)),
+        }
+    }
 
-    /// Checks whether a path exists.
-    ///
-    /// # Parameters
-    /// - `path`: Resource path.
-    ///
-    /// # Returns
-    /// `true` when the resource exists.
+    /// Opens a directory, prefix, or collection enumeration.
     ///
     /// # Errors
-    /// Returns [`crate::FsError`] for errors other than confirmed absence.
-    fn exists(&self, path: &FsPath) -> FsResult<bool>;
-
-    /// Lists a directory, prefix, or collection.
-    ///
-    /// # Parameters
-    /// - `path`: Container path.
-    /// - `options`: Listing options.
-    ///
-    /// # Returns
-    /// Directory stream.
-    ///
-    /// # Errors
-    /// Returns [`crate::FsError`] when listing cannot be started.
+    /// Returns an unsupported-capability error by default.
     fn list(
         &self,
         path: &FsPath,
-        options: &ListOptions,
-    ) -> FsResult<Box<dyn DirectoryStream>>;
+        _options: ListOptions,
+    ) -> FsResult<DirectoryStream> {
+        Err(unsupported(
+            path,
+            FsOperation::List,
+            FileSystemCapability::List,
+        ))
+    }
 
-    /// Opens a readable resource.
+    /// Opens an already-initialized synchronous file reader.
     ///
-    /// # Parameters
-    /// - `path`: Resource path.
-    /// - `options`: Read options.
-    ///
-    /// # Returns
-    /// Reader handle.
+    /// Implementations must call [`ReadOptions::validate_against`] before
+    /// starting provider I/O or producing side effects.
     ///
     /// # Errors
-    /// Returns [`crate::FsError`] when the reader cannot be opened.
+    /// Returns an unsupported-capability error by default.
     fn open_reader(
         &self,
         path: &FsPath,
-        options: &ReadOptions,
-    ) -> FsResult<Box<dyn FileReader>>;
+        _options: ReadOptions,
+    ) -> FsResult<FileReader> {
+        Err(unsupported(
+            path,
+            FsOperation::OpenReader,
+            FileSystemCapability::Read,
+        ))
+    }
 
-    /// Opens a writable resource.
+    /// Opens an already-initialized synchronous file write session.
     ///
-    /// # Parameters
-    /// - `path`: Resource path.
-    /// - `options`: Write options.
-    ///
-    /// # Returns
-    /// Writer handle.
+    /// Implementations must call [`WriteOptions::validate_against`] before
+    /// creating staging resources or accepting bytes.
     ///
     /// # Errors
-    /// Returns [`crate::FsError`] when the writer cannot be opened.
+    /// Returns an unsupported-capability error by default.
     fn open_writer(
         &self,
         path: &FsPath,
-        options: &WriteOptions,
-    ) -> FsResult<Box<dyn FileWriter>>;
+        _options: WriteOptions,
+    ) -> FsResult<FileWriter> {
+        Err(unsupported(
+            path,
+            FsOperation::OpenWriter,
+            FileSystemCapability::Write,
+        ))
+    }
 
-    /// Creates a directory, collection, or equivalent container.
-    ///
-    /// # Parameters
-    /// - `path`: Container path.
-    /// - `options`: Creation options.
+    /// Creates a directory or provider-equivalent container.
     ///
     /// # Errors
-    /// Returns [`crate::FsError`] when the container cannot be created.
+    /// Returns an unsupported-capability error by default.
     fn create_dir(
         &self,
         path: &FsPath,
-        options: &CreateDirOptions,
-    ) -> FsResult<()>;
+        _options: CreateDirOptions,
+    ) -> FsResult<()> {
+        Err(unsupported(
+            path,
+            FsOperation::CreateDir,
+            FileSystemCapability::CreateDirectory,
+        ))
+    }
 
     /// Deletes a resource.
     ///
-    /// # Parameters
-    /// - `path`: Resource path.
-    /// - `options`: Delete options.
+    /// Implementations must call [`DeleteOptions::validate_against`] before
+    /// modifying the resource.
     ///
     /// # Errors
-    /// Returns [`crate::FsError`] when deletion fails.
-    fn delete(&self, path: &FsPath, options: &DeleteOptions) -> FsResult<()>;
+    /// Returns an unsupported-capability error by default.
+    fn delete(&self, path: &FsPath, _options: DeleteOptions) -> FsResult<()> {
+        Err(unsupported(
+            path,
+            FsOperation::Delete,
+            FileSystemCapability::Delete,
+        ))
+    }
 
-    /// Renames or moves a resource within this filesystem.
+    /// Renames or moves a resource within this configured filesystem.
     ///
-    /// # Parameters
-    /// - `from`: Source path.
-    /// - `to`: Destination path.
-    /// - `options`: Rename options.
+    /// Implementations must call [`RenameOptions::validate_against`] before
+    /// modifying the source or destination.
+    ///
+    /// # Returns
+    /// The actual method and atomicity achieved.
     ///
     /// # Errors
-    /// Returns [`crate::FsError`] when rename fails.
+    /// Returns an unsupported-capability error by default.
     fn rename(
         &self,
         from: &FsPath,
-        to: &FsPath,
-        options: &RenameOptions,
-    ) -> FsResult<()>;
+        _to: &FsPath,
+        _options: RenameOptions,
+    ) -> FsResult<RenameOutcome> {
+        Err(unsupported(
+            from,
+            FsOperation::Rename,
+            FileSystemCapability::Rename,
+        ))
+    }
 
-    /// Copies a resource within this filesystem.
+    /// Copies a resource within this configured filesystem.
     ///
-    /// # Parameters
-    /// - `from`: Source path.
-    /// - `to`: Destination path.
-    /// - `options`: Copy options.
+    /// Implementations must call [`CopyOptions::validate_against`] before
+    /// starting a required server-side copy.
     ///
     /// # Returns
-    /// Copy outcome.
+    /// The actual copy method and destination publication guarantee.
     ///
     /// # Errors
-    /// Returns [`crate::FsError`] when copy fails.
+    /// Returns an unsupported-capability error by default.
     fn copy(
         &self,
         from: &FsPath,
-        to: &FsPath,
-        options: &CopyOptions,
-    ) -> FsResult<CopyOutcome>;
+        _to: &FsPath,
+        _options: CopyOptions,
+    ) -> FsResult<CopyOutcome> {
+        Err(unsupported(
+            from,
+            FsOperation::Copy,
+            FileSystemCapability::Copy,
+        ))
+    }
+
+    /// Creates a provider-native or explicitly configured temporary file.
+    ///
+    /// Core code never invents a temporary namespace for an arbitrary backend.
+    /// Providers must opt in by implementing this method.
+    ///
+    /// # Errors
+    /// Returns an unsupported-capability error by default.
+    fn create_temp_file(
+        &self,
+        _options: TempFileOptions,
+    ) -> FsResult<TempFile> {
+        Err(FsError::new(
+            FsErrorKind::UnsupportedCapability,
+            FsOperation::CreateTemp,
+            "filesystem has no configured temporary-file strategy",
+        )
+        .with_required_capability(FileSystemCapability::TempFile))
+    }
+
+    /// Creates a provider-native or explicitly configured temporary directory.
+    ///
+    /// Core code never derives a temporary root from ordinary backend paths.
+    /// Providers must opt in by implementing this method.
+    ///
+    /// # Errors
+    /// Returns an unsupported-capability error by default.
+    fn create_temp_dir(&self, _options: TempDirOptions) -> FsResult<TempDir> {
+        Err(FsError::new(
+            FsErrorKind::UnsupportedCapability,
+            FsOperation::CreateTemp,
+            "filesystem has no configured temporary-directory strategy",
+        )
+        .with_required_capability(FileSystemCapability::TempDirectory))
+    }
+}
+
+/// Builds a path-aware unsupported-capability error before side effects.
+fn unsupported(
+    path: &FsPath,
+    operation: FsOperation,
+    capability: FileSystemCapability,
+) -> FsError {
+    FsError::new(
+        FsErrorKind::UnsupportedCapability,
+        operation,
+        "filesystem capability is not supported",
+    )
+    .with_path(path.clone())
+    .with_required_capability(capability)
 }

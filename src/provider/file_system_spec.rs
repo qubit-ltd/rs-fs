@@ -7,13 +7,12 @@
 // =============================================================================
 //! SPI service specification for filesystems.
 
-use std::sync::Arc;
-
 use qubit_spi::ServiceSpec;
 
 use crate::{
     FileSystem,
     FileSystemConfig,
+    FileSystemResolution,
 };
 
 /// Service specification for filesystem providers.
@@ -22,5 +21,5 @@ pub struct FileSystemSpec;
 
 impl ServiceSpec for FileSystemSpec {
     type Config = FileSystemConfig;
-    type Output = Arc<dyn FileSystem>;
+    type Output = FileSystemResolution<dyn FileSystem>;
 }

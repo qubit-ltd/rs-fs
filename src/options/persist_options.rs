@@ -9,6 +9,11 @@
 
 use crate::{
     AtomicityRequirement,
+    FileSystemCapabilities,
+    FileSystemCapability,
+    FsError,
+    FsErrorKind,
+    FsOperation,
     MetadataPreservePolicy,
 };
 
@@ -18,11 +23,35 @@ pub struct PersistOptions {
     /// Whether the destination may be overwritten.
     pub overwrite: bool,
     /// Required atomicity level.
-    pub atomic: AtomicityRequirement,
-    /// Whether copy plus delete may be used when rename is unavailable.
-    pub allow_copy_delete: bool,
+    pub atomicity: AtomicityRequirement,
     /// Metadata preservation policy.
     pub preserve_metadata: MetadataPreservePolicy,
+}
+
+impl PersistOptions {
+    /// Validates required persistence guarantees before provider side effects.
+    ///
+    /// # Errors
+    /// Returns [`FsErrorKind::RequirementNotMet`] when atomic persistence is
+    /// required but the configured filesystem does not guarantee it.
+    pub fn validate_against(
+        &self,
+        capabilities: FileSystemCapabilities,
+    ) -> Result<(), FsError> {
+        if self.atomicity == AtomicityRequirement::Required
+            && !capabilities.contains(FileSystemCapability::AtomicTempPersist)
+        {
+            return Err(FsError::new(
+                FsErrorKind::RequirementNotMet,
+                FsOperation::PersistTemp,
+                "atomic temporary persistence is required but not guaranteed",
+            )
+            .with_required_capability(
+                FileSystemCapability::AtomicTempPersist,
+            ));
+        }
+        Ok(())
+    }
 }
 
 impl Default for PersistOptions {
@@ -30,8 +59,7 @@ impl Default for PersistOptions {
     fn default() -> Self {
         Self {
             overwrite: false,
-            atomic: AtomicityRequirement::Required,
-            allow_copy_delete: false,
+            atomicity: AtomicityRequirement::Required,
             preserve_metadata: MetadataPreservePolicy::Portable,
         }
     }

@@ -14,9 +14,10 @@ use std::fmt::{
 };
 
 use crate::{
-    FsError,
+    FsName,
     FsOperation,
     FsResult,
+    RelativeFsPath,
 };
 
 /// Provider-local filesystem path.
@@ -24,12 +25,12 @@ use crate::{
 pub struct FsPath {
     /// Whether the path is absolute.
     absolute: bool,
-    /// Normalized path string using `/` separators.
-    normalized: String,
+    /// Provider-local path string using `/` separators.
+    path: String,
 }
 
 impl FsPath {
-    /// Parses and normalizes a filesystem path.
+    /// Parses a hierarchical filesystem path using normalized semantics.
     ///
     /// # Parameters
     /// - `path`: Raw path string.
@@ -38,19 +39,33 @@ impl FsPath {
     /// Normalized provider-local path.
     ///
     /// # Errors
-    /// Returns [`FsError`] when the path is empty, contains a NUL byte, or
-    /// tries to escape above its root with `..`.
+    /// Returns [`crate::FsError`] when the path is empty, contains a NUL byte,
+    /// or tries to escape above its root with `..`.
+    #[inline]
     pub fn parse(path: &str) -> FsResult<Self> {
+        Self::parse_normalized(path)
+    }
+
+    /// Parses and normalizes a hierarchical filesystem path.
+    ///
+    /// Repeated separators and `.` components are removed. `..` components
+    /// are resolved and may not escape above the path root.
+    ///
+    /// # Errors
+    ///
+    /// Returns an invalid-path error for empty paths, control characters, or
+    /// root escape attempts.
+    pub fn parse_normalized(path: &str) -> FsResult<Self> {
         if path.is_empty() {
-            return Err(FsError::invalid_path(
+            return Err(crate::FsError::invalid_path(
                 FsOperation::ParsePath,
                 "path must not be empty",
             ));
         }
-        if path.contains('\0') {
-            return Err(FsError::invalid_path(
+        if path.chars().any(char::is_control) {
+            return Err(crate::FsError::invalid_path(
                 FsOperation::ParsePath,
-                "path must not contain NUL bytes",
+                "path must not contain control characters",
             ));
         }
         let absolute = path.starts_with('/');
@@ -60,7 +75,7 @@ impl FsPath {
                 "" | "." => {}
                 ".." => {
                     if components.pop().is_none() {
-                        return Err(FsError::invalid_path(
+                        return Err(crate::FsError::invalid_path(
                             FsOperation::ParsePath,
                             "path must not escape above its root",
                         ));
@@ -79,14 +94,42 @@ impl FsPath {
             components.join("/")
         };
         if normalized.is_empty() {
-            return Err(FsError::invalid_path(
+            return Err(crate::FsError::invalid_path(
                 FsOperation::ParsePath,
                 "relative path must not normalize to empty",
             ));
         }
         Ok(Self {
             absolute,
-            normalized,
+            path: normalized,
+        })
+    }
+
+    /// Parses a provider-literal path without normalizing path components.
+    ///
+    /// This form is intended for object-key and provider-specific semantics.
+    /// It preserves repeated separators, `.`, and `..` as ordinary text.
+    ///
+    /// # Errors
+    ///
+    /// Returns an invalid-path error when `path` is empty or contains control
+    /// characters.
+    pub fn parse_literal(path: &str) -> FsResult<Self> {
+        if path.is_empty() {
+            return Err(crate::FsError::invalid_path(
+                FsOperation::ParsePath,
+                "literal path must not be empty",
+            ));
+        }
+        if path.chars().any(char::is_control) {
+            return Err(crate::FsError::invalid_path(
+                FsOperation::ParsePath,
+                "literal path must not contain control characters",
+            ));
+        }
+        Ok(Self {
+            absolute: path.starts_with('/'),
+            path: path.to_owned(),
         })
     }
 
@@ -99,7 +142,7 @@ impl FsPath {
     pub fn root() -> Self {
         Self {
             absolute: true,
-            normalized: "/".to_owned(),
+            path: "/".to_owned(),
         }
     }
 
@@ -120,30 +163,51 @@ impl FsPath {
     #[inline]
     #[must_use]
     pub fn as_str(&self) -> &str {
-        &self.normalized
+        &self.path
+    }
+
+    /// Appends one validated child name.
+    #[must_use]
+    pub fn child(&self, name: &FsName) -> Self {
+        let path = if self.path == "/" {
+            format!("/{}", name.as_str())
+        } else {
+            format!("{}/{}", self.path, name.as_str())
+        };
+        Self {
+            absolute: self.absolute,
+            path,
+        }
+    }
+
+    /// Appends a validated relative descendant path.
+    #[must_use]
+    pub fn join_relative(&self, relative: &RelativeFsPath) -> Self {
+        let path = if self.path == "/" {
+            format!("/{}", relative.as_str())
+        } else {
+            format!("{}/{}", self.path, relative.as_str())
+        };
+        Self {
+            absolute: self.absolute,
+            path,
+        }
     }
 
     /// Joins a child path to this path.
     ///
     /// # Parameters
-    /// - `child`: Relative or absolute child path.
+    /// - `child`: Relative descendant path.
     ///
     /// # Returns
-    /// Joined path. Absolute child paths replace the base path.
+    /// Joined descendant path.
     ///
     /// # Errors
-    /// Returns [`FsError`] when `child` is not a valid path.
+    /// Returns [`crate::FsError`] when `child` is empty, absolute, contains a
+    /// control character, or escapes above the base with `..`.
     pub fn join(&self, child: &str) -> FsResult<Self> {
-        let child = Self::parse(child)?;
-        if child.is_absolute() {
-            return Ok(child);
-        }
-        let joined = if self.normalized == "/" {
-            format!("/{}", child.as_str())
-        } else {
-            format!("{}/{}", self.normalized, child.as_str())
-        };
-        Self::parse(&joined)
+        RelativeFsPath::parse(child)
+            .map(|relative| self.join_relative(&relative))
     }
 
     /// Gets this path's parent.
@@ -153,17 +217,20 @@ impl FsPath {
     /// parentless relative paths.
     #[must_use]
     pub fn parent(&self) -> Option<Self> {
-        if self.normalized == "/" {
+        if self.path == "/" {
             return None;
         }
-        let trimmed = self.normalized.trim_end_matches('/');
+        let trimmed = self.path.trim_end_matches('/');
         let index = trimmed.rfind('/')?;
         if index == 0 && self.absolute {
             Some(Self::root())
         } else if index == 0 {
             None
         } else {
-            Self::parse(&trimmed[..index]).ok()
+            Some(Self {
+                absolute: self.absolute,
+                path: trimmed[..index].to_owned(),
+            })
         }
     }
 
@@ -173,10 +240,10 @@ impl FsPath {
     /// `Some` file name when one exists, or `None` for root.
     #[must_use]
     pub fn file_name(&self) -> Option<&str> {
-        if self.normalized == "/" {
+        if self.path == "/" {
             None
         } else {
-            self.normalized.rsplit('/').next()
+            self.path.rsplit('/').next()
         }
     }
 
@@ -201,6 +268,6 @@ impl FsPath {
 impl Display for FsPath {
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
-        formatter.write_str(&self.normalized)
+        formatter.write_str(&self.path)
     }
 }

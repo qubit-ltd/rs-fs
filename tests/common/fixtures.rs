@@ -17,9 +17,11 @@ use std::io::{
 use std::sync::{
     Arc,
     Mutex,
+    OnceLock,
 };
 
 use qubit_fs::{
+    AchievedAtomicity,
     CopyMethod,
     CopyOptions,
     CopyOutcome,
@@ -28,14 +30,21 @@ use qubit_fs::{
     DeleteOptions,
     DirEntry,
     DirectoryStream,
+    DirectoryStreamSession,
     FileKind,
+    FileLocation,
     FileMetadata,
     FileReader,
     FileSystem,
     FileSystemCapabilities,
+    FileSystemCapability,
     FileSystemConfig,
-    FileSystemMetadata,
+    FileSystemId,
+    FileSystemInfo,
+    FileSystemProperties,
+    FileSystemResolution,
     FileSystemSpec,
+    FileWriteSession,
     FileWriter,
     FsError,
     FsErrorKind,
@@ -43,15 +52,13 @@ use qubit_fs::{
     FsPath,
     FsResult,
     ListOptions,
-    PersistOptions,
+    OpenedFileInfo,
+    PathSemantics,
+    PublicationMethod,
     ReadOptions,
     RenameOptions,
-    TempDir,
-    TempDirOptions,
-    TempFile,
-    TempFileOptions,
-    TempResource,
-    TempResourceFactory,
+    RenameOutcome,
+    ResourceVersion,
     WriteOptions,
     WriteOutcome,
 };
@@ -62,6 +69,7 @@ use qubit_spi::error::{
 use qubit_spi::{
     ProviderDefinition,
     ProviderDescriptor,
+    ProviderId,
     ServiceProvider,
 };
 
@@ -93,33 +101,52 @@ impl MockFs {
     }
 }
 
-impl FileSystem for MockFs {
-    fn metadata(&self) -> FileSystemMetadata {
-        let mut metadata = FileSystemMetadata::new("mock");
-        metadata.schemes.push("mock".to_owned());
-        metadata.capabilities = FileSystemCapabilities {
-            hierarchical_paths: true,
-            directories: true,
-            empty_directories: true,
-            symlinks: true,
-            range_read: true,
-            append: true,
-            random_write: false,
-            atomic_rename: true,
-            atomic_replace: true,
-            conditional_write: true,
-            server_side_copy: true,
-            recursive_delete: true,
-            temp_file: true,
-            temp_dir: true,
-            temp_persist: true,
-            temp_persist_atomic: true,
-            native_metadata: true,
-        };
-        metadata
+impl FileSystemProperties for MockFs {
+    fn info(&self) -> &FileSystemInfo {
+        static INFO: OnceLock<FileSystemInfo> = OnceLock::new();
+        INFO.get_or_init(|| {
+            FileSystemInfo::new(
+                FileSystemId::new("mock-instance")
+                    .expect("mock filesystem id should be valid"),
+                ProviderId::new("mock")
+                    .expect("mock provider id should be valid"),
+                PathSemantics::Hierarchical,
+            )
+            .with_scheme("mock")
+            .expect("mock scheme should be valid")
+        })
     }
 
-    fn path_metadata(&self, path: &FsPath) -> FsResult<FileMetadata> {
+    fn capabilities(&self) -> FileSystemCapabilities {
+        FileSystemCapabilities::default()
+            .with(FileSystemCapability::Stat)
+            .with(FileSystemCapability::List)
+            .with(FileSystemCapability::Read)
+            .with(FileSystemCapability::RangeRead)
+            .with(FileSystemCapability::ConditionalRead)
+            .with(FileSystemCapability::ChecksumValidation)
+            .with(FileSystemCapability::Write)
+            .with(FileSystemCapability::Append)
+            .with(FileSystemCapability::ConditionalWrite)
+            .with(FileSystemCapability::CreateDirectory)
+            .with(FileSystemCapability::EmptyDirectory)
+            .with(FileSystemCapability::Delete)
+            .with(FileSystemCapability::RecursiveDelete)
+            .with(FileSystemCapability::ConditionalDelete)
+            .with(FileSystemCapability::Rename)
+            .with(FileSystemCapability::AtomicRename)
+            .with(FileSystemCapability::AtomicReplace)
+            .with(FileSystemCapability::Copy)
+            .with(FileSystemCapability::ServerSideCopy)
+            .with(FileSystemCapability::Symlink)
+            .with(FileSystemCapability::TempFile)
+            .with(FileSystemCapability::TempDirectory)
+            .with(FileSystemCapability::AtomicTempPersist)
+    }
+}
+
+impl FileSystem for MockFs {
+    fn stat(&self, path: &FsPath) -> FsResult<FileMetadata> {
         let state = self.state.lock().expect("state lock should succeed");
         if state.dirs.contains(path.as_str()) {
             Ok(FileMetadata::new(FileKind::Directory))
@@ -131,7 +158,7 @@ impl FileSystem for MockFs {
         } else {
             Err(FsError::new(
                 FsErrorKind::NotFound,
-                FsOperation::Metadata,
+                FsOperation::Stat,
                 "missing",
             )
             .with_path(path.clone()))
@@ -147,9 +174,9 @@ impl FileSystem for MockFs {
     fn list(
         &self,
         _path: &FsPath,
-        _options: &ListOptions,
-    ) -> FsResult<Box<dyn DirectoryStream>> {
-        Ok(Box::new(MockDirectoryStream {
+        _options: ListOptions,
+    ) -> FsResult<DirectoryStream> {
+        Ok(DirectoryStream::new(MockDirectoryStream {
             entries: vec![DirEntry::new(
                 FsPath::parse("/a.txt")?,
                 FileKind::File,
@@ -159,25 +186,26 @@ impl FileSystem for MockFs {
 
     fn open_reader(
         &self,
-        _path: &FsPath,
-        _options: &ReadOptions,
-    ) -> FsResult<Box<dyn FileReader>> {
+        path: &FsPath,
+        _options: ReadOptions,
+    ) -> FsResult<FileReader> {
+        let info = mock_opened_info(path);
         if self
             .state
             .lock()
             .expect("state lock should succeed")
             .fail_read
         {
-            return Ok(Box::new(ErrorReader));
+            return Ok(FileReader::new(ErrorReader, info));
         }
-        Ok(Box::new(Cursor::new(b"data".to_vec())))
+        Ok(FileReader::new(Cursor::new(b"data".to_vec()), info))
     }
 
     fn open_writer(
         &self,
         path: &FsPath,
-        _options: &WriteOptions,
-    ) -> FsResult<Box<dyn FileWriter>> {
+        _options: WriteOptions,
+    ) -> FsResult<FileWriter> {
         let fail_write = self
             .state
             .lock()
@@ -188,19 +216,22 @@ impl FileSystem for MockFs {
             .lock()
             .expect("state lock should succeed")
             .fail_commit;
-        Ok(Box::new(MockWriter {
-            state: self.state.clone(),
-            path: path.clone(),
-            bytes: Vec::new(),
-            fail_write,
-            fail_commit,
-        }))
+        Ok(FileWriter::new(
+            MockWriter {
+                state: self.state.clone(),
+                path: path.clone(),
+                bytes: Vec::new(),
+                fail_write,
+                fail_commit,
+            },
+            mock_opened_info(path),
+        ))
     }
 
     fn create_dir(
         &self,
         path: &FsPath,
-        _options: &CreateDirOptions,
+        _options: CreateDirOptions,
     ) -> FsResult<()> {
         let mut state = self.state.lock().expect("state lock should succeed");
         if state.fail_create_dir {
@@ -214,7 +245,7 @@ impl FileSystem for MockFs {
         Ok(())
     }
 
-    fn delete(&self, path: &FsPath, _options: &DeleteOptions) -> FsResult<()> {
+    fn delete(&self, path: &FsPath, _options: DeleteOptions) -> FsResult<()> {
         let mut state = self.state.lock().expect("state lock should succeed");
         state.deletes.push(path.as_str().to_owned());
         if state.fail_delete {
@@ -233,8 +264,8 @@ impl FileSystem for MockFs {
         &self,
         from: &FsPath,
         to: &FsPath,
-        _options: &RenameOptions,
-    ) -> FsResult<()> {
+        _options: RenameOptions,
+    ) -> FsResult<RenameOutcome> {
         let mut state = self.state.lock().expect("state lock should succeed");
         if state.fail_rename_unsupported {
             return Err(FsError::new(
@@ -252,14 +283,17 @@ impl FileSystem for MockFs {
         if state.dirs.remove(from.as_str()) {
             state.dirs.insert(to.as_str().to_owned());
         }
-        Ok(())
+        Ok(RenameOutcome::new(
+            AchievedAtomicity::Atomic,
+            PublicationMethod::AtomicRename,
+        ))
     }
 
     fn copy(
         &self,
         from: &FsPath,
         to: &FsPath,
-        _options: &CopyOptions,
+        _options: CopyOptions,
     ) -> FsResult<CopyOutcome> {
         let mut state = self.state.lock().expect("state lock should succeed");
         state
@@ -271,7 +305,11 @@ impl FileSystem for MockFs {
             bytes: 4,
             ..Default::default()
         };
-        Ok(CopyOutcome::new(stats, CopyMethod::Stream))
+        Ok(CopyOutcome::new(
+            stats,
+            CopyMethod::Stream,
+            AchievedAtomicity::NonAtomic,
+        ))
     }
 }
 
@@ -298,8 +336,8 @@ impl Write for MockWriter {
     }
 }
 
-impl FileWriter for MockWriter {
-    fn commit(self: Box<Self>) -> FsResult<WriteOutcome> {
+impl FileWriteSession for MockWriter {
+    fn commit(&mut self) -> FsResult<WriteOutcome> {
         if self.fail_commit {
             return Err(FsError::new(
                 FsErrorKind::Io,
@@ -310,14 +348,16 @@ impl FileWriter for MockWriter {
         let mut state = self.state.lock().expect("state lock should succeed");
         state.files.insert(self.path.as_str().to_owned());
         state.writes.push(self.path.as_str().to_owned());
-        Ok(WriteOutcome {
-            bytes_written: Some(self.bytes.len() as u64),
-            etag: Some("committed".to_owned()),
-            diagnostics: qubit_metadata::Metadata::new(),
-        })
+        let mut outcome = WriteOutcome::new(
+            AchievedAtomicity::Atomic,
+            PublicationMethod::Direct,
+        );
+        outcome.bytes_written = Some(self.bytes.len() as u64);
+        outcome.version = Some(ResourceVersion::new("committed"));
+        Ok(outcome)
     }
 
-    fn abort(self: Box<Self>) -> FsResult<()> {
+    fn abort(&mut self) -> FsResult<()> {
         self.state.lock().expect("state lock should succeed").aborts += 1;
         Ok(())
     }
@@ -332,12 +372,19 @@ impl Read for ErrorReader {
     }
 }
 
+fn mock_opened_info(path: &FsPath) -> OpenedFileInfo {
+    OpenedFileInfo::new(FileLocation::new(
+        FileSystemId::new("mock-instance").expect("mock id should be valid"),
+        path.clone(),
+    ))
+}
+
 #[derive(Debug)]
 pub(crate) struct MockDirectoryStream {
     pub(crate) entries: Vec<DirEntry>,
 }
 
-impl DirectoryStream for MockDirectoryStream {
+impl DirectoryStreamSession for MockDirectoryStream {
     fn next_entry(&mut self) -> FsResult<Option<DirEntry>> {
         Ok(self.entries.pop())
     }
@@ -346,7 +393,7 @@ impl DirectoryStream for MockDirectoryStream {
 #[derive(Debug)]
 pub(crate) struct FailingDirectoryStream;
 
-impl DirectoryStream for FailingDirectoryStream {
+impl DirectoryStreamSession for FailingDirectoryStream {
     fn next_entry(&mut self) -> FsResult<Option<DirEntry>> {
         Err(FsError::new(
             FsErrorKind::Io,
@@ -361,7 +408,7 @@ pub(crate) struct PartiallyFailingDirectoryStream {
     pub(crate) entry: Option<DirEntry>,
 }
 
-impl DirectoryStream for PartiallyFailingDirectoryStream {
+impl DirectoryStreamSession for PartiallyFailingDirectoryStream {
     fn next_entry(&mut self) -> FsResult<Option<DirEntry>> {
         if let Some(entry) = self.entry.take() {
             Ok(Some(entry))
@@ -376,222 +423,6 @@ impl DirectoryStream for PartiallyFailingDirectoryStream {
 }
 
 #[derive(Debug)]
-struct NativeTempFileHandle {
-    fs: Arc<dyn FileSystem>,
-    path: FsPath,
-}
-
-impl TempResource for NativeTempFileHandle {
-    fn fs(&self) -> Arc<dyn FileSystem> {
-        self.fs.clone()
-    }
-
-    fn path(&self) -> &FsPath {
-        &self.path
-    }
-
-    fn cleanup(self: Box<Self>) -> FsResult<()> {
-        Ok(())
-    }
-
-    fn keep(self: Box<Self>) -> FsResult<FsPath> {
-        Ok(self.path)
-    }
-}
-
-impl TempFile for NativeTempFileHandle {
-    fn persist(
-        self: Box<Self>,
-        _target: &FsPath,
-        _options: &PersistOptions,
-    ) -> FsResult<WriteOutcome> {
-        Ok(WriteOutcome::default())
-    }
-}
-
-#[derive(Debug)]
-struct NativeTempDirHandle {
-    fs: Arc<dyn FileSystem>,
-    path: FsPath,
-}
-
-impl TempResource for NativeTempDirHandle {
-    fn fs(&self) -> Arc<dyn FileSystem> {
-        self.fs.clone()
-    }
-
-    fn path(&self) -> &FsPath {
-        &self.path
-    }
-
-    fn cleanup(self: Box<Self>) -> FsResult<()> {
-        Ok(())
-    }
-
-    fn keep(self: Box<Self>) -> FsResult<FsPath> {
-        Ok(self.path)
-    }
-}
-
-impl TempDir for NativeTempDirHandle {
-    fn persist(
-        self: Box<Self>,
-        _target: &FsPath,
-        _options: &PersistOptions,
-    ) -> FsResult<()> {
-        Ok(())
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct NativeTempResourceFactory;
-
-static NATIVE_TEMP_RESOURCE_FACTORY: NativeTempResourceFactory =
-    NativeTempResourceFactory;
-
-impl TempResourceFactory for NativeTempResourceFactory {
-    fn create_file(
-        &self,
-        owner: Arc<dyn FileSystem>,
-        options: &TempFileOptions,
-    ) -> FsResult<Box<dyn TempFile>> {
-        let path = self.make_temp_path(
-            options.parent.as_ref(),
-            &options.prefix,
-            &options.suffix,
-        )?;
-        Ok(Box::new(NativeTempFileHandle { fs: owner, path }))
-    }
-
-    fn create_dir(
-        &self,
-        owner: Arc<dyn FileSystem>,
-        options: &TempDirOptions,
-    ) -> FsResult<Box<dyn TempDir>> {
-        let path = self.make_temp_path(
-            options.parent.as_ref(),
-            &options.prefix,
-            &options.suffix,
-        )?;
-        Ok(Box::new(NativeTempDirHandle { fs: owner, path }))
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct NativeTempFs;
-
-impl FileSystem for NativeTempFs {
-    fn metadata(&self) -> FileSystemMetadata {
-        let mut metadata = FileSystemMetadata::new("native-temp");
-        metadata.capabilities.temp_file = true;
-        metadata.capabilities.temp_dir = true;
-        metadata
-    }
-
-    fn temp_resource_factory(&self) -> &dyn TempResourceFactory {
-        &NATIVE_TEMP_RESOURCE_FACTORY
-    }
-
-    fn path_metadata(&self, _path: &FsPath) -> FsResult<FileMetadata> {
-        Err(FsError::new(
-            FsErrorKind::UnsupportedOperation,
-            FsOperation::Metadata,
-            "not used",
-        ))
-    }
-
-    fn exists(&self, _path: &FsPath) -> FsResult<bool> {
-        Err(FsError::new(
-            FsErrorKind::UnsupportedOperation,
-            FsOperation::Exists,
-            "not used",
-        ))
-    }
-
-    fn list(
-        &self,
-        _path: &FsPath,
-        _options: &ListOptions,
-    ) -> FsResult<Box<dyn DirectoryStream>> {
-        Err(FsError::new(
-            FsErrorKind::UnsupportedOperation,
-            FsOperation::List,
-            "not used",
-        ))
-    }
-
-    fn open_reader(
-        &self,
-        _path: &FsPath,
-        _options: &ReadOptions,
-    ) -> FsResult<Box<dyn FileReader>> {
-        Err(FsError::new(
-            FsErrorKind::UnsupportedOperation,
-            FsOperation::OpenReader,
-            "not used",
-        ))
-    }
-
-    fn open_writer(
-        &self,
-        _path: &FsPath,
-        _options: &WriteOptions,
-    ) -> FsResult<Box<dyn FileWriter>> {
-        Err(FsError::new(
-            FsErrorKind::UnsupportedOperation,
-            FsOperation::OpenWriter,
-            "not used",
-        ))
-    }
-
-    fn create_dir(
-        &self,
-        _path: &FsPath,
-        _options: &CreateDirOptions,
-    ) -> FsResult<()> {
-        Err(FsError::new(
-            FsErrorKind::UnsupportedOperation,
-            FsOperation::CreateDir,
-            "not used",
-        ))
-    }
-
-    fn delete(&self, _path: &FsPath, _options: &DeleteOptions) -> FsResult<()> {
-        Err(FsError::new(
-            FsErrorKind::UnsupportedOperation,
-            FsOperation::Delete,
-            "not used",
-        ))
-    }
-
-    fn rename(
-        &self,
-        _from: &FsPath,
-        _to: &FsPath,
-        _options: &RenameOptions,
-    ) -> FsResult<()> {
-        Err(FsError::new(
-            FsErrorKind::UnsupportedOperation,
-            FsOperation::Rename,
-            "not used",
-        ))
-    }
-
-    fn copy(
-        &self,
-        _from: &FsPath,
-        _to: &FsPath,
-        _options: &CopyOptions,
-    ) -> FsResult<CopyOutcome> {
-        Err(FsError::new(
-            FsErrorKind::UnsupportedOperation,
-            FsOperation::Copy,
-            "not used",
-        ))
-    }
-}
-
-#[derive(Debug)]
 pub(crate) struct MockProvider {
     pub(crate) descriptor: ProviderDescriptor,
     pub(crate) fs: MockFs,
@@ -600,9 +431,13 @@ pub(crate) struct MockProvider {
 impl ServiceProvider<FileSystemSpec> for MockProvider {
     fn create_configured(
         &self,
-        _config: &FileSystemConfig,
-    ) -> Result<Arc<dyn FileSystem>, ProviderCreationError> {
-        Ok(Arc::new(self.fs.clone()))
+        config: &FileSystemConfig,
+    ) -> Result<FileSystemResolution<dyn FileSystem>, ProviderCreationError>
+    {
+        let fs: Arc<dyn FileSystem> = Arc::new(self.fs.clone());
+        let path = FsPath::parse_literal(config.uri().path().as_encoded())
+            .expect("mock URI path should be valid");
+        Ok(FileSystemResolution::new(fs, path, config.uri().clone()))
     }
 }
 
@@ -622,7 +457,8 @@ impl ServiceProvider<FileSystemSpec> for FailingCreateProvider {
     fn create_configured(
         &self,
         _config: &FileSystemConfig,
-    ) -> Result<Arc<dyn FileSystem>, ProviderCreationError> {
+    ) -> Result<FileSystemResolution<dyn FileSystem>, ProviderCreationError>
+    {
         Err(self.error.clone().into())
     }
 }

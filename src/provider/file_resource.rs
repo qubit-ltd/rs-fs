@@ -7,6 +7,11 @@
 // =============================================================================
 //! Bound filesystem resource.
 
+use std::fmt::{
+    Debug,
+    Formatter,
+    Result as FmtResult,
+};
 use std::sync::Arc;
 
 use crate::{
@@ -15,6 +20,7 @@ use crate::{
     CreateDirOptions,
     DeleteOptions,
     DirectoryStream,
+    FileLocation,
     FileMetadata,
     FileReader,
     FileSystem,
@@ -25,6 +31,7 @@ use crate::{
     ListOptions,
     ReadOptions,
     RenameOptions,
+    RenameOutcome,
     WriteOptions,
     WriteOutcome,
 };
@@ -35,10 +42,10 @@ use crate::{
 /// [`FileSystemRegistry::resource`](crate::FileSystemRegistry::resource). It
 /// keeps path operations close to the resolved filesystem without making
 /// [`FsPath`](crate::FsPath) itself carry any backend state.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct FileResource {
     fs: Arc<dyn FileSystem>,
-    path: FsPath,
+    location: FileLocation,
 }
 
 impl FileResource {
@@ -52,7 +59,24 @@ impl FileResource {
     /// A resource bound to the supplied filesystem and path.
     #[must_use]
     pub fn new(fs: Arc<dyn FileSystem>, path: FsPath) -> Self {
-        Self { fs, path }
+        let location = FileLocation::new(fs.info().id().clone(), path);
+        Self { fs, location }
+    }
+
+    /// Creates a resource from a resolved location.
+    ///
+    /// # Parameters
+    /// - `fs`: Filesystem that owns the location.
+    /// - `location`: Provider-decoded path and optional canonical URI.
+    ///
+    /// # Returns
+    /// A resource bound to the supplied filesystem and location.
+    #[must_use]
+    pub fn from_location(
+        fs: Arc<dyn FileSystem>,
+        location: FileLocation,
+    ) -> Self {
+        Self { fs, location }
     }
 
     /// Returns the filesystem that owns this resource.
@@ -64,16 +88,31 @@ impl FileResource {
         self.fs.as_ref()
     }
 
+    /// Clones the owning filesystem handle for derived resources.
+    #[inline]
+    pub(crate) fn fs_arc(&self) -> Arc<dyn FileSystem> {
+        self.fs.clone()
+    }
+
     /// Returns the filesystem-local path of this resource.
     ///
     /// # Returns
     /// A shared reference to the filesystem-local path.
     #[must_use]
     pub fn path(&self) -> &FsPath {
-        &self.path
+        self.location.path()
     }
 
-    /// Reads metadata for this resource.
+    /// Returns the stable resolved resource location.
+    ///
+    /// # Returns
+    /// Configured filesystem id, provider-local path, and optional safe URI.
+    #[must_use]
+    pub fn location(&self) -> &FileLocation {
+        &self.location
+    }
+
+    /// Reads current metadata for this resource.
     ///
     /// # Returns
     /// File metadata for this resource.
@@ -81,8 +120,8 @@ impl FileResource {
     /// # Errors
     /// Returns an error when the owning filesystem cannot read metadata for the
     /// resource path.
-    pub fn metadata(&self) -> FsResult<FileMetadata> {
-        self.fs.path_metadata(&self.path)
+    pub fn stat(&self) -> FsResult<FileMetadata> {
+        self.fs.stat(self.path())
     }
 
     /// Checks whether this resource exists.
@@ -94,7 +133,7 @@ impl FileResource {
     /// Returns an error when the owning filesystem cannot determine existence
     /// for the resource path.
     pub fn exists(&self) -> FsResult<bool> {
-        self.fs.exists(&self.path)
+        self.fs.exists(self.path())
     }
 
     /// Lists child entries under this resource.
@@ -108,11 +147,8 @@ impl FileResource {
     /// # Errors
     /// Returns an error when the owning filesystem cannot open a directory
     /// stream for the resource path.
-    pub fn list(
-        &self,
-        options: &ListOptions,
-    ) -> FsResult<Box<dyn DirectoryStream>> {
-        self.fs.list(&self.path, options)
+    pub fn list(&self, options: &ListOptions) -> FsResult<DirectoryStream> {
+        self.fs.list(self.path(), options.clone())
     }
 
     /// Opens this resource for reading.
@@ -126,11 +162,11 @@ impl FileResource {
     /// # Errors
     /// Returns an error when the owning filesystem cannot open the resource for
     /// reading.
-    pub fn open_reader(
-        &self,
-        options: &ReadOptions,
-    ) -> FsResult<Box<dyn FileReader>> {
-        self.fs.open_reader(&self.path, options)
+    pub fn open_reader(&self, options: &ReadOptions) -> FsResult<FileReader> {
+        options.validate_against(self.fs.capabilities())?;
+        let mut reader = self.fs.open_reader(self.path(), options.clone())?;
+        reader.bind_location(self.location.clone());
+        Ok(reader)
     }
 
     /// Opens this resource for writing.
@@ -144,11 +180,11 @@ impl FileResource {
     /// # Errors
     /// Returns an error when the owning filesystem cannot open the resource for
     /// writing.
-    pub fn open_writer(
-        &self,
-        options: &WriteOptions,
-    ) -> FsResult<Box<dyn FileWriter>> {
-        self.fs.open_writer(&self.path, options)
+    pub fn open_writer(&self, options: &WriteOptions) -> FsResult<FileWriter> {
+        options.validate_against(self.fs.capabilities())?;
+        let mut writer = self.fs.open_writer(self.path(), options.clone())?;
+        writer.bind_location(self.location.clone());
+        Ok(writer)
     }
 
     /// Reads this resource into memory.
@@ -160,7 +196,7 @@ impl FileResource {
     /// Returns an error when the owning filesystem cannot open or read the
     /// resource.
     pub fn read_all(&self) -> FsResult<Vec<u8>> {
-        self.fs.read_all(&self.path)
+        self.fs.read_all(self.path())
     }
 
     /// Writes all bytes to this resource.
@@ -175,7 +211,7 @@ impl FileResource {
     /// Returns an error when the owning filesystem cannot open, write, flush,
     /// or commit the resource.
     pub fn write_all(&self, bytes: &[u8]) -> FsResult<WriteOutcome> {
-        self.fs.write_all(&self.path, bytes)
+        self.fs.write_all(self.path(), bytes)
     }
 
     /// Creates this resource as a directory.
@@ -186,7 +222,7 @@ impl FileResource {
     /// # Errors
     /// Returns an error when the owning filesystem cannot create the directory.
     pub fn create_dir(&self, options: &CreateDirOptions) -> FsResult<()> {
-        self.fs.create_dir(&self.path, options)
+        self.fs.create_dir(self.path(), options.clone())
     }
 
     /// Deletes this resource.
@@ -197,7 +233,8 @@ impl FileResource {
     /// # Errors
     /// Returns an error when the owning filesystem cannot delete the resource.
     pub fn delete(&self, options: &DeleteOptions) -> FsResult<()> {
-        self.fs.delete(&self.path, options)
+        options.validate_against(self.fs.capabilities())?;
+        self.fs.delete(self.path(), options.clone())
     }
 
     /// Renames this resource to another filesystem-local path.
@@ -212,8 +249,9 @@ impl FileResource {
         &self,
         target: &FsPath,
         options: &RenameOptions,
-    ) -> FsResult<()> {
-        self.fs.rename(&self.path, target, options)
+    ) -> FsResult<RenameOutcome> {
+        options.validate_against(self.fs.capabilities())?;
+        self.fs.rename(self.path(), target, options.clone())
     }
 
     /// Copies this resource to another filesystem-local path.
@@ -232,6 +270,17 @@ impl FileResource {
         target: &FsPath,
         options: &CopyOptions,
     ) -> FsResult<CopyOutcome> {
-        self.fs.copy(&self.path, target, options)
+        options.validate_against(self.fs.capabilities())?;
+        self.fs.copy(self.path(), target, options.clone())
+    }
+}
+
+impl Debug for FileResource {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
+        formatter
+            .debug_struct("FileResource")
+            .field("file_system_id", self.fs.info().id())
+            .field("location", &self.location)
+            .finish()
     }
 }

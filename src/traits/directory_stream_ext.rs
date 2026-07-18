@@ -25,7 +25,7 @@ pub trait DirectoryStreamExt {
     fn collect_entries(self) -> FsResult<Vec<DirEntry>>;
 }
 
-impl DirectoryStreamExt for Box<dyn DirectoryStream> {
+impl DirectoryStreamExt for DirectoryStream {
     fn collect_entries(mut self) -> FsResult<Vec<DirEntry>> {
         let mut entries = Vec::new();
         while let Some(entry) = self.next_entry()? {

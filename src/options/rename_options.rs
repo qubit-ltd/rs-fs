@@ -7,7 +7,14 @@
 // =============================================================================
 //! Rename operation options.
 
-use crate::AtomicityRequirement;
+use crate::{
+    AtomicityRequirement,
+    FileSystemCapabilities,
+    FileSystemCapability,
+    FsError,
+    FsErrorKind,
+    FsOperation,
+};
 
 /// Options controlling rename operations.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -15,7 +22,7 @@ pub struct RenameOptions {
     /// Whether the destination may be overwritten.
     pub overwrite: bool,
     /// Required atomicity level.
-    pub atomic: AtomicityRequirement,
+    pub atomicity: AtomicityRequirement,
 }
 
 impl Default for RenameOptions {
@@ -23,7 +30,38 @@ impl Default for RenameOptions {
     fn default() -> Self {
         Self {
             overwrite: false,
-            atomic: AtomicityRequirement::BestEffort,
+            atomicity: AtomicityRequirement::Preferred,
         }
+    }
+}
+
+impl RenameOptions {
+    /// Validates required atomicity against a configured capability snapshot.
+    ///
+    /// Providers should call this before making any source or destination
+    /// change. Preferred and not-required requests always pass preflight and
+    /// must report the actual successful method in [`crate::RenameOutcome`].
+    ///
+    /// # Parameters
+    /// - `capabilities`: Stable capabilities of the configured filesystem.
+    ///
+    /// # Errors
+    /// Returns [`FsErrorKind::RequirementNotMet`] when atomic rename is
+    /// required but not guaranteed.
+    pub fn validate_against(
+        &self,
+        capabilities: FileSystemCapabilities,
+    ) -> Result<(), FsError> {
+        if self.atomicity == AtomicityRequirement::Required
+            && !capabilities.contains(FileSystemCapability::AtomicRename)
+        {
+            return Err(FsError::new(
+                FsErrorKind::RequirementNotMet,
+                FsOperation::Rename,
+                "atomic rename is required but not guaranteed",
+            )
+            .with_required_capability(FileSystemCapability::AtomicRename));
+        }
+        Ok(())
     }
 }
