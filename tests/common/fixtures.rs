@@ -62,14 +62,11 @@ use qubit_fs::{
     WriteOptions,
     WriteOutcome,
 };
-use qubit_spi::error::{
-    ProviderCreationError,
-    ProviderError,
-};
+use qubit_spi::error::ProviderError;
 use qubit_spi::{
-    ProviderDefinition,
     ProviderDescriptor,
     ProviderId,
+    ProviderMetadata,
     ServiceProvider,
 };
 
@@ -432,8 +429,7 @@ impl ServiceProvider<FileSystemSpec> for MockProvider {
     fn create_configured(
         &self,
         config: &FileSystemConfig,
-    ) -> Result<FileSystemResolution<dyn FileSystem>, ProviderCreationError>
-    {
+    ) -> Result<FileSystemResolution<dyn FileSystem>, ProviderError> {
         let fs: Arc<dyn FileSystem> = Arc::new(self.fs.clone());
         let path = FsPath::parse_literal(config.uri().path().as_encoded())
             .expect("mock URI path should be valid");
@@ -441,7 +437,7 @@ impl ServiceProvider<FileSystemSpec> for MockProvider {
     }
 }
 
-impl ProviderDefinition<FileSystemSpec> for MockProvider {
+impl ProviderMetadata for MockProvider {
     fn descriptor(&self) -> ProviderDescriptor {
         self.descriptor.clone()
     }
@@ -457,13 +453,12 @@ impl ServiceProvider<FileSystemSpec> for FailingCreateProvider {
     fn create_configured(
         &self,
         _config: &FileSystemConfig,
-    ) -> Result<FileSystemResolution<dyn FileSystem>, ProviderCreationError>
-    {
-        Err(self.error.clone().into())
+    ) -> Result<FileSystemResolution<dyn FileSystem>, ProviderError> {
+        Err(self.error.clone())
     }
 }
 
-impl ProviderDefinition<FileSystemSpec> for FailingCreateProvider {
+impl ProviderMetadata for FailingCreateProvider {
     fn descriptor(&self) -> ProviderDescriptor {
         self.descriptor.clone()
     }

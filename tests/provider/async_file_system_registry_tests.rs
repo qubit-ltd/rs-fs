@@ -13,6 +13,7 @@ use std::pin::Pin;
 use std::sync::{
     Arc,
     Mutex,
+    mpsc,
 };
 use std::task::{
     Context,
@@ -44,14 +45,24 @@ use qubit_fs::{
     OpenedFileInfo,
     PathSemantics,
     ReadOptions,
+    map_async_provider_error,
 };
 use qubit_io::AsyncInput;
 use qubit_metadata::Metadata;
+use qubit_spi::error::{
+    ProviderCreationError,
+    ProviderError,
+    ProviderResolutionError,
+};
 use qubit_spi::{
+    AsyncServiceProvider,
     FallbackPolicy,
     ProviderDescriptor,
+    ProviderFuture,
     ProviderId,
+    ProviderMetadata,
     ProviderSelection,
+    ProviderSelectionTargetRef,
 };
 
 #[derive(Debug)]
@@ -127,15 +138,20 @@ struct CapturingAsyncProvider {
     path: &'static str,
 }
 
-impl AsyncFileSystemProvider for CapturingAsyncProvider {
+impl ProviderMetadata for CapturingAsyncProvider {
     fn descriptor(&self) -> ProviderDescriptor {
         self.descriptor.clone()
     }
+}
 
-    fn create_configured_async<'a>(
+impl AsyncServiceProvider<qubit_fs::FileSystemSpec> for CapturingAsyncProvider {
+    fn create_configured<'a>(
         &'a self,
         config: &'a FileSystemConfig,
-    ) -> FsFuture<'a, FileSystemResolution<dyn AsyncFileSystem>> {
+    ) -> ProviderFuture<
+        'a,
+        Result<FileSystemResolution<dyn AsyncFileSystem>, ProviderError>,
+    > {
         *self.captured.lock().expect("lock should succeed") =
             Some(config.clone());
         let fs: Arc<dyn AsyncFileSystem> =
@@ -156,41 +172,53 @@ struct ErrorAsyncProvider {
     kind: FsErrorKind,
 }
 
-impl AsyncFileSystemProvider for ErrorAsyncProvider {
+impl ProviderMetadata for ErrorAsyncProvider {
     fn descriptor(&self) -> ProviderDescriptor {
         self.descriptor.clone()
     }
+}
 
-    fn create_configured_async<'a>(
+impl AsyncServiceProvider<qubit_fs::FileSystemSpec> for ErrorAsyncProvider {
+    fn create_configured<'a>(
         &'a self,
         _config: &'a FileSystemConfig,
-    ) -> FsFuture<'a, FileSystemResolution<dyn AsyncFileSystem>> {
+    ) -> ProviderFuture<
+        'a,
+        Result<FileSystemResolution<dyn AsyncFileSystem>, ProviderError>,
+    > {
         let kind = self.kind;
         Box::pin(async move {
-            Err(FsError::new(
+            Err(map_async_provider_error(FsError::new(
                 kind,
                 FsOperation::Provider,
                 "provider creation failed",
-            ))
+            )))
         })
     }
 }
 
-impl AsyncFileSystemProvider for UnavailableAsyncProvider {
+impl ProviderMetadata for UnavailableAsyncProvider {
     fn descriptor(&self) -> ProviderDescriptor {
         self.descriptor.clone()
     }
+}
 
-    fn create_configured_async<'a>(
+impl AsyncServiceProvider<qubit_fs::FileSystemSpec>
+    for UnavailableAsyncProvider
+{
+    fn create_configured<'a>(
         &'a self,
         _config: &'a FileSystemConfig,
-    ) -> FsFuture<'a, FileSystemResolution<dyn AsyncFileSystem>> {
+    ) -> ProviderFuture<
+        'a,
+        Result<FileSystemResolution<dyn AsyncFileSystem>, ProviderError>,
+    > {
         Box::pin(async {
-            Err(FsError::new(
+            Err(map_async_provider_error(FsError::new(
                 FsErrorKind::ProviderUnavailable,
                 FsOperation::Provider,
                 "provider is unavailable",
-            ))
+            )))
         })
     }
 }
@@ -276,6 +304,59 @@ fn async_registry_applies_absence_fallback_after_awaiting_creation() {
 }
 
 #[test]
+fn async_registry_rejects_partially_unknown_strict_chain_before_await() {
+    let registry = AsyncFileSystemRegistry::default();
+    registry
+        .register(CapturingAsyncProvider {
+            descriptor: descriptor("known"),
+            captured: Arc::new(Mutex::new(None)),
+            path: "known",
+        })
+        .expect("known provider should register");
+    let selection = ProviderSelection::chain(["missing", "known"])
+        .expect("strict chain should parse");
+    let config = FileSystemConfig::new(
+        FsUri::parse("known:///resource").expect("URI should parse"),
+    );
+
+    let error = ready(registry.resolve_selected_async(&selection, &config))
+        .expect_err("strict chain should fail before provider creation");
+
+    assert!(
+        error
+            .source()
+            .and_then(|source| source.downcast_ref::<ProviderResolutionError>())
+            .is_some(),
+    );
+}
+
+#[test]
+fn async_registry_allows_explicit_missing_chain_entries() {
+    let registry = AsyncFileSystemRegistry::default();
+    registry
+        .register(CapturingAsyncProvider {
+            descriptor: descriptor("known"),
+            captured: Arc::new(Mutex::new(None)),
+            path: "known",
+        })
+        .expect("known provider should register");
+    let selection =
+        ProviderSelection::chain_allowing_missing(["missing", "known"])
+            .expect("lenient chain should parse");
+    let config = FileSystemConfig::new(
+        FsUri::parse("known:///resource").expect("URI should parse"),
+    );
+
+    assert_eq!(
+        "known",
+        ready(registry.resolve_selected_async(&selection, &config))
+            .expect("known provider should create")
+            .path()
+            .as_str(),
+    );
+}
+
+#[test]
 fn async_registry_rejects_conflicting_provider_selectors() {
     let registry = AsyncFileSystemRegistry::default();
     registry
@@ -301,7 +382,10 @@ fn async_registry_rejects_conflicting_provider_selectors() {
 #[test]
 fn async_registry_exposes_default_and_uri_convenience_paths() {
     let registry = AsyncFileSystemRegistry::default();
-    assert!(registry.default_selection().selectors().is_empty());
+    assert!(matches!(
+        registry.default_selection().target(),
+        ProviderSelectionTargetRef::Auto,
+    ));
     let provider: Arc<dyn AsyncFileSystemProvider> =
         Arc::new(CapturingAsyncProvider {
             descriptor: descriptor("async-capture"),
@@ -314,10 +398,7 @@ fn async_registry_exposes_default_and_uri_convenience_paths() {
     let selection = ProviderSelection::named("async-capture")
         .expect("selection should parse");
     registry.set_default_selection(selection.clone());
-    assert_eq!(
-        selection.selectors(),
-        registry.default_selection().selectors()
-    );
+    assert_eq!(selection.target(), registry.default_selection().target());
 
     let uri = FsUri::parse("async-capture:///resource").unwrap();
     let config = FileSystemConfig::new(uri.clone());
@@ -429,7 +510,12 @@ fn async_registry_applies_each_creation_fallback_policy() {
     let error = ready(registry.resolve_selected_async(&never, &config))
         .expect_err("never policy should stop at the first error");
     assert_eq!(FsErrorKind::Other, error.kind());
-    assert_eq!(Some("broken"), error.provider().map(ProviderId::as_str));
+    assert_eq!(None, error.provider());
+    let creation = error
+        .source()
+        .and_then(|source| source.downcast_ref::<ProviderCreationError>())
+        .expect("creation aggregate should be retained");
+    assert_eq!("broken", creation.decisive_attempt().provider_id().as_str());
 
     let absence = ProviderSelection::chain(["broken", "async-capture"])
         .unwrap()
@@ -492,20 +578,18 @@ fn async_registry_retains_ordered_failures_when_fallback_is_exhausted() {
 
     assert_eq!(FsErrorKind::ProviderUnavailable, error.kind());
     assert_eq!(None, error.provider());
-    let source = error.source().expect("aggregate source should be retained");
-    let debug = format!("{source:?}");
-    assert!(debug.contains("attempt_count: 2"));
-    assert!(!debug.contains("first-offline"));
-    let diagnostics = source.to_string();
-    let first = diagnostics
-        .find("first-offline")
-        .expect("first failure should be present");
-    let second = diagnostics
-        .find("second-unsupported")
-        .expect("second failure should be present");
-    assert!(
-        first < second,
-        "provider failures must preserve attempt order"
+    let creation = error
+        .source()
+        .and_then(|source| source.downcast_ref::<ProviderCreationError>())
+        .expect("aggregate source should be retained");
+    assert_eq!(
+        ["first-offline", "second-unsupported"],
+        creation
+            .attempts()
+            .iter()
+            .map(|attempt| attempt.provider_id().as_str())
+            .collect::<Vec<_>>()
+            .as_slice(),
     );
 }
 
@@ -549,7 +633,7 @@ fn async_registry_aggregates_failures_before_policy_stops_fallback() {
         .source()
         .expect("aggregate source should be retained")
         .to_string();
-    assert!(diagnostics.contains("fallback stopped"));
+    assert!(diagnostics.contains("stopped by fallback policy"));
     assert!(diagnostics.contains("first-offline"));
     assert!(diagnostics.contains("second-broken"));
     assert!(!diagnostics.contains("unreached"));
@@ -611,6 +695,95 @@ fn async_registry_automatic_priority_aliases_and_deduplication_are_stable() {
             .kind(),
     );
     assert_eq!(vec!["low", "high"], registry.provider_ids());
+}
+
+struct PendingAsyncProvider {
+    descriptor: ProviderDescriptor,
+    entered: mpsc::Sender<()>,
+    release: Mutex<Option<mpsc::Receiver<()>>>,
+}
+
+impl ProviderMetadata for PendingAsyncProvider {
+    fn descriptor(&self) -> ProviderDescriptor {
+        self.descriptor.clone()
+    }
+}
+
+impl AsyncServiceProvider<qubit_fs::FileSystemSpec> for PendingAsyncProvider {
+    fn create_configured<'a>(
+        &'a self,
+        config: &'a FileSystemConfig,
+    ) -> ProviderFuture<
+        'a,
+        Result<FileSystemResolution<dyn AsyncFileSystem>, ProviderError>,
+    > {
+        let entered = self.entered.clone();
+        let release = self
+            .release
+            .lock()
+            .expect("release lock should succeed")
+            .take()
+            .expect("pending provider should be called once");
+        let uri = config.uri().clone();
+        Box::pin(async move {
+            entered
+                .send(())
+                .expect("entry receiver should remain alive");
+            release.recv().expect("release sender should remain alive");
+            let fs: Arc<dyn AsyncFileSystem> =
+                Arc::new(AsyncOnlyFs::new("pending"));
+            Ok(FileSystemResolution::new(
+                fs,
+                FsPath::parse_literal("released")
+                    .expect("provider path should parse"),
+                uri,
+            ))
+        })
+    }
+}
+
+#[test]
+fn async_provider_pending_does_not_hold_registry_lock() {
+    let registry = AsyncFileSystemRegistry::default();
+    let (entered_tx, entered_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    registry
+        .register(PendingAsyncProvider {
+            descriptor: descriptor("pending"),
+            entered: entered_tx,
+            release: Mutex::new(Some(release_rx)),
+        })
+        .expect("pending provider should register");
+    let creation_registry = registry.clone();
+    let creation = std::thread::spawn(move || {
+        let config = FileSystemConfig::new(
+            FsUri::parse("pending:///resource").expect("URI should parse"),
+        );
+        ready(creation_registry.resolve_async(&config))
+    });
+
+    entered_rx.recv().expect("provider should announce entry");
+    registry
+        .register(CapturingAsyncProvider {
+            descriptor: descriptor("later"),
+            captured: Arc::new(Mutex::new(None)),
+            path: "later",
+        })
+        .expect("registration should proceed while creation is pending");
+    assert_eq!(vec!["pending", "later"], registry.provider_ids());
+    release_tx
+        .send(())
+        .expect("pending provider should remain alive");
+
+    assert_eq!(
+        "released",
+        creation
+            .join()
+            .expect("creation thread should not panic")
+            .expect("pending provider should succeed")
+            .path()
+            .as_str(),
+    );
 }
 
 fn descriptor(id: &str) -> ProviderDescriptor {

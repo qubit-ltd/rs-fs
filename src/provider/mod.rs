@@ -19,7 +19,10 @@ mod file_system_resolution;
 mod file_system_spec;
 
 pub use async_file_resource::AsyncFileResource;
-pub use async_file_system_provider::AsyncFileSystemProvider;
+pub use async_file_system_provider::{
+    AsyncFileSystemProvider,
+    map_async_provider_error,
+};
 pub use async_file_system_registry::AsyncFileSystemRegistry;
 pub use credential_ref::CredentialRef;
 pub use file_resource::FileResource;

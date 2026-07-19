@@ -38,6 +38,7 @@ use qubit_spi::{
     FallbackPolicy,
     ProviderDescriptor,
     ProviderId,
+    ProviderMetadata,
     ProviderSelection,
     ServiceProvider,
 };
@@ -295,8 +296,7 @@ impl ServiceProvider<FileSystemSpec> for CapturingProvider {
     fn create_configured(
         &self,
         config: &FileSystemConfig,
-    ) -> Result<FileSystemResolution<dyn FileSystem>, ProviderCreationError>
-    {
+    ) -> Result<FileSystemResolution<dyn FileSystem>, ProviderError> {
         *self.captured.lock().expect("lock should succeed") =
             Some(config.clone());
         let fs: Arc<dyn FileSystem> = Arc::new(MockFs::default());
@@ -309,7 +309,7 @@ impl ServiceProvider<FileSystemSpec> for CapturingProvider {
     }
 }
 
-impl qubit_spi::ProviderDefinition<FileSystemSpec> for CapturingProvider {
+impl ProviderMetadata for CapturingProvider {
     fn descriptor(&self) -> ProviderDescriptor {
         self.descriptor.clone()
     }

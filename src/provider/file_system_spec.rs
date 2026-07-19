@@ -8,9 +8,14 @@
 // qubit-style: allow source-test-pair
 //! SPI service specification for filesystems.
 
-use qubit_spi::ServiceSpec;
+use qubit_spi::{
+    AsyncServiceSpec,
+    ServiceSpec,
+    SyncServiceSpec,
+};
 
 use crate::{
+    AsyncFileSystem,
     FileSystem,
     FileSystemConfig,
     FileSystemResolution,
@@ -22,5 +27,12 @@ pub struct FileSystemSpec;
 
 impl ServiceSpec for FileSystemSpec {
     type Config = FileSystemConfig;
+}
+
+impl SyncServiceSpec for FileSystemSpec {
     type Output = FileSystemResolution<dyn FileSystem>;
+}
+
+impl AsyncServiceSpec for FileSystemSpec {
+    type Output = FileSystemResolution<dyn AsyncFileSystem>;
 }

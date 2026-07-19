@@ -5,47 +5,55 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow source-test-pair
-//! Asynchronous filesystem provider contract.
+//! Asynchronous filesystem provider contract and error classification.
 
-use qubit_spi::ProviderDescriptor;
+use qubit_spi::AsyncProviderDefinition;
+use qubit_spi::error::ProviderError;
 
 use crate::{
-    AsyncFileSystem,
-    FileSystemConfig,
-    FileSystemResolution,
-    FsFuture,
+    FileSystemSpec,
+    FsError,
+    FsErrorKind,
 };
 
-/// Creates asynchronous filesystems from complete provider configuration.
-///
-/// This contract is intentionally independent from the synchronous provider
-/// SPI: a backend may support asynchronous filesystem access without also
-/// implementing [`crate::FileSystem`].
-pub trait AsyncFileSystemProvider: Send + Sync {
-    /// Returns immutable provider identity, aliases, and selection priority.
-    ///
-    /// # Returns
-    ///
-    /// A descriptor snapshot used for atomic registry registration.
-    fn descriptor(&self) -> ProviderDescriptor;
+/// Metadata-bearing asynchronous filesystem provider.
+pub trait AsyncFileSystemProvider:
+    AsyncProviderDefinition<FileSystemSpec>
+{
+}
 
-    /// Asynchronously creates and resolves a configured filesystem.
-    ///
-    /// The complete configuration includes the raw URI representation,
-    /// explicit provider selection, non-sensitive options, and an optional
-    /// credential reference. The provider owns URI-to-path decoding.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - Complete validated provider configuration.
-    ///
-    /// # Returns
-    ///
-    /// A future resolving to an asynchronous filesystem, provider-local path,
-    /// and safe canonical URI.
-    fn create_configured_async<'a>(
-        &'a self,
-        config: &'a FileSystemConfig,
-    ) -> FsFuture<'a, FileSystemResolution<dyn AsyncFileSystem>>;
+impl<T> AsyncFileSystemProvider for T where
+    T: AsyncProviderDefinition<FileSystemSpec> + ?Sized
+{
+}
+
+/// Converts a filesystem creation failure into an SPI leaf provider failure.
+///
+/// # Arguments
+///
+/// * `error` - Filesystem error returned while creating an async filesystem.
+///
+/// # Returns
+///
+/// A classified provider error retaining the original filesystem error as its
+/// source.
+#[must_use]
+pub fn map_async_provider_error(error: FsError) -> ProviderError {
+    let reason = format!("asynchronous filesystem provider failed: {error}");
+    match error.kind() {
+        FsErrorKind::ProviderUnavailable => {
+            ProviderError::unavailable_with_source(reason, error)
+        }
+        FsErrorKind::UnsupportedOperation
+        | FsErrorKind::UnsupportedCapability
+        | FsErrorKind::RequirementNotMet => {
+            ProviderError::unsupported_with_source(reason, error)
+        }
+        FsErrorKind::InvalidUri
+        | FsErrorKind::InvalidPath
+        | FsErrorKind::InvalidOptions => {
+            ProviderError::invalid_configuration_with_source(reason, error)
+        }
+        _ => ProviderError::initialization_failed_with_source(reason, error),
+    }
 }

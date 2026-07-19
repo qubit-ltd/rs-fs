@@ -291,7 +291,7 @@ impl Default for FileSystemRegistry {
 ///
 /// A filesystem provider error preserving the original source.
 #[inline]
-fn map_registration_error(error: RegistrationError) -> FsError {
+pub(super) fn map_registration_error(error: RegistrationError) -> FsError {
     let message = error.to_string();
     FsError::with_source(
         FsErrorKind::Conflict,
@@ -311,7 +311,9 @@ fn map_registration_error(error: RegistrationError) -> FsError {
 ///
 /// A provider-unavailable filesystem error preserving the selection failure.
 #[inline]
-fn map_provider_resolution_error(error: ProviderResolutionError) -> FsError {
+pub(super) fn map_provider_resolution_error(
+    error: ProviderResolutionError,
+) -> FsError {
     let message = error.to_string();
     FsError::with_source(
         FsErrorKind::ProviderUnavailable,
@@ -331,7 +333,7 @@ fn map_provider_resolution_error(error: ProviderResolutionError) -> FsError {
 ///
 /// A provider-unavailable filesystem error preserving the validation failure.
 #[inline]
-fn map_provider_selection_build_error(
+pub(super) fn map_provider_selection_build_error(
     error: ProviderSelectionBuildError,
 ) -> FsError {
     let message = error.to_string();
@@ -353,7 +355,9 @@ fn map_provider_selection_build_error(
 ///
 /// A filesystem provider error classified from the retained SPI diagnostics.
 #[inline]
-fn map_provider_creation_error(error: ProviderCreationError) -> FsError {
+pub(super) fn map_provider_creation_error(
+    error: ProviderCreationError,
+) -> FsError {
     let kind = if error.is_absence() {
         FsErrorKind::ProviderUnavailable
     } else {

@@ -95,6 +95,7 @@ pub use provider::{
     FileSystemRegistry,
     FileSystemResolution,
     FileSystemSpec,
+    map_async_provider_error,
 };
 pub use temp::{
     AsyncTempDir,
