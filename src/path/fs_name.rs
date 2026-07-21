@@ -19,7 +19,14 @@ use crate::{
     FsResult,
 };
 
-/// A non-empty single path component that cannot escape its parent.
+use super::native_path_text::validate_canonical_text;
+
+/// A non-empty canonical native-path component that cannot escape its parent.
+///
+/// The text follows the same `%XX` invariant as [`crate::FsPath`] and
+/// [`crate::NativePathCodec`]: a native percent sign is `%25`, and bytes that
+/// cannot appear literally are uppercase escapes. This is canonical path text,
+/// not URI encoding or a lossy display string.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct FsName(Box<str>);
 
@@ -29,8 +36,10 @@ impl FsName {
     /// # Errors
     ///
     /// Returns [`FsError`] when `name` is empty, is `.` or `..`, contains a
-    /// separator, NUL, or another control character.
+    /// separator, malformed or non-canonical native-path escaping, NUL, or
+    /// another literal control character.
     pub fn parse(name: &str) -> FsResult<Self> {
+        validate_name_text(name)?;
         if name.is_empty() {
             return Err(invalid_name("filesystem name must not be empty"));
         }
@@ -54,6 +63,21 @@ impl FsName {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+}
+
+/// Validates the shared canonical native-path text invariant.
+///
+/// # Errors
+///
+/// Returns an invalid-path error when `name` has malformed or non-canonical
+/// native-path escaping.
+fn validate_name_text(name: &str) -> FsResult<()> {
+    validate_canonical_text(name).map_err(|_| {
+        FsError::invalid_path(
+            FsOperation::ParsePath,
+            "name text must use canonical native-path escaping",
+        )
+    })
 }
 
 impl Display for FsName {

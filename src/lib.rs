@@ -74,6 +74,7 @@ pub use options::{
     WritePrecondition,
 };
 pub use path::{
+    EscapedBytePathCodec,
     FsAuthority,
     FsName,
     FsPath,
@@ -81,8 +82,12 @@ pub use path::{
     FsUri,
     FsUriPath,
     FsUriQuery,
+    NativePathCodec,
+    NativePathCodecError,
+    OsStrPathCodec,
     PathSemantics,
     RelativeFsPath,
+    Utf8PathCodec,
 };
 pub use provider::{
     AsyncFileResource,

@@ -19,7 +19,14 @@ use crate::{
     FsResult,
 };
 
+use super::native_path_text::validate_canonical_text;
+
 /// A normalized non-empty relative path that cannot escape its base.
+///
+/// Every component follows the canonical native-path text rules documented by
+/// [`crate::NativePathCodec`] and [`crate::FsPath`]. In particular, `%XX` is
+/// native-byte escaping, not URI percent encoding, and non-canonical aliases
+/// are rejected before relative-path normalization.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct RelativeFsPath(Box<str>);
 
@@ -28,9 +35,11 @@ impl RelativeFsPath {
     ///
     /// # Errors
     ///
-    /// Returns [`FsError`] when `path` is empty, absolute, contains control
-    /// characters, or attempts to escape above its relative root.
+    /// Returns [`FsError`] when `path` is empty, absolute, has malformed or
+    /// non-canonical native-path escaping, contains a literal control
+    /// character, or attempts to escape above its relative root.
     pub fn parse(path: &str) -> FsResult<Self> {
+        validate_relative_path_text(path)?;
         if path.is_empty() {
             return Err(invalid_relative("relative path must not be empty"));
         }
@@ -70,6 +79,21 @@ impl RelativeFsPath {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+}
+
+/// Validates the shared canonical native-path text invariant.
+///
+/// # Errors
+///
+/// Returns an invalid-path error when `path` has malformed or non-canonical
+/// native-path escaping.
+fn validate_relative_path_text(path: &str) -> FsResult<()> {
+    validate_canonical_text(path).map_err(|_| {
+        FsError::invalid_path(
+            FsOperation::ParsePath,
+            "relative path text must use canonical native-path escaping",
+        )
+    })
 }
 
 impl Display for RelativeFsPath {

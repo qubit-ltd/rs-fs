@@ -22,21 +22,21 @@ fn resolution_keeps_provider_decoded_path_with_safe_canonical_uri() {
     let fs: Arc<dyn FileSystem> = Arc::new(MockFs::default());
     let resolution = FileSystemResolution::new(
         fs,
-        FsPath::parse_literal("bucket/a%2Fb")
+        FsPath::parse_literal("bucket/a%252Fb")
             .expect("literal path should parse"),
-        FsUri::parse("mock:///bucket/a%2Fb").expect("URI should parse"),
+        FsUri::parse("mock:///bucket/a%25252Fb").expect("URI should parse"),
     );
 
-    assert_eq!("bucket/a%2Fb", resolution.path().as_str());
+    assert_eq!("bucket/a%252Fb", resolution.path().as_str());
     assert_eq!(
-        "/bucket/a%2Fb",
+        "/bucket/a%25252Fb",
         resolution.canonical_uri().path().as_encoded()
     );
     assert_eq!(
         "mock-instance",
         resolution.file_system().info().id().as_str()
     );
-    assert!(format!("{resolution:?}").contains("bucket/a%2Fb"));
+    assert!(format!("{resolution:?}").contains("bucket/a%252Fb"));
 
     let cloned = resolution.clone();
     let (cloned_fs, cloned_path, cloned_uri) = cloned.into_parts();

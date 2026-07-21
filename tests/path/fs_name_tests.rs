@@ -25,3 +25,10 @@ fn fs_name_prevents_child_path_escape() {
     assert!(FsName::parse("bad\nname").is_err());
     assert_eq!("child.txt", name.to_string());
 }
+
+#[test]
+fn test_fs_name_requires_canonical_native_text() {
+    assert!(FsName::parse("name%0Aline").is_ok());
+    assert!(FsName::parse("name%41").is_err());
+    assert!(FsName::parse("name%").is_err());
+}

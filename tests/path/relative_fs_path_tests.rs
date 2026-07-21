@@ -27,3 +27,10 @@ fn relative_path_prevents_descendant_escape() {
     assert!(RelativeFsPath::parse("bad\npath").is_err());
     assert_eq!("a/b", relative.to_string());
 }
+
+#[test]
+fn test_relative_path_requires_canonical_native_text() {
+    assert!(RelativeFsPath::parse("dir/%FFfile").is_ok());
+    assert!(RelativeFsPath::parse("dir/%2fchild").is_err());
+    assert!(RelativeFsPath::parse("dir/%").is_err());
+}

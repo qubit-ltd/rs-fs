@@ -143,3 +143,11 @@ fn child_supports_root_and_relative_bases() {
         FsPath::parse("base").unwrap().child(&name).as_str(),
     );
 }
+
+#[test]
+fn test_path_value_objects_require_canonical_native_text() {
+    for value in ["raw%", "%2f", "%41", "%e4%b8%ad"] {
+        assert!(FsPath::parse_literal(value).is_err(), "{value}");
+    }
+    assert!(FsPath::parse("dir/%FFfile").is_ok());
+}

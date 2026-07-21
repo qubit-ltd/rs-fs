@@ -9,5 +9,6 @@ mod fs_authority_tests;
 mod fs_name_tests;
 mod fs_path_tests;
 mod fs_uri_tests;
+mod native_path_codec_tests;
 mod path_semantics_tests;
 mod relative_fs_path_tests;

@@ -279,7 +279,7 @@ fn registry_passes_the_complete_config_and_uses_provider_decoded_path() {
         .resource(&config)
         .expect("complete config should resolve");
 
-    assert_eq!("provider-decoded/%2F", resource.path().as_str());
+    assert_eq!("provider-decoded/%252F", resource.path().as_str());
     assert_eq!(
         Some(config),
         captured.lock().expect("lock should succeed").clone()
@@ -302,7 +302,7 @@ impl ServiceProvider<FileSystemSpec> for CapturingProvider {
         let fs: Arc<dyn FileSystem> = Arc::new(MockFs::default());
         Ok(FileSystemResolution::new(
             fs,
-            FsPath::parse_literal("provider-decoded/%2F")
+            FsPath::parse_literal("provider-decoded/%252F")
                 .expect("provider path should parse"),
             config.uri().clone(),
         ))

@@ -243,7 +243,7 @@ fn async_registry_accepts_async_only_provider_and_passes_complete_config() {
         .register(CapturingAsyncProvider {
             descriptor: descriptor("async-capture"),
             captured: captured.clone(),
-            path: "provider-decoded/%2F",
+            path: "provider-decoded/%252F",
         })
         .expect("async provider should register");
     let config = FileSystemConfig::new(
@@ -260,7 +260,7 @@ fn async_registry_accepts_async_only_provider_and_passes_complete_config() {
     let resource = ready(registry.resource_async(&config))
         .expect("complete config should resolve asynchronously");
 
-    assert_eq!("provider-decoded/%2F", resource.path().as_str());
+    assert_eq!("provider-decoded/%252F", resource.path().as_str());
     assert_eq!(
         Some(config),
         captured.lock().expect("lock should succeed").clone()

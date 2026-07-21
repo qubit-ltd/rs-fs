@@ -20,7 +20,21 @@ use crate::{
     RelativeFsPath,
 };
 
-/// Provider-local filesystem path.
+use super::native_path_text::validate_canonical_text;
+
+/// Provider-local filesystem path stored as canonical UTF-8 native-path text.
+///
+/// The path structure uses `/` separators, but each non-separator fragment
+/// follows [`crate::NativePathCodec`] canonical text rules: ordinary Unicode is
+/// literal, a native `%` is `%25`, and control characters or non-UTF-8 bytes
+/// are uppercase `%XX` escapes. For example, `report-中文.txt` remains readable,
+/// while native bytes `66 6F 80 6F` are represented as `fo%80o`.
+///
+/// This canonical form is a representation invariant, so [`Eq`], [`Hash`], and
+/// [`Ord`] identify a single native path spelling rather than aliases such as
+/// `%41` and `A`. It is neither a lossy display string nor a URI path: when
+/// canonical path text `%25` is placed in a URI component, URI encoding writes
+/// `%2525`.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct FsPath {
     /// Whether the path is absolute.
@@ -39,8 +53,9 @@ impl FsPath {
     /// Normalized provider-local path.
     ///
     /// # Errors
-    /// Returns [`crate::FsError`] when the path is empty, contains a NUL byte,
-    /// or tries to escape above its root with `..`.
+    /// Returns [`crate::FsError`] when the path is empty, has malformed or
+    /// non-canonical native-path escaping, or tries to escape above its root
+    /// with `..`.
     #[inline]
     pub fn parse(path: &str) -> FsResult<Self> {
         Self::parse_normalized(path)
@@ -53,9 +68,10 @@ impl FsPath {
     ///
     /// # Errors
     ///
-    /// Returns an invalid-path error for empty paths, control characters, or
-    /// root escape attempts.
+    /// Returns an invalid-path error for empty paths, malformed or
+    /// non-canonical native-path escaping, or root escape attempts.
     pub fn parse_normalized(path: &str) -> FsResult<Self> {
+        validate_path_text(path)?;
         if path.is_empty() {
             return Err(crate::FsError::invalid_path(
                 FsOperation::ParsePath,
@@ -112,9 +128,10 @@ impl FsPath {
     ///
     /// # Errors
     ///
-    /// Returns an invalid-path error when `path` is empty or contains control
-    /// characters.
+    /// Returns an invalid-path error when `path` is empty or has malformed or
+    /// non-canonical native-path escaping.
     pub fn parse_literal(path: &str) -> FsResult<Self> {
+        validate_path_text(path)?;
         if path.is_empty() {
             return Err(crate::FsError::invalid_path(
                 FsOperation::ParsePath,
@@ -156,10 +173,10 @@ impl FsPath {
         self.absolute
     }
 
-    /// Gets the normalized path string.
+    /// Gets the canonical path string.
     ///
     /// # Returns
-    /// Normalized path string using `/` separators.
+    /// Canonical native-path text using `/` separators.
     #[inline]
     #[must_use]
     pub fn as_str(&self) -> &str {
@@ -263,6 +280,21 @@ impl FsPath {
             Some(&file_name[index + 1..])
         }
     }
+}
+
+/// Validates the shared canonical native-path text invariant.
+///
+/// # Errors
+///
+/// Returns an invalid-path error when `path` has malformed or non-canonical
+/// native-path escaping.
+fn validate_path_text(path: &str) -> FsResult<()> {
+    validate_canonical_text(path).map_err(|_| {
+        crate::FsError::invalid_path(
+            FsOperation::ParsePath,
+            "path text must use canonical native-path escaping",
+        )
+    })
 }
 
 impl Display for FsPath {
