@@ -10,8 +10,8 @@
 use std::io::ErrorKind as IoErrorKind;
 
 use qubit_io::{
-    AsyncInputExt,
-    AsyncOutputExt,
+    AsyncInput,
+    AsyncOutput,
 };
 
 use crate::{
