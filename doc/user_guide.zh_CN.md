@@ -277,7 +277,7 @@ use qubit_fs::{
     FsResult,
     ReadOptions,
 };
-use qubit_io::AsyncInputExt;
+use qubit_io::AsyncInput;
 
 async fn read_prefix(
     resource: &AsyncFileResource,
@@ -304,7 +304,7 @@ use qubit_fs::{
     WriteOptions,
     WriteOutcome,
 };
-use qubit_io::AsyncOutputExt;
+use qubit_io::AsyncOutput;
 
 async fn write(
     resource: &AsyncFileResource,
