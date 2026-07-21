@@ -104,6 +104,32 @@ diagnostics）统一使用 `NonSensitiveMetadata`，递归检查顶层、string 
 JSON object 的 credential-like key，且 Debug 只输出 key。普通 scalar value 无法
 可靠分类，因此所有 secret 都必须通过 `CredentialRef` 引用。
 
+## 原生路径文本编码
+
+`FsPath`、`FsName` 与 `RelativeFsPath` 存储规范化 UTF-8 路径文本。它是 provider
+原生路径字符串的无损表示，并不意味着所有 provider 都原生使用 UTF-8；更不会进行
+lossy display conversion。普通 Unicode 保持可读；字面的 `%`、控制字符和 opaque byte
+使用大写 `%XX` 转义。
+
+| 原生值或字节 | 规范路径文本 |
+| --- | --- |
+| `report-中文.txt` | `report-中文.txt` |
+| `100%` | `100%25` |
+| `66 6F 80 6F` | `fo%80o` |
+| `line<LF>break` | `line%0Abreak` |
+| Windows 未配对代理项 `D800` | `%ED%A0%80` |
+
+`NativePathCodec` 只转换这个字符串表示，不负责拆分 component、解释 root 或
+separator、规范化 dot segment、解析 URI 语法或执行 I/O。本地 `OsStr` 使用
+`OsStrPathCodec`；保证严格 UTF-8 byte 的协议使用 `Utf8PathCodec`；允许 opaque
+path byte 的兼容 SFTP 或 NFS server 使用 `EscapedBytePathCodec`。三个 codec 都是
+只依赖标准库的零大小类型。
+
+路径文本必须使用唯一的规范写法：裸 `%`、格式错误的 escape、小写 hex 和对普通
+Unicode 的过度转义都会被拒绝。这使每个原生路径只有一个文本身份，因而可以安全地
+作为 `Eq`/`Hash` 的 registry 或 cache key。URI percent encoding 是另一层：规范原生
+路径片段 `%25` 在作为 URI path component 编码时会变成 `%2525`。
+
 ## 文档
 
 - [User guide](doc/user_guide.md)

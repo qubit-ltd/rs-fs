@@ -112,6 +112,35 @@ JSON objects nested in arrays, while its `Debug` output prints keys only.
 Scalar values cannot be classified reliably, so use `CredentialRef` for every
 secret.
 
+## Native Path Text Encoding
+
+`FsPath`, `FsName`, and `RelativeFsPath` store canonical UTF-8 path text. This
+is a lossless representation of a provider's native path string, not a claim
+that every provider natively uses UTF-8 and never a lossy display conversion.
+Ordinary Unicode is kept readable; a literal `%`, controls, and opaque bytes
+use uppercase `%XX` escapes.
+
+| Native value or bytes | Canonical path text |
+| --- | --- |
+| `report-中文.txt` | `report-中文.txt` |
+| `100%` | `100%25` |
+| `66 6F 80 6F` | `fo%80o` |
+| `line<LF>break` | `line%0Abreak` |
+| Windows lone surrogate `D800` | `%ED%A0%80` |
+
+`NativePathCodec` converts only this string representation. It does not split
+components, interpret roots or separators, normalize dot segments, decode URI
+syntax, or perform I/O. Use `OsStrPathCodec` for local native `OsStr` values,
+`Utf8PathCodec` for protocols that guarantee strict UTF-8 bytes, and
+`EscapedBytePathCodec` for opaque byte-oriented protocols such as compatible
+SFTP or NFS servers. All three are zero-sized, standard-library-only codecs.
+
+Canonical spelling is required: raw `%`, malformed escapes, lowercase hex, and
+over-escaped ordinary Unicode are rejected. This gives one textual identity for
+each native path and makes `Eq`/`Hash` safe for registry and cache keys. URI
+percent encoding remains a separate layer: a canonical native path fragment
+`%25` becomes `%2525` when encoded as a URI path component.
+
 ## Documentation
 
 - [User guide](doc/user_guide.md)
