@@ -6,6 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use std::error::Error;
 use std::future::Future;
 use std::io::{
     Error as IoError,
@@ -281,11 +282,18 @@ where
 }
 
 #[test]
-fn async_file_system_extensions_retry_interrupted_reads() {
+fn async_file_system_extensions_reject_interrupted_reads() {
     let fs = ExtAsyncFs::new(ExtMode::InterruptedRead);
     let path = FsPath::parse("/file").unwrap();
 
-    assert!(ready(fs.read_all_async(&path, 1)).unwrap().is_empty());
+    let error = ready(fs.read_all_async(&path, 1))
+        .expect_err("reject Interrupted across the asynchronous I/O boundary");
+    let source = Error::source(&error)
+        .and_then(|source| source.downcast_ref::<IoError>())
+        .expect("retain asynchronous I/O contract error");
+
+    assert_eq!(FsErrorKind::Io, error.kind());
+    assert_eq!(IoErrorKind::InvalidData, source.kind());
 }
 
 #[test]
