@@ -91,7 +91,7 @@ impl TempDir {
     /// Returns the owning filesystem's listing error.
     #[inline]
     pub fn list(&self, options: ListOptions) -> FsResult<DirectoryStream> {
-        self.resource.fs().list(self.path(), options)
+        self.resource.list(options)
     }
 
     /// Builds one immediate child resource using a validated single name.
@@ -225,6 +225,17 @@ impl TempDir {
                     FsOperation::PersistTemp,
                     "temporary directory cannot be persisted now",
                 ),
+                PersistFailureState::NotPublished,
+            ));
+        }
+        if let Err(error) = self
+            .resource
+            .validate_path(target, FsOperation::PersistTemp)
+        {
+            return Err(PersistFailure::new(
+                error
+                    .with_path(self.path().clone())
+                    .with_target(target.clone()),
                 PersistFailureState::NotPublished,
             ));
         }

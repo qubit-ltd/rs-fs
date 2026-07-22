@@ -30,3 +30,35 @@ fn capability_set_supports_mutation_and_an_empty_default() {
     capabilities.insert(FileSystemCapability::Write);
     assert!(capabilities.contains(FileSystemCapability::Write));
 }
+
+#[test]
+fn capability_discriminants_remain_stable_for_capability_sets() {
+    let capabilities = [
+        FileSystemCapability::List,
+        FileSystemCapability::Read,
+        FileSystemCapability::RangeRead,
+        FileSystemCapability::ConditionalRead,
+        FileSystemCapability::ChecksumValidation,
+        FileSystemCapability::Write,
+        FileSystemCapability::Append,
+        FileSystemCapability::ConditionalWrite,
+        FileSystemCapability::CreateDirectory,
+        FileSystemCapability::EmptyDirectory,
+        FileSystemCapability::Delete,
+        FileSystemCapability::RecursiveDelete,
+        FileSystemCapability::ConditionalDelete,
+        FileSystemCapability::Rename,
+        FileSystemCapability::AtomicRename,
+        FileSystemCapability::AtomicReplace,
+        FileSystemCapability::Copy,
+        FileSystemCapability::ServerSideCopy,
+        FileSystemCapability::Symlink,
+        FileSystemCapability::TempFile,
+        FileSystemCapability::TempDirectory,
+        FileSystemCapability::AtomicTempPersist,
+    ];
+
+    for (expected, capability) in capabilities.into_iter().enumerate() {
+        assert_eq!(expected as u8, capability as u8);
+    }
+}

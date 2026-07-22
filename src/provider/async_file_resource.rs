@@ -108,11 +108,13 @@ impl AsyncFileResource {
     #[inline]
     pub fn list_async(
         &self,
-        options: ListOptions,
+        mut options: ListOptions,
     ) -> FsFuture<'_, AsyncDirectoryStream> {
         if let Err(error) = self.validate_path(self.path(), FsOperation::List) {
             return Box::pin(async move { Err(error) });
         }
+        options.page_size =
+            self.fs.limits().clamp_list_page_size(options.page_size);
         self.fs.list_async(self.path(), options)
     }
 
@@ -283,7 +285,8 @@ impl AsyncFileResource {
         self.fs.clone()
     }
 
-    fn validate_path(
+    /// Validates `path` against the owning filesystem's declared limits.
+    pub(crate) fn validate_path(
         &self,
         path: &FsPath,
         operation: FsOperation,

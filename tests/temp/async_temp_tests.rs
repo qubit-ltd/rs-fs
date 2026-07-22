@@ -37,6 +37,8 @@ use qubit_fs::{
     FileSystemCapability,
     FileSystemId,
     FileSystemInfo,
+    FileSystemLimit,
+    FileSystemLimits,
     FileSystemProperties,
     FsError,
     FsErrorKind,
@@ -61,6 +63,7 @@ use qubit_spi::ProviderId;
 struct AsyncTempFs {
     info: FileSystemInfo,
     atomic_persist: bool,
+    limits: FileSystemLimits,
 }
 
 impl FileSystemProperties for AsyncTempFs {
@@ -77,10 +80,8 @@ impl FileSystemProperties for AsyncTempFs {
         }
     }
 
-    fn limits(&self) -> &qubit_fs::FileSystemLimits {
-        static LIMITS: qubit_fs::FileSystemLimits =
-            qubit_fs::FileSystemLimits::unknown();
-        &LIMITS
+    fn limits(&self) -> &FileSystemLimits {
+        &self.limits
     }
 }
 
@@ -198,7 +199,10 @@ where
     assert!(future.as_mut().poll(&mut context).is_pending());
 }
 
-fn async_resource_with_atomic(atomic_persist: bool) -> AsyncFileResource {
+fn async_resource_with(
+    atomic_persist: bool,
+    limits: FileSystemLimits,
+) -> AsyncFileResource {
     let fs: Arc<dyn AsyncFileSystem> = Arc::new(AsyncTempFs {
         info: FileSystemInfo::new(
             FileSystemId::new("async-temp").expect("id should parse"),
@@ -206,11 +210,16 @@ fn async_resource_with_atomic(atomic_persist: bool) -> AsyncFileResource {
             PathSemantics::Hierarchical,
         ),
         atomic_persist,
+        limits,
     });
     AsyncFileResource::new(
         fs,
         FsPath::parse_normalized("/tmp/source").expect("path should parse"),
     )
+}
+
+fn async_resource_with_atomic(atomic_persist: bool) -> AsyncFileResource {
+    async_resource_with(atomic_persist, FileSystemLimits::unknown())
 }
 
 fn async_resource() -> AsyncFileResource {
@@ -870,4 +879,42 @@ impl AsyncTempResourceSession for DefaultAsyncTempSession {
 #[test]
 fn async_temp_session_default_drop_cancellation_is_a_nonblocking_noop() {
     let _temp = AsyncTempFile::new(async_resource(), DefaultAsyncTempSession);
+}
+
+#[test]
+fn async_temp_resources_preflight_target_path_limits() {
+    let limits = FileSystemLimits::unknown()
+        .with_max_path_text_bytes(FileSystemLimit::Maximum(4));
+    let target = FsPath::parse("/final").unwrap();
+
+    for is_directory in [false, true] {
+        let persist_calls = Arc::new(Mutex::new(0));
+        let session = configurable_session(
+            [],
+            None,
+            None,
+            Arc::new(Mutex::new(0)),
+            persist_calls.clone(),
+        );
+        let resource = async_resource_with(true, limits);
+        let failure = if is_directory {
+            let mut temp = AsyncTempDir::new(resource, session);
+            let failure =
+                ready(temp.persist_async(&target, PersistOptions::default()))
+                    .unwrap_err();
+            assert_eq!(Some(temp.path()), failure.error().path());
+            failure
+        } else {
+            let mut temp = AsyncTempFile::new(resource, session);
+            let failure =
+                ready(temp.persist_async(&target, PersistOptions::default()))
+                    .unwrap_err();
+            assert_eq!(Some(temp.path()), failure.error().path());
+            failure
+        };
+        assert_eq!(PersistFailureState::NotPublished, failure.state());
+        assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
+        assert_eq!(Some(&target), failure.error().target());
+        assert_eq!(0, *persist_calls.lock().expect("lock should succeed"));
+    }
 }

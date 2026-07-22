@@ -11,51 +11,52 @@
 /// A stable operation or semantic guarantee advertised by a filesystem.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[repr(u8)]
+#[non_exhaustive]
 pub enum FileSystemCapability {
     /// Directory or prefix listing.
-    List,
+    List = 0,
     /// Sequential byte reads.
-    Read,
+    Read = 1,
     /// Required byte-range reads.
-    RangeRead,
+    RangeRead = 2,
     /// Version-conditional reads.
-    ConditionalRead,
+    ConditionalRead = 3,
     /// Provider-backed checksum validation for reads.
-    ChecksumValidation,
+    ChecksumValidation = 4,
     /// File or object writes.
-    Write,
+    Write = 5,
     /// Append writes.
-    Append,
+    Append = 6,
     /// Conditional writes.
-    ConditionalWrite,
+    ConditionalWrite = 7,
     /// Directory creation.
-    CreateDirectory,
+    CreateDirectory = 8,
     /// Native empty-directory representation.
-    EmptyDirectory,
+    EmptyDirectory = 9,
     /// Resource deletion.
-    Delete,
+    Delete = 10,
     /// Recursive directory or prefix deletion.
-    RecursiveDelete,
+    RecursiveDelete = 11,
     /// Version-conditional deletion.
-    ConditionalDelete,
+    ConditionalDelete = 12,
     /// Rename or move.
-    Rename,
+    Rename = 13,
     /// Atomic rename.
-    AtomicRename,
+    AtomicRename = 14,
     /// Atomic replacement publication.
-    AtomicReplace,
+    AtomicReplace = 15,
     /// Same-filesystem copy.
-    Copy,
+    Copy = 16,
     /// Server-side copy without downloading payload bytes.
-    ServerSideCopy,
+    ServerSideCopy = 17,
     /// Symbolic links.
-    Symlink,
+    Symlink = 18,
     /// Native or configured temporary files.
-    TempFile,
+    TempFile = 19,
     /// Native or configured temporary directories.
-    TempDirectory,
+    TempDirectory = 20,
     /// Atomic temporary-resource persistence.
-    AtomicTempPersist,
+    AtomicTempPersist = 21,
 }
 
 impl FileSystemCapability {

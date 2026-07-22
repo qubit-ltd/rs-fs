@@ -136,3 +136,23 @@ fn operation_limits_validate_ranges_and_write_sessions() {
     assert_eq!(FsErrorKind::ResourceLimitExceeded, write_error.kind());
     assert_eq!(FsOperation::Write, write_error.operation());
 }
+
+#[test]
+fn list_page_size_hints_are_clamped_to_finite_provider_limits() {
+    let finite = FileSystemLimits::unknown()
+        .with_max_list_page_entries(FileSystemLimit::Maximum(64));
+
+    assert_eq!(Some(32), finite.clamp_list_page_size(Some(32)));
+    assert_eq!(Some(64), finite.clamp_list_page_size(Some(128)));
+    assert_eq!(None, finite.clamp_list_page_size(None));
+
+    for limit in [
+        FileSystemLimit::Unknown,
+        FileSystemLimit::NotApplicable,
+        FileSystemLimit::Unbounded,
+    ] {
+        let limits =
+            FileSystemLimits::unknown().with_max_list_page_entries(limit);
+        assert_eq!(Some(128), limits.clamp_list_page_size(Some(128)));
+    }
+}

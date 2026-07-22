@@ -209,6 +209,18 @@ impl AsyncTempDir {
             );
             return Box::pin(async move { Err(failure) });
         }
+        if let Err(error) = self
+            .resource
+            .validate_path(target, FsOperation::PersistTemp)
+        {
+            let failure = PersistFailure::new(
+                error
+                    .with_path(self.path().clone())
+                    .with_target(target.clone()),
+                PersistFailureState::NotPublished,
+            );
+            return Box::pin(async move { Err(failure) });
+        }
         if let Err(error) =
             options.validate_against(self.resource.fs().capabilities())
         {

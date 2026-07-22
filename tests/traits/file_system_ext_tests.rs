@@ -98,6 +98,39 @@ fn read_all_preserves_an_error_raised_by_the_limit_probe() {
 }
 
 #[test]
+fn read_all_preserves_specific_standard_io_error_kinds() {
+    let path = FsPath::parse("/timeout").expect("path should parse");
+
+    let error = ExtFileSystem::new(ExtMode::TimedOutReader)
+        .read_all(&path, 1)
+        .expect_err("timed-out stream should fail");
+
+    assert_eq!(FsErrorKind::Timeout, error.kind());
+    assert_eq!(FsOperation::Read, error.operation());
+    assert_eq!(Some(&path), error.path());
+}
+
+#[test]
+fn read_all_restores_embedded_file_system_error_context() {
+    let path = FsPath::parse("/quota").expect("path should parse");
+
+    let error = ExtFileSystem::new(ExtMode::EmbeddedFsErrorReader)
+        .read_all(&path, 1)
+        .expect_err("quota error should fail the read");
+
+    assert_eq!(FsErrorKind::QuotaExceeded, error.kind());
+    assert_eq!(FsOperation::Read, error.operation());
+    assert_eq!(Some(&path), error.path());
+    assert_eq!(
+        Some(
+            &ProviderId::new("stream-provider")
+                .expect("provider id should parse")
+        ),
+        error.provider(),
+    );
+}
+
+#[test]
 fn extension_methods_preflight_provider_write_limits() {
     let state = Arc::new(Mutex::new(MockState::default()));
     let fs = MockFs::with_state(state.clone()).with_limits(
@@ -152,6 +185,8 @@ fn test_read_all_and_write_all_error_branches() {
 enum ExtMode {
     InterruptedReader,
     ProbeErrorReader,
+    TimedOutReader,
+    EmbeddedFsErrorReader,
     OpenReaderError,
     OpenWriterError,
 }
@@ -209,6 +244,12 @@ impl FileSystem for ExtFileSystem {
                 ProbeErrorReader { emitted: false },
                 opened_info(path),
             )),
+            ExtMode::TimedOutReader => {
+                Ok(FileReader::new(TimedOutReader, opened_info(path)))
+            }
+            ExtMode::EmbeddedFsErrorReader => {
+                Ok(FileReader::new(EmbeddedFsErrorReader, opened_info(path)))
+            }
             _ => Err(FsError::new(
                 FsErrorKind::Io,
                 FsOperation::OpenReader,
@@ -245,6 +286,31 @@ impl Read for InterruptedOnceReader {
 
 struct ProbeErrorReader {
     emitted: bool,
+}
+
+struct TimedOutReader;
+
+impl Read for TimedOutReader {
+    fn read(&mut self, _buffer: &mut [u8]) -> IoResult<usize> {
+        Err(IoError::from(IoErrorKind::TimedOut))
+    }
+}
+
+struct EmbeddedFsErrorReader;
+
+impl Read for EmbeddedFsErrorReader {
+    fn read(&mut self, _buffer: &mut [u8]) -> IoResult<usize> {
+        Err(FsError::new(
+            FsErrorKind::QuotaExceeded,
+            FsOperation::OpenReader,
+            "provider quota exhausted",
+        )
+        .with_provider(
+            ProviderId::new("stream-provider")
+                .expect("provider id should parse"),
+        )
+        .into_io_error())
+    }
 }
 
 impl Read for ProbeErrorReader {

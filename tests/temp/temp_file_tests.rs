@@ -23,6 +23,8 @@ use qubit_fs::{
     FileSystemCapabilities,
     FileSystemId,
     FileSystemInfo,
+    FileSystemLimit,
+    FileSystemLimits,
     FileSystemProperties,
     FsError,
     FsErrorKind,
@@ -418,6 +420,33 @@ fn temp_file_required_atomicity_fails_before_provider_persist() {
 
     let failure = temp.persist(&target, options).unwrap_err();
     assert_eq!(PersistFailureState::NotPublished, failure.state());
+    assert_eq!(Some(temp.path()), failure.error().path());
+    assert_eq!(Some(&target), failure.error().target());
+    assert_eq!(0, *persist_calls.lock().expect("lock should succeed"));
+}
+
+#[test]
+fn temp_file_persist_preflights_target_path_limits() {
+    let limits = FileSystemLimits::unknown()
+        .with_max_path_text_bytes(FileSystemLimit::Maximum(4));
+    let fs: Arc<dyn FileSystem> =
+        Arc::new(MockFs::default().with_limits(limits));
+    let persist_calls = Arc::new(Mutex::new(0));
+    let mut temp = lifecycle_temp_file(
+        fs,
+        [],
+        None,
+        Arc::new(Mutex::new(0)),
+        persist_calls.clone(),
+    );
+    let target = FsPath::parse("/final").unwrap();
+
+    let failure = temp
+        .persist(&target, PersistOptions::default())
+        .unwrap_err();
+
+    assert_eq!(PersistFailureState::NotPublished, failure.state());
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
     assert_eq!(Some(temp.path()), failure.error().path());
     assert_eq!(Some(&target), failure.error().target());
     assert_eq!(0, *persist_calls.lock().expect("lock should succeed"));

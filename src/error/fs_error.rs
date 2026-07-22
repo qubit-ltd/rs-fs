@@ -227,6 +227,49 @@ impl FsError {
         Self::with_source(kind, operation, "stream I/O failed", error)
     }
 
+    /// Restores a filesystem error transported through an I/O boundary.
+    ///
+    /// Provider streams may embed an [`FsError`] inside [`io::Error`]. This
+    /// helper recovers that typed error when present; ordinary I/O errors use
+    /// [`Self::from_io`] classification instead. An untyped `InvalidData`
+    /// remains generic I/O because stream adapters also use it for contract
+    /// violations; providers report verified corruption with an embedded typed
+    /// error.
+    ///
+    /// # Parameters
+    ///
+    /// * `error` - Stream error returned by a reader or writer.
+    /// * `operation` - Public filesystem operation consuming the stream.
+    /// * `path` - Resource path supplied to that public operation.
+    ///
+    /// # Returns
+    ///
+    /// A typed filesystem error with the public operation and path rebound.
+    #[inline]
+    pub(crate) fn from_stream_io(
+        error: io::Error,
+        operation: FsOperation,
+        path: &FsPath,
+    ) -> Self {
+        match error.downcast::<Self>() {
+            Ok(error) => {
+                error.with_operation(operation).with_path(path.clone())
+            }
+            Err(error) if error.kind() == io::ErrorKind::InvalidData => {
+                Self::with_source(
+                    FsErrorKind::Io,
+                    operation,
+                    "stream I/O contract failed",
+                    error,
+                )
+                .with_path(path.clone())
+            }
+            Err(error) => {
+                Self::from_io(error, operation).with_path(path.clone())
+            }
+        }
+    }
+
     /// Gets the error kind.
     ///
     /// # Returns

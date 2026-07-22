@@ -38,6 +38,10 @@ use crate::{
 pub trait AsyncFileSystem: FileSystemProperties {
     /// Asynchronously reads current metadata for a path.
     ///
+    /// Implementations must inspect the final path entry itself and must not
+    /// follow a final symbolic link. Metadata for a symbolic link therefore
+    /// reports [`crate::FileKind::Symlink`].
+    ///
     /// # Returns
     /// A future resolving to current provider metadata.
     fn stat_async<'a>(&'a self, path: &'a FsPath)
@@ -63,6 +67,12 @@ pub trait AsyncFileSystem: FileSystemProperties {
     }
 
     /// Asynchronously opens a directory enumeration.
+    ///
+    /// Implementations must treat [`ListOptions::page_size`] as a hint and
+    /// clamp it to a finite
+    /// [`FileSystemProperties::limits`](crate::FileSystemProperties::limits)
+    /// `max_list_page_entries` value before issuing provider I/O. When the hint
+    /// is absent, provider-selected pages must still honor that finite limit.
     ///
     /// # Returns
     /// A future resolving to an already-open asynchronous stream.

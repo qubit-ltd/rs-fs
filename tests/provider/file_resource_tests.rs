@@ -18,6 +18,7 @@ use qubit_fs::{
     CopyOptions,
     CreateDirOptions,
     DeleteOptions,
+    DirectoryStream,
     DirectoryStreamExt,
     FileResource,
     FileSystem,
@@ -29,11 +30,14 @@ use qubit_fs::{
     FileSystemLimits,
     FileSystemProperties,
     FileSystemRegistry,
+    FsError,
     FsErrorKind,
+    FsOperation,
     FsPath,
     FsResult,
     FsUri,
     ListOptions,
+    PathSemantics,
     ReadOptions,
     RenameOptions,
     ServerSidePreference,
@@ -307,6 +311,66 @@ fn file_resource_preflights_paths_for_every_bound_operation() {
             .copy_to(&long, CopyOptions::default())
             .is_err()
     );
+}
+
+struct ListPageLimitFs {
+    info: FileSystemInfo,
+    limits: FileSystemLimits,
+}
+
+impl FileSystemProperties for ListPageLimitFs {
+    fn info(&self) -> &FileSystemInfo {
+        &self.info
+    }
+
+    fn capabilities(&self) -> FileSystemCapabilities {
+        FileSystemCapabilities::default().with(FileSystemCapability::List)
+    }
+
+    fn limits(&self) -> &FileSystemLimits {
+        &self.limits
+    }
+}
+
+impl FileSystem for ListPageLimitFs {
+    fn stat(&self, _path: &FsPath) -> FsResult<qubit_fs::FileMetadata> {
+        unreachable!("stat is not used by this test")
+    }
+
+    fn list(
+        &self,
+        path: &FsPath,
+        options: ListOptions,
+    ) -> FsResult<DirectoryStream> {
+        assert_eq!(Some(64), options.page_size);
+        Err(FsError::new(
+            FsErrorKind::Other,
+            FsOperation::List,
+            "observed clamped page size",
+        )
+        .with_path(path.clone()))
+    }
+}
+
+#[test]
+fn file_resource_clamps_list_page_size_before_delegation() {
+    let fs: Arc<dyn FileSystem> = Arc::new(ListPageLimitFs {
+        info: FileSystemInfo::new(
+            FileSystemId::new("list-page-limit").unwrap(),
+            ProviderId::new("mock").unwrap(),
+            PathSemantics::Hierarchical,
+        ),
+        limits: FileSystemLimits::unknown()
+            .with_max_list_page_entries(FileSystemLimit::Maximum(64)),
+    });
+    let resource = FileResource::new(fs, FsPath::parse("/dir").unwrap());
+
+    let result = resource.list(ListOptions {
+        page_size: Some(100),
+        ..ListOptions::default()
+    });
+
+    assert!(result.is_err());
 }
 
 fn registry_with_mock(provider: MockProvider) -> FileSystemRegistry {

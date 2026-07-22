@@ -207,6 +207,17 @@ impl TempFile {
                 PersistFailureState::NotPublished,
             ));
         }
+        if let Err(error) = self
+            .resource
+            .validate_path(target, FsOperation::PersistTemp)
+        {
+            return Err(PersistFailure::new(
+                error
+                    .with_path(self.path().clone())
+                    .with_target(target.clone()),
+                PersistFailureState::NotPublished,
+            ));
+        }
         if let Err(error) =
             options.validate_against(self.resource.fs().capabilities())
         {

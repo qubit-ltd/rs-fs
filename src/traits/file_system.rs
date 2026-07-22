@@ -38,6 +38,10 @@ use crate::{
 pub trait FileSystem: FileSystemProperties {
     /// Reads current metadata for a provider-local path.
     ///
+    /// Implementations must inspect the final path entry itself and must not
+    /// follow a final symbolic link. Metadata for a symbolic link therefore
+    /// reports [`crate::FileKind::Symlink`].
+    ///
     /// # Parameters
     /// - `path`: Resource path in this configured filesystem.
     ///
@@ -73,6 +77,12 @@ pub trait FileSystem: FileSystemProperties {
     }
 
     /// Opens a directory, prefix, or collection enumeration.
+    ///
+    /// Implementations must treat [`ListOptions::page_size`] as a hint and
+    /// clamp it to a finite
+    /// [`FileSystemProperties::limits`](crate::FileSystemProperties::limits)
+    /// `max_list_page_entries` value before issuing provider I/O. When the hint
+    /// is absent, provider-selected pages must still honor that finite limit.
     ///
     /// # Errors
     /// Returns an unsupported-capability error by default.

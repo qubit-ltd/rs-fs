@@ -162,23 +162,11 @@ async fn write_all_to_async(
 ) -> Result<WriteOutcome, FsError> {
     if let Err(error) = writer.write_fully_async(bytes).await {
         let _ = writer.abort_async().await;
-        return Err(FsError::with_source(
-            FsErrorKind::Io,
-            FsOperation::Write,
-            "failed to write resource",
-            error,
-        )
-        .with_path(path.clone()));
+        return Err(FsError::from_stream_io(error, FsOperation::Write, path));
     }
     writer.commit_async().await
 }
 
 fn async_read_error(path: &FsPath, error: std::io::Error) -> FsError {
-    FsError::with_source(
-        FsErrorKind::Io,
-        FsOperation::Read,
-        "failed to read resource",
-        error,
-    )
-    .with_path(path.clone())
+    FsError::from_stream_io(error, FsOperation::Read, path)
 }

@@ -63,6 +63,8 @@ use qubit_spi::ProviderId;
 enum ExtMode {
     InterruptedRead,
     ProbeErrorRead,
+    TimedOutRead,
+    EmbeddedFsErrorRead,
     ReadError,
     OpenReaderError,
     WriteError,
@@ -138,6 +140,13 @@ impl AsyncFileSystem for ExtAsyncFs {
                 ExtInput::ProbeError { emitted: false },
                 opened_info(path),
             )),
+            ExtMode::TimedOutRead => {
+                Ok(AsyncFileReader::new(ExtInput::TimedOut, opened_info(path)))
+            }
+            ExtMode::EmbeddedFsErrorRead => Ok(AsyncFileReader::new(
+                ExtInput::EmbeddedFsError,
+                opened_info(path),
+            )),
             _ => Ok(AsyncFileReader::new(ExtInput::Error, opened_info(path))),
         };
         Box::pin(async move { result })
@@ -170,6 +179,8 @@ impl AsyncFileSystem for ExtAsyncFs {
 enum ExtInput {
     Interrupted,
     ProbeError { emitted: bool },
+    TimedOut,
+    EmbeddedFsError,
     Error,
     Eof,
 }
@@ -199,6 +210,19 @@ impl AsyncInput for ExtInput {
                 Poll::Ready(Ok(1))
             }
             Self::ProbeError { .. } => Poll::Ready(Ok(0)),
+            Self::TimedOut => {
+                Poll::Ready(Err(IoError::from(IoErrorKind::TimedOut)))
+            }
+            Self::EmbeddedFsError => Poll::Ready(Err(FsError::new(
+                FsErrorKind::QuotaExceeded,
+                FsOperation::OpenReader,
+                "provider quota exhausted",
+            )
+            .with_provider(
+                ProviderId::new("stream-provider")
+                    .expect("provider id should parse"),
+            )
+            .into_io_error())),
             Self::Error => Poll::Ready(Err(IoError::other("read failed"))),
             Self::Eof => Poll::Ready(Ok(0)),
         }
@@ -307,6 +331,40 @@ fn async_read_all_preserves_probe_errors() {
     assert_eq!(FsErrorKind::Io, error.kind());
     assert_eq!(FsOperation::Read, error.operation());
     assert_eq!(Some(&path), error.path());
+}
+
+#[test]
+fn async_read_all_preserves_specific_standard_io_error_kinds() {
+    let path = FsPath::parse("/timeout").expect("path should parse");
+
+    let error =
+        ready(ExtAsyncFs::new(ExtMode::TimedOutRead).read_all_async(&path, 1))
+            .expect_err("timed-out stream should fail");
+
+    assert_eq!(FsErrorKind::Timeout, error.kind());
+    assert_eq!(FsOperation::Read, error.operation());
+    assert_eq!(Some(&path), error.path());
+}
+
+#[test]
+fn async_read_all_restores_embedded_file_system_error_context() {
+    let path = FsPath::parse("/quota").expect("path should parse");
+
+    let error = ready(
+        ExtAsyncFs::new(ExtMode::EmbeddedFsErrorRead).read_all_async(&path, 1),
+    )
+    .expect_err("quota error should fail the read");
+
+    assert_eq!(FsErrorKind::QuotaExceeded, error.kind());
+    assert_eq!(FsOperation::Read, error.operation());
+    assert_eq!(Some(&path), error.path());
+    assert_eq!(
+        Some(
+            &ProviderId::new("stream-provider")
+                .expect("provider id should parse")
+        ),
+        error.provider(),
+    );
 }
 
 #[test]

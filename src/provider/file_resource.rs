@@ -149,8 +149,10 @@ impl FileResource {
     /// # Errors
     /// Returns an error when the owning filesystem cannot open a directory
     /// stream for the resource path.
-    pub fn list(&self, options: ListOptions) -> FsResult<DirectoryStream> {
+    pub fn list(&self, mut options: ListOptions) -> FsResult<DirectoryStream> {
         self.validate_path(self.path(), FsOperation::List)?;
+        options.page_size =
+            self.fs.limits().clamp_list_page_size(options.page_size);
         self.fs.list(self.path(), options)
     }
 
@@ -299,7 +301,8 @@ impl FileResource {
         self.fs.clone()
     }
 
-    fn validate_path(
+    /// Validates `path` against the owning filesystem's declared limits.
+    pub(crate) fn validate_path(
         &self,
         path: &FsPath,
         operation: FsOperation,

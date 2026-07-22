@@ -65,6 +65,7 @@ use qubit_spi::ProviderId;
 struct ResourceAsyncFs {
     info: FileSystemInfo,
     limits: FileSystemLimits,
+    expected_list_page_size: Option<Option<usize>>,
 }
 
 impl ResourceAsyncFs {
@@ -76,11 +77,17 @@ impl ResourceAsyncFs {
                 PathSemantics::Hierarchical,
             ),
             limits: FileSystemLimits::unknown(),
+            expected_list_page_size: None,
         }
     }
 
     fn with_limits(mut self, limits: FileSystemLimits) -> Self {
         self.limits = limits;
+        self
+    }
+
+    fn expecting_list_page_size(mut self, page_size: Option<usize>) -> Self {
+        self.expected_list_page_size = Some(page_size);
         self
     }
 }
@@ -112,8 +119,11 @@ impl AsyncFileSystem for ResourceAsyncFs {
     fn list_async<'a>(
         &'a self,
         path: &'a FsPath,
-        _options: ListOptions,
+        options: ListOptions,
     ) -> FsFuture<'a, AsyncDirectoryStream> {
+        if let Some(expected) = self.expected_list_page_size {
+            assert_eq!(expected, options.page_size);
+        }
         let entry = DirEntry::new(path.clone(), FileKind::File);
         Box::pin(async move {
             Ok(AsyncDirectoryStream::new(ResourceDirectorySession {
@@ -444,4 +454,22 @@ fn async_file_resource_preflights_paths_for_every_bound_operation() {
         ready(short_resource.copy_to_async(&long, CopyOptions::default()))
             .is_err()
     );
+}
+
+#[test]
+fn async_file_resource_clamps_list_page_size_before_delegation() {
+    let limits = FileSystemLimits::unknown()
+        .with_max_list_page_entries(FileSystemLimit::Maximum(64));
+    let fs: Arc<dyn AsyncFileSystem> = Arc::new(
+        ResourceAsyncFs::new()
+            .with_limits(limits)
+            .expecting_list_page_size(Some(64)),
+    );
+    let resource = AsyncFileResource::new(fs, FsPath::parse("/dir").unwrap());
+
+    ready(resource.list_async(ListOptions {
+        page_size: Some(100),
+        ..ListOptions::default()
+    }))
+    .unwrap();
 }

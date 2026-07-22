@@ -127,23 +127,11 @@ fn write_all_to(
 ) -> FsResult<WriteOutcome> {
     if let Err(error) = writer.write_fully(bytes) {
         let _ = writer.abort();
-        return Err(FsError::with_source(
-            FsErrorKind::Io,
-            FsOperation::Write,
-            "failed to write resource",
-            error,
-        )
-        .with_path(path.clone()));
+        return Err(FsError::from_stream_io(error, FsOperation::Write, path));
     }
     writer.commit()
 }
 
 fn read_error(path: &FsPath, error: std::io::Error) -> FsError {
-    FsError::with_source(
-        FsErrorKind::Io,
-        FsOperation::Read,
-        "failed to read resource",
-        error,
-    )
-    .with_path(path.clone())
+    FsError::from_stream_io(error, FsOperation::Read, path)
 }

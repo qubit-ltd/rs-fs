@@ -134,6 +134,35 @@ impl FileSystemLimits {
         self.max_list_page_entries
     }
 
+    /// Clamps a requested list-page size to the declared finite maximum.
+    ///
+    /// Unknown, unbounded, and inapplicable limits leave the hint unchanged.
+    /// A missing hint remains absent so the provider can select its natural
+    /// page size while still honoring its declared limit.
+    ///
+    /// # Parameters
+    /// - `requested`: Optional caller-supplied page-size hint.
+    ///
+    /// # Returns
+    /// The effective page-size hint forwarded to the provider.
+    #[inline]
+    #[must_use]
+    pub fn clamp_list_page_size(
+        &self,
+        requested: Option<usize>,
+    ) -> Option<usize> {
+        let requested = requested?;
+        match self.max_list_page_entries {
+            FileSystemLimit::Maximum(maximum) => usize::try_from(maximum)
+                .map_or(Some(requested), |maximum| {
+                    Some(requested.min(maximum))
+                }),
+            FileSystemLimit::Unknown
+            | FileSystemLimit::NotApplicable
+            | FileSystemLimit::Unbounded => Some(requested),
+        }
+    }
+
     /// Validates a canonical filesystem path against provider path limits.
     ///
     /// Component limits are checked only for hierarchical path semantics.
