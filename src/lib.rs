@@ -43,6 +43,7 @@ pub use metadata::{
     FileSystemCapability,
     FileSystemId,
     FileSystemInfo,
+    FileSystemLimit,
     FileSystemLimits,
     NonSensitiveMetadata,
     OpenedFileInfo,

@@ -147,8 +147,8 @@ impl FileResource {
     /// # Errors
     /// Returns an error when the owning filesystem cannot open a directory
     /// stream for the resource path.
-    pub fn list(&self, options: &ListOptions) -> FsResult<DirectoryStream> {
-        self.fs.list(self.path(), options.clone())
+    pub fn list(&self, options: ListOptions) -> FsResult<DirectoryStream> {
+        self.fs.list(self.path(), options)
     }
 
     /// Opens this resource for reading.
@@ -162,9 +162,9 @@ impl FileResource {
     /// # Errors
     /// Returns an error when the owning filesystem cannot open the resource for
     /// reading.
-    pub fn open_reader(&self, options: &ReadOptions) -> FsResult<FileReader> {
+    pub fn open_reader(&self, options: ReadOptions) -> FsResult<FileReader> {
         options.validate_against(self.fs.capabilities())?;
-        let mut reader = self.fs.open_reader(self.path(), options.clone())?;
+        let mut reader = self.fs.open_reader(self.path(), options)?;
         reader.bind_location(self.location.clone());
         Ok(reader)
     }
@@ -180,23 +180,26 @@ impl FileResource {
     /// # Errors
     /// Returns an error when the owning filesystem cannot open the resource for
     /// writing.
-    pub fn open_writer(&self, options: &WriteOptions) -> FsResult<FileWriter> {
+    pub fn open_writer(&self, options: WriteOptions) -> FsResult<FileWriter> {
         options.validate_against(self.fs.capabilities())?;
-        let mut writer = self.fs.open_writer(self.path(), options.clone())?;
+        let mut writer = self.fs.open_writer(self.path(), options)?;
         writer.bind_location(self.location.clone());
         Ok(writer)
     }
 
     /// Reads this resource into memory.
     ///
+    /// # Parameters
+    /// - `max_bytes`: Maximum number of bytes to retain in memory.
+    ///
     /// # Returns
     /// The complete byte content of this resource.
     ///
     /// # Errors
     /// Returns an error when the owning filesystem cannot open or read the
-    /// resource.
-    pub fn read_all(&self) -> FsResult<Vec<u8>> {
-        self.fs.read_all(self.path())
+    /// resource, or when it contains more than `max_bytes` bytes.
+    pub fn read_all(&self, max_bytes: usize) -> FsResult<Vec<u8>> {
+        self.fs.read_all(self.path(), max_bytes)
     }
 
     /// Writes all bytes to this resource.
@@ -221,8 +224,8 @@ impl FileResource {
     ///
     /// # Errors
     /// Returns an error when the owning filesystem cannot create the directory.
-    pub fn create_dir(&self, options: &CreateDirOptions) -> FsResult<()> {
-        self.fs.create_dir(self.path(), options.clone())
+    pub fn create_dir(&self, options: CreateDirOptions) -> FsResult<()> {
+        self.fs.create_dir(self.path(), options)
     }
 
     /// Deletes this resource.
@@ -232,9 +235,9 @@ impl FileResource {
     ///
     /// # Errors
     /// Returns an error when the owning filesystem cannot delete the resource.
-    pub fn delete(&self, options: &DeleteOptions) -> FsResult<()> {
+    pub fn delete(&self, options: DeleteOptions) -> FsResult<()> {
         options.validate_against(self.fs.capabilities())?;
-        self.fs.delete(self.path(), options.clone())
+        self.fs.delete(self.path(), options)
     }
 
     /// Renames this resource to another filesystem-local path.
@@ -248,10 +251,10 @@ impl FileResource {
     pub fn rename_to(
         &self,
         target: &FsPath,
-        options: &RenameOptions,
+        options: RenameOptions,
     ) -> FsResult<RenameOutcome> {
         options.validate_against(self.fs.capabilities())?;
-        self.fs.rename(self.path(), target, options.clone())
+        self.fs.rename(self.path(), target, options)
     }
 
     /// Copies this resource to another filesystem-local path.
@@ -268,10 +271,10 @@ impl FileResource {
     pub fn copy_to(
         &self,
         target: &FsPath,
-        options: &CopyOptions,
+        options: CopyOptions,
     ) -> FsResult<CopyOutcome> {
         options.validate_against(self.fs.capabilities())?;
-        self.fs.copy(self.path(), target, options.clone())
+        self.fs.copy(self.path(), target, options)
     }
 }
 

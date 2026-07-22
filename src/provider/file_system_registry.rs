@@ -96,6 +96,17 @@ impl FileSystemRegistry {
             .map_err(map_registration_error)
     }
 
+    /// Returns the selection used by [`Self::resolve`].
+    ///
+    /// # Returns
+    ///
+    /// The registry's current default provider selection.
+    #[inline(always)]
+    #[must_use]
+    pub fn default_selection(&self) -> ProviderSelection {
+        self.providers.default_selection()
+    }
+
     /// Replaces the selection used by future default resolutions.
     ///
     /// # Arguments

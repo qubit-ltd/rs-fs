@@ -132,6 +132,7 @@ fn fs_error_maps_every_specific_kind_to_io_error() {
         (FsErrorKind::Interrupted, io::ErrorKind::Interrupted),
         (FsErrorKind::Cancelled, io::ErrorKind::Interrupted),
         (FsErrorKind::QuotaExceeded, io::ErrorKind::StorageFull),
+        (FsErrorKind::ResourceLimitExceeded, io::ErrorKind::Other),
         (FsErrorKind::DataCorruption, io::ErrorKind::InvalidData),
         (FsErrorKind::Other, io::ErrorKind::Other),
     ];

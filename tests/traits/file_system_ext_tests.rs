@@ -55,8 +55,44 @@ fn test_read_all_and_write_all_success_paths() {
         .expect("write_all should succeed");
     assert_eq!(
         b"data".to_vec(),
-        fs.read_all(&path).expect("read_all should succeed"),
+        fs.read_all(&path, 4).expect("read_all should succeed"),
     );
+}
+
+#[test]
+fn read_all_enforces_an_inclusive_caller_budget() {
+    let fs = MockFs::default();
+    let path = FsPath::parse("/file.txt").expect("path should parse");
+
+    assert_eq!(b"data", fs.read_all(&path, 4).unwrap().as_slice());
+    assert_eq!(b"data", fs.read_all(&path, usize::MAX).unwrap().as_slice());
+
+    let error = fs.read_all(&path, 3).unwrap_err();
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, error.kind());
+    assert_eq!(FsOperation::Read, error.operation());
+    assert_eq!(Some(&path), error.path());
+}
+
+#[test]
+fn read_all_accepts_an_empty_resource_with_a_zero_budget() {
+    let path = FsPath::parse("/empty").unwrap();
+    let bytes = ExtFileSystem::new(ExtMode::InterruptedReader)
+        .read_all(&path, 0)
+        .unwrap();
+
+    assert!(bytes.is_empty());
+}
+
+#[test]
+fn read_all_preserves_an_error_raised_by_the_limit_probe() {
+    let path = FsPath::parse("/probe-error").unwrap();
+    let error = ExtFileSystem::new(ExtMode::ProbeErrorReader)
+        .read_all(&path, 1)
+        .unwrap_err();
+
+    assert_eq!(FsErrorKind::Io, error.kind());
+    assert_eq!(FsOperation::Read, error.operation());
+    assert_eq!(Some(&path), error.path());
 }
 
 #[test]
@@ -66,7 +102,7 @@ fn test_read_all_and_write_all_error_branches() {
     let path = FsPath::parse("/file.txt").expect("path should parse");
 
     state.lock().expect("state lock should succeed").fail_read = true;
-    assert!(fs.read_all(&path).is_err());
+    assert!(fs.read_all(&path, 4).is_err());
     state.lock().expect("state lock should succeed").fail_read = false;
 
     state.lock().expect("state lock should succeed").fail_write = true;
@@ -76,6 +112,7 @@ fn test_read_all_and_write_all_error_branches() {
 
 enum ExtMode {
     InterruptedReader,
+    ProbeErrorReader,
     OpenReaderError,
     OpenWriterError,
 }
@@ -106,6 +143,12 @@ impl FileSystemProperties for ExtFileSystem {
     fn capabilities(&self) -> FileSystemCapabilities {
         FileSystemCapabilities::default()
     }
+
+    fn limits(&self) -> &qubit_fs::FileSystemLimits {
+        static LIMITS: qubit_fs::FileSystemLimits =
+            qubit_fs::FileSystemLimits::unknown();
+        &LIMITS
+    }
 }
 
 impl FileSystem for ExtFileSystem {
@@ -121,6 +164,10 @@ impl FileSystem for ExtFileSystem {
         match self.mode {
             ExtMode::InterruptedReader => Ok(FileReader::new(
                 InterruptedOnceReader(true),
+                opened_info(path),
+            )),
+            ExtMode::ProbeErrorReader => Ok(FileReader::new(
+                ProbeErrorReader { emitted: false },
                 opened_info(path),
             )),
             _ => Err(FsError::new(
@@ -157,6 +204,24 @@ impl Read for InterruptedOnceReader {
     }
 }
 
+struct ProbeErrorReader {
+    emitted: bool,
+}
+
+impl Read for ProbeErrorReader {
+    fn read(&mut self, buffer: &mut [u8]) -> IoResult<usize> {
+        if self.emitted {
+            Err(IoError::other("probe failed"))
+        } else if buffer.is_empty() {
+            Ok(0)
+        } else {
+            self.emitted = true;
+            buffer[0] = b'x';
+            Ok(1)
+        }
+    }
+}
+
 fn opened_info(path: &FsPath) -> OpenedFileInfo {
     OpenedFileInfo::new(FileLocation::new(
         FileSystemId::new("ext").unwrap(),
@@ -170,13 +235,13 @@ fn extension_methods_handle_open_failures_and_interrupted_reads() {
 
     assert!(
         ExtFileSystem::new(ExtMode::OpenReaderError)
-            .read_all(&path)
+            .read_all(&path, 16)
             .is_err(),
     );
     assert_eq!(
         Vec::<u8>::new(),
         ExtFileSystem::new(ExtMode::InterruptedReader)
-            .read_all(&path)
+            .read_all(&path, 16)
             .unwrap(),
     );
     assert!(

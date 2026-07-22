@@ -11,6 +11,8 @@ use qubit_fs::{
     FileSystemCapability,
     FileSystemId,
     FileSystemInfo,
+    FileSystemLimit,
+    FileSystemLimits,
     FileSystemProperties,
     PathSemantics,
 };
@@ -20,6 +22,7 @@ use qubit_spi::ProviderId;
 struct Properties {
     info: FileSystemInfo,
     capabilities: FileSystemCapabilities,
+    limits: FileSystemLimits,
 }
 
 impl FileSystemProperties for Properties {
@@ -29,6 +32,10 @@ impl FileSystemProperties for Properties {
 
     fn capabilities(&self) -> FileSystemCapabilities {
         self.capabilities
+    }
+
+    fn limits(&self) -> &FileSystemLimits {
+        &self.limits
     }
 }
 
@@ -41,13 +48,20 @@ fn common_properties_are_object_safe_local_snapshots() {
             PathSemantics::Hierarchical,
         ),
         capabilities: FileSystemCapabilities::default()
-            .with(FileSystemCapability::Stat),
+            .with(FileSystemCapability::Read),
+        limits: FileSystemLimits::unknown()
+            .with_max_write_bytes(FileSystemLimit::Maximum(1024)),
     });
 
     assert_eq!("properties-instance", properties.info().id().as_str());
+    assert!(core::ptr::eq(properties.limits(), properties.limits()));
+    assert_eq!(
+        FileSystemLimit::Maximum(1024),
+        properties.limits().max_write_bytes(),
+    );
     assert!(
         properties
             .capabilities()
-            .contains(FileSystemCapability::Stat)
+            .contains(FileSystemCapability::Read)
     );
 }

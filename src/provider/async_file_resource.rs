@@ -148,12 +148,16 @@ impl AsyncFileResource {
 
     /// Asynchronously reads this resource into memory.
     ///
+    /// # Parameters
+    ///
+    /// - `max_bytes`: Maximum number of bytes to retain in memory.
+    ///
     /// # Returns
     ///
     /// A future resolving to the complete byte content.
     #[inline]
-    pub fn read_all_async(&self) -> FsFuture<'_, Vec<u8>> {
-        self.fs.read_all_async(self.path())
+    pub fn read_all_async(&self, max_bytes: usize) -> FsFuture<'_, Vec<u8>> {
+        self.fs.read_all_async(self.path(), max_bytes)
     }
 
     /// Asynchronously writes and commits complete byte content.

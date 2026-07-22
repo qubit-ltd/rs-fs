@@ -76,6 +76,12 @@ impl FileSystemProperties for AsyncTempFs {
             capabilities
         }
     }
+
+    fn limits(&self) -> &qubit_fs::FileSystemLimits {
+        static LIMITS: qubit_fs::FileSystemLimits =
+            qubit_fs::FileSystemLimits::unknown();
+        &LIMITS
+    }
 }
 
 impl AsyncFileSystem for AsyncTempFs {

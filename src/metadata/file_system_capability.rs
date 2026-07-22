@@ -12,8 +12,6 @@
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[repr(u8)]
 pub enum FileSystemCapability {
-    /// Metadata lookup.
-    Stat,
     /// Directory or prefix listing.
     List,
     /// Sequential byte reads.
@@ -62,7 +60,7 @@ pub enum FileSystemCapability {
 
 impl FileSystemCapability {
     /// Returns the bit representing this capability in a capability set.
-    #[inline]
+    #[inline(always)]
     pub(crate) const fn bit(self) -> u128 {
         1_u128 << (self as u8)
     }

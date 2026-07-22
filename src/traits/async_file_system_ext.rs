@@ -33,11 +33,16 @@ pub trait AsyncFileSystemExt {
     /// # Parameters
     ///
     /// - `path`: Provider-local resource path.
+    /// - `max_bytes`: Maximum number of bytes to retain in memory.
     ///
     /// # Returns
     ///
     /// A future resolving to the complete resource bytes.
-    fn read_all_async<'a>(&'a self, path: &'a FsPath) -> FsFuture<'a, Vec<u8>>;
+    fn read_all_async<'a>(
+        &'a self,
+        path: &'a FsPath,
+        max_bytes: usize,
+    ) -> FsFuture<'a, Vec<u8>>;
 
     /// Writes all bytes and commits the asynchronous writer.
     ///
@@ -65,29 +70,43 @@ impl<T> AsyncFileSystemExt for T
 where
     T: AsyncFileSystem + ?Sized,
 {
-    fn read_all_async<'a>(&'a self, path: &'a FsPath) -> FsFuture<'a, Vec<u8>> {
+    fn read_all_async<'a>(
+        &'a self,
+        path: &'a FsPath,
+        max_bytes: usize,
+    ) -> FsFuture<'a, Vec<u8>> {
         Box::pin(async move {
             let mut reader =
                 self.open_reader_async(path, ReadOptions::default()).await?;
             let mut bytes = Vec::new();
             let mut buffer = [0_u8; 8192];
-            loop {
-                match reader.read_async(&mut buffer).await {
-                    Ok(0) => break,
+            while bytes.len() < max_bytes {
+                let remaining = max_bytes - bytes.len();
+                let read_limit = remaining.min(buffer.len());
+                match reader.read_async(&mut buffer[..read_limit]).await {
+                    Ok(0) => return Ok(bytes),
                     Ok(read) => bytes.extend_from_slice(&buffer[..read]),
                     Err(error) if error.kind() == IoErrorKind::Interrupted => {}
-                    Err(error) => {
-                        return Err(FsError::with_source(
-                            FsErrorKind::Io,
+                    Err(error) => return Err(async_read_error(path, error)),
+                }
+            }
+
+            let mut probe = [0_u8; 1];
+            loop {
+                match reader.read_async(&mut probe).await {
+                    Ok(0) => return Ok(bytes),
+                    Ok(_) => {
+                        return Err(FsError::new(
+                            FsErrorKind::ResourceLimitExceeded,
                             FsOperation::Read,
-                            "failed to read resource",
-                            error,
+                            "resource exceeds the caller byte limit",
                         )
                         .with_path(path.clone()));
                     }
+                    Err(error) if error.kind() == IoErrorKind::Interrupted => {}
+                    Err(error) => return Err(async_read_error(path, error)),
                 }
             }
-            Ok(bytes)
         })
     }
 
@@ -113,4 +132,14 @@ where
             writer.commit_async().await
         })
     }
+}
+
+fn async_read_error(path: &FsPath, error: std::io::Error) -> FsError {
+    FsError::with_source(
+        FsErrorKind::Io,
+        FsOperation::Read,
+        "failed to read resource",
+        error,
+    )
+    .with_path(path.clone())
 }

@@ -71,7 +71,7 @@ fn test_file_resource_delegates_operations_to_resolved_file_system() {
     assert_eq!(Some(4), resource.stat().expect("metadata should load").len);
 
     let mut reader = resource
-        .open_reader(&ReadOptions::default())
+        .open_reader(ReadOptions::default())
         .expect("reader should open");
     assert_eq!(
         Some(&resource_uri),
@@ -85,7 +85,7 @@ fn test_file_resource_delegates_operations_to_resolved_file_system() {
     assert_eq!(b"data", &direct_read);
 
     let mut writer = resource
-        .open_writer(&WriteOptions::default())
+        .open_writer(WriteOptions::default())
         .expect("writer should open");
     assert_eq!(
         Some(&resource_uri),
@@ -99,20 +99,20 @@ fn test_file_resource_delegates_operations_to_resolved_file_system() {
     );
     assert_eq!(
         b"data".to_vec(),
-        resource.read_all().expect("resource should read")
+        resource.read_all(4).expect("resource should read")
     );
 
     let entries = resource
-        .list(&ListOptions::default())
+        .list(ListOptions::default())
         .expect("resource list should start")
-        .collect_entries()
+        .collect_entries(1)
         .expect("resource list should collect");
     assert_eq!(1, entries.len());
 
     let copied = resource
         .copy_to(
             &FsPath::parse("/copy.txt").expect("path should parse"),
-            &CopyOptions::file(),
+            CopyOptions::file(),
         )
         .expect("resource should copy");
     assert_eq!(1, copied.stats.files);
@@ -120,7 +120,7 @@ fn test_file_resource_delegates_operations_to_resolved_file_system() {
     resource
         .rename_to(
             &FsPath::parse("/renamed.txt").expect("path should parse"),
-            &RenameOptions::default(),
+            RenameOptions::default(),
         )
         .expect("resource should rename");
 }
@@ -137,10 +137,10 @@ fn test_file_resource_delegates_directory_create_and_delete() {
         .resource_uri(&dir_uri)
         .expect("directory resource should resolve");
 
-    dir.create_dir(&CreateDirOptions::default())
+    dir.create_dir(CreateDirOptions::default())
         .expect("resource directory should create");
     assert!(dir.exists().expect("directory should exist"));
-    dir.delete(&DeleteOptions::default())
+    dir.delete(DeleteOptions::default())
         .expect("resource directory should delete");
 }
 
@@ -155,6 +155,12 @@ impl FileSystemProperties for NoCapabilitiesFs {
 
     fn capabilities(&self) -> FileSystemCapabilities {
         FileSystemCapabilities::default()
+    }
+
+    fn limits(&self) -> &qubit_fs::FileSystemLimits {
+        static LIMITS: qubit_fs::FileSystemLimits =
+            qubit_fs::FileSystemLimits::unknown();
+        &LIMITS
     }
 }
 
@@ -182,7 +188,7 @@ fn file_resource_rejects_unmet_requirements_before_delegation() {
     };
     assert_eq!(
         qubit_fs::FsErrorKind::RequirementNotMet,
-        resource.open_reader(&read).unwrap_err().kind(),
+        resource.open_reader(read).unwrap_err().kind(),
     );
 
     let write = WriteOptions {
@@ -191,7 +197,7 @@ fn file_resource_rejects_unmet_requirements_before_delegation() {
     };
     assert_eq!(
         qubit_fs::FsErrorKind::RequirementNotMet,
-        resource.open_writer(&write).unwrap_err().kind(),
+        resource.open_writer(write).unwrap_err().kind(),
     );
 
     let delete = DeleteOptions {
@@ -200,7 +206,7 @@ fn file_resource_rejects_unmet_requirements_before_delegation() {
     };
     assert_eq!(
         qubit_fs::FsErrorKind::RequirementNotMet,
-        resource.delete(&delete).unwrap_err().kind(),
+        resource.delete(delete).unwrap_err().kind(),
     );
 
     let rename = RenameOptions {
@@ -209,7 +215,7 @@ fn file_resource_rejects_unmet_requirements_before_delegation() {
     };
     assert_eq!(
         qubit_fs::FsErrorKind::RequirementNotMet,
-        resource.rename_to(&target, &rename).unwrap_err().kind(),
+        resource.rename_to(&target, rename).unwrap_err().kind(),
     );
 
     let copy = CopyOptions {
@@ -218,7 +224,7 @@ fn file_resource_rejects_unmet_requirements_before_delegation() {
     };
     assert_eq!(
         qubit_fs::FsErrorKind::RequirementNotMet,
-        resource.copy_to(&target, &copy).unwrap_err().kind(),
+        resource.copy_to(&target, copy).unwrap_err().kind(),
     );
 }
 

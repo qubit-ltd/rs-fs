@@ -7,24 +7,20 @@
 // =============================================================================
 //! Filesystem capability guarantees.
 
-use crate::{
-    FileSystemCapability,
-    FileSystemLimits,
-};
+use crate::FileSystemCapability;
 
 /// Stable typed capability guarantees for one configured filesystem.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct FileSystemCapabilities {
     flags: u128,
-    limits: FileSystemLimits,
 }
 
 impl FileSystemCapabilities {
-    /// Creates an empty capability set with configured limits.
+    /// Creates an empty capability set.
     #[inline]
     #[must_use]
-    pub const fn new(limits: FileSystemLimits) -> Self {
-        Self { flags: 0, limits }
+    pub const fn new() -> Self {
+        Self { flags: 0 }
     }
 
     /// Returns a copy with one additional guaranteed capability.
@@ -36,30 +32,24 @@ impl FileSystemCapabilities {
     }
 
     /// Inserts one guaranteed capability.
-    #[inline]
+    #[inline(always)]
     pub fn insert(&mut self, capability: FileSystemCapability) {
         self.flags |= capability.bit();
     }
 
     /// Returns whether the filesystem guarantees `capability`.
-    #[inline]
+    #[inline(always)]
     #[must_use]
     pub const fn contains(&self, capability: FileSystemCapability) -> bool {
         self.flags & capability.bit() != 0
     }
 
-    /// Returns the configured filesystem limits.
-    #[inline]
-    #[must_use]
-    pub const fn limits(&self) -> &FileSystemLimits {
-        &self.limits
-    }
 }
 
 impl Default for FileSystemCapabilities {
-    /// Creates an empty capability set with unknown limits.
+    /// Creates an empty capability set.
     #[inline]
     fn default() -> Self {
-        Self::new(FileSystemLimits::default())
+        Self::new()
     }
 }

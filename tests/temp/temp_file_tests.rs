@@ -383,6 +383,12 @@ impl FileSystemProperties for NoAtomicFileSystem {
     fn capabilities(&self) -> FileSystemCapabilities {
         FileSystemCapabilities::default()
     }
+
+    fn limits(&self) -> &qubit_fs::FileSystemLimits {
+        static LIMITS: qubit_fs::FileSystemLimits =
+            qubit_fs::FileSystemLimits::unknown();
+        &LIMITS
+    }
 }
 
 impl FileSystem for NoAtomicFileSystem {

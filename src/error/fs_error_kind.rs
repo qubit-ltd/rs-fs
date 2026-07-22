@@ -53,6 +53,8 @@ pub enum FsErrorKind {
     Interrupted,
     /// A quota, capacity, or storage limit was exceeded.
     QuotaExceeded,
+    /// A deterministic caller or provider resource bound was exceeded.
+    ResourceLimitExceeded,
     /// Stored or transferred data failed integrity validation.
     DataCorruption,
     /// A lower-level local or remote I/O error occurred.

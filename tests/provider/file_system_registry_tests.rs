@@ -233,9 +233,10 @@ fn test_registry_resolves_configured_default_provider() {
         descriptor: mock_descriptor(),
         fs: MockFs::default(),
     });
-    registry.set_default_selection(
-        ProviderSelection::named("mem").expect("selection should be valid"),
-    );
+    let selection =
+        ProviderSelection::named("mem").expect("selection should be valid");
+    registry.set_default_selection(selection.clone());
+    assert_eq!(selection, registry.default_selection());
     let provider = registry
         .resolve()
         .expect("configured default should resolve");

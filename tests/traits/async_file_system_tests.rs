@@ -55,6 +55,12 @@ impl FileSystemProperties for AsyncStatFs {
     fn capabilities(&self) -> FileSystemCapabilities {
         self.capabilities
     }
+
+    fn limits(&self) -> &qubit_fs::FileSystemLimits {
+        static LIMITS: qubit_fs::FileSystemLimits =
+            qubit_fs::FileSystemLimits::unknown();
+        &LIMITS
+    }
 }
 
 impl AsyncFileSystem for AsyncStatFs {
@@ -101,7 +107,7 @@ fn async_file_system_is_object_safe_and_uses_suffixed_operations() {
             PathSemantics::Hierarchical,
         ),
         capabilities: FileSystemCapabilities::default()
-            .with(FileSystemCapability::Stat),
+            .with(FileSystemCapability::Read),
     });
     let path = FsPath::parse_normalized("/file").expect("path should parse");
 
@@ -111,7 +117,7 @@ fn async_file_system_is_object_safe_and_uses_suffixed_operations() {
             .expect("stat should succeed")
             .kind,
     );
-    assert!(fs.capabilities().contains(FileSystemCapability::Stat));
+    assert!(fs.capabilities().contains(FileSystemCapability::Read));
 }
 
 #[test]

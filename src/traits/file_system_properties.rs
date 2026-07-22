@@ -10,6 +10,7 @@
 use crate::{
     FileSystemCapabilities,
     FileSystemInfo,
+    FileSystemLimits,
 };
 
 /// Construction-time local snapshots shared by all filesystem operation modes.
@@ -28,6 +29,15 @@ pub trait FileSystemProperties: Send + Sync {
     /// must complete it during construction.
     ///
     /// # Returns
-    /// Stable capabilities and limits.
+    /// Stable capability guarantees.
     fn capabilities(&self) -> FileSystemCapabilities;
+
+    /// Returns stable provider-declared filesystem limits.
+    ///
+    /// This getter must not perform I/O. Unknown, inapplicable, and unbounded
+    /// dimensions must be represented explicitly in the returned snapshot.
+    ///
+    /// # Returns
+    /// Limits fixed when the configured filesystem was constructed.
+    fn limits(&self) -> &FileSystemLimits;
 }

@@ -35,6 +35,7 @@ fn test_async_provider_error_mapping_classifies_every_fs_error_kind() {
         FsErrorKind::Timeout,
         FsErrorKind::Interrupted,
         FsErrorKind::QuotaExceeded,
+        FsErrorKind::ResourceLimitExceeded,
         FsErrorKind::DataCorruption,
         FsErrorKind::Io,
         FsErrorKind::Other,

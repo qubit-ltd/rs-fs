@@ -32,13 +32,15 @@ pub trait FileSystemExt {
     ///
     /// # Parameters
     /// - `path`: Resource path.
+    /// - `max_bytes`: Maximum number of bytes to retain in memory.
     ///
     /// # Returns
     /// Resource bytes.
     ///
     /// # Errors
-    /// Returns [`crate::FsError`] when opening or reading fails.
-    fn read_all(&self, path: &FsPath) -> FsResult<Vec<u8>>;
+    /// Returns [`crate::FsError`] when opening or reading fails, or when the
+    /// resource contains more than `max_bytes` bytes.
+    fn read_all(&self, path: &FsPath, max_bytes: usize) -> FsResult<Vec<u8>>;
 
     /// Writes an entire resource and commits the writer.
     ///
@@ -58,27 +60,37 @@ impl<T> FileSystemExt for T
 where
     T: FileSystem + ?Sized,
 {
-    fn read_all(&self, path: &FsPath) -> FsResult<Vec<u8>> {
+    fn read_all(&self, path: &FsPath, max_bytes: usize) -> FsResult<Vec<u8>> {
         let mut reader = self.open_reader(path, ReadOptions::default())?;
         let mut bytes = Vec::new();
         let mut buffer = [0_u8; 8192];
-        loop {
-            match reader.read(&mut buffer) {
-                Ok(0) => break,
+        while bytes.len() < max_bytes {
+            let remaining = max_bytes - bytes.len();
+            let read_limit = remaining.min(buffer.len());
+            match reader.read(&mut buffer[..read_limit]) {
+                Ok(0) => return Ok(bytes),
                 Ok(read) => bytes.extend_from_slice(&buffer[..read]),
                 Err(error) if error.kind() == IoErrorKind::Interrupted => {}
-                Err(error) => {
-                    return Err(FsError::with_source(
-                        FsErrorKind::Io,
+                Err(error) => return Err(read_error(path, error)),
+            }
+        }
+
+        let mut probe = [0_u8; 1];
+        loop {
+            match reader.read(&mut probe) {
+                Ok(0) => return Ok(bytes),
+                Ok(_) => {
+                    return Err(FsError::new(
+                        FsErrorKind::ResourceLimitExceeded,
                         FsOperation::Read,
-                        "failed to read resource",
-                        error,
+                        "resource exceeds the caller byte limit",
                     )
                     .with_path(path.clone()));
                 }
+                Err(error) if error.kind() == IoErrorKind::Interrupted => {}
+                Err(error) => return Err(read_error(path, error)),
             }
         }
-        Ok(bytes)
     }
 
     fn write_all(&self, path: &FsPath, bytes: &[u8]) -> FsResult<WriteOutcome> {
@@ -95,4 +107,14 @@ where
         }
         writer.commit()
     }
+}
+
+fn read_error(path: &FsPath, error: std::io::Error) -> FsError {
+    FsError::with_source(
+        FsErrorKind::Io,
+        FsOperation::Read,
+        "failed to read resource",
+        error,
+    )
+    .with_path(path.clone())
 }

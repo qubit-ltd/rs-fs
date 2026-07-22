@@ -116,7 +116,6 @@ impl FileSystemProperties for MockFs {
 
     fn capabilities(&self) -> FileSystemCapabilities {
         FileSystemCapabilities::default()
-            .with(FileSystemCapability::Stat)
             .with(FileSystemCapability::List)
             .with(FileSystemCapability::Read)
             .with(FileSystemCapability::RangeRead)
@@ -139,6 +138,12 @@ impl FileSystemProperties for MockFs {
             .with(FileSystemCapability::TempFile)
             .with(FileSystemCapability::TempDirectory)
             .with(FileSystemCapability::AtomicTempPersist)
+    }
+
+    fn limits(&self) -> &qubit_fs::FileSystemLimits {
+        static LIMITS: qubit_fs::FileSystemLimits =
+            qubit_fs::FileSystemLimits::unknown();
+        &LIMITS
     }
 }
 

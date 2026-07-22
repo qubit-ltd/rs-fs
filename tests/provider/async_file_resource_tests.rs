@@ -86,6 +86,12 @@ impl FileSystemProperties for ResourceAsyncFs {
             .with(FileSystemCapability::Read)
             .with(FileSystemCapability::Write)
     }
+
+    fn limits(&self) -> &qubit_fs::FileSystemLimits {
+        static LIMITS: qubit_fs::FileSystemLimits =
+            qubit_fs::FileSystemLimits::unknown();
+        &LIMITS
+    }
 }
 
 impl AsyncFileSystem for ResourceAsyncFs {
@@ -297,8 +303,11 @@ fn async_file_resource_delegates_every_operation_and_binds_handles() {
     assert!(ready(resource.exists_async()).unwrap());
     assert_eq!(
         b"data",
-        ready(resource.read_all_async()).unwrap().as_slice()
+        ready(resource.read_all_async(4)).unwrap().as_slice()
     );
+    let error = ready(resource.read_all_async(3)).unwrap_err();
+    assert_eq!(qubit_fs::FsErrorKind::ResourceLimitExceeded, error.kind());
+    assert_eq!(qubit_fs::FsOperation::Read, error.operation());
     let outcome = ready(resource.write_all_async(b"updated"))
         .expect("write-all should succeed");
     assert_eq!(PublicationMethod::Direct, outcome.method);

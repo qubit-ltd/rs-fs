@@ -11,30 +11,50 @@
 use crate::{
     AsyncDirectoryStream,
     DirEntry,
+    FsError,
+    FsErrorKind,
     FsFuture,
+    FsOperation,
 };
 
 /// Future-based convenience methods for asynchronous directory streams.
 pub trait AsyncDirectoryStreamExt {
     /// Collects all remaining entries asynchronously.
     ///
-    /// This helper is appropriate only when the caller intentionally accepts
-    /// memory use proportional to the complete remaining enumeration.
+    /// # Parameters
+    ///
+    /// - `max_entries`: Maximum number of entries to retain in memory.
     ///
     /// # Returns
     ///
-    /// A future resolving to all remaining entries.
-    fn collect_entries_async(self) -> FsFuture<'static, Vec<DirEntry>>;
+    /// A future resolving to at most `max_entries` remaining entries.
+    fn collect_entries_async(
+        self,
+        max_entries: usize,
+    ) -> FsFuture<'static, Vec<DirEntry>>;
 }
 
 impl AsyncDirectoryStreamExt for AsyncDirectoryStream {
-    fn collect_entries_async(mut self) -> FsFuture<'static, Vec<DirEntry>> {
+    fn collect_entries_async(
+        mut self,
+        max_entries: usize,
+    ) -> FsFuture<'static, Vec<DirEntry>> {
         Box::pin(async move {
             let mut entries = Vec::new();
-            while let Some(entry) = self.next_entry_async().await? {
-                entries.push(entry);
+            while entries.len() < max_entries {
+                match self.next_entry_async().await? {
+                    Some(entry) => entries.push(entry),
+                    None => return Ok(entries),
+                }
             }
-            Ok(entries)
+            match self.next_entry_async().await? {
+                Some(_) => Err(FsError::new(
+                    FsErrorKind::ResourceLimitExceeded,
+                    FsOperation::List,
+                    "directory listing exceeds the caller entry limit",
+                )),
+                None => Ok(entries),
+            }
         })
     }
 }

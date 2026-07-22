@@ -59,6 +59,7 @@ use qubit_spi::ProviderId;
 #[derive(Clone, Copy)]
 enum ExtMode {
     InterruptedRead,
+    ProbeErrorRead,
     ReadError,
     OpenReaderError,
     WriteError,
@@ -94,6 +95,12 @@ impl FileSystemProperties for ExtAsyncFs {
     fn capabilities(&self) -> FileSystemCapabilities {
         FileSystemCapabilities::default()
     }
+
+    fn limits(&self) -> &qubit_fs::FileSystemLimits {
+        static LIMITS: qubit_fs::FileSystemLimits =
+            qubit_fs::FileSystemLimits::unknown();
+        &LIMITS
+    }
 }
 
 impl AsyncFileSystem for ExtAsyncFs {
@@ -117,6 +124,10 @@ impl AsyncFileSystem for ExtAsyncFs {
             )),
             ExtMode::InterruptedRead => Ok(AsyncFileReader::new(
                 ExtInput::Interrupted,
+                opened_info(path),
+            )),
+            ExtMode::ProbeErrorRead => Ok(AsyncFileReader::new(
+                ExtInput::ProbeError { emitted: false },
                 opened_info(path),
             )),
             _ => Ok(AsyncFileReader::new(ExtInput::Error, opened_info(path))),
@@ -150,6 +161,7 @@ impl AsyncFileSystem for ExtAsyncFs {
 
 enum ExtInput {
     Interrupted,
+    ProbeError { emitted: bool },
     Error,
     Eof,
 }
@@ -160,9 +172,9 @@ impl AsyncInput for ExtInput {
     unsafe fn poll_read_unchecked(
         self: Pin<&mut Self>,
         _cx: &mut Context<'_>,
-        _output: &mut [u8],
-        _index: usize,
-        _count: usize,
+        output: &mut [u8],
+        index: usize,
+        count: usize,
     ) -> Poll<IoResult<usize>> {
         let this = self.get_mut();
         match this {
@@ -170,6 +182,15 @@ impl AsyncInput for ExtInput {
                 *this = Self::Eof;
                 Poll::Ready(Err(IoError::from(IoErrorKind::Interrupted)))
             }
+            Self::ProbeError { emitted } if *emitted => {
+                Poll::Ready(Err(IoError::other("probe failed")))
+            }
+            Self::ProbeError { emitted } if count > 0 => {
+                output[index] = b'x';
+                *emitted = true;
+                Poll::Ready(Ok(1))
+            }
+            Self::ProbeError { .. } => Poll::Ready(Ok(0)),
             Self::Error => Poll::Ready(Err(IoError::other("read failed"))),
             Self::Eof => Poll::Ready(Ok(0)),
         }
@@ -257,7 +278,20 @@ fn async_file_system_extensions_retry_interrupted_reads() {
     let fs = ExtAsyncFs::new(ExtMode::InterruptedRead);
     let path = FsPath::parse("/file").unwrap();
 
-    assert!(ready(fs.read_all_async(&path)).unwrap().is_empty());
+    assert!(ready(fs.read_all_async(&path, 0)).unwrap().is_empty());
+}
+
+#[test]
+fn async_read_all_preserves_probe_errors() {
+    let path = FsPath::parse("/probe-error").unwrap();
+    let error = ready(
+        ExtAsyncFs::new(ExtMode::ProbeErrorRead).read_all_async(&path, 1),
+    )
+    .unwrap_err();
+
+    assert_eq!(FsErrorKind::Io, error.kind());
+    assert_eq!(FsOperation::Read, error.operation());
+    assert_eq!(Some(&path), error.path());
 }
 
 #[test]
@@ -265,12 +299,15 @@ fn async_file_system_extensions_preserve_open_and_transfer_errors() {
     let path = FsPath::parse("/file").unwrap();
 
     let error =
-        ready(ExtAsyncFs::new(ExtMode::OpenReaderError).read_all_async(&path))
+        ready(
+            ExtAsyncFs::new(ExtMode::OpenReaderError)
+                .read_all_async(&path, 16),
+        )
             .unwrap_err();
     assert_eq!(FsOperation::OpenReader, error.operation());
 
     let error =
-        ready(ExtAsyncFs::new(ExtMode::ReadError).read_all_async(&path))
+        ready(ExtAsyncFs::new(ExtMode::ReadError).read_all_async(&path, 16))
             .unwrap_err();
     assert_eq!(FsOperation::Read, error.operation());
 
