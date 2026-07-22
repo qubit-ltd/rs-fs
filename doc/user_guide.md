@@ -43,7 +43,8 @@ registries are separate because a provider may support only one mode.
 
 `stat()` and `stat_async()` are live operations and may perform remote I/O.
 They are intentionally distinct from `info()` and from the optional metadata
-snapshot attached to an opened handle.
+snapshot attached to an opened handle. Both inspect the final path entry itself:
+a final symbolic link is reported as `FileKind::Symlink`, not followed.
 
 ## URI and Provider-Local Paths
 
@@ -78,9 +79,10 @@ assert_eq!(vec!["first", "second"], uri.query().get_all("tag"));
 # Ok::<(), qubit_fs::FsError>(())
 ```
 
-The core never decodes an `FsUriPath` into an `FsPath`. The selected provider
-owns that conversion because encoded separators, dot segments, object keys,
-drive identifiers, and authority semantics vary between backends.
+`FsUriPath::decode()` performs syntax-level percent decoding into UTF-8 text,
+but it does not interpret that text as an `FsPath`. The selected provider owns
+that conversion because encoded separators, dot segments, object keys, drive
+identifiers, and authority semantics vary between backends.
 
 ### `FsPath`
 
@@ -108,7 +110,9 @@ assert_eq!("/work/2026/july/report.csv", nested.as_str());
 
 `FsName` and `RelativeFsPath` cannot represent absolute paths or parent escape.
 APIs such as `TempDir::child()` use these types to make lexical escape
-unrepresentable.
+unrepresentable in the canonical `/` namespace. A hierarchical provider must
+still decode native paths component by component and reject a component that
+introduces a platform-native separator, root, or prefix.
 
 Do not use `std::path::Path` as a cross-provider model. A local provider may
 convert to it internally after applying its own platform and sandbox rules.
@@ -271,16 +275,16 @@ fn replace(
 }
 ```
 
-`commit(&mut self)` deliberately does not consume the handle. A definite
-failure keeps the writer open for retry or abort. If the provider cannot
-determine whether publication occurred, it returns `FsErrorKind::Indeterminate`
-and the writer enters `WriterState::Indeterminate`; the session is still
-retained for explicit recovery.
+`commit(&mut self)` deliberately does not consume the handle. Synchronous
+providers return a typed `WriteFailure`: `Retryable` keeps the writer open,
+`NotPublished` and `Published` enter terminal states that still permit explicit
+cleanup, and `Indeterminate` records that publication cannot be confirmed.
+Only `Retryable` may be committed again.
 
-Dropping an open synchronous writer attempts best-effort abort. An indeterminate
-writer is never aborted automatically because publication or cleanup may have
-already occurred. Drop-time cleanup cannot report failure, so callers needing
-confirmation must call `abort()` themselves.
+Dropping an open, not-published, or published synchronous writer attempts
+best-effort abort. An indeterminate writer is never aborted automatically
+because publication or cleanup may already have occurred. Drop-time cleanup
+cannot report failure, so callers needing confirmation must call `abort()`.
 
 ## Asynchronous Operations
 
@@ -385,6 +389,10 @@ what a generic provider might sometimes attempt. The separate
 `FileSystemProperties::limits()` snapshot carries stable configured limits,
 including explicit unknown, inapplicable, and unbounded dimensions.
 
+`ListOptions::page_size` is a hint. Bound resources clamp it to a finite
+`max_list_page_entries`; direct provider implementations must do the same before
+I/O, and provider-selected pages must honor the limit when no hint is supplied.
+
 `AtomicityRequirement` has three meanings:
 
 - `Required`: success must satisfy atomicity; unsupported guarantees fail
@@ -469,13 +477,16 @@ A provider should:
 1. validate the complete `FileSystemConfig`;
 2. resolve `CredentialRef` through an external secret source;
 3. decode the raw URI path according to provider semantics;
-4. construct immutable `FileSystemInfo`, `FileSystemCapabilities`, and
+4. convert hierarchical native paths component by component and reject decoded
+   separators, roots, or prefixes;
+5. construct immutable `FileSystemInfo`, `FileSystemCapabilities`, and
    `FileSystemLimits` snapshots;
-5. return the configured filesystem, decoded `FsPath`, and safe canonical URI;
-6. create explicit file and lifecycle handles with stable identity;
-7. reject unsupported guarantees before side effects;
-8. report actual publication methods, atomicity, and partial progress;
-9. attach operation, path, provider, capability, and source context to errors.
+6. return the configured filesystem, decoded `FsPath`, and safe canonical URI;
+7. create explicit file and lifecycle handles with stable identity;
+8. enforce finite list-page limits and reject unsupported guarantees before
+   side effects;
+9. report actual publication methods, atomicity, and partial progress;
+10. attach operation, path, provider, capability, and source context to errors.
 
 `FileSystemInfo::with_provider_metadata()` rejects credential-like keys at the
 top level and recursively inside string maps and JSON objects because the

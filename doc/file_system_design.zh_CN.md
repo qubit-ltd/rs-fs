@@ -172,12 +172,18 @@ Literal parse 只执行基本安全校验，保留 repeated separator、`.` 与 
 
 为了安全组合路径，提供两个更窄的类型：
 
-- `FsName`：一个非空 component，不能包含 separator、`.` 或 `..`；
+- `FsName`：一个非空 component，在规范 `/` namespace 中不能包含 separator、`.` 或
+  `..`；
 - `RelativeFsPath`：非空、normalized、不能是 absolute，也不能逃逸 relative root。
 
 `FsPath::child`、`join_relative`、`TempDir::child` 和 `descendant` 使用这些类型。
 原始字符串 convenience `FsPath::join` 也会先解析为 `RelativeFsPath`，绝对路径不能
 替换 base。
+
+`FsUriPath::decode()` 只执行 URI percent decode，不负责把结果解释为 `FsPath`。
+`NativePathCodec` 也只转换 opaque fragment，不解释 root、prefix 或 separator。
+Hierarchical provider 必须逐 component 转换，并拒绝解码后引入目标平台 native
+separator、root 或 prefix 的 component。
 
 ## 5. FileSystem Trait 层次
 
@@ -268,11 +274,13 @@ Open 是异步操作，而不只是“同步返回一个异步 reader”。原�
 | 概念 | 是否 I/O | 是否实时 | 用途 |
 | --- | --- | --- | --- |
 | `FileSystemInfo` | getter 不 I/O | 构造时固定 | filesystem/provider 身份与 path semantics |
-| `FileSystemCapabilities` | getter 不 I/O | 构造时固定 | 保证与限制 |
+| `FileSystemCapabilities` | getter 不 I/O | 构造时固定 | 可选保证 |
 | `stat` / `stat_async` | 可以 I/O | 当前观察 | 资源 metadata |
 | `OpenedFileInfo::metadata` | open 已有时附带 | open-time snapshot | 避免重复 lookup |
 
 Provider 不应为了填充 `OpenedFileInfo::metadata` 额外发起一次 `stat`。
+`stat` 与 `stat_async` 都检查最终路径项本身，不跟随最终符号链接；最终项为符号链接时
+返回 `FileKind::Symlink`。
 
 ## 6. 字节流与文件句柄
 
@@ -348,6 +356,10 @@ server-side copy、temporary resource 等。
 `FileSystemCapabilities` 是纯 capability set；`FileSystemLimits` 由
 `FileSystemProperties::limits()` 独立返回，并明确表示未知、不适用、无界或有限上限。
 错误可以通过 `required_capability` 指回具体缺失保证，而不依赖模糊字符串。
+
+`max_list_page_entries` 是 provider-native page 的有限上限。
+`ListOptions::page_size` 只是 hint：绑定资源会 clamp，直接 provider 也必须在 I/O 前
+clamp；调用方未指定 hint 时，provider 自选 page 仍必须遵守该上限。
 
 Capability 表示“当前 configured filesystem 保证支持”，不表示：
 
@@ -434,7 +446,9 @@ Open ─────────────────────────
  │
  ├─ abort success ────────────────► Aborted
  │
- ├─ definite commit failure ──────► Open（session 保留）
+ ├─ retryable commit failure ─────► Open（session 保留）
+ ├─ target not published ─────────► NotPublished（仅可清理）
+ ├─ target published ─────────────► Published（仅可清理）
  ├─ uncertain lifecycle failure ──► Indeterminate（session 保留）
  │
  └─ polled async lifecycle future
@@ -443,7 +457,8 @@ Open ─────────────────────────
 
 `commit(&mut self)` / `commit_async(&mut self)` 不消费 handle：
 
-- 确定性失败后可重试或 abort；
+- 只有 `WriteFailureState::Retryable` 失败后可重试；
+- `NotPublished` / `Published` 保留 session 供显式 cleanup，但禁止再次 commit；
 - indeterminate 失败后仍可通过 provider session 执行显式 recovery；
 - commit/abort 成功后禁止继续写入；
 - abort indeterminate session 只表示 staging cleanup 成功，不保证已经发布的 target
@@ -572,19 +587,22 @@ provider 语义。`FileSystemResolution` 因此同时返回：
 
 1. `info()`、`capabilities()` 与 `limits()` 不触发 I/O，并在对象生命周期内稳定；
 2. capability 只声明当前配置真正保证的行为；
-3. `FsUriPath` 只由 provider 按自己的语义解码；
+3. `FsUriPath` 只由 provider 按自己的语义解释；hierarchical native path 逐 component
+   转换，并拒绝解码后产生的 separator、root 或 prefix；
 4. canonical URI 不含 credential；
 5. mandatory option 不可静默忽略；
 6. `AtomicityRequirement::Required` 无法满足时，在副作用前失败；
 7. 成功 outcome 报告实际 method 与 atomicity；
 8. file handle 必须携带固定 `OpenedFileInfo`；
-9. open-time metadata 只是 snapshot，不冒充 live stat；
+9. open-time metadata 只是 snapshot，不冒充 live stat；`stat` 不跟随最终符号链接；
 10. write、persist 和 cleanup 失败必须保留可恢复 session；
 11. partial success 使用 typed state，不依赖错误字符串；
 12. async drop 不执行阻塞或远程 I/O；
 13. error 附带 operation、path、target、provider、capability 与 source context；
 14. 所有 debug-visible 扩展 metadata 都使用 `NonSensitiveMetadata`；
-15. unsupported optional operation 返回明确 capability error。
+15. unsupported optional operation 返回明确 capability error；
+16. 有限 `max_list_page_entries` 在 provider I/O 前执行，超大 `page_size` hint 被
+    clamp。
 
 ## 13. 简洁性边界
 

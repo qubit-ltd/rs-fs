@@ -105,12 +105,15 @@ diagnostics）统一使用 `NonSensitiveMetadata`，递归检查顶层、string 
 JSON object 的 credential-like key，且 Debug 只输出 key。普通 scalar value 无法
 可靠分类，因此所有 secret 都必须通过 `CredentialRef` 引用。
 
-`stat` 是文件系统必备操作，不是可选 capability。因此
+`stat` 是文件系统必备操作，不是可选 capability；它检查最终路径项本身，不跟随最终
+符号链接。因此
 `FileSystemCapabilities` 只包含可选保证；`FileSystemProperties::limits()`
 则返回 provider 稳定的 `FileSystemLimits` 快照。每项限制使用
 `FileSystemLimit` 区分 `Unknown`、`NotApplicable`、`Unbounded` 和包含式上限
 `Maximum(n)`。provider 必须在直接操作中执行自己声明的有限上限；当请求大小或
 规范路径已经可知时，绑定资源与整体读取 helper 会提前检查这些限制。
+`ListOptions::page_size` 是 hint；绑定资源与直接 provider 都会在 I/O 前把它收敛到
+有限的 `max_list_page_entries`。
 
 ## 有界聚合
 
@@ -143,7 +146,9 @@ lossy display conversion。普通 Unicode 保持可读；字面的 `%`、控制�
 | Windows 未配对代理项 `D800` | `%ED%A0%80` |
 
 `NativePathCodec` 只转换这个字符串表示，不负责拆分 component、解释 root 或
-separator、规范化 dot segment、解析 URI 语法或执行 I/O。本地 `OsStr` 使用
+separator、规范化 dot segment、解析 URI 语法或执行 I/O。Hierarchical provider
+必须逐 component 转换，并拒绝解码后出现的 native separator、root 或 prefix。本地
+`OsStr` 使用
 `OsStrPathCodec`；保证严格 UTF-8 byte 的协议使用 `Utf8PathCodec`；允许 opaque
 path byte 的兼容 SFTP 或 NFS server 使用 `EscapedBytePathCodec`。三个 codec 都是
 只依赖标准库的零大小类型。
@@ -186,8 +191,7 @@ Copyright (c) 2025 - 2026. Haixing Hu. All rights reserved.
 ## 贡献
 
 欢迎贡献。请遵循 Rust API 指南，及时更新公共 API 文档与测试，并在提交
-Pull Request 前运行 `./align-ci.sh` 格式化代码，运行 `./ci-check.sh` 对齐 CI
-要求。
+Pull Request 前运行 `./align-ci.sh`格式化代码，运行`./ci-check.sh`对齐CI要求。
 
 ## 作者
 

@@ -38,7 +38,8 @@ use qubit_fs::{
 彼此独立，因为 provider 可能只支持一种模式。
 
 `stat()` 与 `stat_async()` 是实时操作，可以触发远程 I/O。它们和 `info()` 不同，
-也不同于打开句柄时携带的可选 metadata 快照。
+也不同于打开句柄时携带的可选 metadata 快照。两者都检查最终路径项本身：最终项为
+符号链接时返回 `FileKind::Symlink`，不会跟随链接。
 
 ## URI 与 Provider-Local Path
 
@@ -70,9 +71,9 @@ assert_eq!(vec!["first", "second"], uri.query().get_all("tag"));
 # Ok::<(), qubit_fs::FsError>(())
 ```
 
-核心层绝不会自行把 `FsUriPath` 解码成 `FsPath`。Encoded separator、dot segment、
-object key、drive identifier 和 authority 的语义因后端而异，转换责任属于选中的
-provider。
+`FsUriPath::decode()` 只执行语法层 percent decode，得到 UTF-8 文本，不会把文本解释
+为 `FsPath`。Encoded separator、dot segment、object key、drive identifier 和
+authority 的语义因后端而异，转换责任属于选中的 provider。
 
 ### `FsPath`
 
@@ -98,7 +99,9 @@ assert_eq!("/work/2026/july/report.csv", nested.as_str());
 ```
 
 `FsName` 与 `RelativeFsPath` 无法表示绝对路径或向上逃逸。`TempDir::child()` 等 API
-使用这些类型，使词法路径逃逸在类型层面无法表达。
+使用这些类型，使规范 `/` namespace 中的词法路径逃逸在类型层面无法表达。
+Hierarchical provider 仍必须逐 component 解码 native path，并拒绝解码后引入目标
+平台 native separator、root 或 prefix 的 component。
 
 不要把 `std::path::Path` 当作跨 provider 的统一模型。本地 provider 可以在应用自身
 平台规则与 sandbox 规则后，在内部进行转换。
@@ -253,14 +256,14 @@ fn replace(
 }
 ```
 
-`commit(&mut self)` 有意不消费 handle。确定性失败后 writer 仍为 open，可重试或
-abort。Provider 无法确认 publication 是否发生时，返回
-`FsErrorKind::Indeterminate`，writer 进入 `WriterState::Indeterminate`，同时仍
-保留 session，供调用方显式恢复。
+`commit(&mut self)` 有意不消费 handle。同步 provider 返回带状态的
+`WriteFailure`：`Retryable` 让 writer 保持 Open；`NotPublished` 与 `Published`
+进入只能显式清理的终态；`Indeterminate` 表示无法确认 publication 是否发生。
+只有 `Retryable` 允许再次 commit。
 
-仍为 Open 的同步 writer 在 drop 时会 best-effort abort。Indeterminate writer 可能
-已经发生 publication 或 cleanup，因此绝不自动 abort。Drop 无法返回清理错误，
-需要确认清理的调用方必须自己调用 `abort()`。
+Open、NotPublished 或 Published 的同步 writer 在 drop 时会 best-effort abort。
+Indeterminate writer 可能已经发生 publication 或 cleanup，因此绝不自动 abort。
+Drop 无法返回清理错误，需要确认清理的调用方必须自己调用 `abort()`。
 
 ## 异步操作
 
@@ -360,6 +363,10 @@ Capability 快照描述当前已配置文件系统保证什么，而不是某个
 尝试什么。独立的 `FileSystemProperties::limits()` 快照携带稳定配置限制，并明确区分
 未知、不适用和无界的限制维度。
 
+`ListOptions::page_size` 是 hint。绑定资源会把它收敛到有限的
+`max_list_page_entries`；直接 provider 也必须在 I/O 前执行相同收敛。未提供 hint 时，
+provider 自选的 page 仍不得超过该有限上限。
+
 `AtomicityRequirement` 有三种语义：
 
 - `Required`：成功必须满足原子性；无法保证时，在副作用前失败；
@@ -435,13 +442,15 @@ Provider 应当：
 1. 校验完整 `FileSystemConfig`；
 2. 通过外部 secret source 解析 `CredentialRef`；
 3. 按 provider 语义解码 raw URI path；
-4. 构造 immutable `FileSystemInfo`、`FileSystemCapabilities` 与
+4. hierarchical native path 必须逐 component 转换，并拒绝解码后产生的 separator、
+   root 或 prefix；
+5. 构造 immutable `FileSystemInfo`、`FileSystemCapabilities` 与
    `FileSystemLimits` 快照；
-5. 返回 configured filesystem、decoded `FsPath` 与安全 canonical URI；
-6. 用稳定 identity 创建显式 file/lifecycle handle；
-7. 在副作用前拒绝无法满足的 guarantee；
-8. 报告实际 publication method、atomicity 与 partial progress；
-9. 为错误附加 operation、path、provider、capability 与 source context。
+6. 返回 configured filesystem、decoded `FsPath` 与安全 canonical URI；
+7. 用稳定 identity 创建显式 file/lifecycle handle；
+8. 在副作用前执行有限 list-page 上限并拒绝无法满足的 guarantee；
+9. 报告实际 publication method、atomicity 与 partial progress；
+10. 为错误附加 operation、path、provider、capability 与 source context。
 
 `FileSystemInfo::with_provider_metadata()` 会拒绝顶层、string map 与 JSON object
 内部的 credential-like key，因为该快照可出现在 Debug 输出中。File metadata、

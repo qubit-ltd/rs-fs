@@ -114,7 +114,8 @@ JSON objects nested in arrays, while its `Debug` output prints keys only.
 Scalar values cannot be classified reliably, so use `CredentialRef` for every
 secret.
 
-`stat` is a required filesystem operation rather than an optional capability.
+`stat` is a required filesystem operation rather than an optional capability;
+it inspects the final path entry without following a final symbolic link.
 `FileSystemCapabilities` therefore contains only optional guarantees, while
 `FileSystemProperties::limits()` returns the provider's stable
 `FileSystemLimits` snapshot. Every limit uses `FileSystemLimit` to distinguish
@@ -122,6 +123,8 @@ secret.
 Providers remain responsible for enforcing their declared finite limits on
 direct operations; bound resources and whole-resource helpers preflight limits
 when the request size or canonical path is already known.
+`ListOptions::page_size` is a hint that bound resources and direct providers
+clamp to a finite `max_list_page_entries` before provider I/O.
 
 ## Bounded Aggregation
 
@@ -157,7 +160,9 @@ use uppercase `%XX` escapes.
 
 `NativePathCodec` converts only this string representation. It does not split
 components, interpret roots or separators, normalize dot segments, decode URI
-syntax, or perform I/O. Use `OsStrPathCodec` for local native `OsStr` values,
+syntax, or perform I/O. Hierarchical providers must convert component by
+component and reject decoded native separators, roots, or prefixes. Use
+`OsStrPathCodec` for local native `OsStr` values,
 `Utf8PathCodec` for protocols that guarantee strict UTF-8 bytes, and
 `EscapedBytePathCodec` for opaque byte-oriented protocols such as compatible
 SFTP or NFS servers. All three are zero-sized, standard-library-only codecs.
