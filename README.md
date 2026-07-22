@@ -15,8 +15,10 @@ The crate defines contracts rather than a concrete backend:
 - `FileSystemProperties` exposes construction-time, non-I/O information;
 - `FileSystem` provides synchronous operations;
 - `AsyncFileSystem` provides runtime-neutral asynchronous operations;
-- `FileSystemExt` and `AsyncFileSystemExt` provide bounded whole-resource
-  helpers without expanding provider traits;
+- `FileSystemExt` and `AsyncFileSystemExt` provide whole-resource helpers that
+  require an explicit caller byte budget;
+- directory stream helpers require an explicit maximum entry count before
+  collecting an enumeration into memory;
 - file handles use `qubit_io::Input` / `Output` and
   `AsyncInput` / `AsyncOutput`;
 - `FsUri` locates a resource while `FsPath` represents the provider-decoded
@@ -112,6 +114,31 @@ JSON objects nested in arrays, while its `Debug` output prints keys only.
 Scalar values cannot be classified reliably, so use `CredentialRef` for every
 secret.
 
+`stat` is a required filesystem operation rather than an optional capability.
+`FileSystemCapabilities` therefore contains only optional guarantees, while
+`FileSystemProperties::limits()` returns the provider's stable
+`FileSystemLimits` snapshot. Every limit uses `FileSystemLimit` to distinguish
+`Unknown`, `NotApplicable`, `Unbounded`, and an inclusive `Maximum(n)`.
+Providers remain responsible for enforcing their declared finite limits on
+direct operations; bound resources and whole-resource helpers preflight limits
+when the request size or canonical path is already known.
+
+## Bounded Aggregation
+
+Whole-resource and whole-enumeration helpers never choose an implicit memory
+limit. The caller supplies a budget for each operation:
+
+```rust,ignore
+let bytes = resource.read_all(8 * 1024 * 1024)?;
+let entries = resource
+    .list(ListOptions::default())?
+    .collect_entries(10_000)?;
+```
+
+An exact-size result succeeds. If a minimal probe confirms additional bytes or
+entries, the helper returns `FsErrorKind::ResourceLimitExceeded`. Provider
+storage capacity and account quota failures remain `FsErrorKind::QuotaExceeded`.
+
 ## Native Path Text Encoding
 
 `FsPath`, `FsName`, and `RelativeFsPath` store canonical UTF-8 path text. This
@@ -148,16 +175,37 @@ percent encoding remains a separate layer: a canonical native path fragment
 - [中文架构设计](doc/file_system_design.zh_CN.md)
 - [API reference](https://docs.rs/qubit-fs)
 
-## Development
+## Testing
 
 ```bash
+# Run tests with the default feature set
 cargo test
-./align-ci.sh
-RS_CI_SKIP_TOOLCHAIN_UPDATE=1 ./ci-check.sh
+
+# Run tests with all declared features
+cargo test --all-features
+
+# Project CI checks
+./ci-check.sh
+
+# Check code coverage
+./coverage.sh
 ```
 
 ## License
 
-Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).
+Copyright (c) 2025 - 2026. Haixing Hu. All rights reserved.
 
-Copyright (c) 2025 - 2026 Haixing Hu.
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for the
+full license text.
+
+## Contributing
+
+Contributions are welcome. Please follow the Rust API guidelines, keep public
+API documentation and tests current, and run `./align-ci.sh` to format code and
+`./ci-check.sh` to satisfy CI requirements before submitting a pull request.
+
+## Author
+
+**Haixing Hu** - *Qubit Co. Ltd.*
+
+Repository: [https://github.com/qubit-ltd/rs-fs](https://github.com/qubit-ltd/rs-fs)

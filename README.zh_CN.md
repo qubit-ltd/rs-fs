@@ -15,8 +15,9 @@ Qubit FS 是一个 provider-neutral 的文件系统抽象层，面向本地、�
 - `FileSystemProperties` 暴露构造时确定、不会触发 I/O 的信息；
 - `FileSystem` 提供同步操作；
 - `AsyncFileSystem` 提供运行时无关的异步操作；
-- `FileSystemExt` 与 `AsyncFileSystemExt` 提供有界资源的整体读写 helper，不扩张
-  provider trait；
+- `FileSystemExt` 与 `AsyncFileSystemExt` 提供整体读取 helper，并要求调用者显式
+  提供字节预算；
+- directory stream helper 在把枚举收集进内存前要求调用者显式提供最大条目数；
 - 文件句柄使用 `qubit_io::Input` / `Output` 与
   `AsyncInput` / `AsyncOutput`；
 - `FsUri` 定位资源，`FsPath` 表示 provider 解码后、某个已配置文件系统内部的
@@ -104,6 +105,28 @@ diagnostics）统一使用 `NonSensitiveMetadata`，递归检查顶层、string 
 JSON object 的 credential-like key，且 Debug 只输出 key。普通 scalar value 无法
 可靠分类，因此所有 secret 都必须通过 `CredentialRef` 引用。
 
+`stat` 是文件系统必备操作，不是可选 capability。因此
+`FileSystemCapabilities` 只包含可选保证；`FileSystemProperties::limits()`
+则返回 provider 稳定的 `FileSystemLimits` 快照。每项限制使用
+`FileSystemLimit` 区分 `Unknown`、`NotApplicable`、`Unbounded` 和包含式上限
+`Maximum(n)`。provider 必须在直接操作中执行自己声明的有限上限；当请求大小或
+规范路径已经可知时，绑定资源与整体读取 helper 会提前检查这些限制。
+
+## 有界聚合
+
+整体读取和完整枚举 helper 不会隐式选择内存上限。调用者必须为每次操作提供预算：
+
+```rust,ignore
+let bytes = resource.read_all(8 * 1024 * 1024)?;
+let entries = resource
+    .list(ListOptions::default())?
+    .collect_entries(10_000)?;
+```
+
+结果大小恰好等于预算时成功；如果最小探测确认仍有额外字节或条目，则返回
+`FsErrorKind::ResourceLimitExceeded`。provider 存储容量或账户配额不足仍返回
+`FsErrorKind::QuotaExceeded`。
+
 ## 原生路径文本编码
 
 `FsPath`、`FsName` 与 `RelativeFsPath` 存储规范化 UTF-8 路径文本。它是 provider
@@ -137,16 +160,37 @@ Unicode 的过度转义都会被拒绝。这使每个原生路径只有一个文
 - [文件系统架构设计](doc/file_system_design.zh_CN.md)
 - [API 文档](https://docs.rs/qubit-fs)
 
-## 开发
+## 测试
 
 ```bash
+# 使用默认 feature 集运行测试
 cargo test
-./align-ci.sh
-RS_CI_SKIP_TOOLCHAIN_UPDATE=1 ./ci-check.sh
+
+# 使用项目声明的全部 feature 运行测试
+cargo test --all-features
+
+# 运行项目 CI 检查
+./ci-check.sh
+
+# 检查代码覆盖率
+./coverage.sh
 ```
 
 ## 许可证
 
-本项目使用 Apache License 2.0，完整文本见 [LICENSE](LICENSE)。
+Copyright (c) 2025 - 2026. Haixing Hu. All rights reserved.
 
-Copyright (c) 2025 - 2026 Haixing Hu.
+本项目基于 Apache License 2.0 授权。完整许可证文本请参阅
+[LICENSE](LICENSE)。
+
+## 贡献
+
+欢迎贡献。请遵循 Rust API 指南，及时更新公共 API 文档与测试，并在提交
+Pull Request 前运行 `./align-ci.sh` 格式化代码，运行 `./ci-check.sh` 对齐 CI
+要求。
+
+## 作者
+
+**Haixing Hu** - *Qubit Co. Ltd.*
+
+仓库地址：[https://github.com/qubit-ltd/rs-fs](https://github.com/qubit-ltd/rs-fs)
