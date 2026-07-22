@@ -6,7 +6,14 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::{FileSystemLimit, FileSystemLimits};
+use qubit_fs::{
+    FileSystemLimit,
+    FileSystemLimits,
+    FsErrorKind,
+    FsOperation,
+    FsPath,
+    PathSemantics,
+};
 
 #[test]
 fn finite_limit_uses_an_inclusive_maximum() {
@@ -80,4 +87,61 @@ fn unknown_filesystem_limits_are_explicit() {
         FileSystemLimit::Unknown,
         limits.max_list_page_entries(),
     );
+}
+
+#[test]
+fn path_limits_validate_canonical_text_and_hierarchical_components() {
+    let path = FsPath::parse_normalized("/abc/de").unwrap();
+    let accepted = FileSystemLimits::unknown()
+        .with_max_path_text_bytes(FileSystemLimit::Maximum(7))
+        .with_max_component_text_bytes(FileSystemLimit::Maximum(3));
+
+    accepted
+        .validate_path(&path, PathSemantics::Hierarchical, FsOperation::Stat)
+        .unwrap();
+
+    let path_error = accepted
+        .with_max_path_text_bytes(FileSystemLimit::Maximum(6))
+        .validate_path(&path, PathSemantics::Hierarchical, FsOperation::Stat)
+        .unwrap_err();
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, path_error.kind());
+    assert_eq!(FsOperation::Stat, path_error.operation());
+    assert_eq!(Some(&path), path_error.path());
+
+    let component_error = accepted
+        .with_max_component_text_bytes(FileSystemLimit::Maximum(2))
+        .validate_path(&path, PathSemantics::Hierarchical, FsOperation::List)
+        .unwrap_err();
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, component_error.kind());
+    assert_eq!(FsOperation::List, component_error.operation());
+}
+
+#[test]
+fn component_limit_does_not_apply_to_object_keys() {
+    let path = FsPath::parse_literal("abc/long-key").unwrap();
+    let limits = FileSystemLimits::unknown()
+        .with_max_component_text_bytes(FileSystemLimit::Maximum(1));
+
+    limits
+        .validate_path(&path, PathSemantics::ObjectKey, FsOperation::Stat)
+        .unwrap();
+}
+
+#[test]
+fn operation_limits_validate_ranges_and_write_sessions() {
+    let path = FsPath::parse_normalized("/file").unwrap();
+    let limits = FileSystemLimits::unknown()
+        .with_max_read_range_bytes(FileSystemLimit::Maximum(8))
+        .with_max_write_bytes(FileSystemLimit::Maximum(8));
+
+    limits.validate_read_range(&path, Some(8)).unwrap();
+    limits.validate_write_size(&path, 8).unwrap();
+
+    let read_error = limits.validate_read_range(&path, Some(9)).unwrap_err();
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, read_error.kind());
+    assert_eq!(FsOperation::OpenReader, read_error.operation());
+
+    let write_error = limits.validate_write_size(&path, 9).unwrap_err();
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, write_error.kind());
+    assert_eq!(FsOperation::Write, write_error.operation());
 }
