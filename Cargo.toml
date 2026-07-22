@@ -37,7 +37,7 @@ parking_lot = "0.12"
 
 qubit-io = { path = "../rs-io", version = "0.14" }
 qubit-spi = { path = "../rs-spi", version = "0.9" }
-qubit-metadata = { path = "../rs-metadata", version = "0.9", features = ["json"] }
+qubit-metadata = { path = "../rs-metadata", version = "0.10", features = ["json"] }
 serde_json = "1.0"
 
 [lints.rust]
