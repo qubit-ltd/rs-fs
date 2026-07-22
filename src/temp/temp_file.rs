@@ -91,7 +91,7 @@ impl TempFile {
     /// Returns the owning filesystem's open error.
     #[inline]
     pub fn open_reader(&self, options: ReadOptions) -> FsResult<FileReader> {
-        self.resource.open_reader(&options)
+        self.resource.open_reader(options)
     }
 
     /// Opens the temporary file for synchronous writing.
@@ -100,7 +100,7 @@ impl TempFile {
     /// Returns the owning filesystem's open error.
     #[inline]
     pub fn open_writer(&self, options: WriteOptions) -> FsResult<FileWriter> {
-        self.resource.open_writer(&options)
+        self.resource.open_writer(options)
     }
 
     /// Explicitly deletes the source and releases cleanup responsibility.

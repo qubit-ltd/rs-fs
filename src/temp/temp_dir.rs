@@ -136,7 +136,7 @@ impl TempDir {
         options: CreateDirOptions,
     ) -> FsResult<FileResource> {
         let child = self.child(name);
-        child.create_dir(&options)?;
+        child.create_dir(options)?;
         Ok(child)
     }
 
