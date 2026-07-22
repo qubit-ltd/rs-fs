@@ -31,8 +31,9 @@ use qubit_fs::{
 };
 ```
 
-- `FileSystemProperties` contains `info()` and `capabilities()`. Both values are
-  stable construction-time snapshots and getters must never perform I/O.
+- `FileSystemProperties` contains `info()`, `capabilities()`, and `limits()`.
+  All three values are stable construction-time snapshots and getters must
+  never perform I/O.
 - `FileSystem: FileSystemProperties` contains synchronous operations.
 - `AsyncFileSystem: FileSystemProperties` contains runtime-neutral async
   operations whose names end in `_async`.
@@ -125,9 +126,8 @@ use qubit_fs::{
 
 fn configure() -> FsResult<FileSystemRegistry> {
     let registry = FileSystemRegistry::default();
-    // Backend crates register their self-described providers here.
-    // qubit_fs_local::register(&registry)?;
-    // qubit_fs_object::register(&registry)?;
+    // Backend crates expose self-described providers for explicit registration.
+    registry.register(qubit_fs_local::LocalFileSystemProvider)?;
     Ok(registry)
 }
 ```
@@ -219,7 +219,7 @@ use qubit_fs::{
 use qubit_io::Input;
 
 fn read_prefix(resource: &FileResource) -> FsResult<Vec<u8>> {
-    let mut reader = resource.open_reader(&ReadOptions::default())?;
+    let mut reader = resource.open_reader(ReadOptions::default())?;
     let mut buffer = [0_u8; 4096];
     let count = reader.read(&mut buffer).map_err(|error| {
         FsError::from_io(error, FsOperation::Read)
@@ -381,8 +381,9 @@ fn supports_atomic_rename(fs: &dyn FileSystem) -> bool {
 ```
 
 Capability snapshots describe what the configured filesystem guarantees, not
-what a generic provider might sometimes attempt. `FileSystemLimits` carries
-stable configured limits.
+what a generic provider might sometimes attempt. The separate
+`FileSystemProperties::limits()` snapshot carries stable configured limits,
+including explicit unknown, inapplicable, and unbounded dimensions.
 
 `AtomicityRequirement` has three meanings:
 
@@ -468,7 +469,8 @@ A provider should:
 1. validate the complete `FileSystemConfig`;
 2. resolve `CredentialRef` through an external secret source;
 3. decode the raw URI path according to provider semantics;
-4. construct immutable `FileSystemInfo` and `FileSystemCapabilities`;
+4. construct immutable `FileSystemInfo`, `FileSystemCapabilities`, and
+   `FileSystemLimits` snapshots;
 5. return the configured filesystem, decoded `FsPath`, and safe canonical URI;
 6. create explicit file and lifecycle handles with stable identity;
 7. reject unsupported guarantees before side effects;

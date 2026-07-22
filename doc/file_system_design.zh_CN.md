@@ -187,10 +187,11 @@ Literal parse 只执行基本安全校验，保留 repeated separator、`.` 与 
 pub trait FileSystemProperties: Send + Sync {
     fn info(&self) -> &FileSystemInfo;
     fn capabilities(&self) -> FileSystemCapabilities;
+    fn limits(&self) -> &FileSystemLimits;
 }
 ```
 
-`info()` 和 `capabilities()` 都是 construction-time local snapshot：
+`info()`、`capabilities()` 和 `limits()` 都是 construction-time local snapshot：
 
 - getter 不触发本地或远程 I/O；
 - 结果在对象生命周期内稳定；
@@ -344,8 +345,9 @@ extension point 则是：
 conditional read、checksum validation、append、conditional write/delete、atomic rename、
 server-side copy、temporary resource 等。
 
-`FileSystemCapabilities` 是 capability set 加 `FileSystemLimits`。错误可以通过
-`required_capability` 指回具体缺失保证，而不依赖模糊字符串。
+`FileSystemCapabilities` 是纯 capability set；`FileSystemLimits` 由
+`FileSystemProperties::limits()` 独立返回，并明确表示未知、不适用、无界或有限上限。
+错误可以通过 `required_capability` 指回具体缺失保证，而不依赖模糊字符串。
 
 Capability 表示“当前 configured filesystem 保证支持”，不表示：
 
@@ -568,7 +570,7 @@ provider 语义。`FileSystemResolution` 因此同时返回：
 
 每个 provider 实现必须遵守以下不变量：
 
-1. `info()` 与 `capabilities()` 不触发 I/O，并在对象生命周期内稳定；
+1. `info()`、`capabilities()` 与 `limits()` 不触发 I/O，并在对象生命周期内稳定；
 2. capability 只声明当前配置真正保证的行为；
 3. `FsUriPath` 只由 provider 按自己的语义解码；
 4. canonical URI 不含 credential；

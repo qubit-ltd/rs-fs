@@ -28,8 +28,8 @@ use qubit_fs::{
 };
 ```
 
-- `FileSystemProperties` 包含 `info()` 与 `capabilities()`。两者都是构造时确定的
-  稳定快照，getter 绝不能触发 I/O；
+- `FileSystemProperties` 包含 `info()`、`capabilities()` 与 `limits()`。三者都是
+  构造时确定的稳定快照，getter 绝不能触发 I/O；
 - `FileSystem: FileSystemProperties` 包含同步操作；
 - `AsyncFileSystem: FileSystemProperties` 包含运行时无关的异步操作，方法名统一以
   `_async` 结尾。
@@ -116,9 +116,8 @@ use qubit_fs::{
 
 fn configure() -> FsResult<FileSystemRegistry> {
     let registry = FileSystemRegistry::default();
-    // 后端 crate 在这里注册自描述 provider。
-    // qubit_fs_local::register(&registry)?;
-    // qubit_fs_object::register(&registry)?;
+    // 后端 crate 暴露自描述 provider，应用显式注册。
+    registry.register(qubit_fs_local::LocalFileSystemProvider)?;
     Ok(registry)
 }
 ```
@@ -203,7 +202,7 @@ use qubit_fs::{
 use qubit_io::Input;
 
 fn read_prefix(resource: &FileResource) -> FsResult<Vec<u8>> {
-    let mut reader = resource.open_reader(&ReadOptions::default())?;
+    let mut reader = resource.open_reader(ReadOptions::default())?;
     let mut buffer = [0_u8; 4096];
     let count = reader.read(&mut buffer).map_err(|error| {
         FsError::from_io(error, FsOperation::Read)
@@ -358,7 +357,8 @@ fn supports_atomic_rename(fs: &dyn FileSystem) -> bool {
 ```
 
 Capability 快照描述当前已配置文件系统保证什么，而不是某个泛型 provider 偶尔可能
-尝试什么。`FileSystemLimits` 携带稳定的配置限制。
+尝试什么。独立的 `FileSystemProperties::limits()` 快照携带稳定配置限制，并明确区分
+未知、不适用和无界的限制维度。
 
 `AtomicityRequirement` 有三种语义：
 
@@ -435,7 +435,8 @@ Provider 应当：
 1. 校验完整 `FileSystemConfig`；
 2. 通过外部 secret source 解析 `CredentialRef`；
 3. 按 provider 语义解码 raw URI path；
-4. 构造 immutable `FileSystemInfo` 与 `FileSystemCapabilities`；
+4. 构造 immutable `FileSystemInfo`、`FileSystemCapabilities` 与
+   `FileSystemLimits` 快照；
 5. 返回 configured filesystem、decoded `FsPath` 与安全 canonical URI；
 6. 用稳定 identity 创建显式 file/lifecycle handle；
 7. 在副作用前拒绝无法满足的 guarantee；
