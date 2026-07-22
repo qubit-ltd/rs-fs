@@ -27,6 +27,8 @@ use qubit_fs::{
     FileSystemExt,
     FileSystemId,
     FileSystemInfo,
+    FileSystemLimit,
+    FileSystemLimits,
     FileSystemProperties,
     FileWriter,
     FsError,
@@ -93,6 +95,43 @@ fn read_all_preserves_an_error_raised_by_the_limit_probe() {
     assert_eq!(FsErrorKind::Io, error.kind());
     assert_eq!(FsOperation::Read, error.operation());
     assert_eq!(Some(&path), error.path());
+}
+
+#[test]
+fn extension_methods_preflight_provider_write_limits() {
+    let state = Arc::new(Mutex::new(MockState::default()));
+    let fs = MockFs::with_state(state.clone()).with_limits(
+        FileSystemLimits::unknown()
+            .with_max_write_bytes(FileSystemLimit::Maximum(3)),
+    );
+    let path = FsPath::parse("/file").unwrap();
+
+    let error = fs.write_all(&path, b"data").unwrap_err();
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, error.kind());
+    assert_eq!(FsOperation::Write, error.operation());
+    assert_eq!(Some(&path), error.path());
+    assert!(state.lock().unwrap().writes.is_empty());
+}
+
+#[test]
+fn extension_methods_preflight_provider_path_limits() {
+    let limits = FileSystemLimits::unknown()
+        .with_max_path_text_bytes(FileSystemLimit::Maximum(3));
+    let path = FsPath::parse("/file").unwrap();
+
+    let read_error = MockFs::default()
+        .with_limits(limits)
+        .read_all(&path, 4)
+        .unwrap_err();
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, read_error.kind());
+    assert_eq!(FsOperation::Read, read_error.operation());
+
+    let write_error = MockFs::default()
+        .with_limits(limits)
+        .write_all(&path, b"data")
+        .unwrap_err();
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, write_error.kind());
+    assert_eq!(FsOperation::Write, write_error.operation());
 }
 
 #[test]

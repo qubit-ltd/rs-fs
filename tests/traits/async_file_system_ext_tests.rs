@@ -37,6 +37,8 @@ use qubit_fs::{
     FileSystemCapabilities,
     FileSystemId,
     FileSystemInfo,
+    FileSystemLimit,
+    FileSystemLimits,
     FileSystemProperties,
     FsError,
     FsErrorKind,
@@ -69,6 +71,7 @@ enum ExtMode {
 
 struct ExtAsyncFs {
     info: FileSystemInfo,
+    limits: FileSystemLimits,
     mode: ExtMode,
     aborts: Arc<AtomicUsize>,
 }
@@ -81,9 +84,15 @@ impl ExtAsyncFs {
                 ProviderId::new("async-ext").unwrap(),
                 PathSemantics::Hierarchical,
             ),
+            limits: FileSystemLimits::unknown(),
             mode,
             aborts: Arc::new(AtomicUsize::new(0)),
         }
+    }
+
+    fn with_limits(mut self, limits: FileSystemLimits) -> Self {
+        self.limits = limits;
+        self
     }
 }
 
@@ -96,10 +105,8 @@ impl FileSystemProperties for ExtAsyncFs {
         FileSystemCapabilities::default()
     }
 
-    fn limits(&self) -> &qubit_fs::FileSystemLimits {
-        static LIMITS: qubit_fs::FileSystemLimits =
-            qubit_fs::FileSystemLimits::unknown();
-        &LIMITS
+    fn limits(&self) -> &FileSystemLimits {
+        &self.limits
     }
 }
 
@@ -278,7 +285,7 @@ fn async_file_system_extensions_retry_interrupted_reads() {
     let fs = ExtAsyncFs::new(ExtMode::InterruptedRead);
     let path = FsPath::parse("/file").unwrap();
 
-    assert!(ready(fs.read_all_async(&path, 0)).unwrap().is_empty());
+    assert!(ready(fs.read_all_async(&path, 1)).unwrap().is_empty());
 }
 
 #[test]
@@ -295,15 +302,52 @@ fn async_read_all_preserves_probe_errors() {
 }
 
 #[test]
+fn async_extension_methods_preflight_provider_write_limits() {
+    let path = FsPath::parse("/file").unwrap();
+    let fs = ExtAsyncFs::new(ExtMode::InterruptedRead).with_limits(
+        FileSystemLimits::unknown()
+            .with_max_write_bytes(FileSystemLimit::Maximum(3)),
+    );
+
+    let error = ready(fs.write_all_async(&path, b"data")).unwrap_err();
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, error.kind());
+    assert_eq!(FsOperation::Write, error.operation());
+    assert_eq!(Some(&path), error.path());
+}
+
+#[test]
+fn async_extension_methods_preflight_provider_path_limits() {
+    let limits = FileSystemLimits::unknown()
+        .with_max_path_text_bytes(FileSystemLimit::Maximum(3));
+    let path = FsPath::parse("/file").unwrap();
+
+    let read_error = ready(
+        ExtAsyncFs::new(ExtMode::InterruptedRead)
+            .with_limits(limits)
+            .read_all_async(&path, 4),
+    )
+    .unwrap_err();
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, read_error.kind());
+    assert_eq!(FsOperation::Read, read_error.operation());
+
+    let write_error = ready(
+        ExtAsyncFs::new(ExtMode::InterruptedRead)
+            .with_limits(limits)
+            .write_all_async(&path, b"data"),
+    )
+    .unwrap_err();
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, write_error.kind());
+    assert_eq!(FsOperation::Write, write_error.operation());
+}
+
+#[test]
 fn async_file_system_extensions_preserve_open_and_transfer_errors() {
     let path = FsPath::parse("/file").unwrap();
 
-    let error =
-        ready(
-            ExtAsyncFs::new(ExtMode::OpenReaderError)
-                .read_all_async(&path, 16),
-        )
-            .unwrap_err();
+    let error = ready(
+        ExtAsyncFs::new(ExtMode::OpenReaderError).read_all_async(&path, 16),
+    )
+    .unwrap_err();
     assert_eq!(FsOperation::OpenReader, error.operation());
 
     let error =

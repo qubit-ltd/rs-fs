@@ -15,7 +15,9 @@ use qubit_io::{
 };
 
 use crate::{
+    FileReader,
     FileSystem,
+    FileWriter,
     FsError,
     FsErrorKind,
     FsOperation,
@@ -61,52 +63,79 @@ where
     T: FileSystem + ?Sized,
 {
     fn read_all(&self, path: &FsPath, max_bytes: usize) -> FsResult<Vec<u8>> {
-        let mut reader = self.open_reader(path, ReadOptions::default())?;
-        let mut bytes = Vec::new();
-        let mut buffer = [0_u8; 8192];
-        while bytes.len() < max_bytes {
-            let remaining = max_bytes - bytes.len();
-            let read_limit = remaining.min(buffer.len());
-            match reader.read(&mut buffer[..read_limit]) {
-                Ok(0) => return Ok(bytes),
-                Ok(read) => bytes.extend_from_slice(&buffer[..read]),
-                Err(error) if error.kind() == IoErrorKind::Interrupted => {}
-                Err(error) => return Err(read_error(path, error)),
-            }
-        }
-
-        let mut probe = [0_u8; 1];
-        loop {
-            match reader.read(&mut probe) {
-                Ok(0) => return Ok(bytes),
-                Ok(_) => {
-                    return Err(FsError::new(
-                        FsErrorKind::ResourceLimitExceeded,
-                        FsOperation::Read,
-                        "resource exceeds the caller byte limit",
-                    )
-                    .with_path(path.clone()));
-                }
-                Err(error) if error.kind() == IoErrorKind::Interrupted => {}
-                Err(error) => return Err(read_error(path, error)),
-            }
-        }
+        self.limits().validate_path(
+            path,
+            self.info().path_semantics(),
+            FsOperation::Read,
+        )?;
+        let reader = self.open_reader(path, ReadOptions::default())?;
+        read_all_from(reader, path, max_bytes)
     }
 
     fn write_all(&self, path: &FsPath, bytes: &[u8]) -> FsResult<WriteOutcome> {
-        let mut writer = self.open_writer(path, WriteOptions::default())?;
-        if let Err(error) = writer.write_fully(bytes) {
-            let _ = writer.abort();
-            return Err(FsError::with_source(
-                FsErrorKind::Io,
-                FsOperation::Write,
-                "failed to write resource",
-                error,
-            )
-            .with_path(path.clone()));
-        }
-        writer.commit()
+        self.limits().validate_path(
+            path,
+            self.info().path_semantics(),
+            FsOperation::Write,
+        )?;
+        self.limits().validate_write_size(path, bytes.len())?;
+        let writer = self.open_writer(path, WriteOptions::default())?;
+        write_all_to(writer, path, bytes)
     }
+}
+
+fn read_all_from(
+    mut reader: FileReader,
+    path: &FsPath,
+    max_bytes: usize,
+) -> FsResult<Vec<u8>> {
+    let mut bytes = Vec::new();
+    let mut buffer = [0_u8; 8192];
+    while bytes.len() < max_bytes {
+        let remaining = max_bytes - bytes.len();
+        let read_limit = remaining.min(buffer.len());
+        match reader.read(&mut buffer[..read_limit]) {
+            Ok(0) => return Ok(bytes),
+            Ok(read) => bytes.extend_from_slice(&buffer[..read]),
+            Err(error) if error.kind() == IoErrorKind::Interrupted => {}
+            Err(error) => return Err(read_error(path, error)),
+        }
+    }
+
+    let mut probe = [0_u8; 1];
+    loop {
+        match reader.read(&mut probe) {
+            Ok(0) => return Ok(bytes),
+            Ok(_) => {
+                return Err(FsError::new(
+                    FsErrorKind::ResourceLimitExceeded,
+                    FsOperation::Read,
+                    "resource exceeds the caller byte limit",
+                )
+                .with_path(path.clone()));
+            }
+            Err(error) if error.kind() == IoErrorKind::Interrupted => {}
+            Err(error) => return Err(read_error(path, error)),
+        }
+    }
+}
+
+fn write_all_to(
+    mut writer: FileWriter,
+    path: &FsPath,
+    bytes: &[u8],
+) -> FsResult<WriteOutcome> {
+    if let Err(error) = writer.write_fully(bytes) {
+        let _ = writer.abort();
+        return Err(FsError::with_source(
+            FsErrorKind::Io,
+            FsOperation::Write,
+            "failed to write resource",
+            error,
+        )
+        .with_path(path.clone()));
+    }
+    writer.commit()
 }
 
 fn read_error(path: &FsPath, error: std::io::Error) -> FsError {
