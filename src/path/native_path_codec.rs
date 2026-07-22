@@ -16,6 +16,8 @@ use std::error::Error;
 /// components, interpret separators, normalize `.` or `..`, process roots, or
 /// parse URI encoding. Hierarchical providers normally invoke it for each
 /// component, while object-key providers may invoke it for one complete key.
+/// A hierarchical provider must independently reject a decoded fragment that
+/// introduces a native separator, root, or prefix on its target platform.
 ///
 /// Canonical text keeps ordinary Unicode unchanged, encodes a literal percent
 /// sign as `%25`, and encodes control characters and non-UTF-8 native bytes as

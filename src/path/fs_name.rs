@@ -26,7 +26,9 @@ use super::native_path_text::validate_canonical_text;
 /// The text follows the same `%XX` invariant as [`crate::FsPath`] and
 /// [`crate::NativePathCodec`]: a native percent sign is `%25`, and bytes that
 /// cannot appear literally are uppercase escapes. This is canonical path text,
-/// not URI encoding or a lossy display string.
+/// not URI encoding or a lossy display string. Its lexical safety applies to
+/// the canonical `/` namespace; providers must still reject native separators
+/// or prefixes introduced while decoding a component on their target platform.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct FsName(Box<str>);
 

@@ -17,6 +17,7 @@ use std::fmt::{
 use crate::FsResult;
 
 use super::uri_codec::canonicalize_encoded;
+use super::uri_codec::percent_decode;
 
 /// A validated URI path that retains percent-encoded path boundaries.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -48,6 +49,26 @@ impl FsUriPath {
     #[must_use]
     pub fn as_encoded(&self) -> &str {
         &self.0
+    }
+
+    /// Decodes the canonical percent-encoded path as UTF-8 text.
+    ///
+    /// This operation removes URI encoding only. It does not split path
+    /// components, normalize dot segments, or apply provider path semantics.
+    ///
+    /// # Returns
+    ///
+    /// The decoded path text, including any encoded separators such as `%2F`.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if this type's validated percent-encoding invariant is
+    /// violated internally.
+    #[inline(always)]
+    #[must_use]
+    pub fn decode(&self) -> String {
+        percent_decode(self.as_encoded())
+            .expect("validated filesystem URI path must decode")
     }
 }
 

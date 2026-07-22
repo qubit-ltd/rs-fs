@@ -29,6 +29,14 @@ fn test_uri_preserves_encoded_path_and_repeated_query_values() {
 }
 
 #[test]
+fn test_uri_path_decodes_validated_percent_encoded_text() {
+    let path =
+        FsUriPath::parse("/caf%C3%A9%2F100%25").expect("path should parse");
+
+    assert_eq!("/café/100%", path.decode());
+}
+
+#[test]
 fn test_uri_rejects_unsafe_or_ambiguous_syntax() {
     assert!(FsUri::parse("mock://user:password@host/path").is_err());
     assert!(FsUri::parse("mock://host/path?access_key=secret").is_err());

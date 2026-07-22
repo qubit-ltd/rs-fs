@@ -516,7 +516,7 @@ fn async_registry_applies_each_creation_fallback_policy() {
     let error = ready(registry.resolve_selected_async(&never, &config))
         .expect_err("never policy should stop at the first error");
     assert_eq!(FsErrorKind::Other, error.kind());
-    assert_eq!(None, error.provider());
+    assert_eq!(Some(&ProviderId::new("broken").unwrap()), error.provider(),);
     let creation = error
         .source()
         .and_then(|source| source.downcast_ref::<ProviderCreationError>())
@@ -583,7 +583,10 @@ fn async_registry_retains_ordered_failures_when_fallback_is_exhausted() {
         .expect_err("every admitted provider should fail");
 
     assert_eq!(FsErrorKind::ProviderUnavailable, error.kind());
-    assert_eq!(None, error.provider());
+    assert_eq!(
+        Some(&ProviderId::new("second-unsupported").unwrap()),
+        error.provider(),
+    );
     let creation = error
         .source()
         .and_then(|source| source.downcast_ref::<ProviderCreationError>())

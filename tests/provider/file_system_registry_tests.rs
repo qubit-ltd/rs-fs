@@ -171,6 +171,41 @@ fn test_registry_maps_provider_create_errors() {
 }
 
 #[test]
+fn test_registry_preserves_invalid_configuration_classification_and_scrubs_reason()
+ {
+    let registry = registry_with(FailingCreateProvider {
+        descriptor: failing_descriptor("invalid-config"),
+        error: ProviderError::invalid_configuration(
+            "credential=secret must not reach FsError display",
+        ),
+    });
+
+    let error = match registry.file_system_uri(
+        &FsUri::parse("invalid-config:///file.txt").expect("URI should parse"),
+    ) {
+        Ok(_) => panic!("invalid provider configuration should fail"),
+        Err(error) => error,
+    };
+
+    assert_eq!(FsErrorKind::InvalidOptions, error.kind());
+    assert_eq!(
+        Some(
+            &ProviderId::new("invalid-config")
+                .expect("provider id should parse")
+        ),
+        error.provider(),
+    );
+    assert!(!error.to_string().contains("credential=secret"));
+    assert!(
+        error
+            .source()
+            .and_then(|source| source.downcast_ref::<ProviderCreationError>())
+            .is_some(),
+        "creation failures should retain ProviderCreationError as source",
+    );
+}
+
+#[test]
 fn test_empty_registry_returns_errors_for_fs_and_resource() {
     let registry = FileSystemRegistry::default();
     let missing_uri =

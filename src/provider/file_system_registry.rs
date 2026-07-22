@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 use qubit_spi::error::{
     ProviderCreationError,
+    ProviderErrorKind,
     ProviderResolutionError,
     ProviderSelectionBuildError,
     RegistrationError,
@@ -369,11 +370,21 @@ pub(super) fn map_provider_selection_build_error(
 pub(super) fn map_provider_creation_error(
     error: ProviderCreationError,
 ) -> FsError {
-    let kind = if error.is_absence() {
-        FsErrorKind::ProviderUnavailable
-    } else {
-        FsErrorKind::Other
+    let decisive_attempt = error.decisive_attempt();
+    let provider = decisive_attempt.provider_id().clone();
+    let kind = match decisive_attempt.error().kind() {
+        ProviderErrorKind::Unsupported | ProviderErrorKind::Unavailable => {
+            FsErrorKind::ProviderUnavailable
+        }
+        ProviderErrorKind::InvalidConfiguration => FsErrorKind::InvalidOptions,
+        ProviderErrorKind::InitializationFailed => FsErrorKind::Other,
+        _ => FsErrorKind::Other,
     };
-    let message = error.to_string();
-    FsError::with_source(kind, FsOperation::Provider, &message, error)
+    FsError::with_source(
+        kind,
+        FsOperation::Provider,
+        "filesystem provider creation failed",
+        error,
+    )
+    .with_provider(provider)
 }
