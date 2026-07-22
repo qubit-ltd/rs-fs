@@ -27,8 +27,8 @@ use super::native_path_text::validate_canonical_text;
 /// The path structure uses `/` separators, but each non-separator fragment
 /// follows [`crate::NativePathCodec`] canonical text rules: ordinary Unicode is
 /// literal, a native `%` is `%25`, and control characters or non-UTF-8 bytes
-/// are uppercase `%XX` escapes. For example, `report-中文.txt` remains readable,
-/// while native bytes `66 6F 80 6F` are represented as `fo%80o`.
+/// are uppercase `%XX` escapes. For example, `report-中文.txt` remains
+/// readable, while native bytes `66 6F 80 6F` are represented as `fo%80o`.
 ///
 /// This canonical form is a representation invariant, so [`Eq`], [`Hash`], and
 /// [`Ord`] identify a single native path spelling rather than aliases such as
@@ -76,12 +76,6 @@ impl FsPath {
             return Err(crate::FsError::invalid_path(
                 FsOperation::ParsePath,
                 "path must not be empty",
-            ));
-        }
-        if path.chars().any(char::is_control) {
-            return Err(crate::FsError::invalid_path(
-                FsOperation::ParsePath,
-                "path must not contain control characters",
             ));
         }
         let absolute = path.starts_with('/');
@@ -136,12 +130,6 @@ impl FsPath {
             return Err(crate::FsError::invalid_path(
                 FsOperation::ParsePath,
                 "literal path must not be empty",
-            ));
-        }
-        if path.chars().any(char::is_control) {
-            return Err(crate::FsError::invalid_path(
-                FsOperation::ParsePath,
-                "literal path must not contain control characters",
             ));
         }
         Ok(Self {
@@ -239,10 +227,9 @@ impl FsPath {
         }
         let trimmed = self.path.trim_end_matches('/');
         let index = trimmed.rfind('/')?;
-        if index == 0 && self.absolute {
+        if index == 0 {
+            debug_assert!(self.absolute, "a leading separator is absolute");
             Some(Self::root())
-        } else if index == 0 {
-            None
         } else {
             Some(Self {
                 absolute: self.absolute,

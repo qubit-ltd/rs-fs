@@ -30,9 +30,7 @@ fn test_collect_entries_collects_all_entries() {
         )],
     });
     assert!(format!("{stream:?}").contains("DirectoryStream"));
-    let entries = stream
-        .collect_entries(1)
-        .expect("stream should collect");
+    let entries = stream.collect_entries(1).expect("stream should collect");
 
     assert_eq!(1, entries.len());
 }
@@ -42,7 +40,7 @@ fn test_collect_entries_returns_empty_vec_for_empty_stream() {
     let entries = DirectoryStream::new(MockDirectoryStream {
         entries: Vec::new(),
     })
-    .collect_entries(0)
+    .collect_entries(1)
     .expect("empty stream should collect");
 
     assert!(entries.is_empty());

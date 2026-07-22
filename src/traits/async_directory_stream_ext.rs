@@ -28,6 +28,11 @@ pub trait AsyncDirectoryStreamExt {
     /// # Returns
     ///
     /// A future resolving to at most `max_entries` remaining entries.
+    ///
+    /// # Errors
+    ///
+    /// The future resolves to an error when listing fails before the stream
+    /// ends or when more than `max_entries` entries remain.
     fn collect_entries_async(
         self,
         max_entries: usize,

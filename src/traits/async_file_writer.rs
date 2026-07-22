@@ -70,23 +70,17 @@ impl AsyncFileWriter {
     ///
     /// # Returns
     /// Information captured when the writer was opened.
-    #[inline]
+    #[inline(always)]
     #[must_use]
     pub fn info(&self) -> &OpenedFileInfo {
         &self.info
-    }
-
-    /// Rebinds the handle to registry-resolved canonical identity.
-    #[inline]
-    pub(crate) fn bind_location(&mut self, location: FileLocation) {
-        self.info.replace_location(location);
     }
 
     /// Returns the current lifecycle state.
     ///
     /// # Returns
     /// Current writer state.
-    #[inline]
+    #[inline(always)]
     #[must_use]
     pub const fn state(&self) -> WriterState {
         self.state
@@ -165,6 +159,12 @@ impl AsyncFileWriter {
         })
     }
 
+    /// Rebinds the handle to registry-resolved canonical identity.
+    #[inline(always)]
+    pub(crate) fn bind_location(&mut self, location: FileLocation) {
+        self.info.replace_location(location);
+    }
+
     /// Builds a stable invalid-state error.
     fn invalid_state(&self, operation: FsOperation, message: &str) -> FsError {
         FsError::new(FsErrorKind::InvalidState, operation, message)
@@ -186,7 +186,7 @@ impl AsyncFileWriter {
 impl AsyncOutput for AsyncFileWriter {
     type Item = u8;
 
-    #[inline]
+    #[inline(always)]
     fn is_buffered(&self) -> bool {
         self.session.is_buffered()
     }

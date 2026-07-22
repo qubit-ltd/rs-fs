@@ -53,10 +53,7 @@ fn filesystem_limits_have_explicit_states_and_units() {
         .with_max_write_bytes(FileSystemLimit::Maximum(1_048_576))
         .with_max_list_page_entries(FileSystemLimit::NotApplicable);
 
-    assert_eq!(
-        FileSystemLimit::Maximum(4096),
-        limits.max_path_text_bytes(),
-    );
+    assert_eq!(FileSystemLimit::Maximum(4096), limits.max_path_text_bytes(),);
     assert_eq!(
         FileSystemLimit::Maximum(255),
         limits.max_component_text_bytes(),
@@ -77,16 +74,10 @@ fn unknown_filesystem_limits_are_explicit() {
     let limits = FileSystemLimits::unknown();
 
     assert_eq!(FileSystemLimit::Unknown, limits.max_path_text_bytes());
-    assert_eq!(
-        FileSystemLimit::Unknown,
-        limits.max_component_text_bytes(),
-    );
+    assert_eq!(FileSystemLimit::Unknown, limits.max_component_text_bytes(),);
     assert_eq!(FileSystemLimit::Unknown, limits.max_read_range_bytes());
     assert_eq!(FileSystemLimit::Unknown, limits.max_write_bytes());
-    assert_eq!(
-        FileSystemLimit::Unknown,
-        limits.max_list_page_entries(),
-    );
+    assert_eq!(FileSystemLimit::Unknown, limits.max_list_page_entries(),);
 }
 
 #[test]

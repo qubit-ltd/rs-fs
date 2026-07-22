@@ -33,8 +33,8 @@ use std::error::Error;
 ///
 /// Implementations should return [`Cow::Borrowed`] for plain representable
 /// UTF-8 text when no escaping or representation conversion is required. Error
-/// offsets reported by the built-in codec error are UTF-8 byte offsets for text,
-/// native byte offsets for byte input, and WTF-8 byte offsets for Windows
+/// offsets reported by the built-in codec error are UTF-8 byte offsets for
+/// text, native byte offsets for byte input, and WTF-8 byte offsets for Windows
 /// surrogate representations.
 pub trait NativePathCodec: Send + Sync {
     /// Borrowed native string representation used by the provider.
@@ -49,7 +49,10 @@ pub trait NativePathCodec: Send + Sync {
     ///
     /// Returns an error when `text` is not canonical or cannot be represented
     /// by the selected native encoding.
-    fn encode<'a>(&self, text: &'a str) -> Result<Cow<'a, Self::Native>, Self::Error>;
+    fn encode<'a>(
+        &self,
+        text: &'a str,
+    ) -> Result<Cow<'a, Self::Native>, Self::Error>;
 
     /// Decodes a native path representation into canonical UTF-8 text.
     ///
@@ -57,5 +60,8 @@ pub trait NativePathCodec: Send + Sync {
     ///
     /// Returns an error when `native` is invalid for the selected encoding or
     /// cannot be represented without loss.
-    fn decode<'a>(&self, native: &'a Self::Native) -> Result<Cow<'a, str>, Self::Error>;
+    fn decode<'a>(
+        &self,
+        native: &'a Self::Native,
+    ) -> Result<Cow<'a, str>, Self::Error>;
 }

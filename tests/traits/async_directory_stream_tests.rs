@@ -55,6 +55,18 @@ fn async_directory_stream_collects_remaining_entries() {
     assert_eq!("/collected.txt", entries[0].path.as_str());
 }
 
+#[test]
+fn async_directory_stream_collects_an_empty_stream_below_the_budget() {
+    let stream =
+        AsyncDirectoryStream::new(ReadyDirectorySession { entry: None });
+
+    assert!(
+        ready(stream.collect_entries_async(1))
+            .expect("empty collection should succeed")
+            .is_empty()
+    );
+}
+
 impl AsyncDirectoryStreamSession for ReadyDirectorySession {
     fn next_entry_async(&mut self) -> FsFuture<'_, Option<DirEntry>> {
         let entry = self.entry.take();

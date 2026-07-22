@@ -46,20 +46,6 @@ impl NonSensitiveMetadata {
         Self(Metadata::new())
     }
 
-    /// Returns the validated metadata without mutable access.
-    #[inline]
-    #[must_use]
-    pub const fn as_metadata(&self) -> &Metadata {
-        &self.0
-    }
-
-    /// Consumes this wrapper and returns the underlying metadata.
-    #[inline]
-    #[must_use]
-    pub fn into_metadata(self) -> Metadata {
-        self.0
-    }
-
     /// Validates metadata for a specific filesystem operation.
     pub(crate) fn try_from_with_context(
         metadata: Metadata,
@@ -74,6 +60,20 @@ impl NonSensitiveMetadata {
             ));
         }
         Ok(Self(metadata))
+    }
+
+    /// Returns the validated metadata without mutable access.
+    #[inline(always)]
+    #[must_use]
+    pub const fn as_metadata(&self) -> &Metadata {
+        &self.0
+    }
+
+    /// Consumes this wrapper and returns the underlying metadata.
+    #[inline]
+    #[must_use]
+    pub fn into_metadata(self) -> Metadata {
+        self.0
     }
 }
 

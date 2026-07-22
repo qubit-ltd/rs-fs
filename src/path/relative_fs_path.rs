@@ -46,11 +46,6 @@ impl RelativeFsPath {
         if path.starts_with('/') {
             return Err(invalid_relative("relative path must not be absolute"));
         }
-        if path.chars().any(char::is_control) {
-            return Err(invalid_relative(
-                "relative path must not contain control characters",
-            ));
-        }
         let mut components = Vec::new();
         for component in path.split('/') {
             match component {

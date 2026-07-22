@@ -49,11 +49,6 @@ impl FsName {
         if name.contains('/') {
             return Err(invalid_name("filesystem name must be one component"));
         }
-        if name.chars().any(char::is_control) {
-            return Err(invalid_name(
-                "filesystem name must not contain control characters",
-            ));
-        }
         Ok(Self(name.into()))
     }
 

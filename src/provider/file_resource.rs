@@ -26,6 +26,7 @@ use crate::{
     FileSystem,
     FileSystemExt,
     FileWriter,
+    FsOperation,
     FsPath,
     FsResult,
     ListOptions,
@@ -57,6 +58,7 @@ impl FileResource {
     ///
     /// # Returns
     /// A resource bound to the supplied filesystem and path.
+    #[inline]
     #[must_use]
     pub fn new(fs: Arc<dyn FileSystem>, path: FsPath) -> Self {
         let location = FileLocation::new(fs.info().id().clone(), path);
@@ -71,6 +73,7 @@ impl FileResource {
     ///
     /// # Returns
     /// A resource bound to the supplied filesystem and location.
+    #[inline]
     #[must_use]
     pub fn from_location(
         fs: Arc<dyn FileSystem>,
@@ -83,21 +86,17 @@ impl FileResource {
     ///
     /// # Returns
     /// A shared reference to the owning filesystem.
+    #[inline(always)]
     #[must_use]
     pub fn fs(&self) -> &dyn FileSystem {
         self.fs.as_ref()
-    }
-
-    /// Clones the owning filesystem handle for derived resources.
-    #[inline]
-    pub(crate) fn fs_arc(&self) -> Arc<dyn FileSystem> {
-        self.fs.clone()
     }
 
     /// Returns the filesystem-local path of this resource.
     ///
     /// # Returns
     /// A shared reference to the filesystem-local path.
+    #[inline(always)]
     #[must_use]
     pub fn path(&self) -> &FsPath {
         self.location.path()
@@ -107,6 +106,7 @@ impl FileResource {
     ///
     /// # Returns
     /// Configured filesystem id, provider-local path, and optional safe URI.
+    #[inline(always)]
     #[must_use]
     pub fn location(&self) -> &FileLocation {
         &self.location
@@ -121,6 +121,7 @@ impl FileResource {
     /// Returns an error when the owning filesystem cannot read metadata for the
     /// resource path.
     pub fn stat(&self) -> FsResult<FileMetadata> {
+        self.validate_path(self.path(), FsOperation::Stat)?;
         self.fs.stat(self.path())
     }
 
@@ -133,6 +134,7 @@ impl FileResource {
     /// Returns an error when the owning filesystem cannot determine existence
     /// for the resource path.
     pub fn exists(&self) -> FsResult<bool> {
+        self.validate_path(self.path(), FsOperation::Exists)?;
         self.fs.exists(self.path())
     }
 
@@ -148,6 +150,7 @@ impl FileResource {
     /// Returns an error when the owning filesystem cannot open a directory
     /// stream for the resource path.
     pub fn list(&self, options: ListOptions) -> FsResult<DirectoryStream> {
+        self.validate_path(self.path(), FsOperation::List)?;
         self.fs.list(self.path(), options)
     }
 
@@ -163,6 +166,10 @@ impl FileResource {
     /// Returns an error when the owning filesystem cannot open the resource for
     /// reading.
     pub fn open_reader(&self, options: ReadOptions) -> FsResult<FileReader> {
+        self.validate_path(self.path(), FsOperation::OpenReader)?;
+        self.fs
+            .limits()
+            .validate_read_range(self.path(), options.length)?;
         options.validate_against(self.fs.capabilities())?;
         let mut reader = self.fs.open_reader(self.path(), options)?;
         reader.bind_location(self.location.clone());
@@ -181,6 +188,7 @@ impl FileResource {
     /// Returns an error when the owning filesystem cannot open the resource for
     /// writing.
     pub fn open_writer(&self, options: WriteOptions) -> FsResult<FileWriter> {
+        self.validate_path(self.path(), FsOperation::OpenWriter)?;
         options.validate_against(self.fs.capabilities())?;
         let mut writer = self.fs.open_writer(self.path(), options)?;
         writer.bind_location(self.location.clone());
@@ -198,6 +206,7 @@ impl FileResource {
     /// # Errors
     /// Returns an error when the owning filesystem cannot open or read the
     /// resource, or when it contains more than `max_bytes` bytes.
+    #[inline(always)]
     pub fn read_all(&self, max_bytes: usize) -> FsResult<Vec<u8>> {
         self.fs.read_all(self.path(), max_bytes)
     }
@@ -213,6 +222,7 @@ impl FileResource {
     /// # Errors
     /// Returns an error when the owning filesystem cannot open, write, flush,
     /// or commit the resource.
+    #[inline(always)]
     pub fn write_all(&self, bytes: &[u8]) -> FsResult<WriteOutcome> {
         self.fs.write_all(self.path(), bytes)
     }
@@ -225,6 +235,7 @@ impl FileResource {
     /// # Errors
     /// Returns an error when the owning filesystem cannot create the directory.
     pub fn create_dir(&self, options: CreateDirOptions) -> FsResult<()> {
+        self.validate_path(self.path(), FsOperation::CreateDir)?;
         self.fs.create_dir(self.path(), options)
     }
 
@@ -236,6 +247,7 @@ impl FileResource {
     /// # Errors
     /// Returns an error when the owning filesystem cannot delete the resource.
     pub fn delete(&self, options: DeleteOptions) -> FsResult<()> {
+        self.validate_path(self.path(), FsOperation::Delete)?;
         options.validate_against(self.fs.capabilities())?;
         self.fs.delete(self.path(), options)
     }
@@ -253,6 +265,8 @@ impl FileResource {
         target: &FsPath,
         options: RenameOptions,
     ) -> FsResult<RenameOutcome> {
+        self.validate_path(self.path(), FsOperation::Rename)?;
+        self.validate_path(target, FsOperation::Rename)?;
         options.validate_against(self.fs.capabilities())?;
         self.fs.rename(self.path(), target, options)
     }
@@ -273,8 +287,28 @@ impl FileResource {
         target: &FsPath,
         options: CopyOptions,
     ) -> FsResult<CopyOutcome> {
+        self.validate_path(self.path(), FsOperation::Copy)?;
+        self.validate_path(target, FsOperation::Copy)?;
         options.validate_against(self.fs.capabilities())?;
         self.fs.copy(self.path(), target, options)
+    }
+
+    /// Clones the owning filesystem handle for derived resources.
+    #[inline(always)]
+    pub(crate) fn fs_arc(&self) -> Arc<dyn FileSystem> {
+        self.fs.clone()
+    }
+
+    fn validate_path(
+        &self,
+        path: &FsPath,
+        operation: FsOperation,
+    ) -> FsResult<()> {
+        self.fs.limits().validate_path(
+            path,
+            self.fs.info().path_semantics(),
+            operation,
+        )
     }
 }
 

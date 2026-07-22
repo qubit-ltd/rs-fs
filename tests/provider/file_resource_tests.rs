@@ -25,8 +25,11 @@ use qubit_fs::{
     FileSystemCapability,
     FileSystemId,
     FileSystemInfo,
+    FileSystemLimit,
+    FileSystemLimits,
     FileSystemProperties,
     FileSystemRegistry,
+    FsErrorKind,
     FsPath,
     FsResult,
     FsUri,
@@ -225,6 +228,84 @@ fn file_resource_rejects_unmet_requirements_before_delegation() {
     assert_eq!(
         qubit_fs::FsErrorKind::RequirementNotMet,
         resource.copy_to(&target, copy).unwrap_err().kind(),
+    );
+}
+
+#[test]
+fn file_resource_preflights_provider_path_and_range_limits() {
+    let limits = FileSystemLimits::unknown()
+        .with_max_path_text_bytes(FileSystemLimit::Maximum(8))
+        .with_max_read_range_bytes(FileSystemLimit::Maximum(4));
+    let fs = MockFs::default().with_limits(limits);
+    let registry = registry_with_mock(MockProvider {
+        descriptor: mock_descriptor(),
+        fs: fs.clone(),
+    });
+    let resource = registry
+        .resource_uri(&FsUri::parse("mock:///file.txt").unwrap())
+        .unwrap();
+
+    let path_error = resource.stat().unwrap_err();
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, path_error.kind());
+    assert_eq!(qubit_fs::FsOperation::Stat, path_error.operation());
+
+    let short_resource =
+        FileResource::new(Arc::new(fs), FsPath::parse("/a").unwrap());
+    let range_error = short_resource
+        .open_reader(ReadOptions {
+            length: Some(5),
+            ..ReadOptions::default()
+        })
+        .unwrap_err();
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, range_error.kind());
+    assert_eq!(qubit_fs::FsOperation::OpenReader, range_error.operation());
+}
+
+#[test]
+fn file_resource_preflights_paths_for_every_bound_operation() {
+    let limits = FileSystemLimits::unknown()
+        .with_max_path_text_bytes(FileSystemLimit::Maximum(3));
+    let long = FsPath::parse("/long").unwrap();
+    let short = FsPath::parse("/a").unwrap();
+    let long_resource = FileResource::new(
+        Arc::new(MockFs::default().with_limits(limits)),
+        long.clone(),
+    );
+
+    assert!(long_resource.exists().is_err());
+    assert!(long_resource.list(ListOptions::default()).is_err());
+    assert!(long_resource.open_reader(ReadOptions::default()).is_err());
+    assert!(long_resource.open_writer(WriteOptions::default()).is_err());
+    assert!(
+        long_resource
+            .create_dir(CreateDirOptions::default())
+            .is_err()
+    );
+    assert!(long_resource.delete(DeleteOptions::default()).is_err());
+    assert!(
+        long_resource
+            .rename_to(&short, RenameOptions::default())
+            .is_err()
+    );
+    assert!(
+        long_resource
+            .copy_to(&short, CopyOptions::default())
+            .is_err()
+    );
+
+    let short_resource = FileResource::new(
+        Arc::new(MockFs::default().with_limits(limits)),
+        short,
+    );
+    assert!(
+        short_resource
+            .rename_to(&long, RenameOptions::default())
+            .is_err()
+    );
+    assert!(
+        short_resource
+            .copy_to(&long, CopyOptions::default())
+            .is_err()
     );
 }
 

@@ -43,7 +43,6 @@ impl FileSystemCapabilities {
     pub const fn contains(&self, capability: FileSystemCapability) -> bool {
         self.flags & capability.bit() != 0
     }
-
 }
 
 impl Default for FileSystemCapabilities {

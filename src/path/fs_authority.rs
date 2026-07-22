@@ -56,6 +56,38 @@ impl FsAuthority {
         })
     }
 
+    /// Parses the raw authority portion of a filesystem URI.
+    pub(super) fn parse_encoded(authority: &str) -> FsResult<Self> {
+        let (userinfo, host_port) = match authority.rsplit_once('@') {
+            Some((userinfo, host_port)) => {
+                if userinfo.contains('@') {
+                    return Err(invalid_uri("invalid URI authority user-info"));
+                }
+                (Some(userinfo), host_port)
+            }
+            None => (None, authority),
+        };
+        let username = match userinfo {
+            Some(userinfo) => {
+                if userinfo.contains(':') {
+                    return Err(invalid_uri(
+                        "passwords are forbidden in filesystem URI authority",
+                    ));
+                }
+                let username = percent_decode(userinfo)?;
+                validate_username(&username)?;
+                Some(username.into_boxed_str())
+            }
+            None => None,
+        };
+        let (host, port) = parse_host_port(host_port)?;
+        Ok(Self {
+            host: host.into(),
+            port,
+            username,
+        })
+    }
+
     /// Sets the authority port.
     ///
     /// # Parameters
@@ -91,56 +123,24 @@ impl FsAuthority {
     }
 
     /// Returns the host, bucket, or endpoint name.
-    #[inline]
+    #[inline(always)]
     #[must_use]
     pub fn host(&self) -> &str {
         &self.host
     }
 
     /// Returns the optional network port.
-    #[inline]
+    #[inline(always)]
     #[must_use]
     pub const fn port(&self) -> Option<u16> {
         self.port
     }
 
     /// Returns the optional non-sensitive username hint.
-    #[inline]
+    #[inline(always)]
     #[must_use]
     pub fn username(&self) -> Option<&str> {
         self.username.as_deref()
-    }
-
-    /// Parses the raw authority portion of a filesystem URI.
-    pub(super) fn parse_encoded(authority: &str) -> FsResult<Self> {
-        let (userinfo, host_port) = match authority.rsplit_once('@') {
-            Some((userinfo, host_port)) => {
-                if userinfo.contains('@') {
-                    return Err(invalid_uri("invalid URI authority user-info"));
-                }
-                (Some(userinfo), host_port)
-            }
-            None => (None, authority),
-        };
-        let username = match userinfo {
-            Some(userinfo) => {
-                if userinfo.contains(':') {
-                    return Err(invalid_uri(
-                        "passwords are forbidden in filesystem URI authority",
-                    ));
-                }
-                let username = percent_decode(userinfo)?;
-                validate_username(&username)?;
-                Some(username.into_boxed_str())
-            }
-            None => None,
-        };
-        let (host, port) = parse_host_port(host_port)?;
-        Ok(Self {
-            host: host.into(),
-            port,
-            username,
-        })
     }
 }
 

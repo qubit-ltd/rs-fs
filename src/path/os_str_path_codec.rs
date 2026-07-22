@@ -8,14 +8,23 @@
 //! Codec for the operating system's native path string type.
 
 use std::borrow::Cow;
-use std::ffi::{OsStr, OsString};
+use std::ffi::{
+    OsStr,
+    OsString,
+};
 
 #[cfg(windows)]
 use std::os::windows::ffi::OsStringExt;
 
-use crate::{NativePathCodec, NativePathCodecError};
+use crate::{
+    NativePathCodec,
+    NativePathCodecError,
+};
 
-use super::native_path_text::{decode_canonical_text, encode_path_bytes};
+use super::native_path_text::{
+    decode_canonical_text,
+    encode_path_bytes,
+};
 
 /// Losslessly maps [`OsStr`] values to canonical native-path text.
 ///
@@ -46,14 +55,19 @@ impl NativePathCodec for OsStrPathCodec {
     ///
     /// Returns [`NativePathCodecError::UnsupportedNativeEncoding`] on targets
     /// without a stable lossless conversion for a non-Unicode native value.
-    fn decode<'a>(&self, native: &'a OsStr) -> Result<Cow<'a, str>, Self::Error> {
+    fn decode<'a>(
+        &self,
+        native: &'a OsStr,
+    ) -> Result<Cow<'a, str>, Self::Error> {
         decode_os_str(native)
     }
 }
 
 /// Encodes canonical text into an operating-system native string on Unix.
 #[cfg(unix)]
-fn encode_os_str<'a>(text: &'a str) -> Result<Cow<'a, OsStr>, NativePathCodecError> {
+fn encode_os_str<'a>(
+    text: &'a str,
+) -> Result<Cow<'a, OsStr>, NativePathCodecError> {
     use std::os::unix::ffi::OsStringExt;
 
     let bytes = decode_canonical_text(text)?;
@@ -66,7 +80,9 @@ fn encode_os_str<'a>(text: &'a str) -> Result<Cow<'a, OsStr>, NativePathCodecErr
 
 /// Decodes an operating-system native string into canonical text on Unix.
 #[cfg(unix)]
-fn decode_os_str<'a>(native: &'a OsStr) -> Result<Cow<'a, str>, NativePathCodecError> {
+fn decode_os_str<'a>(
+    native: &'a OsStr,
+) -> Result<Cow<'a, str>, NativePathCodecError> {
     use std::os::unix::ffi::OsStrExt;
 
     let bytes = native.as_bytes();
@@ -82,7 +98,9 @@ fn decode_os_str<'a>(native: &'a OsStr) -> Result<Cow<'a, str>, NativePathCodecE
 
 /// Encodes canonical text into an operating-system native string on Windows.
 #[cfg(windows)]
-fn encode_os_str<'a>(text: &'a str) -> Result<Cow<'a, OsStr>, NativePathCodecError> {
+fn encode_os_str<'a>(
+    text: &'a str,
+) -> Result<Cow<'a, OsStr>, NativePathCodecError> {
     let bytes = decode_canonical_text(text)?;
     if text.as_bytes().contains(&b'%') {
         let wide = wtf8_to_wide(&bytes)?;
@@ -94,7 +112,9 @@ fn encode_os_str<'a>(text: &'a str) -> Result<Cow<'a, OsStr>, NativePathCodecErr
 
 /// Decodes an operating-system native string into canonical text on Windows.
 #[cfg(windows)]
-fn decode_os_str<'a>(native: &'a OsStr) -> Result<Cow<'a, str>, NativePathCodecError> {
+fn decode_os_str<'a>(
+    native: &'a OsStr,
+) -> Result<Cow<'a, str>, NativePathCodecError> {
     use std::os::windows::ffi::OsStrExt;
 
     let bytes = wide_to_wtf8(&native.encode_wide().collect::<Vec<_>>());
@@ -110,12 +130,15 @@ fn decode_os_str<'a>(native: &'a OsStr) -> Result<Cow<'a, str>, NativePathCodecE
 
 /// Encodes canonical text on targets with only a strict-Unicode fallback.
 #[cfg(not(any(unix, windows)))]
-fn encode_os_str<'a>(text: &'a str) -> Result<Cow<'a, OsStr>, NativePathCodecError> {
+fn encode_os_str<'a>(
+    text: &'a str,
+) -> Result<Cow<'a, OsStr>, NativePathCodecError> {
     let bytes = decode_canonical_text(text)?;
-    let decoded =
-        std::str::from_utf8(&bytes).map_err(|error| NativePathCodecError::InvalidUtf8 {
+    let decoded = std::str::from_utf8(&bytes).map_err(|error| {
+        NativePathCodecError::InvalidUtf8 {
             offset: error.valid_up_to(),
-        })?;
+        }
+    })?;
     if text.as_bytes().contains(&b'%') {
         Ok(Cow::Owned(OsString::from(decoded)))
     } else {
@@ -125,7 +148,9 @@ fn encode_os_str<'a>(text: &'a str) -> Result<Cow<'a, OsStr>, NativePathCodecErr
 
 /// Decodes native text on targets with only a strict-Unicode fallback.
 #[cfg(not(any(unix, windows)))]
-fn decode_os_str<'a>(native: &'a OsStr) -> Result<Cow<'a, str>, NativePathCodecError> {
+fn decode_os_str<'a>(
+    native: &'a OsStr,
+) -> Result<Cow<'a, str>, NativePathCodecError> {
     let native_text = native
         .to_str()
         .ok_or(NativePathCodecError::UnsupportedNativeEncoding)?;
@@ -148,7 +173,9 @@ fn wide_to_wtf8(wide: &[u16]) -> Vec<u8> {
             && let Some(&low) = wide.get(index + 1)
             && is_low_surrogate(low)
         {
-            let scalar = 0x1_0000 + ((u32::from(unit) - 0xd800) << 10) + (u32::from(low) - 0xdc00);
+            let scalar = 0x1_0000
+                + ((u32::from(unit) - 0xd800) << 10)
+                + (u32::from(low) - 0xdc00);
             append_scalar_utf8(&mut bytes, scalar);
             index += 2;
         } else {
@@ -192,7 +219,10 @@ fn wtf8_to_wide(bytes: &[u8]) -> Result<Vec<u16>, NativePathCodecError> {
 /// Returns [`NativePathCodecError::InvalidWtf8`] at `index` when the sequence
 /// is overlong, truncated, has bad continuation bytes, or exceeds Unicode.
 #[cfg(windows)]
-fn decode_wtf8_scalar(bytes: &[u8], index: usize) -> Result<(u32, usize), NativePathCodecError> {
+fn decode_wtf8_scalar(
+    bytes: &[u8],
+    index: usize,
+) -> Result<(u32, usize), NativePathCodecError> {
     let first = bytes[index];
     if first <= 0x7f {
         return Ok((u32::from(first), 1));

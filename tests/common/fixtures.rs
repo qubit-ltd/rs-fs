@@ -41,6 +41,7 @@ use qubit_fs::{
     FileSystemConfig,
     FileSystemId,
     FileSystemInfo,
+    FileSystemLimits,
     FileSystemProperties,
     FileSystemResolution,
     FileSystemSpec,
@@ -87,14 +88,29 @@ pub(crate) struct MockState {
     pub(crate) fail_delete: bool,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub(crate) struct MockFs {
     state: Arc<Mutex<MockState>>,
+    limits: FileSystemLimits,
 }
 
 impl MockFs {
     pub(crate) fn with_state(state: Arc<Mutex<MockState>>) -> Self {
-        Self { state }
+        Self {
+            state,
+            limits: FileSystemLimits::unknown(),
+        }
+    }
+
+    pub(crate) fn with_limits(mut self, limits: FileSystemLimits) -> Self {
+        self.limits = limits;
+        self
+    }
+}
+
+impl Default for MockFs {
+    fn default() -> Self {
+        Self::with_state(Arc::new(Mutex::new(MockState::default())))
     }
 }
 
@@ -140,10 +156,8 @@ impl FileSystemProperties for MockFs {
             .with(FileSystemCapability::AtomicTempPersist)
     }
 
-    fn limits(&self) -> &qubit_fs::FileSystemLimits {
-        static LIMITS: qubit_fs::FileSystemLimits =
-            qubit_fs::FileSystemLimits::unknown();
-        &LIMITS
+    fn limits(&self) -> &FileSystemLimits {
+        &self.limits
     }
 }
 

@@ -45,7 +45,10 @@ impl FileSystemLimits {
     /// Returns a copy with the path-text byte limit replaced by `limit`.
     #[inline]
     #[must_use]
-    pub const fn with_max_path_text_bytes(mut self, limit: FileSystemLimit) -> Self {
+    pub const fn with_max_path_text_bytes(
+        mut self,
+        limit: FileSystemLimit,
+    ) -> Self {
         self.max_path_text_bytes = limit;
         self
     }
@@ -53,7 +56,10 @@ impl FileSystemLimits {
     /// Returns a copy with the component-text byte limit replaced by `limit`.
     #[inline]
     #[must_use]
-    pub const fn with_max_component_text_bytes(mut self, limit: FileSystemLimit) -> Self {
+    pub const fn with_max_component_text_bytes(
+        mut self,
+        limit: FileSystemLimit,
+    ) -> Self {
         self.max_component_text_bytes = limit;
         self
     }
@@ -61,7 +67,10 @@ impl FileSystemLimits {
     /// Returns a copy with the range-read byte limit replaced by `limit`.
     #[inline]
     #[must_use]
-    pub const fn with_max_read_range_bytes(mut self, limit: FileSystemLimit) -> Self {
+    pub const fn with_max_read_range_bytes(
+        mut self,
+        limit: FileSystemLimit,
+    ) -> Self {
         self.max_read_range_bytes = limit;
         self
     }
@@ -69,20 +78,28 @@ impl FileSystemLimits {
     /// Returns a copy with the write-session byte limit replaced by `limit`.
     #[inline]
     #[must_use]
-    pub const fn with_max_write_bytes(mut self, limit: FileSystemLimit) -> Self {
+    pub const fn with_max_write_bytes(
+        mut self,
+        limit: FileSystemLimit,
+    ) -> Self {
         self.max_write_bytes = limit;
         self
     }
 
-    /// Returns a copy with the native list-page entry limit replaced by `limit`.
+    /// Returns a copy with the native list-page entry limit replaced by
+    /// `limit`.
     #[inline]
     #[must_use]
-    pub const fn with_max_list_page_entries(mut self, limit: FileSystemLimit) -> Self {
+    pub const fn with_max_list_page_entries(
+        mut self,
+        limit: FileSystemLimit,
+    ) -> Self {
         self.max_list_page_entries = limit;
         self
     }
 
-    /// Returns the maximum canonical [`crate::FsPath`] text length in UTF-8 bytes.
+    /// Returns the maximum canonical [`crate::FsPath`] text length in UTF-8
+    /// bytes.
     #[inline(always)]
     #[must_use]
     pub const fn max_path_text_bytes(&self) -> FileSystemLimit {

@@ -40,6 +40,8 @@ use qubit_fs::{
     FileSystemCapability,
     FileSystemId,
     FileSystemInfo,
+    FileSystemLimit,
+    FileSystemLimits,
     FileSystemProperties,
     FsFuture,
     FsPath,
@@ -62,6 +64,7 @@ use qubit_spi::ProviderId;
 
 struct ResourceAsyncFs {
     info: FileSystemInfo,
+    limits: FileSystemLimits,
 }
 
 impl ResourceAsyncFs {
@@ -72,7 +75,13 @@ impl ResourceAsyncFs {
                 ProviderId::new("async-resource").unwrap(),
                 PathSemantics::Hierarchical,
             ),
+            limits: FileSystemLimits::unknown(),
         }
+    }
+
+    fn with_limits(mut self, limits: FileSystemLimits) -> Self {
+        self.limits = limits;
+        self
     }
 }
 
@@ -87,10 +96,8 @@ impl FileSystemProperties for ResourceAsyncFs {
             .with(FileSystemCapability::Write)
     }
 
-    fn limits(&self) -> &qubit_fs::FileSystemLimits {
-        static LIMITS: qubit_fs::FileSystemLimits =
-            qubit_fs::FileSystemLimits::unknown();
-        &LIMITS
+    fn limits(&self) -> &FileSystemLimits {
+        &self.limits
     }
 }
 
@@ -355,4 +362,86 @@ fn async_file_resource_delegates_every_operation_and_binds_handles() {
         ..CopyOptions::default()
     };
     assert!(ready(resource.copy_to_async(&target, copy)).is_err());
+}
+
+#[test]
+fn async_file_resource_preflights_provider_path_and_range_limits() {
+    let limits = FileSystemLimits::unknown()
+        .with_max_path_text_bytes(FileSystemLimit::Maximum(4))
+        .with_max_read_range_bytes(FileSystemLimit::Maximum(4));
+    let fs: Arc<dyn AsyncFileSystem> =
+        Arc::new(ResourceAsyncFs::new().with_limits(limits));
+    let resource = AsyncFileResource::new(fs, FsPath::parse("/file").unwrap());
+
+    let path_error = ready(resource.stat_async()).unwrap_err();
+    assert_eq!(
+        qubit_fs::FsErrorKind::ResourceLimitExceeded,
+        path_error.kind(),
+    );
+    assert_eq!(qubit_fs::FsOperation::Stat, path_error.operation());
+
+    let fs: Arc<dyn AsyncFileSystem> =
+        Arc::new(ResourceAsyncFs::new().with_limits(limits));
+    let short_resource =
+        AsyncFileResource::new(fs, FsPath::parse("/a").unwrap());
+    let range_error = ready(short_resource.open_reader_async(ReadOptions {
+        length: Some(5),
+        ..ReadOptions::default()
+    }))
+    .unwrap_err();
+    assert_eq!(
+        qubit_fs::FsErrorKind::ResourceLimitExceeded,
+        range_error.kind(),
+    );
+    assert_eq!(qubit_fs::FsOperation::OpenReader, range_error.operation());
+}
+
+#[test]
+fn async_file_resource_preflights_paths_for_every_bound_operation() {
+    let limits = FileSystemLimits::unknown()
+        .with_max_path_text_bytes(FileSystemLimit::Maximum(3));
+    let long = FsPath::parse("/long").unwrap();
+    let short = FsPath::parse("/a").unwrap();
+    let long_resource = AsyncFileResource::new(
+        Arc::new(ResourceAsyncFs::new().with_limits(limits)),
+        long.clone(),
+    );
+
+    assert!(ready(long_resource.exists_async()).is_err());
+    assert!(ready(long_resource.list_async(ListOptions::default())).is_err());
+    assert!(
+        ready(long_resource.open_reader_async(ReadOptions::default())).is_err()
+    );
+    assert!(
+        ready(long_resource.open_writer_async(WriteOptions::default()))
+            .is_err()
+    );
+    assert!(
+        ready(long_resource.create_dir_async(CreateDirOptions::default()))
+            .is_err()
+    );
+    assert!(
+        ready(long_resource.delete_async(DeleteOptions::default())).is_err()
+    );
+    assert!(
+        ready(long_resource.rename_to_async(&short, RenameOptions::default()))
+            .is_err()
+    );
+    assert!(
+        ready(long_resource.copy_to_async(&short, CopyOptions::default()))
+            .is_err()
+    );
+
+    let short_resource = AsyncFileResource::new(
+        Arc::new(ResourceAsyncFs::new().with_limits(limits)),
+        short,
+    );
+    assert!(
+        ready(short_resource.rename_to_async(&long, RenameOptions::default()))
+            .is_err()
+    );
+    assert!(
+        ready(short_resource.copy_to_async(&long, CopyOptions::default()))
+            .is_err()
+    );
 }

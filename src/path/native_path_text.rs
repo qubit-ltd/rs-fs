@@ -16,14 +16,18 @@ use crate::NativePathCodecError;
 /// Returns [`NativePathCodecError::InvalidEscape`] for malformed escapes and
 /// [`NativePathCodecError::NonCanonicalText`] when the decoded bytes have a
 /// different canonical spelling.
-pub(super) fn decode_canonical_text(text: &str) -> Result<Vec<u8>, NativePathCodecError> {
+pub(super) fn decode_canonical_text(
+    text: &str,
+) -> Result<Vec<u8>, NativePathCodecError> {
     let bytes = text.as_bytes();
     let mut decoded = Vec::with_capacity(bytes.len());
     let mut index = 0;
     while index < bytes.len() {
         if bytes[index] == b'%' {
             if index + 2 >= bytes.len() {
-                return Err(NativePathCodecError::InvalidEscape { offset: index });
+                return Err(NativePathCodecError::InvalidEscape {
+                    offset: index,
+                });
             }
             let high = hex_value(bytes[index + 1])
                 .ok_or(NativePathCodecError::InvalidEscape { offset: index })?;
@@ -37,7 +41,9 @@ pub(super) fn decode_canonical_text(text: &str) -> Result<Vec<u8>, NativePathCod
                 .next()
                 .expect("index remains inside the UTF-8 text");
             let mut buffer = [0_u8; 4];
-            decoded.extend_from_slice(character.encode_utf8(&mut buffer).as_bytes());
+            decoded.extend_from_slice(
+                character.encode_utf8(&mut buffer).as_bytes(),
+            );
             index += character.len_utf8();
         }
     }
@@ -56,7 +62,9 @@ pub(super) fn decode_canonical_text(text: &str) -> Result<Vec<u8>, NativePathCod
 ///
 /// Returns the same error as [`decode_canonical_text`] without exposing the
 /// decoded bytes to the caller.
-pub(super) fn validate_canonical_text(text: &str) -> Result<(), NativePathCodecError> {
+pub(super) fn validate_canonical_text(
+    text: &str,
+) -> Result<(), NativePathCodecError> {
     let _ = decode_canonical_text(text)?;
     Ok(())
 }

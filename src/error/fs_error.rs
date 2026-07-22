@@ -199,11 +199,39 @@ impl FsError {
         Self::new(FsErrorKind::InvalidPath, operation, message)
     }
 
+    /// Wraps a byte-stream error with filesystem operation context.
+    ///
+    /// # Parameters
+    /// - `error`: Lower-level stream error.
+    /// - `operation`: Filesystem operation in progress when it occurred.
+    ///
+    /// # Returns
+    /// A filesystem error retaining `error` as its source.
+    #[inline]
+    #[must_use]
+    pub fn from_io(error: io::Error, operation: FsOperation) -> Self {
+        let kind = match error.kind() {
+            io::ErrorKind::NotFound => FsErrorKind::NotFound,
+            io::ErrorKind::AlreadyExists => FsErrorKind::AlreadyExists,
+            io::ErrorKind::NotADirectory => FsErrorKind::NotDirectory,
+            io::ErrorKind::IsADirectory => FsErrorKind::IsDirectory,
+            io::ErrorKind::PermissionDenied => FsErrorKind::PermissionDenied,
+            io::ErrorKind::InvalidInput => FsErrorKind::InvalidOptions,
+            io::ErrorKind::Unsupported => FsErrorKind::UnsupportedOperation,
+            io::ErrorKind::TimedOut => FsErrorKind::Timeout,
+            io::ErrorKind::Interrupted => FsErrorKind::Interrupted,
+            io::ErrorKind::StorageFull => FsErrorKind::QuotaExceeded,
+            io::ErrorKind::InvalidData => FsErrorKind::DataCorruption,
+            _ => FsErrorKind::Io,
+        };
+        Self::with_source(kind, operation, "stream I/O failed", error)
+    }
+
     /// Gets the error kind.
     ///
     /// # Returns
     /// Error category.
-    #[inline]
+    #[inline(always)]
     #[must_use]
     pub fn kind(&self) -> FsErrorKind {
         self.kind
@@ -213,7 +241,7 @@ impl FsError {
     ///
     /// # Returns
     /// The provider-neutral operation identifier.
-    #[inline]
+    #[inline(always)]
     #[must_use]
     pub fn operation(&self) -> FsOperation {
         self.operation
@@ -223,7 +251,7 @@ impl FsError {
     ///
     /// # Returns
     /// The path when one was attached.
-    #[inline]
+    #[inline(always)]
     #[must_use]
     pub fn path(&self) -> Option<&FsPath> {
         self.path.as_deref()
@@ -233,7 +261,7 @@ impl FsError {
     ///
     /// # Returns
     /// The target path when one was attached.
-    #[inline]
+    #[inline(always)]
     #[must_use]
     pub fn target(&self) -> Option<&FsPath> {
         self.target.as_deref()
@@ -243,7 +271,7 @@ impl FsError {
     ///
     /// # Returns
     /// The canonical provider id when one was attached.
-    #[inline]
+    #[inline(always)]
     #[must_use]
     pub fn provider(&self) -> Option<&ProviderId> {
         self.provider.as_ref()
@@ -254,7 +282,7 @@ impl FsError {
     /// # Returns
     /// The capability when the error describes unsupported functionality or
     /// an unmet semantic requirement.
-    #[inline]
+    #[inline(always)]
     #[must_use]
     pub fn required_capability(&self) -> Option<FileSystemCapability> {
         self.required_capability
@@ -295,34 +323,6 @@ impl FsError {
             _ => io::ErrorKind::Other,
         };
         io::Error::new(kind, self)
-    }
-
-    /// Wraps a byte-stream error with filesystem operation context.
-    ///
-    /// # Parameters
-    /// - `error`: Lower-level stream error.
-    /// - `operation`: Filesystem operation in progress when it occurred.
-    ///
-    /// # Returns
-    /// A filesystem error retaining `error` as its source.
-    #[inline]
-    #[must_use]
-    pub fn from_io(error: io::Error, operation: FsOperation) -> Self {
-        let kind = match error.kind() {
-            io::ErrorKind::NotFound => FsErrorKind::NotFound,
-            io::ErrorKind::AlreadyExists => FsErrorKind::AlreadyExists,
-            io::ErrorKind::NotADirectory => FsErrorKind::NotDirectory,
-            io::ErrorKind::IsADirectory => FsErrorKind::IsDirectory,
-            io::ErrorKind::PermissionDenied => FsErrorKind::PermissionDenied,
-            io::ErrorKind::InvalidInput => FsErrorKind::InvalidOptions,
-            io::ErrorKind::Unsupported => FsErrorKind::UnsupportedOperation,
-            io::ErrorKind::TimedOut => FsErrorKind::Timeout,
-            io::ErrorKind::Interrupted => FsErrorKind::Interrupted,
-            io::ErrorKind::StorageFull => FsErrorKind::QuotaExceeded,
-            io::ErrorKind::InvalidData => FsErrorKind::DataCorruption,
-            _ => FsErrorKind::Io,
-        };
-        Self::with_source(kind, operation, "stream I/O failed", error)
     }
 }
 
