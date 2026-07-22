@@ -137,5 +137,7 @@ pub use traits::{
     FileWriteSession,
     FileWriter,
     FsFuture,
+    WriteFailure,
+    WriteFailureState,
     WriterState,
 };

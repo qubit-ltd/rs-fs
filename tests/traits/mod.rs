@@ -16,3 +16,4 @@ mod file_system_ext_tests;
 mod file_system_properties_tests;
 mod file_system_tests;
 mod file_writer_tests;
+mod write_failure_tests;

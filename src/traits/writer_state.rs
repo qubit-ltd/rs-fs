@@ -15,6 +15,10 @@ pub enum WriterState {
     Open,
     /// Publication completed successfully.
     Committed,
+    /// Publication definitely did not occur and only cleanup remains possible.
+    NotPublished,
+    /// Publication occurred, but provider cleanup remains possible.
+    Published,
     /// The session was explicitly cancelled and cleaned up.
     Aborted,
     /// Publication or lifecycle cleanup may have occurred, but the provider

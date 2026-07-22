@@ -24,6 +24,8 @@ use qubit_fs::{
     FsPath,
     OpenedFileInfo,
     PublicationMethod,
+    WriteFailure,
+    WriteFailureState,
     WriteOutcome,
     WriterState,
 };
@@ -32,8 +34,7 @@ use qubit_io::Output;
 #[derive(Debug)]
 struct TestWriteSession {
     bytes: Arc<Mutex<Vec<u8>>>,
-    fail_commit_once: bool,
-    indeterminate_commit_once: bool,
+    commit_failure_once: Option<WriteFailureState>,
     abort_error: Option<FsErrorKind>,
     buffered: bool,
     aborts: Arc<Mutex<usize>>,
@@ -65,21 +66,16 @@ impl Output for TestWriteSession {
 }
 
 impl FileWriteSession for TestWriteSession {
-    fn commit(&mut self) -> qubit_fs::FsResult<WriteOutcome> {
-        if self.indeterminate_commit_once {
-            self.indeterminate_commit_once = false;
-            return Err(FsError::new(
-                FsErrorKind::Indeterminate,
-                FsOperation::CommitWriter,
-                "publication state is unknown",
-            ));
-        }
-        if self.fail_commit_once {
-            self.fail_commit_once = false;
-            return Err(FsError::new(
-                FsErrorKind::Io,
-                FsOperation::CommitWriter,
-                "transient commit failure",
+    fn commit(&mut self) -> Result<WriteOutcome, WriteFailure> {
+        if let Some(state) = self.commit_failure_once.take() {
+            let kind = if state == WriteFailureState::Indeterminate {
+                FsErrorKind::Indeterminate
+            } else {
+                FsErrorKind::Io
+            };
+            return Err(WriteFailure::new(
+                FsError::new(kind, FsOperation::CommitWriter, "commit failure"),
+                state,
             ));
         }
         Ok(WriteOutcome::new(
@@ -115,8 +111,7 @@ fn commit_failure_retains_the_writer_session_for_retry() {
     let mut writer = FileWriter::new(
         TestWriteSession {
             bytes: bytes.clone(),
-            fail_commit_once: true,
-            indeterminate_commit_once: false,
+            commit_failure_once: Some(WriteFailureState::Retryable),
             abort_error: None,
             buffered: false,
             aborts,
@@ -138,12 +133,61 @@ fn commit_failure_retains_the_writer_session_for_retry() {
 }
 
 #[test]
+fn not_published_commit_failure_retains_session_for_abort() {
+    let aborts = Arc::new(Mutex::new(0));
+    let mut writer = FileWriter::new(
+        TestWriteSession {
+            bytes: Arc::new(Mutex::new(Vec::new())),
+            commit_failure_once: Some(WriteFailureState::NotPublished),
+            abort_error: None,
+            buffered: false,
+            aborts: aborts.clone(),
+        },
+        opened_info(),
+    );
+
+    assert_eq!(FsErrorKind::Io, writer.commit().unwrap_err().kind());
+    assert_eq!(WriterState::NotPublished, writer.state());
+    assert_eq!(
+        FsErrorKind::InvalidState,
+        writer.commit().unwrap_err().kind(),
+    );
+    writer
+        .abort()
+        .expect("terminal session should be abortable");
+    assert_eq!(WriterState::Aborted, writer.state());
+    assert_eq!(1, *aborts.lock().expect("lock should succeed"));
+}
+
+#[test]
+fn published_commit_failure_retains_session_for_cleanup() {
+    let aborts = Arc::new(Mutex::new(0));
+    let mut writer = FileWriter::new(
+        TestWriteSession {
+            bytes: Arc::new(Mutex::new(Vec::new())),
+            commit_failure_once: Some(WriteFailureState::Published),
+            abort_error: None,
+            buffered: false,
+            aborts: aborts.clone(),
+        },
+        opened_info(),
+    );
+
+    assert_eq!(FsErrorKind::Io, writer.commit().unwrap_err().kind());
+    assert_eq!(WriterState::Published, writer.state());
+    writer
+        .abort()
+        .expect("published session cleanup should be allowed");
+    assert_eq!(WriterState::Aborted, writer.state());
+    assert_eq!(1, *aborts.lock().expect("lock should succeed"));
+}
+
+#[test]
 fn writer_rejects_io_after_commit_and_repeated_lifecycle_calls() {
     let mut writer = FileWriter::new(
         TestWriteSession {
             bytes: Arc::new(Mutex::new(Vec::new())),
-            fail_commit_once: false,
-            indeterminate_commit_once: false,
+            commit_failure_once: None,
             abort_error: None,
             buffered: false,
             aborts: Arc::new(Mutex::new(0)),
@@ -188,8 +232,7 @@ fn explicit_abort_transitions_state_and_prevents_drop_abort() {
         let mut writer = FileWriter::new(
             TestWriteSession {
                 bytes: Arc::new(Mutex::new(Vec::new())),
-                fail_commit_once: false,
-                indeterminate_commit_once: false,
+                commit_failure_once: None,
                 abort_error: None,
                 buffered: false,
                 aborts: aborts.clone(),
@@ -208,8 +251,7 @@ fn indeterminate_commit_retains_session_for_explicit_abort() {
     let mut writer = FileWriter::new(
         TestWriteSession {
             bytes: Arc::new(Mutex::new(Vec::new())),
-            fail_commit_once: false,
-            indeterminate_commit_once: true,
+            commit_failure_once: Some(WriteFailureState::Indeterminate),
             abort_error: None,
             buffered: true,
             aborts: aborts.clone(),
@@ -243,8 +285,7 @@ fn abort_failure_retains_open_session_and_drop_retries_cleanup() {
         let mut writer = FileWriter::new(
             TestWriteSession {
                 bytes: Arc::new(Mutex::new(Vec::new())),
-                fail_commit_once: false,
-                indeterminate_commit_once: false,
+                commit_failure_once: None,
                 abort_error: Some(FsErrorKind::Io),
                 buffered: false,
                 aborts: aborts.clone(),
@@ -265,8 +306,7 @@ fn dropping_an_open_writer_performs_best_effort_abort() {
         let _writer = FileWriter::new(
             TestWriteSession {
                 bytes: Arc::new(Mutex::new(Vec::new())),
-                fail_commit_once: false,
-                indeterminate_commit_once: false,
+                commit_failure_once: None,
                 abort_error: None,
                 buffered: false,
                 aborts: aborts.clone(),
@@ -284,8 +324,7 @@ fn indeterminate_abort_disables_automatic_drop_abort() {
         let mut writer = FileWriter::new(
             TestWriteSession {
                 bytes: Arc::new(Mutex::new(Vec::new())),
-                fail_commit_once: false,
-                indeterminate_commit_once: false,
+                commit_failure_once: None,
                 abort_error: Some(FsErrorKind::Indeterminate),
                 buffered: false,
                 aborts: aborts.clone(),
@@ -309,8 +348,7 @@ fn indeterminate_commit_is_not_automatically_aborted_on_drop() {
         let mut writer = FileWriter::new(
             TestWriteSession {
                 bytes: Arc::new(Mutex::new(Vec::new())),
-                fail_commit_once: false,
-                indeterminate_commit_once: true,
+                commit_failure_once: Some(WriteFailureState::Indeterminate),
                 abort_error: None,
                 buffered: false,
                 aborts: aborts.clone(),

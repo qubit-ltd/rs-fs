@@ -12,6 +12,7 @@ use qubit_io::Output;
 
 use crate::{
     FsResult,
+    WriteFailure,
     WriteOutcome,
 };
 
@@ -19,16 +20,16 @@ use crate::{
 pub trait FileWriteSession: Output<Item = u8> + Send {
     /// Publishes bytes accepted by the session.
     ///
-    /// A failed call must leave the session available to the caller. The
-    /// returned error should use [`crate::FsErrorKind::Indeterminate`] when the
-    /// provider cannot determine whether publication occurred.
+    /// A failed call must retain the session for retry or explicit cleanup.
+    /// The returned [`WriteFailure`] identifies whether retry is safe and
+    /// whether publication definitely occurred.
     ///
     /// # Returns
     /// Actual publication method and atomicity on success.
     ///
     /// # Errors
     /// Returns a filesystem error when publication cannot be confirmed.
-    fn commit(&mut self) -> FsResult<WriteOutcome>;
+    fn commit(&mut self) -> Result<WriteOutcome, WriteFailure>;
 
     /// Cancels the session and releases provider staging resources.
     ///

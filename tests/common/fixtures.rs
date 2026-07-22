@@ -60,6 +60,8 @@ use qubit_fs::{
     RenameOptions,
     RenameOutcome,
     ResourceVersion,
+    WriteFailure,
+    WriteFailureState,
     WriteOptions,
     WriteOutcome,
 };
@@ -353,12 +355,15 @@ impl Write for MockWriter {
 }
 
 impl FileWriteSession for MockWriter {
-    fn commit(&mut self) -> FsResult<WriteOutcome> {
+    fn commit(&mut self) -> Result<WriteOutcome, WriteFailure> {
         if self.fail_commit {
-            return Err(FsError::new(
-                FsErrorKind::Io,
-                FsOperation::OpenWriter,
-                "commit failed",
+            return Err(WriteFailure::new(
+                FsError::new(
+                    FsErrorKind::Io,
+                    FsOperation::OpenWriter,
+                    "commit failed",
+                ),
+                WriteFailureState::Retryable,
             ));
         }
         let mut state = self.state.lock().expect("state lock should succeed");

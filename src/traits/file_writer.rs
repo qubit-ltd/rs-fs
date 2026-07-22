@@ -29,6 +29,7 @@ use crate::{
     FsOperation,
     FsResult,
     OpenedFileInfo,
+    WriteFailureState,
     WriteOutcome,
     WriterState,
 };
@@ -84,10 +85,9 @@ impl FileWriter {
 
     /// Publishes bytes accepted by this session.
     ///
-    /// This method borrows rather than consumes the writer. A definite failure
-    /// leaves it open so the caller can retry or abort. An indeterminate error
-    /// changes the state to [`WriterState::Indeterminate`] while retaining the
-    /// provider session for explicit recovery.
+    /// This method borrows rather than consumes the writer. The provider's
+    /// typed failure determines whether retry remains safe or only explicit
+    /// cleanup is available.
     ///
     /// # Returns
     /// Actual publication method and atomicity on success.
@@ -108,28 +108,40 @@ impl FileWriter {
                 self.state = WriterState::Committed;
                 Ok(outcome)
             }
-            Err(error) => {
-                if error.kind() == FsErrorKind::Indeterminate {
-                    self.state = WriterState::Indeterminate;
-                }
-                Err(error)
+            Err(failure) => {
+                self.state = match failure.state() {
+                    WriteFailureState::Retryable => WriterState::Open,
+                    WriteFailureState::NotPublished => {
+                        WriterState::NotPublished
+                    }
+                    WriteFailureState::Published => WriterState::Published,
+                    WriteFailureState::Indeterminate => {
+                        WriterState::Indeterminate
+                    }
+                };
+                Err(failure.into_error())
             }
         }
     }
 
     /// Aborts this writer and releases provider staging resources.
     ///
-    /// Abort is allowed from open and indeterminate states. In the latter case
-    /// successful cleanup does not imply that an already-published target was
-    /// rolled back. An indeterminate abort disables automatic drop cleanup so
-    /// the caller can inspect provider state before choosing a recovery action.
+    /// Abort is allowed while open and after every failed commit. Successful
+    /// cleanup does not imply that an already-published target was rolled back.
+    /// An indeterminate abort disables automatic drop cleanup so the caller can
+    /// inspect provider state before choosing a recovery action.
     ///
     /// # Errors
     /// Returns [`FsErrorKind::InvalidState`] after commit or a previous abort,
     /// or returns the provider cleanup error while retaining the session.
     pub fn abort(&mut self) -> FsResult<()> {
-        if !matches!(self.state, WriterState::Open | WriterState::Indeterminate)
-        {
+        if !matches!(
+            self.state,
+            WriterState::Open
+                | WriterState::NotPublished
+                | WriterState::Published
+                | WriterState::Indeterminate
+        ) {
             return Err(self.invalid_state(
                 FsOperation::AbortWriter,
                 "writer cannot be aborted in its current state",
@@ -215,8 +227,12 @@ impl Debug for FileWriter {
 
 impl Drop for FileWriter {
     fn drop(&mut self) {
-        if self.state == WriterState::Open
-            && let Err(error) = self.session.abort()
+        if matches!(
+            self.state,
+            WriterState::Open
+                | WriterState::NotPublished
+                | WriterState::Published
+        ) && let Err(error) = self.session.abort()
         {
             warn!("best-effort writer abort failed during drop: {error}");
         }
