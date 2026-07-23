@@ -8,7 +8,10 @@
 //! Asynchronous filesystem provider contract and error classification.
 
 use qubit_spi::AsyncProviderDefinition;
-use qubit_spi::error::ProviderError;
+use qubit_spi::error::{
+    ProviderError,
+    ProviderErrorKind,
+};
 
 use crate::{
     FileSystemSpec,
@@ -40,20 +43,17 @@ impl<T> AsyncFileSystemProvider for T where
 #[must_use]
 pub fn map_async_provider_error(error: FsError) -> ProviderError {
     let reason = format!("asynchronous filesystem provider failed: {error}");
-    match error.kind() {
-        FsErrorKind::ProviderUnavailable => {
-            ProviderError::unavailable_with_source(reason, error)
-        }
+    let kind = match error.kind() {
+        FsErrorKind::ProviderUnavailable => ProviderErrorKind::Unavailable,
         FsErrorKind::UnsupportedOperation
         | FsErrorKind::UnsupportedCapability
-        | FsErrorKind::RequirementNotMet => {
-            ProviderError::unsupported_with_source(reason, error)
-        }
+        | FsErrorKind::RequirementNotMet => ProviderErrorKind::Unsupported,
         FsErrorKind::InvalidUri
         | FsErrorKind::InvalidPath
         | FsErrorKind::InvalidOptions => {
-            ProviderError::invalid_configuration_with_source(reason, error)
+            ProviderErrorKind::InvalidConfiguration
         }
-        _ => ProviderError::initialization_failed_with_source(reason, error),
-    }
+        _ => ProviderErrorKind::InitializationFailed,
+    };
+    ProviderError::with_source(kind, reason, error)
 }
