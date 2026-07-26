@@ -1,0 +1,20 @@
+[package]
+name = "qubit-fs-fuzz"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.94"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+qubit-fs = { path = ".." }
+
+[[bin]]
+name = "path_uri"
+path = "fuzz_targets/path_uri.rs"
+test = false
+doc = false
+bench = false
