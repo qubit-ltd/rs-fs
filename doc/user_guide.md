@@ -117,74 +117,15 @@ introduces a platform-native separator, root, or prefix.
 Do not use `std::path::Path` as a cross-provider model. A local provider may
 convert to it internally after applying its own platform and sandbox rules.
 
-## Registry and Complete Configuration
+## Registry Integration
 
-Create and populate registries during application assembly. Registry clones
-share registrations and default provider selection.
-
-```rust
-use qubit_fs::{
-    FileSystemRegistry,
-    FsResult,
-};
-
-fn configure() -> FsResult<FileSystemRegistry> {
-    let registry = FileSystemRegistry::default();
-    // Backend crates expose self-described providers for explicit registration.
-    registry.register(qubit_fs_local::LocalFileSystemProvider)?;
-    Ok(registry)
-}
-```
-
-`FileSystemConfig` is the complete provider input:
-
-- a required, secret-free `FsUri`;
-- an optional explicit `ProviderSelection`;
-- validated `NonSensitiveMetadata`-backed options;
-- an optional `CredentialRef`.
-
-`NonSensitiveMetadata` is the common boundary for config options,
-filesystem/file metadata, write and directory metadata, and operation
-diagnostics. Validation is key-based and recursive over top-level fields,
-string maps, and JSON objects, including objects inside arrays. Its `Debug`
-implementation prints keys only. Scalar contents cannot be classified
-reliably, so providers must use non-sensitive values under ordinary keys and
-place every secret behind `CredentialRef`.
-
-```rust
-use qubit_fs::{
-    CredentialRef,
-    FileSystemConfig,
-    FileSystemRegistry,
-    FsResult,
-    FsUri,
-};
-
-fn open_configured(
-    registry: &FileSystemRegistry,
-) -> FsResult<()> {
-    let config = FileSystemConfig::new(FsUri::parse(
-        "object://bucket/reports/a.csv?region=cn-east-1",
-    )?)
-    .with_credentials(CredentialRef::Profile("reporting".into()));
-
-    let resource = registry.resource(&config)?;
-    println!("{}", resource.path());
-    Ok(())
-}
-```
-
-When selection is absent, the registry selects by URI scheme. The provider
-receives the complete configuration and returns a `FileSystemResolution`
-containing:
-
-- the configured filesystem object;
-- its decoded `FsPath`;
-- a canonical credential-free `FsUri`.
-
-The registry turns that result into `FileResource` or `AsyncFileResource`.
-Convenience methods `resource_uri()` and `resource_uri_async()` construct an
-empty-options configuration.
+The core crate deliberately does not provide provider discovery or credential
+references. Applications that need these capabilities depend on
+[`qubit-fs-registry`](https://crates.io/crates/qubit-fs-registry), which owns
+`FileSystemRegistry`, `AsyncFileSystemRegistry`, `FileSystemConfig`, and
+`CredentialRef`. Providers receive the complete configuration, decode a
+provider-local `FsPath`, and return a credential-free canonical URI. See that
+crate's README for synchronous and asynchronous registration examples.
 
 ## File Identity and Metadata
 

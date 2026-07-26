@@ -106,70 +106,13 @@ Hierarchical provider 仍必须逐 component 解码 native path，并拒绝解�
 不要把 `std::path::Path` 当作跨 provider 的统一模型。本地 provider 可以在应用自身
 平台规则与 sandbox 规则后，在内部进行转换。
 
-## Registry 与完整配置
+## Registry 集成
 
-应用在组装阶段创建并填充 registry。Registry clone 共享注册结果与默认 provider
-selection。
-
-```rust
-use qubit_fs::{
-    FileSystemRegistry,
-    FsResult,
-};
-
-fn configure() -> FsResult<FileSystemRegistry> {
-    let registry = FileSystemRegistry::default();
-    // 后端 crate 暴露自描述 provider，应用显式注册。
-    registry.register(qubit_fs_local::LocalFileSystemProvider)?;
-    Ok(registry)
-}
-```
-
-`FileSystemConfig` 是完整的 provider 输入：
-
-- 必需且不含 secret 的 `FsUri`；
-- 可选的显式 `ProviderSelection`；
-- 由 `NonSensitiveMetadata` 承载的已校验非敏感 options；
-- 可选 `CredentialRef`。
-
-`NonSensitiveMetadata` 是 config options、filesystem/file metadata、write/directory
-metadata 与 operation diagnostics 的统一边界。它基于 key 递归检查顶层 field、
-string map 和 JSON object（包括数组内 object），其 Debug 只输出 key。普通 scalar
-内容无法可靠判断是否为 secret，因此 provider 必须只把非敏感值放在普通 key 下，
-所有 secret 都通过 `CredentialRef` 引用。
-
-```rust
-use qubit_fs::{
-    CredentialRef,
-    FileSystemConfig,
-    FileSystemRegistry,
-    FsResult,
-    FsUri,
-};
-
-fn open_configured(
-    registry: &FileSystemRegistry,
-) -> FsResult<()> {
-    let config = FileSystemConfig::new(FsUri::parse(
-        "object://bucket/reports/a.csv?region=cn-east-1",
-    )?)
-    .with_credentials(CredentialRef::Profile("reporting".into()));
-
-    let resource = registry.resource(&config)?;
-    println!("{}", resource.path());
-    Ok(())
-}
-```
-
-没有显式 selection 时，registry 按 URI scheme 选择 provider。Provider 收到完整
-配置，并返回包含以下内容的 `FileSystemResolution`：
-
-- 已配置文件系统对象；
-- provider 解码后的 `FsPath`；
-- canonical、credential-free 的 `FsUri`。
-
-Registry 再把它转换成 `FileResource` 或 `AsyncFileResource`。
-`resource_uri()` 与 `resource_uri_async()` 是 empty-options 便捷方法。
+核心 crate 有意不提供 provider 发现或 credential reference。需要这些能力的应用应
+依赖 [`qubit-fs-registry`](https://crates.io/crates/qubit-fs-registry)，该 crate 提供
+`FileSystemRegistry`、`AsyncFileSystemRegistry`、`FileSystemConfig` 与
+`CredentialRef`。Provider 会接收完整配置，解码 provider-local `FsPath`，并返回
+不含 credential 的 canonical URI。同步和异步注册示例请参阅该 crate 的 README。
 
 ## 文件身份与 Metadata
 

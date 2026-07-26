@@ -36,18 +36,22 @@ Qubit FS 是一个 provider-neutral 的文件系统抽象层，面向本地、�
 ```toml
 [dependencies]
 qubit-fs = "0.2"
+# 只有应用需要运行时 provider 发现时才需要。
+qubit-fs-registry = "0.1"
 ```
 
 ## 同步解析
 
 ```rust
 use qubit_fs::{
-    CredentialRef,
     FileResource,
-    FileSystemConfig,
-    FileSystemRegistry,
     FsResult,
     FsUri,
+};
+use qubit_fs_registry::{
+    CredentialRef,
+    FileSystemConfig,
+    FileSystemRegistry,
 };
 
 fn resolve_report(
@@ -70,10 +74,12 @@ fn resolve_report(
 ```rust
 use qubit_fs::{
     AsyncFileResource,
-    AsyncFileSystemRegistry,
-    FileSystemConfig,
     FsResult,
     FsUri,
+};
+use qubit_fs_registry::{
+    AsyncFileSystemRegistry,
+    FileSystemConfig,
 };
 
 async fn resolve_report(
@@ -102,11 +108,9 @@ Writer 和临时资源句柄会在可恢复失败后保留 provider session。�
 
 `FsUri` 保留原始编码 path、重复 query 的顺序，以及 `scheme:/path` 与
 `scheme:///path` 的区别。URI path 由 provider 解码；必须转义的 literal path 字符
-应预先 percent encode。URI 会拒绝 password、token 等 credential 字段；所有可被
-Debug 观察的扩展 metadata（config options、filesystem/file metadata 与 operation
-diagnostics）统一使用 `NonSensitiveMetadata`，递归检查顶层、string map 与数组内
-JSON object 的 credential-like key，且 Debug 只输出 key。普通 scalar value 无法
-可靠分类，因此所有 secret 都必须通过 `CredentialRef` 引用。
+应预先 percent encode。URI 会拒绝 password、token 等 credential 字段。`UserMetadata`
+会在构造时拒绝 credential-like key，且其 Debug 只输出 key。registry 专用 credential
+由 `qubit_fs_registry::CredentialRef` 表示，核心 crate 不携带 credential。
 
 `stat` 是文件系统必备操作，不是可选 capability；它检查最终路径项本身，不跟随最终
 符号链接。因此

@@ -39,18 +39,22 @@ dependency graph limited to `qubit-io`.
 ```toml
 [dependencies]
 qubit-fs = "0.2"
+# Needed only when an application performs runtime provider discovery.
+qubit-fs-registry = "0.1"
 ```
 
 ## Bound Resources
 
 ```rust
 use qubit_fs::{
-    CredentialRef,
     FileResource,
-    FileSystemConfig,
-    FileSystemRegistry,
     FsResult,
     FsUri,
+};
+use qubit_fs_registry::{
+    CredentialRef,
+    FileSystemConfig,
+    FileSystemRegistry,
 };
 
 fn resolve_report(
@@ -74,10 +78,12 @@ method.
 ```rust
 use qubit_fs::{
     AsyncFileResource,
-    AsyncFileSystemRegistry,
-    FileSystemConfig,
     FsResult,
     FsUri,
+};
+use qubit_fs_registry::{
+    AsyncFileSystemRegistry,
+    FileSystemConfig,
 };
 
 async fn resolve_report(
@@ -109,12 +115,9 @@ so callers can distinguish retry, cleanup, and reconciliation paths.
 difference between `scheme:/path` and `scheme:///path`. Providers own URI-path
 decoding. Literal path characters that require escaping must already be percent
 encoded. Passwords, tokens, and other credential-like values are rejected from
-URIs. `NonSensitiveMetadata` rejects credential-like keys recursively from all
-debug-visible extensible metadata, including config options, filesystem and
-file metadata, and operation diagnostics. Validation covers string maps and
-JSON objects nested in arrays, while its `Debug` output prints keys only.
-Scalar values cannot be classified reliably, so use `CredentialRef` for every
-secret.
+URIs. `UserMetadata` rejects credential-like keys while it is constructed and
+its `Debug` output prints keys only. Registry-specific credentials are modeled
+by `qubit_fs_registry::CredentialRef`; the core crate never carries them.
 
 `stat` is a required filesystem operation rather than an optional capability;
 it inspects the final path entry without following a final symbolic link.
