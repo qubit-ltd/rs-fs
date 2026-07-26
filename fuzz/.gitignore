@@ -1,0 +1,6 @@
+/target
+/corpus/*
+!/corpus/path_uri/
+!/corpus/path_uri/**
+/artifacts
+/coverage
