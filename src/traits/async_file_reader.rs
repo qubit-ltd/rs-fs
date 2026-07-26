@@ -7,24 +7,14 @@
 // =============================================================================
 //! Concrete asynchronous file reader handle.
 
-use std::fmt::{
-    Debug,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::{Debug, Formatter, Result as FmtResult};
 use std::io::Result as IoResult;
 use std::pin::Pin;
-use std::task::{
-    Context,
-    Poll,
-};
+use std::task::{Context, Poll};
 
 use qubit_io::AsyncInput;
 
-use crate::{
-    FileLocation,
-    OpenedFileInfo,
-};
+use crate::{FileLocation, OpenedFileInfo};
 
 /// Type-erased asynchronous byte input associated with an opened file.
 pub struct AsyncFileReader {

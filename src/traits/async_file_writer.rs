@@ -7,34 +7,16 @@
 // =============================================================================
 //! Concrete asynchronous file writer handle.
 
-use std::fmt::{
-    Debug,
-    Formatter,
-    Result as FmtResult,
-};
-use std::io::{
-    Error as IoError,
-    ErrorKind as IoErrorKind,
-    Result as IoResult,
-};
+use std::fmt::{Debug, Formatter, Result as FmtResult};
+use std::io::{Error as IoError, ErrorKind as IoErrorKind, Result as IoResult};
 use std::pin::Pin;
-use std::task::{
-    Context,
-    Poll,
-};
+use std::task::{Context, Poll};
 
 use qubit_io::AsyncOutput;
 
 use crate::{
-    AsyncFileWriteSession,
-    FileLocation,
-    FsError,
-    FsErrorKind,
-    FsFuture,
-    FsOperation,
-    OpenedFileInfo,
-    WriteOutcome,
-    WriterState,
+    AsyncFileWriteSession, FileLocation, FsError, FsErrorKind, FsFuture, FsOperation,
+    OpenedFileInfo, WriteOutcome, WriterState,
 };
 
 /// Type-erased asynchronous provider write session associated with a file.
@@ -133,8 +115,7 @@ impl AsyncFileWriter {
     /// # Returns
     /// A future resolving when cleanup is confirmed.
     pub fn abort_async(&mut self) -> FsFuture<'_, ()> {
-        if !matches!(self.state, WriterState::Open | WriterState::Indeterminate)
-        {
+        if !matches!(self.state, WriterState::Open | WriterState::Indeterminate) {
             let error = self.invalid_state(
                 FsOperation::AbortWriter,
                 "writer cannot be aborted in its current state",
@@ -175,10 +156,7 @@ impl AsyncFileWriter {
     fn closed_io_error(&self) -> IoError {
         IoError::new(
             IoErrorKind::BrokenPipe,
-            self.invalid_state(
-                FsOperation::Write,
-                "writer no longer accepts bytes",
-            ),
+            self.invalid_state(FsOperation::Write, "writer no longer accepts bytes"),
         )
     }
 }
@@ -211,10 +189,7 @@ impl AsyncOutput for AsyncFileWriter {
         }
     }
 
-    fn poll_flush(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<IoResult<()>> {
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<IoResult<()>> {
         let this = self.get_mut();
         if this.state != WriterState::Open {
             return Poll::Ready(Err(this.closed_io_error()));

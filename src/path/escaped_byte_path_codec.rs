@@ -9,15 +9,9 @@
 
 use std::borrow::Cow;
 
-use crate::{
-    NativePathCodec,
-    NativePathCodecError,
-};
+use crate::{NativePathCodec, NativePathCodecError};
 
-use super::native_path_text::{
-    decode_canonical_text,
-    encode_path_bytes,
-};
+use super::native_path_text::{decode_canonical_text, encode_path_bytes};
 
 /// Losslessly maps arbitrary bytes to canonical native-path text.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
@@ -42,10 +36,7 @@ impl NativePathCodec for EscapedBytePathCodec {
     }
 
     /// Decodes arbitrary native bytes into canonical text.
-    fn decode<'a>(
-        &self,
-        native: &'a [u8],
-    ) -> Result<Cow<'a, str>, Self::Error> {
+    fn decode<'a>(&self, native: &'a [u8]) -> Result<Cow<'a, str>, Self::Error> {
         let text = encode_path_bytes(native);
         if let Ok(native_text) = std::str::from_utf8(native)
             && native_text == text

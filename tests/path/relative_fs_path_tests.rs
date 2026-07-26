@@ -6,10 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::{
-    FsPath,
-    RelativeFsPath,
-};
+use qubit_fs::{FsPath, RelativeFsPath};
 
 #[test]
 fn relative_path_prevents_descendant_escape() {

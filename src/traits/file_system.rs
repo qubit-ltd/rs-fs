@@ -8,30 +8,10 @@
 //! Synchronous filesystem operations.
 
 use crate::{
-    CopyOptions,
-    CopyOutcome,
-    CreateDirOptions,
-    DeleteOptions,
-    DirectoryStream,
-    FileMetadata,
-    FileReader,
-    FileSystemCapability,
-    FileSystemProperties,
-    FileWriter,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    FsPath,
-    FsResult,
-    ListOptions,
-    ReadOptions,
-    RenameOptions,
-    RenameOutcome,
-    TempDir,
-    TempDirOptions,
-    TempFile,
-    TempFileOptions,
-    WriteOptions,
+    CopyOptions, CopyOutcome, CreateDirOptions, DeleteOptions, DirectoryStream, FileMetadata,
+    FileReader, FileSystemCapability, FileSystemProperties, FileWriter, FsError, FsErrorKind,
+    FsOperation, FsPath, FsResult, ListOptions, ReadOptions, RenameOptions, RenameOutcome, TempDir,
+    TempDirOptions, TempFile, TempFileOptions, WriteOptions,
 };
 
 /// Provider-neutral synchronous filesystem interface.
@@ -86,11 +66,7 @@ pub trait FileSystem: FileSystemProperties {
     ///
     /// # Errors
     /// Returns an unsupported-capability error by default.
-    fn list(
-        &self,
-        path: &FsPath,
-        _options: ListOptions,
-    ) -> FsResult<DirectoryStream> {
+    fn list(&self, path: &FsPath, _options: ListOptions) -> FsResult<DirectoryStream> {
         Err(unsupported(
             path,
             FsOperation::List,
@@ -105,11 +81,7 @@ pub trait FileSystem: FileSystemProperties {
     ///
     /// # Errors
     /// Returns an unsupported-capability error by default.
-    fn open_reader(
-        &self,
-        path: &FsPath,
-        _options: ReadOptions,
-    ) -> FsResult<FileReader> {
+    fn open_reader(&self, path: &FsPath, _options: ReadOptions) -> FsResult<FileReader> {
         Err(unsupported(
             path,
             FsOperation::OpenReader,
@@ -124,11 +96,7 @@ pub trait FileSystem: FileSystemProperties {
     ///
     /// # Errors
     /// Returns an unsupported-capability error by default.
-    fn open_writer(
-        &self,
-        path: &FsPath,
-        _options: WriteOptions,
-    ) -> FsResult<FileWriter> {
+    fn open_writer(&self, path: &FsPath, _options: WriteOptions) -> FsResult<FileWriter> {
         Err(unsupported(
             path,
             FsOperation::OpenWriter,
@@ -140,11 +108,7 @@ pub trait FileSystem: FileSystemProperties {
     ///
     /// # Errors
     /// Returns an unsupported-capability error by default.
-    fn create_dir(
-        &self,
-        path: &FsPath,
-        _options: CreateDirOptions,
-    ) -> FsResult<()> {
+    fn create_dir(&self, path: &FsPath, _options: CreateDirOptions) -> FsResult<()> {
         Err(unsupported(
             path,
             FsOperation::CreateDir,
@@ -200,12 +164,7 @@ pub trait FileSystem: FileSystemProperties {
     ///
     /// # Errors
     /// Returns an unsupported-capability error by default.
-    fn copy(
-        &self,
-        from: &FsPath,
-        _to: &FsPath,
-        _options: CopyOptions,
-    ) -> FsResult<CopyOutcome> {
+    fn copy(&self, from: &FsPath, _to: &FsPath, _options: CopyOptions) -> FsResult<CopyOutcome> {
         Err(unsupported(
             from,
             FsOperation::Copy,
@@ -220,10 +179,7 @@ pub trait FileSystem: FileSystemProperties {
     ///
     /// # Errors
     /// Returns an unsupported-capability error by default.
-    fn create_temp_file(
-        &self,
-        _options: TempFileOptions,
-    ) -> FsResult<TempFile> {
+    fn create_temp_file(&self, _options: TempFileOptions) -> FsResult<TempFile> {
         Err(FsError::new(
             FsErrorKind::UnsupportedCapability,
             FsOperation::CreateTemp,
@@ -250,11 +206,7 @@ pub trait FileSystem: FileSystemProperties {
 }
 
 /// Builds a path-aware unsupported-capability error before side effects.
-fn unsupported(
-    path: &FsPath,
-    operation: FsOperation,
-    capability: FileSystemCapability,
-) -> FsError {
+fn unsupported(path: &FsPath, operation: FsOperation, capability: FileSystemCapability) -> FsError {
     FsError::new(
         FsErrorKind::UnsupportedCapability,
         operation,

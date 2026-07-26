@@ -8,10 +8,7 @@
 // qubit-style: allow source-test-pair
 //! File information captured as part of opening a stream.
 
-use crate::{
-    FileLocation,
-    FileMetadata,
-};
+use crate::{FileLocation, FileMetadata};
 
 /// Stable file identity plus an optional metadata snapshot captured at open.
 #[derive(Clone, Debug, PartialEq)]

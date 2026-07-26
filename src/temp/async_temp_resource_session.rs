@@ -10,12 +10,7 @@
 
 use std::pin::Pin;
 
-use crate::{
-    FsFuture,
-    FsPath,
-    PersistFuture,
-    PersistOptions,
-};
+use crate::{FsFuture, FsPath, PersistFuture, PersistOptions};
 
 /// Provider lifecycle session underlying asynchronous temp handles.
 pub trait AsyncTempResourceSession: Send {

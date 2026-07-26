@@ -12,10 +12,7 @@ use std::pin::Pin;
 
 use qubit_io::AsyncOutput;
 
-use crate::{
-    FsFuture,
-    WriteOutcome,
-};
+use crate::{FsFuture, WriteOutcome};
 
 /// Provider session underlying a concrete [`crate::AsyncFileWriter`] handle.
 pub trait AsyncFileWriteSession: AsyncOutput<Item = u8> + Send {

@@ -8,19 +8,9 @@
 
 use std::io::Result as IoResult;
 use std::pin::Pin;
-use std::task::{
-    Context,
-    Poll,
-    Waker,
-};
+use std::task::{Context, Poll, Waker};
 
-use qubit_fs::{
-    AsyncFileReader,
-    FileLocation,
-    FileSystemId,
-    FsPath,
-    OpenedFileInfo,
-};
+use qubit_fs::{AsyncFileReader, FileLocation, FileSystemId, FsPath, OpenedFileInfo};
 use qubit_io::AsyncInput;
 
 #[derive(Debug)]

@@ -8,11 +8,7 @@
 // qubit-style: allow source-test-pair
 //! Raw encoded filesystem URI path.
 
-use std::fmt::{
-    Display,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::{Display, Formatter, Result as FmtResult};
 
 use crate::FsResult;
 
@@ -67,8 +63,7 @@ impl FsUriPath {
     #[inline(always)]
     #[must_use]
     pub fn decode(&self) -> String {
-        percent_decode(self.as_encoded())
-            .expect("validated filesystem URI path must decode")
+        percent_decode(self.as_encoded()).expect("validated filesystem URI path must decode")
     }
 }
 

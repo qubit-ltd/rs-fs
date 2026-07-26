@@ -6,12 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::{
-    FileLocation,
-    FileSystemId,
-    FsPath,
-    FsUri,
-};
+use qubit_fs::{FileLocation, FileSystemId, FsPath, FsUri};
 
 #[test]
 fn file_location_preserves_opened_identity_path_and_optional_uri() {

@@ -8,11 +8,7 @@
 // qubit-style: allow source-test-pair
 //! Validated filesystem URI scheme.
 
-use std::fmt::{
-    Display,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::{Display, Formatter, Result as FmtResult};
 
 use crate::FsResult;
 
@@ -35,10 +31,7 @@ impl FsScheme {
             return Err(invalid_uri("URI scheme must not be empty"));
         };
         if !first.is_ascii_alphabetic()
-            || !bytes.all(|byte| {
-                byte.is_ascii_alphanumeric()
-                    || matches!(byte, b'+' | b'-' | b'.')
-            })
+            || !bytes.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'-' | b'.'))
         {
             return Err(invalid_uri("invalid URI scheme"));
         }

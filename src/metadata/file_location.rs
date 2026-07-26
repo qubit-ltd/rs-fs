@@ -7,11 +7,7 @@
 // =============================================================================
 //! Stable location captured when a file handle is opened.
 
-use crate::{
-    FileSystemId,
-    FsPath,
-    FsUri,
-};
+use crate::{FileSystemId, FsPath, FsUri};
 
 /// Provider-local identity of a file captured when a handle is opened.
 #[derive(Clone, Debug, Eq, PartialEq)]

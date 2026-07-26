@@ -7,17 +7,9 @@
 // =============================================================================
 //! Validated single filesystem path component.
 
-use std::fmt::{
-    Display,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::{Display, Formatter, Result as FmtResult};
 
-use crate::{
-    FsError,
-    FsOperation,
-    FsResult,
-};
+use crate::{FsError, FsOperation, FsResult};
 
 use super::native_path_text::validate_canonical_text;
 

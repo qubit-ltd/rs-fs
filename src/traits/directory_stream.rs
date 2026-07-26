@@ -8,17 +8,9 @@
 // qubit-style: allow source-test-pair
 //! Concrete synchronous directory stream handle.
 
-use std::fmt::{
-    Debug,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::{Debug, Formatter, Result as FmtResult};
 
-use crate::{
-    DirEntry,
-    DirectoryStreamSession,
-    FsResult,
-};
+use crate::{DirEntry, DirectoryStreamSession, FsResult};
 
 /// Type-erased synchronous directory enumeration handle.
 pub struct DirectoryStream {

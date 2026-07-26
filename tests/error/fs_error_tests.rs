@@ -5,18 +5,11 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use qubit_fs::{
-    FileSystemCapability,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    FsPath,
-};
+use qubit_fs::{FileSystemCapability, FsError, FsErrorKind, FsOperation, FsPath};
 
 use std::io;
 
-const SECRET_SOURCE_TEXT: &str =
-    "https://storage.example/object?x-amz-signature=secret-signature";
+const SECRET_SOURCE_TEXT: &str = "https://storage.example/object?x-amz-signature=secret-signature";
 
 struct SecretSourceError;
 
@@ -137,8 +130,7 @@ fn fs_error_maps_every_specific_kind_to_io_error() {
     ];
 
     for (fs_kind, io_kind) in cases {
-        let error = FsError::new(fs_kind, FsOperation::Other, "mapping")
-            .into_io_error();
+        let error = FsError::new(fs_kind, FsOperation::Other, "mapping").into_io_error();
         assert_eq!(io_kind, error.kind());
     }
 }

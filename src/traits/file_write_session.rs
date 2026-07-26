@@ -10,11 +10,7 @@
 
 use qubit_io::Output;
 
-use crate::{
-    FsResult,
-    WriteFailure,
-    WriteOutcome,
-};
+use crate::{FsResult, WriteFailure, WriteOutcome};
 
 /// Provider session underlying a concrete [`crate::FileWriter`] handle.
 pub trait FileWriteSession: Output<Item = u8> + Send {

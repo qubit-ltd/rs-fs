@@ -9,30 +9,12 @@
 use std::future::Future;
 use std::io::Result as IoResult;
 use std::pin::Pin;
-use std::sync::{
-    Arc,
-    Mutex,
-};
-use std::task::{
-    Context,
-    Poll,
-    Waker,
-};
+use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll, Waker};
 
 use qubit_fs::{
-    AchievedAtomicity,
-    AsyncFileWriteSession,
-    AsyncFileWriter,
-    FileLocation,
-    FileSystemId,
-    FsError,
-    FsErrorKind,
-    FsFuture,
-    FsOperation,
-    FsPath,
-    OpenedFileInfo,
-    PublicationMethod,
-    WriteOutcome,
+    AchievedAtomicity, AsyncFileWriteSession, AsyncFileWriter, FileLocation, FileSystemId, FsError,
+    FsErrorKind, FsFuture, FsOperation, FsPath, OpenedFileInfo, PublicationMethod, WriteOutcome,
     WriterState,
 };
 use qubit_io::AsyncOutput;
@@ -69,10 +51,7 @@ impl AsyncOutput for ReadyWriteSession {
         Poll::Ready(Ok(count))
     }
 
-    fn poll_flush(
-        self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
-    ) -> Poll<IoResult<()>> {
+    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<IoResult<()>> {
         Poll::Ready(Ok(()))
     }
 }
@@ -112,11 +91,7 @@ impl AsyncFileWriteSession for ReadyWriteSession {
         let abort_error = self.abort_error;
         Box::pin(async move {
             if let Some(kind) = abort_error {
-                Err(FsError::new(
-                    kind,
-                    FsOperation::AbortWriter,
-                    "abort failed",
-                ))
+                Err(FsError::new(kind, FsOperation::AbortWriter, "abort failed"))
             } else {
                 Ok(())
             }
@@ -233,8 +208,7 @@ fn async_writer_forwards_io_and_rejects_it_after_commit() {
 
     ready(writer.commit_async()).expect("commit should succeed");
     assert_eq!(WriterState::Committed, writer.state());
-    let Poll::Ready(Err(write_error)) =
-        Pin::new(&mut writer).poll_write(&mut context, b"late")
+    let Poll::Ready(Err(write_error)) = Pin::new(&mut writer).poll_write(&mut context, b"late")
     else {
         panic!("closed writer should reject I/O");
     };
@@ -353,10 +327,7 @@ impl AsyncOutput for PendingLifecycleSession {
         Poll::Ready(Ok(count))
     }
 
-    fn poll_flush(
-        self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
-    ) -> Poll<IoResult<()>> {
+    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<IoResult<()>> {
         Poll::Ready(Ok(()))
     }
 }
@@ -424,10 +395,7 @@ impl AsyncOutput for DefaultCancellationSession {
         Poll::Ready(Ok(count))
     }
 
-    fn poll_flush(
-        self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
-    ) -> Poll<IoResult<()>> {
+    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<IoResult<()>> {
         Poll::Ready(Ok(()))
     }
 }
@@ -449,6 +417,5 @@ impl AsyncFileWriteSession for DefaultCancellationSession {
 
 #[test]
 fn async_session_default_drop_cancellation_is_nonblocking_noop() {
-    let _writer =
-        AsyncFileWriter::new(DefaultCancellationSession, opened_info());
+    let _writer = AsyncFileWriter::new(DefaultCancellationSession, opened_info());
 }

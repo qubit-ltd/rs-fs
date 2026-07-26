@@ -9,23 +9,11 @@
 
 use std::io::ErrorKind as IoErrorKind;
 
-use qubit_io::{
-    Input,
-    Output,
-};
+use qubit_io::{Input, Output};
 
 use crate::{
-    FileReader,
-    FileSystem,
-    FileWriter,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    FsPath,
-    FsResult,
-    ReadOptions,
-    WriteOptions,
-    WriteOutcome,
+    FileReader, FileSystem, FileWriter, FsError, FsErrorKind, FsOperation, FsPath, FsResult,
+    ReadOptions, WriteOptions, WriteOutcome,
 };
 
 /// Convenience methods for filesystem trait objects.
@@ -63,21 +51,15 @@ where
     T: FileSystem + ?Sized,
 {
     fn read_all(&self, path: &FsPath, max_bytes: usize) -> FsResult<Vec<u8>> {
-        self.limits().validate_path(
-            path,
-            self.info().path_semantics(),
-            FsOperation::Read,
-        )?;
+        self.limits()
+            .validate_path(path, self.info().path_semantics(), FsOperation::Read)?;
         let reader = self.open_reader(path, ReadOptions::default())?;
         read_all_from(reader, path, max_bytes)
     }
 
     fn write_all(&self, path: &FsPath, bytes: &[u8]) -> FsResult<WriteOutcome> {
-        self.limits().validate_path(
-            path,
-            self.info().path_semantics(),
-            FsOperation::Write,
-        )?;
+        self.limits()
+            .validate_path(path, self.info().path_semantics(), FsOperation::Write)?;
         self.limits().validate_write_size(path, bytes.len())?;
         let writer = self.open_writer(path, WriteOptions::default())?;
         write_all_to(writer, path, bytes)
@@ -88,11 +70,7 @@ where
 ///
 /// Retries interrupted synchronous reads and returns a resource-limit error
 /// when a one-byte probe finds content beyond the caller budget.
-fn read_all_from(
-    mut reader: FileReader,
-    path: &FsPath,
-    max_bytes: usize,
-) -> FsResult<Vec<u8>> {
+fn read_all_from(mut reader: FileReader, path: &FsPath, max_bytes: usize) -> FsResult<Vec<u8>> {
     let mut bytes = Vec::new();
     let mut buffer = [0_u8; 8192];
     while bytes.len() < max_bytes {
@@ -128,11 +106,7 @@ fn read_all_from(
 ///
 /// On transfer failure this function attempts a best-effort abort, then
 /// returns the transfer error with `path` context.
-fn write_all_to(
-    mut writer: FileWriter,
-    path: &FsPath,
-    bytes: &[u8],
-) -> FsResult<WriteOutcome> {
+fn write_all_to(mut writer: FileWriter, path: &FsPath, bytes: &[u8]) -> FsResult<WriteOutcome> {
     if let Err(error) = writer.write_fully(bytes) {
         let _ = writer.abort();
         return Err(FsError::from_stream_io(error, FsOperation::Write, path));

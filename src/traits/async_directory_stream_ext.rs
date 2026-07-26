@@ -8,14 +8,7 @@
 // qubit-style: allow source-test-pair
 //! Convenience methods for asynchronous directory streams.
 
-use crate::{
-    AsyncDirectoryStream,
-    DirEntry,
-    FsError,
-    FsErrorKind,
-    FsFuture,
-    FsOperation,
-};
+use crate::{AsyncDirectoryStream, DirEntry, FsError, FsErrorKind, FsFuture, FsOperation};
 
 /// Future-based convenience methods for asynchronous directory streams.
 pub trait AsyncDirectoryStreamExt {
@@ -33,17 +26,11 @@ pub trait AsyncDirectoryStreamExt {
     ///
     /// The future resolves to an error when listing fails before the stream
     /// ends or when more than `max_entries` entries remain.
-    fn collect_entries_async(
-        self,
-        max_entries: usize,
-    ) -> FsFuture<'static, Vec<DirEntry>>;
+    fn collect_entries_async(self, max_entries: usize) -> FsFuture<'static, Vec<DirEntry>>;
 }
 
 impl AsyncDirectoryStreamExt for AsyncDirectoryStream {
-    fn collect_entries_async(
-        mut self,
-        max_entries: usize,
-    ) -> FsFuture<'static, Vec<DirEntry>> {
+    fn collect_entries_async(mut self, max_entries: usize) -> FsFuture<'static, Vec<DirEntry>> {
         Box::pin(async move {
             let mut entries = Vec::new();
             while entries.len() < max_entries {

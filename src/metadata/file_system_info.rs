@@ -7,14 +7,7 @@
 // =============================================================================
 //! Immutable configured filesystem information.
 
-use crate::{
-    FileSystemId,
-    FsResult,
-    FsScheme,
-    NonSensitiveMetadata,
-    PathSemantics,
-    UserMetadata,
-};
+use crate::{FileSystemId, FsResult, FsScheme, NonSensitiveMetadata, PathSemantics, UserMetadata};
 use std::fmt::Display;
 
 /// Construction-time local snapshot describing one filesystem object.
@@ -31,11 +24,7 @@ impl FileSystemInfo {
     /// Creates a filesystem information snapshot without scheme aliases.
     #[inline]
     #[must_use]
-    pub fn new(
-        id: FileSystemId,
-        provider_id: impl Display,
-        path_semantics: PathSemantics,
-    ) -> Self {
+    pub fn new(id: FileSystemId, provider_id: impl Display, path_semantics: PathSemantics) -> Self {
         Self {
             id,
             provider_id: provider_id.to_string().into(),
@@ -63,10 +52,7 @@ impl FileSystemInfo {
     /// `metadata` has already rejected credential-like keys. Providers must
     /// expose secrets only through an external credential boundary, never
     /// through this debug-visible local snapshot.
-    pub fn with_provider_metadata(
-        mut self,
-        metadata: UserMetadata,
-    ) -> Self {
+    pub fn with_provider_metadata(mut self, metadata: UserMetadata) -> Self {
         self.provider_metadata = NonSensitiveMetadata::from(metadata);
         self
     }

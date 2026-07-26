@@ -6,18 +6,9 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 use qubit_fs::{
-    AtomicityRequirement,
-    Checksum,
-    ChecksumAlgorithm,
-    FileSystemCapabilities,
-    FileSystemCapability,
-    FsErrorKind,
-    NonSensitiveMetadata,
-    ResourceVersion,
-    UserMetadata,
-    WriteDisposition,
-    WriteOptions,
-    WritePrecondition,
+    AtomicityRequirement, Checksum, ChecksumAlgorithm, FileSystemCapabilities,
+    FileSystemCapability, FsErrorKind, NonSensitiveMetadata, ResourceVersion, UserMetadata,
+    WriteDisposition, WriteOptions, WritePrecondition,
 };
 
 #[test]
@@ -135,12 +126,11 @@ fn create_new_rejects_if_match_precondition() {
 
 #[test]
 fn write_options_preserve_validated_user_metadata() {
-    let options = WriteOptions::default()
-        .with_user_metadata(
-            UserMetadata::new()
-                .with("category", "private-category")
-                .unwrap(),
-        );
+    let options = WriteOptions::default().with_user_metadata(
+        UserMetadata::new()
+            .with("category", "private-category")
+            .unwrap(),
+    );
     assert!(options.user_metadata.contains_key("category"));
     assert!(!format!("{options:?}").contains("private-category"));
 }

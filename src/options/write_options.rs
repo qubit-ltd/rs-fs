@@ -8,16 +8,8 @@
 //! Write operation options.
 
 use crate::{
-    AtomicityRequirement,
-    Checksum,
-    FileSystemCapabilities,
-    FileSystemCapability,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    NonSensitiveMetadata,
-    UserMetadata,
-    WriteDisposition,
+    AtomicityRequirement, Checksum, FileSystemCapabilities, FileSystemCapability, FsError,
+    FsErrorKind, FsOperation, NonSensitiveMetadata, UserMetadata, WriteDisposition,
     WritePrecondition,
 };
 
@@ -58,10 +50,7 @@ impl Default for WriteOptions {
 impl WriteOptions {
     /// Replaces user-defined metadata that has already passed key validation.
     #[inline]
-    pub fn with_user_metadata(
-        mut self,
-        metadata: UserMetadata,
-    ) -> Self {
+    pub fn with_user_metadata(mut self, metadata: UserMetadata) -> Self {
         self.user_metadata = NonSensitiveMetadata::from(metadata);
         self
     }
@@ -107,10 +96,7 @@ impl WriteOptions {
     /// Returns invalid-option errors from [`Self::validate`], or a typed
     /// [`FsErrorKind::RequirementNotMet`] for unsupported append, conditional,
     /// or required-atomic writes.
-    pub fn validate_against(
-        &self,
-        capabilities: FileSystemCapabilities,
-    ) -> Result<(), FsError> {
+    pub fn validate_against(&self, capabilities: FileSystemCapabilities) -> Result<(), FsError> {
         self.validate()?;
         if self.disposition == WriteDisposition::Append
             && !capabilities.contains(FileSystemCapability::Append)
@@ -141,10 +127,7 @@ impl WriteOptions {
 }
 
 /// Builds a typed unmet write requirement.
-fn missing_requirement(
-    capability: FileSystemCapability,
-    message: &str,
-) -> FsError {
+fn missing_requirement(capability: FileSystemCapability, message: &str) -> FsError {
     FsError::new(
         FsErrorKind::RequirementNotMet,
         FsOperation::OpenWriter,

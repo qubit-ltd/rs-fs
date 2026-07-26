@@ -8,30 +8,13 @@
 // qubit-style: allow source-test-pair
 //! Concrete asynchronous temporary file handle.
 
-use std::fmt::{
-    Debug,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::{Debug, Formatter, Result as FmtResult};
 use std::pin::Pin;
 
 use crate::{
-    AsyncFileReader,
-    AsyncFileResource,
-    AsyncFileWriter,
-    AsyncTempResourceSession,
-    FsError,
-    FsErrorKind,
-    FsFuture,
-    FsOperation,
-    FsPath,
-    PersistFailure,
-    PersistFailureState,
-    PersistFuture,
-    PersistOptions,
-    ReadOptions,
-    TempResourceState,
-    WriteOptions,
+    AsyncFileReader, AsyncFileResource, AsyncFileWriter, AsyncTempResourceSession, FsError,
+    FsErrorKind, FsFuture, FsOperation, FsPath, PersistFailure, PersistFailureState, PersistFuture,
+    PersistOptions, ReadOptions, TempResourceState, WriteOptions,
 };
 
 /// Type-erased async temporary file with explicit remote lifecycle methods.
@@ -79,19 +62,13 @@ impl AsyncTempFile {
 
     /// Asynchronously opens the temporary file for reading.
     #[inline]
-    pub fn open_reader_async(
-        &self,
-        options: ReadOptions,
-    ) -> FsFuture<'_, AsyncFileReader> {
+    pub fn open_reader_async(&self, options: ReadOptions) -> FsFuture<'_, AsyncFileReader> {
         self.resource.open_reader_async(options)
     }
 
     /// Asynchronously opens the temporary file for writing.
     #[inline]
-    pub fn open_writer_async(
-        &self,
-        options: WriteOptions,
-    ) -> FsFuture<'_, AsyncFileWriter> {
+    pub fn open_writer_async(&self, options: WriteOptions) -> FsFuture<'_, AsyncFileWriter> {
         self.resource.open_writer_async(options)
     }
 
@@ -206,9 +183,7 @@ impl AsyncTempFile {
             );
             return Box::pin(async move { Err(failure) });
         }
-        if let Err(error) =
-            options.validate_against(self.resource.fs().capabilities())
-        {
+        if let Err(error) = options.validate_against(self.resource.fs().capabilities()) {
             let failure = PersistFailure::new(
                 error
                     .with_path(self.path().clone())
@@ -219,8 +194,7 @@ impl AsyncTempFile {
         }
         Box::pin(async move {
             self.state = TempResourceState::Indeterminate;
-            let result =
-                self.session.as_mut().persist_async(target, options).await;
+            let result = self.session.as_mut().persist_async(target, options).await;
             match result {
                 Ok(outcome) => {
                     self.state = TempResourceState::Persisted;
@@ -228,15 +202,11 @@ impl AsyncTempFile {
                 }
                 Err(failure) => {
                     self.state = match failure.state() {
-                        PersistFailureState::NotPublished => {
-                            TempResourceState::Owned
-                        }
+                        PersistFailureState::NotPublished => TempResourceState::Owned,
                         PersistFailureState::PublishedSourceRetained => {
                             TempResourceState::CleanupRequired
                         }
-                        PersistFailureState::Indeterminate => {
-                            TempResourceState::Indeterminate
-                        }
+                        PersistFailureState::Indeterminate => TempResourceState::Indeterminate,
                     };
                     Err(failure)
                 }
@@ -246,8 +216,7 @@ impl AsyncTempFile {
 
     /// Builds an invalid-state error for this handle.
     fn invalid_state(&self, operation: FsOperation, message: &str) -> FsError {
-        FsError::new(FsErrorKind::InvalidState, operation, message)
-            .with_path(self.path().clone())
+        FsError::new(FsErrorKind::InvalidState, operation, message).with_path(self.path().clone())
     }
 }
 

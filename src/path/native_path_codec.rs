@@ -51,10 +51,7 @@ pub trait NativePathCodec: Send + Sync {
     ///
     /// Returns an error when `text` is not canonical or cannot be represented
     /// by the selected native encoding.
-    fn encode<'a>(
-        &self,
-        text: &'a str,
-    ) -> Result<Cow<'a, Self::Native>, Self::Error>;
+    fn encode<'a>(&self, text: &'a str) -> Result<Cow<'a, Self::Native>, Self::Error>;
 
     /// Decodes a native path representation into canonical UTF-8 text.
     ///
@@ -62,8 +59,5 @@ pub trait NativePathCodec: Send + Sync {
     ///
     /// Returns an error when `native` is invalid for the selected encoding or
     /// cannot be represented without loss.
-    fn decode<'a>(
-        &self,
-        native: &'a Self::Native,
-    ) -> Result<Cow<'a, str>, Self::Error>;
+    fn decode<'a>(&self, native: &'a Self::Native) -> Result<Cow<'a, str>, Self::Error>;
 }

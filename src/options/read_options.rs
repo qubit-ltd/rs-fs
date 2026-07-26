@@ -8,12 +8,7 @@
 //! Read operation options.
 
 use crate::{
-    ChecksumPolicy,
-    FileSystemCapabilities,
-    FileSystemCapability,
-    FsError,
-    FsErrorKind,
-    FsOperation,
+    ChecksumPolicy, FileSystemCapabilities, FileSystemCapability, FsError, FsErrorKind, FsOperation,
 };
 
 /// Options controlling a read operation.
@@ -42,10 +37,7 @@ impl ReadOptions {
     /// Returns [`FsErrorKind::InvalidOptions`] for mutually exclusive version
     /// conditions, or [`FsErrorKind::RequirementNotMet`] with the exact
     /// missing capability for range, conditional, or required-checksum reads.
-    pub fn validate_against(
-        &self,
-        capabilities: FileSystemCapabilities,
-    ) -> Result<(), FsError> {
+    pub fn validate_against(&self, capabilities: FileSystemCapabilities) -> Result<(), FsError> {
         if self.if_match.is_some() && self.if_none_match.is_some() {
             return Err(FsError::new(
                 FsErrorKind::InvalidOptions,
@@ -82,10 +74,7 @@ impl ReadOptions {
 }
 
 /// Builds a typed unmet read requirement.
-fn missing_requirement(
-    capability: FileSystemCapability,
-    message: &str,
-) -> FsError {
+fn missing_requirement(capability: FileSystemCapability, message: &str) -> FsError {
     FsError::new(
         FsErrorKind::RequirementNotMet,
         FsOperation::OpenReader,

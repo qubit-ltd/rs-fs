@@ -7,39 +7,14 @@
 // =============================================================================
 
 use std::collections::VecDeque;
-use std::sync::{
-    Arc,
-    Mutex,
-};
+use std::sync::{Arc, Mutex};
 
 use qubit_fs::{
-    AchievedAtomicity,
-    AtomicityRequirement,
-    CreateDirOptions,
-    FileKind,
-    FileMetadata,
-    FileResource,
-    FileSystem,
-    FileSystemCapabilities,
-    FileSystemId,
-    FileSystemInfo,
-    FileSystemLimit,
-    FileSystemLimits,
-    FileSystemProperties,
-    FsError,
-    FsErrorKind,
-    FsName,
-    FsPath,
-    ListOptions,
-    PathSemantics,
-    PersistFailure,
-    PersistFailureState,
-    PersistOptions,
-    PersistOutcome,
-    PublicationMethod,
-    RelativeFsPath,
-    TempDir,
-    TempResourceSession,
+    AchievedAtomicity, AtomicityRequirement, CreateDirOptions, FileKind, FileMetadata,
+    FileResource, FileSystem, FileSystemCapabilities, FileSystemId, FileSystemInfo,
+    FileSystemLimit, FileSystemLimits, FileSystemProperties, FsError, FsErrorKind, FsName, FsPath,
+    ListOptions, PathSemantics, PersistFailure, PersistFailureState, PersistOptions,
+    PersistOutcome, PublicationMethod, RelativeFsPath, TempDir, TempResourceSession,
     TempResourceState,
 };
 
@@ -84,12 +59,9 @@ fn temp_dir() -> TempDir {
 #[test]
 fn child_and_descendant_use_safe_relative_types() {
     let temp = temp_dir();
-    let child =
-        temp.child(&FsName::parse("child.txt").expect("name should parse"));
-    let descendant = temp.descendant(
-        &RelativeFsPath::parse("nested/file.txt")
-            .expect("relative path should parse"),
-    );
+    let child = temp.child(&FsName::parse("child.txt").expect("name should parse"));
+    let descendant = temp
+        .descendant(&RelativeFsPath::parse("nested/file.txt").expect("relative path should parse"));
 
     assert_eq!("/tmp/root/child.txt", child.path().as_str());
     assert_eq!("/tmp/root/nested/file.txt", descendant.path().as_str());
@@ -156,11 +128,7 @@ impl TempResourceSession for DirectoryLifecycleSession {
                 FsErrorKind::Io
             };
             Err(PersistFailure::new(
-                FsError::new(
-                    kind,
-                    qubit_fs::FsOperation::PersistTemp,
-                    "persist failed",
-                ),
+                FsError::new(kind, qubit_fs::FsOperation::PersistTemp, "persist failed"),
                 state,
             ))
         } else {
@@ -198,14 +166,7 @@ fn temp_dir_accessors_listing_child_creation_and_keep_are_usable() {
     let cleanup_calls = Arc::new(Mutex::new(0));
     let persist_calls = Arc::new(Mutex::new(0));
     let fs: Arc<dyn FileSystem> = Arc::new(MockFs::default());
-    let mut temp = lifecycle_temp_dir(
-        fs,
-        [],
-        None,
-        None,
-        cleanup_calls.clone(),
-        persist_calls,
-    );
+    let mut temp = lifecycle_temp_dir(fs, [], None, None, cleanup_calls.clone(), persist_calls);
 
     assert_eq!(temp.path(), temp.resource().path());
     assert!(format!("{temp:?}").contains("TempDir"));
@@ -223,11 +184,8 @@ fn temp_dir_accessors_listing_child_creation_and_keep_are_usable() {
     assert!(temp.keep().is_err());
     assert!(temp.cleanup().is_err());
     assert!(
-        temp.persist(
-            &FsPath::parse("/final").unwrap(),
-            PersistOptions::default()
-        )
-        .is_err(),
+        temp.persist(&FsPath::parse("/final").unwrap(), PersistOptions::default())
+            .is_err(),
     );
     drop(temp);
     assert_eq!(0, *cleanup_calls.lock().expect("lock should succeed"));
@@ -367,8 +325,7 @@ impl FileSystemProperties for DirectoryNoAtomicFileSystem {
     }
 
     fn limits(&self) -> &qubit_fs::FileSystemLimits {
-        static LIMITS: qubit_fs::FileSystemLimits =
-            qubit_fs::FileSystemLimits::unknown();
+        static LIMITS: qubit_fs::FileSystemLimits = qubit_fs::FileSystemLimits::unknown();
         &LIMITS
     }
 }
@@ -411,10 +368,8 @@ fn temp_dir_required_atomicity_is_rejected_before_provider_persist() {
 
 #[test]
 fn temp_dir_list_preflights_the_owned_path_limits() {
-    let limits = FileSystemLimits::unknown()
-        .with_max_path_text_bytes(FileSystemLimit::Maximum(4));
-    let fs: Arc<dyn FileSystem> =
-        Arc::new(MockFs::default().with_limits(limits));
+    let limits = FileSystemLimits::unknown().with_max_path_text_bytes(FileSystemLimit::Maximum(4));
+    let fs: Arc<dyn FileSystem> = Arc::new(MockFs::default().with_limits(limits));
     let temp = lifecycle_temp_dir(
         fs,
         [],
@@ -432,10 +387,8 @@ fn temp_dir_list_preflights_the_owned_path_limits() {
 
 #[test]
 fn temp_dir_persist_preflights_target_path_limits() {
-    let limits = FileSystemLimits::unknown()
-        .with_max_path_text_bytes(FileSystemLimit::Maximum(4));
-    let fs: Arc<dyn FileSystem> =
-        Arc::new(MockFs::default().with_limits(limits));
+    let limits = FileSystemLimits::unknown().with_max_path_text_bytes(FileSystemLimit::Maximum(4));
+    let fs: Arc<dyn FileSystem> = Arc::new(MockFs::default().with_limits(limits));
     let persist_calls = Arc::new(Mutex::new(0));
     let mut temp = lifecycle_temp_dir(
         fs,

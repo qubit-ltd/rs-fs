@@ -8,19 +8,11 @@
 // qubit-style: allow source-test-pair
 //! Ordered non-sensitive filesystem URI query.
 
-use std::fmt::{
-    Display,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::{Display, Formatter, Result as FmtResult};
 
 use crate::FsResult;
 
-use super::uri_codec::{
-    invalid_uri,
-    percent_decode,
-    percent_encode_query,
-};
+use super::uri_codec::{invalid_uri, percent_decode, percent_encode_query};
 
 /// An ordered multi-map of decoded, non-sensitive URI query pairs.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -62,9 +54,7 @@ impl FsUriQuery {
     pub fn get_all(&self, key: &str) -> Vec<&str> {
         self.pairs
             .iter()
-            .filter_map(|(candidate, value)| {
-                (candidate.as_ref() == key).then_some(value.as_ref())
-            })
+            .filter_map(|(candidate, value)| (candidate.as_ref() == key).then_some(value.as_ref()))
             .collect()
     }
 

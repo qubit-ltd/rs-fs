@@ -7,30 +7,14 @@
 // =============================================================================
 //! Concrete synchronous file writer handle.
 
-use std::fmt::{
-    Debug,
-    Formatter,
-    Result as FmtResult,
-};
-use std::io::{
-    Error as IoError,
-    ErrorKind as IoErrorKind,
-    Result as IoResult,
-};
+use std::fmt::{Debug, Formatter, Result as FmtResult};
+use std::io::{Error as IoError, ErrorKind as IoErrorKind, Result as IoResult};
 
 use qubit_io::Output;
 
 use crate::{
-    FileLocation,
-    FileWriteSession,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    FsResult,
-    OpenedFileInfo,
-    WriteFailureState,
-    WriteOutcome,
-    WriterState,
+    FileLocation, FileWriteSession, FsError, FsErrorKind, FsOperation, FsResult, OpenedFileInfo,
+    WriteFailureState, WriteOutcome, WriterState,
 };
 
 /// Type-erased provider write session explicitly associated with a file.
@@ -110,13 +94,9 @@ impl FileWriter {
             Err(failure) => {
                 self.state = match failure.state() {
                     WriteFailureState::Retryable => WriterState::Open,
-                    WriteFailureState::NotPublished => {
-                        WriterState::NotPublished
-                    }
+                    WriteFailureState::NotPublished => WriterState::NotPublished,
                     WriteFailureState::Published => WriterState::Published,
-                    WriteFailureState::Indeterminate => {
-                        WriterState::Indeterminate
-                    }
+                    WriteFailureState::Indeterminate => WriterState::Indeterminate,
                 };
                 Err(failure.into_error())
             }
@@ -176,10 +156,7 @@ impl FileWriter {
     fn closed_io_error(&self) -> IoError {
         IoError::new(
             IoErrorKind::BrokenPipe,
-            self.invalid_state(
-                FsOperation::Write,
-                "writer no longer accepts bytes",
-            ),
+            self.invalid_state(FsOperation::Write, "writer no longer accepts bytes"),
         )
     }
 }
@@ -228,9 +205,7 @@ impl Drop for FileWriter {
     fn drop(&mut self) {
         if matches!(
             self.state,
-            WriterState::Open
-                | WriterState::NotPublished
-                | WriterState::Published
+            WriterState::Open | WriterState::NotPublished | WriterState::Published
         ) {
             let _ = self.session.abort();
         }

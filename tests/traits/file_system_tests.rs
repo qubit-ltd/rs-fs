@@ -5,41 +5,16 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::sync::{
-    Arc,
-    Mutex,
-};
+use std::sync::{Arc, Mutex};
 
 use qubit_fs::{
-    CopyOptions,
-    CreateDirOptions,
-    DeleteOptions,
-    FileKind,
-    FileMetadata,
-    FileSystem,
-    FileSystemCapabilities,
-    FileSystemCapability,
-    FileSystemExt,
-    FileSystemId,
-    FileSystemInfo,
-    FileSystemProperties,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    FsPath,
-    ListOptions,
-    PathSemantics,
-    ReadOptions,
-    RenameOptions,
-    TempDirOptions,
-    TempFileOptions,
-    WriteOptions,
+    CopyOptions, CreateDirOptions, DeleteOptions, FileKind, FileMetadata, FileSystem,
+    FileSystemCapabilities, FileSystemCapability, FileSystemExt, FileSystemId, FileSystemInfo,
+    FileSystemProperties, FsError, FsErrorKind, FsOperation, FsPath, ListOptions, PathSemantics,
+    ReadOptions, RenameOptions, TempDirOptions, TempFileOptions, WriteOptions,
 };
 
-use crate::common::{
-    MockFs,
-    MockState,
-};
+use crate::common::{MockFs, MockState};
 
 #[test]
 fn test_file_system_capabilities_exists_and_stat_work() {
@@ -90,8 +65,7 @@ impl FileSystemProperties for MinimalFileSystem {
     }
 
     fn limits(&self) -> &qubit_fs::FileSystemLimits {
-        static LIMITS: qubit_fs::FileSystemLimits =
-            qubit_fs::FileSystemLimits::unknown();
+        static LIMITS: qubit_fs::FileSystemLimits = qubit_fs::FileSystemLimits::unknown();
         &LIMITS
     }
 }

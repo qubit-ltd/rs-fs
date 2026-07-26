@@ -7,20 +7,12 @@
 // =============================================================================
 //! URI authority model.
 
-use std::fmt::{
-    Display,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::net::Ipv6Addr;
 
 use crate::FsResult;
 
-use super::uri_codec::{
-    invalid_uri,
-    percent_decode,
-    percent_encode_query,
-};
+use super::uri_codec::{invalid_uri, percent_decode, percent_encode_query};
 
 /// Provider-neutral URI authority.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -179,9 +171,9 @@ fn parse_host_port(host_port: &str) -> FsResult<(&str, Option<u16>)> {
         let port = if suffix.is_empty() {
             None
         } else {
-            let value = suffix.strip_prefix(':').ok_or_else(|| {
-                invalid_uri("invalid IPv6 URI authority suffix")
-            })?;
+            let value = suffix
+                .strip_prefix(':')
+                .ok_or_else(|| invalid_uri("invalid IPv6 URI authority suffix"))?;
             Some(parse_port(value)?)
         };
         return Ok((host, port));

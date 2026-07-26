@@ -7,30 +7,12 @@
 // =============================================================================
 //! Concrete synchronous temporary directory handle.
 
-use std::fmt::{
-    Debug,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::{Debug, Formatter, Result as FmtResult};
 
 use crate::{
-    CreateDirOptions,
-    DirectoryStream,
-    FileResource,
-    FsError,
-    FsErrorKind,
-    FsName,
-    FsOperation,
-    FsPath,
-    FsResult,
-    ListOptions,
-    PersistFailure,
-    PersistFailureState,
-    PersistOptions,
-    PersistOutcome,
-    RelativeFsPath,
-    TempResourceSession,
-    TempResourceState,
+    CreateDirOptions, DirectoryStream, FileResource, FsError, FsErrorKind, FsName, FsOperation,
+    FsPath, FsResult, ListOptions, PersistFailure, PersistFailureState, PersistOptions,
+    PersistOutcome, RelativeFsPath, TempResourceSession, TempResourceState,
 };
 
 /// Type-erased temporary directory retaining cleanup responsibility.
@@ -237,9 +219,7 @@ impl TempDir {
                 PersistFailureState::NotPublished,
             ));
         }
-        if let Err(error) =
-            options.validate_against(self.resource.fs().capabilities())
-        {
+        if let Err(error) = options.validate_against(self.resource.fs().capabilities()) {
             return Err(PersistFailure::new(
                 error
                     .with_path(self.path().clone())
@@ -254,15 +234,11 @@ impl TempDir {
             }
             Err(failure) => {
                 self.state = match failure.state() {
-                    PersistFailureState::NotPublished => {
-                        TempResourceState::Owned
-                    }
+                    PersistFailureState::NotPublished => TempResourceState::Owned,
                     PersistFailureState::PublishedSourceRetained => {
                         TempResourceState::CleanupRequired
                     }
-                    PersistFailureState::Indeterminate => {
-                        TempResourceState::Indeterminate
-                    }
+                    PersistFailureState::Indeterminate => TempResourceState::Indeterminate,
                 };
                 Err(failure)
             }
@@ -271,8 +247,7 @@ impl TempDir {
 
     /// Builds an invalid-state error for this temporary directory.
     fn invalid_state(&self, operation: FsOperation, message: &str) -> FsError {
-        FsError::new(FsErrorKind::InvalidState, operation, message)
-            .with_path(self.path().clone())
+        FsError::new(FsErrorKind::InvalidState, operation, message).with_path(self.path().clone())
     }
 }
 

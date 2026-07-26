@@ -9,12 +9,7 @@
 
 use std::time::SystemTime;
 
-use crate::{
-    Checksum,
-    FileKind,
-    NonSensitiveMetadata,
-    UserMetadata,
-};
+use crate::{Checksum, FileKind, NonSensitiveMetadata, UserMetadata};
 
 /// Stable and extensible metadata for one filesystem resource.
 #[derive(Clone, Debug, PartialEq)]
@@ -68,20 +63,15 @@ impl FileMetadata {
 
     /// Replaces user-defined metadata that has already passed key validation.
     #[inline]
-    pub fn with_user_metadata(
-        mut self,
-        metadata: UserMetadata,
-    ) -> Self {
+    pub fn with_user_metadata(mut self, metadata: UserMetadata) -> Self {
         self.user_metadata = NonSensitiveMetadata::from(metadata);
         self
     }
 
-    /// Replaces provider-native metadata that has already passed key validation.
+    /// Replaces provider-native metadata that has already passed key
+    /// validation.
     #[inline]
-    pub fn with_provider_metadata(
-        mut self,
-        metadata: UserMetadata,
-    ) -> Self {
+    pub fn with_provider_metadata(mut self, metadata: UserMetadata) -> Self {
         self.provider_metadata = NonSensitiveMetadata::from(metadata);
         self
     }

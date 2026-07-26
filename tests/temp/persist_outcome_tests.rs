@@ -6,13 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::{
-    AchievedAtomicity,
-    FsPath,
-    PersistOutcome,
-    PublicationMethod,
-    UserMetadata,
-};
+use qubit_fs::{AchievedAtomicity, FsPath, PersistOutcome, PublicationMethod, UserMetadata};
 
 #[test]
 fn persist_outcome_preserves_safe_diagnostics() {

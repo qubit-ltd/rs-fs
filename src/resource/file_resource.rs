@@ -7,34 +7,13 @@
 // =============================================================================
 //! Bound filesystem resource.
 
-use std::fmt::{
-    Debug,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::{Debug, Formatter, Result as FmtResult};
 use std::sync::Arc;
 
 use crate::{
-    CopyOptions,
-    CopyOutcome,
-    CreateDirOptions,
-    DeleteOptions,
-    DirectoryStream,
-    FileLocation,
-    FileMetadata,
-    FileReader,
-    FileSystem,
-    FileSystemExt,
-    FileWriter,
-    FsOperation,
-    FsPath,
-    FsResult,
-    ListOptions,
-    ReadOptions,
-    RenameOptions,
-    RenameOutcome,
-    WriteOptions,
-    WriteOutcome,
+    CopyOptions, CopyOutcome, CreateDirOptions, DeleteOptions, DirectoryStream, FileLocation,
+    FileMetadata, FileReader, FileSystem, FileSystemExt, FileWriter, FsOperation, FsPath, FsResult,
+    ListOptions, ReadOptions, RenameOptions, RenameOutcome, WriteOptions, WriteOutcome,
 };
 
 /// A filesystem path bound to the filesystem that owns it.
@@ -74,10 +53,7 @@ impl FileResource {
     /// A resource bound to the supplied filesystem and location.
     #[inline]
     #[must_use]
-    pub fn from_location(
-        fs: Arc<dyn FileSystem>,
-        location: FileLocation,
-    ) -> Self {
+    pub fn from_location(fs: Arc<dyn FileSystem>, location: FileLocation) -> Self {
         Self { fs, location }
     }
 
@@ -150,8 +126,7 @@ impl FileResource {
     /// stream for the resource path.
     pub fn list(&self, mut options: ListOptions) -> FsResult<DirectoryStream> {
         self.validate_path(self.path(), FsOperation::List)?;
-        options.page_size =
-            self.fs.limits().clamp_list_page_size(options.page_size);
+        options.page_size = self.fs.limits().clamp_list_page_size(options.page_size);
         self.fs.list(self.path(), options)
     }
 
@@ -261,11 +236,7 @@ impl FileResource {
     ///
     /// # Errors
     /// Returns an error when the owning filesystem cannot rename the resource.
-    pub fn rename_to(
-        &self,
-        target: &FsPath,
-        options: RenameOptions,
-    ) -> FsResult<RenameOutcome> {
+    pub fn rename_to(&self, target: &FsPath, options: RenameOptions) -> FsResult<RenameOutcome> {
         self.validate_path(self.path(), FsOperation::Rename)?;
         self.validate_path(target, FsOperation::Rename)?;
         options.validate_against(self.fs.capabilities())?;
@@ -283,11 +254,7 @@ impl FileResource {
     ///
     /// # Errors
     /// Returns an error when the owning filesystem cannot copy the resource.
-    pub fn copy_to(
-        &self,
-        target: &FsPath,
-        options: CopyOptions,
-    ) -> FsResult<CopyOutcome> {
+    pub fn copy_to(&self, target: &FsPath, options: CopyOptions) -> FsResult<CopyOutcome> {
         self.validate_path(self.path(), FsOperation::Copy)?;
         self.validate_path(target, FsOperation::Copy)?;
         options.validate_against(self.fs.capabilities())?;
@@ -301,16 +268,10 @@ impl FileResource {
     }
 
     /// Validates `path` against the owning filesystem's declared limits.
-    pub(crate) fn validate_path(
-        &self,
-        path: &FsPath,
-        operation: FsOperation,
-    ) -> FsResult<()> {
-        self.fs.limits().validate_path(
-            path,
-            self.fs.info().path_semantics(),
-            operation,
-        )
+    pub(crate) fn validate_path(&self, path: &FsPath, operation: FsOperation) -> FsResult<()> {
+        self.fs
+            .limits()
+            .validate_path(path, self.fs.info().path_semantics(), operation)
     }
 }
 

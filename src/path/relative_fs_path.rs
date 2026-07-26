@@ -7,17 +7,9 @@
 // =============================================================================
 //! Validated relative descendant path.
 
-use std::fmt::{
-    Display,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::{Display, Formatter, Result as FmtResult};
 
-use crate::{
-    FsError,
-    FsOperation,
-    FsResult,
-};
+use crate::{FsError, FsOperation, FsResult};
 
 use super::native_path_text::validate_canonical_text;
 
@@ -52,18 +44,14 @@ impl RelativeFsPath {
                 "" | "." => {}
                 ".." => {
                     if components.pop().is_none() {
-                        return Err(invalid_relative(
-                            "relative path must not escape its base",
-                        ));
+                        return Err(invalid_relative("relative path must not escape its base"));
                     }
                 }
                 _ => components.push(component),
             }
         }
         if components.is_empty() {
-            return Err(invalid_relative(
-                "relative path must identify a descendant",
-            ));
+            return Err(invalid_relative("relative path must identify a descendant"));
         }
         Ok(Self(components.join("/").into()))
     }

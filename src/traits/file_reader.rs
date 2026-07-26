@@ -7,19 +7,12 @@
 // =============================================================================
 //! Concrete synchronous file reader handle.
 
-use std::fmt::{
-    Debug,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::{Debug, Formatter, Result as FmtResult};
 use std::io::Result as IoResult;
 
 use qubit_io::Input;
 
-use crate::{
-    FileLocation,
-    OpenedFileInfo,
-};
+use crate::{FileLocation, OpenedFileInfo};
 
 /// Type-erased byte input explicitly associated with an opened file.
 pub struct FileReader {

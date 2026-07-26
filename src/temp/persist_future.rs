@@ -10,14 +10,8 @@
 use std::future::Future;
 use std::pin::Pin;
 
-use crate::{
-    PersistFailure,
-    PersistOutcome,
-};
+use crate::{PersistFailure, PersistOutcome};
 
 /// Boxed sendable future resolving to a typed temporary persistence result.
-pub type PersistFuture<'a> = Pin<
-    Box<
-        dyn Future<Output = Result<PersistOutcome, PersistFailure>> + Send + 'a,
-    >,
->;
+pub type PersistFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<PersistOutcome, PersistFailure>> + Send + 'a>>;

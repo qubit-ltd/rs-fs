@@ -7,29 +7,12 @@
 // =============================================================================
 //! Concrete synchronous temporary file handle.
 
-use std::fmt::{
-    Debug,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::{Debug, Formatter, Result as FmtResult};
 
 use crate::{
-    FileReader,
-    FileResource,
-    FileWriter,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    FsPath,
-    FsResult,
-    PersistFailure,
-    PersistFailureState,
-    PersistOptions,
-    PersistOutcome,
-    ReadOptions,
-    TempResourceSession,
-    TempResourceState,
-    WriteOptions,
+    FileReader, FileResource, FileWriter, FsError, FsErrorKind, FsOperation, FsPath, FsResult,
+    PersistFailure, PersistFailureState, PersistOptions, PersistOutcome, ReadOptions,
+    TempResourceSession, TempResourceState, WriteOptions,
 };
 
 /// Type-erased temporary file retaining cleanup responsibility after failures.
@@ -148,10 +131,9 @@ impl TempFile {
             self.state,
             TempResourceState::Owned | TempResourceState::CleanupRequired
         ) {
-            return Err(self.invalid_state(
-                FsOperation::KeepTemp,
-                "temporary file cannot be kept now",
-            ));
+            return Err(
+                self.invalid_state(FsOperation::KeepTemp, "temporary file cannot be kept now")
+            );
         }
         match self.session.keep() {
             Ok(()) => {
@@ -216,9 +198,7 @@ impl TempFile {
                 PersistFailureState::NotPublished,
             ));
         }
-        if let Err(error) =
-            options.validate_against(self.resource.fs().capabilities())
-        {
+        if let Err(error) = options.validate_against(self.resource.fs().capabilities()) {
             return Err(PersistFailure::new(
                 error
                     .with_path(self.path().clone())
@@ -233,15 +213,11 @@ impl TempFile {
             }
             Err(failure) => {
                 self.state = match failure.state() {
-                    PersistFailureState::NotPublished => {
-                        TempResourceState::Owned
-                    }
+                    PersistFailureState::NotPublished => TempResourceState::Owned,
                     PersistFailureState::PublishedSourceRetained => {
                         TempResourceState::CleanupRequired
                     }
-                    PersistFailureState::Indeterminate => {
-                        TempResourceState::Indeterminate
-                    }
+                    PersistFailureState::Indeterminate => TempResourceState::Indeterminate,
                 };
                 Err(failure)
             }
@@ -250,8 +226,7 @@ impl TempFile {
 
     /// Builds an invalid-state error for this temporary file.
     fn invalid_state(&self, operation: FsOperation, message: &str) -> FsError {
-        FsError::new(FsErrorKind::InvalidState, operation, message)
-            .with_path(self.path().clone())
+        FsError::new(FsErrorKind::InvalidState, operation, message).with_path(self.path().clone())
     }
 }
 

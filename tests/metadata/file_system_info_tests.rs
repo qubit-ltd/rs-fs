@@ -6,24 +6,15 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::{
-    FileSystemId,
-    FileSystemInfo,
-    PathSemantics,
-    UserMetadata,
-};
+use qubit_fs::{FileSystemId, FileSystemInfo, PathSemantics, UserMetadata};
 
 #[test]
 fn file_system_info_is_a_validated_local_snapshot() {
     let id = FileSystemId::new("mock-instance").unwrap();
     let provider_id = "mock";
-    let info = FileSystemInfo::new(
-        id.clone(),
-        provider_id,
-        PathSemantics::ObjectKey,
-    )
-    .with_scheme("mock")
-    .unwrap();
+    let info = FileSystemInfo::new(id.clone(), provider_id, PathSemantics::ObjectKey)
+        .with_scheme("mock")
+        .unwrap();
 
     assert_eq!(&id, info.id());
     assert_eq!(provider_id, info.provider_id());

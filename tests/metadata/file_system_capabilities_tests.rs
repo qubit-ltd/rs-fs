@@ -6,10 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::{
-    FileSystemCapabilities,
-    FileSystemCapability,
-};
+use qubit_fs::{FileSystemCapabilities, FileSystemCapability};
 
 #[test]
 fn capability_set_reports_typed_guarantees() {

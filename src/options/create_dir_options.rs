@@ -7,10 +7,7 @@
 // =============================================================================
 //! Directory creation options.
 
-use crate::{
-    NonSensitiveMetadata,
-    UserMetadata,
-};
+use crate::{NonSensitiveMetadata, UserMetadata};
 
 /// Options controlling directory or collection creation.
 #[derive(Clone, Debug, PartialEq)]
@@ -37,10 +34,7 @@ impl Default for CreateDirOptions {
 impl CreateDirOptions {
     /// Replaces user-defined metadata that has already passed key validation.
     #[inline]
-    pub fn with_user_metadata(
-        mut self,
-        metadata: UserMetadata,
-    ) -> Self {
+    pub fn with_user_metadata(mut self, metadata: UserMetadata) -> Self {
         self.user_metadata = NonSensitiveMetadata::from(metadata);
         self
     }

@@ -6,10 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::{
-    EscapedBytePathCodec,
-    NativePathCodec,
-};
+use qubit_fs::{EscapedBytePathCodec, NativePathCodec};
 
 #[test]
 fn escaped_byte_path_codec_round_trips_every_single_byte() {
