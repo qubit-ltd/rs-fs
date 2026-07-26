@@ -34,10 +34,5 @@ doctest = true
 [dependencies]
 qubit-io = { path = "../rs-io", version = "0.14" }
 
-[dev-dependencies]
-qubit-metadata = { path = "../rs-metadata", version = "0.10", features = ["json"] }
-qubit-spi = { path = "../rs-spi", version = "0.10" }
-serde_json = "1.0"
-
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)'] }

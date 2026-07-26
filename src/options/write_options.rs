@@ -15,7 +15,6 @@ use crate::{
     FsError,
     FsErrorKind,
     FsOperation,
-    FsResult,
     NonSensitiveMetadata,
     UserMetadata,
     WriteDisposition,
@@ -57,19 +56,14 @@ impl Default for WriteOptions {
 }
 
 impl WriteOptions {
-    /// Replaces user-defined metadata after validating its structural keys.
-    ///
-    /// # Errors
-    ///
-    /// Returns an invalid-options error when a top-level key or a key nested
-    /// in a string map or JSON object resembles credential material.
+    /// Replaces user-defined metadata that has already passed key validation.
     #[inline]
     pub fn with_user_metadata(
         mut self,
         metadata: UserMetadata,
-    ) -> FsResult<Self> {
+    ) -> Self {
         self.user_metadata = NonSensitiveMetadata::from(metadata);
-        Ok(self)
+        self
     }
 
     /// Validates combinations that have no coherent provider interpretation.

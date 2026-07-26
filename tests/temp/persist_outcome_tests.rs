@@ -25,8 +25,7 @@ fn persist_outcome_preserves_safe_diagnostics() {
         UserMetadata::new()
             .with("request_id", "private-persist-id")
             .unwrap(),
-    )
-    .expect("safe diagnostics should be accepted");
+    );
 
     assert!(outcome.diagnostics.contains_key("request_id"));
     assert!(!format!("{outcome:?}").contains("private-persist-id"));

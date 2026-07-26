@@ -43,7 +43,6 @@ use qubit_fs::{
     TempResourceState,
     WriteOptions,
 };
-use qubit_spi::ProviderId;
 
 use crate::common::MockFs;
 
@@ -404,7 +403,7 @@ fn temp_file_required_atomicity_fails_before_provider_persist() {
     let fs: Arc<dyn FileSystem> = Arc::new(NoAtomicFileSystem {
         info: FileSystemInfo::new(
             FileSystemId::new("no-atomic").unwrap(),
-            ProviderId::new("mock").unwrap(),
+            "mock",
             PathSemantics::Hierarchical,
         ),
     });

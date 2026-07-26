@@ -57,7 +57,6 @@ use qubit_fs::{
     RelativeFsPath,
     TempResourceState,
 };
-use qubit_spi::ProviderId;
 
 #[derive(Debug)]
 struct AsyncTempFs {
@@ -206,7 +205,7 @@ fn async_resource_with(
     let fs: Arc<dyn AsyncFileSystem> = Arc::new(AsyncTempFs {
         info: FileSystemInfo::new(
             FileSystemId::new("async-temp").expect("id should parse"),
-            ProviderId::new("mock").expect("provider id should parse"),
+            "mock",
             PathSemantics::Hierarchical,
         ),
         atomic_persist,

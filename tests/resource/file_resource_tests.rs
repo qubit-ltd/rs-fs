@@ -43,7 +43,6 @@ use qubit_fs::{
     ServerSidePreference,
     WriteOptions,
 };
-use qubit_spi::ProviderId;
 
 use crate::common::MockFs;
 
@@ -167,7 +166,7 @@ fn file_resource_rejects_unmet_requirements_before_delegation() {
     let fs: Arc<dyn FileSystem> = Arc::new(NoCapabilitiesFs {
         info: FileSystemInfo::new(
             FileSystemId::new("no-capabilities").unwrap(),
-            ProviderId::new("no-capabilities").unwrap(),
+            "no-capabilities",
             qubit_fs::PathSemantics::Hierarchical,
         ),
     });
@@ -340,7 +339,7 @@ fn file_resource_clamps_list_page_size_before_delegation() {
     let fs: Arc<dyn FileSystem> = Arc::new(ListPageLimitFs {
         info: FileSystemInfo::new(
             FileSystemId::new("list-page-limit").unwrap(),
-            ProviderId::new("mock").unwrap(),
+            "mock",
             PathSemantics::Hierarchical,
         ),
         limits: FileSystemLimits::unknown()

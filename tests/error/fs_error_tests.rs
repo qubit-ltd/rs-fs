@@ -12,7 +12,6 @@ use qubit_fs::{
     FsOperation,
     FsPath,
 };
-use qubit_spi::ProviderId;
 
 use std::io;
 
@@ -39,7 +38,7 @@ impl std::error::Error for SecretSourceError {}
 fn test_fs_error_carries_context_and_source() {
     let path = FsPath::parse("/source").expect("path should parse");
     let target = FsPath::parse("/target").expect("path should parse");
-    let provider = ProviderId::new("mock").expect("provider id should parse");
+    let provider = "mock";
     let error = FsError::with_source(
         FsErrorKind::Io,
         FsOperation::Copy,
@@ -48,14 +47,14 @@ fn test_fs_error_carries_context_and_source() {
     )
     .with_path(path.clone())
     .with_target(target.clone())
-    .with_provider(provider.clone())
+    .with_provider(provider)
     .with_required_capability(FileSystemCapability::ServerSideCopy);
 
     assert_eq!(FsErrorKind::Io, error.kind());
     assert_eq!(FsOperation::Copy, error.operation());
     assert_eq!(Some(&path), error.path());
     assert_eq!(Some(&target), error.target());
-    assert_eq!(Some(provider.as_str()), error.provider());
+    assert_eq!(Some(provider), error.provider());
     assert!(error.to_string().contains("copy failed"));
     assert!(std::error::Error::source(&error).is_some());
     assert_eq!(

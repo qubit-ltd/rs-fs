@@ -16,7 +16,6 @@ use qubit_fs::{
     FileSystemProperties,
     PathSemantics,
 };
-use qubit_spi::ProviderId;
 
 #[derive(Debug)]
 struct Properties {
@@ -44,7 +43,7 @@ fn common_properties_are_object_safe_local_snapshots() {
     let properties: Box<dyn FileSystemProperties> = Box::new(Properties {
         info: FileSystemInfo::new(
             FileSystemId::new("properties-instance").expect("id should parse"),
-            ProviderId::new("mock").expect("provider id should parse"),
+            "mock",
             PathSemantics::Hierarchical,
         ),
         capabilities: FileSystemCapabilities::default()

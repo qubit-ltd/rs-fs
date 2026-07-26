@@ -84,6 +84,10 @@ where
     }
 }
 
+/// Reads all bytes from an opened reader within `max_bytes`.
+///
+/// Retries interrupted synchronous reads and returns a resource-limit error
+/// when a one-byte probe finds content beyond the caller budget.
 fn read_all_from(
     mut reader: FileReader,
     path: &FsPath,
@@ -120,6 +124,10 @@ fn read_all_from(
     }
 }
 
+/// Writes `bytes` to an opened writer and commits it.
+///
+/// On transfer failure this function attempts a best-effort abort, then
+/// returns the transfer error with `path` context.
 fn write_all_to(
     mut writer: FileWriter,
     path: &FsPath,
@@ -132,6 +140,7 @@ fn write_all_to(
     writer.commit()
 }
 
+/// Adds filesystem read context to a synchronous stream error.
 fn read_error(path: &FsPath, error: std::io::Error) -> FsError {
     FsError::from_stream_io(error, FsOperation::Read, path)
 }

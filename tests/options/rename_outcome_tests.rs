@@ -25,7 +25,7 @@ fn rename_outcome_reports_actual_method_and_atomicity() {
 }
 
 #[test]
-fn rename_outcome_rejects_nested_sensitive_diagnostics() {
+fn rename_outcome_preserves_validated_diagnostics() {
     let outcome = RenameOutcome::new(
         AchievedAtomicity::NonAtomic,
         PublicationMethod::CopyThenDelete,
@@ -34,8 +34,7 @@ fn rename_outcome_rejects_nested_sensitive_diagnostics() {
         UserMetadata::new()
             .with("request_id", "private-rename-id")
             .unwrap(),
-    )
-    .expect("safe diagnostics should be accepted");
+    );
     assert!(outcome.diagnostics.contains_key("request_id"));
     assert!(!format!("{outcome:?}").contains("private-rename-id"));
 }

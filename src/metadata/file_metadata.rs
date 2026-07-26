@@ -12,7 +12,6 @@ use std::time::SystemTime;
 use crate::{
     Checksum,
     FileKind,
-    FsResult,
     NonSensitiveMetadata,
     UserMetadata,
 };
@@ -67,34 +66,24 @@ impl FileMetadata {
         }
     }
 
-    /// Replaces user-defined metadata after validating its structural keys.
-    ///
-    /// # Errors
-    ///
-    /// Returns an invalid-options error when a top-level key or a key nested
-    /// in a string map or JSON object resembles credential material.
+    /// Replaces user-defined metadata that has already passed key validation.
     #[inline]
     pub fn with_user_metadata(
         mut self,
         metadata: UserMetadata,
-    ) -> FsResult<Self> {
+    ) -> Self {
         self.user_metadata = NonSensitiveMetadata::from(metadata);
-        Ok(self)
+        self
     }
 
-    /// Replaces provider-native metadata after validating its structural keys.
-    ///
-    /// # Errors
-    ///
-    /// Returns an invalid-options error when a top-level key or a key nested
-    /// in a string map or JSON object resembles credential material.
+    /// Replaces provider-native metadata that has already passed key validation.
     #[inline]
     pub fn with_provider_metadata(
         mut self,
         metadata: UserMetadata,
-    ) -> FsResult<Self> {
+    ) -> Self {
         self.provider_metadata = NonSensitiveMetadata::from(metadata);
-        Ok(self)
+        self
     }
 
     /// Tells whether this metadata describes a directory-like resource.

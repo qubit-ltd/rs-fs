@@ -42,7 +42,6 @@ use qubit_fs::{
     TempResourceSession,
     TempResourceState,
 };
-use qubit_spi::ProviderId;
 
 use crate::common::MockFs;
 
@@ -385,7 +384,7 @@ fn temp_dir_required_atomicity_is_rejected_before_provider_persist() {
     let fs: Arc<dyn FileSystem> = Arc::new(DirectoryNoAtomicFileSystem {
         info: FileSystemInfo::new(
             FileSystemId::new("no-atomic-dir").unwrap(),
-            ProviderId::new("mock").unwrap(),
+            "mock",
             PathSemantics::Hierarchical,
         ),
     });

@@ -9,13 +9,11 @@
 
 use crate::UserMetadata;
 
-/// Metadata whose structural keys have passed credential-sensitivity checks.
+/// Flat metadata whose keys have passed credential-sensitivity checks.
 ///
-/// The validation covers top-level keys, keys in string maps, and JSON object
-/// keys at every depth, including objects nested inside arrays. Scalar values
-/// are intentionally not classified: callers must still avoid putting secrets
-/// under innocuous keys. This type's [`Debug`] implementation prints keys only
-/// and never automatically exposes values.
+/// [`UserMetadata`] stores ordered string pairs and rejects credential-like
+/// keys when each pair is added. This type's [`Debug`] implementation prints
+/// keys only and never automatically exposes values.
 ///
 /// The inner [`UserMetadata`] is not mutably exposed, so every value of this
 /// type retains the wrapper invariant after construction.

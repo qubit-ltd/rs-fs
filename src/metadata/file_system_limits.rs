@@ -249,6 +249,9 @@ impl FileSystemLimits {
     }
 }
 
+/// Tests whether a `usize` count exceeds the declared filesystem limit.
+///
+/// Values that cannot be represented as `u64` exceed every finite maximum.
 fn exceeds_usize(limit: FileSystemLimit, actual: usize) -> bool {
     match u64::try_from(actual) {
         Ok(actual) => limit.is_exceeded_by(actual),
@@ -256,6 +259,7 @@ fn exceeds_usize(limit: FileSystemLimit, actual: usize) -> bool {
     }
 }
 
+/// Builds a path-contextual resource-limit error for `operation`.
 fn limit_error(
     operation: FsOperation,
     message: &'static str,

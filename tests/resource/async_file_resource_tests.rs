@@ -60,7 +60,6 @@ use qubit_io::{
     AsyncInput,
     AsyncOutput,
 };
-use qubit_spi::ProviderId;
 
 struct ResourceAsyncFs {
     info: FileSystemInfo,
@@ -73,7 +72,7 @@ impl ResourceAsyncFs {
         Self {
             info: FileSystemInfo::new(
                 FileSystemId::new("async-resource").unwrap(),
-                ProviderId::new("async-resource").unwrap(),
+                "async-resource",
                 PathSemantics::Hierarchical,
             ),
             limits: FileSystemLimits::unknown(),

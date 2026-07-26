@@ -60,19 +60,15 @@ impl FileSystemInfo {
 
     /// Replaces the scrubbed provider metadata snapshot.
     ///
-    /// # Errors
-    ///
-    /// Returns [`crate::FsErrorKind::InvalidOptions`] when a top-level key or
-    /// any key nested in a string map or JSON object resembles credential
-    /// material.
-    /// Providers must expose secrets only through their external credential
-    /// boundary, never through this debug-visible local snapshot.
+    /// `metadata` has already rejected credential-like keys. Providers must
+    /// expose secrets only through an external credential boundary, never
+    /// through this debug-visible local snapshot.
     pub fn with_provider_metadata(
         mut self,
         metadata: UserMetadata,
-    ) -> FsResult<Self> {
+    ) -> Self {
         self.provider_metadata = NonSensitiveMetadata::from(metadata);
-        Ok(self)
+        self
     }
 
     /// Returns the configured filesystem identity.

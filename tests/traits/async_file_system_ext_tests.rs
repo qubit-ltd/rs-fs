@@ -57,7 +57,6 @@ use qubit_io::{
     AsyncInput,
     AsyncOutput,
 };
-use qubit_spi::ProviderId;
 
 #[derive(Clone, Copy)]
 enum ExtMode {
@@ -85,7 +84,7 @@ impl ExtAsyncFs {
         Self {
             info: FileSystemInfo::new(
                 FileSystemId::new("async-ext").unwrap(),
-                ProviderId::new("async-ext").unwrap(),
+                "async-ext",
                 PathSemantics::Hierarchical,
             ),
             limits: FileSystemLimits::unknown(),
@@ -222,10 +221,7 @@ impl AsyncInput for ExtInput {
                 FsOperation::OpenReader,
                 "provider quota exhausted",
             )
-            .with_provider(
-                ProviderId::new("stream-provider")
-                    .expect("provider id should parse"),
-            )
+            .with_provider("stream-provider")
             .into_io_error())),
             Self::Error => Poll::Ready(Err(IoError::other("read failed"))),
             Self::Eof => Poll::Ready(Ok(0)),

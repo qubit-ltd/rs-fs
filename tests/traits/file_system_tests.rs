@@ -35,7 +35,6 @@ use qubit_fs::{
     TempFileOptions,
     WriteOptions,
 };
-use qubit_spi::ProviderId;
 
 use crate::common::{
     MockFs,
@@ -74,7 +73,7 @@ impl MinimalFileSystem {
         Self {
             info: FileSystemInfo::new(
                 FileSystemId::new("minimal").unwrap(),
-                ProviderId::new("minimal").unwrap(),
+                "minimal",
                 PathSemantics::Hierarchical,
             ),
         }

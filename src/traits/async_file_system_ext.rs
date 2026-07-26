@@ -7,8 +7,6 @@
 // =============================================================================
 //! Convenience extension methods for [`crate::AsyncFileSystem`].
 
-use std::io::ErrorKind as IoErrorKind;
-
 use qubit_io::{
     AsyncInput,
     AsyncOutput,
@@ -119,6 +117,10 @@ where
     }
 }
 
+/// Reads all bytes from an opened asynchronous reader within `max_bytes`.
+///
+/// Returns a read error with `path` context, or a resource-limit error when a
+/// one-byte probe finds content beyond the caller budget.
 async fn read_all_from_async(
     mut reader: AsyncFileReader,
     path: &FsPath,
@@ -132,29 +134,27 @@ async fn read_all_from_async(
         match reader.read_async(&mut buffer[..read_limit]).await {
             Ok(0) => return Ok(bytes),
             Ok(read) => bytes.extend_from_slice(&buffer[..read]),
-            Err(error) if error.kind() == IoErrorKind::Interrupted => {}
             Err(error) => return Err(async_read_error(path, error)),
         }
     }
 
     let mut probe = [0_u8; 1];
-    loop {
-        match reader.read_async(&mut probe).await {
-            Ok(0) => return Ok(bytes),
-            Ok(_) => {
-                return Err(FsError::new(
-                    FsErrorKind::ResourceLimitExceeded,
-                    FsOperation::Read,
-                    "resource exceeds the caller byte limit",
-                )
-                .with_path(path.clone()));
-            }
-            Err(error) if error.kind() == IoErrorKind::Interrupted => {}
-            Err(error) => return Err(async_read_error(path, error)),
-        }
+    match reader.read_async(&mut probe).await {
+        Ok(0) => Ok(bytes),
+        Ok(_) => Err(FsError::new(
+            FsErrorKind::ResourceLimitExceeded,
+            FsOperation::Read,
+            "resource exceeds the caller byte limit",
+        )
+        .with_path(path.clone())),
+        Err(error) => Err(async_read_error(path, error)),
     }
 }
 
+/// Writes `bytes` to an opened asynchronous writer and commits it.
+///
+/// On transfer failure this function attempts a best-effort asynchronous
+/// abort, then returns the transfer error with `path` context.
 async fn write_all_to_async(
     mut writer: AsyncFileWriter,
     path: &FsPath,
@@ -167,6 +167,7 @@ async fn write_all_to_async(
     writer.commit_async().await
 }
 
+/// Adds filesystem read context to an asynchronous stream error.
 fn async_read_error(path: &FsPath, error: std::io::Error) -> FsError {
     FsError::from_stream_io(error, FsOperation::Read, path)
 }

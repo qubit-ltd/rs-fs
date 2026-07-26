@@ -40,7 +40,6 @@ use qubit_fs::{
     ReadOptions,
     WriteOptions,
 };
-use qubit_spi::ProviderId;
 
 use crate::common::{
     MockFs,
@@ -195,7 +194,7 @@ impl ExtFileSystem {
         Self {
             info: FileSystemInfo::new(
                 FileSystemId::new("ext").unwrap(),
-                ProviderId::new("ext").unwrap(),
+                "ext",
                 PathSemantics::Hierarchical,
             ),
             mode,
@@ -299,10 +298,7 @@ impl Read for EmbeddedFsErrorReader {
             FsOperation::OpenReader,
             "provider quota exhausted",
         )
-        .with_provider(
-            ProviderId::new("stream-provider")
-                .expect("provider id should parse"),
-        )
+        .with_provider("stream-provider")
         .into_io_error())
     }
 }

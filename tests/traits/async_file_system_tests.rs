@@ -39,7 +39,6 @@ use qubit_fs::{
     TempFileOptions,
     WriteOptions,
 };
-use qubit_spi::ProviderId;
 
 #[derive(Debug)]
 struct AsyncStatFs {
@@ -103,7 +102,7 @@ fn async_file_system_is_object_safe_and_uses_suffixed_operations() {
     let fs: Arc<dyn AsyncFileSystem> = Arc::new(AsyncStatFs {
         info: FileSystemInfo::new(
             FileSystemId::new("async-fs").expect("id should parse"),
-            ProviderId::new("mock").expect("provider id should parse"),
+            "mock",
             PathSemantics::Hierarchical,
         ),
         capabilities: FileSystemCapabilities::default()
@@ -125,7 +124,7 @@ fn async_file_system_defaults_are_awaitable_capability_failures() {
     let fs = AsyncStatFs {
         info: FileSystemInfo::new(
             FileSystemId::new("async-fs").unwrap(),
-            ProviderId::new("mock").unwrap(),
+            "mock",
             PathSemantics::Hierarchical,
         ),
         capabilities: FileSystemCapabilities::default(),

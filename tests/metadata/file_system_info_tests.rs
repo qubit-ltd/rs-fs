@@ -12,22 +12,21 @@ use qubit_fs::{
     PathSemantics,
     UserMetadata,
 };
-use qubit_spi::ProviderId;
 
 #[test]
 fn file_system_info_is_a_validated_local_snapshot() {
     let id = FileSystemId::new("mock-instance").unwrap();
-    let provider_id = ProviderId::new("mock").unwrap();
+    let provider_id = "mock";
     let info = FileSystemInfo::new(
         id.clone(),
-        provider_id.clone(),
+        provider_id,
         PathSemantics::ObjectKey,
     )
     .with_scheme("mock")
     .unwrap();
 
     assert_eq!(&id, info.id());
-    assert_eq!(provider_id.as_str(), info.provider_id());
+    assert_eq!(provider_id, info.provider_id());
     assert_eq!(&["mock"], info.schemes());
     assert_eq!(PathSemantics::ObjectKey, info.path_semantics());
     assert!(info.provider_metadata().is_empty());
@@ -38,15 +37,14 @@ fn file_system_info_is_a_validated_local_snapshot() {
 fn file_system_info_deduplicates_schemes_and_replaces_provider_metadata() {
     let info = FileSystemInfo::new(
         FileSystemId::new("mock-instance").unwrap(),
-        ProviderId::new("mock").unwrap(),
+        "mock",
         PathSemantics::ProviderSpecific,
     )
     .with_scheme("MOCK")
     .unwrap()
     .with_scheme("mock")
     .unwrap()
-    .with_provider_metadata(UserMetadata::new())
-    .unwrap();
+    .with_provider_metadata(UserMetadata::new());
 
     assert_eq!(&["mock"], info.schemes());
     assert!(info.provider_metadata().is_empty());
@@ -59,7 +57,7 @@ fn file_system_info_rejects_secret_bearing_provider_metadata() {
 }
 
 #[test]
-fn file_system_info_rejects_secret_keys_nested_in_json_metadata() {
+fn file_system_info_rejects_sensitive_provider_metadata_keys() {
     assert!(
         UserMetadata::new()
             .with("x-amz-signature", "plaintext")
@@ -68,15 +66,14 @@ fn file_system_info_rejects_secret_keys_nested_in_json_metadata() {
 }
 
 #[test]
-fn file_system_info_accepts_non_sensitive_nested_json_metadata() {
+fn file_system_info_preserves_validated_provider_metadata() {
     let metadata = UserMetadata::new().with("provider", "ready").unwrap();
     let info = FileSystemInfo::new(
         FileSystemId::new("mock-instance").unwrap(),
-        ProviderId::new("mock").unwrap(),
+        "mock",
         PathSemantics::ProviderSpecific,
     )
-    .with_provider_metadata(metadata)
-    .expect("non-sensitive nested metadata should be accepted");
+    .with_provider_metadata(metadata);
 
     assert!(info.provider_metadata().contains_key("provider"));
 }

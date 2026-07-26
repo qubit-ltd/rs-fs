@@ -8,7 +8,6 @@
 //! Directory creation options.
 
 use crate::{
-    FsResult,
     NonSensitiveMetadata,
     UserMetadata,
 };
@@ -36,18 +35,13 @@ impl Default for CreateDirOptions {
 }
 
 impl CreateDirOptions {
-    /// Replaces user-defined metadata after validating its structural keys.
-    ///
-    /// # Errors
-    ///
-    /// Returns an invalid-options error when a top-level key or a key nested
-    /// in a string map or JSON object resembles credential material.
+    /// Replaces user-defined metadata that has already passed key validation.
     #[inline]
     pub fn with_user_metadata(
         mut self,
         metadata: UserMetadata,
-    ) -> FsResult<Self> {
+    ) -> Self {
         self.user_metadata = NonSensitiveMetadata::from(metadata);
-        Ok(self)
+        self
     }
 }
