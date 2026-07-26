@@ -18,7 +18,6 @@ mod delete_options_tests;
 mod list_options_tests;
 mod metadata_preserve_policy_tests;
 mod persist_options_tests;
-mod progress_policy_tests;
 mod read_options_tests;
 mod rename_options_tests;
 mod rename_outcome_tests;

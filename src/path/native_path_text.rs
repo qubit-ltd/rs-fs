@@ -7,7 +7,7 @@
 // =============================================================================
 //! Shared canonical native-path text conversion helpers.
 
-use crate::NativePathCodecError;
+use super::native_path_codec_error::NativePathCodecError;
 
 /// Decodes and validates canonical native-path text into its original bytes.
 ///

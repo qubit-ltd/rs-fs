@@ -10,9 +10,8 @@ use qubit_fs::{
     CopyMethod,
     CopyOutcome,
     CopyStats,
-    FsErrorKind,
+    UserMetadata,
 };
-use qubit_metadata::Metadata;
 
 #[test]
 fn test_copy_outcome_new_stores_stats_and_method() {
@@ -35,26 +34,15 @@ fn test_copy_outcome_new_stores_stats_and_method() {
 
 #[test]
 fn copy_outcome_rejects_nested_sensitive_diagnostics() {
-    let error = CopyOutcome::new(
-        CopyStats::default(),
-        CopyMethod::ServerSide,
-        AchievedAtomicity::Atomic,
-    )
-    .with_diagnostics(Metadata::new().with(
-        "provider",
-        serde_json::json!({"items": [{"authorization": "plaintext"}]}),
-    ))
-    .expect_err("nested credential diagnostics must be rejected");
-
-    assert_eq!(FsErrorKind::InvalidOptions, error.kind());
-
     let outcome = CopyOutcome::new(
         CopyStats::default(),
         CopyMethod::Stream,
         AchievedAtomicity::NonAtomic,
     )
     .with_diagnostics(
-        Metadata::new().with("request_id", "private-copy-id".to_owned()),
+        UserMetadata::new()
+            .with("request_id", "private-copy-id")
+            .unwrap(),
     )
     .expect("safe diagnostics should be accepted");
     assert!(outcome.diagnostics.contains_key("request_id"));

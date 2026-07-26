@@ -18,7 +18,6 @@ use std::io::{
     Result as IoResult,
 };
 
-use log::warn;
 use qubit_io::Output;
 
 use crate::{
@@ -232,9 +231,8 @@ impl Drop for FileWriter {
             WriterState::Open
                 | WriterState::NotPublished
                 | WriterState::Published
-        ) && let Err(error) = self.session.abort()
-        {
-            warn!("best-effort writer abort failed during drop: {error}");
+        ) {
+            let _ = self.session.abort();
         }
     }
 }

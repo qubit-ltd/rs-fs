@@ -7,10 +7,11 @@
 // =============================================================================
 
 mod common;
+mod core_boundary_tests;
 mod error;
 mod metadata;
 mod options;
 mod path;
-mod provider;
+mod resource;
 mod temp;
 mod traits;

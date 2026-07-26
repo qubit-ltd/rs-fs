@@ -7,12 +7,10 @@
 // =============================================================================
 //! Directory creation options.
 
-use qubit_metadata::Metadata;
-
 use crate::{
-    FsOperation,
     FsResult,
     NonSensitiveMetadata,
+    UserMetadata,
 };
 
 /// Options controlling directory or collection creation.
@@ -45,12 +43,11 @@ impl CreateDirOptions {
     /// Returns an invalid-options error when a top-level key or a key nested
     /// in a string map or JSON object resembles credential material.
     #[inline]
-    pub fn with_user_metadata(mut self, metadata: Metadata) -> FsResult<Self> {
-        self.user_metadata = NonSensitiveMetadata::try_from_with_context(
-            metadata,
-            FsOperation::CreateDir,
-            "credential-like directory metadata keys are forbidden",
-        )?;
+    pub fn with_user_metadata(
+        mut self,
+        metadata: UserMetadata,
+    ) -> FsResult<Self> {
+        self.user_metadata = NonSensitiveMetadata::from(metadata);
         Ok(self)
     }
 }

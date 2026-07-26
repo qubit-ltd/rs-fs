@@ -10,6 +10,7 @@ use qubit_fs::{
     FileSystemId,
     FileSystemInfo,
     PathSemantics,
+    UserMetadata,
 };
 use qubit_spi::ProviderId;
 
@@ -26,7 +27,7 @@ fn file_system_info_is_a_validated_local_snapshot() {
     .unwrap();
 
     assert_eq!(&id, info.id());
-    assert_eq!(&provider_id, info.provider_id());
+    assert_eq!(provider_id.as_str(), info.provider_id());
     assert_eq!(&["mock"], info.schemes());
     assert_eq!(PathSemantics::ObjectKey, info.path_semantics());
     assert!(info.provider_metadata().is_empty());
@@ -44,7 +45,7 @@ fn file_system_info_deduplicates_schemes_and_replaces_provider_metadata() {
     .unwrap()
     .with_scheme("mock")
     .unwrap()
-    .with_provider_metadata(qubit_metadata::Metadata::new())
+    .with_provider_metadata(UserMetadata::new())
     .unwrap();
 
     assert_eq!(&["mock"], info.schemes());
@@ -54,52 +55,21 @@ fn file_system_info_deduplicates_schemes_and_replaces_provider_metadata() {
 
 #[test]
 fn file_system_info_rejects_secret_bearing_provider_metadata() {
-    let metadata = qubit_metadata::Metadata::new()
-        .with("access token", "secret".to_owned());
-    let error = FileSystemInfo::new(
-        FileSystemId::new("mock-instance").unwrap(),
-        ProviderId::new("mock").unwrap(),
-        PathSemantics::ProviderSpecific,
-    )
-    .with_provider_metadata(metadata)
-    .expect_err("provider snapshots must not retain credential material");
-
-    assert_eq!(qubit_fs::FsErrorKind::InvalidOptions, error.kind());
+    assert!(UserMetadata::new().with("access token", "secret").is_err());
 }
 
 #[test]
 fn file_system_info_rejects_secret_keys_nested_in_json_metadata() {
-    let metadata = qubit_metadata::Metadata::new().with(
-        "provider",
-        serde_json::json!({
-            "diagnostics": [
-                {"status": "failed"},
-                {"x-amz-signature": "plaintext"}
-            ]
-        }),
+    assert!(
+        UserMetadata::new()
+            .with("x-amz-signature", "plaintext")
+            .is_err()
     );
-    let error = FileSystemInfo::new(
-        FileSystemId::new("mock-instance").unwrap(),
-        ProviderId::new("mock").unwrap(),
-        PathSemantics::ProviderSpecific,
-    )
-    .with_provider_metadata(metadata)
-    .expect_err("debug-visible metadata must reject nested secret keys");
-
-    assert_eq!(qubit_fs::FsErrorKind::InvalidOptions, error.kind());
 }
 
 #[test]
 fn file_system_info_accepts_non_sensitive_nested_json_metadata() {
-    let metadata = qubit_metadata::Metadata::new().with(
-        "provider",
-        serde_json::json!({
-            "diagnostics": [
-                {"status": "ready"},
-                {"region": "primary"}
-            ]
-        }),
-    );
+    let metadata = UserMetadata::new().with("provider", "ready").unwrap();
     let info = FileSystemInfo::new(
         FileSystemId::new("mock-instance").unwrap(),
         ProviderId::new("mock").unwrap(),

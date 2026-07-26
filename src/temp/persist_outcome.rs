@@ -7,15 +7,13 @@
 // =============================================================================
 //! Successful temporary resource persistence outcome.
 
-use qubit_metadata::Metadata;
-
 use crate::{
     AchievedAtomicity,
-    FsOperation,
     FsPath,
     FsResult,
     NonSensitiveMetadata,
     PublicationMethod,
+    UserMetadata,
 };
 
 /// Confirmed result of publishing a temporary source to its final target.
@@ -63,12 +61,11 @@ impl PersistOutcome {
     /// Returns an invalid-options error when a top-level key or a key nested
     /// in a string map or JSON object resembles credential material.
     #[inline]
-    pub fn with_diagnostics(mut self, diagnostics: Metadata) -> FsResult<Self> {
-        self.diagnostics = NonSensitiveMetadata::try_from_with_context(
-            diagnostics,
-            FsOperation::PersistTemp,
-            "credential-like persistence diagnostic keys are forbidden",
-        )?;
+    pub fn with_diagnostics(
+        mut self,
+        diagnostics: UserMetadata,
+    ) -> FsResult<Self> {
+        self.diagnostics = NonSensitiveMetadata::from(diagnostics);
         Ok(self)
     }
 }

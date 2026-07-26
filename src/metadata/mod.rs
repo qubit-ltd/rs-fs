@@ -24,6 +24,7 @@ mod non_sensitive_metadata;
 mod opened_file_info;
 mod publication_method;
 mod resource_version;
+mod user_metadata;
 mod write_outcome;
 
 pub use achieved_atomicity::AchievedAtomicity;
@@ -43,4 +44,5 @@ pub use non_sensitive_metadata::NonSensitiveMetadata;
 pub use opened_file_info::OpenedFileInfo;
 pub use publication_method::PublicationMethod;
 pub use resource_version::ResourceVersion;
+pub use user_metadata::UserMetadata;
 pub use write_outcome::WriteOutcome;

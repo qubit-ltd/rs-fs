@@ -38,13 +38,10 @@ use qubit_fs::{
     FileSystem,
     FileSystemCapabilities,
     FileSystemCapability,
-    FileSystemConfig,
     FileSystemId,
     FileSystemInfo,
     FileSystemLimits,
     FileSystemProperties,
-    FileSystemResolution,
-    FileSystemSpec,
     FileWriteSession,
     FileWriter,
     FsError,
@@ -64,13 +61,6 @@ use qubit_fs::{
     WriteFailureState,
     WriteOptions,
     WriteOutcome,
-};
-use qubit_spi::error::ProviderError;
-use qubit_spi::{
-    ProviderDescriptor,
-    ProviderId,
-    ProviderMetadata,
-    ServiceProvider,
 };
 
 #[derive(Debug, Default)]
@@ -123,8 +113,7 @@ impl FileSystemProperties for MockFs {
             FileSystemInfo::new(
                 FileSystemId::new("mock-instance")
                     .expect("mock filesystem id should be valid"),
-                ProviderId::new("mock")
-                    .expect("mock provider id should be valid"),
+                "mock",
                 PathSemantics::Hierarchical,
             )
             .with_scheme("mock")
@@ -440,50 +429,5 @@ impl DirectoryStreamSession for PartiallyFailingDirectoryStream {
                 "list failed",
             ))
         }
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct MockProvider {
-    pub(crate) descriptor: ProviderDescriptor,
-    pub(crate) fs: MockFs,
-}
-
-impl ServiceProvider<FileSystemSpec> for MockProvider {
-    fn create_configured(
-        &self,
-        config: &FileSystemConfig,
-    ) -> Result<FileSystemResolution<dyn FileSystem>, ProviderError> {
-        let fs: Arc<dyn FileSystem> = Arc::new(self.fs.clone());
-        let path = FsPath::parse_literal(config.uri().path().as_encoded())
-            .expect("mock URI path should be valid");
-        Ok(FileSystemResolution::new(fs, path, config.uri().clone()))
-    }
-}
-
-impl ProviderMetadata for MockProvider {
-    fn descriptor(&self) -> ProviderDescriptor {
-        self.descriptor.clone()
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct FailingCreateProvider {
-    pub(crate) descriptor: ProviderDescriptor,
-    pub(crate) error: ProviderError,
-}
-
-impl ServiceProvider<FileSystemSpec> for FailingCreateProvider {
-    fn create_configured(
-        &self,
-        _config: &FileSystemConfig,
-    ) -> Result<FileSystemResolution<dyn FileSystem>, ProviderError> {
-        Err(self.error.clone())
-    }
-}
-
-impl ProviderMetadata for FailingCreateProvider {
-    fn descriptor(&self) -> ProviderDescriptor {
-        self.descriptor.clone()
     }
 }

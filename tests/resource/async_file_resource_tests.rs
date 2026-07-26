@@ -301,7 +301,9 @@ where
 #[test]
 fn async_file_resource_delegates_every_operation_and_binds_handles() {
     let fs: Arc<dyn AsyncFileSystem> = Arc::new(ResourceAsyncFs::new());
-    let resource = AsyncFileResource::new(fs, FsPath::parse("/file").unwrap());
+    let path = FsPath::parse("/file").unwrap();
+    let location = FileLocation::new(fs.info().id().clone(), path);
+    let resource = AsyncFileResource::from_location(fs, location);
     let target = FsPath::parse("/target").unwrap();
 
     assert_eq!("/file", resource.path().as_str());

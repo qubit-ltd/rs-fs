@@ -55,7 +55,7 @@ fn test_fs_error_carries_context_and_source() {
     assert_eq!(FsOperation::Copy, error.operation());
     assert_eq!(Some(&path), error.path());
     assert_eq!(Some(&target), error.target());
-    assert_eq!(Some(&provider), error.provider());
+    assert_eq!(Some(provider.as_str()), error.provider());
     assert!(error.to_string().contains("copy failed"));
     assert!(std::error::Error::source(&error).is_some());
     assert_eq!(

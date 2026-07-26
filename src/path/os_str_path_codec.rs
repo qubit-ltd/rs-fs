@@ -28,10 +28,10 @@ use super::native_path_text::{
 
 /// Losslessly maps [`OsStr`] values to canonical native-path text.
 ///
-/// On Unix this is equivalent to [`crate::EscapedBytePathCodec`]. On Windows
-/// it explicitly preserves unpaired UTF-16 surrogates through WTF-8 before
-/// applying the same canonical byte escaping. Other targets accept only values
-/// exposed as strict Unicode by the stable standard library.
+/// On Unix this applies canonical byte escaping directly. On Windows it
+/// explicitly preserves unpaired UTF-16 surrogates through WTF-8 before
+/// applying the same canonical byte escaping. Other targets accept only
+/// values exposed as strict Unicode by the stable standard library.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct OsStrPathCodec;
 

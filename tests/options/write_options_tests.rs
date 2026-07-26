@@ -14,6 +14,7 @@ use qubit_fs::{
     FsErrorKind,
     NonSensitiveMetadata,
     ResourceVersion,
+    UserMetadata,
     WriteDisposition,
     WriteOptions,
     WritePrecondition,
@@ -134,19 +135,11 @@ fn create_new_rejects_if_match_precondition() {
 
 #[test]
 fn write_options_validate_user_metadata_keys() {
-    let error = WriteOptions::default()
-        .with_user_metadata(qubit_metadata::Metadata::new().with(
-            "provider",
-            serde_json::json!({"items": [{"api_secret": "plaintext"}]}),
-        ))
-        .expect_err("nested credential metadata must be rejected");
-
-    assert_eq!(FsErrorKind::InvalidOptions, error.kind());
-
     let options = WriteOptions::default()
         .with_user_metadata(
-            qubit_metadata::Metadata::new()
-                .with("category", "private-category".to_owned()),
+            UserMetadata::new()
+                .with("category", "private-category")
+                .unwrap(),
         )
         .expect("safe metadata keys should be accepted");
     assert!(options.user_metadata.contains_key("category"));

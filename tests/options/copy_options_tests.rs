@@ -12,7 +12,6 @@ use qubit_fs::{
     FileSystemCapabilities,
     FileSystemCapability,
     MetadataPreservePolicy,
-    ProgressPolicy,
     ServerSidePreference,
 };
 
@@ -56,8 +55,6 @@ fn test_copy_options_full_configuration_is_usable() {
         follow_symlinks: true,
         create_parent: true,
         continue_on_error: true,
-        filter: None,
-        progress: ProgressPolicy::Detailed,
     };
 
     assert_eq!(CopyMode::Tree, options.mode);

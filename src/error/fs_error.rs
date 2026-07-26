@@ -16,8 +16,6 @@ use std::fmt::{
 };
 use std::io;
 
-use qubit_spi::ProviderId;
-
 use crate::{
     FileSystemCapability,
     FsErrorKind,
@@ -42,7 +40,7 @@ pub struct FsError {
     /// Secondary path involved in the operation.
     target: Option<Box<FsPath>>,
     /// Provider id or alias involved in the operation.
-    provider: Option<ProviderId>,
+    provider: Option<Box<str>>,
     /// Capability needed to satisfy the request, when applicable.
     required_capability: Option<FileSystemCapability>,
     /// Human-readable, non-sensitive error message.
@@ -164,8 +162,8 @@ impl FsError {
     /// Updated filesystem error.
     #[inline]
     #[must_use]
-    pub fn with_provider(mut self, provider: ProviderId) -> Self {
-        self.provider = Some(provider);
+    pub fn with_provider(mut self, provider: impl Display) -> Self {
+        self.provider = Some(provider.to_string().into());
         self
     }
 
@@ -316,8 +314,8 @@ impl FsError {
     /// The canonical provider id when one was attached.
     #[inline(always)]
     #[must_use]
-    pub fn provider(&self) -> Option<&ProviderId> {
-        self.provider.as_ref()
+    pub fn provider(&self) -> Option<&str> {
+        self.provider.as_deref()
     }
 
     /// Gets the required capability associated with this error.

@@ -13,8 +13,6 @@ use std::fmt::{
     Result as FmtResult,
 };
 
-use log::warn;
-
 use crate::{
     CreateDirOptions,
     DirectoryStream,
@@ -293,9 +291,8 @@ impl Drop for TempDir {
         if matches!(
             self.state,
             TempResourceState::Owned | TempResourceState::CleanupRequired
-        ) && let Err(error) = self.session.cleanup()
-        {
-            warn!("best-effort temporary directory cleanup failed: {error}");
+        ) {
+            let _ = self.session.cleanup();
         }
     }
 }

@@ -13,8 +13,6 @@ use std::fmt::{
     Result as FmtResult,
 };
 
-use log::warn;
-
 use crate::{
     FileReader,
     FileResource,
@@ -272,9 +270,8 @@ impl Drop for TempFile {
         if matches!(
             self.state,
             TempResourceState::Owned | TempResourceState::CleanupRequired
-        ) && let Err(error) = self.session.cleanup()
-        {
-            warn!("best-effort temporary file cleanup failed: {error}");
+        ) {
+            let _ = self.session.cleanup();
         }
     }
 }

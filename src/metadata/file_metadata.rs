@@ -9,14 +9,12 @@
 
 use std::time::SystemTime;
 
-use qubit_metadata::Metadata;
-
 use crate::{
     Checksum,
     FileKind,
-    FsOperation,
     FsResult,
     NonSensitiveMetadata,
+    UserMetadata,
 };
 
 /// Stable and extensible metadata for one filesystem resource.
@@ -76,12 +74,11 @@ impl FileMetadata {
     /// Returns an invalid-options error when a top-level key or a key nested
     /// in a string map or JSON object resembles credential material.
     #[inline]
-    pub fn with_user_metadata(mut self, metadata: Metadata) -> FsResult<Self> {
-        self.user_metadata = NonSensitiveMetadata::try_from_with_context(
-            metadata,
-            FsOperation::Stat,
-            "credential-like user metadata keys are forbidden",
-        )?;
+    pub fn with_user_metadata(
+        mut self,
+        metadata: UserMetadata,
+    ) -> FsResult<Self> {
+        self.user_metadata = NonSensitiveMetadata::from(metadata);
         Ok(self)
     }
 
@@ -94,13 +91,9 @@ impl FileMetadata {
     #[inline]
     pub fn with_provider_metadata(
         mut self,
-        metadata: Metadata,
+        metadata: UserMetadata,
     ) -> FsResult<Self> {
-        self.provider_metadata = NonSensitiveMetadata::try_from_with_context(
-            metadata,
-            FsOperation::Stat,
-            "credential-like provider metadata keys are forbidden",
-        )?;
+        self.provider_metadata = NonSensitiveMetadata::from(metadata);
         Ok(self)
     }
 

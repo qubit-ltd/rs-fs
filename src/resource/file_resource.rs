@@ -39,9 +39,8 @@ use crate::{
 
 /// A filesystem path bound to the filesystem that owns it.
 ///
-/// `FileResource` is the high-level resource object returned by
-/// [`FileSystemRegistry::resource`](crate::FileSystemRegistry::resource). It
-/// keeps path operations close to the resolved filesystem without making
+/// `FileResource` keeps path operations close to the resolved filesystem
+/// without making
 /// [`FsPath`](crate::FsPath) itself carry any backend state.
 #[derive(Clone)]
 pub struct FileResource {

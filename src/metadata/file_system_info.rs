@@ -7,23 +7,21 @@
 // =============================================================================
 //! Immutable configured filesystem information.
 
-use qubit_metadata::Metadata;
-use qubit_spi::ProviderId;
-
 use crate::{
     FileSystemId,
-    FsOperation,
     FsResult,
     FsScheme,
     NonSensitiveMetadata,
     PathSemantics,
+    UserMetadata,
 };
+use std::fmt::Display;
 
 /// Construction-time local snapshot describing one filesystem object.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FileSystemInfo {
     id: FileSystemId,
-    provider_id: ProviderId,
+    provider_id: Box<str>,
     schemes: Vec<String>,
     path_semantics: PathSemantics,
     provider_metadata: NonSensitiveMetadata,
@@ -35,12 +33,12 @@ impl FileSystemInfo {
     #[must_use]
     pub fn new(
         id: FileSystemId,
-        provider_id: ProviderId,
+        provider_id: impl Display,
         path_semantics: PathSemantics,
     ) -> Self {
         Self {
             id,
-            provider_id,
+            provider_id: provider_id.to_string().into(),
             schemes: Vec::new(),
             path_semantics,
             provider_metadata: NonSensitiveMetadata::new(),
@@ -71,13 +69,9 @@ impl FileSystemInfo {
     /// boundary, never through this debug-visible local snapshot.
     pub fn with_provider_metadata(
         mut self,
-        metadata: Metadata,
+        metadata: UserMetadata,
     ) -> FsResult<Self> {
-        self.provider_metadata = NonSensitiveMetadata::try_from_with_context(
-            metadata,
-            FsOperation::Provider,
-            "credential-like provider metadata is forbidden",
-        )?;
+        self.provider_metadata = NonSensitiveMetadata::from(metadata);
         Ok(self)
     }
 
@@ -91,7 +85,7 @@ impl FileSystemInfo {
     /// Returns the provider identity that created this filesystem.
     #[inline]
     #[must_use]
-    pub const fn provider_id(&self) -> &ProviderId {
+    pub const fn provider_id(&self) -> &str {
         &self.provider_id
     }
 

@@ -121,13 +121,7 @@ fn read_all_restores_embedded_file_system_error_context() {
     assert_eq!(FsErrorKind::QuotaExceeded, error.kind());
     assert_eq!(FsOperation::Read, error.operation());
     assert_eq!(Some(&path), error.path());
-    assert_eq!(
-        Some(
-            &ProviderId::new("stream-provider")
-                .expect("provider id should parse")
-        ),
-        error.provider(),
-    );
+    assert_eq!(Some("stream-provider"), error.provider());
 }
 
 #[test]

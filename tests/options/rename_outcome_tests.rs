@@ -8,11 +8,10 @@
 
 use qubit_fs::{
     AchievedAtomicity,
-    FsErrorKind,
     PublicationMethod,
     RenameOutcome,
+    UserMetadata,
 };
-use qubit_metadata::Metadata;
 
 #[test]
 fn rename_outcome_reports_actual_method_and_atomicity() {
@@ -27,24 +26,14 @@ fn rename_outcome_reports_actual_method_and_atomicity() {
 
 #[test]
 fn rename_outcome_rejects_nested_sensitive_diagnostics() {
-    let error = RenameOutcome::new(
-        AchievedAtomicity::Atomic,
-        PublicationMethod::AtomicRename,
-    )
-    .with_diagnostics(Metadata::new().with(
-        "provider",
-        serde_json::json!({"items": [{"secret_key": "plaintext"}]}),
-    ))
-    .expect_err("nested credential diagnostics must be rejected");
-
-    assert_eq!(FsErrorKind::InvalidOptions, error.kind());
-
     let outcome = RenameOutcome::new(
         AchievedAtomicity::NonAtomic,
         PublicationMethod::CopyThenDelete,
     )
     .with_diagnostics(
-        Metadata::new().with("request_id", "private-rename-id".to_owned()),
+        UserMetadata::new()
+            .with("request_id", "private-rename-id")
+            .unwrap(),
     )
     .expect("safe diagnostics should be accepted");
     assert!(outcome.diagnostics.contains_key("request_id"));

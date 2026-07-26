@@ -24,9 +24,12 @@ Qubit FS 是一个 provider-neutral 的文件系统抽象层，面向本地、�
   路径；
 - 类型化的能力、要求、结果和错误保留 POSIX 文件系统、对象存储、云盘和分布式
   文件系统之间真实存在的语义差异；
-- 同步与异步 registry 都会把完整 `FileSystemConfig` 传给可插拔 provider。
+- `FileResource` 与 `AsyncFileResource` 在不依赖 provider 发现机制的情况下，
+  将 provider-neutral 路径绑定到文件系统。
 
-本 crate 不内置本地或远程 provider。应用在启动时组装所需后端 crate。
+本 crate 不内置本地或远程 provider。运行时 provider 发现与 SPI 集成位于独立
+的 `qubit-fs-registry` crate，因此核心的 normal dependency 只包含
+`qubit-io`。
 
 ## 安装
 

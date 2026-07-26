@@ -7,7 +7,6 @@
 // =============================================================================
 //! Path and URI models.
 
-mod escaped_byte_path_codec;
 mod fs_authority;
 mod fs_name;
 mod fs_path;
@@ -22,9 +21,7 @@ mod os_str_path_codec;
 mod path_semantics;
 mod relative_fs_path;
 mod uri_codec;
-mod utf8_path_codec;
 
-pub use escaped_byte_path_codec::EscapedBytePathCodec;
 pub use fs_authority::FsAuthority;
 pub use fs_name::FsName;
 pub use fs_path::FsPath;
@@ -38,4 +35,3 @@ pub use native_path_codec_error::NativePathCodecError;
 pub use os_str_path_codec::OsStrPathCodec;
 pub use path_semantics::PathSemantics;
 pub use relative_fs_path::RelativeFsPath;
-pub use utf8_path_codec::Utf8PathCodec;

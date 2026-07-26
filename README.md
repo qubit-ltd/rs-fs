@@ -26,11 +26,13 @@ The crate defines contracts rather than a concrete backend:
 - typed capabilities, requirements, outcomes, and errors preserve semantic
   differences between POSIX filesystems, object stores, cloud drives, and
   distributed filesystems;
-- sync and async registries pass a complete `FileSystemConfig` to pluggable
-  providers.
+- `FileResource` and `AsyncFileResource` bind a provider-neutral path to a
+  filesystem without depending on provider discovery.
 
 No local or remote provider is built into this crate. Applications assemble
-backend crates at startup.
+backend crates at startup. Runtime provider discovery and SPI integration live
+in the separate `qubit-fs-registry` crate, keeping this core's normal
+dependency graph limited to `qubit-io`.
 
 ## Installation
 
@@ -39,7 +41,7 @@ backend crates at startup.
 qubit-fs = "0.2"
 ```
 
-## Synchronous Resolution
+## Bound Resources
 
 ```rust
 use qubit_fs::{

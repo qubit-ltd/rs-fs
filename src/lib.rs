@@ -21,7 +21,7 @@ mod error;
 mod metadata;
 mod options;
 mod path;
-mod provider;
+mod resource;
 mod temp;
 mod traits;
 
@@ -49,6 +49,7 @@ pub use metadata::{
     OpenedFileInfo,
     PublicationMethod,
     ResourceVersion,
+    UserMetadata,
     WriteOutcome,
 };
 pub use options::{
@@ -65,7 +66,6 @@ pub use options::{
     ListOptions,
     MetadataPreservePolicy,
     PersistOptions,
-    ProgressPolicy,
     ReadOptions,
     RenameOptions,
     RenameOutcome,
@@ -75,7 +75,6 @@ pub use options::{
     WritePrecondition,
 };
 pub use path::{
-    EscapedBytePathCodec,
     FsAuthority,
     FsName,
     FsPath,
@@ -88,20 +87,10 @@ pub use path::{
     OsStrPathCodec,
     PathSemantics,
     RelativeFsPath,
-    Utf8PathCodec,
 };
-pub use provider::{
+pub use resource::{
     AsyncFileResource,
-    AsyncFileSystemProvider,
-    AsyncFileSystemRegistry,
-    CredentialRef,
     FileResource,
-    FileSystemConfig,
-    FileSystemProvider,
-    FileSystemRegistry,
-    FileSystemResolution,
-    FileSystemSpec,
-    map_async_provider_error,
 };
 pub use temp::{
     AsyncTempDir,

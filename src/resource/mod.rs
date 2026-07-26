@@ -5,11 +5,10 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-mod fs_authority_tests;
-mod fs_name_tests;
-mod fs_path_tests;
-mod fs_uri_tests;
-mod native_path_codec_error_tests;
-mod os_str_path_codec_tests;
-mod path_semantics_tests;
-mod relative_fs_path_tests;
+//! Filesystem-bound resource handles.
+
+mod async_file_resource;
+mod file_resource;
+
+pub use async_file_resource::AsyncFileResource;
+pub use file_resource::FileResource;

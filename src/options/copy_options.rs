@@ -7,8 +7,6 @@
 // =============================================================================
 //! Copy operation options and policy types.
 
-use qubit_metadata::MetadataFilter;
-
 use crate::{
     CopyConflictPolicy,
     CopyMode,
@@ -18,7 +16,6 @@ use crate::{
     FsErrorKind,
     FsOperation,
     MetadataPreservePolicy,
-    ProgressPolicy,
     ServerSidePreference,
 };
 
@@ -39,10 +36,6 @@ pub struct CopyOptions {
     pub create_parent: bool,
     /// Whether tree copy should continue after per-entry failures.
     pub continue_on_error: bool,
-    /// Optional metadata filter for tree copy.
-    pub filter: Option<MetadataFilter>,
-    /// Progress collection policy.
-    pub progress: ProgressPolicy,
 }
 
 impl CopyOptions {
@@ -112,8 +105,6 @@ impl Default for CopyOptions {
             follow_symlinks: false,
             create_parent: false,
             continue_on_error: false,
-            filter: None,
-            progress: ProgressPolicy::CountOnly,
         }
     }
 }

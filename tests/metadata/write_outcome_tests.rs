@@ -7,12 +7,11 @@
 // =============================================================================
 use qubit_fs::{
     AchievedAtomicity,
-    FsErrorKind,
     PublicationMethod,
     ResourceVersion,
+    UserMetadata,
     WriteOutcome,
 };
-use qubit_metadata::Metadata;
 
 #[test]
 fn write_outcome_reports_actual_publication_semantics() {
@@ -33,20 +32,12 @@ fn write_outcome_reports_actual_publication_semantics() {
 
 #[test]
 fn write_outcome_validates_and_safely_formats_diagnostics() {
-    let error =
-        WriteOutcome::new(AchievedAtomicity::Atomic, PublicationMethod::Direct)
-            .with_diagnostics(Metadata::new().with(
-                "provider",
-                serde_json::json!({"x-amz-signature": "plaintext"}),
-            ))
-            .expect_err("nested credential diagnostics must be rejected");
-    assert_eq!(FsErrorKind::InvalidOptions, error.kind());
-
     let outcome =
         WriteOutcome::new(AchievedAtomicity::Atomic, PublicationMethod::Direct)
             .with_diagnostics(
-                Metadata::new()
-                    .with("request_id", "private-request-id".to_owned()),
+                UserMetadata::new()
+                    .with("request_id", "private-request-id")
+                    .unwrap(),
             )
             .expect("safe diagnostic keys should be accepted");
     assert!(outcome.diagnostics.contains_key("request_id"));

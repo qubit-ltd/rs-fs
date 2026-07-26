@@ -20,6 +20,7 @@ use qubit_fs::{
     DeleteOptions,
     DirectoryStream,
     DirectoryStreamExt,
+    FileLocation,
     FileResource,
     FileSystem,
     FileSystemCapabilities,
@@ -29,7 +30,6 @@ use qubit_fs::{
     FileSystemLimit,
     FileSystemLimits,
     FileSystemProperties,
-    FileSystemRegistry,
     FsError,
     FsErrorKind,
     FsOperation,
@@ -45,23 +45,14 @@ use qubit_fs::{
 };
 use qubit_spi::ProviderId;
 
-use crate::common::{
-    MockFs,
-    MockProvider,
-};
+use crate::common::MockFs;
 
 #[test]
 fn test_file_resource_delegates_operations_to_resolved_file_system() {
     let fs = MockFs::default();
-    let registry = registry_with_mock(MockProvider {
-        descriptor: mock_descriptor(),
-        fs,
-    });
     let resource_uri =
         FsUri::parse("mock:///file.txt").expect("URI should parse");
-    let resource = registry
-        .resource_uri(&resource_uri)
-        .expect("URI should resolve");
+    let resource = resource_with_mock(fs, "/file.txt", resource_uri.clone());
     let _: FileResource = resource.clone();
 
     assert_eq!("/file.txt", resource.path().as_str());
@@ -135,14 +126,8 @@ fn test_file_resource_delegates_operations_to_resolved_file_system() {
 #[test]
 fn test_file_resource_delegates_directory_create_and_delete() {
     let fs = MockFs::default();
-    let registry = registry_with_mock(MockProvider {
-        descriptor: mock_descriptor(),
-        fs,
-    });
     let dir_uri = FsUri::parse("mock:///dir").expect("URI should parse");
-    let dir = registry
-        .resource_uri(&dir_uri)
-        .expect("directory resource should resolve");
+    let dir = resource_with_mock(fs, "/dir", dir_uri);
 
     dir.create_dir(CreateDirOptions::default())
         .expect("resource directory should create");
@@ -241,13 +226,11 @@ fn file_resource_preflights_provider_path_and_range_limits() {
         .with_max_path_text_bytes(FileSystemLimit::Maximum(8))
         .with_max_read_range_bytes(FileSystemLimit::Maximum(4));
     let fs = MockFs::default().with_limits(limits);
-    let registry = registry_with_mock(MockProvider {
-        descriptor: mock_descriptor(),
-        fs: fs.clone(),
-    });
-    let resource = registry
-        .resource_uri(&FsUri::parse("mock:///file.txt").unwrap())
-        .unwrap();
+    let resource = resource_with_mock(
+        fs.clone(),
+        "/file.txt",
+        FsUri::parse("mock:///file.txt").unwrap(),
+    );
 
     let path_error = resource.stat().unwrap_err();
     assert_eq!(FsErrorKind::ResourceLimitExceeded, path_error.kind());
@@ -373,18 +356,10 @@ fn file_resource_clamps_list_page_size_before_delegation() {
     assert!(result.is_err());
 }
 
-fn registry_with_mock(provider: MockProvider) -> FileSystemRegistry {
-    let registry = FileSystemRegistry::default();
-    registry
-        .register(provider)
-        .expect("provider should register");
-    registry
-}
-
-fn mock_descriptor() -> qubit_spi::ProviderDescriptor {
-    qubit_spi::ProviderDescriptor::new(
-        qubit_spi::ProviderId::new("mock").expect("valid provider ID"),
-    )
-    .with_aliases(["mem"])
-    .expect("valid aliases")
+fn resource_with_mock(fs: MockFs, path: &str, uri: FsUri) -> FileResource {
+    let fs: Arc<dyn FileSystem> = Arc::new(fs);
+    let path = FsPath::parse(path).expect("path should parse");
+    let location =
+        FileLocation::new(fs.info().id().clone(), path).with_uri(uri);
+    FileResource::from_location(fs, location)
 }

@@ -61,6 +61,7 @@ use qubit_spi::ProviderId;
 
 #[derive(Clone, Copy)]
 enum ExtMode {
+    EmptyRead,
     InterruptedRead,
     ProbeErrorRead,
     TimedOutRead,
@@ -132,6 +133,9 @@ impl AsyncFileSystem for ExtAsyncFs {
                 FsOperation::OpenReader,
                 "open reader failed",
             )),
+            ExtMode::EmptyRead => {
+                Ok(AsyncFileReader::new(ExtInput::Eof, opened_info(path)))
+            }
             ExtMode::InterruptedRead => Ok(AsyncFileReader::new(
                 ExtInput::Interrupted,
                 opened_info(path),
@@ -321,6 +325,14 @@ fn async_file_system_extensions_reject_interrupted_reads() {
 }
 
 #[test]
+fn async_read_all_accepts_an_empty_resource() {
+    let fs = ExtAsyncFs::new(ExtMode::EmptyRead);
+    let path = FsPath::parse("/empty").unwrap();
+
+    assert!(ready(fs.read_all_async(&path, 1)).unwrap().is_empty());
+}
+
+#[test]
 fn async_read_all_preserves_probe_errors() {
     let path = FsPath::parse("/probe-error").unwrap();
     let error = ready(
@@ -358,13 +370,7 @@ fn async_read_all_restores_embedded_file_system_error_context() {
     assert_eq!(FsErrorKind::QuotaExceeded, error.kind());
     assert_eq!(FsOperation::Read, error.operation());
     assert_eq!(Some(&path), error.path());
-    assert_eq!(
-        Some(
-            &ProviderId::new("stream-provider")
-                .expect("provider id should parse")
-        ),
-        error.provider(),
-    );
+    assert_eq!(Some("stream-provider"), error.provider());
 }
 
 #[test]
