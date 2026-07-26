@@ -37,18 +37,16 @@ qubit-fs
   ├─ 操作接口：FileSystem / AsyncFileSystem
   ├─ 文件句柄：FileReader / FileWriter / Async*
   ├─ 生命周期：writer、directory stream、temporary resource
-  └─ 组装接口：registry、provider、FileSystemConfig
-       │
-       ├─ qubit-io：同步与运行时无关异步流
-       ├─ qubit-spi：同步 provider 注册和选择
-       └─ qubit-metadata：可扩展非敏感 metadata
-             │
-             ▼
-        独立 backend crate
+  └─ qubit-io：同步与运行时无关异步流
+       ▲
+       │ 依赖核心契约
+qubit-fs-registry
+  ├─ provider discovery、SPI 与完整配置
+  └─ 独立 backend crate
 ```
 
-依赖只向下。Provider 可以依赖平台 SDK、网络协议或 runtime adapter；核心层不反向
-依赖具体 provider。
+依赖只向下。Provider 可以依赖平台 SDK、网络协议或 runtime adapter；核心层既不反向
+依赖具体 provider，也不依赖 registry 或 SPI。
 
 ## 3. 三种不同的“身份”
 
@@ -56,7 +54,7 @@ qubit-fs
 
 ### 3.1 Provider
 
-Provider 是工厂和协议适配器。它负责：
+Provider 是 registry 层的工厂和协议适配器。它负责：
 
 - 声明 provider id、alias 和选择优先级；
 - 校验完整配置；
@@ -140,21 +138,15 @@ URI 是日志、配置和错误上下文中可能出现的对象，因此必须 
 - authority 禁止 password；
 - query 禁止 password、token、access key、secret key、signed-URL signature 等
   credential-like key，包括带 provider 前缀的形式；
-- fragment 禁止；
-- `FileSystemConfig::with_options` 对普通 metadata option 执行相同敏感 key 检查，
-  并递归检查 string map、JSON object 以及数组内 object；
-- secret 只能通过 `CredentialRef` 指向外部 credential source。
+- fragment 禁止。
 
-这个结构化校验由 `NonSensitiveMetadata` 统一承载，并用于 config options、
-filesystem/file metadata、write/directory metadata 以及各类 outcome diagnostics。
-其内部 `Metadata` 不提供可变访问，构造后始终保持校验不变量；Debug 只输出 key，
-不会自动输出 value。
+核心扩展 metadata 使用平坦的 `UserMetadata`：每次加入 string key/value pair 时拒绝
+credential-like key，且 Debug 只输出 key。`NonSensitiveMetadata` 只是其不暴露可变
+访问的 wrapper，因此接收 `UserMetadata` 的 setter 不再产生新的校验错误。普通 value
+无法可靠分类，provider 必须保证其非敏感。
 
-该边界按结构化 key 判断。普通 scalar string 的内容无法可靠分类，provider 必须保证
-其非敏感；任何 secret value 都只能位于 `CredentialRef` 指向的外部系统。
-
-`CredentialRef` 本身只保存 default chain、profile、环境变量名或外部 provider id，
-不保存 secret value。Debug 输出也不展开凭据。
+完整配置、credential reference 与 secret resolver 属于 `qubit-fs-registry`。核心层不
+保存 secret value，也不依赖 registry crate。
 
 Provider 返回的 canonical URI 必须遵守相同边界，才能安全地附加到 `FileLocation`。
 
@@ -204,9 +196,8 @@ pub trait FileSystemProperties: Send + Sync {
 - 需要 remote probe 的 provider 应在 construction/open configuration 阶段完成；
 - 结果描述当前 configured filesystem，而不是 provider 的理论上限。
 
-`FileSystemInfo::with_provider_metadata` 会把输入转换成 `NonSensitiveMetadata`，拒绝
-顶层、string map 与 JSON object 内部的 credential-like key，保证这个可被 Debug
-和日志观察的快照不成为 secret 通道。
+`FileSystemInfo::with_provider_metadata` 接收已经校验的 `UserMetadata` 并转换成
+`NonSensitiveMetadata`，保证这个可被 Debug 和日志观察的快照不成为 secret 通道。
 
 这个父 trait 只描述文件系统对象本身，不冒充完整操作接口。
 
@@ -399,8 +390,8 @@ typed capability；provider 必须在 I/O 或副作用前调用相应校验。
 - `PersistOutcome`。
 
 它们报告 `AchievedAtomicity`、`PublicationMethod` / `CopyMethod`、统计、版本和
-`NonSensitiveMetadata` diagnostics。Diagnostics 必须通过校验 setter 构造，其自动
-Debug 只显示 key。调用方不需要根据 provider 名称猜测实际语义。
+`NonSensitiveMetadata` diagnostics。Diagnostics 使用已校验的 `UserMetadata` 构造，
+其自动 Debug 只显示 key。调用方不需要根据 provider 名称猜测实际语义。
 
 ## 8. Error 模型
 
@@ -534,52 +525,13 @@ temporary root，`..` 也无法越过 root。
 这只解决 lexical composition。Local provider 仍需处理 symlink、mount point、race
 与平台 canonicalization 等真实 filesystem 安全问题。
 
-## 11. Registry 与 Provider SPI
+## 11. Registry 集成边界
 
-### 11.1 同步 registry
-
-`FileSystemRegistry` 基于 `qubit-spi`：
-
-- provider 实现 `ProviderDefinition<FileSystemSpec>`；
-- `FileSystemSpec::Config = FileSystemConfig`；
-- `FileSystemSpec::Output = FileSystemResolution<dyn FileSystem>`；
-- provider descriptor 携带 id、alias、priority 与 fallback selection 信息；
-- registry clone 共享注册状态。
-
-`resource(&FileSystemConfig)` 与 `file_system(&FileSystemConfig)` 是完整配置入口。
-`resource_uri(&FsUri)` 与 `file_system_uri(&FsUri)` 只是无 option、无 credential 的
-便捷形式。
-
-### 11.2 异步 registry
-
-`AsyncFileSystemProvider` 独立于同步 SPI：
-
-```rust
-pub trait AsyncFileSystemProvider: Send + Sync {
-    fn descriptor(&self) -> ProviderDescriptor;
-    fn create_configured_async<'a>(
-        &'a self,
-        config: &'a FileSystemConfig,
-    ) -> FsFuture<'a, FileSystemResolution<dyn AsyncFileSystem>>;
-}
-```
-
-`AsyncFileSystemRegistry` 在 await provider code 前 snapshot candidate，不跨 await
-持有 registry lock。一个 provider 可以只实现 async，而不被迫伪造同步 filesystem。
-Fallback 成功时直接返回第一个成功结果；若多个候选都失败或 policy 在已有 fallback
-attempt 后终止，则最终 `FsError` 的 source 会按尝试顺序保留全部 provider failure，
-不会只报告最后一个错误。
-
-### 11.3 Resolution 不只是 filesystem
-
-如果 registry 只返回 filesystem，核心层就不得不重新解释 URI path，从而破坏
-provider 语义。`FileSystemResolution` 因此同时返回：
-
-1. configured filesystem；
-2. decoded provider-local path；
-3. safe canonical URI。
-
-`FileResource` 由这三个结果构造，后续打开的 file handle 继承同一 canonical identity。
+`qubit-fs-registry` 负责 provider discovery、SPI、完整配置、credential reference 和
+由 provider 解码 URI 后得到的 resolution。它把 configured filesystem、decoded
+provider-local `FsPath` 与安全 canonical URI 组合为 `FileResource` 或
+`AsyncFileResource`；核心层不会重新解释 URI path。同步与异步 provider 注册、fallback
+和 resolution 的具体协议由该 crate 单独维护。
 
 ## 12. Provider 一致性约束
 
@@ -599,7 +551,7 @@ provider 语义。`FileSystemResolution` 因此同时返回：
 11. partial success 使用 typed state，不依赖错误字符串；
 12. async drop 不执行阻塞或远程 I/O；
 13. error 附带 operation、path、target、provider、capability 与 source context；
-14. 所有 debug-visible 扩展 metadata 都使用 `NonSensitiveMetadata`；
+14. 所有 debug-visible 扩展 metadata 都从已校验的 `UserMetadata` 构造；
 15. unsupported optional operation 返回明确 capability error；
 16. 有限 `max_list_page_entries` 在 provider I/O 前执行，超大 `page_size` hint 被
     clamp。
@@ -614,8 +566,8 @@ provider 语义。`FileSystemResolution` 因此同时返回：
 - concrete type-erased handle 隐藏 provider 泛型；
 - resource convenience object 避免反复传 filesystem 与 path；
 - option 表示请求，outcome 表示事实，error 表示失败上下文；
-- provider-specific 信息进入 `NonSensitiveMetadata`，不污染核心枚举，也不让自动
-  Debug 暴露 value；
+- provider-specific 非敏感信息进入 `NonSensitiveMetadata`，不污染核心枚举，也不让
+  自动 Debug 暴露 value；
 - 具体 backend、runtime adapter 和 secret resolver 留在组装层。
 
 简洁不等于丢失语义。核心 API 只抽象真正稳定的共同结构，并为差异保留明确扩展点。

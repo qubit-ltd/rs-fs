@@ -39,65 +39,33 @@ dependency graph limited to `qubit-io`.
 ```toml
 [dependencies]
 qubit-fs = "0.2"
-# Needed only when an application performs runtime provider discovery.
-qubit-fs-registry = "0.1"
 ```
 
 ## Bound Resources
 
 ```rust
+use std::sync::Arc;
+
 use qubit_fs::{
     FileResource,
+    FileSystem,
+    FsPath,
     FsResult,
-    FsUri,
-};
-use qubit_fs_registry::{
-    CredentialRef,
-    FileSystemConfig,
-    FileSystemRegistry,
 };
 
-fn resolve_report(
-    registry: &FileSystemRegistry,
+fn bind_report(
+    filesystem: Arc<dyn FileSystem>,
 ) -> FsResult<FileResource> {
-    let uri = FsUri::parse(
-        "s3://reports/2026/summary.csv?region=us-east-1",
-    )?;
-    let config = FileSystemConfig::new(uri)
-        .with_credentials(CredentialRef::Profile("analytics".into()));
-    registry.resource(&config)
+    let path = FsPath::parse("/reports/2026/summary.csv")?;
+    Ok(FileResource::new(filesystem, path))
 }
 ```
 
-The registry selects by URI scheme unless `FileSystemConfig` contains an
-explicit provider selection. `resource_uri()` is the URI-only convenience
-method.
-
-## Asynchronous Resolution
-
-```rust
-use qubit_fs::{
-    AsyncFileResource,
-    FsResult,
-    FsUri,
-};
-use qubit_fs_registry::{
-    AsyncFileSystemRegistry,
-    FileSystemConfig,
-};
-
-async fn resolve_report(
-    registry: &AsyncFileSystemRegistry,
-) -> FsResult<AsyncFileResource> {
-    let config = FileSystemConfig::new(
-        FsUri::parse("s3://reports/2026/summary.csv")?,
-    );
-    registry.resource_async(&config).await
-}
-```
-
-Async filesystem methods use `_async` names. Opening is itself asynchronous and
-returns an already-initialized `AsyncFileReader` or `AsyncFileWriter`.
+`AsyncFileResource` provides the corresponding runtime-neutral asynchronous
+binding. Applications that need runtime provider discovery, configuration, or
+credential references should additionally depend on
+[`qubit-fs-registry`](https://crates.io/crates/qubit-fs-registry); its README
+contains synchronous and asynchronous registration examples.
 
 ## Semantic Guarantees
 

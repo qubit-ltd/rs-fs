@@ -16,8 +16,8 @@ the provider it wants to assemble.
 qubit-fs = "0.2"
 ```
 
-File byte streams use the traits from `qubit-io`. Provider implementations also
-use `qubit-spi` and commonly use `qubit-metadata`.
+File byte streams use the traits from `qubit-io`. Runtime provider discovery
+and SPI integration are supplied by `qubit-fs-registry`, not by this core crate.
 
 ## The Object Model
 
@@ -144,8 +144,9 @@ populate it only when metadata was already obtained as part of opening; they
 should not issue an extra remote `stat` just to fill the field. Use
 `FileSystem::stat()` or `AsyncFileSystem::stat_async()` for a current view.
 The extensible `FileMetadata::user_metadata` and `provider_metadata` fields are
-`NonSensitiveMetadata`, so providers must construct them through validated
-conversion or the supplied builder methods.
+`NonSensitiveMetadata`. Build a `UserMetadata` value first; it rejects
+credential-like keys as pairs are added, and conversion into the wrapper is
+infallible.
 
 ## Synchronous Reading
 
@@ -408,35 +409,19 @@ cleanup must be awaited explicitly.
 
 ## Implementing a Provider
 
-A synchronous provider is a self-described
-`qubit_spi::ProviderDefinition<FileSystemSpec>` whose output is
-`FileSystemResolution<dyn FileSystem>`. An asynchronous provider implements
-`AsyncFileSystemProvider` independently.
+Provider discovery, complete configuration, and credential references belong
+to [`qubit-fs-registry`](https://crates.io/crates/qubit-fs-registry). Its
+provider interfaces return a configured filesystem, decoded `FsPath`, and safe
+canonical URI. Core provider implementations must still decode hierarchical
+native paths component by component, reject decoded separators, roots, and
+prefixes, and construct stable `FileSystemInfo`, `FileSystemCapabilities`, and
+`FileSystemLimits` snapshots.
 
-A provider should:
-
-1. validate the complete `FileSystemConfig`;
-2. resolve `CredentialRef` through an external secret source;
-3. decode the raw URI path according to provider semantics;
-4. convert hierarchical native paths component by component and reject decoded
-   separators, roots, or prefixes;
-5. construct immutable `FileSystemInfo`, `FileSystemCapabilities`, and
-   `FileSystemLimits` snapshots;
-6. return the configured filesystem, decoded `FsPath`, and safe canonical URI;
-7. create explicit file and lifecycle handles with stable identity;
-8. enforce finite list-page limits and reject unsupported guarantees before
-   side effects;
-9. report actual publication methods, atomicity, and partial progress;
-10. attach operation, path, provider, capability, and source context to errors.
-
-`FileSystemInfo::with_provider_metadata()` rejects credential-like keys at the
-top level and recursively inside string maps and JSON objects because the
-snapshot is debug-visible. The same invariant is enforced by
-`NonSensitiveMetadata` for file metadata, options, and outcome diagnostics;
-automatic `Debug` formatting exposes keys but not values. Resolve all secret
-values outside the core model. `FsError` messages must likewise be scrubbed;
-its `Debug` and `Display` implementations never expand the retained source
-error. Explicit callers can still inspect that source through
+Build all debug-visible metadata through `UserMetadata`; it rejects
+credential-like keys while pairs are added, and `Debug` exposes keys but not
+values. Resolve secret values outside the core model. `FsError` messages must
+likewise be scrubbed; its `Debug` and `Display` implementations never expand a
+retained source error. Explicit callers can still inspect that source through
 `Error::source()`.
 
 Default trait methods return `UnsupportedCapability` for optional operations.

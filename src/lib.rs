@@ -12,8 +12,27 @@
 //! This crate defines filesystem properties and operation traits, explicit
 //! file handles over [`qubit_io`] streams, distinct URI and provider-local path
 //! models, typed capabilities and outcomes, recoverable writer and temporary
-//! resource lifecycles, and synchronous/asynchronous provider registries. It
-//! contains no concrete storage backend and binds to no asynchronous runtime.
+//! resource lifecycles. Runtime provider discovery and SPI integration live in
+//! the companion `qubit-fs-registry` crate. This crate contains no concrete
+//! storage backend and binds to no asynchronous runtime.
+//!
+//! ## Binding a resource
+//!
+//! ```no_run
+//! use std::sync::Arc;
+//!
+//! use qubit_fs::{
+//!     FileResource,
+//!     FileSystem,
+//!     FsPath,
+//!     FsResult,
+//! };
+//!
+//! fn bind_report(filesystem: Arc<dyn FileSystem>) -> FsResult<FileResource> {
+//!     let path = FsPath::parse("/reports/2026/summary.csv")?;
+//!     Ok(FileResource::new(filesystem, path))
+//! }
+//! ```
 
 #![deny(missing_docs)]
 
@@ -82,11 +101,13 @@ pub use path::{
     FsUri,
     FsUriPath,
     FsUriQuery,
+    EscapedBytePathCodec,
     NativePathCodec,
     NativePathCodecError,
     OsStrPathCodec,
     PathSemantics,
     RelativeFsPath,
+    Utf8PathCodec,
 };
 pub use resource::{
     AsyncFileResource,

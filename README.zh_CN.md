@@ -36,64 +36,32 @@ Qubit FS 是一个 provider-neutral 的文件系统抽象层，面向本地、�
 ```toml
 [dependencies]
 qubit-fs = "0.2"
-# 只有应用需要运行时 provider 发现时才需要。
-qubit-fs-registry = "0.1"
 ```
 
-## 同步解析
+## 绑定资源
 
 ```rust
+use std::sync::Arc;
+
 use qubit_fs::{
     FileResource,
+    FileSystem,
+    FsPath,
     FsResult,
-    FsUri,
-};
-use qubit_fs_registry::{
-    CredentialRef,
-    FileSystemConfig,
-    FileSystemRegistry,
 };
 
-fn resolve_report(
-    registry: &FileSystemRegistry,
+fn bind_report(
+    filesystem: Arc<dyn FileSystem>,
 ) -> FsResult<FileResource> {
-    let uri = FsUri::parse(
-        "s3://reports/2026/summary.csv?region=us-east-1",
-    )?;
-    let config = FileSystemConfig::new(uri)
-        .with_credentials(CredentialRef::Profile("analytics".into()));
-    registry.resource(&config)
+    let path = FsPath::parse("/reports/2026/summary.csv")?;
+    Ok(FileResource::new(filesystem, path))
 }
 ```
 
-如果 `FileSystemConfig` 没有显式 provider selection，registry 会按 URI scheme
-选择 provider。`resource_uri()` 是只使用 URI 的便捷方法。
-
-## 异步解析
-
-```rust
-use qubit_fs::{
-    AsyncFileResource,
-    FsResult,
-    FsUri,
-};
-use qubit_fs_registry::{
-    AsyncFileSystemRegistry,
-    FileSystemConfig,
-};
-
-async fn resolve_report(
-    registry: &AsyncFileSystemRegistry,
-) -> FsResult<AsyncFileResource> {
-    let config = FileSystemConfig::new(
-        FsUri::parse("s3://reports/2026/summary.csv")?,
-    );
-    registry.resource_async(&config).await
-}
-```
-
-异步文件系统方法统一使用 `_async` 后缀。Open 本身是异步操作，完成后返回已经初始化
-好的 `AsyncFileReader` 或 `AsyncFileWriter`。
+`AsyncFileResource` 提供对应的运行时无关异步绑定。需要运行时 provider 发现、配置或
+credential reference 的应用应额外依赖
+[`qubit-fs-registry`](https://crates.io/crates/qubit-fs-registry)，其 README 提供同步和
+异步注册示例。
 
 ## 语义保证
 

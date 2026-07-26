@@ -13,8 +13,8 @@
 qubit-fs = "0.2"
 ```
 
-文件字节流使用 `qubit-io` 的 trait。Provider 实现还会使用 `qubit-spi`，通常也会
-使用 `qubit-metadata`。
+文件字节流使用 `qubit-io` 的 trait。运行时 provider 发现与 SPI 集成由
+`qubit-fs-registry` 提供，不属于核心 crate。
 
 ## 对象模型
 
@@ -129,7 +129,8 @@ Hierarchical provider 仍必须逐 component 解码 native path，并拒绝解�
 metadata 时才应填充，provider 不应为了填字段额外发起远程 `stat`。需要当前状态时，
 调用 `FileSystem::stat()` 或 `AsyncFileSystem::stat_async()`。
 可扩展的 `FileMetadata::user_metadata` 与 `provider_metadata` 字段使用
-`NonSensitiveMetadata`，provider 必须通过受校验转换或对应 builder method 构造。
+`NonSensitiveMetadata`。先构造 `UserMetadata`；它会在加入每对键值时拒绝
+credential-like key，随后转换为该 wrapper 不会失败。
 
 ## 同步读取
 
@@ -375,32 +376,17 @@ poll 的 future 不影响生命周期。远程清理必须显式 await。
 
 ## 实现 Provider
 
-同步 provider 是自描述的
-`qubit_spi::ProviderDefinition<FileSystemSpec>`，输出
-`FileSystemResolution<dyn FileSystem>`。异步 provider 独立实现
-`AsyncFileSystemProvider`。
+provider 发现、完整配置与 credential reference 属于
+[`qubit-fs-registry`](https://crates.io/crates/qubit-fs-registry)。它的 provider 接口会
+返回 configured filesystem、decoded `FsPath` 与安全 canonical URI。核心 provider
+实现仍必须逐 component 解码 hierarchical native path，拒绝解码后出现的 separator、
+root 或 prefix，并构造稳定的 `FileSystemInfo`、`FileSystemCapabilities` 与
+`FileSystemLimits` 快照。
 
-Provider 应当：
-
-1. 校验完整 `FileSystemConfig`；
-2. 通过外部 secret source 解析 `CredentialRef`；
-3. 按 provider 语义解码 raw URI path；
-4. hierarchical native path 必须逐 component 转换，并拒绝解码后产生的 separator、
-   root 或 prefix；
-5. 构造 immutable `FileSystemInfo`、`FileSystemCapabilities` 与
-   `FileSystemLimits` 快照；
-6. 返回 configured filesystem、decoded `FsPath` 与安全 canonical URI；
-7. 用稳定 identity 创建显式 file/lifecycle handle；
-8. 在副作用前执行有限 list-page 上限并拒绝无法满足的 guarantee；
-9. 报告实际 publication method、atomicity 与 partial progress；
-10. 为错误附加 operation、path、provider、capability 与 source context。
-
-`FileSystemInfo::with_provider_metadata()` 会拒绝顶层、string map 与 JSON object
-内部的 credential-like key，因为该快照可出现在 Debug 输出中。File metadata、
-options 与 outcome diagnostics 也由 `NonSensitiveMetadata` 强制执行同一不变量，自动
-Debug 只暴露 key，不暴露 value。所有 secret value 都必须在核心模型之外解析。
-`FsError` message 也必须预先清洗；它的 `Debug` 与 `Display` 不展开保留的 source
-error，显式诊断仍可通过 `Error::source()` 访问。
+所有可出现在 Debug 输出中的 metadata 都应通过 `UserMetadata` 构造；它会在加入键值时
+拒绝 credential-like key，且 Debug 只暴露 key，不暴露 value。所有 secret value 都必须
+在核心模型之外解析。`FsError` message 也必须预先清洗；它的 `Debug` 与 `Display`
+不展开保留的 source error，显式诊断仍可通过 `Error::source()` 访问。
 
 可选操作的默认 trait 方法返回 `UnsupportedCapability`。Provider 只应 override 自己
 真正支持的操作。
