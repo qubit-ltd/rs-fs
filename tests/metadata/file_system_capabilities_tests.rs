@@ -29,6 +29,36 @@ fn capability_set_supports_mutation_and_an_empty_default() {
 }
 
 #[test]
+fn capability_set_reports_the_first_missing_dependency() {
+    let capabilities = FileSystemCapabilities::new().with(FileSystemCapability::AtomicRename);
+
+    assert_eq!(
+        Some((
+            FileSystemCapability::AtomicRename,
+            FileSystemCapability::Rename,
+        )),
+        capabilities.missing_dependency()
+    );
+}
+
+#[test]
+fn capability_set_accepts_complete_dependency_sets() {
+    let capabilities = FileSystemCapabilities::new()
+        .with(FileSystemCapability::Read)
+        .with(FileSystemCapability::RangeRead)
+        .with(FileSystemCapability::Write)
+        .with(FileSystemCapability::Append)
+        .with(FileSystemCapability::Delete)
+        .with(FileSystemCapability::RecursiveDelete)
+        .with(FileSystemCapability::Rename)
+        .with(FileSystemCapability::AtomicRename)
+        .with(FileSystemCapability::Copy)
+        .with(FileSystemCapability::ServerSideCopy);
+
+    assert_eq!(None, capabilities.missing_dependency());
+}
+
+#[test]
 fn capability_discriminants_remain_stable_for_capability_sets() {
     let capabilities = [
         FileSystemCapability::List,

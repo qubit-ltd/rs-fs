@@ -9,6 +9,43 @@
 
 use crate::FileSystemCapability;
 
+const CAPABILITY_DEPENDENCIES: &[(FileSystemCapability, FileSystemCapability)] = &[
+    (FileSystemCapability::RangeRead, FileSystemCapability::Read),
+    (
+        FileSystemCapability::ConditionalRead,
+        FileSystemCapability::Read,
+    ),
+    (
+        FileSystemCapability::ChecksumValidation,
+        FileSystemCapability::Read,
+    ),
+    (FileSystemCapability::Append, FileSystemCapability::Write),
+    (
+        FileSystemCapability::ConditionalWrite,
+        FileSystemCapability::Write,
+    ),
+    (
+        FileSystemCapability::AtomicReplace,
+        FileSystemCapability::Write,
+    ),
+    (
+        FileSystemCapability::RecursiveDelete,
+        FileSystemCapability::Delete,
+    ),
+    (
+        FileSystemCapability::ConditionalDelete,
+        FileSystemCapability::Delete,
+    ),
+    (
+        FileSystemCapability::AtomicRename,
+        FileSystemCapability::Rename,
+    ),
+    (
+        FileSystemCapability::ServerSideCopy,
+        FileSystemCapability::Copy,
+    ),
+];
+
 /// Stable typed capability guarantees for one configured filesystem.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct FileSystemCapabilities {
@@ -42,6 +79,21 @@ impl FileSystemCapabilities {
     #[must_use]
     pub const fn contains(&self, capability: FileSystemCapability) -> bool {
         self.flags & capability.bit() != 0
+    }
+
+    /// Returns the first advertised capability whose required base capability is absent.
+    ///
+    /// `None` means that every advertised derived capability has its required base
+    /// capability. The returned pair contains the derived capability followed by the
+    /// missing base capability.
+    #[must_use]
+    pub fn missing_dependency(&self) -> Option<(FileSystemCapability, FileSystemCapability)> {
+        CAPABILITY_DEPENDENCIES
+            .iter()
+            .copied()
+            .find(|(capability, dependency)| {
+                self.contains(*capability) && !self.contains(*dependency)
+            })
     }
 }
 
