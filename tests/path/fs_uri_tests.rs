@@ -5,7 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use qubit_fs::{FsAuthority, FsScheme, FsUri, FsUriPath, FsUriQuery};
+use qubit_fs::{FsAuthority, FsScheme, FsUri, FsUriAuthority, FsUriPath, FsUriQuery};
 
 #[test]
 fn test_uri_preserves_encoded_path_and_repeated_query_values() {
@@ -108,6 +108,21 @@ fn uri_can_be_built_from_validated_components() {
     assert!(uri.has_authority_component());
     assert_eq!("/a%2Fb", uri.path().as_encoded());
     assert_eq!("mock://bucket/a%2Fb?tag=one&tag=two", uri.to_string());
+}
+
+#[test]
+fn uri_component_builder_preserves_an_explicit_empty_authority() {
+    let uri = FsUri::new_with_authority(
+        FsScheme::parse("file").unwrap(),
+        FsUriAuthority::Empty,
+        FsUriPath::parse("/tmp/data").unwrap(),
+        FsUriQuery::default(),
+    )
+    .unwrap();
+
+    assert!(uri.has_authority_component());
+    assert!(uri.authority().is_none());
+    assert_eq!("file:///tmp/data", uri.to_string());
 }
 
 #[test]

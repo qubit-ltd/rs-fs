@@ -10,7 +10,13 @@
 
 use libfuzzer_sys::fuzz_target;
 use qubit_fs::{
-    EscapedBytePathCodec, FsAuthority, FsPath, FsUri, FsUriPath, NativePathCodec, RelativeFsPath,
+    EscapedBytePathCodec,
+    FsAuthority,
+    FsPath,
+    FsUri,
+    FsUriPath,
+    NativePathCodec,
+    RelativeFsPath,
 };
 
 /// Bounds parser and codec allocations for direct target invocation.
@@ -47,8 +53,8 @@ fn fuzz_uri_path_round_trip(text: &str) {
     let Ok(path) = FsUriPath::parse(text) else {
         return;
     };
-    let reparsed =
-        FsUriPath::parse(path.as_encoded()).expect("validated URI path must parse again");
+    let reparsed = FsUriPath::parse(path.as_encoded())
+        .expect("validated URI path must parse again");
 
     assert_eq!(path, reparsed);
 }

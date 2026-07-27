@@ -9,7 +9,7 @@
 
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
-use crate::{FsAuthority, FsResult, FsScheme, FsUriPath, FsUriQuery};
+use crate::{FsAuthority, FsResult, FsScheme, FsUriAuthority, FsUriPath, FsUriQuery};
 
 use super::uri_codec::invalid_uri;
 
@@ -108,7 +108,33 @@ impl FsUri {
         path: FsUriPath,
         query: FsUriQuery,
     ) -> FsResult<Self> {
-        let authority_present = authority.is_some();
+        let authority = match authority {
+            Some(authority) => FsUriAuthority::Present(authority),
+            None => FsUriAuthority::Absent,
+        };
+        Self::new_with_authority(scheme, authority, path, query)
+    }
+
+    /// Creates a URI from independently validated components while preserving
+    /// whether an authority was absent, empty, or non-empty.
+    ///
+    /// # Errors
+    ///
+    /// Returns an invalid-URI error when an authority component is paired with
+    /// a relative path, or when an authority-free URI uses a path beginning in
+    /// `//` that would be reparsed as an authority component.
+    #[inline]
+    pub fn new_with_authority(
+        scheme: FsScheme,
+        authority: FsUriAuthority,
+        path: FsUriPath,
+        query: FsUriQuery,
+    ) -> FsResult<Self> {
+        let (authority, authority_present) = match authority {
+            FsUriAuthority::Absent => (None, false),
+            FsUriAuthority::Empty => (None, true),
+            FsUriAuthority::Present(authority) => (Some(authority), true),
+        };
         if authority_present && !path.as_encoded().starts_with('/') {
             return Err(invalid_uri(
                 "filesystem URI authority requires an absolute path",

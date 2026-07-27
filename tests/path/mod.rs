@@ -9,6 +9,7 @@ mod escaped_byte_path_codec_tests;
 mod fs_authority_tests;
 mod fs_name_tests;
 mod fs_path_tests;
+mod fs_uri_authority_tests;
 mod fs_uri_tests;
 mod native_path_codec_error_tests;
 mod native_path_codec_tests;
