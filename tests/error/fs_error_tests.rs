@@ -140,6 +140,7 @@ fn fs_error_maps_io_error_kinds_and_preserves_the_source() {
     let cases = [
         (io::ErrorKind::NotFound, FsErrorKind::NotFound),
         (io::ErrorKind::AlreadyExists, FsErrorKind::AlreadyExists),
+        (io::ErrorKind::DirectoryNotEmpty, FsErrorKind::Conflict),
         (io::ErrorKind::NotADirectory, FsErrorKind::NotDirectory),
         (io::ErrorKind::IsADirectory, FsErrorKind::IsDirectory),
         (

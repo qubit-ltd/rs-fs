@@ -9,7 +9,7 @@
 
 use std::time::SystemTime;
 
-use crate::{Checksum, FileKind, NonSensitiveMetadata, UserMetadata};
+use crate::{Checksum, FileKind, NonSensitiveMetadata, ResourceVersion, UserMetadata};
 
 /// Stable and extensible metadata for one filesystem resource.
 #[derive(Clone, Debug, PartialEq)]
@@ -25,7 +25,7 @@ pub struct FileMetadata {
     /// Last access time when known.
     pub accessed_at: Option<SystemTime>,
     /// Provider version or HTTP-style ETag when known.
-    pub etag: Option<String>,
+    pub etag: Option<ResourceVersion>,
     /// Content type when known.
     pub content_type: Option<String>,
     /// Content checksum when known.

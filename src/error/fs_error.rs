@@ -167,6 +167,40 @@ impl FsError {
         self
     }
 
+    /// Adds missing path, target, and provider context without overwriting
+    /// provider-supplied details.
+    ///
+    /// Core resource wrappers use this when an error crosses an abstraction
+    /// boundary. It preserves a provider's more specific context while making
+    /// generic validation and stream failures actionable to callers.
+    ///
+    /// # Parameters
+    /// - `path`: Fallback primary path for the requested operation.
+    /// - `target`: Fallback secondary path, when the operation has one.
+    /// - `provider`: Fallback canonical provider id.
+    ///
+    /// # Returns
+    /// Updated error with every previously absent context field filled.
+    #[inline]
+    #[must_use]
+    pub(crate) fn with_missing_context(
+        mut self,
+        path: &FsPath,
+        target: Option<&FsPath>,
+        provider: &str,
+    ) -> Self {
+        if self.path.is_none() {
+            self.path = Some(Box::new(path.clone()));
+        }
+        if self.target.is_none() {
+            self.target = target.cloned().map(Box::new);
+        }
+        if self.provider.is_none() {
+            self.provider = Some(provider.into());
+        }
+        self
+    }
+
     /// Creates an invalid-path error.
     ///
     /// # Parameters
@@ -194,6 +228,7 @@ impl FsError {
         let kind = match error.kind() {
             io::ErrorKind::NotFound => FsErrorKind::NotFound,
             io::ErrorKind::AlreadyExists => FsErrorKind::AlreadyExists,
+            io::ErrorKind::DirectoryNotEmpty => FsErrorKind::Conflict,
             io::ErrorKind::NotADirectory => FsErrorKind::NotDirectory,
             io::ErrorKind::IsADirectory => FsErrorKind::IsDirectory,
             io::ErrorKind::PermissionDenied => FsErrorKind::PermissionDenied,

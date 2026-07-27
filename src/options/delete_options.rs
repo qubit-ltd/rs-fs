@@ -7,7 +7,10 @@
 // =============================================================================
 //! Delete operation options.
 
-use crate::{FileSystemCapabilities, FileSystemCapability, FsError, FsErrorKind, FsOperation};
+use crate::{
+    FileSystemCapabilities, FileSystemCapability, FsError, FsErrorKind, FsOperation,
+    ResourceVersion,
+};
 
 /// Options controlling delete operations.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -17,7 +20,7 @@ pub struct DeleteOptions {
     /// Whether a missing target should be treated as success.
     pub missing_ok: bool,
     /// Optional required ETag or provider version.
-    pub if_match: Option<String>,
+    pub if_match: Option<ResourceVersion>,
 }
 
 impl DeleteOptions {

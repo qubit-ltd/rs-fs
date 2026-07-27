@@ -22,10 +22,27 @@ fn capability_set_reports_typed_guarantees() {
 #[test]
 fn capability_set_supports_mutation_and_an_empty_default() {
     let mut capabilities = FileSystemCapabilities::default();
+    assert!(capabilities.is_empty());
+    assert_eq!(0, capabilities.len());
     assert!(!capabilities.contains(FileSystemCapability::Write));
 
     capabilities.insert(FileSystemCapability::Write);
+    assert!(!capabilities.is_empty());
+    assert_eq!(1, capabilities.len());
     assert!(capabilities.contains(FileSystemCapability::Write));
+}
+
+#[test]
+fn capability_set_iterates_and_formats_semantic_values() {
+    let capabilities = FileSystemCapabilities::new()
+        .with(FileSystemCapability::Read)
+        .with(FileSystemCapability::Write);
+
+    assert_eq!(
+        vec![FileSystemCapability::Read, FileSystemCapability::Write],
+        capabilities.iter().collect::<Vec<_>>(),
+    );
+    assert_eq!("{Read, Write}", format!("{capabilities:?}"));
 }
 
 #[test]

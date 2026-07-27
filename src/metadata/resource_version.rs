@@ -44,3 +44,24 @@ impl Display for ResourceVersion {
         formatter.write_str(self.as_str())
     }
 }
+
+impl AsRef<str> for ResourceVersion {
+    #[inline(always)]
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl From<&str> for ResourceVersion {
+    #[inline]
+    fn from(value: &str) -> Self {
+        Self::new(value)
+    }
+}
+
+impl From<String> for ResourceVersion {
+    #[inline]
+    fn from(value: String) -> Self {
+        Self::new(value)
+    }
+}

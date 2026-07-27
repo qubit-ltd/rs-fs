@@ -8,7 +8,8 @@
 //! Read operation options.
 
 use crate::{
-    ChecksumPolicy, FileSystemCapabilities, FileSystemCapability, FsError, FsErrorKind, FsOperation,
+    ChecksumPolicy, FileSystemCapabilities, FileSystemCapability, FsError, FsErrorKind,
+    FsOperation, ResourceVersion,
 };
 
 /// Options controlling a read operation.
@@ -19,9 +20,9 @@ pub struct ReadOptions {
     /// Optional byte length.
     pub length: Option<u64>,
     /// Optional required ETag or provider version.
-    pub if_match: Option<String>,
+    pub if_match: Option<ResourceVersion>,
     /// Optional ETag or provider version that must not match.
-    pub if_none_match: Option<String>,
+    pub if_none_match: Option<ResourceVersion>,
     /// Checksum validation policy.
     pub checksum: ChecksumPolicy,
 }

@@ -5,30 +5,38 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use qubit_fs::{ChecksumPolicy, FileSystemCapabilities, FileSystemCapability, ReadOptions};
+use qubit_fs::{
+    ChecksumPolicy, FileSystemCapabilities, FileSystemCapability, ReadOptions, ResourceVersion,
+};
 
 #[test]
 fn test_read_options_full_configuration_is_usable() {
     let options = ReadOptions {
         offset: Some(1),
         length: Some(2),
-        if_match: Some("a".to_owned()),
-        if_none_match: Some("b".to_owned()),
+        if_match: Some(ResourceVersion::from("a")),
+        if_none_match: Some(ResourceVersion::from("b")),
         checksum: ChecksumPolicy::Required,
     };
 
     assert_eq!(Some(1), options.offset);
     assert_eq!(Some(2), options.length);
-    assert_eq!(Some("a"), options.if_match.as_deref());
-    assert_eq!(Some("b"), options.if_none_match.as_deref());
+    assert_eq!(
+        Some("a"),
+        options.if_match.as_ref().map(ResourceVersion::as_str),
+    );
+    assert_eq!(
+        Some("b"),
+        options.if_none_match.as_ref().map(ResourceVersion::as_str),
+    );
     assert_eq!(ChecksumPolicy::Required, options.checksum);
 }
 
 #[test]
 fn read_requirements_are_checked_against_typed_capabilities() {
     let conflicting = ReadOptions {
-        if_match: Some("v1".to_owned()),
-        if_none_match: Some("v2".to_owned()),
+        if_match: Some(ResourceVersion::from("v1")),
+        if_none_match: Some(ResourceVersion::from("v2")),
         ..ReadOptions::default()
     };
     assert_eq!(
@@ -52,7 +60,7 @@ fn read_requirements_are_checked_against_typed_capabilities() {
     );
 
     let conditional = ReadOptions {
-        if_match: Some("v1".to_owned()),
+        if_match: Some(ResourceVersion::from("v1")),
         ..ReadOptions::default()
     };
     let error = conditional
@@ -83,7 +91,7 @@ fn read_requirements_are_checked_against_typed_capabilities() {
         ReadOptions {
             offset: Some(0),
             length: Some(1),
-            if_none_match: Some("v2".to_owned()),
+            if_none_match: Some(ResourceVersion::from("v2")),
             checksum: ChecksumPolicy::Required,
             ..ReadOptions::default()
         }

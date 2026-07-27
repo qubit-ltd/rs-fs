@@ -60,6 +60,32 @@ pub enum FileSystemCapability {
 }
 
 impl FileSystemCapability {
+    /// Stable list of every capability known by this crate version.
+    pub(crate) const ALL: [Self; 22] = [
+        Self::List,
+        Self::Read,
+        Self::RangeRead,
+        Self::ConditionalRead,
+        Self::ChecksumValidation,
+        Self::Write,
+        Self::Append,
+        Self::ConditionalWrite,
+        Self::CreateDirectory,
+        Self::EmptyDirectory,
+        Self::Delete,
+        Self::RecursiveDelete,
+        Self::ConditionalDelete,
+        Self::Rename,
+        Self::AtomicRename,
+        Self::AtomicReplace,
+        Self::Copy,
+        Self::ServerSideCopy,
+        Self::Symlink,
+        Self::TempFile,
+        Self::TempDirectory,
+        Self::AtomicTempPersist,
+    ];
+
     /// Returns the bit representing this capability in a capability set.
     #[inline(always)]
     pub(crate) const fn bit(self) -> u128 {

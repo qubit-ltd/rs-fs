@@ -7,6 +7,8 @@
 // =============================================================================
 //! Filesystem capability guarantees.
 
+use std::fmt::{Debug, Formatter, Result as FmtResult};
+
 use crate::FileSystemCapability;
 
 const CAPABILITY_DEPENDENCIES: &[(FileSystemCapability, FileSystemCapability)] = &[
@@ -47,7 +49,7 @@ const CAPABILITY_DEPENDENCIES: &[(FileSystemCapability, FileSystemCapability)] =
 ];
 
 /// Stable typed capability guarantees for one configured filesystem.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, PartialEq)]
 pub struct FileSystemCapabilities {
     flags: u128,
 }
@@ -81,11 +83,43 @@ impl FileSystemCapabilities {
         self.flags & capability.bit() != 0
     }
 
-    /// Returns the first advertised capability whose required base capability is absent.
+    /// Returns the number of advertised capabilities.
     ///
-    /// `None` means that every advertised derived capability has its required base
-    /// capability. The returned pair contains the derived capability followed by the
-    /// missing base capability.
+    /// # Returns
+    /// Number of set capability flags.
+    #[inline(always)]
+    #[must_use]
+    pub const fn len(&self) -> usize {
+        self.flags.count_ones() as usize
+    }
+
+    /// Returns whether no capability is advertised.
+    ///
+    /// # Returns
+    /// `true` when the set contains no capability.
+    #[inline(always)]
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.flags == 0
+    }
+
+    /// Iterates advertised capabilities in stable discriminant order.
+    ///
+    /// # Returns
+    /// An iterator over every capability contained in this set.
+    #[inline]
+    pub fn iter(&self) -> impl Iterator<Item = FileSystemCapability> + '_ {
+        FileSystemCapability::ALL
+            .into_iter()
+            .filter(|capability| self.contains(*capability))
+    }
+
+    /// Returns the first advertised capability whose required base capability
+    /// is absent.
+    ///
+    /// `None` means that every advertised derived capability has its required
+    /// base capability. The returned pair contains the derived capability
+    /// followed by the missing base capability.
     #[must_use]
     pub fn missing_dependency(&self) -> Option<(FileSystemCapability, FileSystemCapability)> {
         CAPABILITY_DEPENDENCIES
@@ -102,5 +136,11 @@ impl Default for FileSystemCapabilities {
     #[inline]
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Debug for FileSystemCapabilities {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
+        formatter.debug_set().entries(self.iter()).finish()
     }
 }

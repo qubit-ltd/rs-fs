@@ -10,8 +10,9 @@ use qubit_fs::ResourceVersion;
 
 #[test]
 fn resource_version_preserves_and_displays_opaque_text() {
-    let version = ResourceVersion::new(String::from("etag-42"));
+    let version = ResourceVersion::from("etag-42");
 
     assert_eq!("etag-42", version.as_str());
+    assert_eq!("etag-42", version.as_ref());
     assert_eq!("etag-42", version.to_string());
 }
