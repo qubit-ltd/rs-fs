@@ -13,7 +13,7 @@ use std::sync::Arc;
 use crate::{
     AsyncDirectoryStream, AsyncFileReader, AsyncFileSystem, AsyncFileSystemExt, AsyncFileWriter,
     CopyOptions, CopyOutcome, CreateDirOptions, DeleteOptions, FileLocation, FileMetadata,
-    FsFuture, FsOperation, FsPath, FsResult, ListOptions, ReadOptions, RenameOptions,
+    FsFuture, FsOperation, FsPath, FsResult, FsUri, ListOptions, ReadOptions, RenameOptions,
     RenameOutcome, WriteOptions, WriteOutcome,
 };
 
@@ -33,10 +33,19 @@ impl AsyncFileResource {
         Self { fs, location }
     }
 
-    /// Creates a resource from a fully resolved location.
+    /// Creates a resource from a resolved path and canonical URI.
+    ///
+    /// # Parameters
+    /// - `fs`: Asynchronous filesystem that owns the path.
+    /// - `path`: Provider-decoded path.
+    /// - `canonical_uri`: Canonical URI used to resolve the resource.
+    ///
+    /// # Returns
+    /// A resource whose location identity is derived from `fs`.
     #[inline]
     #[must_use]
-    pub fn from_location(fs: Arc<dyn AsyncFileSystem>, location: FileLocation) -> Self {
+    pub fn from_resolved(fs: Arc<dyn AsyncFileSystem>, path: FsPath, canonical_uri: FsUri) -> Self {
+        let location = FileLocation::new(fs.info().id().clone(), path).with_uri(canonical_uri);
         Self { fs, location }
     }
 
@@ -67,7 +76,12 @@ impl AsyncFileResource {
         if let Err(error) = self.validate_path(self.path(), FsOperation::Stat) {
             return Box::pin(async move { Err(error) });
         }
-        self.fs.stat_async(self.path())
+        Box::pin(async move {
+            self.fs
+                .stat_async(self.path())
+                .await
+                .map_err(|error| self.with_context(error, None))
+        })
     }
 
     /// Asynchronously checks observed existence.
@@ -76,7 +90,12 @@ impl AsyncFileResource {
         if let Err(error) = self.validate_path(self.path(), FsOperation::Exists) {
             return Box::pin(async move { Err(error) });
         }
-        self.fs.exists_async(self.path())
+        Box::pin(async move {
+            self.fs
+                .exists_async(self.path())
+                .await
+                .map_err(|error| self.with_context(error, None))
+        })
     }
 
     /// Asynchronously opens a directory enumeration.
@@ -86,13 +105,19 @@ impl AsyncFileResource {
             return Box::pin(async move { Err(error) });
         }
         options.page_size = self.fs.limits().clamp_list_page_size(options.page_size);
-        self.fs.list_async(self.path(), options)
+        Box::pin(async move {
+            self.fs
+                .list_async(self.path(), options)
+                .await
+                .map_err(|error| self.with_context(error, None))
+        })
     }
 
     /// Asynchronously opens an already-initialized file reader.
     #[inline]
     pub fn open_reader_async(&self, options: ReadOptions) -> FsFuture<'_, AsyncFileReader> {
         if let Err(error) = self.validate_path(self.path(), FsOperation::OpenReader) {
+            let error = self.with_context(error, None);
             return Box::pin(async move { Err(error) });
         }
         if let Err(error) = self
@@ -100,14 +125,20 @@ impl AsyncFileResource {
             .limits()
             .validate_read_range(self.path(), options.length)
         {
+            let error = self.with_context(error, None);
             return Box::pin(async move { Err(error) });
         }
         if let Err(error) = options.validate_against(self.fs.capabilities()) {
+            let error = self.with_context(error, None);
             return Box::pin(async move { Err(error) });
         }
         let location = self.location.clone();
         Box::pin(async move {
-            let mut reader = self.fs.open_reader_async(self.path(), options).await?;
+            let mut reader = self
+                .fs
+                .open_reader_async(self.path(), options)
+                .await
+                .map_err(|error| self.with_context(error, None))?;
             reader.bind_location(location);
             Ok(reader)
         })
@@ -117,14 +148,20 @@ impl AsyncFileResource {
     #[inline]
     pub fn open_writer_async(&self, options: WriteOptions) -> FsFuture<'_, AsyncFileWriter> {
         if let Err(error) = self.validate_path(self.path(), FsOperation::OpenWriter) {
+            let error = self.with_context(error, None);
             return Box::pin(async move { Err(error) });
         }
         if let Err(error) = options.validate_against(self.fs.capabilities()) {
+            let error = self.with_context(error, None);
             return Box::pin(async move { Err(error) });
         }
         let location = self.location.clone();
         Box::pin(async move {
-            let mut writer = self.fs.open_writer_async(self.path(), options).await?;
+            let mut writer = self
+                .fs
+                .open_writer_async(self.path(), options)
+                .await
+                .map_err(|error| self.with_context(error, None))?;
             writer.bind_location(location);
             Ok(writer)
         })
@@ -146,7 +183,12 @@ impl AsyncFileResource {
     /// or read the resource, or when it contains more than `max_bytes` bytes.
     #[inline(always)]
     pub fn read_all_async(&self, max_bytes: usize) -> FsFuture<'_, Vec<u8>> {
-        self.fs.read_all_async(self.path(), max_bytes)
+        Box::pin(async move {
+            self.fs
+                .read_all_async(self.path(), max_bytes)
+                .await
+                .map_err(|error| self.with_context(error, None))
+        })
     }
 
     /// Asynchronously writes and commits complete byte content.
@@ -166,28 +208,46 @@ impl AsyncFileResource {
     /// limit is exceeded.
     #[inline(always)]
     pub fn write_all_async<'a>(&'a self, bytes: &'a [u8]) -> FsFuture<'a, WriteOutcome> {
-        self.fs.write_all_async(self.path(), bytes)
+        Box::pin(async move {
+            self.fs
+                .write_all_async(self.path(), bytes)
+                .await
+                .map_err(|error| self.with_context(error, None))
+        })
     }
 
     /// Asynchronously creates this resource as a directory.
     #[inline]
     pub fn create_dir_async(&self, options: CreateDirOptions) -> FsFuture<'_, ()> {
         if let Err(error) = self.validate_path(self.path(), FsOperation::CreateDir) {
+            let error = self.with_context(error, None);
             return Box::pin(async move { Err(error) });
         }
-        self.fs.create_dir_async(self.path(), options)
+        Box::pin(async move {
+            self.fs
+                .create_dir_async(self.path(), options)
+                .await
+                .map_err(|error| self.with_context(error, None))
+        })
     }
 
     /// Asynchronously deletes this resource.
     #[inline]
     pub fn delete_async(&self, options: DeleteOptions) -> FsFuture<'_, ()> {
         if let Err(error) = self.validate_path(self.path(), FsOperation::Delete) {
+            let error = self.with_context(error, None);
             return Box::pin(async move { Err(error) });
         }
         if let Err(error) = options.validate_against(self.fs.capabilities()) {
+            let error = self.with_context(error, None);
             return Box::pin(async move { Err(error) });
         }
-        self.fs.delete_async(self.path(), options)
+        Box::pin(async move {
+            self.fs
+                .delete_async(self.path(), options)
+                .await
+                .map_err(|error| self.with_context(error, None))
+        })
     }
 
     /// Asynchronously renames this resource.
@@ -198,15 +258,22 @@ impl AsyncFileResource {
         options: RenameOptions,
     ) -> FsFuture<'a, RenameOutcome> {
         if let Err(error) = self.validate_path(self.path(), FsOperation::Rename) {
+            let error = self.with_context(error, Some(target));
             return Box::pin(async move { Err(error) });
         }
-        if let Err(error) = self.validate_path(target, FsOperation::Rename) {
+        if let Err(error) = self.validate_target_path(target, FsOperation::Rename) {
             return Box::pin(async move { Err(error) });
         }
         if let Err(error) = options.validate_against(self.fs.capabilities()) {
+            let error = self.with_context(error, Some(target));
             return Box::pin(async move { Err(error) });
         }
-        self.fs.rename_async(self.path(), target, options)
+        Box::pin(async move {
+            self.fs
+                .rename_async(self.path(), target, options)
+                .await
+                .map_err(|error| self.with_context(error, Some(target)))
+        })
     }
 
     /// Asynchronously copies this resource.
@@ -217,15 +284,22 @@ impl AsyncFileResource {
         options: CopyOptions,
     ) -> FsFuture<'a, CopyOutcome> {
         if let Err(error) = self.validate_path(self.path(), FsOperation::Copy) {
+            let error = self.with_context(error, Some(target));
             return Box::pin(async move { Err(error) });
         }
-        if let Err(error) = self.validate_path(target, FsOperation::Copy) {
+        if let Err(error) = self.validate_target_path(target, FsOperation::Copy) {
             return Box::pin(async move { Err(error) });
         }
         if let Err(error) = options.validate_against(self.fs.capabilities()) {
+            let error = self.with_context(error, Some(target));
             return Box::pin(async move { Err(error) });
         }
-        self.fs.copy_async(self.path(), target, options)
+        Box::pin(async move {
+            self.fs
+                .copy_async(self.path(), target, options)
+                .await
+                .map_err(|error| self.with_context(error, Some(target)))
+        })
     }
 
     /// Clones the owning filesystem for derived resources.
@@ -239,6 +313,28 @@ impl AsyncFileResource {
         self.fs
             .limits()
             .validate_path(path, self.fs.info().path_semantics(), operation)
+            .map_err(|error| self.with_context(error, None))
+    }
+
+    /// Validates a destination path while retaining source and target roles.
+    fn validate_target_path(&self, target: &FsPath, operation: FsOperation) -> FsResult<()> {
+        self.fs
+            .limits()
+            .validate_path(target, self.fs.info().path_semantics(), operation)
+            .map_err(|error| {
+                self.with_context(
+                    error
+                        .with_path(self.path().clone())
+                        .with_target(target.clone()),
+                    Some(target),
+                )
+            })
+    }
+
+    /// Adds resource identity to an error that crossed this abstraction
+    /// boundary without replacing provider-supplied context.
+    fn with_context(&self, error: crate::FsError, target: Option<&FsPath>) -> crate::FsError {
+        error.with_missing_context(self.path(), target, self.fs.info().provider_id())
     }
 }
 

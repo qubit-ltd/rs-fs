@@ -112,19 +112,28 @@ fn async_file_system_defaults_are_awaitable_capability_failures() {
     assert_eq!(FsErrorKind::PermissionDenied, denied_error.kind());
     assert_eq!(FsOperation::Exists, denied_error.operation());
 
+    let rename_error =
+        ready(fs.rename_async(&path, &target, RenameOptions::default())).unwrap_err();
+    assert_eq!(Some(&path), rename_error.path());
+    assert_eq!(Some(&target), rename_error.target());
+    let copy_error = ready(fs.copy_async(&path, &target, CopyOptions::default())).unwrap_err();
+    assert_eq!(Some(&path), copy_error.path());
+    assert_eq!(Some(&target), copy_error.target());
+
     let failures = [
         ready(fs.list_async(&path, ListOptions::default())).unwrap_err(),
         ready(fs.open_reader_async(&path, ReadOptions::default())).unwrap_err(),
         ready(fs.open_writer_async(&path, WriteOptions::default())).unwrap_err(),
         ready(fs.create_dir_async(&path, CreateDirOptions::default())).unwrap_err(),
         ready(fs.delete_async(&path, DeleteOptions::default())).unwrap_err(),
-        ready(fs.rename_async(&path, &target, RenameOptions::default())).unwrap_err(),
-        ready(fs.copy_async(&path, &target, CopyOptions::default())).unwrap_err(),
+        rename_error,
+        copy_error,
         ready(fs.create_temp_file_async(TempFileOptions::default())).unwrap_err(),
         ready(fs.create_temp_dir_async(TempDirOptions::default())).unwrap_err(),
     ];
     for error in failures {
         assert_eq!(FsErrorKind::UnsupportedCapability, error.kind());
         assert!(error.required_capability().is_some());
+        assert_eq!(Some("mock"), error.provider());
     }
 }

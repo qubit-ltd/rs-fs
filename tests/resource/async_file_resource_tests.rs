@@ -20,7 +20,7 @@ use qubit_fs::{
     FileSystemCapability, FileSystemId, FileSystemInfo, FileSystemLimit, FileSystemLimits,
     FileSystemProperties, FsFuture, FsPath, ListOptions, OpenedFileInfo, PathSemantics,
     PublicationMethod, ReadOptions, RenameOptions, RenameOutcome, ServerSidePreference,
-    WriteOptions, WriteOutcome,
+    WriteFuture, WriteOptions, WriteOutcome,
 };
 use qubit_io::{AsyncInput, AsyncOutput};
 
@@ -215,7 +215,7 @@ impl AsyncOutput for ResourceWriteSession {
 }
 
 impl AsyncFileWriteSession for ResourceWriteSession {
-    fn commit_async<'a>(self: Pin<&'a mut Self>) -> FsFuture<'a, WriteOutcome> {
+    fn commit_async<'a>(self: Pin<&'a mut Self>) -> WriteFuture<'a> {
         Box::pin(async {
             Ok(WriteOutcome::new(
                 AchievedAtomicity::Atomic,
@@ -252,8 +252,7 @@ where
 fn async_file_resource_delegates_every_operation_and_binds_handles() {
     let fs: Arc<dyn AsyncFileSystem> = Arc::new(ResourceAsyncFs::new());
     let path = FsPath::parse("/file").unwrap();
-    let location = FileLocation::new(fs.info().id().clone(), path);
-    let resource = AsyncFileResource::from_location(fs, location);
+    let resource = AsyncFileResource::new(fs, path);
     let target = FsPath::parse("/target").unwrap();
 
     assert_eq!("/file", resource.path().as_str());
@@ -338,6 +337,8 @@ fn async_file_resource_preflights_provider_path_and_range_limits() {
         path_error.kind(),
     );
     assert_eq!(qubit_fs::FsOperation::Stat, path_error.operation());
+    assert_eq!(Some("/file"), path_error.path().map(FsPath::as_str));
+    assert_eq!(Some("async-resource"), path_error.provider());
 
     let fs: Arc<dyn AsyncFileSystem> = Arc::new(ResourceAsyncFs::new().with_limits(limits));
     let short_resource = AsyncFileResource::new(fs, FsPath::parse("/a").unwrap());
@@ -351,6 +352,8 @@ fn async_file_resource_preflights_provider_path_and_range_limits() {
         range_error.kind(),
     );
     assert_eq!(qubit_fs::FsOperation::OpenReader, range_error.operation());
+    assert_eq!(Some("/a"), range_error.path().map(FsPath::as_str));
+    assert_eq!(Some("async-resource"), range_error.provider());
 }
 
 #[test]
@@ -372,10 +375,18 @@ fn async_file_resource_preflights_paths_for_every_bound_operation() {
     assert!(ready(long_resource.rename_to_async(&short, RenameOptions::default())).is_err());
     assert!(ready(long_resource.copy_to_async(&short, CopyOptions::default())).is_err());
 
-    let short_resource =
-        AsyncFileResource::new(Arc::new(ResourceAsyncFs::new().with_limits(limits)), short);
-    assert!(ready(short_resource.rename_to_async(&long, RenameOptions::default())).is_err());
-    assert!(ready(short_resource.copy_to_async(&long, CopyOptions::default())).is_err());
+    let short_resource = AsyncFileResource::new(
+        Arc::new(ResourceAsyncFs::new().with_limits(limits)),
+        short.clone(),
+    );
+    let rename_error =
+        ready(short_resource.rename_to_async(&long, RenameOptions::default())).unwrap_err();
+    assert_eq!(Some(&short), rename_error.path());
+    assert_eq!(Some(&long), rename_error.target());
+    let copy_error =
+        ready(short_resource.copy_to_async(&long, CopyOptions::default())).unwrap_err();
+    assert_eq!(Some(&short), copy_error.path());
+    assert_eq!(Some(&long), copy_error.target());
 }
 
 #[test]

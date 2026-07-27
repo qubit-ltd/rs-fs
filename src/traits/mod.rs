@@ -27,6 +27,7 @@ mod file_writer;
 mod fs_future;
 mod write_failure;
 mod write_failure_state;
+mod write_future;
 mod writer_state;
 
 pub use async_directory_stream::AsyncDirectoryStream;
@@ -49,4 +50,5 @@ pub use file_writer::FileWriter;
 pub use fs_future::FsFuture;
 pub use write_failure::WriteFailure;
 pub use write_failure_state::WriteFailureState;
+pub use write_future::WriteFuture;
 pub use writer_state::WriterState;

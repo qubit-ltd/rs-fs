@@ -16,7 +16,7 @@ use qubit_io::AsyncOutput;
 
 use crate::{
     AsyncFileWriteSession, FileLocation, FsError, FsErrorKind, FsFuture, FsOperation,
-    OpenedFileInfo, WriteOutcome, WriterState,
+    OpenedFileInfo, WriteFailureState, WriteOutcome, WriterState,
 };
 
 /// Type-erased asynchronous provider write session associated with a file.
@@ -95,11 +95,14 @@ impl AsyncFileWriter {
                     self.state = WriterState::Committed;
                     Ok(outcome)
                 }
-                Err(error) => {
-                    if error.kind() != FsErrorKind::Indeterminate {
-                        self.state = WriterState::Open;
-                    }
-                    Err(error)
+                Err(failure) => {
+                    self.state = match failure.state() {
+                        WriteFailureState::Retryable => WriterState::Open,
+                        WriteFailureState::NotPublished => WriterState::NotPublished,
+                        WriteFailureState::Published => WriterState::Published,
+                        WriteFailureState::Indeterminate => WriterState::Indeterminate,
+                    };
+                    Err(failure.into_error())
                 }
             }
         })
@@ -115,7 +118,13 @@ impl AsyncFileWriter {
     /// # Returns
     /// A future resolving when cleanup is confirmed.
     pub fn abort_async(&mut self) -> FsFuture<'_, ()> {
-        if !matches!(self.state, WriterState::Open | WriterState::Indeterminate) {
+        if !matches!(
+            self.state,
+            WriterState::Open
+                | WriterState::NotPublished
+                | WriterState::Published
+                | WriterState::Indeterminate
+        ) {
             let error = self.invalid_state(
                 FsOperation::AbortWriter,
                 "writer cannot be aborted in its current state",
@@ -210,7 +219,10 @@ impl Debug for AsyncFileWriter {
 
 impl Drop for AsyncFileWriter {
     fn drop(&mut self) {
-        if self.state == WriterState::Open {
+        if matches!(
+            self.state,
+            WriterState::Open | WriterState::NotPublished | WriterState::Published
+        ) {
             self.session.as_mut().cancel_on_drop();
         }
     }

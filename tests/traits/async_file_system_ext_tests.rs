@@ -19,7 +19,7 @@ use qubit_fs::{
     AsyncFileWriter, FileKind, FileLocation, FileMetadata, FileSystemCapabilities, FileSystemId,
     FileSystemInfo, FileSystemLimit, FileSystemLimits, FileSystemProperties, FsError, FsErrorKind,
     FsFuture, FsOperation, FsPath, OpenedFileInfo, PathSemantics, PublicationMethod, ReadOptions,
-    WriteOptions, WriteOutcome,
+    WriteFailure, WriteFailureState, WriteFuture, WriteOptions, WriteOutcome,
 };
 use qubit_io::{AsyncInput, AsyncOutput};
 
@@ -216,13 +216,12 @@ impl AsyncOutput for ExtWriteSession {
 }
 
 impl AsyncFileWriteSession for ExtWriteSession {
-    fn commit_async<'a>(self: Pin<&'a mut Self>) -> FsFuture<'a, WriteOutcome> {
+    fn commit_async<'a>(self: Pin<&'a mut Self>) -> WriteFuture<'a> {
         if self.fail_commit {
             Box::pin(async {
-                Err(FsError::new(
-                    FsErrorKind::Io,
-                    FsOperation::CommitWriter,
-                    "commit failed",
+                Err(WriteFailure::new(
+                    FsError::new(FsErrorKind::Io, FsOperation::CommitWriter, "commit failed"),
+                    WriteFailureState::Retryable,
                 ))
             })
         } else {

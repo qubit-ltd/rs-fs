@@ -102,6 +102,17 @@ fn file_system_defaults_are_safe_explicit_capability_failures() {
     assert_eq!(FsErrorKind::PermissionDenied, denied_error.kind());
     assert_eq!(FsOperation::Exists, denied_error.operation());
 
+    let rename_error = fs
+        .rename(&present, &target, RenameOptions::default())
+        .unwrap_err();
+    assert_eq!(Some(&present), rename_error.path());
+    assert_eq!(Some(&target), rename_error.target());
+    let copy_error = fs
+        .copy(&present, &target, CopyOptions::default())
+        .unwrap_err();
+    assert_eq!(Some(&present), copy_error.path());
+    assert_eq!(Some(&target), copy_error.target());
+
     let failures = [
         fs.list(&present, ListOptions::default()).unwrap_err(),
         fs.open_reader(&present, ReadOptions::default())
@@ -111,15 +122,14 @@ fn file_system_defaults_are_safe_explicit_capability_failures() {
         fs.create_dir(&present, CreateDirOptions::default())
             .unwrap_err(),
         fs.delete(&present, DeleteOptions::default()).unwrap_err(),
-        fs.rename(&present, &target, RenameOptions::default())
-            .unwrap_err(),
-        fs.copy(&present, &target, CopyOptions::default())
-            .unwrap_err(),
+        rename_error,
+        copy_error,
         fs.create_temp_file(TempFileOptions::default()).unwrap_err(),
         fs.create_temp_dir(TempDirOptions::default()).unwrap_err(),
     ];
     for error in failures {
         assert_eq!(FsErrorKind::UnsupportedCapability, error.kind());
         assert!(error.required_capability().is_some());
+        assert_eq!(Some("minimal"), error.provider());
     }
 }

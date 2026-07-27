@@ -12,15 +12,16 @@ use std::pin::Pin;
 
 use qubit_io::AsyncOutput;
 
-use crate::{FsFuture, WriteOutcome};
+use crate::{FsFuture, WriteFuture};
 
 /// Provider session underlying a concrete [`crate::AsyncFileWriter`] handle.
 pub trait AsyncFileWriteSession: AsyncOutput<Item = u8> + Send {
     /// Asynchronously publishes bytes accepted by the session.
     ///
     /// # Returns
-    /// A future resolving to the actual publication method and atomicity.
-    fn commit_async<'a>(self: Pin<&'a mut Self>) -> FsFuture<'a, WriteOutcome>;
+    /// A future resolving to the actual publication method and atomicity, or a
+    /// typed failure that preserves provider-confirmed publication progress.
+    fn commit_async<'a>(self: Pin<&'a mut Self>) -> WriteFuture<'a>;
 
     /// Asynchronously cancels and cleans up this write session.
     ///

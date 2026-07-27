@@ -10,11 +10,11 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 use qubit_fs::{
-    AchievedAtomicity, AtomicityRequirement, FileKind, FileLocation, FileMetadata, FileResource,
-    FileSystem, FileSystemCapabilities, FileSystemId, FileSystemInfo, FileSystemLimit,
-    FileSystemLimits, FileSystemProperties, FsError, FsErrorKind, FsOperation, FsPath, FsUri,
-    PathSemantics, PersistFailure, PersistFailureState, PersistOptions, PersistOutcome,
-    PublicationMethod, ReadOptions, TempFile, TempResourceSession, TempResourceState, WriteOptions,
+    AchievedAtomicity, AtomicityRequirement, FileKind, FileMetadata, FileResource, FileSystem,
+    FileSystemCapabilities, FileSystemId, FileSystemInfo, FileSystemLimit, FileSystemLimits,
+    FileSystemProperties, FsError, FsErrorKind, FsOperation, FsPath, FsUri, PathSemantics,
+    PersistFailure, PersistFailureState, PersistOptions, PersistOutcome, PublicationMethod,
+    ReadOptions, TempFile, TempResourceSession, TempResourceState, WriteOptions,
 };
 
 use crate::common::MockFs;
@@ -215,13 +215,12 @@ fn lifecycle_temp_file(
     cleanup_calls: Arc<Mutex<usize>>,
     persist_calls: Arc<Mutex<usize>>,
 ) -> TempFile {
-    let location = FileLocation::new(
-        fs.info().id().clone(),
-        FsPath::parse("/tmp/source").unwrap(),
-    )
-    .with_uri(FsUri::parse("mock:///tmp/source").unwrap());
     TempFile::new(
-        FileResource::from_location(fs, location),
+        FileResource::from_resolved(
+            fs,
+            FsPath::parse("/tmp/source").unwrap(),
+            FsUri::parse("mock:///tmp/source").unwrap(),
+        ),
         LifecycleSession {
             cleanup_results: cleanup_results.into_iter().collect(),
             keep_error,

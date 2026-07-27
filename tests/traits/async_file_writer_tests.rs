@@ -14,16 +14,15 @@ use std::task::{Context, Poll, Waker};
 
 use qubit_fs::{
     AchievedAtomicity, AsyncFileWriteSession, AsyncFileWriter, FileLocation, FileSystemId, FsError,
-    FsErrorKind, FsFuture, FsOperation, FsPath, OpenedFileInfo, PublicationMethod, WriteOutcome,
-    WriterState,
+    FsErrorKind, FsFuture, FsOperation, FsPath, OpenedFileInfo, PublicationMethod, WriteFailure,
+    WriteFailureState, WriteFuture, WriteOutcome, WriterState,
 };
 use qubit_io::AsyncOutput;
 
 #[derive(Debug)]
 struct ReadyWriteSession {
     bytes: Arc<Mutex<Vec<u8>>>,
-    fail_commit_once: bool,
-    indeterminate_commit_once: bool,
+    commit_failure_once: Option<WriteFailureState>,
     abort_error: Option<FsErrorKind>,
     buffered: bool,
     drop_cancellations: Arc<Mutex<usize>>,
@@ -57,25 +56,19 @@ impl AsyncOutput for ReadyWriteSession {
 }
 
 impl AsyncFileWriteSession for ReadyWriteSession {
-    fn commit_async<'a>(self: Pin<&'a mut Self>) -> FsFuture<'a, WriteOutcome> {
+    fn commit_async<'a>(self: Pin<&'a mut Self>) -> WriteFuture<'a> {
         let this = self.get_mut();
-        if this.indeterminate_commit_once {
-            this.indeterminate_commit_once = false;
-            return Box::pin(async {
-                Err(FsError::new(
-                    FsErrorKind::Indeterminate,
-                    FsOperation::CommitWriter,
-                    "publication state is unknown",
-                ))
-            });
-        }
-        if this.fail_commit_once {
-            this.fail_commit_once = false;
-            return Box::pin(async {
-                Err(FsError::new(
-                    FsErrorKind::Io,
-                    FsOperation::CommitWriter,
-                    "transient commit failure",
+        if let Some(state) = this.commit_failure_once.take() {
+            let kind = match state {
+                WriteFailureState::Indeterminate => FsErrorKind::Indeterminate,
+                WriteFailureState::Retryable
+                | WriteFailureState::NotPublished
+                | WriteFailureState::Published => FsErrorKind::Io,
+            };
+            return Box::pin(async move {
+                Err(WriteFailure::new(
+                    FsError::new(kind, FsOperation::CommitWriter, "commit failed"),
+                    state,
                 ))
             });
         }
@@ -139,8 +132,7 @@ fn async_commit_failure_retains_session_for_retry() {
     let mut writer = AsyncFileWriter::new(
         ReadyWriteSession {
             bytes: Arc::new(Mutex::new(Vec::new())),
-            fail_commit_once: true,
-            indeterminate_commit_once: false,
+            commit_failure_once: Some(WriteFailureState::Retryable),
             abort_error: None,
             buffered: false,
             drop_cancellations: Arc::new(Mutex::new(0)),
@@ -155,14 +147,40 @@ fn async_commit_failure_retains_session_for_retry() {
 }
 
 #[test]
+fn async_commit_failure_preserves_definitive_publication_state() {
+    for (failure_state, expected_writer_state) in [
+        (WriteFailureState::NotPublished, WriterState::NotPublished),
+        (WriteFailureState::Published, WriterState::Published),
+    ] {
+        let mut writer = AsyncFileWriter::new(
+            ReadyWriteSession {
+                bytes: Arc::new(Mutex::new(Vec::new())),
+                commit_failure_once: Some(failure_state),
+                abort_error: None,
+                buffered: false,
+                drop_cancellations: Arc::new(Mutex::new(0)),
+            },
+            opened_info(),
+        );
+
+        assert_eq!(
+            FsErrorKind::Io,
+            ready(writer.commit_async()).unwrap_err().kind()
+        );
+        assert_eq!(expected_writer_state, writer.state());
+        ready(writer.abort_async()).expect("definitive commit failure should remain abortable");
+        assert_eq!(WriterState::Aborted, writer.state());
+    }
+}
+
+#[test]
 fn async_writer_drop_only_invokes_nonblocking_local_cancellation() {
     let cancellations = Arc::new(Mutex::new(0));
     {
         let _writer = AsyncFileWriter::new(
             ReadyWriteSession {
                 bytes: Arc::new(Mutex::new(Vec::new())),
-                fail_commit_once: false,
-                indeterminate_commit_once: false,
+                commit_failure_once: None,
                 abort_error: None,
                 buffered: false,
                 drop_cancellations: cancellations.clone(),
@@ -175,13 +193,41 @@ fn async_writer_drop_only_invokes_nonblocking_local_cancellation() {
 }
 
 #[test]
+fn async_writer_drop_cancels_definitive_failed_sessions() {
+    for failure_state in [
+        WriteFailureState::NotPublished,
+        WriteFailureState::Published,
+    ] {
+        let cancellations = Arc::new(Mutex::new(0));
+        {
+            let mut writer = AsyncFileWriter::new(
+                ReadyWriteSession {
+                    bytes: Arc::new(Mutex::new(Vec::new())),
+                    commit_failure_once: Some(failure_state),
+                    abort_error: None,
+                    buffered: false,
+                    drop_cancellations: cancellations.clone(),
+                },
+                opened_info(),
+            );
+
+            assert!(ready(writer.commit_async()).is_err());
+        }
+        assert_eq!(
+            1,
+            *cancellations.lock().expect("lock should succeed"),
+            "dropping a definitively failed session should cancel local state",
+        );
+    }
+}
+
+#[test]
 fn async_writer_forwards_io_and_rejects_it_after_commit() {
     let bytes = Arc::new(Mutex::new(Vec::new()));
     let mut writer = AsyncFileWriter::new(
         ReadyWriteSession {
             bytes: bytes.clone(),
-            fail_commit_once: false,
-            indeterminate_commit_once: false,
+            commit_failure_once: None,
             abort_error: None,
             buffered: true,
             drop_cancellations: Arc::new(Mutex::new(0)),
@@ -242,8 +288,7 @@ fn async_indeterminate_commit_can_be_aborted_without_drop_cancellation() {
         let mut writer = AsyncFileWriter::new(
             ReadyWriteSession {
                 bytes: Arc::new(Mutex::new(Vec::new())),
-                fail_commit_once: false,
-                indeterminate_commit_once: true,
+                commit_failure_once: Some(WriteFailureState::Indeterminate),
                 abort_error: None,
                 buffered: false,
                 drop_cancellations: cancellations.clone(),
@@ -269,8 +314,7 @@ fn async_abort_failure_retains_open_state_for_drop_cancellation() {
         let mut writer = AsyncFileWriter::new(
             ReadyWriteSession {
                 bytes: Arc::new(Mutex::new(Vec::new())),
-                fail_commit_once: false,
-                indeterminate_commit_once: false,
+                commit_failure_once: None,
                 abort_error: Some(FsErrorKind::Io),
                 buffered: false,
                 drop_cancellations: cancellations.clone(),
@@ -291,8 +335,7 @@ fn async_indeterminate_abort_disables_drop_cancellation() {
         let mut writer = AsyncFileWriter::new(
             ReadyWriteSession {
                 bytes: Arc::new(Mutex::new(Vec::new())),
-                fail_commit_once: false,
-                indeterminate_commit_once: false,
+                commit_failure_once: None,
                 abort_error: Some(FsErrorKind::Indeterminate),
                 buffered: false,
                 drop_cancellations: cancellations.clone(),
@@ -333,7 +376,7 @@ impl AsyncOutput for PendingLifecycleSession {
 }
 
 impl AsyncFileWriteSession for PendingLifecycleSession {
-    fn commit_async<'a>(self: Pin<&'a mut Self>) -> FsFuture<'a, WriteOutcome> {
+    fn commit_async<'a>(self: Pin<&'a mut Self>) -> WriteFuture<'a> {
         Box::pin(std::future::pending())
     }
 
@@ -401,7 +444,7 @@ impl AsyncOutput for DefaultCancellationSession {
 }
 
 impl AsyncFileWriteSession for DefaultCancellationSession {
-    fn commit_async<'a>(self: Pin<&'a mut Self>) -> FsFuture<'a, WriteOutcome> {
+    fn commit_async<'a>(self: Pin<&'a mut Self>) -> WriteFuture<'a> {
         Box::pin(async {
             Ok(WriteOutcome::new(
                 AchievedAtomicity::Atomic,

@@ -58,7 +58,7 @@ pub trait AsyncFileSystem: FileSystemProperties {
         path: &'a FsPath,
         _options: ListOptions,
     ) -> FsFuture<'a, AsyncDirectoryStream> {
-        let error = unsupported(path, FsOperation::List, FileSystemCapability::List);
+        let error = unsupported(self, path, FsOperation::List, FileSystemCapability::List);
         Box::pin(async move { Err(error) })
     }
 
@@ -74,7 +74,12 @@ pub trait AsyncFileSystem: FileSystemProperties {
         path: &'a FsPath,
         _options: ReadOptions,
     ) -> FsFuture<'a, AsyncFileReader> {
-        let error = unsupported(path, FsOperation::OpenReader, FileSystemCapability::Read);
+        let error = unsupported(
+            self,
+            path,
+            FsOperation::OpenReader,
+            FileSystemCapability::Read,
+        );
         Box::pin(async move { Err(error) })
     }
 
@@ -90,7 +95,12 @@ pub trait AsyncFileSystem: FileSystemProperties {
         path: &'a FsPath,
         _options: WriteOptions,
     ) -> FsFuture<'a, AsyncFileWriter> {
-        let error = unsupported(path, FsOperation::OpenWriter, FileSystemCapability::Write);
+        let error = unsupported(
+            self,
+            path,
+            FsOperation::OpenWriter,
+            FileSystemCapability::Write,
+        );
         Box::pin(async move { Err(error) })
     }
 
@@ -101,6 +111,7 @@ pub trait AsyncFileSystem: FileSystemProperties {
         _options: CreateDirOptions,
     ) -> FsFuture<'a, ()> {
         let error = unsupported(
+            self,
             path,
             FsOperation::CreateDir,
             FileSystemCapability::CreateDirectory,
@@ -113,7 +124,12 @@ pub trait AsyncFileSystem: FileSystemProperties {
     /// Implementations must call [`DeleteOptions::validate_against`] before
     /// modifying the resource.
     fn delete_async<'a>(&'a self, path: &'a FsPath, _options: DeleteOptions) -> FsFuture<'a, ()> {
-        let error = unsupported(path, FsOperation::Delete, FileSystemCapability::Delete);
+        let error = unsupported(
+            self,
+            path,
+            FsOperation::Delete,
+            FileSystemCapability::Delete,
+        );
         Box::pin(async move { Err(error) })
     }
 
@@ -124,10 +140,16 @@ pub trait AsyncFileSystem: FileSystemProperties {
     fn rename_async<'a>(
         &'a self,
         from: &'a FsPath,
-        _to: &'a FsPath,
+        to: &'a FsPath,
         _options: RenameOptions,
     ) -> FsFuture<'a, RenameOutcome> {
-        let error = unsupported(from, FsOperation::Rename, FileSystemCapability::Rename);
+        let error = unsupported(
+            self,
+            from,
+            FsOperation::Rename,
+            FileSystemCapability::Rename,
+        )
+        .with_target(to.clone());
         Box::pin(async move { Err(error) })
     }
 
@@ -138,10 +160,11 @@ pub trait AsyncFileSystem: FileSystemProperties {
     fn copy_async<'a>(
         &'a self,
         from: &'a FsPath,
-        _to: &'a FsPath,
+        to: &'a FsPath,
         _options: CopyOptions,
     ) -> FsFuture<'a, CopyOutcome> {
-        let error = unsupported(from, FsOperation::Copy, FileSystemCapability::Copy);
+        let error = unsupported(self, from, FsOperation::Copy, FileSystemCapability::Copy)
+            .with_target(to.clone());
         Box::pin(async move { Err(error) })
     }
 
@@ -155,6 +178,7 @@ pub trait AsyncFileSystem: FileSystemProperties {
             FsOperation::CreateTemp,
             "filesystem has no configured asynchronous temporary-file strategy",
         )
+        .with_provider(self.info().provider_id())
         .with_required_capability(FileSystemCapability::TempFile);
         Box::pin(async move { Err(error) })
     }
@@ -166,18 +190,28 @@ pub trait AsyncFileSystem: FileSystemProperties {
             FsOperation::CreateTemp,
             "filesystem has no configured asynchronous temporary-directory strategy",
         )
+        .with_provider(self.info().provider_id())
         .with_required_capability(FileSystemCapability::TempDirectory);
         Box::pin(async move { Err(error) })
     }
 }
 
 /// Builds a path-aware unsupported-capability error before side effects.
-fn unsupported(path: &FsPath, operation: FsOperation, capability: FileSystemCapability) -> FsError {
+fn unsupported<P>(
+    properties: &P,
+    path: &FsPath,
+    operation: FsOperation,
+    capability: FileSystemCapability,
+) -> FsError
+where
+    P: FileSystemProperties + ?Sized,
+{
     FsError::new(
         FsErrorKind::UnsupportedCapability,
         operation,
         "filesystem capability is not supported",
     )
     .with_path(path.clone())
+    .with_provider(properties.info().provider_id())
     .with_required_capability(capability)
 }

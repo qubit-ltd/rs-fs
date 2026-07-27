@@ -68,6 +68,7 @@ pub trait FileSystem: FileSystemProperties {
     /// Returns an unsupported-capability error by default.
     fn list(&self, path: &FsPath, _options: ListOptions) -> FsResult<DirectoryStream> {
         Err(unsupported(
+            self,
             path,
             FsOperation::List,
             FileSystemCapability::List,
@@ -83,6 +84,7 @@ pub trait FileSystem: FileSystemProperties {
     /// Returns an unsupported-capability error by default.
     fn open_reader(&self, path: &FsPath, _options: ReadOptions) -> FsResult<FileReader> {
         Err(unsupported(
+            self,
             path,
             FsOperation::OpenReader,
             FileSystemCapability::Read,
@@ -98,6 +100,7 @@ pub trait FileSystem: FileSystemProperties {
     /// Returns an unsupported-capability error by default.
     fn open_writer(&self, path: &FsPath, _options: WriteOptions) -> FsResult<FileWriter> {
         Err(unsupported(
+            self,
             path,
             FsOperation::OpenWriter,
             FileSystemCapability::Write,
@@ -110,6 +113,7 @@ pub trait FileSystem: FileSystemProperties {
     /// Returns an unsupported-capability error by default.
     fn create_dir(&self, path: &FsPath, _options: CreateDirOptions) -> FsResult<()> {
         Err(unsupported(
+            self,
             path,
             FsOperation::CreateDir,
             FileSystemCapability::CreateDirectory,
@@ -125,6 +129,7 @@ pub trait FileSystem: FileSystemProperties {
     /// Returns an unsupported-capability error by default.
     fn delete(&self, path: &FsPath, _options: DeleteOptions) -> FsResult<()> {
         Err(unsupported(
+            self,
             path,
             FsOperation::Delete,
             FileSystemCapability::Delete,
@@ -144,14 +149,16 @@ pub trait FileSystem: FileSystemProperties {
     fn rename(
         &self,
         from: &FsPath,
-        _to: &FsPath,
+        to: &FsPath,
         _options: RenameOptions,
     ) -> FsResult<RenameOutcome> {
         Err(unsupported(
+            self,
             from,
             FsOperation::Rename,
             FileSystemCapability::Rename,
-        ))
+        )
+        .with_target(to.clone()))
     }
 
     /// Copies a resource within this configured filesystem.
@@ -164,12 +171,11 @@ pub trait FileSystem: FileSystemProperties {
     ///
     /// # Errors
     /// Returns an unsupported-capability error by default.
-    fn copy(&self, from: &FsPath, _to: &FsPath, _options: CopyOptions) -> FsResult<CopyOutcome> {
-        Err(unsupported(
-            from,
-            FsOperation::Copy,
-            FileSystemCapability::Copy,
-        ))
+    fn copy(&self, from: &FsPath, to: &FsPath, _options: CopyOptions) -> FsResult<CopyOutcome> {
+        Err(
+            unsupported(self, from, FsOperation::Copy, FileSystemCapability::Copy)
+                .with_target(to.clone()),
+        )
     }
 
     /// Creates a provider-native or explicitly configured temporary file.
@@ -185,6 +191,7 @@ pub trait FileSystem: FileSystemProperties {
             FsOperation::CreateTemp,
             "filesystem has no configured temporary-file strategy",
         )
+        .with_provider(self.info().provider_id())
         .with_required_capability(FileSystemCapability::TempFile))
     }
 
@@ -201,17 +208,27 @@ pub trait FileSystem: FileSystemProperties {
             FsOperation::CreateTemp,
             "filesystem has no configured temporary-directory strategy",
         )
+        .with_provider(self.info().provider_id())
         .with_required_capability(FileSystemCapability::TempDirectory))
     }
 }
 
 /// Builds a path-aware unsupported-capability error before side effects.
-fn unsupported(path: &FsPath, operation: FsOperation, capability: FileSystemCapability) -> FsError {
+fn unsupported<P>(
+    properties: &P,
+    path: &FsPath,
+    operation: FsOperation,
+    capability: FileSystemCapability,
+) -> FsError
+where
+    P: FileSystemProperties + ?Sized,
+{
     FsError::new(
         FsErrorKind::UnsupportedCapability,
         operation,
         "filesystem capability is not supported",
     )
     .with_path(path.clone())
+    .with_provider(properties.info().provider_id())
     .with_required_capability(capability)
 }

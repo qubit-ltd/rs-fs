@@ -58,9 +58,9 @@ pub use options::{
     WriteDisposition, WriteOptions, WritePrecondition,
 };
 pub use path::{
-    EscapedBytePathCodec, FsAuthority, FsName, FsPath, FsScheme, FsUri, FsUriPath, FsUriQuery,
-    NativePathCodec, NativePathCodecError, OsStrPathCodec, PathSemantics, RelativeFsPath,
-    Utf8PathCodec,
+    EscapedBytePathCodec, FsAuthority, FsName, FsPath, FsScheme, FsUri, FsUriAuthority, FsUriPath,
+    FsUriQuery, NativePathCodec, NativePathCodecError, OsStrPathCodec, PathSemantics,
+    RelativeFsPath, Utf8PathCodec,
 };
 pub use resource::{AsyncFileResource, FileResource};
 pub use temp::{
@@ -73,5 +73,5 @@ pub use traits::{
     AsyncFileSystem, AsyncFileSystemExt, AsyncFileWriteSession, AsyncFileWriter, DirectoryStream,
     DirectoryStreamExt, DirectoryStreamSession, FileReader, FileSystem, FileSystemExt,
     FileSystemProperties, FileWriteSession, FileWriter, FsFuture, WriteFailure, WriteFailureState,
-    WriterState,
+    WriteFuture, WriterState,
 };

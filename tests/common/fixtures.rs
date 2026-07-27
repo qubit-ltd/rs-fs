@@ -117,7 +117,7 @@ impl FileSystem for MockFs {
         } else if state.files.contains(path.as_str()) {
             let mut metadata = FileMetadata::new(FileKind::File);
             metadata.len = Some(4);
-            metadata.etag = Some("v1".to_owned());
+            metadata.etag = Some(ResourceVersion::from("v1"));
             Ok(metadata)
         } else {
             Err(

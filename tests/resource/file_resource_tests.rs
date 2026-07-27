@@ -12,10 +12,10 @@ use qubit_io::{Input, Output};
 
 use qubit_fs::{
     AtomicityRequirement, CopyOptions, CreateDirOptions, DeleteOptions, DirectoryStream,
-    DirectoryStreamExt, FileLocation, FileResource, FileSystem, FileSystemCapabilities,
-    FileSystemCapability, FileSystemId, FileSystemInfo, FileSystemLimit, FileSystemLimits,
-    FileSystemProperties, FsError, FsErrorKind, FsOperation, FsPath, FsResult, FsUri, ListOptions,
-    PathSemantics, ReadOptions, RenameOptions, ServerSidePreference, WriteOptions,
+    DirectoryStreamExt, FileResource, FileSystem, FileSystemCapabilities, FileSystemCapability,
+    FileSystemId, FileSystemInfo, FileSystemLimit, FileSystemLimits, FileSystemProperties, FsError,
+    FsErrorKind, FsOperation, FsPath, FsResult, FsUri, ListOptions, PathSemantics, ReadOptions,
+    RenameOptions, ServerSidePreference, WriteOptions,
 };
 
 use crate::common::MockFs;
@@ -149,10 +149,10 @@ fn file_resource_rejects_unmet_requirements_before_delegation() {
         offset: Some(1),
         ..ReadOptions::default()
     };
-    assert_eq!(
-        qubit_fs::FsErrorKind::RequirementNotMet,
-        resource.open_reader(read).unwrap_err().kind(),
-    );
+    let read_error = resource.open_reader(read).unwrap_err();
+    assert_eq!(qubit_fs::FsErrorKind::RequirementNotMet, read_error.kind());
+    assert_eq!(Some("/file"), read_error.path().map(FsPath::as_str));
+    assert_eq!(Some("no-capabilities"), read_error.provider());
 
     let write = WriteOptions {
         atomicity: AtomicityRequirement::Required,
@@ -249,17 +249,20 @@ fn file_resource_preflights_paths_for_every_bound_operation() {
             .is_err()
     );
 
-    let short_resource = FileResource::new(Arc::new(MockFs::default().with_limits(limits)), short);
-    assert!(
-        short_resource
-            .rename_to(&long, RenameOptions::default())
-            .is_err()
+    let short_resource = FileResource::new(
+        Arc::new(MockFs::default().with_limits(limits)),
+        short.clone(),
     );
-    assert!(
-        short_resource
-            .copy_to(&long, CopyOptions::default())
-            .is_err()
-    );
+    let rename_error = short_resource
+        .rename_to(&long, RenameOptions::default())
+        .unwrap_err();
+    assert_eq!(Some(&short), rename_error.path());
+    assert_eq!(Some(&long), rename_error.target());
+    let copy_error = short_resource
+        .copy_to(&long, CopyOptions::default())
+        .unwrap_err();
+    assert_eq!(Some(&short), copy_error.path());
+    assert_eq!(Some(&long), copy_error.target());
 }
 
 struct ListPageLimitFs {
@@ -321,6 +324,5 @@ fn file_resource_clamps_list_page_size_before_delegation() {
 fn resource_with_mock(fs: MockFs, path: &str, uri: FsUri) -> FileResource {
     let fs: Arc<dyn FileSystem> = Arc::new(fs);
     let path = FsPath::parse(path).expect("path should parse");
-    let location = FileLocation::new(fs.info().id().clone(), path).with_uri(uri);
-    FileResource::from_location(fs, location)
+    FileResource::from_resolved(fs, path, uri)
 }
