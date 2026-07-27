@@ -18,6 +18,11 @@ pub struct ListOptions {
     pub include_metadata: bool,
     /// Optional provider page size hint.
     pub page_size: Option<usize>,
-    /// Optional lexical prefix filter.
+    /// Optional lexical prefix filter relative to the requested list root.
+    ///
+    /// The filter uses canonical `/`-separated relative paths. For example,
+    /// listing `/root` with `prefix: Some("nested/item")` matches
+    /// `/root/nested/item`, while `prefix: Some("item")` only matches an
+    /// immediate child named `item`.
     pub prefix: Option<String>,
 }

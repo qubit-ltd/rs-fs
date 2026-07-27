@@ -190,7 +190,7 @@ fn replace(
         atomicity: AtomicityRequirement::Required,
         ..WriteOptions::default()
     };
-    let mut writer = resource.open_writer(&options)?;
+    let mut writer = resource.open_writer(options)?;
     if let Err(error) = writer.write_fully(bytes) {
         let _ = writer.abort();
         return Err(FsError::from_io(error, FsOperation::Write)
