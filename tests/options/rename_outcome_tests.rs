@@ -6,12 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::{
-    AchievedAtomicity,
-    PublicationMethod,
-    RenameOutcome,
-    UserMetadata,
-};
+use qubit_fs::{AchievedAtomicity, PublicationMethod, RenameOutcome, UserMetadata};
 
 #[test]
 fn rename_outcome_reports_actual_method_and_atomicity() {
@@ -20,8 +15,8 @@ fn rename_outcome_reports_actual_method_and_atomicity() {
         PublicationMethod::CopyThenDelete,
     );
 
-    assert_eq!(AchievedAtomicity::NonAtomic, outcome.atomicity);
-    assert_eq!(PublicationMethod::CopyThenDelete, outcome.method);
+    assert_eq!(AchievedAtomicity::NonAtomic, outcome.atomicity());
+    assert_eq!(PublicationMethod::CopyThenDelete, outcome.method());
 }
 
 #[test]
@@ -35,6 +30,6 @@ fn rename_outcome_preserves_validated_diagnostics() {
             .with("request_id", "private-rename-id")
             .unwrap(),
     );
-    assert!(outcome.diagnostics.contains_key("request_id"));
+    assert!(outcome.diagnostics().contains_key("request_id"));
     assert!(!format!("{outcome:?}").contains("private-rename-id"));
 }

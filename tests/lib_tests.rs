@@ -6,11 +6,21 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-mod common;
+#[path = "common/async_recording_spi.rs"]
+mod async_recording_spi;
+mod copy;
+mod directory;
 mod error;
+mod handle_support;
 mod metadata;
 mod options;
 mod path;
-mod resource;
+#[path = "common/poll_support.rs"]
+mod poll_support;
+mod properties_tests;
+mod reader;
+mod rename;
+mod spi;
 mod temp;
-mod traits;
+mod uri;
+mod writer;

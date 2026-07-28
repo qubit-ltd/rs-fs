@@ -8,17 +8,9 @@
 //! Provider-neutral user metadata.
 
 use std::collections::BTreeMap;
-use std::fmt::{
-    Debug,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::{Debug, Formatter, Result as FmtResult};
 
-use crate::{
-    FsError,
-    FsErrorKind,
-    FsOperation,
-};
+use crate::{FsError, FsErrorKind, FsOperation};
 
 /// An ordered string-to-string metadata map with safe structural formatting.
 #[derive(Clone, Default, Eq, PartialEq)]
@@ -38,7 +30,7 @@ impl UserMetadata {
     /// Returns an invalid-options error when the key resembles credential
     /// material.
     pub fn with(mut self, key: &str, value: &str) -> Result<Self, FsError> {
-        if crate::path::is_sensitive_key(key) {
+        if crate::uri::query_pair_is_sensitive(key) {
             return Err(FsError::new(
                 FsErrorKind::InvalidOptions,
                 FsOperation::Other,

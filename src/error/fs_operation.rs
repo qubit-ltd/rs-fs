@@ -15,6 +15,10 @@ pub enum FsOperation {
     ParsePath,
     /// URI parsing or normalization.
     ParseUri,
+    /// Construction-time filesystem property validation.
+    ValidateProperties,
+    /// Verification of a provider operation outcome.
+    ValidateProviderOutcome,
     /// Metadata lookup.
     Stat,
     /// Existence check.
@@ -41,6 +45,8 @@ pub enum FsOperation {
     Rename,
     /// Copy.
     Copy,
+    /// Provider copy primitive invocation.
+    BeginCopy,
     /// Temporary resource creation.
     CreateTemp,
     /// Temporary resource cleanup.

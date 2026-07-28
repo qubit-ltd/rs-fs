@@ -7,19 +7,13 @@
 // =============================================================================
 //! Successful temporary resource persistence outcome.
 
-use crate::{
-    AchievedAtomicity,
-    FsPath,
-    NonSensitiveMetadata,
-    PublicationMethod,
-    UserMetadata,
-};
+use crate::{AchievedAtomicity, NonSensitiveMetadata, Path, PublicationMethod, UserMetadata};
 
 /// Confirmed result of publishing a temporary source to its final target.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PersistOutcome {
     /// Final provider-local target path.
-    pub target: FsPath,
+    pub target: Path,
     /// Atomicity actually achieved by publication.
     pub atomicity: AchievedAtomicity,
     /// Concrete publication method used.
@@ -40,11 +34,7 @@ impl PersistOutcome {
     /// An outcome without provider diagnostics.
     #[inline]
     #[must_use]
-    pub fn new(
-        target: FsPath,
-        atomicity: AchievedAtomicity,
-        method: PublicationMethod,
-    ) -> Self {
+    pub fn new(target: Path, atomicity: AchievedAtomicity, method: PublicationMethod) -> Self {
         Self {
             target,
             atomicity,

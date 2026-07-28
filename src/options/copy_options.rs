@@ -8,15 +8,9 @@
 //! Copy operation options and policy types.
 
 use crate::{
-    CopyConflictPolicy,
-    CopyMode,
-    FileSystemCapabilities,
-    FileSystemCapability,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    MetadataPreservePolicy,
-    ServerSidePreference,
+    AtomicityRequirement, CopyConflictPolicy, CopyMode, DurabilityRequirement,
+    FileSystemCapabilities, FileSystemCapability, FsError, FsErrorKind, FsOperation,
+    MetadataPreservePolicy, ServerSidePreference,
 };
 
 /// Options controlling file, object, or tree copy operations.
@@ -36,6 +30,10 @@ pub struct CopyOptions {
     pub create_parent: bool,
     /// Whether tree copy should continue after per-entry failures.
     pub continue_on_error: bool,
+    /// Required atomicity of destination publication.
+    pub atomicity: AtomicityRequirement,
+    /// Required durability of destination publication.
+    pub durability: DurabilityRequirement,
 }
 
 impl CopyOptions {
@@ -76,10 +74,7 @@ impl CopyOptions {
     /// Returns [`FsErrorKind::RequirementNotMet`] with
     /// [`FileSystemCapability::ServerSideCopy`] when required server-side copy
     /// is unavailable.
-    pub fn validate_against(
-        &self,
-        capabilities: FileSystemCapabilities,
-    ) -> Result<(), FsError> {
+    pub fn validate_against(&self, capabilities: FileSystemCapabilities) -> Result<(), FsError> {
         if self.server_side == ServerSidePreference::Require
             && !capabilities.contains(FileSystemCapability::ServerSideCopy)
         {
@@ -89,6 +84,26 @@ impl CopyOptions {
                 "server-side copy is required but not guaranteed",
             )
             .with_required_capability(FileSystemCapability::ServerSideCopy));
+        }
+        if self.atomicity == AtomicityRequirement::Required
+            && !capabilities.contains(FileSystemCapability::AtomicReplace)
+        {
+            return Err(FsError::new(
+                FsErrorKind::RequirementNotMet,
+                FsOperation::Copy,
+                "atomic copy publication is required but not guaranteed",
+            )
+            .with_required_capability(FileSystemCapability::AtomicReplace));
+        }
+        if self.durability == DurabilityRequirement::Required
+            && !capabilities.contains(FileSystemCapability::DurableCopy)
+        {
+            return Err(FsError::new(
+                FsErrorKind::RequirementNotMet,
+                FsOperation::Copy,
+                "durable copy publication is required but not guaranteed",
+            )
+            .with_required_capability(FileSystemCapability::DurableCopy));
         }
         Ok(())
     }
@@ -100,11 +115,13 @@ impl Default for CopyOptions {
         Self {
             mode: CopyMode::Auto,
             conflict: CopyConflictPolicy::Fail,
-            preserve_metadata: MetadataPreservePolicy::Portable,
-            server_side: ServerSidePreference::Prefer,
+            preserve_metadata: MetadataPreservePolicy::None,
+            server_side: ServerSidePreference::Disable,
             follow_symlinks: false,
             create_parent: false,
             continue_on_error: false,
+            atomicity: AtomicityRequirement::NotRequired,
+            durability: DurabilityRequirement::NotRequired,
         }
     }
 }

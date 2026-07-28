@@ -6,13 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 use qubit_fs::{
-    CopyConflictPolicy,
-    CopyMode,
-    CopyOptions,
-    FileSystemCapabilities,
-    FileSystemCapability,
-    MetadataPreservePolicy,
-    ServerSidePreference,
+    AtomicityRequirement, CopyConflictPolicy, CopyMode, CopyOptions, DurabilityRequirement,
+    FileSystemCapabilities, FileSystemCapability, MetadataPreservePolicy, ServerSidePreference,
 };
 
 #[test]
@@ -38,8 +33,7 @@ fn required_server_side_copy_is_checked_before_side_effects() {
     assert!(
         options
             .validate_against(
-                FileSystemCapabilities::default()
-                    .with(FileSystemCapability::ServerSideCopy),
+                FileSystemCapabilities::default().with(FileSystemCapability::ServerSideCopy),
             )
             .is_ok()
     );
@@ -55,6 +49,8 @@ fn test_copy_options_full_configuration_is_usable() {
         follow_symlinks: true,
         create_parent: true,
         continue_on_error: true,
+        atomicity: AtomicityRequirement::Required,
+        durability: DurabilityRequirement::Required,
     };
 
     assert_eq!(CopyMode::Tree, options.mode);
@@ -62,4 +58,6 @@ fn test_copy_options_full_configuration_is_usable() {
     assert!(options.follow_symlinks);
     assert!(options.create_parent);
     assert!(options.continue_on_error);
+    assert_eq!(AtomicityRequirement::Required, options.atomicity);
+    assert_eq!(DurabilityRequirement::Required, options.durability);
 }

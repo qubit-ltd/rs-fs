@@ -8,13 +8,13 @@
 // qubit-style: allow source-test-pair
 //! Temporary file creation options.
 
-use crate::FsPath;
+use crate::Path;
 
 /// Options controlling temporary file creation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TempFileOptions {
     /// Parent directory or prefix for the temporary file.
-    pub parent: Option<FsPath>,
+    pub parent: Option<Path>,
     /// Name prefix.
     pub prefix: String,
     /// Name suffix.

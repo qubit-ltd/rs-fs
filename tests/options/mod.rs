@@ -13,7 +13,6 @@ mod copy_mode_tests;
 mod copy_options_tests;
 mod copy_outcome_tests;
 mod copy_stats_tests;
-mod create_dir_options_tests;
 mod delete_options_tests;
 mod list_options_tests;
 mod metadata_preserve_policy_tests;

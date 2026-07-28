@@ -10,12 +10,14 @@
 /// Method used to complete a copy operation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CopyMethod {
-    /// Local provider-native copy.
-    Local,
+    /// Provider-native copy.
+    Native,
+    /// Storage-level clone or reflink copy.
+    Clone,
     /// Server-side copy.
     ServerSide,
     /// Client-side stream copy.
-    Stream,
+    Streamed,
     /// Mixed copy strategy.
     Mixed,
 }

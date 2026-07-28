@@ -8,7 +8,7 @@
 //! Path semantics exposed by filesystem implementations.
 
 /// Provider path semantics.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum PathSemantics {
     /// Hierarchical directory semantics.
     Hierarchical,

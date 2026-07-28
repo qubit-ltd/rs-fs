@@ -16,140 +16,79 @@
 //! the companion `qubit-fs-registry` crate. This crate contains no concrete
 //! storage backend and binds to no asynchronous runtime.
 //!
-//! ## Binding a resource
+//! ## Addressing a resource
 //!
 //! ```no_run
-//! use std::sync::Arc;
+//! use qubit_fs::Path;
 //!
-//! use qubit_fs::{
-//!     FileResource,
-//!     FileSystem,
-//!     FsPath,
-//!     FsResult,
-//! };
+//! let path = Path::parse("/reports/2026/summary.csv")?;
+//! assert!(path.is_absolute());
+//! # Ok::<(), qubit_fs::FsError>(())
+//! ```
 //!
-//! fn bind_report(filesystem: Arc<dyn FileSystem>) -> FsResult<FileResource> {
-//!     let path = FsPath::parse("/reports/2026/summary.csv")?;
-//!     Ok(FileResource::new(filesystem, path))
-//! }
+//! Application code uses the concrete facades and their handles. Provider contracts are available
+//! only under [`spi`]. Legacy resource wrappers and provider-local path values are not public API.
+//!
+//! ```compile_fail
+//! use qubit_fs::FileResource;
+//! ```
+//!
+//! ```compile_fail
+//! use qubit_fs::FsPath;
+//! ```
+//!
+//! ```compile_fail
+//! use qubit_fs::FileSystemSpi;
 //! ```
 
 #![deny(missing_docs)]
 
+mod async_file_system;
+mod copy;
 mod error;
+mod file_system;
+mod handle;
 mod metadata;
 mod options;
 mod path;
-mod resource;
+mod properties;
+mod rename;
+pub mod spi;
 mod temp;
-mod traits;
+mod uri;
 
-pub use error::{
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    FsResult,
+pub use async_file_system::AsyncFileSystem;
+pub use copy::{
+    AsyncCopyFailure, AsyncCopyOperation, AsyncCopyOperationState, CopyFailure, CopyFailureState,
+};
+pub use error::{FsError, FsErrorKind, FsOperation, FsResult};
+pub use file_system::FileSystem;
+pub use handle::{
+    AsyncDirectoryStream, AsyncFileReader, AsyncFileWriter, DirectoryStream, FileReader,
+    FileWriter, WriteAllFailure, WriteFailure, WriteFailureState, WriterState,
 };
 pub use metadata::{
-    AchievedAtomicity,
-    Checksum,
-    ChecksumAlgorithm,
-    DirEntry,
-    FileKind,
-    FileLocation,
-    FileMetadata,
-    FileSystemCapabilities,
-    FileSystemCapability,
-    FileSystemId,
-    FileSystemInfo,
-    FileSystemLimit,
-    FileSystemLimits,
-    NonSensitiveMetadata,
-    OpenedFileInfo,
-    PublicationMethod,
-    ResourceVersion,
-    UserMetadata,
-    WriteOutcome,
+    AchievedAtomicity, Checksum, ChecksumAlgorithm, DirEntry, FileKind, FileMetadata,
+    FileSystemCapabilities, FileSystemCapability, FileSystemId, FileSystemInfo, FileSystemLimit,
+    FileSystemLimits, NonSensitiveMetadata, OpenedFileInfo, PublicationMethod, ResourceVersion,
+    UserMetadata, WriteOutcome,
 };
 pub use options::{
-    AtomicityRequirement,
-    ChecksumPolicy,
-    CopyConflictPolicy,
-    CopyMethod,
-    CopyMode,
-    CopyOptions,
-    CopyOutcome,
-    CopyStats,
-    CreateDirOptions,
-    DeleteOptions,
-    ListOptions,
-    MetadataPreservePolicy,
-    PersistOptions,
-    ReadOptions,
-    RenameOptions,
-    RenameOutcome,
-    ServerSidePreference,
-    WriteDisposition,
-    WriteOptions,
-    WritePrecondition,
+    AtomicityRequirement, ChecksumPolicy, CopyConflictPolicy, CopyMethod, CopyMode, CopyOptions,
+    CopyOutcome, CopyStats, CreateDirectoryOptions, CreateDirectoryOutcome, DeleteOptions,
+    DeleteOutcome, DurabilityRequirement, ListOptions, MetadataPreservePolicy, PersistOptions,
+    ReadOptions, RenameOptions, RenameOutcome, ServerSidePreference, WriteDisposition,
+    WriteOptions, WritePrecondition,
 };
 pub use path::{
-    EscapedBytePathCodec,
-    FsAuthority,
-    FsName,
-    FsPath,
-    FsScheme,
-    FsUri,
-    FsUriAuthority,
-    FsUriPath,
-    FsUriQuery,
-    NativePathCodec,
-    NativePathCodecError,
-    OsStrPathCodec,
-    PathSemantics,
-    RelativeFsPath,
-    Utf8PathCodec,
+    NativePathCodec, NativePathCodecError, Path, PathComponent, PathComponents, PathSemantics,
+    RelativePath,
 };
-pub use resource::{
-    AsyncFileResource,
-    FileResource,
-};
+pub use properties::{FileSystemProperties, PathConstraints, PathForm};
+pub use rename::{RenameFailure, RenameFailureState};
 pub use temp::{
-    AsyncTempDir,
-    AsyncTempFile,
-    AsyncTempResourceSession,
-    PersistFailure,
-    PersistFailureState,
-    PersistFuture,
-    PersistOutcome,
-    TempDir,
-    TempDirOptions,
-    TempFile,
-    TempFileOptions,
-    TempResourceSession,
+    AsyncTempDirectory, AsyncTempFile, PersistFailure, PersistFailureState, PersistOutcome,
+    TempDirOptions as TempDirectoryOptions, TempDirectory, TempFile, TempFileOptions,
     TempResourceState,
 };
-pub use traits::{
-    AsyncDirectoryStream,
-    AsyncDirectoryStreamExt,
-    AsyncDirectoryStreamSession,
-    AsyncFileReader,
-    AsyncFileSystem,
-    AsyncFileSystemExt,
-    AsyncFileWriteSession,
-    AsyncFileWriter,
-    DirectoryStream,
-    DirectoryStreamExt,
-    DirectoryStreamSession,
-    FileReader,
-    FileSystem,
-    FileSystemExt,
-    FileSystemProperties,
-    FileWriteSession,
-    FileWriter,
-    FsFuture,
-    WriteFailure,
-    WriteFailureState,
-    WriteFuture,
-    WriterState,
-};
+pub use uri::{ConnectionUri, Uri};

@@ -25,6 +25,8 @@ pub enum FsErrorKind {
     InvalidUri,
     /// Operation options or provider construction input are inconsistent.
     InvalidOptions,
+    /// A provider returned a value that violates the SPI contract.
+    ProviderContractViolation,
     /// The current credentials do not grant the requested operation.
     PermissionDenied,
     /// Authentication failed before authorization could be evaluated.

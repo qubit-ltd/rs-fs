@@ -7,8 +7,9 @@
 // =============================================================================
 //! Native path text codec abstraction.
 
-use std::borrow::Cow;
-use std::error::Error;
+use std::borrow::Borrow;
+
+use super::NativePathCodecError;
 
 /// Converts between canonical UTF-8 path text and a provider-native string.
 ///
@@ -33,17 +34,17 @@ use std::error::Error;
 /// be canonical, whereas a raw `%`, `%2f`, `%41`, and `%E4%B8%AD` are rejected
 /// as malformed or non-canonical aliases.
 ///
-/// Implementations should return [`Cow::Borrowed`] for plain representable
+/// Implementations should return `Cow::Borrowed` for plain representable
 /// UTF-8 text when no escaping or representation conversion is required. Error
 /// offsets reported by the built-in codec error are UTF-8 byte offsets for
 /// text, native byte offsets for byte input, and WTF-8 byte offsets for Windows
 /// surrogate representations.
-pub trait NativePathCodec: Send + Sync {
+pub trait NativePathCodec {
     /// Borrowed native string representation used by the provider.
-    type Native: ?Sized + ToOwned;
+    type NativePath: ?Sized;
 
-    /// Error returned when either representation is invalid or unsupported.
-    type Error: Error + Send + Sync + 'static;
+    /// Owned native representation returned by encoding.
+    type NativePathBuf: Borrow<Self::NativePath>;
 
     /// Encodes canonical UTF-8 path text into the native representation.
     ///
@@ -51,10 +52,7 @@ pub trait NativePathCodec: Send + Sync {
     ///
     /// Returns an error when `text` is not canonical or cannot be represented
     /// by the selected native encoding.
-    fn encode<'a>(
-        &self,
-        text: &'a str,
-    ) -> Result<Cow<'a, Self::Native>, Self::Error>;
+    fn encode(&self, text: &str) -> Result<Self::NativePathBuf, NativePathCodecError>;
 
     /// Decodes a native path representation into canonical UTF-8 text.
     ///
@@ -62,8 +60,5 @@ pub trait NativePathCodec: Send + Sync {
     ///
     /// Returns an error when `native` is invalid for the selected encoding or
     /// cannot be represented without loss.
-    fn decode<'a>(
-        &self,
-        native: &'a Self::Native,
-    ) -> Result<Cow<'a, str>, Self::Error>;
+    fn decode(&self, native: &Self::NativePath) -> Result<String, NativePathCodecError>;
 }

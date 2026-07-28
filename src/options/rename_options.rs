@@ -8,11 +8,7 @@
 //! Rename operation options.
 
 use crate::{
-    AtomicityRequirement,
-    FileSystemCapabilities,
-    FileSystemCapability,
-    FsError,
-    FsErrorKind,
+    AtomicityRequirement, FileSystemCapabilities, FileSystemCapability, FsError, FsErrorKind,
     FsOperation,
 };
 
@@ -48,10 +44,7 @@ impl RenameOptions {
     /// # Errors
     /// Returns [`FsErrorKind::RequirementNotMet`] when atomic rename is
     /// required but not guaranteed.
-    pub fn validate_against(
-        &self,
-        capabilities: FileSystemCapabilities,
-    ) -> Result<(), FsError> {
+    pub fn validate_against(&self, capabilities: FileSystemCapabilities) -> Result<(), FsError> {
         if self.atomicity == AtomicityRequirement::Required
             && !capabilities.contains(FileSystemCapability::AtomicRename)
         {

@@ -7,14 +7,7 @@
 // =============================================================================
 //! Immutable configured filesystem information.
 
-use crate::{
-    FileSystemId,
-    FsResult,
-    FsScheme,
-    NonSensitiveMetadata,
-    PathSemantics,
-    UserMetadata,
-};
+use crate::{FileSystemId, FsResult, NonSensitiveMetadata, PathSemantics, Uri, UserMetadata};
 use std::fmt::Display;
 
 /// Construction-time local snapshot describing one filesystem object.
@@ -31,11 +24,7 @@ impl FileSystemInfo {
     /// Creates a filesystem information snapshot without scheme aliases.
     #[inline]
     #[must_use]
-    pub fn new(
-        id: FileSystemId,
-        provider_id: impl Display,
-        path_semantics: PathSemantics,
-    ) -> Self {
+    pub fn new(id: FileSystemId, provider_id: impl Display, path_semantics: PathSemantics) -> Self {
         Self {
             id,
             provider_id: provider_id.to_string().into(),
@@ -51,7 +40,7 @@ impl FileSystemInfo {
     ///
     /// Returns an invalid-URI error when `scheme` is not a valid URI scheme.
     pub fn with_scheme(mut self, scheme: &str) -> FsResult<Self> {
-        let scheme = FsScheme::parse(scheme)?.as_str().to_owned();
+        let scheme = Uri::parse(&format!("{scheme}:/"))?.scheme().to_owned();
         if !self.schemes.contains(&scheme) {
             self.schemes.push(scheme);
         }

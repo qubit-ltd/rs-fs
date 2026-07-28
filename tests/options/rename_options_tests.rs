@@ -6,11 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 use qubit_fs::{
-    AtomicityRequirement,
-    FileSystemCapabilities,
-    FileSystemCapability,
-    FsErrorKind,
-    RenameOptions,
+    AtomicityRequirement, FileSystemCapabilities, FileSystemCapability, FsErrorKind, RenameOptions,
 };
 
 #[test]
@@ -49,8 +45,7 @@ fn required_rename_atomicity_fails_preflight_without_side_effects() {
     assert!(
         options
             .validate_against(
-                FileSystemCapabilities::default()
-                    .with(FileSystemCapability::AtomicRename),
+                FileSystemCapabilities::default().with(FileSystemCapability::AtomicRename),
             )
             .is_ok()
     );

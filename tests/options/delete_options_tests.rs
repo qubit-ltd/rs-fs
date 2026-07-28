@@ -5,12 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use qubit_fs::{
-    DeleteOptions,
-    FileSystemCapabilities,
-    FileSystemCapability,
-    ResourceVersion,
-};
+use qubit_fs::{DeleteOptions, FileSystemCapabilities, FileSystemCapability, ResourceVersion};
 
 #[test]
 fn test_delete_options_full_configuration_is_usable() {

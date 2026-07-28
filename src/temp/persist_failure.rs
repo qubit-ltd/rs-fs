@@ -8,16 +8,9 @@
 //! Typed temporary persistence failure.
 
 use std::error::Error;
-use std::fmt::{
-    Display,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::{Display, Formatter, Result as FmtResult};
 
-use crate::{
-    FsError,
-    PersistFailureState,
-};
+use crate::{FsError, PersistFailureState};
 
 /// Persistence error paired with provider-confirmed partial progress.
 #[derive(Debug)]
@@ -69,6 +62,12 @@ impl PersistFailure {
     #[must_use]
     pub fn into_error(self) -> FsError {
         self.error
+    }
+
+    /// Splits this facade failure into its causal error and state.
+    #[must_use]
+    pub fn into_parts(self) -> (FsError, PersistFailureState) {
+        (self.error, self.state)
     }
 }
 

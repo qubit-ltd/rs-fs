@@ -7,17 +7,13 @@
 // =============================================================================
 //! Directory entry model.
 
-use crate::{
-    FileKind,
-    FileMetadata,
-    FsPath,
-};
+use crate::{FileKind, FileMetadata, Path};
 
 /// One entry returned by directory listing.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DirEntry {
     /// Provider-local path of the entry.
-    pub path: FsPath,
+    pub path: Path,
     /// Final path component.
     pub name: String,
     /// Provider-neutral resource kind.
@@ -36,8 +32,12 @@ impl DirEntry {
     /// # Returns
     /// New entry with no loaded metadata.
     #[must_use]
-    pub fn new(path: FsPath, kind: FileKind) -> Self {
-        let name = path.file_name().unwrap_or("").to_owned();
+    pub fn new(path: Path, kind: FileKind) -> Self {
+        let name = path
+            .components()
+            .last()
+            .map(|component| component.to_string())
+            .unwrap_or_default();
         Self {
             path,
             name,

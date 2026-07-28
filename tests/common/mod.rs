@@ -5,12 +5,3 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-mod fixtures;
-
-pub(crate) use fixtures::{
-    FailingDirectoryStream,
-    MockDirectoryStream,
-    MockFs,
-    MockState,
-    PartiallyFailingDirectoryStream,
-};

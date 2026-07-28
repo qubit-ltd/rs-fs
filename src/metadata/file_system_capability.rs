@@ -57,11 +57,13 @@ pub enum FileSystemCapability {
     TempDirectory = 20,
     /// Atomic temporary-resource persistence.
     AtomicTempPersist = 21,
+    /// Copy completion with explicit storage durability confirmation.
+    DurableCopy = 22,
 }
 
 impl FileSystemCapability {
     /// Stable list of every capability known by this crate version.
-    pub(crate) const ALL: [Self; 22] = [
+    pub(crate) const ALL: [Self; 23] = [
         Self::List,
         Self::Read,
         Self::RangeRead,
@@ -84,6 +86,7 @@ impl FileSystemCapability {
         Self::TempFile,
         Self::TempDirectory,
         Self::AtomicTempPersist,
+        Self::DurableCopy,
     ];
 
     /// Returns the bit representing this capability in a capability set.

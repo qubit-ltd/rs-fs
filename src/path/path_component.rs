@@ -1,0 +1,42 @@
+//! One validated logical path component.
+
+use std::fmt::{Display, Formatter, Result as FmtResult};
+
+use crate::{FsError, FsOperation, FsResult};
+
+/// A non-empty logical component that cannot express hierarchy or traversal.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct PathComponent(String);
+
+impl PathComponent {
+    /// Parses one logical component.
+    ///
+    /// Returns an invalid-path error for empty input, separators, traversal
+    /// markers, or NUL. This method performs no native-path conversion.
+    pub fn parse(text: &str) -> FsResult<Self> {
+        if text.is_empty()
+            || matches!(text, "." | "..")
+            || text.contains('/')
+            || text.contains('\0')
+        {
+            return Err(FsError::invalid_path(
+                FsOperation::ParsePath,
+                "path component must be a non-empty non-traversal component",
+            ));
+        }
+        Ok(Self(text.to_owned()))
+    }
+
+    /// Returns the validated logical component text.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Display for PathComponent {
+    /// Formats the validated component without changing its lexical spelling.
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
+        formatter.write_str(self.as_str())
+    }
+}

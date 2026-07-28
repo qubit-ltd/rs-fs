@@ -8,20 +8,10 @@
 //! Concrete filesystem error type.
 
 use std::error::Error;
-use std::fmt::{
-    Debug,
-    Display,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
 use std::io;
 
-use crate::{
-    FileSystemCapability,
-    FsErrorKind,
-    FsOperation,
-    FsPath,
-};
+use crate::{FileSystemCapability, FsErrorKind, FsOperation, Path};
 
 /// Provider-neutral filesystem error with operation and path context.
 ///
@@ -36,9 +26,9 @@ pub struct FsError {
     /// Operation that produced the error.
     operation: FsOperation,
     /// Primary path involved in the operation.
-    path: Option<Box<FsPath>>,
+    path: Option<Box<Path>>,
     /// Secondary path involved in the operation.
-    target: Option<Box<FsPath>>,
+    target: Option<Box<Path>>,
     /// Provider id or alias involved in the operation.
     provider: Option<Box<str>>,
     /// Capability needed to satisfy the request, when applicable.
@@ -61,11 +51,7 @@ impl FsError {
     /// # Returns
     /// New filesystem error.
     #[inline]
-    pub fn new(
-        kind: FsErrorKind,
-        operation: FsOperation,
-        message: &str,
-    ) -> Self {
+    pub fn new(kind: FsErrorKind, operation: FsOperation, message: &str) -> Self {
         Self {
             kind,
             operation,
@@ -116,8 +102,8 @@ impl FsError {
     /// Updated filesystem error.
     #[inline]
     #[must_use]
-    pub fn with_path(mut self, path: FsPath) -> Self {
-        self.path = Some(Box::new(path));
+    pub fn with_path(mut self, path: impl Into<Path>) -> Self {
+        self.path = Some(Box::new(path.into()));
         self
     }
 
@@ -148,8 +134,8 @@ impl FsError {
     /// Updated filesystem error.
     #[inline]
     #[must_use]
-    pub fn with_target(mut self, target: FsPath) -> Self {
-        self.target = Some(Box::new(target));
+    pub fn with_target(mut self, target: impl Into<Path>) -> Self {
+        self.target = Some(Box::new(target.into()));
         self
     }
 
@@ -176,10 +162,7 @@ impl FsError {
     /// Updated filesystem error.
     #[inline]
     #[must_use]
-    pub fn with_required_capability(
-        mut self,
-        capability: FileSystemCapability,
-    ) -> Self {
+    pub fn with_required_capability(mut self, capability: FileSystemCapability) -> Self {
         self.required_capability = Some(capability);
         self
     }
@@ -202,8 +185,8 @@ impl FsError {
     #[must_use]
     pub(crate) fn with_missing_context(
         mut self,
-        path: &FsPath,
-        target: Option<&FsPath>,
+        path: &Path,
+        target: Option<&Path>,
         provider: &str,
     ) -> Self {
         if self.path.is_none() {
@@ -278,28 +261,19 @@ impl FsError {
     /// # Returns
     ///
     /// A typed filesystem error with the public operation and path rebound.
+    #[allow(dead_code)]
     #[inline]
-    pub(crate) fn from_stream_io(
-        error: io::Error,
-        operation: FsOperation,
-        path: &FsPath,
-    ) -> Self {
+    pub(crate) fn from_stream_io(error: io::Error, operation: FsOperation, path: &Path) -> Self {
         match error.downcast::<Self>() {
-            Ok(error) => {
-                error.with_operation(operation).with_path(path.clone())
-            }
-            Err(error) if error.kind() == io::ErrorKind::InvalidData => {
-                Self::with_source(
-                    FsErrorKind::Io,
-                    operation,
-                    "stream I/O contract failed",
-                    error,
-                )
-                .with_path(path.clone())
-            }
-            Err(error) => {
-                Self::from_io(error, operation).with_path(path.clone())
-            }
+            Ok(error) => error.with_operation(operation).with_path(path.clone()),
+            Err(error) if error.kind() == io::ErrorKind::InvalidData => Self::with_source(
+                FsErrorKind::Io,
+                operation,
+                "stream I/O contract failed",
+                error,
+            )
+            .with_path(path.clone()),
+            Err(error) => Self::from_io(error, operation).with_path(path.clone()),
         }
     }
 
@@ -329,7 +303,7 @@ impl FsError {
     /// The path when one was attached.
     #[inline(always)]
     #[must_use]
-    pub fn path(&self) -> Option<&FsPath> {
+    pub fn path(&self) -> Option<&Path> {
         self.path.as_deref()
     }
 
@@ -339,7 +313,7 @@ impl FsError {
     /// The target path when one was attached.
     #[inline(always)]
     #[must_use]
-    pub fn target(&self) -> Option<&FsPath> {
+    pub fn target(&self) -> Option<&Path> {
         self.target.as_deref()
     }
 
@@ -380,20 +354,18 @@ impl FsError {
             FsErrorKind::AlreadyExists => io::ErrorKind::AlreadyExists,
             FsErrorKind::NotDirectory => io::ErrorKind::NotADirectory,
             FsErrorKind::IsDirectory => io::ErrorKind::IsADirectory,
-            FsErrorKind::PermissionDenied
-            | FsErrorKind::AuthenticationFailed => {
+            FsErrorKind::PermissionDenied | FsErrorKind::AuthenticationFailed => {
                 io::ErrorKind::PermissionDenied
             }
             FsErrorKind::InvalidPath
             | FsErrorKind::InvalidUri
             | FsErrorKind::InvalidOptions
             | FsErrorKind::InvalidState => io::ErrorKind::InvalidInput,
-            FsErrorKind::UnsupportedOperation
-            | FsErrorKind::UnsupportedCapability => io::ErrorKind::Unsupported,
-            FsErrorKind::Timeout => io::ErrorKind::TimedOut,
-            FsErrorKind::Interrupted | FsErrorKind::Cancelled => {
-                io::ErrorKind::Interrupted
+            FsErrorKind::UnsupportedOperation | FsErrorKind::UnsupportedCapability => {
+                io::ErrorKind::Unsupported
             }
+            FsErrorKind::Timeout => io::ErrorKind::TimedOut,
+            FsErrorKind::Interrupted | FsErrorKind::Cancelled => io::ErrorKind::Interrupted,
             FsErrorKind::QuotaExceeded => io::ErrorKind::StorageFull,
             FsErrorKind::DataCorruption => io::ErrorKind::InvalidData,
             _ => io::ErrorKind::Other,

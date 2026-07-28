@@ -8,15 +8,13 @@
 // qubit-style: allow source-test-pair
 //! File information captured as part of opening a stream.
 
-use crate::{
-    FileLocation,
-    FileMetadata,
-};
+use crate::{FileMetadata, FileSystemId, Path};
 
 /// Stable file identity plus an optional metadata snapshot captured at open.
 #[derive(Clone, Debug, PartialEq)]
 pub struct OpenedFileInfo {
-    location: FileLocation,
+    filesystem_id: FileSystemId,
+    path: Path,
     metadata: Option<FileMetadata>,
 }
 
@@ -30,9 +28,10 @@ impl OpenedFileInfo {
     /// Opened-file information with no metadata snapshot.
     #[inline]
     #[must_use]
-    pub fn new(location: FileLocation) -> Self {
+    pub fn new(filesystem_id: FileSystemId, path: Path) -> Self {
         Self {
-            location,
+            filesystem_id,
+            path,
             metadata: None,
         }
     }
@@ -60,8 +59,15 @@ impl OpenedFileInfo {
     /// The location captured at open time.
     #[inline]
     #[must_use]
-    pub fn location(&self) -> &FileLocation {
-        &self.location
+    pub const fn filesystem_id(&self) -> &FileSystemId {
+        &self.filesystem_id
+    }
+
+    /// Returns the logical path fixed when the provider opened the handle.
+    #[inline]
+    #[must_use]
+    pub const fn path(&self) -> &Path {
+        &self.path
     }
 
     /// Returns the optional metadata snapshot captured during open.
@@ -75,12 +81,5 @@ impl OpenedFileInfo {
     #[must_use]
     pub fn metadata(&self) -> Option<&FileMetadata> {
         self.metadata.as_ref()
-    }
-
-    /// Replaces the location when a registry-bound resource adds canonical
-    /// identity that was unavailable to the provider-local open operation.
-    #[inline]
-    pub(crate) fn replace_location(&mut self, location: FileLocation) {
-        self.location = location;
     }
 }

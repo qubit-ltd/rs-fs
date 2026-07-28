@@ -5,13 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use qubit_fs::{
-    AchievedAtomicity,
-    CopyMethod,
-    CopyOutcome,
-    CopyStats,
-    UserMetadata,
-};
+use qubit_fs::{AchievedAtomicity, CopyMethod, CopyOutcome, CopyStats, UserMetadata};
 
 #[test]
 fn test_copy_outcome_new_stores_stats_and_method() {
@@ -20,23 +14,20 @@ fn test_copy_outcome_new_stores_stats_and_method() {
         bytes: 4,
         ..Default::default()
     };
-    let outcome = CopyOutcome::new(
-        stats,
-        CopyMethod::Mixed,
-        AchievedAtomicity::NonAtomic,
-    );
+    let outcome = CopyOutcome::new(stats, CopyMethod::Mixed, AchievedAtomicity::NonAtomic);
 
-    assert_eq!(1, outcome.stats.files);
-    assert_eq!(4, outcome.stats.bytes);
-    assert_eq!(CopyMethod::Mixed, outcome.method);
-    assert_eq!(AchievedAtomicity::NonAtomic, outcome.atomicity);
+    assert_eq!(1, outcome.stats().files);
+    assert_eq!(4, outcome.stats().bytes);
+    assert_eq!(CopyMethod::Mixed, outcome.method());
+    assert_eq!(AchievedAtomicity::NonAtomic, outcome.atomicity());
+    assert!(!outcome.durable());
 }
 
 #[test]
 fn copy_outcome_preserves_validated_diagnostics() {
     let outcome = CopyOutcome::new(
         CopyStats::default(),
-        CopyMethod::Stream,
+        CopyMethod::Streamed,
         AchievedAtomicity::NonAtomic,
     )
     .with_diagnostics(
@@ -44,6 +35,18 @@ fn copy_outcome_preserves_validated_diagnostics() {
             .with("request_id", "private-copy-id")
             .unwrap(),
     );
-    assert!(outcome.diagnostics.contains_key("request_id"));
+    assert!(outcome.diagnostics().contains_key("request_id"));
     assert!(!format!("{outcome:?}").contains("private-copy-id"));
+}
+
+/// Verifies providers can explicitly report completed durability synchronization.
+#[test]
+fn test_copy_outcome_with_durable_reports_true() {
+    let outcome = CopyOutcome::new(
+        CopyStats::default(),
+        CopyMethod::Native,
+        AchievedAtomicity::Atomic,
+    )
+    .with_durable(true);
+    assert!(outcome.durable());
 }
