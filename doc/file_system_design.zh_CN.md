@@ -1,573 +1,794 @@
 # Qubit FS 文件系统抽象层设计
 
-本文定义 `qubit-fs` 的长期架构、核心语义与 provider 实现约束。它描述当前公开
-API，而不是某个具体后端或一次性迁移过程。
+> 状态：已批准的目标设计。本文定义重构完成后的长期架构与 provider 契约；
+> 在重构完成前，仓库中的现有 API 可能与本文不同。
 
 ## 1. 设计目标
 
-`qubit-fs` 的目标不是把所有存储伪装成 POSIX 文件系统，而是为应用层提供一个稳定、
-可组装且语义诚实的公共层：
+`qubit-fs` 为本地、远程、对象存储和其他文件型 provider 提供语义诚实的公共层。
+它不把所有 provider 强行伪装成 POSIX 文件系统。
 
-1. 应用只依赖文件系统抽象，不依赖本地、远程、云端、云盘或分布式后端；
-2. 新 provider 可独立发布和注册，不修改核心 crate；
-3. 同步与异步应用获得形态一致的对象和操作；
-4. 后端差异通过 capability、option、outcome 与 error 显式表达；
-5. 无法满足的强语义必须失败，不能静默降级；
-6. URI、凭据、临时资源和部分成功具有明确安全边界；
-7. 核心层保持小而实用，不绑定平台路径模型或异步运行时。
+目标如下：
+
+1. 应用只依赖具体、可克隆的 `FileSystem` 或 `AsyncFileSystem` 门面；
+2. provider 只实现最小操作 SPI，不重复实现公共校验与资源状态机；
+3. capability、limit、requirement、outcome 和 error 明确表达 provider 差异；
+4. 强语义无法满足时必须失败，不能静默降级；
+5. URI、凭据、临时资源、提交和部分成功具有明确安全边界；
+6. 同步与异步 API 形态一致，但核心不绑定异步 runtime；
+7. provider 可独立发布和注册，不修改核心 crate；
+8. 所有公共工具能力都由具体类型的固有方法或关联方法组织，不增加 public free
+   function。
 
 非目标包括：
 
-- 提供一个“所有操作必定支持”的最大接口承诺；
-- 把对象存储 key 强行解释成目录路径；
-- 在核心 crate 中内置所有 provider；
-- 为所有后端猜测统一的临时目录；
-- 在 URI 中携带 secret；
-- 绑定 Tokio、`futures-io` 或某个 executor；
-- 用标准库 `Read` / `Write` 定义文件句柄身份。
+- 承诺每个 provider 支持全部操作；
+- 在核心层实现本地平台算法；
+- 把 object key 强制解释成目录路径；
+- 为 provider 猜测临时 namespace、权限或 publication 策略；
+- 在 URI、metadata、错误显示或调试输出中携带 secret；
+- 让应用直接调用 provider SPI；
+- 为同步和异步 API 构造一个带模式开关的统一 trait；
+- 绑定 Tokio、`futures-io` 或某个 executor。
 
 ## 2. 分层与依赖方向
 
 ```text
-应用层
-  │  只依赖 provider-neutral 对象
+应用
+  │
   ▼
 qubit-fs
-  ├─ 领域模型：URI、path、metadata、capability、option、outcome、error
-  ├─ 操作接口：FileSystem / AsyncFileSystem
-  ├─ 文件句柄：FileReader / FileWriter / Async*
-  ├─ 生命周期：writer、directory stream、temporary resource
-  └─ qubit-io：同步与运行时无关异步流
+  ├─ FileSystem / AsyncFileSystem 具体门面
+  ├─ resource、reader、writer、directory stream、temp handle
+  ├─ path、URI、metadata、options、outcomes、errors
+  └─ qubit_fs::spi provider 扩展点
        ▲
-       │ 依赖核心契约
-qubit-fs-registry
-  ├─ provider discovery、SPI 与完整配置
-  └─ 独立 backend crate
+       │ 实现 SPI
+provider adapter（例如 qubit-fs-local）
+       │
+       ▼
+provider 原生实现（例如 qubit-local-files）
+
+qubit-fs-registry ── 发现并创建 provider，返回 FileSystem 门面
+qubit-fs-testkit  ── 通过公开门面验证 provider 契约
 ```
 
-依赖只向下。Provider 可以依赖平台 SDK、网络协议或 runtime adapter；核心层既不反向
-依赖具体 provider，也不依赖 registry 或 SPI。
+依赖规则：
 
-## 3. 三种不同的“身份”
+- `qubit-fs` 不依赖 registry 或具体 provider；
+- provider adapter 依赖 `qubit-fs` 及其原生实现；
+- 原生实现不依赖 `qubit-fs`；
+- registry 依赖 `qubit-fs` 和 `qubit-spi`，但不取得 filesystem operation SPI；
+- testkit 只通过公开门面测试 provider，不绕过门面构造 SPI request。
 
-文件系统抽象容易混淆 provider、configured filesystem 和 resource。它们必须分开：
+## 3. Provider、configured filesystem 与 resource
 
 ### 3.1 Provider
 
-Provider 是 registry 层的工厂和协议适配器。它负责：
+Provider 是 registry 层的配置和 URI 适配工厂。它负责：
 
-- 声明 provider id、alias 和选择优先级；
+- 声明 provider id、alias 和优先级；
 - 校验完整配置；
 - 解析 credential reference；
 - 解释 URI authority、path 与 query；
 - 构造 configured filesystem；
 - 返回 provider-local path 与安全 canonical URI。
 
-Provider 本身不是一个文件系统对象。
+Provider 本身不是文件系统操作对象。`FileSystemProvider` 这一名称保留给 registry
+工厂，因此 operation 扩展接口命名为 `FileSystemSpi`，不使用含义冲突的
+`FileSystemProvider`。
 
 ### 3.2 Configured filesystem
 
-`FileSystem` 或 `AsyncFileSystem` 是一次配置完成后的操作对象。例如，同一个 S3
-provider 可以构造不同 region、endpoint、bucket scope 或 credential profile 的多个
+`FileSystem` 或 `AsyncFileSystem` 表示一次配置完成后的文件系统。例如，同一个
+provider 可以因 endpoint、region、bucket、root 或 credential profile 不同而产生多个
 filesystem。
 
-`FileSystemInfo::id()` 标识该 configured filesystem，而
+`FileSystemInfo::id()` 标识 configured filesystem；
 `FileSystemInfo::provider_id()` 标识创建它的 provider。两者不可混用。
 
 ### 3.3 Resource 与 opened handle
 
-`FileResource` / `AsyncFileResource` 把一个 decoded `FsPath` 绑定到 owning
-filesystem。`FileReader` / `FileWriter` 则代表一次已经打开的文件会话，并携带打开时
-固定的 `OpenedFileInfo`。
+`FileResource` / `AsyncFileResource` 把一个 provider-local `FsPath` 绑定到 owning
+filesystem。Reader、writer、directory stream 和 temporary resource 表示由这个
+filesystem 创建的有状态会话。
 
-这种拆分避免把 backend 状态塞进 `FsPath`，也避免把任意字节流误认为文件。
+Resource 保存门面，不保存裸 SPI；opened handle 保存固定的 `OpenedFileInfo` 和完成
+生命周期所需的公共契约状态。
 
 ## 4. URI 与 Path 语义
 
-### 4.1 第一原则
+### 4.1 URI 与 path 的边界
 
-URI 是跨边界定位与 provider 选择表示；path 是 provider 解释后的内部资源表示。
-如果核心层提前解码或规范化 URI，就会不可逆地破坏 provider 语义。
-
-因此：
+URI 是跨边界定位及 provider 选择表示；path 是 provider 解码后的内部资源表示：
 
 ```text
-FsUri（传输表示）
-  └─ provider 选择、校验和解码
-       ├─ configured filesystem
-       ├─ FsPath（provider-local 表示）
-       └─ canonical FsUri（安全、可记录）
+FsUri
+  └─ registry/provider 选择、校验和解码
+       ├─ FileSystem
+       ├─ FsPath
+       └─ canonical FsUri
 ```
+
+核心层不能提前执行会破坏 provider 语义的解码或规范化。
 
 ### 4.2 `FsUri`
 
-`FsUri` 包含：
+`FsUri` 保留：
 
-- `FsScheme`：小写、经过语法校验，用于默认 provider selection；
-- 可选 `FsAuthority`：host/bucket/namespace/endpoint、port 和非敏感 username
-  hint；
-- `authority_present`：保留 `//` 是否出现；
-- `FsUriPath`：经过语法校验但未按 provider 语义解码的 raw encoded path；
-- `FsUriQuery`：decoded、ordered、允许 duplicate key 的非敏感 pair。
+- 小写且经过语法校验的 `FsScheme`；
+- 可选 `FsAuthority`；
+- authority component 是否出现；
+- 尚未按 provider 语义解码的 `FsUriPath`；
+- decoded、ordered、允许 duplicate key 的非敏感 `FsUriQuery`。
 
-以下区别必须保留：
+以下表示不可合并：
 
 ```text
-file:/tmp/a      authority component 不存在
-file:///tmp/a    authority component 存在，但 authority 为空
-object://b/a%2Fb encoded "/" 仍属于 path 数据，核心层不得拆分
+file:/tmp/a
+file:///tmp/a
+object://bucket/a%2Fb
 ```
 
-`FsUriPath` 校验 RFC 3986 path 字符、percent encoding、decoded UTF-8 与控制字符；
-非 ASCII、空白、`?` 与 `#` 必须先编码。它不：
-
-- 解码 `%2F`；
-- 规范化 dot segment；
-- 把 repeated separator 合并；
-- 推断 object-key 或 hierarchy。
-
-这些决定属于 provider。
-
-`FsUriQuery` 保留 encounter order 与 duplicate key，因为签名、路由和 provider option
-可能依赖它们。Display 会输出 canonical percent encoding。
+`FsUriPath` 不解码 `%2F`、不规范化 dot segment、不合并 repeated separator，也不
+推断 hierarchy。
 
 ### 4.3 Credential 边界
 
-URI 是日志、配置和错误上下文中可能出现的对象，因此必须 secret-free：
+URI 和所有可自动显示的 metadata 必须 secret-free：
 
 - authority 禁止 password；
 - query 禁止 password、token、access key、secret key、signed-URL signature 等
-  credential-like key，包括带 provider 前缀的形式；
-- fragment 禁止。
+  credential-like key；
+- URI fragment 禁止；
+- `UserMetadata` 拒绝 credential-like key；
+- `NonSensitiveMetadata` 不公开可变 value 入口；
+- `FsError` 的 `Display` 和 `Debug` 不自动展开底层 source error。
 
-核心扩展 metadata 使用平坦的 `UserMetadata`：每次加入 string key/value pair 时拒绝
-credential-like key，且 Debug 只输出 key。`NonSensitiveMetadata` 只是其不暴露可变
-访问的 wrapper，因此接收 `UserMetadata` 的 setter 不再产生新的校验错误。普通 value
-无法可靠分类，provider 必须保证其非敏感。
-
-完整配置、credential reference 与 secret resolver 属于 `qubit-fs-registry`。核心层不
-保存 secret value，也不依赖 registry crate。
-
-Provider 返回的 canonical URI 必须遵守相同边界，才能安全地附加到 `FileLocation`。
+完整 secret value 只存在于 registry/provider 的受控配置解析过程，不进入
+`qubit-fs` 值对象。
 
 ### 4.4 `FsPath`
 
-`FsPath` 表示一个 configured filesystem 内部的 UTF-8 provider-local path：
+`FsPath` 是 configured filesystem 内的 UTF-8 provider-local path：
 
-- `parse` / `parse_normalized` 用于 hierarchical semantics；
-- `parse_literal` 用于 object key 或 provider-specific semantics；
-- `PathSemantics` 在 `FileSystemInfo` 中声明
-  `Hierarchical`、`ObjectKey` 或 `ProviderSpecific`。
+- hierarchical semantics 使用 normalized parse；
+- object-key 或 provider-specific semantics 使用 literal parse；
+- `PathSemantics` 由 `FileSystemProperties` 中的 `FileSystemInfo` 声明。
 
-Hierarchical parse 会移除 repeated separator 和 `.`，解析 `..`，并拒绝越过根。
-Literal parse 只执行基本安全校验，保留 repeated separator、`.` 与 `..` 文本。
+安全组合使用：
 
-为了安全组合路径，提供两个更窄的类型：
+- `FsName`：单一非空 component；
+- `RelativeFsPath`：非空、normalized、不能是 absolute，且不能逃逸 relative root。
 
-- `FsName`：一个非空 component，在规范 `/` namespace 中不能包含 separator、`.` 或
-  `..`；
-- `RelativeFsPath`：非空、normalized、不能是 absolute，也不能逃逸 relative root。
+Provider 把 URI 或 `FsPath` 转为 native path 时，必须逐 component 转换，并拒绝解码
+后产生平台 separator、root 或 prefix 的 component。
 
-`FsPath::child`、`join_relative`、`TempDir::child` 和 `descendant` 使用这些类型。
-原始字符串 convenience `FsPath::join` 也会先解析为 `RelativeFsPath`，绝对路径不能
-替换 base。
+## 5. 具体门面
 
-`FsUriPath::decode()` 只执行 URI percent decode，不负责把结果解释为 `FsPath`。
-`NativePathCodec` 也只转换 opaque fragment，不解释 root、prefix 或 separator。
-Hierarchical provider 必须逐 component 转换，并拒绝解码后引入目标平台 native
-separator、root 或 prefix 的 component。
+### 5.1 `FileSystemProperties`
 
-## 5. FileSystem Trait 层次
-
-### 5.1 公共父 trait
+原 `FileSystemProperties` trait 改为不可变值类型：
 
 ```rust
-pub trait FileSystemProperties: Send + Sync {
-    fn info(&self) -> &FileSystemInfo;
-    fn capabilities(&self) -> FileSystemCapabilities;
-    fn limits(&self) -> &FileSystemLimits;
+#[derive(Clone, Debug)]
+pub struct FileSystemProperties {
+    info: FileSystemInfo,
+    capabilities: FileSystemCapabilities,
+    limits: FileSystemLimits,
+}
+
+impl FileSystemProperties {
+    pub fn new(
+        info: FileSystemInfo,
+        capabilities: FileSystemCapabilities,
+        limits: FileSystemLimits,
+    ) -> FsResult<Self>;
 }
 ```
 
-`info()`、`capabilities()` 和 `limits()` 都是 construction-time local snapshot：
+它是 configured filesystem 的构造时快照：
 
-- getter 不触发本地或远程 I/O；
-- 结果在对象生命周期内稳定；
-- 需要 remote probe 的 provider 应在 construction/open configuration 阶段完成；
-- 结果描述当前 configured filesystem，而不是 provider 的理论上限。
+- getter 不执行本地或远程 I/O；
+- 内容在门面生命周期内稳定；
+- capability 描述当前配置真正保证的能力；
+- unknown、inapplicable、unbounded 和有限 limit 必须明确区分。
 
-`FileSystemInfo::with_provider_metadata` 接收已经校验的 `UserMetadata` 并转换成
-`NonSensitiveMetadata`，保证这个可被 Debug 和日志观察的快照不成为 secret 通道。
+字段私有，provider 通过 `FileSystemProperties::new` 构造。该方法检查属性内部一致性；
+`FileSystem::from_spi` 在 SPI trust boundary 再次执行防御性校验。
 
-这个父 trait 只描述文件系统对象本身，不冒充完整操作接口。
-
-### 5.2 同步接口
+### 5.2 同步门面
 
 ```rust
-pub trait FileSystem: FileSystemProperties {
-    fn stat(&self, path: &FsPath) -> FsResult<FileMetadata>;
+#[derive(Clone)]
+pub struct FileSystem {
+    spi: Arc<dyn spi::FileSystemSpi>,
+    properties: Arc<FileSystemProperties>,
+}
+```
+
+构造入口：
+
+```rust
+impl FileSystem {
+    pub fn from_spi<S>(spi: S) -> FsResult<Self>
+    where
+        S: spi::FileSystemSpi + 'static;
+
+    pub fn from_shared_spi(
+        spi: Arc<dyn spi::FileSystemSpi>,
+    ) -> FsResult<Self>;
+}
+```
+
+构造时读取、校验并缓存属性。门面不公开 `spi()`、`into_spi()` 或任何可绕过公共契约
+的入口。
+
+所有应用操作都是 inherent methods，包括：
+
+- `stat`、`exists`、`list`；
+- `open_reader`、`open_writer`；
+- `create_directory`、`delete_file`、`delete_directory`；
+- `copy`、`rename`；
+- `create_temp_file`、`create_temp_directory`；
+- `resource`；
+- `read_all`、`write_all`。
+
+`FileSystemExt` 被删除。
+
+### 5.3 异步门面
+
+```rust
+#[derive(Clone)]
+pub struct AsyncFileSystem {
+    spi: Arc<dyn spi::AsyncFileSystemSpi>,
+    properties: Arc<FileSystemProperties>,
+}
+```
+
+异步门面的 I/O 操作使用 inherent `async fn`，方法名与同步语义相同：
+
+```rust
+let metadata = async_file_system.stat(&path).await?;
+```
+
+类型名称已经表达异步模式，因此不再给方法附加 `_async`。同步与异步门面共享值类型，
+但分别实现 I/O 和生命周期逻辑。Properties getter、capability/limit 查询和
+`resource`/`resource_at` 等纯绑定操作不执行 I/O，仍是普通同步方法。
+
+## 6. Provider SPI
+
+### 6.1 命名空间
+
+Provider API 只通过 `qubit_fs::spi` 暴露：
+
+```text
+qubit_fs::spi::FileSystemSpi
+qubit_fs::spi::AsyncFileSystemSpi
+qubit_fs::spi::StatRequest
+qubit_fs::spi::CopyRequest
+qubit_fs::spi::OpenedWriter
+qubit_fs::spi::FileWriterSpi
+```
+
+SPI 类型不在 crate 根部或普通 prelude 中重导出。
+
+### 6.2 不可伪造的 request
+
+每个 SPI 操作接收已经完成公共校验的 request：
+
+```rust
+pub struct CopyRequest<'a> {
+    source: &'a FsPath,
+    target: &'a FsPath,
+    options: &'a ResolvedCopyOptions,
+}
+```
+
+实际字段全部私有，构造器为 `pub(crate)`，只提供只读 getter。外部 provider 可以实现
+SPI 并读取 request，但普通调用者不能在 safe Rust 中构造 request。
+
+公开 options 表达调用者意图；`Resolved*Options` 表达门面已经：
+
+- 校验内部组合；
+- 解析默认值；
+- 应用 path semantics；
+- 检查 capabilities；
+- 检查并应用 limits。
+
+Provider 不重复这些通用检查。
+
+### 6.3 最小 provider 原语
+
+`FileSystemSpi` 包含不可由门面可靠推导的操作：
+
+- `properties`；
+- `stat`；
+- `list`；
+- `open_reader`、`open_writer`；
+- `create_directory`；
+- `delete_file`、`delete_directory`；
+- `copy`、`rename`；
+- `create_temp_file`、`create_temp_directory`。
+
+同步 SPI 的结构如下：
+
+```rust
+pub trait FileSystemSpi: Send + Sync {
+    fn properties(&self) -> FileSystemProperties;
+
+    fn stat(
+        &self,
+        request: StatRequest<'_>,
+    ) -> FsResult<FileMetadata>;
+
+    fn list(
+        &self,
+        request: ListRequest<'_>,
+    ) -> FsResult<OpenedDirectoryStream>;
+
     fn open_reader(
         &self,
-        path: &FsPath,
-        options: ReadOptions,
-    ) -> FsResult<FileReader>;
+        request: OpenReaderRequest<'_>,
+    ) -> FsResult<OpenedReader>;
+
     fn open_writer(
         &self,
-        path: &FsPath,
-        options: WriteOptions,
-    ) -> FsResult<FileWriter>;
-    // list/create/delete/rename/copy/temp ...
+        request: OpenWriterRequest<'_>,
+    ) -> FsResult<OpenedWriter>;
+
+    fn create_directory(
+        &self,
+        request: CreateDirectoryRequest<'_>,
+    ) -> FsResult<CreateDirectoryOutcome>;
+
+    fn delete_file(
+        &self,
+        request: DeleteFileRequest<'_>,
+    ) -> FsResult<DeleteOutcome>;
+
+    fn delete_directory(
+        &self,
+        request: DeleteDirectoryRequest<'_>,
+    ) -> FsResult<DeleteOutcome>;
+
+    fn copy(
+        &self,
+        request: CopyRequest<'_>,
+    ) -> FsResult<CopyOutcome>;
+
+    fn rename(
+        &self,
+        request: RenameRequest<'_>,
+    ) -> FsResult<RenameOutcome>;
+
+    fn create_temp_file(
+        &self,
+        request: CreateTempFileRequest<'_>,
+    ) -> FsResult<OpenedTempFile>;
+
+    fn create_temp_directory(
+        &self,
+        request: CreateTempDirectoryRequest<'_>,
+    ) -> FsResult<OpenedTempDirectory>;
 }
 ```
 
-没有 `SyncFileSystem` 名称，因为 Rust API 惯例中无前缀版本就是同步版本。
+`CreateDirectoryOutcome` 明确区分实际创建与 options 允许的 already-existed no-op，
+并可报告递归创建的 ancestor 数量。`DeleteOutcome` 明确区分实际删除与 options 允许的
+not-found no-op，并可报告递归删除的 entry 数量。未知计数使用 `Option<u64>`，不伪造
+精确值；不使用含义未定义的布尔返回值。
 
-### 5.3 异步接口
+以下操作不进入 SPI：
+
+- `exists`：由 `stat` 的明确 `NotFound` 推导；
+- `read_all`、`write_all`：由公开 handle 组合；
+- `resource`：由门面绑定；
+- 不改变 provider 语义且可可靠组合的其他 convenience operation。
+
+“最小原语”不等于“操作系统保证原子”。原子性和 durability 仍通过 request requirement
+与 outcome 表达。
+
+### 6.4 Provider 返回对象
+
+SPI 不直接构造公开 handle，而是返回 `spi` 模块的中间对象：
+
+| SPI 返回值 | 门面包装结果 |
+| --- | --- |
+| `OpenedReader` | `FileReader` |
+| `OpenedWriter` | `FileWriter` |
+| `OpenedDirectoryStream` | `DirectoryStream` |
+| `OpenedTempFile` | `TempFile` |
+| `OpenedTempDirectory` | `TempDirectory` |
+
+中间对象的 provider 构造器公开；转换为公开 handle 的入口仅在 `qubit-fs` 内可见。
+
+有状态 provider session trait 包括：
+
+- `FileWriterSpi`；
+- `DirectoryStreamSpi`；
+- `TempResourceSpi`；
+- 对应的异步 SPI。
+
+Reader 只需要 type-erased `qubit_io::Input<Item = u8>` 或异步输入以及
+`OpenedFileInfo`，不增加没有行为的 reader session trait。
+
+### 6.5 Object safety 与异步
+
+同步与异步 SPI 分离。`AsyncFileSystemSpi` 通过 `spi::FsFuture<'a, T>` 保持 object
+safety 和 runtime neutrality。公开 `AsyncFileSystem` 隐藏 boxed future 细节。
+
+不使用 public macro 生成两套 API，也不使用一个带同步/异步模式开关的 trait。
+
+## 7. 门面校验流水线
+
+每个操作在任何 provider I/O 或副作用前执行固定流程：
+
+1. 校验公开 options 的内部一致性；
+2. 按属性快照中的 `PathSemantics` 校验 source 和 target；
+3. 使用属性快照解析默认值；
+4. 检查 required capabilities；
+5. 检查 path、component、range、write size、page size 等静态 limits；
+6. 构造不可伪造的 SPI request；
+7. 调用 SPI；
+8. 校验 provider 返回的 metadata、entry、location 和 outcome。
+
+Provider 仍负责只能在执行时发现的条件：
+
+- 权限、认证与远程可用性；
+- 当前资源状态和 precondition；
+- 动态配额、剩余空间；
+- mount、跨设备或其他运行时边界；
+- 无法通过稳定 capability/limit 静态表达的 provider 条件。
+
+门面校验 provider 返回值至少包括：
+
+- opened location 与请求路径一致；
+- directory entry 属于请求 namespace，并满足 prefix/filter contract；
+- required atomicity 没有被降级；
+- copy/rename/write/persist outcome 与实际请求相容；
+- provider 返回路径符合声明的 path semantics；
+- metadata 和 capability 组合不自相矛盾。
+
+## 8. Resource 与公开 handle
+
+### 8.1 `FileResource`
 
 ```rust
-pub trait AsyncFileSystem: FileSystemProperties {
-    fn stat_async<'a>(
-        &'a self,
-        path: &'a FsPath,
-    ) -> FsFuture<'a, FileMetadata>;
-    fn open_reader_async<'a>(
-        &'a self,
-        path: &'a FsPath,
-        options: ReadOptions,
-    ) -> FsFuture<'a, AsyncFileReader>;
-    fn open_writer_async<'a>(
-        &'a self,
-        path: &'a FsPath,
-        options: WriteOptions,
-    ) -> FsFuture<'a, AsyncFileWriter>;
-    // list/create/delete/rename/copy/temp ..._async
+#[derive(Clone)]
+pub struct FileResource {
+    file_system: FileSystem,
+    location: FileLocation,
 }
 ```
 
-异步方法添加 `_async`，因此同一 struct 可以同时实现两套 trait，而 method call 不会
-产生名字歧义。
+门面提供两个绑定入口：
 
-Open 是异步操作，而不只是“同步返回一个异步 reader”。原因是 open 本身可能需要：
+```rust
+impl FileSystem {
+    pub fn resource(
+        &self,
+        path: FsPath,
+    ) -> FsResult<FileResource>;
 
-- DNS、连接和认证；
-- 远程 metadata 或 precondition 校验；
-- range request 初始化；
-- multipart upload 或 staging session 创建；
-- provider SDK 的异步资源分配。
+    pub fn resource_at(
+        &self,
+        location: FileLocation,
+    ) -> FsResult<FileResource>;
+}
+```
 
-`open_reader_async().await` 成功后返回已经打开的 `AsyncFileReader`；之后字节读取仍然
-是异步的。这和同步 `open_reader()` 成功后返回已经打开的 `FileReader` 具有一致语义。
+`resource` 绑定没有 canonical URI 的普通 provider-local path。`resource_at` 供 registry
+等已经完成 URI resolution 的调用者使用，并验证 filesystem id、provider identity、
+path semantics、limits 和 canonical URI 的非敏感结构。URI 到 decoded path 的
+provider-specific 对应关系仍由创建 `FileLocation` 的 registry/provider 保证。
 
-### 5.4 `stat` 与 metadata snapshot
+规则：
 
-三个概念必须严格区分：
+- 普通资源通过 `FileSystem::resource` 创建；
+- registry resolution 通过 `FileSystem::resource_at` 创建；
+- `FileResource::new` 和绕过门面的构造器删除；
+- `file_system()` 可返回安全的 `&FileSystem`；
+- 不提供 SPI getter；
+- resource 方法只委托门面，不重复参数、capability 或 limit 校验。
 
-| 概念 | 是否 I/O | 是否实时 | 用途 |
-| --- | --- | --- | --- |
-| `FileSystemInfo` | getter 不 I/O | 构造时固定 | filesystem/provider 身份与 path semantics |
-| `FileSystemCapabilities` | getter 不 I/O | 构造时固定 | 可选保证 |
-| `stat` / `stat_async` | 可以 I/O | 当前观察 | 资源 metadata |
-| `OpenedFileInfo::metadata` | open 已有时附带 | open-time snapshot | 避免重复 lookup |
+`AsyncFileResource` 保存 `AsyncFileSystem`，规则相同。
 
-Provider 不应为了填充 `OpenedFileInfo::metadata` 额外发起一次 `stat`。
-`stat` 与 `stat_async` 都检查最终路径项本身，不跟随最终符号链接；最终项为符号链接时
-返回 `FileKind::Symlink`。
+### 8.2 Reader
 
-## 6. 字节流与文件句柄
+`FileReader` / `AsyncFileReader` 保存固定 `OpenedFileInfo` 与 type-erased input。
+Provider 返回的 opened location 在门面包装前验证。Open-time metadata 只是 snapshot，
+不能冒充 live `stat`。
 
-### 6.1 为什么不用 `std::io::Read` / `Write`
-
-`qubit-fs` 的底层字节流使用：
+底层字节流继续使用：
 
 - `qubit_io::Input<Item = u8>`；
 - `qubit_io::Output<Item = u8>`；
 - `qubit_io::AsyncInput<Item = u8>`；
 - `qubit_io::AsyncOutput<Item = u8>`。
 
-原因是：
+这样同步与异步组合能力保持一致，异步核心也不绑定 runtime。任意 `Input<u8>` 不等于
+文件 reader；只有门面把 `spi::OpenedReader` 与经过校验的 `OpenedFileInfo` 组合后，
+才能产生 `FileReader`。Public handle 的直接 `new` 构造器删除。
 
-1. 应用可在同一抽象上组合 buffering、limit、count、checksum、binary 与 text
-   adapter；
-2. 同步与异步流共享一致的 item-oriented 模型；
-3. 异步核心只依赖 `Poll`，不绑定 runtime；
-4. 标准库或生态流可以在 `qubit-io` 边界适配；
-5. 文件系统层不需要复制通用 stream 能力。
+`read_all` 在分配前检查已知长度，并在流式读取时再次执行实际字节上限，防止 provider
+metadata 缺失或错误导致无界分配。
 
-### 6.2 为什么任意 Input 不是 FileReader
+### 8.3 Directory stream
 
-`Input<u8>` 只表示“可以读取字节”。它可能来自内存、socket、解码器、压缩流或随机
-生成器，与文件没有必然关系。
+`list` 的 SPI 结果是 `OpenedDirectoryStream`，不是公开 page 或 provider continuation
+token。Public `DirectoryStream` 逐项：
 
-`FileReader` 还必须表示：
+- 调用 `DirectoryStreamSpi`；
+- 校验 entry path、name、root、prefix 与 metadata；
+- 补齐错误上下文；
+- 对外提供 inherent collection/convenience methods。
 
-- 它由某个 configured filesystem 打开；
-- 它对应一个固定 `FileLocation`；
-- 它可能携带 open-time metadata snapshot；
-- 它的错误与生命周期来自文件 provider。
+Stream 具有 `Open`、`Exhausted`、`Failed` 状态。Provider error 或 contract violation
+使其进入终止 `Failed`，不能继续消费不可信数据。`DirectoryStreamExt` 及异步版本删除。
 
-因此不存在 `impl<I: Input<u8>> FileReader for I` 之类 blanket conversion。Provider
-必须显式调用 `FileReader::new(input, opened_info)`。`AsyncFileReader` 同理。
+## 9. Capability、Requirement 与 Outcome
 
-### 6.3 固定身份
+`FileSystemCapabilities` 是稳定 capability set，`FileSystemLimits` 是独立快照。
+Capability 表示当前 configured filesystem 保证支持，不表示某次操作可能碰巧成功。
 
-`FileLocation` 包含：
+Requirement 决定什么结果可以称为成功；outcome 描述实际发生的事实。例如：
 
-- `FileSystemId`；
-- open-time provider-local `FsPath`；
-- 可选 canonical credential-free URI。
+- `AtomicityRequirement::Required`：无法保证时在副作用前失败；
+- `Preferred`：允许 fallback，但 outcome 必须报告实际 atomicity；
+- `NotRequired`：调用者不要求，provider 仍可采用更强实现。
 
-即使资源后来 rename，已打开 handle 的 location 也不会被悄悄改写。它描述“这个
-handle 当初打开的对象”，不是对 namespace 的实时反向查询。
+成功结果使用 `WriteOutcome`、`RenameOutcome`、`CopyOutcome` 和 `PersistOutcome`，
+报告 actual atomicity、publication/copy method、版本、统计和非敏感 diagnostics。
 
-Registry-bound resource 在 open 后会把 provider-local identity 补充为 registry
-解析得到的 canonical location，但不会改变已捕获的 metadata snapshot。
+门面根据 request 复核 outcome。Provider 不能通过返回“成功”绕过 required semantics。
 
-### 6.4 Type erasure
+## 10. Error 模型与归责
 
-公开 `FileReader`、`FileWriter`、`AsyncFileReader`、`AsyncFileWriter` 是 concrete
-type-erased handle，而不是让每个应用传播 provider-specific 泛型。Provider-side
-extension point 则是：
-
-- `FileWriteSession`；
-- `AsyncFileWriteSession`；
-- `DirectoryStreamSession`；
-- `AsyncDirectoryStreamSession`；
-- temporary session trait。
-
-这样应用 API 简洁，provider 仍可使用自己的实现类型。
-
-## 7. Capability、Requirement 与 Outcome
-
-### 7.1 Capability 不是布尔字段集合
-
-`FileSystemCapability` 是稳定、可扩展的 typed identifier，包括 read、range read、
-conditional read、checksum validation、append、conditional write/delete、atomic rename、
-server-side copy、temporary resource 等。
-
-`FileSystemCapabilities` 是纯 capability set；`FileSystemLimits` 由
-`FileSystemProperties::limits()` 独立返回，并明确表示未知、不适用、无界或有限上限。
-错误可以通过 `required_capability` 指回具体缺失保证，而不依赖模糊字符串。
-
-`max_list_page_entries` 是 provider-native page 的有限上限。
-`ListOptions::page_size` 只是 hint：绑定资源会 clamp，直接 provider 也必须在 I/O 前
-clamp；调用方未指定 hint 时，provider 自选 page 仍必须遵守该上限。
-
-Capability 表示“当前 configured filesystem 保证支持”，不表示：
-
-- provider 在另一个账号或 region 可能支持；
-- 某次操作可能碰巧成功；
-- 应用可以跳过运行时错误处理。
-
-### 7.2 Required 不允许静默降级
-
-`AtomicityRequirement`：
-
-- `Required`：成功必须原子；无法保证时必须在副作用前返回
-  `RequirementNotMet`；
-- `Preferred`：允许 fallback，但成功结果必须报告实际 atomicity；
-- `NotRequired`：调用方不要求原子性，provider 仍可选择原子实现。
-
-这个设计遵循一个基本不变量：
-
-```text
-请求中的 requirement 决定“什么结果可以被称为成功”；
-outcome 描述“这次成功实际上发生了什么”。
-```
-
-`ReadOptions`、`WriteOptions`、`DeleteOptions`、`RenameOptions`、`CopyOptions` 与
-`PersistOptions` 都提供 `validate_against` preflight。它们把缺失保证映射到明确的
-typed capability；provider 必须在 I/O 或副作用前调用相应校验。
-此外，`WriteOptions::validate` 会拒绝模型内部不可能同时成立的组合，例如
-`CreateNew + IfMatch`，从而避免不同 provider 给出相互矛盾的解释。
-
-### 7.3 Outcome 报告事实
-
-成功结果使用：
-
-- `WriteOutcome`；
-- `RenameOutcome`；
-- `CopyOutcome`；
-- `PersistOutcome`。
-
-它们报告 `AchievedAtomicity`、`PublicationMethod` / `CopyMethod`、统计、版本和
-`NonSensitiveMetadata` diagnostics。Diagnostics 使用已校验的 `UserMetadata` 构造，
-其自动 Debug 只显示 key。调用方不需要根据 provider 名称猜测实际语义。
-
-## 8. Error 模型
-
-`FsError` 是 namespace、open、metadata、provider 与 lifecycle 操作的统一错误，
-包含：
+`FsError` 保留：
 
 - `FsErrorKind`；
-- `FsOperation`；
-- primary path 与 target path；
-- provider id；
+- 面向调用者的 `FsOperation`；
+- primary path 和 target path；
+- provider identity；
 - required capability；
-- 已清洗的 message 与保留的 source error。
+- 已清洗 message；
+- 不自动显示的 source error。
 
-`Debug` 与 `Display` 都不展开 source error；`Debug` 仅通过 `source_present` 报告
-是否存在 source，`Display` 完全省略它。显式诊断仍可通过 `Error::source()` 访问。
-这样底层 HTTP、SDK 或 I/O 错误中的 signed URL、token 与认证诊断不会意外进入普通
-日志。
+门面统一处理上下文：
 
-关键分类包括：
+- provider identity 总是取自属性快照；
+- operation 总是对应公开调用；
+- SPI 未提供时补齐 source/target path 和 required capability；
+- SPI 可以报告更精确的失败子路径；
+- source error 被保留，但不能通过普通格式化泄漏 secret。
 
-- `UnsupportedOperation`：模型本身不支持；
-- `UnsupportedCapability`：缺少稳定 capability；
-- `RequirementNotMet`：操作存在，但无法满足强保证；
-- `InvalidState`：handle 生命周期不允许；
-- `Indeterminate`：副作用可能发生，但最终状态未知；
-- `PreconditionFailed`：版本或 existence condition 不满足；
-- authentication、permission、timeout、quota、corruption、I/O 等。
+新增：
 
-字节传输遵循 `qubit-io`，返回 `std::io::Error`；控制面操作返回 `FsError`。
-`FsError::into_io_error` 会把完整 `FsError` 保留为 source，
-`FsError::from_io` 则在跨回文件系统边界时补充 operation context。
+```rust
+FsErrorKind::ProviderContractViolation
+```
 
-`exists` 只把明确 `NotFound` 转换成 `false`。权限、认证、网络和 timeout 不能被伪装
-成“不存在”。
+它表示 provider bug 或不合法返回，例如 required-atomic 请求却报告非原子成功、list
+返回越界 entry、opened location 不匹配或 outcome 自相矛盾。
 
-## 9. Writer 生命周期
+`RequirementNotMet` 表示运行时条件使一个合法请求无法满足；它不是 provider contract
+violation。
 
-Writer 不只是 `Output<u8>`，还是 publication session：
+`exists` 只把明确 `NotFound` 转换为 `false`。权限、认证、timeout 或 I/O 错误不能被
+伪装为不存在。
+
+## 11. Writer 与 `write_all`
+
+### 11.1 Writer 状态
 
 ```text
-                 commit success
-Open ─────────────────────────────► Committed
- │
+Open
+ ├─ commit success ───────────────► Committed
  ├─ abort success ────────────────► Aborted
- │
- ├─ retryable commit failure ─────► Open（session 保留）
- ├─ target not published ─────────► NotPublished（仅可清理）
- ├─ target published ─────────────► Published（仅可清理）
- ├─ uncertain lifecycle failure ──► Indeterminate（session 保留）
- │
- └─ polled async lifecycle future
-    dropped before completion ────► Indeterminate（session 保留）
+ ├─ retryable/not published ──────► Open
+ ├─ not published/not retryable ──► NotPublished
+ ├─ published ────────────────────► Published
+ └─ unknown ──────────────────────► Indeterminate
 ```
 
-`commit(&mut self)` / `commit_async(&mut self)` 不消费 handle：
+`WriteFailureState` 为：
 
-- 只有 `WriteFailureState::Retryable` 失败后可重试；
-- `NotPublished` / `Published` 保留 session 供显式 cleanup，但禁止再次 commit；
-- indeterminate 失败后仍可通过 provider session 执行显式 recovery；
-- commit/abort 成功后禁止继续写入；
-- abort indeterminate session 只表示 staging cleanup 成功，不保证已经发布的 target
-  被回滚。
+- `RetryableNotPublished`；
+- `NotPublished`；
+- `Published`；
+- `Indeterminate`。
 
-同步 drop 只对确定仍为 Open 的 writer 执行 best-effort abort，错误只能记录；不会
-自动处理 `Indeterminate`。异步 drop 不允许启动或阻塞 executor，只对确定仍为 Open
-的 writer 调用 provider 的 nonblocking `cancel_on_drop` hook。异步 lifecycle future
-从未被 poll 时不改变状态；一旦 poll 后在完成前被 drop，就转为 `Indeterminate`。
-需要确认远程清理的调用方必须显式 await `abort_async`。
+`FileWriter` 保存 open 时解析的 write contract。`commit(&mut self)` 负责：
 
-## 10. 临时资源策略
+- 调用 `FileWriterSpi::commit`；
+- 复核 `WriteOutcome`；
+- 更新公开状态；
+- 在 provider 报告成功但违反 required semantics 时返回
+  `ProviderContractViolation`，并按已知事实进入 `Published`，不能伪装成未写入。
 
-### 10.1 不提供隐式默认
+`abort` 可用于清理 `Open`、`NotPublished`、`Published` 或 `Indeterminate` session。
+对 `Published` 的 abort 只能清理 staging，绝不能回滚已经发布的 target。
+`Open`/`NotPublished` abort 成功后进入 `Aborted`；`Published`/`Indeterminate`
+即使 session cleanup 成功也保留原事实状态，不能用 `Aborted` 抹去 namespace 事实。
 
-“临时文件”在不同后端上的真实含义可能是：
+同步 drop 只在确定安全的状态下 best-effort abort；`Indeterminate` 不自动操作。
 
-- 本地同目录 staging file；
-- 系统 temp directory；
-- 对象存储随机 key；
-- multipart upload；
-- 云盘隐藏目录；
-- 分布式文件系统同 namespace staging path；
-- provider-native upload session。
+### 11.2 `write_all`
 
-核心层无法安全推断 namespace、权限、生命周期、成本和 publication atomicity。因此：
+`write_all` 不能只返回 `FsResult<WriteOutcome>`，否则内部 writer 失败时会丢失恢复
+session：
 
-- `FileSystem::create_temp_file/dir` 默认返回 `UnsupportedCapability`；
-- async 对应方法同样默认不支持；
-- provider 必须实现 native strategy，或在 provider config 中要求显式 strategy；
-- capability 必须声明 `TempFile`、`TempDirectory` 和
-  `AtomicTempPersist` 的保证；
-- `TempFileOptions` / `TempDirOptions` 的 `parent: None` 由已配置 provider 解释，
-  不是核心层猜测一个路径。
+```rust
+pub struct WriteAllFailure {
+    error: FsError,
+    writer: Option<FileWriter>,
+}
+```
 
-### 10.2 Ownership
+- 仍需 retry、abort 或人工核查时返回 writer；
+- 已确认完成清理时 writer 为 `None`；
+- 调用者可以根据 writer state 选择恢复动作；
+- convenience API 不通过 drop 掩盖 publication 或 cleanup 的不确定性。
 
-`TempFile` / `TempDir` 与 async 对应物拥有 cleanup responsibility：
+异步版本携带 `AsyncFileWriter`，遵循相同语义。
+
+## 12. Temporary resource
+
+### 12.1 策略边界
+
+核心层不猜测 provider 的临时目录、namespace、权限、成本或 publication 策略。
+Provider 必须通过 capability 和 SPI 明确提供 temp file、temp directory 与 atomic
+persist 能力。
+
+`TempFile` / `TempDirectory` 保存由原始 `FileSystem` 构造的 `FileResource`，因此
+始终绑定同一个 configured filesystem 实例。
+
+门面在包装 public handle 前复核 SPI 返回的 temp location/kind。若 opened temp
+违反契约，门面必须显式调用 session cleanup；cleanup 失败作为
+`ProviderContractViolation` 的 secondary/source context 保留，不能把尚未绑定的
+cleanup responsibility 静默交给 drop。
+
+### 12.2 状态
+
+```rust
+pub enum TempResourceState {
+    Owned,
+    Persisted,
+    Kept,
+    Cleaned,
+    CleanupRequired,
+    Indeterminate,
+}
+```
+
+`persist(&mut self, target, options)` 失败不消费 handle：
+
+| `PersistFailureState` | Handle 状态 | 已确认事实 |
+| --- | --- | --- |
+| `NotPublished` | `Owned` | target 未发布，可修正后重试 |
+| `Published` | `Persisted` | target 已发布，source ownership 已处理 |
+| `PublishedSourceRetained` | `CleanupRequired` | target 已发布，source 仍需清理 |
+| `Indeterminate` | `Indeterminate` | source 或 target 最终状态未知 |
+
+`Published` 覆盖 rename 已完成但后续目录 durability 操作失败等情况。方法虽然返回错误，
+handle 也不能回到 `Owned`。
+
+同步 drop：
+
+- `Owned`、`CleanupRequired`：best-effort cleanup；
+- `Persisted`、`Kept`、`Cleaned`：不操作；
+- `Indeterminate`：不自动修改文件系统。
+
+确认清理必须显式调用 `cleanup`。
+
+### 12.3 Child 安全
+
+`TempDirectory::child(&FsName)` 只接受单一安全 component；
+`descendant(&RelativeFsPath)` 只接受不能逃逸的相对路径。Provider 仍负责 symlink、
+mount point、race 和平台 canonicalization 等真实边界。
+
+## 13. 异步生命周期
+
+异步 drop 不启动 executor、不阻塞线程，也不暗中发起远程 I/O。
+
+异步 commit、abort、persist、keep 和 cleanup future：
+
+- 尚未 poll 即 drop，不改变 handle 状态；
+- poll 后未完成即 drop，进入 `Indeterminate`；
+- 需要确认恢复或清理时必须显式 await；
+- provider 可提供明确 nonblocking 且无远程副作用的 drop hook，但它不能替代确认语义。
+
+同步与异步状态枚举、failure state 和 outcome 保持一致。
+
+## 14. Registry 集成边界
+
+`qubit-fs-registry` 负责：
+
+- provider discovery 和 selection；
+- 完整配置与 credential reference；
+- URI provider-specific 解码；
+- canonical URI 去敏；
+- 返回具体 `FileSystemResolution` 或 `AsyncFileSystemResolution`。
+
+Resolution 保存门面、provider-local `FsPath` 和 canonical `FsUri`，不保存或暴露
+`Arc<dyn FileSystemSpi>`。Registry resource 必须通过门面的安全 location 绑定入口
+构造。
+
+`qubit-fs` 不依赖 registry，也不重新解释 provider 已解码的 URI path。
+
+## 15. 模块与公开 API
+
+目标模块：
 
 ```text
-Owned
- ├─ persist success ──────────────► Persisted
- ├─ keep success ─────────────────► Kept
- ├─ cleanup success ──────────────► Cleaned
- ├─ target published, source left ► CleanupRequired
- └─ final state unknown ──────────► Indeterminate
+src/
+├── file_system.rs
+├── async_file_system.rs
+├── properties.rs
+├── spi/
+│   ├── file_system_spi.rs
+│   ├── async_file_system_spi.rs
+│   ├── request/
+│   ├── opened/
+│   └── session/
+├── resource/
+├── reader/
+├── writer/
+├── directory/
+├── temp/
+├── options/
+├── metadata/
+├── path/
+└── error/
 ```
 
-### 10.3 Persist 失败不能丢句柄
+主要替换关系：
 
-`persist` 接收 `&mut self`，失败不会消费临时 handle。错误类型
-`PersistFailure` 同时携带 `FsError` 与 `PersistFailureState`：
+| 旧 API | 目标 API |
+| --- | --- |
+| `trait FileSystem` | `struct FileSystem` + `spi::FileSystemSpi` |
+| `trait AsyncFileSystem` | `struct AsyncFileSystem` + `spi::AsyncFileSystemSpi` |
+| `trait FileSystemProperties` | `struct FileSystemProperties` |
+| `Arc<dyn FileSystem>` | `FileSystem` |
+| `FileSystemExt` | `FileSystem` inherent methods |
+| `DirectoryStreamExt` | `DirectoryStream` inherent methods |
+| `FileWriteSession` | `spi::FileWriterSpi` |
+| `DirectoryStreamSession` | `spi::DirectoryStreamSpi` |
+| `TempResourceSession` | `spi::TempResourceSpi` |
 
-| Failure state | 已确认事实 | 合法恢复 |
-| --- | --- | --- |
-| `NotPublished` | target 未发布，source 仍由 handle 拥有 | 修正参数后重试，或 cleanup/keep |
-| `PublishedSourceRetained` | target 已发布，source 仍由 handle 拥有 | 禁止 republish；cleanup 或 keep source |
-| `Indeterminate` | source/target 最终状态不确定 | 禁止自动 cleanup 与 blind retry；外部 reconciliation |
+Crate 根部只重导出应用层类型；SPI 始终保留在 `spi` 命名空间。
 
-成功则返回 `PersistOutcome`，明确 target、actual atomicity 与 publication method。
+## 16. Provider 必须遵守的不变量
 
-同步 drop 只对 `Owned` / `CleanupRequired` 执行 best-effort cleanup，不自动处理
-`Indeterminate`。异步 cleanup、keep、persist future 从未被 poll 时不改变状态；一旦
-poll 后在完成前被 drop，handle 就转为 `Indeterminate`，异步 drop 不再 local cancel。
-确认 cleanup 需要 await。
-
-### 10.4 Child 安全
-
-`TempDir::child(&FsName)` 只接受单一安全 component；
-`descendant(&RelativeFsPath)` 只接受不能逃逸的相对 descendant。绝对 path 无法替换
-temporary root，`..` 也无法越过 root。
-
-这只解决 lexical composition。Local provider 仍需处理 symlink、mount point、race
-与平台 canonicalization 等真实 filesystem 安全问题。
-
-## 11. Registry 集成边界
-
-`qubit-fs-registry` 负责 provider discovery、SPI、完整配置、credential reference 和
-由 provider 解码 URI 后得到的 resolution。它把 configured filesystem、decoded
-provider-local `FsPath` 与安全 canonical URI 组合为 `FileResource` 或
-`AsyncFileResource`；核心层不会重新解释 URI path。同步与异步 provider 注册、fallback
-和 resolution 的具体协议由该 crate 单独维护。
-
-## 12. Provider 一致性约束
-
-每个 provider 实现必须遵守以下不变量：
-
-1. `info()`、`capabilities()` 与 `limits()` 不触发 I/O，并在对象生命周期内稳定；
+1. `properties()` 不执行 I/O，并返回构造时稳定值；
 2. capability 只声明当前配置真正保证的行为；
-3. `FsUriPath` 只由 provider 按自己的语义解释；hierarchical native path 逐 component
-   转换，并拒绝解码后产生的 separator、root 或 prefix；
-4. canonical URI 不含 credential；
-5. mandatory option 不可静默忽略；
-6. `AtomicityRequirement::Required` 无法满足时，在副作用前失败；
-7. 成功 outcome 报告实际 method 与 atomicity；
-8. file handle 必须携带固定 `OpenedFileInfo`；
-9. open-time metadata 只是 snapshot，不冒充 live stat；`stat` 不跟随最终符号链接；
-10. write、persist 和 cleanup 失败必须保留可恢复 session；
-11. partial success 使用 typed state，不依赖错误字符串；
-12. async drop 不执行阻塞或远程 I/O；
-13. error 附带 operation、path、target、provider、capability 与 source context；
-14. 所有 debug-visible 扩展 metadata 都从已校验的 `UserMetadata` 构造；
-15. unsupported optional operation 返回明确 capability error；
-16. 有限 `max_list_page_entries` 在 provider I/O 前执行，超大 `page_size` hint 被
-    clamp。
+3. provider 只接收门面构造的 request；
+4. mandatory option 不可忽略；
+5. required semantics 无法满足时不得返回成功；
+6. outcome 报告实际 method、atomicity、版本和 side effect；
+7. opened handle location 与请求一致；
+8. list entry 不能离开请求 namespace；
+9. write、persist 和 cleanup 的部分成功使用 typed state；
+10. async drop 不执行阻塞或远程 I/O；
+11. error source 和 diagnostics 不泄漏 secret；
+12. provider-specific native 算法留在 provider 原生实现，不复制到 adapter；
+13. SPI session 的 cleanup 不能擅自回滚已确认 published target；
+14. provider contract violation 不能降格为普通 I/O 错误。
 
-## 13. 简洁性边界
+## 17. 验证策略
 
-这套设计通过以下方式保持简洁：
+`qubit-fs` 自身使用 recording 和 fault-injecting SPI 验证：
 
-- 应用只面对两套同形 operation trait；
-- 公共 property 提升到一个父 trait；
-- 文件流统一复用 `qubit-io`；
-- concrete type-erased handle 隐藏 provider 泛型；
-- resource convenience object 避免反复传 filesystem 与 path；
-- option 表示请求，outcome 表示事实，error 表示失败上下文；
-- provider-specific 非敏感信息进入 `NonSensitiveMetadata`，不污染核心枚举，也不让
-  自动 Debug 暴露 value；
-- 具体 backend、runtime adapter 和 secret resolver 留在组装层。
+- 所有确定性校验发生在 SPI 调用前；
+- 外部代码无法构造 SPI request；
+- 属性快照只采集一次并保持稳定；
+- opened object 和 outcome 会被门面复核；
+- writer、directory stream、temp 的全部状态转换；
+- `write_all` 在失败时保留恢复 handle；
+- error context 与 secret boundary；
+- 同步/异步行为对称；
+- async future cancellation 和 drop 语义。
 
-简洁不等于丢失语义。核心 API 只抽象真正稳定的共同结构，并为差异保留明确扩展点。
+Provider 的黑盒一致性由 `qubit-fs-testkit` 通过公开门面验证。Provider 自己仍需测试
+平台、协议、编码、安全和性能边界。
