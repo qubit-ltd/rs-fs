@@ -5,12 +5,30 @@
 // =============================================================================
 //! Provider-backed temporary file lifecycle handle.
 
-use std::fmt::{Debug, Formatter, Result as FmtResult};
+use std::fmt::{
+    Debug,
+    Formatter,
+    Result as FmtResult,
+};
 
-use crate::spi::{PersistRequest, SpiPersistFailure, TempResourceSpi};
+use crate::spi::{
+    PersistRequest,
+    SpiPersistFailure,
+    TempResourceSpi,
+};
 use crate::{
-    AchievedAtomicity, AtomicityRequirement, FileSystem, FsError, FsErrorKind, FsOperation,
-    FsResult, Path, PersistFailure, PersistFailureState, PersistOptions, PersistOutcome,
+    AchievedAtomicity,
+    AtomicityRequirement,
+    FileSystem,
+    FsError,
+    FsErrorKind,
+    FsOperation,
+    FsResult,
+    Path,
+    PersistFailure,
+    PersistFailureState,
+    PersistOptions,
+    PersistOutcome,
     TempResourceState,
 };
 
@@ -122,12 +140,19 @@ impl TempFile {
             .map_err(|error| self.record_cleanup_error(error))
     }
     /// Records provider partial persistence facts in facade state and error.
-    fn record_persist_failure(&mut self, failure: SpiPersistFailure) -> PersistFailure {
+    fn record_persist_failure(
+        &mut self,
+        failure: SpiPersistFailure,
+    ) -> PersistFailure {
         let (error, state) = failure.into_parts();
         self.state = match state {
             PersistFailureState::NotPublished => TempResourceState::Owned,
-            PersistFailureState::PublishedSourceRetained => TempResourceState::CleanupRequired,
-            PersistFailureState::Indeterminate => TempResourceState::Indeterminate,
+            PersistFailureState::PublishedSourceRetained => {
+                TempResourceState::CleanupRequired
+            }
+            PersistFailureState::Indeterminate => {
+                TempResourceState::Indeterminate
+            }
         };
         PersistFailure::new(error, state)
     }

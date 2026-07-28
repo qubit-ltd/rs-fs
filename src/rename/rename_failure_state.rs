@@ -7,7 +7,8 @@
 // =============================================================================
 //! Rename publication state at the point of provider failure.
 
-/// Stable rename state for recovery decisions; error text is not a state protocol.
+/// Stable rename state for recovery decisions; error text is not a state
+/// protocol.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RenameFailureState {
     /// Source and target were not changed.

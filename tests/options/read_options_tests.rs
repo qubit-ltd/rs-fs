@@ -6,7 +6,11 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 use qubit_fs::{
-    ChecksumPolicy, FileSystemCapabilities, FileSystemCapability, ReadOptions, ResourceVersion,
+    ChecksumPolicy,
+    FileSystemCapabilities,
+    FileSystemCapability,
+    ReadOptions,
+    ResourceVersion,
 };
 
 #[test]

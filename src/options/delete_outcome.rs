@@ -14,7 +14,8 @@ pub struct DeleteOutcome {
 }
 
 impl DeleteOutcome {
-    /// Creates an outcome. `already_missing` reports an accepted missing target.
+    /// Creates an outcome. `already_missing` reports an accepted missing
+    /// target.
     #[must_use]
     pub const fn new(already_missing: bool) -> Self {
         Self { already_missing }

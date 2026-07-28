@@ -4,7 +4,8 @@ fn test_directory_entry_path_can_be_compared_with_requested_root() {
         qubit_fs::Path::parse("/outside").expect("entry should parse"),
         qubit_fs::FileKind::File,
     );
-    let (filesystem, _, _) = crate::handle_support::filesystem(false, vec![entry]);
+    let (filesystem, _, _) =
+        crate::handle_support::filesystem(false, vec![entry]);
     let mut stream = filesystem
         .list(
             &qubit_fs::Path::parse("/root").expect("root should parse"),

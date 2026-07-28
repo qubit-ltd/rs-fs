@@ -8,8 +8,13 @@
 //! Copy operation outcome.
 
 use crate::{
-    AchievedAtomicity, CopyMethod, CopyStats, MetadataPreservePolicy, NonSensitiveMetadata,
-    ResourceVersion, UserMetadata,
+    AchievedAtomicity,
+    CopyMethod,
+    CopyStats,
+    MetadataPreservePolicy,
+    NonSensitiveMetadata,
+    ResourceVersion,
+    UserMetadata,
 };
 
 /// Outcome returned by copy operations.
@@ -37,7 +42,11 @@ impl CopyOutcome {
     /// New copy outcome without diagnostics.
     #[inline]
     #[must_use]
-    pub fn new(stats: CopyStats, method: CopyMethod, atomicity: AchievedAtomicity) -> Self {
+    pub fn new(
+        stats: CopyStats,
+        method: CopyMethod,
+        atomicity: AchievedAtomicity,
+    ) -> Self {
         Self {
             stats,
             method,
@@ -94,7 +103,8 @@ impl CopyOutcome {
     pub const fn target_version(&self) -> Option<&ResourceVersion> {
         self.target_version.as_ref()
     }
-    /// Returns whether the facade streamed after the provider declined its fast path.
+    /// Returns whether the facade streamed after the provider declined its fast
+    /// path.
     #[must_use]
     pub const fn used_fallback(&self) -> bool {
         self.used_fallback
@@ -105,7 +115,10 @@ impl CopyOutcome {
         &self.diagnostics
     }
     /// Marks this result as the facade's streamed fallback.
-    pub(crate) fn streamed_fallback(stats: CopyStats, atomicity: AchievedAtomicity) -> Self {
+    pub(crate) fn streamed_fallback(
+        stats: CopyStats,
+        atomicity: AchievedAtomicity,
+    ) -> Self {
         Self {
             stats,
             method: CopyMethod::Streamed,

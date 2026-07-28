@@ -7,10 +7,17 @@
 // =============================================================================
 //! Concrete asynchronous file reader handle.
 
-use std::fmt::{Debug, Formatter, Result as FmtResult};
+use std::fmt::{
+    Debug,
+    Formatter,
+    Result as FmtResult,
+};
 use std::io::Result as IoResult;
 use std::pin::Pin;
-use std::task::{Context, Poll};
+use std::task::{
+    Context,
+    Poll,
+};
 
 use qubit_io::AsyncInput;
 

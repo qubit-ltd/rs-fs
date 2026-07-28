@@ -7,7 +7,8 @@
 // =============================================================================
 //! Copy publication state at the point of provider failure.
 
-/// Stable copy state for recovery decisions; error text is not a state protocol.
+/// Stable copy state for recovery decisions; error text is not a state
+/// protocol.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CopyFailureState {
     /// No destination effect was published.

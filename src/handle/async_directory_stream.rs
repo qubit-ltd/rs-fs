@@ -7,10 +7,24 @@
 // =============================================================================
 //! Concrete asynchronous directory stream handle.
 
-use std::fmt::{Debug, Formatter, Result as FmtResult};
+use std::fmt::{
+    Debug,
+    Formatter,
+    Result as FmtResult,
+};
 
-use crate::spi::{AsyncDirectoryStreamSession, SpiFuture};
-use crate::{DirEntry, FsError, FsErrorKind, FsOperation, FsResult, Path};
+use crate::spi::{
+    AsyncDirectoryStreamSession,
+    SpiFuture,
+};
+use crate::{
+    DirEntry,
+    FsError,
+    FsErrorKind,
+    FsOperation,
+    FsResult,
+    Path,
+};
 
 /// Type-erased asynchronous directory enumeration handle.
 pub struct AsyncDirectoryStream {
@@ -29,7 +43,10 @@ impl AsyncDirectoryStream {
     /// A concrete type-erased asynchronous directory stream.
     #[inline]
     #[must_use]
-    pub(crate) fn new(root: Path, session: Box<dyn AsyncDirectoryStreamSession>) -> Self {
+    pub(crate) fn new(
+        root: Path,
+        session: Box<dyn AsyncDirectoryStreamSession>,
+    ) -> Self {
         Self {
             session,
             root,
@@ -41,7 +58,9 @@ impl AsyncDirectoryStream {
     ///
     /// # Returns
     /// A future resolving to one entry or `None` at end of enumeration.
-    pub fn next_entry_async(&mut self) -> SpiFuture<'_, FsResult<Option<DirEntry>>> {
+    pub fn next_entry_async(
+        &mut self,
+    ) -> SpiFuture<'_, FsResult<Option<DirEntry>>> {
         if self.terminal {
             return Box::pin(async {
                 Err(FsError::new(
@@ -53,7 +72,9 @@ impl AsyncDirectoryStream {
         }
         Box::pin(async move {
             match self.session.next_entry_async().await {
-                Ok(Some(entry)) if is_within(&self.root, &entry.path) => Ok(Some(entry)),
+                Ok(Some(entry)) if is_within(&self.root, &entry.path) => {
+                    Ok(Some(entry))
+                }
                 Ok(Some(_)) => {
                     self.terminal = true;
                     Err(FsError::new(
@@ -81,7 +102,8 @@ fn is_within(root: &Path, entry: &Path) -> bool {
     root == entry
         || (entry.as_str().starts_with(root.as_str())
             && (root.as_str() == "/"
-                || entry.as_str().as_bytes().get(root.as_str().len()) == Some(&b'/')))
+                || entry.as_str().as_bytes().get(root.as_str().len())
+                    == Some(&b'/')))
 }
 
 impl Debug for AsyncDirectoryStream {

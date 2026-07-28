@@ -10,23 +10,71 @@
 use std::io::Error as IoError;
 use std::sync::Arc;
 
-use qubit_io::{Input, Output};
+use qubit_io::{
+    Input,
+    Output,
+};
 
 use crate::spi::{
-    CopyAttempt, CopyRequest, CreateDirectoryRequest, CreateTempDirectoryRequest,
-    CreateTempFileRequest, DeleteDirectoryRequest, DeleteFileRequest, FileSystemSpi, ListRequest,
-    OpenReaderRequest, OpenWriterRequest, RenameRequest, ResolvedCopyOptions,
-    ResolvedCreateDirectoryOptions, ResolvedDeleteOptions, ResolvedListOptions,
-    ResolvedReadOptions, ResolvedRenameOptions, ResolvedWriteOptions, StatRequest,
+    CopyAttempt,
+    CopyRequest,
+    CreateDirectoryRequest,
+    CreateTempDirectoryRequest,
+    CreateTempFileRequest,
+    DeleteDirectoryRequest,
+    DeleteFileRequest,
+    FileSystemSpi,
+    ListRequest,
+    OpenReaderRequest,
+    OpenWriterRequest,
+    RenameRequest,
+    ResolvedCopyOptions,
+    ResolvedCreateDirectoryOptions,
+    ResolvedDeleteOptions,
+    ResolvedListOptions,
+    ResolvedReadOptions,
+    ResolvedRenameOptions,
+    ResolvedWriteOptions,
+    StatRequest,
 };
 use crate::{
-    CopyConflictPolicy, CopyFailure, CopyFailureState, CopyOptions, CopyOutcome, CopyStats,
-    CreateDirectoryOptions, CreateDirectoryOutcome, DeleteOptions, DeleteOutcome, DirectoryStream,
-    FileKind, FileMetadata, FileReader, FileSystemCapability, FileSystemProperties, FileWriter,
-    FsError, FsErrorKind, FsOperation, FsResult, ListOptions, Path, ReadOptions, RenameFailure,
-    RenameFailureState, RenameOptions, RenameOutcome, ServerSidePreference, TempDirectory,
-    TempDirectoryOptions, TempFile, TempFileOptions, WriteAllFailure, WriteDisposition,
-    WriteFailureState, WriteOptions,
+    CopyConflictPolicy,
+    CopyFailure,
+    CopyFailureState,
+    CopyOptions,
+    CopyOutcome,
+    CopyStats,
+    CreateDirectoryOptions,
+    CreateDirectoryOutcome,
+    DeleteOptions,
+    DeleteOutcome,
+    DirectoryStream,
+    FileKind,
+    FileMetadata,
+    FileReader,
+    FileSystemCapability,
+    FileSystemProperties,
+    FileWriter,
+    FsError,
+    FsErrorKind,
+    FsOperation,
+    FsResult,
+    ListOptions,
+    Path,
+    ReadOptions,
+    RenameFailure,
+    RenameFailureState,
+    RenameOptions,
+    RenameOutcome,
+    ServerSidePreference,
+    TempDirectory,
+    TempDirectoryOptions,
+    TempFile,
+    TempFileOptions,
+    WriteAllFailure,
+    WriteDisposition,
+    WriteFailureState,
+    WriteOptions,
 };
 
 /// Application-facing synchronous filesystem facade.
@@ -37,7 +85,8 @@ pub struct FileSystem {
 }
 
 impl FileSystem {
-    /// Constructs a facade and caches the provider's single validated property snapshot.
+    /// Constructs a facade and caches the provider's single validated property
+    /// snapshot.
     pub fn from_spi<S>(spi: S) -> FsResult<Self>
     where
         S: FileSystemSpi + 'static,
@@ -87,11 +136,13 @@ impl FileSystem {
         }
     }
 
-    /// Copies `source` to `target` through an optional provider fast path and a safe stream fallback.
+    /// Copies `source` to `target` through an optional provider fast path and a
+    /// safe stream fallback.
     ///
     /// # Errors
-    /// Returns [`CopyFailure`] with a recovery state. A provider failure is never retried;
-    /// only an explicit provider decline can select the facade's allowlisted fallback.
+    /// Returns [`CopyFailure`] with a recovery state. A provider failure is
+    /// never retried; only an explicit provider decline can select the
+    /// facade's allowlisted fallback.
     #[allow(clippy::result_large_err)]
     pub fn copy(
         &self,
@@ -129,11 +180,14 @@ impl FileSystem {
             }
             Ok(CopyAttempt::Declined(_)) => self
                 .stream_copy_fallback(source, target, &options)
-                .map_err(|failure| self.contextualize_copy_failure(failure, source, target)),
+                .map_err(|failure| {
+                    self.contextualize_copy_failure(failure, source, target)
+                }),
         }
     }
 
-    /// Verifies that a provider-completed fast path honors required outcome guarantees.
+    /// Verifies that a provider-completed fast path honors required outcome
+    /// guarantees.
     #[allow(clippy::result_large_err)]
     fn verify_completed_copy(
         &self,
@@ -160,7 +214,9 @@ impl FileSystem {
                 target,
             ));
         }
-        if options.durability == crate::DurabilityRequirement::Required && !outcome.durable() {
+        if options.durability == crate::DurabilityRequirement::Required
+            && !outcome.durable()
+        {
             return Err(self.contextualize_copy_failure(
                 self.copy_failure(
                     FsError::new(
@@ -182,8 +238,8 @@ impl FileSystem {
     /// Renames one resource through exactly one provider rename primitive.
     ///
     /// # Errors
-    /// Returns [`RenameFailure`] with the provider-confirmed transition state. This method never
-    /// implements rename through copy and delete.
+    /// Returns [`RenameFailure`] with the provider-confirmed transition state.
+    /// This method never implements rename through copy and delete.
     pub fn rename(
         &self,
         source: &Path,
@@ -245,7 +301,11 @@ impl FileSystem {
     }
 
     /// Opens a provider directory stream after local option validation.
-    pub fn list(&self, path: &Path, options: ListOptions) -> FsResult<DirectoryStream> {
+    pub fn list(
+        &self,
+        path: &Path,
+        options: ListOptions,
+    ) -> FsResult<DirectoryStream> {
         self.validate_path(path, FsOperation::List)?;
         self.require(FileSystemCapability::List, FsOperation::List, path)?;
         let options = ListOptions {
@@ -257,18 +317,28 @@ impl FileSystem {
         };
         self.spi
             .list(ListRequest::new(path, ResolvedListOptions::new(options)))
-            .map(|opened| DirectoryStream::new(path.clone(), opened.into_stream()))
+            .map(|opened| {
+                DirectoryStream::new(path.clone(), opened.into_stream())
+            })
             .map_err(|error| self.enrich(error, path, FsOperation::List))
     }
 
     /// Opens a provider reader after local option validation.
-    pub fn open_reader(&self, path: &Path, options: ReadOptions) -> FsResult<FileReader> {
+    pub fn open_reader(
+        &self,
+        path: &Path,
+        options: ReadOptions,
+    ) -> FsResult<FileReader> {
         self.validate_path(path, FsOperation::OpenReader)?;
         options.validate_against(self.properties.capabilities())?;
         self.properties
             .limits()
             .validate_read_range(path, options.length)?;
-        self.require(FileSystemCapability::Read, FsOperation::OpenReader, path)?;
+        self.require(
+            FileSystemCapability::Read,
+            FsOperation::OpenReader,
+            path,
+        )?;
         self.spi
             .open_reader(OpenReaderRequest::new(
                 path,
@@ -276,17 +346,29 @@ impl FileSystem {
             ))
             .and_then(|opened| {
                 let (info, reader) = opened.into_parts();
-                self.validate_opened_info(&info, path, FsOperation::OpenReader)?;
+                self.validate_opened_info(
+                    &info,
+                    path,
+                    FsOperation::OpenReader,
+                )?;
                 Ok(FileReader::new(info, reader))
             })
             .map_err(|error| self.enrich(error, path, FsOperation::OpenReader))
     }
 
     /// Opens a provider writer after local option validation.
-    pub fn open_writer(&self, path: &Path, options: WriteOptions) -> FsResult<FileWriter> {
+    pub fn open_writer(
+        &self,
+        path: &Path,
+        options: WriteOptions,
+    ) -> FsResult<FileWriter> {
         self.validate_path(path, FsOperation::OpenWriter)?;
         options.validate_against(self.properties.capabilities())?;
-        self.require(FileSystemCapability::Write, FsOperation::OpenWriter, path)?;
+        self.require(
+            FileSystemCapability::Write,
+            FsOperation::OpenWriter,
+            path,
+        )?;
         let atomicity = options.atomicity;
         self.spi
             .open_writer(OpenWriterRequest::new(
@@ -295,14 +377,21 @@ impl FileSystem {
             ))
             .and_then(|opened| {
                 let (info, writer) = opened.into_parts();
-                self.validate_opened_info(&info, path, FsOperation::OpenWriter)?;
+                self.validate_opened_info(
+                    &info,
+                    path,
+                    FsOperation::OpenWriter,
+                )?;
                 Ok(FileWriter::new(info, writer, atomicity))
             })
             .map_err(|error| self.enrich(error, path, FsOperation::OpenWriter))
     }
 
     /// Creates a temporary file and binds its provider session to this facade.
-    pub fn create_temp_file(&self, options: TempFileOptions) -> FsResult<TempFile> {
+    pub fn create_temp_file(
+        &self,
+        options: TempFileOptions,
+    ) -> FsResult<TempFile> {
         self.require(
             FileSystemCapability::TempFile,
             FsOperation::CreateTemp,
@@ -333,8 +422,12 @@ impl FileSystem {
             .map_err(|error| self.enrich(error, &Path::root(), FsOperation::CreateTemp))
     }
 
-    /// Creates a temporary directory and binds its provider session to this facade.
-    pub fn create_temp_directory(&self, options: TempDirectoryOptions) -> FsResult<TempDirectory> {
+    /// Creates a temporary directory and binds its provider session to this
+    /// facade.
+    pub fn create_temp_directory(
+        &self,
+        options: TempDirectoryOptions,
+    ) -> FsResult<TempDirectory> {
         self.require(
             FileSystemCapability::TempDirectory,
             FsOperation::CreateTemp,
@@ -388,7 +481,9 @@ impl FileSystem {
                 path,
                 ResolvedCreateDirectoryOptions::new(options),
             ))
-            .map_err(|error| self.enrich(error, path, FsOperation::CreateDir))?;
+            .map_err(|error| {
+                self.enrich(error, path, FsOperation::CreateDir)
+            })?;
         if outcome.already_existed() && !exists_ok {
             return Err(self.contract_error(
                 path,
@@ -400,12 +495,20 @@ impl FileSystem {
     }
 
     /// Deletes a file after local option validation.
-    pub fn delete_file(&self, path: &Path, options: DeleteOptions) -> FsResult<DeleteOutcome> {
+    pub fn delete_file(
+        &self,
+        path: &Path,
+        options: DeleteOptions,
+    ) -> FsResult<DeleteOutcome> {
         self.delete(path, options, false)
     }
 
     /// Deletes a directory after local option validation.
-    pub fn delete_directory(&self, path: &Path, options: DeleteOptions) -> FsResult<DeleteOutcome> {
+    pub fn delete_directory(
+        &self,
+        path: &Path,
+        options: DeleteOptions,
+    ) -> FsResult<DeleteOutcome> {
         self.delete(path, options, true)
     }
 
@@ -442,8 +545,14 @@ impl FileSystem {
         Ok(outcome)
     }
 
-    /// Performs validation common to provider copy dispatch and fallback selection.
-    fn copy_preflight(&self, source: &Path, target: &Path, options: &CopyOptions) -> FsResult<()> {
+    /// Performs validation common to provider copy dispatch and fallback
+    /// selection.
+    fn copy_preflight(
+        &self,
+        source: &Path,
+        target: &Path,
+        options: &CopyOptions,
+    ) -> FsResult<()> {
         self.validate_path(source, FsOperation::Copy)?;
         self.validate_path(target, FsOperation::Copy)?;
         options.validate_against(self.properties.capabilities())?;
@@ -460,7 +569,8 @@ impl FileSystem {
         Ok(())
     }
 
-    /// Applies the deliberately narrow fallback allowlist before opening either stream handle.
+    /// Applies the deliberately narrow fallback allowlist before opening either
+    /// stream handle.
     #[allow(clippy::result_large_err)]
     fn stream_copy_fallback(
         &self,
@@ -492,7 +602,13 @@ impl FileSystem {
             ));
         }
         self.require(FileSystemCapability::Read, FsOperation::Copy, source)
-            .and_then(|_| self.require(FileSystemCapability::Write, FsOperation::Copy, target))
+            .and_then(|_| {
+                self.require(
+                    FileSystemCapability::Write,
+                    FsOperation::Copy,
+                    target,
+                )
+            })
             .map_err(|error| {
                 self.copy_failure(
                     error,
@@ -536,7 +652,9 @@ impl FileSystem {
                             )
                         })
                         .and_then(|length| {
-                            self.properties.limits().validate_write_size(target, length)
+                            self.properties
+                                .limits()
+                                .validate_write_size(target, length)
                         })
                 })
                 .map_err(|error| {
@@ -603,7 +721,9 @@ impl FileSystem {
             if read == 0 {
                 break;
             }
-            if let Err(error) = Output::write_fully(&mut writer, &buffer[..read]) {
+            if let Err(error) =
+                Output::write_fully(&mut writer, &buffer[..read])
+            {
                 return Err(self.copy_failure(
                     self.io_error(target, FsOperation::Write, error),
                     CopyFailureState::PartiallyPublished,
@@ -627,8 +747,11 @@ impl FileSystem {
                 let (error, state) = failure.into_parts();
                 let state = match state {
                     WriteFailureState::Published => CopyFailureState::Published,
-                    WriteFailureState::Indeterminate => CopyFailureState::Indeterminate,
-                    WriteFailureState::RetryableNotPublished | WriteFailureState::NotPublished => {
+                    WriteFailureState::Indeterminate => {
+                        CopyFailureState::Indeterminate
+                    }
+                    WriteFailureState::RetryableNotPublished
+                    | WriteFailureState::NotPublished => {
                         CopyFailureState::PartiallyPublished
                     }
                 };
@@ -660,7 +783,11 @@ impl FileSystem {
         self.validate_path(source, FsOperation::Rename)?;
         self.validate_path(target, FsOperation::Rename)?;
         options.validate_against(self.properties.capabilities())?;
-        self.require(FileSystemCapability::Rename, FsOperation::Rename, source)?;
+        self.require(
+            FileSystemCapability::Rename,
+            FsOperation::Rename,
+            source,
+        )?;
         if source == target {
             return Err(FsError::new(
                 FsErrorKind::InvalidOptions,
@@ -689,7 +816,8 @@ impl FileSystem {
         )
     }
 
-    /// Adds source, target, and provider facts required by public copy failures.
+    /// Adds source, target, and provider facts required by public copy
+    /// failures.
     fn contextualize_copy_failure(
         &self,
         failure: CopyFailure,
@@ -698,14 +826,19 @@ impl FileSystem {
     ) -> CopyFailure {
         let (error, state, stats, writer) = failure.into_parts();
         CopyFailure::new(
-            error.with_missing_context(source, Some(target), self.properties.info().provider_id()),
+            error.with_missing_context(
+                source,
+                Some(target),
+                self.properties.info().provider_id(),
+            ),
             state,
             stats,
             writer,
         )
     }
 
-    /// Adds source, target, and provider facts required by public rename failures.
+    /// Adds source, target, and provider facts required by public rename
+    /// failures.
     fn contextualize_rename_failure(
         &self,
         failure: RenameFailure,
@@ -714,13 +847,21 @@ impl FileSystem {
     ) -> RenameFailure {
         let (error, state) = failure.into_parts();
         RenameFailure::new(
-            error.with_missing_context(source, Some(target), self.properties.info().provider_id()),
+            error.with_missing_context(
+                source,
+                Some(target),
+                self.properties.info().provider_id(),
+            ),
             state,
         )
     }
 
     /// Validates a path against the cached provider snapshot before I/O.
-    fn validate_path(&self, path: &Path, operation: FsOperation) -> FsResult<()> {
+    fn validate_path(
+        &self,
+        path: &Path,
+        operation: FsOperation,
+    ) -> FsResult<()> {
         if path.semantics() != self.properties.info().path_semantics() {
             return Err(FsError::invalid_path(
                 operation,
@@ -757,7 +898,12 @@ impl FileSystem {
     }
 
     /// Adds missing public error context to a provider error.
-    fn enrich(&self, error: FsError, path: &Path, operation: FsOperation) -> FsError {
+    fn enrich(
+        &self,
+        error: FsError,
+        path: &Path,
+        operation: FsOperation,
+    ) -> FsError {
         error.with_operation(operation).with_missing_context(
             path,
             None,
@@ -766,7 +912,12 @@ impl FileSystem {
     }
 
     /// Builds a provider-contract error for an invalid outcome.
-    fn contract_error(&self, path: &Path, operation: FsOperation, message: &str) -> FsError {
+    fn contract_error(
+        &self,
+        path: &Path,
+        operation: FsOperation,
+        message: &str,
+    ) -> FsError {
         FsError::new(FsErrorKind::ProviderContractViolation, operation, message)
             .with_path(path.clone())
             .with_provider(self.properties.info().provider_id())
@@ -779,7 +930,9 @@ impl FileSystem {
         path: &Path,
         operation: FsOperation,
     ) -> FsResult<()> {
-        if info.filesystem_id() != self.properties.info().id() || info.path() != path {
+        if info.filesystem_id() != self.properties.info().id()
+            || info.path() != path
+        {
             return Err(self.contract_error(
                 path,
                 FsOperation::ValidateProviderOutcome,
@@ -790,7 +943,8 @@ impl FileSystem {
         Ok(())
     }
 
-    /// Validates the filesystem identity captured for a newly-created temporary resource.
+    /// Validates the filesystem identity captured for a newly-created temporary
+    /// resource.
     fn validate_temp_info(&self, info: &crate::OpenedFileInfo) -> FsResult<()> {
         if info.filesystem_id() != self.properties.info().id() {
             return Err(self.contract_error(
@@ -810,7 +964,8 @@ impl FileSystem {
         Ok(())
     }
 
-    /// Validates a temporary-resource persistence request before provider effects.
+    /// Validates a temporary-resource persistence request before provider
+    /// effects.
     pub(crate) fn preflight_temp_persist(
         &self,
         source: &Path,
@@ -834,8 +989,10 @@ impl FileSystem {
         let mut result = Vec::new();
         let mut buffer = [0_u8; 8192];
         loop {
-            let read = Input::read(&mut reader, &mut buffer)
-                .map_err(|error| self.io_error(path, FsOperation::Read, error))?;
+            let read =
+                Input::read(&mut reader, &mut buffer).map_err(|error| {
+                    self.io_error(path, FsOperation::Read, error)
+                })?;
             if read == 0 {
                 return Ok(result);
             }
@@ -861,8 +1018,8 @@ impl FileSystem {
         let mut writer = self
             .open_writer(path, options)
             .map_err(|error| WriteAllFailure::new(error, None))?;
-        if let Err(error) =
-            Output::write_fully(&mut writer, bytes).and_then(|_| Output::flush(&mut writer))
+        if let Err(error) = Output::write_fully(&mut writer, bytes)
+            .and_then(|_| Output::flush(&mut writer))
         {
             return Err(WriteAllFailure::new(
                 self.io_error(path, FsOperation::Write, error),
@@ -876,12 +1033,19 @@ impl FileSystem {
     }
 
     /// Creates a contextual filesystem error from an I/O stream failure.
-    fn io_error(&self, path: &Path, operation: FsOperation, error: IoError) -> FsError {
-        FsError::new(FsErrorKind::Io, operation, &error.to_string()).with_path(path.clone())
+    fn io_error(
+        &self,
+        path: &Path,
+        operation: FsOperation,
+        error: IoError,
+    ) -> FsError {
+        FsError::new(FsErrorKind::Io, operation, &error.to_string())
+            .with_path(path.clone())
     }
 }
 
-/// Builds accurate progress for a fallback failure after its destination writer was opened.
+/// Builds accurate progress for a fallback failure after its destination writer
+/// was opened.
 fn fallback_failure_stats(bytes: u64) -> CopyStats {
     CopyStats {
         bytes,

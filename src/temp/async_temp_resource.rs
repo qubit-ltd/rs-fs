@@ -7,10 +7,23 @@
 
 use std::pin::Pin;
 
-use crate::spi::{AsyncTempResourceSpi, SpiFuture};
+use crate::spi::{
+    AsyncTempResourceSpi,
+    SpiFuture,
+};
 use crate::{
-    AchievedAtomicity, AsyncFileSystem, AtomicityRequirement, FsError, FsErrorKind, FsOperation,
-    FsResult, Path, PersistFailure, PersistFailureState, PersistOptions, PersistOutcome,
+    AchievedAtomicity,
+    AsyncFileSystem,
+    AtomicityRequirement,
+    FsError,
+    FsErrorKind,
+    FsOperation,
+    FsResult,
+    Path,
+    PersistFailure,
+    PersistFailureState,
+    PersistOptions,
+    PersistOutcome,
     TempResourceState,
 };
 
@@ -109,11 +122,15 @@ impl AsyncTempFile {
                 }
                 Ok(_) => TempResourceState::Persisted,
                 Err(failure) => match failure.state() {
-                    PersistFailureState::NotPublished => TempResourceState::Owned,
+                    PersistFailureState::NotPublished => {
+                        TempResourceState::Owned
+                    }
                     PersistFailureState::PublishedSourceRetained => {
                         TempResourceState::CleanupRequired
                     }
-                    PersistFailureState::Indeterminate => TempResourceState::Indeterminate,
+                    PersistFailureState::Indeterminate => {
+                        TempResourceState::Indeterminate
+                    }
                 },
             };
             match result {
@@ -137,7 +154,8 @@ impl AsyncTempFile {
         })
     }
 
-    /// Runs one lifecycle operation while retaining an indeterminate cancellation state.
+    /// Runs one lifecycle operation while retaining an indeterminate
+    /// cancellation state.
     fn lifecycle<'a, F>(
         &'a mut self,
         message: &'static str,
@@ -145,7 +163,11 @@ impl AsyncTempFile {
         call: F,
     ) -> SpiFuture<'a, FsResult<()>>
     where
-        F: FnOnce(Pin<&'a mut dyn AsyncTempResourceSpi>) -> SpiFuture<'a, FsResult<()>> + Send + 'a,
+        F: FnOnce(
+                Pin<&'a mut dyn AsyncTempResourceSpi>,
+            ) -> SpiFuture<'a, FsResult<()>>
+            + Send
+            + 'a,
     {
         if !matches!(
             self.state,
@@ -159,9 +181,13 @@ impl AsyncTempFile {
             self.state = TempResourceState::Indeterminate;
             let result = call(self.session.as_mut()).await;
             self.state = match (operation, &result) {
-                (FsOperation::CleanupTemp, Ok(())) => TempResourceState::Cleaned,
+                (FsOperation::CleanupTemp, Ok(())) => {
+                    TempResourceState::Cleaned
+                }
                 (FsOperation::KeepTemp, Ok(())) => TempResourceState::Kept,
-                (_, Err(error)) if error.kind() == FsErrorKind::Indeterminate => {
+                (_, Err(error))
+                    if error.kind() == FsErrorKind::Indeterminate =>
+                {
                     TempResourceState::Indeterminate
                 }
                 (FsOperation::KeepTemp, Err(_)) => previous_state,
@@ -173,7 +199,8 @@ impl AsyncTempFile {
 
     /// Builds an invalid-state error for this handle.
     fn invalid_state(&self, operation: FsOperation, message: &str) -> FsError {
-        FsError::new(FsErrorKind::InvalidState, operation, message).with_path(self.path.clone())
+        FsError::new(FsErrorKind::InvalidState, operation, message)
+            .with_path(self.path.clone())
     }
 }
 

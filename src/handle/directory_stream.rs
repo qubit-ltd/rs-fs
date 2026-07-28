@@ -8,10 +8,21 @@
 // qubit-style: allow source-test-pair
 //! Concrete synchronous directory stream handle.
 
-use std::fmt::{Debug, Formatter, Result as FmtResult};
+use std::fmt::{
+    Debug,
+    Formatter,
+    Result as FmtResult,
+};
 
 use crate::spi::DirectoryStreamSpi;
-use crate::{DirEntry, FsError, FsErrorKind, FsOperation, FsResult, Path};
+use crate::{
+    DirEntry,
+    FsError,
+    FsErrorKind,
+    FsOperation,
+    FsResult,
+    Path,
+};
 
 /// Type-erased synchronous directory enumeration handle.
 pub struct DirectoryStream {
@@ -30,7 +41,10 @@ impl DirectoryStream {
     /// A concrete type-erased directory stream.
     #[inline]
     #[must_use]
-    pub(crate) fn new(root: Path, session: Box<dyn DirectoryStreamSpi>) -> Self {
+    pub(crate) fn new(
+        root: Path,
+        session: Box<dyn DirectoryStreamSpi>,
+    ) -> Self {
         Self {
             session,
             root,
@@ -55,7 +69,9 @@ impl DirectoryStream {
             ));
         }
         match self.session.next_entry() {
-            Ok(Some(entry)) if is_within(&self.root, &entry.path) => Ok(Some(entry)),
+            Ok(Some(entry)) if is_within(&self.root, &entry.path) => {
+                Ok(Some(entry))
+            }
             Ok(Some(_)) => {
                 self.terminal = true;
                 Err(FsError::new(
@@ -82,7 +98,8 @@ fn is_within(root: &Path, entry: &Path) -> bool {
     root == entry
         || (entry.as_str().starts_with(root.as_str())
             && (root.as_str() == "/"
-                || entry.as_str().as_bytes().get(root.as_str().len()) == Some(&b'/')))
+                || entry.as_str().as_bytes().get(root.as_str().len())
+                    == Some(&b'/')))
 }
 
 impl Debug for DirectoryStream {

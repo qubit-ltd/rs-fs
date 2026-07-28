@@ -7,9 +7,17 @@
 // =============================================================================
 //! SPI failure state tests.
 
-use qubit_fs::spi::{SpiCopyFailure, SpiRenameFailure};
+use qubit_fs::spi::{
+    SpiCopyFailure,
+    SpiRenameFailure,
+};
 use qubit_fs::{
-    CopyFailureState, CopyStats, FsError, FsErrorKind, FsOperation, RenameFailureState,
+    CopyFailureState,
+    CopyStats,
+    FsError,
+    FsErrorKind,
+    FsOperation,
+    RenameFailureState,
 };
 
 /// Verifies provider copy failures retain typed recovery state and statistics.

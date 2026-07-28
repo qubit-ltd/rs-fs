@@ -6,14 +6,24 @@
 //! External fallback failures and cancellation behavior for asynchronous copy.
 
 use qubit_fs::{
-    AchievedAtomicity, AsyncCopyOperationState, AtomicityRequirement, CopyFailureState,
-    CopyOptions, FsErrorKind, Path,
+    AchievedAtomicity,
+    AsyncCopyOperationState,
+    AtomicityRequirement,
+    CopyFailureState,
+    CopyOptions,
+    FsErrorKind,
+    Path,
 };
 
 use crate::async_recording_spi::{
-    AsyncCopyStage, AsyncRecordingConfig, async_recording_file_system,
+    AsyncCopyStage,
+    AsyncRecordingConfig,
+    async_recording_file_system,
 };
-use crate::poll_support::{assert_pending, ready};
+use crate::poll_support::{
+    assert_pending,
+    ready,
+};
 
 /// Returns a stable absolute path for copy scenarios.
 fn path(value: &str) -> Path {
@@ -29,14 +39,20 @@ fn test_async_stream_fallback_failures_retain_recovery_writer() {
         AsyncCopyStage::WriterFlush,
         AsyncCopyStage::WriterCommit,
     ] {
-        let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
-            failing_stage: Some(stage),
-            ..AsyncRecordingConfig::default()
-        });
+        let (file_system, _) =
+            async_recording_file_system(AsyncRecordingConfig {
+                failing_stage: Some(stage),
+                ..AsyncRecordingConfig::default()
+            });
         let mut operation = file_system
-            .begin_copy(path("/source"), path("/target"), CopyOptions::default())
+            .begin_copy(
+                path("/source"),
+                path("/target"),
+                CopyOptions::default(),
+            )
             .expect("preflight should succeed");
-        let failure = ready(operation.execute()).expect_err("injected stage should fail");
+        let failure =
+            ready(operation.execute()).expect_err("injected stage should fail");
         assert_eq!(CopyFailureState::PartiallyPublished, failure.state());
         assert_eq!(FsErrorKind::Io, failure.error().kind());
         assert!(
@@ -44,7 +60,9 @@ fn test_async_stream_fallback_failures_retain_recovery_writer() {
             "{stage:?} should retain writer"
         );
         assert_eq!(
-            AsyncCopyOperationState::Failed(CopyFailureState::PartiallyPublished),
+            AsyncCopyOperationState::Failed(
+                CopyFailureState::PartiallyPublished
+            ),
             operation.state()
         );
     }
@@ -59,12 +77,17 @@ fn test_async_stream_fallback_cancellation_is_indeterminate_with_recovery() {
         AsyncCopyStage::WriterFlush,
         AsyncCopyStage::WriterCommit,
     ] {
-        let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig {
-            pending_stage: Some(stage),
-            ..AsyncRecordingConfig::default()
-        });
+        let (file_system, probe) =
+            async_recording_file_system(AsyncRecordingConfig {
+                pending_stage: Some(stage),
+                ..AsyncRecordingConfig::default()
+            });
         let mut operation = file_system
-            .begin_copy(path("/source"), path("/target"), CopyOptions::default())
+            .begin_copy(
+                path("/source"),
+                path("/target"),
+                CopyOptions::default(),
+            )
             .expect("preflight should succeed");
         let mut future = Box::pin(operation.execute());
         assert_pending(future.as_mut());
@@ -89,11 +112,13 @@ fn test_async_stream_fallback_cancellation_is_indeterminate_with_recovery() {
 
 /// Covers cancellation before fallback has allocated a writer.
 #[test]
-fn test_async_native_copy_cancellation_is_indeterminate_without_recovery_writer() {
-    let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig {
-        pending_stage: Some(AsyncCopyStage::TryCopy),
-        ..AsyncRecordingConfig::default()
-    });
+fn test_async_native_copy_cancellation_is_indeterminate_without_recovery_writer()
+ {
+    let (file_system, probe) =
+        async_recording_file_system(AsyncRecordingConfig {
+            pending_stage: Some(AsyncCopyStage::TryCopy),
+            ..AsyncRecordingConfig::default()
+        });
     let mut operation = file_system
         .begin_copy(path("/source"), path("/target"), CopyOptions::default())
         .expect("preflight should succeed");
@@ -113,7 +138,8 @@ fn test_async_native_copy_cancellation_is_indeterminate_without_recovery_writer(
 /// Verifies an unpolled execute future has no state or provider-I/O effect.
 #[test]
 fn test_dropping_unpolled_execute_future_keeps_operation_ready() {
-    let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig::default());
+    let (file_system, probe) =
+        async_recording_file_system(AsyncRecordingConfig::default());
     let mut operation = file_system
         .begin_copy(path("/source"), path("/target"), CopyOptions::default())
         .expect("preflight should succeed");
@@ -140,7 +166,8 @@ fn test_async_completed_copy_rechecks_required_atomicity() {
             },
         )
         .expect("preflight should succeed");
-    let failure = ready(operation.execute()).expect_err("downgraded completed copy must fail");
+    let failure = ready(operation.execute())
+        .expect_err("downgraded completed copy must fail");
     assert_eq!(
         FsErrorKind::ProviderContractViolation,
         failure.error().kind()
@@ -148,13 +175,15 @@ fn test_async_completed_copy_rechecks_required_atomicity() {
     assert_eq!(CopyFailureState::Published, failure.state());
 }
 
-/// Taking and dropping recovery invokes only the writer's local cancellation hook.
+/// Taking and dropping recovery invokes only the writer's local cancellation
+/// hook.
 #[test]
 fn test_async_recovery_writer_drop_uses_local_cancellation() {
-    let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig {
-        failing_stage: Some(AsyncCopyStage::WriterFlush),
-        ..AsyncRecordingConfig::default()
-    });
+    let (file_system, probe) =
+        async_recording_file_system(AsyncRecordingConfig {
+            failing_stage: Some(AsyncCopyStage::WriterFlush),
+            ..AsyncRecordingConfig::default()
+        });
     let mut operation = file_system
         .begin_copy(path("/source"), path("/target"), CopyOptions::default())
         .expect("preflight should succeed");

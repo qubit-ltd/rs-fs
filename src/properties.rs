@@ -1,8 +1,15 @@
 //! Immutable filesystem property snapshots used by facades.
 
 use crate::{
-    FileSystemCapabilities, FileSystemInfo, FileSystemLimits, FsError, FsErrorKind, FsOperation,
-    FsResult, Path, PathSemantics,
+    FileSystemCapabilities,
+    FileSystemInfo,
+    FileSystemLimits,
+    FsError,
+    FsErrorKind,
+    FsOperation,
+    FsResult,
+    Path,
+    PathSemantics,
 };
 
 /// Permitted absolute or relative form for paths accepted by a filesystem.
@@ -132,7 +139,8 @@ impl FileSystemProperties {
         &self.path_constraints
     }
 
-    /// Defensively validates a provider-supplied snapshot at the facade boundary.
+    /// Defensively validates a provider-supplied snapshot at the facade
+    /// boundary.
     ///
     /// Returns an invalid-options error when the snapshot violates core value
     /// invariants. It performs no I/O and is intentionally crate-private.
@@ -144,7 +152,9 @@ impl FileSystemProperties {
                 "provider id must be non-empty and contain no controls",
             ));
         }
-        if let Some((_capability, _dependency)) = self.capabilities.missing_dependency() {
+        if let Some((_capability, _dependency)) =
+            self.capabilities.missing_dependency()
+        {
             return Err(invalid_properties(
                 "advertised capability dependency is missing",
             ));

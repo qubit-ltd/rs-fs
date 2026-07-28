@@ -7,8 +7,15 @@
 // =============================================================================
 //! Typed facade rename failure.
 
-use crate::{FsError, RenameFailureState};
-use std::fmt::{Debug, Formatter, Result as FmtResult};
+use crate::{
+    FsError,
+    RenameFailureState,
+};
+use std::fmt::{
+    Debug,
+    Formatter,
+    Result as FmtResult,
+};
 
 /// A rename failure that preserves the provider's publication-state fact.
 pub struct RenameFailure {

@@ -8,7 +8,11 @@
 //! Delete operation options.
 
 use crate::{
-    FileSystemCapabilities, FileSystemCapability, FsError, FsErrorKind, FsOperation,
+    FileSystemCapabilities,
+    FileSystemCapability,
+    FsError,
+    FsErrorKind,
+    FsOperation,
     ResourceVersion,
 };
 
@@ -30,8 +34,13 @@ impl DeleteOptions {
     ///
     /// Returns [`FsErrorKind::RequirementNotMet`] with the exact missing
     /// recursive or conditional-delete capability.
-    pub fn validate_against(&self, capabilities: FileSystemCapabilities) -> Result<(), FsError> {
-        if self.recursive && !capabilities.contains(FileSystemCapability::RecursiveDelete) {
+    pub fn validate_against(
+        &self,
+        capabilities: FileSystemCapabilities,
+    ) -> Result<(), FsError> {
+        if self.recursive
+            && !capabilities.contains(FileSystemCapability::RecursiveDelete)
+        {
             return Err(missing_requirement(
                 FileSystemCapability::RecursiveDelete,
                 "recursive deletion is required but not guaranteed",
@@ -50,7 +59,10 @@ impl DeleteOptions {
 }
 
 /// Builds a typed unmet delete requirement.
-fn missing_requirement(capability: FileSystemCapability, message: &str) -> FsError {
+fn missing_requirement(
+    capability: FileSystemCapability,
+    message: &str,
+) -> FsError {
     FsError::new(FsErrorKind::RequirementNotMet, FsOperation::Delete, message)
         .with_required_capability(capability)
 }

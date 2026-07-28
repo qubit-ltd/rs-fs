@@ -7,11 +7,18 @@
 // =============================================================================
 //! Filesystem capability guarantees.
 
-use std::fmt::{Debug, Formatter, Result as FmtResult};
+use std::fmt::{
+    Debug,
+    Formatter,
+    Result as FmtResult,
+};
 
 use crate::FileSystemCapability;
 
-const CAPABILITY_DEPENDENCIES: &[(FileSystemCapability, FileSystemCapability)] = &[
+const CAPABILITY_DEPENDENCIES: &[(
+    FileSystemCapability,
+    FileSystemCapability,
+)] = &[
     (FileSystemCapability::RangeRead, FileSystemCapability::Read),
     (
         FileSystemCapability::ConditionalRead,
@@ -121,13 +128,14 @@ impl FileSystemCapabilities {
     /// base capability. The returned pair contains the derived capability
     /// followed by the missing base capability.
     #[must_use]
-    pub fn missing_dependency(&self) -> Option<(FileSystemCapability, FileSystemCapability)> {
-        CAPABILITY_DEPENDENCIES
-            .iter()
-            .copied()
-            .find(|(capability, dependency)| {
+    pub fn missing_dependency(
+        &self,
+    ) -> Option<(FileSystemCapability, FileSystemCapability)> {
+        CAPABILITY_DEPENDENCIES.iter().copied().find(
+            |(capability, dependency)| {
                 self.contains(*capability) && !self.contains(*dependency)
-            })
+            },
+        )
     }
 }
 

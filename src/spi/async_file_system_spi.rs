@@ -9,16 +9,43 @@ use std::future::Future;
 use std::pin::Pin;
 
 use crate::{
-    AsyncDirectoryStream, AsyncFileReader, AsyncFileWriter, AtomicityRequirement, CopyFailureState,
-    CopyStats, CreateDirectoryOutcome, DeleteOutcome, FileMetadata, FileSystemProperties, FsError,
-    FsResult, OpenedFileInfo, PersistOptions, RenameFailureState, RenameOutcome,
+    AsyncDirectoryStream,
+    AsyncFileReader,
+    AsyncFileWriter,
+    AtomicityRequirement,
+    CopyFailureState,
+    CopyStats,
+    CreateDirectoryOutcome,
+    DeleteOutcome,
+    FileMetadata,
+    FileSystemProperties,
+    FsError,
+    FsResult,
+    OpenedFileInfo,
+    PersistOptions,
+    RenameFailureState,
+    RenameOutcome,
 };
 
 use super::{
-    AsyncDirectoryStreamSession, AsyncFileWriteSession, CopyAttempt, CopyDeclineReason,
-    CopyRequest, CreateDirectoryRequest, CreateTempDirectoryRequest, CreateTempFileRequest,
-    DeleteDirectoryRequest, DeleteFileRequest, ListRequest, OpenReaderRequest, OpenWriterRequest,
-    RenameRequest, SpiCopyFailure, SpiRenameFailure, StatRequest, StatResponse,
+    AsyncDirectoryStreamSession,
+    AsyncFileWriteSession,
+    CopyAttempt,
+    CopyDeclineReason,
+    CopyRequest,
+    CreateDirectoryRequest,
+    CreateTempDirectoryRequest,
+    CreateTempFileRequest,
+    DeleteDirectoryRequest,
+    DeleteFileRequest,
+    ListRequest,
+    OpenReaderRequest,
+    OpenWriterRequest,
+    RenameRequest,
+    SpiCopyFailure,
+    SpiRenameFailure,
+    StatRequest,
+    StatResponse,
 };
 
 /// Runtime-neutral boxed future used by asynchronous providers.
@@ -57,7 +84,10 @@ pub struct OpenedAsyncWriter {
 impl OpenedAsyncWriter {
     /// Wraps an opened provider writer session and its validated identity.
     #[must_use]
-    pub fn new(info: OpenedFileInfo, session: Box<dyn AsyncFileWriteSession>) -> Self {
+    pub fn new(
+        info: OpenedFileInfo,
+        session: Box<dyn AsyncFileWriteSession>,
+    ) -> Self {
         Self { info, session }
     }
 
@@ -68,7 +98,10 @@ impl OpenedAsyncWriter {
     }
 
     /// Transfers the validated writer into the facade handle.
-    pub(crate) fn into_writer(self, atomicity: AtomicityRequirement) -> AsyncFileWriter {
+    pub(crate) fn into_writer(
+        self,
+        atomicity: AtomicityRequirement,
+    ) -> AsyncFileWriter {
         AsyncFileWriter::new(self.info, self.session, atomicity)
     }
 }
@@ -100,7 +133,10 @@ pub struct OpenedAsyncTempFile {
 impl OpenedAsyncTempFile {
     /// Wraps an asynchronous temporary-file handle.
     #[must_use]
-    pub fn new(info: OpenedFileInfo, session: Box<dyn AsyncTempResourceSpi>) -> Self {
+    pub fn new(
+        info: OpenedFileInfo,
+        session: Box<dyn AsyncTempResourceSpi>,
+    ) -> Self {
         Self { info, session }
     }
 
@@ -111,7 +147,9 @@ impl OpenedAsyncTempFile {
     }
 
     /// Transfers the provider session into the facade handle.
-    pub(crate) fn into_parts(self) -> (OpenedFileInfo, Box<dyn AsyncTempResourceSpi>) {
+    pub(crate) fn into_parts(
+        self,
+    ) -> (OpenedFileInfo, Box<dyn AsyncTempResourceSpi>) {
         (self.info, self.session)
     }
 }
@@ -125,7 +163,10 @@ pub struct OpenedAsyncTempDirectory {
 impl OpenedAsyncTempDirectory {
     /// Wraps an asynchronous temporary-directory handle.
     #[must_use]
-    pub fn new(info: OpenedFileInfo, session: Box<dyn AsyncTempResourceSpi>) -> Self {
+    pub fn new(
+        info: OpenedFileInfo,
+        session: Box<dyn AsyncTempResourceSpi>,
+    ) -> Self {
         Self { info, session }
     }
 
@@ -136,7 +177,9 @@ impl OpenedAsyncTempDirectory {
     }
 
     /// Transfers the provider session into the facade handle.
-    pub(crate) fn into_parts(self) -> (OpenedFileInfo, Box<dyn AsyncTempResourceSpi>) {
+    pub(crate) fn into_parts(
+        self,
+    ) -> (OpenedFileInfo, Box<dyn AsyncTempResourceSpi>) {
         (self.info, self.session)
     }
 }
@@ -159,11 +202,15 @@ pub trait AsyncTempResourceSpi: Send {
 
 /// Object-safe asynchronous provider implementation contract.
 pub trait AsyncFileSystemSpi: Send + Sync {
-    /// Returns one immutable provider property snapshot without asynchronous I/O.
+    /// Returns one immutable provider property snapshot without asynchronous
+    /// I/O.
     fn properties(&self) -> FileSystemProperties;
 
     /// Asynchronously reads metadata for a validated request.
-    fn stat<'a>(&'a self, request: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>>;
+    fn stat<'a>(
+        &'a self,
+        request: StatRequest<'a>,
+    ) -> SpiFuture<'a, FsResult<StatResponse>>;
 
     /// Asynchronously opens a directory stream.
     fn list<'a>(
@@ -206,7 +253,9 @@ pub trait AsyncFileSystemSpi: Send + Sync {
         &'a self,
         _request: CopyRequest<'a>,
     ) -> SpiFuture<'a, Result<CopyAttempt, SpiCopyFailure>> {
-        Box::pin(async { Ok(CopyAttempt::Declined(CopyDeclineReason::NotImplemented)) })
+        Box::pin(async {
+            Ok(CopyAttempt::Declined(CopyDeclineReason::NotImplemented))
+        })
     }
 
     /// Asynchronously renames a resource.

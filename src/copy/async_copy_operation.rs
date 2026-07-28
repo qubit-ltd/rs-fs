@@ -7,11 +7,22 @@
 
 use crate::spi::ResolvedCopyOptions;
 use crate::{
-    AsyncCopyFailure, AsyncCopyOperationState, AsyncFileSystem, AsyncFileWriter, CopyFailureState,
-    CopyOptions, CopyOutcome, CopyStats, FsError, FsErrorKind, FsOperation, Path,
+    AsyncCopyFailure,
+    AsyncCopyOperationState,
+    AsyncFileSystem,
+    AsyncFileWriter,
+    CopyFailureState,
+    CopyOptions,
+    CopyOutcome,
+    CopyStats,
+    FsError,
+    FsErrorKind,
+    FsOperation,
+    Path,
 };
 
-/// An owning copy request whose recovery writer remains accessible after failure.
+/// An owning copy request whose recovery writer remains accessible after
+/// failure.
 pub struct AsyncCopyOperation {
     pub(crate) file_system: AsyncFileSystem,
     source: Path,
@@ -99,14 +110,16 @@ impl AsyncCopyOperation {
     }
 }
 
-/// Marks a polled operation indeterminate if cancellation interrupts provider I/O.
+/// Marks a polled operation indeterminate if cancellation interrupts provider
+/// I/O.
 struct CopyCancellationGuard<'a> {
     state: &'a mut AsyncCopyOperationState,
     finished: bool,
 }
 
 impl<'a> CopyCancellationGuard<'a> {
-    /// Starts tracking cancellation immediately before the first provider await.
+    /// Starts tracking cancellation immediately before the first provider
+    /// await.
     fn start(state: &'a mut AsyncCopyOperationState) -> Self {
         *state = AsyncCopyOperationState::Running;
         Self {
@@ -129,7 +142,9 @@ impl Drop for CopyCancellationGuard<'_> {
     /// Records only local state; drop never calls a provider.
     fn drop(&mut self) {
         if !self.finished && *self.state == AsyncCopyOperationState::Running {
-            *self.state = AsyncCopyOperationState::Failed(CopyFailureState::Indeterminate);
+            *self.state = AsyncCopyOperationState::Failed(
+                CopyFailureState::Indeterminate,
+            );
         }
     }
 }

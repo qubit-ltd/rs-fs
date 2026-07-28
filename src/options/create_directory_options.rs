@@ -7,7 +7,10 @@
 // =============================================================================
 //! Directory creation options.
 
-use crate::{NonSensitiveMetadata, UserMetadata};
+use crate::{
+    NonSensitiveMetadata,
+    UserMetadata,
+};
 
 /// Options controlling directory or collection creation.
 #[derive(Clone, Debug, PartialEq)]

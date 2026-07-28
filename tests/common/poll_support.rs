@@ -7,7 +7,10 @@
 
 use std::future::Future;
 use std::pin::Pin;
-use std::task::{Context, Waker};
+use std::task::{
+    Context,
+    Waker,
+};
 
 /// Polls a future that is expected to complete without scheduling work.
 pub(crate) fn ready<F>(future: F) -> F::Output
@@ -18,7 +21,9 @@ where
     let mut future = std::pin::pin!(future);
     match future.as_mut().poll(&mut context) {
         std::task::Poll::Ready(output) => output,
-        std::task::Poll::Pending => panic!("test future should be immediately ready"),
+        std::task::Poll::Pending => {
+            panic!("test future should be immediately ready")
+        }
     }
 }
 

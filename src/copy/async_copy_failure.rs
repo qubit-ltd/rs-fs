@@ -5,9 +5,18 @@
 // =============================================================================
 //! Recoverable failure returned by an asynchronous copy operation.
 
-use std::fmt::{Debug, Formatter, Result as FmtResult};
+use std::fmt::{
+    Debug,
+    Formatter,
+    Result as FmtResult,
+};
 
-use crate::{AsyncFileWriter, CopyFailureState, CopyStats, FsError};
+use crate::{
+    AsyncFileWriter,
+    CopyFailureState,
+    CopyStats,
+    FsError,
+};
 
 /// Copy failure facts and an optional writer retained by the operation.
 pub struct AsyncCopyFailure {

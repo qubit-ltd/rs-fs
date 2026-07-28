@@ -1,6 +1,7 @@
 #[test]
 fn test_write_all_success_publishes_writer() {
-    let (filesystem, _, _) = crate::handle_support::filesystem(false, Vec::new());
+    let (filesystem, _, _) =
+        crate::handle_support::filesystem(false, Vec::new());
     let outcome = filesystem
         .write_all(
             &qubit_fs::Path::parse("/target").expect("path should parse"),

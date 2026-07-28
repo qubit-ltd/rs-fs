@@ -14,7 +14,8 @@ pub struct CreateDirectoryOutcome {
 }
 
 impl CreateDirectoryOutcome {
-    /// Creates an outcome. `already_existed` reports an accepted existing directory.
+    /// Creates an outcome. `already_existed` reports an accepted existing
+    /// directory.
     #[must_use]
     pub const fn new(already_existed: bool) -> Self {
         Self { already_existed }
