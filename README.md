@@ -1,150 +1,40 @@
 # Qubit FS
 
-[![Rust CI](https://github.com/qubit-ltd/rs-fs/actions/workflows/ci.yml/badge.svg)](https://github.com/qubit-ltd/rs-fs/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/endpoint?url=https://qubit-ltd.github.io/rs-fs/coverage-badge.json)](https://qubit-ltd.github.io/rs-fs/coverage/)
-[![Crates.io](https://img.shields.io/crates/v/qubit-fs.svg?color=blue)](https://crates.io/crates/qubit-fs)
-[![Rust](https://img.shields.io/badge/rust-1.94+-blue.svg?logo=rust)](https://www.rust-lang.org)
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![中文文档](https://img.shields.io/badge/文档-中文版-blue.svg)](README.zh_CN.md)
-
-Qubit FS is a provider-neutral filesystem abstraction for local, remote, cloud,
-distributed, and virtual storage backends.
-
-The crate defines contracts rather than a concrete backend:
-
-- `FileSystemProperties` exposes construction-time, non-I/O information;
-- `FileSystem` provides synchronous operations;
-- `AsyncFileSystem` provides runtime-neutral asynchronous operations;
-- `FileSystemExt` and `AsyncFileSystemExt` provide whole-resource helpers that
-  require an explicit caller byte budget;
-- directory stream helpers require an explicit maximum entry count before
-  collecting an enumeration into memory;
-- file handles use `qubit_io::Input` / `Output` and
-  `AsyncInput` / `AsyncOutput`;
-- `FsUri` locates a resource while `FsPath` represents the provider-decoded
-  path inside one configured filesystem;
-- typed capabilities, requirements, outcomes, and errors preserve semantic
-  differences between POSIX filesystems, object stores, cloud drives, and
-  distributed filesystems;
-- `FileResource` and `AsyncFileResource` bind a provider-neutral path to a
-  filesystem without depending on provider discovery.
-
-No local or remote provider is built into this crate. Applications assemble
-backend crates at startup. Runtime provider discovery and SPI integration live
-in the separate `qubit-fs-registry` crate, keeping this core's normal
-dependency graph limited to `qubit-io`.
-
-## Installation
+Qubit FS is a provider-neutral filesystem abstraction. Applications use the concrete
+`FileSystem` and `AsyncFileSystem` facades; providers implement contracts only in
+the `qubit_fs::spi` namespace. Provider discovery and configuration belong to
+[`qubit-fs-registry`](https://crates.io/crates/qubit-fs-registry).
 
 ```toml
 [dependencies]
 qubit-fs = "0.2"
 ```
 
-## Bound Resources
+## Application API
 
-```rust
-use std::sync::Arc;
+Create a concrete facade from a provider SPI, then address logical resources with `Path`.
 
-use qubit_fs::{
-    FileResource,
-    FileSystem,
-    FsPath,
-    FsResult,
-};
+```rust,ignore
+use qubit_fs::{FileSystem, Path, ReadOptions};
+use qubit_fs::spi::FileSystemSpi;
 
-fn bind_report(
-    filesystem: Arc<dyn FileSystem>,
-) -> FsResult<FileResource> {
-    let path = FsPath::parse("/reports/2026/summary.csv")?;
-    Ok(FileResource::new(filesystem, path))
+fn read_metadata<S: FileSystemSpi + 'static>(provider: S) -> qubit_fs::FsResult<()> {
+    let filesystem = FileSystem::from_spi(provider)?;
+    let path = Path::parse("/reports/2026/summary.csv")?;
+    let _metadata = filesystem.stat(&path)?;
+    let _reader = filesystem.open_reader(&path, ReadOptions::default())?;
+    Ok(())
 }
 ```
 
-`AsyncFileResource` provides the corresponding runtime-neutral asynchronous
-binding. Applications that need runtime provider discovery, configuration, or
-credential references should additionally depend on
-[`qubit-fs-registry`](https://crates.io/crates/qubit-fs-registry); its README
-contains synchronous and asynchronous registration examples.
+Copy and rename report typed failures and preserve recovery state. Writers and temporary
+handles retain explicit `abort`, `cleanup`, `keep`, or `persist` lifecycle operations after
+recoverable failures. `AsyncFileSystem::begin_copy` returns an `AsyncCopyOperation`; poll its
+execution future with the application's runtime and inspect its state after cancellation.
 
-## Semantic Guarantees
-
-`AtomicityRequirement::Required` is a contract: a provider must reject an
-unsupported guarantee before side effects, never silently downgrade it.
-Successful write, rename, copy, and temporary-persist operations report the
-atomicity and concrete publication method actually achieved.
-
-Writers and temporary handles retain their provider sessions after recoverable
-failures. Temporary persistence additionally reports
-`PersistFailureState::{NotPublished, PublishedSourceRetained, Indeterminate}`
-so callers can distinguish retry, cleanup, and reconciliation paths.
-
-`FsUri` preserves the raw encoded path, ordered duplicate query pairs, and the
-difference between `scheme:/path` and `scheme:///path`. Providers own URI-path
-decoding. Literal path characters that require escaping must already be percent
-encoded. Passwords, tokens, and other credential-like values are rejected from
-URIs. `UserMetadata` rejects credential-like keys while it is constructed and
-its `Debug` output prints keys only. Registry-specific credentials are modeled
-by `qubit_fs_registry::CredentialRef`; the core crate never carries them.
-
-`stat` is a required filesystem operation rather than an optional capability;
-it inspects the final path entry without following a final symbolic link.
-`FileSystemCapabilities` therefore contains only optional guarantees, while
-`FileSystemProperties::limits()` returns the provider's stable
-`FileSystemLimits` snapshot. Every limit uses `FileSystemLimit` to distinguish
-`Unknown`, `NotApplicable`, `Unbounded`, and an inclusive `Maximum(n)`.
-Providers remain responsible for enforcing their declared finite limits on
-direct operations; bound resources and whole-resource helpers preflight limits
-when the request size or canonical path is already known.
-`ListOptions::page_size` is a hint that bound resources and direct providers
-clamp to a finite `max_list_page_entries` before provider I/O.
-
-## Bounded Aggregation
-
-Whole-resource and whole-enumeration helpers never choose an implicit memory
-limit. The caller supplies a budget for each operation:
-
-```rust,ignore
-let bytes = resource.read_all(8 * 1024 * 1024)?;
-let entries = resource
-    .list(ListOptions::default())?
-    .collect_entries(10_000)?;
-```
-
-An exact-size result succeeds. If a minimal probe confirms additional bytes or
-entries, the helper returns `FsErrorKind::ResourceLimitExceeded`. Provider
-storage capacity and account quota failures remain `FsErrorKind::QuotaExceeded`.
-
-## Native Path Text Encoding
-
-`FsPath`, `FsName`, and `RelativeFsPath` store canonical UTF-8 path text. This
-is a lossless representation of a provider's native path string, not a claim
-that every provider natively uses UTF-8 and never a lossy display conversion.
-Ordinary Unicode is kept readable; a literal `%`, controls, and opaque bytes
-use uppercase `%XX` escapes.
-
-| Native value or bytes | Canonical path text |
-| --- | --- |
-| `report-中文.txt` | `report-中文.txt` |
-| `100%` | `100%25` |
-| `66 6F 80 6F` | `fo%80o` |
-| `line<LF>break` | `line%0Abreak` |
-| Windows lone surrogate `D800` | `%ED%A0%80` |
-
-`NativePathCodec` converts only this string representation. It does not split
-components, interpret roots or separators, normalize dot segments, decode URI
-syntax, or perform I/O. Hierarchical providers must convert component by
-component and reject decoded native separators, roots, or prefixes. Use
-`OsStrPathCodec` for local native `OsStr` values,
-`Utf8PathCodec` for protocols that guarantee strict UTF-8 bytes, and
-`EscapedBytePathCodec` for opaque byte-oriented protocols such as compatible
-SFTP or NFS servers. All three are zero-sized, standard-library-only codecs.
-
-Canonical spelling is required: raw `%`, malformed escapes, lowercase hex, and
-over-escaped ordinary Unicode are rejected. This gives one textual identity for
-each native path and makes `Eq`/`Hash` safe for registry and cache keys. URI
-percent encoding remains a separate layer: a canonical native path fragment
-`%25` becomes `%2525` when encoded as a URI path component.
+`Uri` and `ConnectionUri` preserve URI syntax while rejecting credential-bearing fields.
+`UserMetadata` likewise rejects credential-like keys. `FileSystemProperties` is an immutable,
+non-I/O snapshot with capabilities, limits, and logical-path constraints.
 
 ## Documentation
 
@@ -156,34 +46,8 @@ percent encoding remains a separate layer: a canonical native path fragment
 ## Testing
 
 ```bash
-# Run tests with the default feature set
-cargo test
-
-# Run tests with all declared features
 cargo test --all-features
-
-# Project CI checks
-./ci-check.sh
-
-# Check code coverage
-./coverage.sh
+cargo clippy --all-targets --all-features -- -D warnings
 ```
 
-## License
-
-Copyright (c) 2025 - 2026. Haixing Hu. All rights reserved.
-
-Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for the
-full license text.
-
-## Contributing
-
-Contributions are welcome. Please follow the Rust API guidelines, keep public
-API documentation and tests current, and run `./align-ci.sh` to format code and
-`./ci-check.sh` to satisfy CI requirements before submitting a pull request.
-
-## Author
-
-**Haixing Hu** - *Qubit Co. Ltd.*
-
-Repository: [https://github.com/qubit-ltd/rs-fs](https://github.com/qubit-ltd/rs-fs)
+Licensed under Apache License 2.0. See [LICENSE](LICENSE).

@@ -14,8 +14,9 @@
 2. provider 只实现最小操作 SPI，不重复实现公共校验与资源状态机；
 3. capability、limit、requirement、outcome 和 error 明确表达 provider 差异；
 4. 强语义无法满足时必须失败，不能静默降级；
-5. URI、凭据、临时资源、提交和部分成功具有明确安全边界；
-6. 同步与异步 API 形态一致，但核心不绑定异步 runtime；
+5. URI、凭据入口、临时资源、提交和部分成功具有明确安全边界；
+6. 同步与异步 API 语义一致；异步取消需要保留恢复状态时允许使用显式 operation
+   handle，核心不绑定异步 runtime；
 7. provider 可独立发布和注册，不修改核心 crate；
 8. 所有公共工具能力都由具体类型的固有方法或关联方法组织，不增加 public free
    function。
@@ -26,7 +27,7 @@
 - 在核心层实现本地平台算法；
 - 把 object key 强制解释成目录路径；
 - 为 provider 猜测临时 namespace、权限或 publication 策略；
-- 在 URI、metadata、错误显示或调试输出中携带 secret；
+- 让 secret 进入 canonical `Uri`、metadata、错误显示或调试输出；
 - 让应用直接调用 provider SPI；
 - 为同步和异步 API 构造一个带模式开关的统一 trait；
 - 绑定 Tokio、`futures-io` 或某个 executor。
@@ -39,7 +40,7 @@
   ▼
 qubit-fs
   ├─ FileSystem / AsyncFileSystem 具体门面
-  ├─ resource、reader、writer、directory stream、temp handle
+  ├─ reader、writer、directory stream、temp handle
   ├─ path、URI、metadata、options、outcomes、errors
   └─ qubit_fs::spi provider 扩展点
        ▲
@@ -61,7 +62,7 @@ qubit-fs-testkit  ── 通过公开门面验证 provider 契约
 - registry 依赖 `qubit-fs` 和 `qubit-spi`，但不取得 filesystem operation SPI；
 - testkit 只通过公开门面测试 provider，不绕过门面构造 SPI request。
 
-## 3. Provider、configured filesystem 与 resource
+## 3. Provider、configured filesystem 与 handle
 
 ### 3.1 Provider
 
@@ -87,14 +88,16 @@ filesystem。
 `FileSystemInfo::id()` 标识 configured filesystem；
 `FileSystemInfo::provider_id()` 标识创建它的 provider。两者不可混用。
 
-### 3.3 Resource 与 opened handle
+### 3.3 Resolution 与 opened handle
 
-`FileResource` / `AsyncFileResource` 把一个 provider-local `FsPath` 绑定到 owning
-filesystem。Reader、writer、directory stream 和 temporary resource 表示由这个
-filesystem 创建的有状态会话。
+`Path` 只在某个 configured filesystem 的名字空间内有意义，不单独承担跨 filesystem
+定位职责。`qubit-fs` 核心不提供 `FileLocation`、`FileResource` 或
+`AsyncFileResource`；URI resolution 的绑定结果由 registry 的
+`FileSystemResolution` / `AsyncFileSystemResolution` 表达。
 
-Resource 保存门面，不保存裸 SPI；opened handle 保存固定的 `OpenedFileInfo` 和完成
-生命周期所需的公共契约状态。
+Reader、writer、directory stream 和 temporary resource 表示由 configured filesystem
+创建的有状态会话。Opened handle 保存固定的 `OpenedFileInfo`、必要时保存 owning
+filesystem 的克隆，以及完成生命周期所需的公共契约状态；它们不保存裸 SPI getter。
 
 ## 4. URI 与 Path 语义
 
@@ -103,24 +106,30 @@ Resource 保存门面，不保存裸 SPI；opened handle 保存固定的 `Opened
 URI 是跨边界定位及 provider 选择表示；path 是 provider 解码后的内部资源表示：
 
 ```text
-FsUri
-  └─ registry/provider 选择、校验和解码
+ConnectionUri
+  └─ registry/provider 选择、凭据提取、校验和解码
        ├─ FileSystem
-       ├─ FsPath
-       └─ canonical FsUri
+       ├─ Path
+       └─ canonical Uri
 ```
 
 核心层不能提前执行会破坏 provider 语义的解码或规范化。
 
-### 4.2 `FsUri`
+### 4.2 `Uri`
 
-`FsUri` 保留：
+`Uri` 是对经过验证的 RFC 3986 URI 实现的薄领域包装。底层解析器负责通用语法，
+`qubit-fs` 只负责 filesystem 领域约束，并且不把底层第三方 URI 类型暴露到公共 API。
+底层表示必须保留原始词法差异，不采用会重写 path、authority 或 percent-encoding 的
+WHATWG URL 规范化。初始实现使用 `fluent_uri::Uri<String>`；该实现细节可以在不破坏
+`qubit_fs::Uri` 公共 API 的情况下替换。
 
-- 小写且经过语法校验的 `FsScheme`；
-- 可选 `FsAuthority`；
+`Uri` 保留：
+
+- 小写且经过语法校验的 scheme；
+- 可选 authority；
 - authority component 是否出现；
-- 尚未按 provider 语义解码的 `FsUriPath`；
-- decoded、ordered、允许 duplicate key 的非敏感 `FsUriQuery`。
+- 尚未按 provider 语义解码的 raw URI path；
+- ordered、允许 duplicate key 的非敏感 query。
 
 以下表示不可合并：
 
@@ -130,27 +139,41 @@ file:///tmp/a
 object://bucket/a%2Fb
 ```
 
-`FsUriPath` 不解码 `%2F`、不规范化 dot segment、不合并 repeated separator，也不
-推断 hierarchy。
+`Uri` 不解码 `%2F`、不规范化 dot segment、不合并 repeated separator，也不推断
+hierarchy。它的普通 `Display` 可以无损输出 canonical、secret-free URI。
 
 ### 4.3 Credential 边界
 
-URI 和所有可自动显示的 metadata 必须 secret-free：
+URI 输入和长期保存的 canonical URI 使用不同类型：
 
-- authority 禁止 password；
-- query 禁止 password、token、access key、secret key、signed-URL signature 等
-  credential-like key；
-- URI fragment 禁止；
+- `ConnectionUri` 是 registry/configuration ingress，可以接受 authority userinfo
+  中的 password，以及 password、token、access key、secret key、signed-URL
+  signature 等敏感 query；
+- `ConnectionUri` 的 `Display` 和 `Debug` 必须通过 `qubit-redact` 输出脱敏结果；
+- 脱敏直接基于 RFC URI component，不得先转换为可能改写原始表示的
+  `url::Url`；
+- 原始值只能通过名称醒目的显式暴露方法读取，不能依赖 `Display::to_string`；
+- `ConnectionUri` 不实现可静默取得明文的 `Deref<Target = str>`、`AsRef<str>` 或
+  普通 raw getter；
+- `ConnectionUri` 默认不实现普通明文序列化，也不能直接作为 registry cache key；
+- registry/provider 在受控解析过程中提取 credential，并产生 secret-free 的
+  canonical `Uri`；
+- canonical `Uri` 禁止 password 和 credential-like query；provider 只有在确认
+  username 属于非敏感地址身份时才可保留 username；
+- 两种 URI 都禁止 fragment。
+
+其他 secret 边界保持不变：
+
 - `UserMetadata` 拒绝 credential-like key；
 - `NonSensitiveMetadata` 不公开可变 value 入口；
 - `FsError` 的 `Display` 和 `Debug` 不自动展开底层 source error。
 
-完整 secret value 只存在于 registry/provider 的受控配置解析过程，不进入
-`qubit-fs` 值对象。
+完整 secret value 只存在于 `ConnectionUri` 和 registry/provider 的受控配置解析过程，
+不进入 SPI request、canonical `Uri`、公开 handle 或其他 `qubit-fs` 值对象。
 
-### 4.4 `FsPath`
+### 4.4 `Path`
 
-`FsPath` 是 configured filesystem 内的 UTF-8 provider-local path：
+`Path` 是拥有所有权的、configured filesystem 内的 UTF-8 provider-local 逻辑路径：
 
 - hierarchical semantics 使用 normalized parse；
 - object-key 或 provider-specific semantics 使用 literal parse；
@@ -158,11 +181,30 @@ URI 和所有可自动显示的 metadata 必须 secret-free：
 
 安全组合使用：
 
-- `FsName`：单一非空 component；
-- `RelativeFsPath`：非空、normalized、不能是 absolute，且不能逃逸 relative root。
+- `PathComponent`：单一非空 component；
+- `RelativePath`：非空、normalized、不能是 absolute，且不能逃逸 relative root。
 
-Provider 把 URI 或 `FsPath` 转为 native path 时，必须逐 component 转换，并拒绝解码
-后产生平台 separator、root 或 prefix 的 component。
+与 `std::path::Path` 同时使用时，adapter 应通过 `LogicalPath`、`NativePath` 等明确
+别名区分两套类型。
+
+### 4.5 Native path 转换边界
+
+SPI request 和 outcome 只携带逻辑 `Path`，provider-native path 不越过 adapter 边界。
+统一的是转换时机、失败归责和副作用约束，不是所有 provider 的 native path Rust
+类型或编码。
+
+`NativePathCodec` 保留在 `qubit_fs::path`，但只作为 adapter 内部使用的泛型辅助
+契约，通过 associated type 表达 provider-native path；它不出现在 object-safe
+`FileSystemSpi` / `AsyncFileSystemSpi` 方法签名中。对本地文件系统：
+
+- 平台 separator、root、prefix、`OsStr` 和原始字节等转换逻辑位于
+  `qubit-local-files`；
+- `qubit-fs-local` 只实现逻辑 `Path` 与原生层 API 的薄适配，不复制平台算法；
+- URI 或逻辑 path 必须逐 component 转换，并拒绝解码后产生额外 separator、root
+  或 prefix 的 component。
+
+每次多路径操作必须先成功转换全部输入路径，再开始任何 provider I/O 或副作用。
+Provider 返回的 native path 必须在离开 adapter 前解码为逻辑 `Path`。
 
 ## 5. 具体门面
 
@@ -176,6 +218,7 @@ pub struct FileSystemProperties {
     info: FileSystemInfo,
     capabilities: FileSystemCapabilities,
     limits: FileSystemLimits,
+    path_constraints: PathConstraints,
 }
 
 impl FileSystemProperties {
@@ -183,6 +226,7 @@ impl FileSystemProperties {
         info: FileSystemInfo,
         capabilities: FileSystemCapabilities,
         limits: FileSystemLimits,
+        path_constraints: PathConstraints,
     ) -> FsResult<Self>;
 }
 ```
@@ -193,6 +237,8 @@ impl FileSystemProperties {
 - 内容在门面生命周期内稳定；
 - capability 描述当前配置真正保证的能力；
 - unknown、inapplicable、unbounded 和有限 limit 必须明确区分。
+- `PathConstraints` 以稳定数据声明 provider-specific path 限制，门面可在 I/O
+  前统一执行；平台编码算法不进入该值对象。
 
 字段私有，provider 通过 `FileSystemProperties::new` 构造。该方法检查属性内部一致性；
 `FileSystem::from_spi` 在 SPI trust boundary 再次执行防御性校验。
@@ -231,10 +277,30 @@ impl FileSystem {
 - `create_directory`、`delete_file`、`delete_directory`；
 - `copy`、`rename`；
 - `create_temp_file`、`create_temp_directory`；
-- `resource`；
 - `read_all`、`write_all`。
 
 `FileSystemExt` 被删除。
+
+具有类型化部分成功状态的操作不使用普通 `FsResult`：
+
+```rust
+pub fn copy(
+    &self,
+    source: &Path,
+    target: &Path,
+    options: CopyOptions,
+) -> Result<CopyOutcome, CopyFailure>;
+
+pub fn rename(
+    &self,
+    source: &Path,
+    target: &Path,
+    options: RenameOptions,
+) -> Result<RenameOutcome, RenameFailure>;
+```
+
+`FileSystem` 是廉价、显式的共享所有权 handle。`clone()` 只克隆两个 `Arc`；它不能
+实现 `Copy`，因为复制 `Arc` 必须更新引用计数。
 
 ### 5.3 异步门面
 
@@ -246,15 +312,36 @@ pub struct AsyncFileSystem {
 }
 ```
 
-异步门面的 I/O 操作使用 inherent `async fn`，方法名与同步语义相同：
+不需要跨 await 保存恢复责任的异步 I/O 操作使用 inherent `async fn`，方法名与同步
+语义相同：
 
 ```rust
 let metadata = async_file_system.stat(&path).await?;
 ```
 
 类型名称已经表达异步模式，因此不再给方法附加 `_async`。同步与异步门面共享值类型，
-但分别实现 I/O 和生命周期逻辑。Properties getter、capability/limit 查询和
-`resource`/`resource_at` 等纯绑定操作不执行 I/O，仍是普通同步方法。
+但分别实现 I/O 和生命周期逻辑。Properties getter 和 capability/limit/path
+constraint 查询不执行 I/O，仍是普通同步方法。`AsyncFileSystem` 与同步门面一样只
+实现 `Clone`，不实现 `Copy`。
+
+异步流式 copy 可能持有需要恢复的 writer，因此不提供会在 future 取消时丢失内部
+handle 的普通 `async fn copy`。门面先同步构造一个拥有路径、options、filesystem
+和生命周期状态的操作 handle：
+
+```rust
+pub fn begin_copy(
+    &self,
+    source: Path,
+    target: Path,
+    options: CopyOptions,
+) -> Result<AsyncCopyOperation, AsyncCopyFailure>;
+```
+
+`begin_copy` 只做同步的 options、path、capability 和静态 limit preflight，不调用
+provider。它失败时使用 `CopyFailureState::Unchanged`，且不存在 recovery handle。
+调用者通过 `AsyncCopyOperation::execute(&mut self).await` 执行。异步 `rename`
+仍返回 `Result<RenameOutcome, AsyncRenameFailure>`；它没有门面内部 writer
+recovery responsibility。
 
 ## 6. Provider SPI
 
@@ -267,6 +354,8 @@ qubit_fs::spi::FileSystemSpi
 qubit_fs::spi::AsyncFileSystemSpi
 qubit_fs::spi::StatRequest
 qubit_fs::spi::CopyRequest
+qubit_fs::spi::CopyAttempt
+qubit_fs::spi::SpiCopyFailure
 qubit_fs::spi::OpenedWriter
 qubit_fs::spi::FileWriterSpi
 ```
@@ -279,8 +368,8 @@ SPI 类型不在 crate 根部或普通 prelude 中重导出。
 
 ```rust
 pub struct CopyRequest<'a> {
-    source: &'a FsPath,
-    target: &'a FsPath,
+    source: &'a Path,
+    target: &'a Path,
     options: &'a ResolvedCopyOptions,
 }
 ```
@@ -298,6 +387,10 @@ SPI 并读取 request，但普通调用者不能在 safe Rust 中构造 request�
 
 Provider 不重复这些通用检查。
 
+Request 不携带 native path。Adapter 收到 request 后必须先转换该操作涉及的全部逻辑
+路径，转换失败时不得开始 provider I/O；provider session 可以在内部保存 native
+handle 或 native path。
+
 ### 6.3 最小 provider 原语
 
 `FileSystemSpi` 包含不可由门面可靠推导的操作：
@@ -308,7 +401,7 @@ Provider 不重复这些通用检查。
 - `open_reader`、`open_writer`；
 - `create_directory`；
 - `delete_file`、`delete_directory`；
-- `copy`、`rename`；
+- `rename`；
 - `create_temp_file`、`create_temp_directory`。
 
 同步 SPI 的结构如下：
@@ -352,15 +445,19 @@ pub trait FileSystemSpi: Send + Sync {
         request: DeleteDirectoryRequest<'_>,
     ) -> FsResult<DeleteOutcome>;
 
-    fn copy(
+    fn try_copy(
         &self,
-        request: CopyRequest<'_>,
-    ) -> FsResult<CopyOutcome>;
+        _request: CopyRequest<'_>,
+    ) -> Result<CopyAttempt, SpiCopyFailure> {
+        Ok(CopyAttempt::Declined(
+            CopyDeclineReason::NotImplemented,
+        ))
+    }
 
     fn rename(
         &self,
         request: RenameRequest<'_>,
-    ) -> FsResult<RenameOutcome>;
+    ) -> Result<RenameOutcome, SpiRenameFailure>;
 
     fn create_temp_file(
         &self,
@@ -383,13 +480,50 @@ not-found no-op，并可报告递归删除的 entry 数量。未知计数使用 
 
 - `exists`：由 `stat` 的明确 `NotFound` 推导；
 - `read_all`、`write_all`：由公开 handle 组合；
-- `resource`：由门面绑定；
+- URI resolution 和 filesystem/path 绑定：由 registry 表达；
 - 不改变 provider 语义且可可靠组合的其他 convenience operation。
 
 “最小原语”不等于“操作系统保证原子”。原子性和 durability 仍通过 request requirement
 与 outcome 表达。
 
-### 6.4 Provider 返回对象
+### 6.4 Copy fast path
+
+`copy` 是门面操作，不是所有 provider 都必须重复实现的 SPI 原语。SPI 只提供
+operation-specific、带默认实现的可选 fast path：
+
+```rust
+#[non_exhaustive]
+pub enum CopyAttempt {
+    Completed(CopyOutcome),
+    Declined(CopyDeclineReason),
+}
+
+#[non_exhaustive]
+pub enum CopyDeclineReason {
+    NotImplemented,
+    NotApplicable,
+}
+```
+
+暂不抽取通用 `SpiAttempt<T>`。只有出现第二个具有相同拒绝与 fallback 语义的真实操作
+时，才将该模式泛化。
+
+`Declined` 的契约是：
+
+- 可以执行 metadata、拓扑或其他只读探测；
+- 不能创建、删除或修改 source、target 或其他 namespace entry；
+- 不能留下需要调用方 cleanup 的 session、staging entry 或 reservation；
+- 不能把已经产生副作用的 native error 映射为 `Declined`；
+- `EXDEV` 等错误只有在 adapter 能依据 native 契约证明零副作用时，才可转换为
+  `NotApplicable`。
+
+只有 `Declined` 允许门面考虑 fallback。`SpiCopyFailure` 是终止结果，门面不能捕获
+其中的 `Unsupported`、I/O error 或其他错误后自动重试。
+`NotImplemented` 若与 properties 声明的 provider-native required mode 直接矛盾，
+属于 `ProviderContractViolation`；`NotApplicable` 表示经过只读判断后，本次路径对
+不满足该 fast path 的动态前提。
+
+### 6.5 Provider 返回对象
 
 SPI 不直接构造公开 handle，而是返回 `spi` 模块的中间对象：
 
@@ -403,6 +537,10 @@ SPI 不直接构造公开 handle，而是返回 `spi` 模块的中间对象：
 
 中间对象的 provider 构造器公开；转换为公开 handle 的入口仅在 `qubit-fs` 内可见。
 
+`OpenedXxx` 表示一次成功 open 的返回信封，`XxxSpi` 表示具有行为的 provider
+session trait，两者不能混用。若某个 `OpenedXxx` 除 `Box<dyn XxxSpi>` 外不携带任何
+open-time 信息，应删除该信封并直接返回 session，而不是把信封改名为 `XxxSpi`。
+
 有状态 provider session trait 包括：
 
 - `FileWriterSpi`；
@@ -413,25 +551,58 @@ SPI 不直接构造公开 handle，而是返回 `spi` 模块的中间对象：
 Reader 只需要 type-erased `qubit_io::Input<Item = u8>` 或异步输入以及
 `OpenedFileInfo`，不增加没有行为的 reader session trait。
 
-### 6.5 Object safety 与异步
+### 6.6 Object safety 与异步
 
-同步与异步 SPI 分离。`AsyncFileSystemSpi` 通过 `spi::FsFuture<'a, T>` 保持 object
-safety 和 runtime neutrality。公开 `AsyncFileSystem` 隐藏 boxed future 细节。
+同步与异步 SPI 分离。`AsyncFileSystemSpi` 通过标准 `Future` 的类型擦除别名
+`spi::SpiFuture<'a, T>` 保持 object safety 和 runtime neutrality：
+
+```rust
+pub type SpiFuture<'a, T> =
+    Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+```
+
+`SpiFuture` 不是自定义 future 实现。公开 `AsyncFileSystem` 隐藏 boxed future
+细节：普通操作通过 inherent `async fn` 返回公共 result，需要保留恢复责任的复合操作
+则通过 owning operation handle 执行。异步 `try_copy` 返回
+`SpiFuture<'a, Result<CopyAttempt, SpiCopyFailure>>`，与同步 SPI 遵循相同的
+declined、failure 和副作用契约。
 
 不使用 public macro 生成两套 API，也不使用一个带同步/异步模式开关的 trait。
 
-## 7. 门面校验流水线
+## 7. 调用、转换与校验流水线
 
-每个操作在任何 provider I/O 或副作用前执行固定流程：
+每个操作遵循固定流程，并明确门面、adapter 与 provider 原生实现各自负责的阶段：
 
 1. 校验公开 options 的内部一致性；
 2. 按属性快照中的 `PathSemantics` 校验 source 和 target；
 3. 使用属性快照解析默认值；
 4. 检查 required capabilities；
 5. 检查 path、component、range、write size、page size 等静态 limits；
-6. 构造不可伪造的 SPI request；
-7. 调用 SPI；
-8. 校验 provider 返回的 metadata、entry、location 和 outcome。
+6. 按属性快照中的 `PathConstraints` 检查 provider 声明的静态路径限制；
+7. 门面构造不可伪造、只携带逻辑 `Path` 的 SPI request；
+8. adapter 在任何 I/O 前转换本次请求的全部输入路径；
+9. provider 原生实现执行操作，或由可选 fast path 无副作用地 `Declined`；
+10. adapter 将 provider 返回的 native path 解码为逻辑 `Path`；
+11. 门面校验 provider 返回的 metadata、entry、opened identity 和 outcome。
+
+步骤 1—7 由门面执行，步骤 8 和 10 由 adapter 执行，步骤 9 由 provider 原生实现
+执行。多路径操作在全部输入路径转换成功前不得产生副作用。Directory stream 等惰性
+结果可以逐项解码，但每个 entry 都必须在交给门面前完成转换并携带明确错误。
+
+`FileSystem::copy` 在通用步骤之后使用模板方法：
+
+```text
+spi.try_copy(request)
+  ├─ Completed ──► 门面复核 CopyOutcome
+  ├─ Declined
+  │    ├─ 满足通用 fallback 矩阵 ──► 门面流式复制
+  │    └─ 不满足 ──────────────────► 副作用前失败
+  └─ SpiCopyFailure ───────────────► 转换为 CopyFailure，不 fallback
+```
+
+门面 fallback 重新调用公开 reader/writer 所对应的私有门面流程；每个组合原语仍执行
+自己的 path conversion、capability、limit、lifecycle 和 outcome 校验。门面不能直接
+绕过这些流程调用 reader/writer SPI。
 
 Provider 仍负责只能在执行时发现的条件：
 
@@ -443,62 +614,37 @@ Provider 仍负责只能在执行时发现的条件：
 
 门面校验 provider 返回值至少包括：
 
-- opened location 与请求路径一致；
+- opened filesystem identity 和逻辑路径与请求一致；
 - directory entry 属于请求 namespace，并满足 prefix/filter contract；
 - required atomicity 没有被降级；
 - copy/rename/write/persist outcome 与实际请求相容；
 - provider 返回路径符合声明的 path semantics；
 - metadata 和 capability 组合不自相矛盾。
 
-## 8. Resource 与公开 handle
+## 8. 位置边界与公开 handle
 
-### 8.1 `FileResource`
+### 8.1 位置身份
 
-```rust
-#[derive(Clone)]
-pub struct FileResource {
-    file_system: FileSystem,
-    location: FileLocation,
-}
-```
+`Path` 只标识 configured filesystem 内的逻辑路径；它不包含 filesystem identity，也
+不能独立解析为跨 provider 位置。
 
-门面提供两个绑定入口：
+`qubit-fs` 不公开 `FileLocation`、`FileResource` 或 `AsyncFileResource`：
 
-```rust
-impl FileSystem {
-    pub fn resource(
-        &self,
-        path: FsPath,
-    ) -> FsResult<FileResource>;
+- registry 使用自己的 `FileSystemResolution` /
+  `AsyncFileSystemResolution` 表达 `FileSystem + Path + canonical Uri`；
+- opened handle 通过 `OpenedFileInfo` 保存必要的 `FileSystemId + Path` snapshot；
+- writer 和 temporary resource 在生命周期确有需要时私有保存 owning
+  `FileSystem` / `AsyncFileSystem`；
+- 不为绑定路径复制整套 `FileSystem` convenience API。
 
-    pub fn resource_at(
-        &self,
-        location: FileLocation,
-    ) -> FsResult<FileResource>;
-}
-```
-
-`resource` 绑定没有 canonical URI 的普通 provider-local path。`resource_at` 供 registry
-等已经完成 URI resolution 的调用者使用，并验证 filesystem id、provider identity、
-path semantics、limits 和 canonical URI 的非敏感结构。URI 到 decoded path 的
-provider-specific 对应关系仍由创建 `FileLocation` 的 registry/provider 保证。
-
-规则：
-
-- 普通资源通过 `FileSystem::resource` 创建；
-- registry resolution 通过 `FileSystem::resource_at` 创建；
-- `FileResource::new` 和绕过门面的构造器删除；
-- `file_system()` 可返回安全的 `&FileSystem`；
-- 不提供 SPI getter；
-- resource 方法只委托门面，不重复参数、capability 或 limit 校验。
-
-`AsyncFileResource` 保存 `AsyncFileSystem`，规则相同。
+若未来需要类似 Spring `Resource` 的 `FileResource`、`UrlResource` 等统一资源模型，
+应在独立的 `qubit-resource` crate 中设计，并由它适配 `qubit-fs`。
 
 ### 8.2 Reader
 
 `FileReader` / `AsyncFileReader` 保存固定 `OpenedFileInfo` 与 type-erased input。
-Provider 返回的 opened location 在门面包装前验证。Open-time metadata 只是 snapshot，
-不能冒充 live `stat`。
+Provider 返回的 filesystem identity 和逻辑 `Path` 在门面包装前验证。Open-time
+metadata 只是 snapshot，不能冒充 live `stat`。
 
 底层字节流继续使用：
 
@@ -529,8 +675,151 @@ Stream 具有 `Open`、`Exhausted`、`Failed` 状态。Provider error 或 contra
 
 ## 9. Capability、Requirement 与 Outcome
 
+### 9.1 Capability 与动态适用性
+
 `FileSystemCapabilities` 是稳定 capability set，`FileSystemLimits` 是独立快照。
-Capability 表示当前 configured filesystem 保证支持，不表示某次操作可能碰巧成功。
+Capability 表示当前 configured filesystem 在明确静态前提下稳定支持的语义范围，
+不是任意 source、target、mount、device、bucket 或资源状态下都必然成功的承诺。
+Provider 必须能对超出动态适用范围的请求在副作用前明确拒绝。
+
+Capability 不作为 fast-path 分派开关：
+
+- capability 用于副作用前排除必然无法满足的 requirement；
+- `CopyAttempt::Declined` 表示本次 request 的 native fast path 动态不适用；
+- requirement 表示本次调用不可降级的条件；
+- outcome 表示实际完成方式。
+
+`FileSystem::from_spi` 根据 provider 声明的原语能力和核心可证明的 fallback 前提，生成
+对应用可见的 effective capability snapshot。例如，只有 reader、create-new writer
+及其必要生命周期保证同时存在时，门面才可把基础流式 file copy 计入 `Copy`
+capability。`ServerSideCopy` 等 capability 只描述语义支持范围；门面仍调用
+`try_copy` 判断具体路径对是否适用。
+
+基础 `FileSystem` 不承诺完整 quota、POSIX permission、Windows ACL 或对象存储
+ACL/IAM 管理 API。这些模型的作用域和语义不同，不能放入所有 provider 都必须面对的
+基础契约。核心仍保留 `PermissionDenied`、`QuotaExceeded` 等操作错误，并可暴露真正
+可移植的只读 metadata。
+
+出现明确下游需求后，quota 或 access control 应分别设计为强类型的可选 capability
+门面和 SPI，而不是向基础 `FileSystem` 堆叠方法，也不使用 `Any` extension bag。
+本地平台特有的 mode、owner 和 ACL 算法留在 `qubit-local-files`。
+
+### 9.2 Copy fallback 边界
+
+第一版通用 fallback 只覆盖能够在 provider-neutral 原语上证明安全的普通文件子集：
+
+- source 已验证为普通 file/object，不处理 directory tree、symlink 或特殊 entry；
+- 不启用 `continue_on_error`；
+- metadata preservation 为 `None`；
+- 不要求 server-side copy、clone/reflink 或 provider-native method；
+- source 与 target 的逻辑 `Path` 不同；
+- target 使用 create-new/no-replace publication；
+- `Skip` 通过 create-new 的 already-exists 结果实现；
+- 不执行通用 `Overwrite` fallback；
+- 不隐式创建 parent 或执行其他未被 failure state 覆盖的前置副作用。
+
+门面按 allowlist 判断 resolved options；不在列表中的组合在打开 target writer 前返回
+`RequirementNotMet`、`UnsupportedCapability` 或对应的 options error。以后只有在
+staged writer、可靠 replacement、alias 安全和失败恢复都能证明时，才扩展通用
+overwrite fallback。
+
+流式 fallback：
+
+1. 在分配或写入前检查已知 source length 与 read/write limits；
+2. 打开经过门面包装的 reader；
+3. 以 create-new disposition 打开经过门面包装的 writer；
+4. 有界流式传输 bytes；
+5. commit writer 并复核 write outcome；
+6. 返回 `CopyMethod::Streamed` 的 `CopyOutcome`。
+
+任何不能保证的 atomicity、durability、metadata 或 publication requirement 都必须在
+副作用前失败。
+
+### 9.3 Copy outcome 与 failure
+
+`CopyMethod` 报告实际执行方式，而不是笼统的 provider 类型：
+
+```rust
+#[non_exhaustive]
+pub enum CopyMethod {
+    Streamed,
+    Native,
+    Clone,
+    ServerSide,
+    Mixed,
+}
+```
+
+`Clone` 覆盖 reflink、APFS clone 等 copy-on-write 方法。`CopyOutcome` 至少报告：
+
+- actual method；
+- actual atomicity 与 durability；
+- metadata preservation 结果；
+- bytes、files、directories、skipped 等统计；
+- target version（provider 可提供时）；
+- 是否使用 fallback；
+- 非敏感 diagnostics。
+
+`FsResult<CopyOutcome>` 无法表达 target 已部分可见或完整发布后的错误，因此公共
+`copy` 使用类型化 failure：
+
+```rust
+pub enum CopyFailureState {
+    Unchanged,
+    PartiallyPublished,
+    Published,
+    Indeterminate,
+}
+
+pub struct CopyFailure {
+    error: FsError,
+    state: CopyFailureState,
+    partial_stats: CopyStats,
+    writer: Option<FileWriter>,
+}
+```
+
+状态含义：
+
+| `CopyFailureState` | 已确认事实 |
+| --- | --- |
+| `Unchanged` | target 未被本次操作改变 |
+| `PartiallyPublished` | target 已创建或修改，但请求的 copy 尚未完整完成 |
+| `Published` | target 内容已完整发布，后续 metadata 或 durability 步骤失败 |
+| `Indeterminate` | 无法确认 target 的最终状态 |
+
+同步门面只有在 fallback 仍把 recovery responsibility 交给调用者时，才在
+`CopyFailure` 中返回 writer。异步版本由 `AsyncCopyOperation` 保留可恢复的
+`AsyncFileWriter`；`AsyncCopyFailure` 只报告 error、typed state 和 partial stats，
+operation 是 recovery handle 是否存在的唯一事实来源。Provider-native
+`SpiCopyFailure` 携带相同的 typed state 和 partial stats，但不构造公共 writer。
+
+Copy 的 source 必须保持不变。Provider 修改 source 属于
+`ProviderContractViolation`。`try_copy` 返回 failure 后，门面直接转换并返回，不能
+依据错误种类再次执行流式复制。
+
+### 9.4 Rename 与 move
+
+`rename` 是真正的 namespace primitive，继续由 SPI 必须实现，不能用 copy+delete
+模拟。`RenameOutcome` 报告实际 publication method、atomicity 和 durability；
+`SpiRenameFailure` / `RenameFailure` 使用 `Unchanged`、`Renamed`、
+`Indeterminate` 等类型化状态表达 rename 已完成但后续 durability 步骤失败的情况。
+`FileSystemCapability::Rename` 只表示 rename，不再使用“rename or move”的含混定义。
+
+```rust
+pub enum RenameFailureState {
+    Unchanged,
+    Renamed,
+    Indeterminate,
+}
+```
+
+`RenameFailure` 包含统一 `FsError` 和 `RenameFailureState`；异步版本只更换类型名称，
+不改变状态语义。
+
+当前不增加 `move`、`try_move` 或 `MoveOutcome`。如果未来出现明确的 copy+delete
+需求，它必须作为新的高层操作设计，并在调用者允许非原子退化时才启用；“target 已
+发布但 source 删除失败”必须是独立的类型化部分成功状态。
 
 Requirement 决定什么结果可以称为成功；outcome 描述实际发生的事实。例如：
 
@@ -539,7 +828,8 @@ Requirement 决定什么结果可以称为成功；outcome 描述实际发生的
 - `NotRequired`：调用者不要求，provider 仍可采用更强实现。
 
 成功结果使用 `WriteOutcome`、`RenameOutcome`、`CopyOutcome` 和 `PersistOutcome`，
-报告 actual atomicity、publication/copy method、版本、统计和非敏感 diagnostics。
+报告 actual atomicity、durability、publication/copy method、版本、统计和非敏感
+diagnostics。
 
 门面根据 request 复核 outcome。Provider 不能通过返回“成功”绕过 required semantics。
 
@@ -563,6 +853,16 @@ Requirement 决定什么结果可以称为成功；outcome 描述实际发生的
 - SPI 可以报告更精确的失败子路径；
 - source error 被保留，但不能通过普通格式化泄漏 secret。
 
+会产生类型化部分成功状态的操作使用 operation-specific failure 包装 `FsError`：
+
+- `CopyFailure` / `AsyncCopyFailure`；
+- `RenameFailure` / `AsyncRenameFailure`；
+- 已定义的 `WriteAllFailure`、writer failure 和 persist failure。
+
+门面 preflight failure 统一映射为对应操作的 `Unchanged` / `NotStarted` 状态。
+Operation-specific failure 不复制 provider identity、path 或 source error，而是复用
+内部 `FsError` 的统一上下文。
+
 新增：
 
 ```rust
@@ -570,7 +870,7 @@ FsErrorKind::ProviderContractViolation
 ```
 
 它表示 provider bug 或不合法返回，例如 required-atomic 请求却报告非原子成功、list
-返回越界 entry、opened location 不匹配或 outcome 自相矛盾。
+返回越界 entry、opened identity 不匹配或 outcome 自相矛盾。
 
 `RequirementNotMet` 表示运行时条件使一个合法请求无法满足；它不是 provider contract
 violation。
@@ -641,10 +941,11 @@ pub struct WriteAllFailure {
 Provider 必须通过 capability 和 SPI 明确提供 temp file、temp directory 与 atomic
 persist 能力。
 
-`TempFile` / `TempDirectory` 保存由原始 `FileSystem` 构造的 `FileResource`，因此
-始终绑定同一个 configured filesystem 实例。
+`TempFile` / `TempDirectory` 私有保存创建它的 `FileSystem` 克隆和逻辑 `Path`，
+因此始终绑定同一个 configured filesystem 实例。异步 handle 对应保存
+`AsyncFileSystem`。
 
-门面在包装 public handle 前复核 SPI 返回的 temp location/kind。若 opened temp
+门面在包装 public handle 前复核 SPI 返回的 temp identity/kind。若 opened temp
 违反契约，门面必须显式调用 session cleanup；cleanup 失败作为
 `ProviderContractViolation` 的 secondary/source context 保留，不能把尚未绑定的
 cleanup responsibility 静默交给 drop。
@@ -667,12 +968,11 @@ pub enum TempResourceState {
 | `PersistFailureState` | Handle 状态 | 已确认事实 |
 | --- | --- | --- |
 | `NotPublished` | `Owned` | target 未发布，可修正后重试 |
-| `Published` | `Persisted` | target 已发布，source ownership 已处理 |
 | `PublishedSourceRetained` | `CleanupRequired` | target 已发布，source 仍需清理 |
 | `Indeterminate` | `Indeterminate` | source 或 target 最终状态未知 |
 
-`Published` 覆盖 rename 已完成但后续目录 durability 操作失败等情况。方法虽然返回错误，
-handle 也不能回到 `Owned`。
+成功返回 `PersistOutcome` 时 handle 进入 `Persisted`。失败仅使用以上三种
+`PersistFailureState`，不会以 `Published` 作为额外失败状态。
 
 同步 drop：
 
@@ -684,13 +984,15 @@ handle 也不能回到 `Owned`。
 
 ### 12.3 Child 安全
 
-`TempDirectory::child(&FsName)` 只接受单一安全 component；
-`descendant(&RelativeFsPath)` 只接受不能逃逸的相对路径。Provider 仍负责 symlink、
+`TempDirectory::child(&PathComponent)` 只接受单一安全 component；
+`descendant(&RelativePath)` 只接受不能逃逸的相对路径。Provider 仍负责 symlink、
 mount point、race 和平台 canonicalization 等真实边界。
 
 ## 13. 异步生命周期
 
 异步 drop 不启动 executor、不阻塞线程，也不暗中发起远程 I/O。
+
+### 13.1 Handle method future
 
 异步 commit、abort、persist、keep 和 cleanup future：
 
@@ -701,19 +1003,83 @@ mount point、race 和平台 canonicalization 等真实边界。
 
 同步与异步状态枚举、failure state 和 outcome 保持一致。
 
+不持有 recovery session 的 one-shot namespace future（例如 rename）在开始 poll 后被
+取消时，调用者必须把已知路径状态视为 indeterminate 并重新检查。若某个操作可能把
+需要继续驱动或 cleanup 的 session 隐藏在 future 内部，它必须改用显式 operation
+handle，不能继续暴露为消费内部状态的普通 `async fn`。
+
+### 13.2 `AsyncCopyOperation`
+
+`AsyncCopyOperation` 是异步 copy 的 owning lifecycle handle：
+
+```rust
+pub enum AsyncCopyOperationState {
+    Ready,
+    Running,
+    Completed,
+    Failed(CopyFailureState),
+}
+
+pub struct AsyncCopyOperation {
+    file_system: AsyncFileSystem,
+    source: Path,
+    target: Path,
+    options: ResolvedCopyOptions,
+    state: AsyncCopyOperationState,
+    writer: Option<AsyncFileWriter>,
+}
+```
+
+字段全部私有。它提供：
+
+- `source()`、`target()` 和 `state()` 只读 getter；
+- `execute(&mut self) -> Result<CopyOutcome, AsyncCopyFailure>` 执行 provider fast
+  path 或门面 fallback；
+- `has_recovery_writer()` 报告 operation 当前是否仍拥有 recovery writer；
+- `recovery_writer()` 在 operation 仍持有 writer 时返回可变借用；
+- `take_recovery_writer()` 显式转移 writer cleanup/recovery responsibility。
+
+状态转换如下：
+
+```text
+Ready
+  └─ execute polled ───────────────► Running
+       ├─ success ─────────────────► Completed
+       ├─ explicit failure ────────► Failed(reported state)
+       └─ future cancelled ────────► Failed(Indeterminate)
+```
+
+`execute` future 借用 `&mut AsyncCopyOperation`，不能消费 operation。开始 poll 后，
+取消 guard 必须在 future drop 时把仍为 `Running` 的状态改为
+`Failed(Indeterminate)`。如果门面 fallback 已创建 writer，writer 继续保存在
+operation 中；调用者可显式恢复、abort 或取走它。
+
+如果取消发生在 provider-native `try_copy` 内且 provider 没有返回可恢复 session，
+operation 仍保存 filesystem、source 和 target 供调用者检查，但 recovery writer 为
+`None`。此时不能猜测 target 是否改变。
+
+`execute` 只接受 `Ready` 状态；`Completed`、`Running` 或 `Failed` 状态不能盲目重试。
+调用者检查失败事实并完成必要 cleanup 后，可以显式创建新的 operation。
+
+`AsyncCopyOperation` 的 drop 不执行 I/O。Drop 一个 `Ready` 或 `Completed`
+operation 不产生动作；Drop 一个 `Failed` operation 会显式放弃仍由它持有的 recovery
+session，但不会暗中执行 cleanup。调用者必须在 drop 前通过 `state()` 和
+`has_recovery_writer()` 判断恢复责任，并按需使用或取走 writer。
+
 ## 14. Registry 集成边界
 
 `qubit-fs-registry` 负责：
 
 - provider discovery 和 selection；
 - 完整配置与 credential reference；
+- 消费 `ConnectionUri` 并在受控边界提取 credential；
 - URI provider-specific 解码；
 - canonical URI 去敏；
 - 返回具体 `FileSystemResolution` 或 `AsyncFileSystemResolution`。
 
-Resolution 保存门面、provider-local `FsPath` 和 canonical `FsUri`，不保存或暴露
-`Arc<dyn FileSystemSpi>`。Registry resource 必须通过门面的安全 location 绑定入口
-构造。
+Resolution 保存门面、provider-local `Path` 和 canonical `Uri`，不保存
+`ConnectionUri`、credential 或 `Arc<dyn FileSystemSpi>`。Canonical `Uri` 必须在
+resolution 返回前通过 secret-free 结构校验。
 
 `qubit-fs` 不依赖 registry，也不重新解释 provider 已解码的 URI path。
 
@@ -732,7 +1098,8 @@ src/
 │   ├── request/
 │   ├── opened/
 │   └── session/
-├── resource/
+├── copy/
+├── rename/
 ├── reader/
 ├── writer/
 ├── directory/
@@ -740,6 +1107,7 @@ src/
 ├── options/
 ├── metadata/
 ├── path/
+├── uri/
 └── error/
 ```
 
@@ -756,25 +1124,40 @@ src/
 | `FileWriteSession` | `spi::FileWriterSpi` |
 | `DirectoryStreamSession` | `spi::DirectoryStreamSpi` |
 | `TempResourceSession` | `spi::TempResourceSpi` |
+| `FileSystemSpi::copy` | `FileSystemSpi::try_copy` + 门面 fallback |
+| `FsUri` | `Uri` + `ConnectionUri` |
+| `FsPath` | `Path` |
+| `RelativeFsPath` | `RelativePath` |
+| `FsName` | `PathComponent` |
+| `spi::FsFuture` | `spi::SpiFuture` |
+| `FileLocation` / `FileResource` | 删除；registry 使用 resolution |
 
 Crate 根部只重导出应用层类型；SPI 始终保留在 `spi` 命名空间。
 
 ## 16. Provider 必须遵守的不变量
 
 1. `properties()` 不执行 I/O，并返回构造时稳定值；
-2. capability 只声明当前配置真正保证的行为；
-3. provider 只接收门面构造的 request；
-4. mandatory option 不可忽略；
-5. required semantics 无法满足时不得返回成功；
-6. outcome 报告实际 method、atomicity、版本和 side effect；
-7. opened handle location 与请求一致；
-8. list entry 不能离开请求 namespace；
-9. write、persist 和 cleanup 的部分成功使用 typed state；
-10. async drop 不执行阻塞或远程 I/O；
-11. error source 和 diagnostics 不泄漏 secret；
-12. provider-specific native 算法留在 provider 原生实现，不复制到 adapter；
-13. SPI session 的 cleanup 不能擅自回滚已确认 published target；
-14. provider contract violation 不能降格为普通 I/O 错误。
+2. capability 只声明当前配置在明确前提下稳定支持的语义范围；
+3. provider 只接收门面构造、携带逻辑 `Path` 的 request；
+4. adapter 在任何 I/O 前转换一次操作的全部输入路径；
+5. adapter 在返回门面前解码所有 provider-native path；
+6. mandatory option 不可忽略；
+7. required semantics 无法满足时不得返回成功；
+8. `CopyAttempt::Declined` 不得产生外部可见副作用或遗留 cleanup responsibility；
+9. `try_copy` 返回 failure 后门面不得自动 fallback；
+10. copy 不得修改 source，failure 必须报告 target typed state 与 partial stats；
+11. rename 不得以 copy+delete 模拟；
+12. outcome 报告实际 method、fallback、atomicity、durability、版本和 side effect；
+13. opened handle identity 与请求 filesystem 和逻辑路径一致；
+14. list entry 不能离开请求 namespace；
+15. copy、rename、write、persist 和 cleanup 的部分成功使用 typed state；
+16. `AsyncCopyOperation::execute` 借用 operation，取消后不得丢失门面 fallback writer；
+17. async copy 取消后必须进入 `Failed(Indeterminate)`，不能伪造 `Unchanged`；
+18. async drop 不执行阻塞或远程 I/O；
+19. `ConnectionUri`、error source 和 diagnostics 不通过普通格式化泄漏 secret；
+20. provider-specific native 算法留在 provider 原生实现，不复制到 adapter；
+21. SPI session 的 cleanup 不能擅自回滚已确认 published target；
+22. provider contract violation 不能降格为普通 I/O 错误。
 
 ## 17. 验证策略
 
@@ -784,11 +1167,23 @@ Crate 根部只重导出应用层类型；SPI 始终保留在 `spi` 命名空间
 - 外部代码无法构造 SPI request；
 - 属性快照只采集一次并保持稳定；
 - opened object 和 outcome 会被门面复核；
+- `try_copy` 的 `Completed` 路径不执行 fallback；
+- `Declined` 只有在 fallback allowlist 满足时才执行流式复制；
+- `SpiCopyFailure`、任意 I/O error 和 unsupported error 都不会触发重试；
+- recording SPI 验证 `Declined` 前后没有 namespace mutation 或 cleanup responsibility；
+- 普通文件 create-new/skip fallback、overwrite 拒绝和所有 requirement preflight；
+- `CopyFailureState`、partial stats 及需要恢复时保留的 writer；
+- `AsyncCopyOperation` 的 Ready/Running/Completed/Failed 全部状态转换；
+- 分别在 native attempt、reader、writer 和 commit await 点取消 copy future；
+- 取消后 operation 保留 recovery writer，drop 不触发 I/O；
+- rename 始终调用 SPI 原语，不进入 copy+delete；
 - writer、directory stream、temp 的全部状态转换；
 - `write_all` 在失败时保留恢复 handle；
-- error context 与 secret boundary；
-- 同步/异步行为对称；
+- `ConnectionUri` 的脱敏输出、canonical `Uri` 的 secret-free 约束和 error context；
+- 同步/异步 requirement、failure state 和 outcome 语义对齐；
 - async future cancellation 和 drop 语义。
 
 Provider 的黑盒一致性由 `qubit-fs-testkit` 通过公开门面验证。Provider 自己仍需测试
-平台、协议、编码、安全和性能边界。
+平台、协议、编码、安全和性能边界；adapter 测试必须覆盖多路径转换失败无副作用、
+native path 解码、provider-specific `PathConstraints`、copy decline 零副作用、
+native copy method 映射和 rename identity 语义。
