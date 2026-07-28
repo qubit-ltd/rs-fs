@@ -8,5 +8,9 @@
 mod fixtures;
 
 pub(crate) use fixtures::{
-    FailingDirectoryStream, MockDirectoryStream, MockFs, MockState, PartiallyFailingDirectoryStream,
+    FailingDirectoryStream,
+    MockDirectoryStream,
+    MockFs,
+    MockState,
+    PartiallyFailingDirectoryStream,
 };

@@ -9,17 +9,53 @@
 use std::collections::VecDeque;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::{Arc, Mutex};
-use std::task::{Context, Poll, Waker};
+use std::sync::{
+    Arc,
+    Mutex,
+};
+use std::task::{
+    Context,
+    Poll,
+    Waker,
+};
 
 use qubit_fs::{
-    AchievedAtomicity, AsyncDirectoryStream, AsyncDirectoryStreamSession, AsyncFileResource,
-    AsyncFileSystem, AsyncTempDir, AsyncTempFile, AsyncTempResourceSession, AtomicityRequirement,
-    CreateDirOptions, DirEntry, FileKind, FileMetadata, FileSystemCapabilities,
-    FileSystemCapability, FileSystemId, FileSystemInfo, FileSystemLimit, FileSystemLimits,
-    FileSystemProperties, FsError, FsErrorKind, FsFuture, FsName, FsOperation, FsPath, ListOptions,
-    PathSemantics, PersistFailure, PersistFailureState, PersistFuture, PersistOptions,
-    PersistOutcome, PublicationMethod, RelativeFsPath, TempResourceState,
+    AchievedAtomicity,
+    AsyncDirectoryStream,
+    AsyncDirectoryStreamSession,
+    AsyncFileResource,
+    AsyncFileSystem,
+    AsyncTempDir,
+    AsyncTempFile,
+    AsyncTempResourceSession,
+    AtomicityRequirement,
+    CreateDirOptions,
+    DirEntry,
+    FileKind,
+    FileMetadata,
+    FileSystemCapabilities,
+    FileSystemCapability,
+    FileSystemId,
+    FileSystemInfo,
+    FileSystemLimit,
+    FileSystemLimits,
+    FileSystemProperties,
+    FsError,
+    FsErrorKind,
+    FsFuture,
+    FsName,
+    FsOperation,
+    FsPath,
+    ListOptions,
+    PathSemantics,
+    PersistFailure,
+    PersistFailureState,
+    PersistFuture,
+    PersistOptions,
+    PersistOutcome,
+    PublicationMethod,
+    RelativeFsPath,
+    TempResourceState,
 };
 
 #[derive(Debug)]
@@ -49,7 +85,10 @@ impl FileSystemProperties for AsyncTempFs {
 }
 
 impl AsyncFileSystem for AsyncTempFs {
-    fn stat_async<'a>(&'a self, _path: &'a FsPath) -> FsFuture<'a, FileMetadata> {
+    fn stat_async<'a>(
+        &'a self,
+        _path: &'a FsPath,
+    ) -> FsFuture<'a, FileMetadata> {
         Box::pin(async { Ok(FileMetadata::new(FileKind::File)) })
     }
 
@@ -111,7 +150,11 @@ impl AsyncTempResourceSession for AsyncSession {
             this.fail_once = false;
             return Box::pin(async {
                 Err(PersistFailure::new(
-                    FsError::new(FsErrorKind::Io, FsOperation::PersistTemp, "not published"),
+                    FsError::new(
+                        FsErrorKind::Io,
+                        FsOperation::PersistTemp,
+                        "not published",
+                    ),
                     PersistFailureState::NotPublished,
                 ))
             });
@@ -155,7 +198,10 @@ where
     assert!(future.as_mut().poll(&mut context).is_pending());
 }
 
-fn async_resource_with(atomic_persist: bool, limits: FileSystemLimits) -> AsyncFileResource {
+fn async_resource_with(
+    atomic_persist: bool,
+    limits: FileSystemLimits,
+) -> AsyncFileResource {
     let fs: Arc<dyn AsyncFileSystem> = Arc::new(AsyncTempFs {
         info: FileSystemInfo::new(
             FileSystemId::new("async-temp").expect("id should parse"),
@@ -190,9 +236,13 @@ fn async_persist_failure_retains_handle_for_retry() {
     );
     let target = FsPath::parse_normalized("/final").expect("path should parse");
 
-    assert!(ready(temp.persist_async(&target, PersistOptions::default())).is_err());
+    assert!(
+        ready(temp.persist_async(&target, PersistOptions::default())).is_err()
+    );
     assert_eq!(TempResourceState::Owned, temp.state());
-    assert!(ready(temp.persist_async(&target, PersistOptions::default())).is_ok());
+    assert!(
+        ready(temp.persist_async(&target, PersistOptions::default())).is_ok()
+    );
     assert_eq!(TempResourceState::Persisted, temp.state());
 }
 
@@ -230,9 +280,11 @@ fn async_temp_dir_derives_only_validated_children() {
     );
     assert_eq!(
         "/tmp/source/a/b",
-        temp.descendant(&RelativeFsPath::parse("a/b").expect("relative path should parse"),)
-            .path()
-            .as_str(),
+        temp.descendant(
+            &RelativeFsPath::parse("a/b").expect("relative path should parse"),
+        )
+        .path()
+        .as_str(),
     );
 }
 
@@ -260,7 +312,9 @@ impl AsyncTempResourceSession for ConfigurableAsyncSession {
 
     fn keep_async<'a>(self: Pin<&'a mut Self>) -> FsFuture<'a, ()> {
         let result = match self.keep_error {
-            Some(kind) => Err(FsError::new(kind, FsOperation::KeepTemp, "keep failed")),
+            Some(kind) => {
+                Err(FsError::new(kind, FsOperation::KeepTemp, "keep failed"))
+            }
             None => Ok(()),
         };
         Box::pin(async move { result })
@@ -286,7 +340,11 @@ impl AsyncTempResourceSession for ConfigurableAsyncSession {
                     FsErrorKind::Io
                 };
                 Err(PersistFailure::new(
-                    FsError::new(kind, FsOperation::PersistTemp, "persist failed"),
+                    FsError::new(
+                        kind,
+                        FsOperation::PersistTemp,
+                        "persist failed",
+                    ),
                     state,
                 ))
             } else {
@@ -373,7 +431,8 @@ fn dropping_polled_pending_async_temp_file_lifecycle_is_indeterminate() {
                 drop(future);
             }
             PendingTempOperation::Persist => {
-                let mut future = temp.persist_async(&target, PersistOptions::default());
+                let mut future =
+                    temp.persist_async(&target, PersistOptions::default());
                 assert_pending(future.as_mut());
                 drop(future);
             }
@@ -410,7 +469,8 @@ fn dropping_polled_pending_async_temp_dir_lifecycle_is_indeterminate() {
                 drop(future);
             }
             PendingTempOperation::Persist => {
-                let mut future = temp.persist_async(&target, PersistOptions::default());
+                let mut future =
+                    temp.persist_async(&target, PersistOptions::default());
                 assert_pending(future.as_mut());
                 drop(future);
             }
@@ -477,7 +537,8 @@ fn configurable_session(
 }
 
 #[test]
-fn async_temp_file_accessors_open_methods_keep_and_invalid_states_are_explicit() {
+fn async_temp_file_accessors_open_methods_keep_and_invalid_states_are_explicit()
+{
     let cancellations = Arc::new(Mutex::new(0));
     let mut temp = AsyncTempFile::new(
         async_resource(),
@@ -499,8 +560,11 @@ fn async_temp_file_accessors_open_methods_keep_and_invalid_states_are_explicit()
     assert!(ready(temp.keep_async()).is_err());
     assert!(ready(temp.cleanup_async()).is_err());
     assert!(
-        ready(temp.persist_async(&FsPath::parse("/final").unwrap(), PersistOptions::default(),))
-            .is_err(),
+        ready(temp.persist_async(
+            &FsPath::parse("/final").unwrap(),
+            PersistOptions::default(),
+        ))
+        .is_err(),
     );
     drop(temp);
     assert_eq!(0, *cancellations.lock().expect("lock should succeed"));
@@ -621,7 +685,10 @@ fn async_temp_file_required_atomicity_fails_before_session_polling() {
         ..PersistOptions::default()
     };
 
-    assert!(ready(temp.persist_async(&FsPath::parse("/final").unwrap(), options)).is_err(),);
+    assert!(
+        ready(temp.persist_async(&FsPath::parse("/final").unwrap(), options))
+            .is_err(),
+    );
     assert_eq!(0, *persist_calls.lock().expect("lock should succeed"));
 }
 
@@ -655,8 +722,11 @@ fn async_temp_dir_all_operations_and_keep_state_are_usable() {
     assert!(ready(temp.keep_async()).is_err());
     assert!(ready(temp.cleanup_async()).is_err());
     assert!(
-        ready(temp.persist_async(&FsPath::parse("/final").unwrap(), PersistOptions::default(),))
-            .is_err(),
+        ready(temp.persist_async(
+            &FsPath::parse("/final").unwrap(),
+            PersistOptions::default(),
+        ))
+        .is_err(),
     );
     drop(temp);
     assert_eq!(0, *cancellations.lock().expect("lock should succeed"));
@@ -702,13 +772,17 @@ fn async_temp_dir_cleanup_and_persist_failures_update_recovery_state() {
                 Arc::new(Mutex::new(0)),
             ),
         );
-        assert!(ready(temp.persist_async(&target, PersistOptions::default())).is_err(),);
+        assert!(
+            ready(temp.persist_async(&target, PersistOptions::default()))
+                .is_err(),
+        );
         assert_eq!(resource_state, temp.state());
     }
 }
 
 #[test]
-fn async_temp_dir_keep_cleanup_indeterminate_success_and_preflight_are_covered() {
+fn async_temp_dir_keep_cleanup_indeterminate_success_and_preflight_are_covered()
+{
     let target = FsPath::parse("/final").unwrap();
     let mut keep_failure = AsyncTempDir::new(
         async_resource(),
@@ -749,7 +823,10 @@ fn async_temp_dir_keep_cleanup_indeterminate_success_and_preflight_are_covered()
             Arc::new(Mutex::new(0)),
         ),
     );
-    assert!(ready(success.persist_async(&target, PersistOptions::default())).is_ok(),);
+    assert!(
+        ready(success.persist_async(&target, PersistOptions::default()))
+            .is_ok(),
+    );
     assert_eq!(TempResourceState::Persisted, success.state());
 
     let persist_calls = Arc::new(Mutex::new(0));
@@ -805,7 +882,8 @@ fn async_temp_session_default_drop_cancellation_is_a_nonblocking_noop() {
 
 #[test]
 fn async_temp_resources_preflight_target_path_limits() {
-    let limits = FileSystemLimits::unknown().with_max_path_text_bytes(FileSystemLimit::Maximum(4));
+    let limits = FileSystemLimits::unknown()
+        .with_max_path_text_bytes(FileSystemLimit::Maximum(4));
     let target = FsPath::parse("/final").unwrap();
 
     for is_directory in [false, true] {
@@ -821,13 +899,15 @@ fn async_temp_resources_preflight_target_path_limits() {
         let failure = if is_directory {
             let mut temp = AsyncTempDir::new(resource, session);
             let failure =
-                ready(temp.persist_async(&target, PersistOptions::default())).unwrap_err();
+                ready(temp.persist_async(&target, PersistOptions::default()))
+                    .unwrap_err();
             assert_eq!(Some(temp.path()), failure.error().path());
             failure
         } else {
             let mut temp = AsyncTempFile::new(resource, session);
             let failure =
-                ready(temp.persist_async(&target, PersistOptions::default())).unwrap_err();
+                ready(temp.persist_async(&target, PersistOptions::default()))
+                    .unwrap_err();
             assert_eq!(Some(temp.path()), failure.error().path());
             failure
         };

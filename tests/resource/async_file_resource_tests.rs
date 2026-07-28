@@ -10,19 +10,57 @@ use std::future::Future;
 use std::io::Result as IoResult;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{Context, Poll, Waker};
+use std::task::{
+    Context,
+    Poll,
+    Waker,
+};
 
 use qubit_fs::{
-    AchievedAtomicity, AsyncDirectoryStream, AsyncDirectoryStreamSession, AsyncFileReader,
-    AsyncFileResource, AsyncFileSystem, AsyncFileWriteSession, AsyncFileWriter,
-    AtomicityRequirement, CopyMethod, CopyOptions, CopyOutcome, CopyStats, CreateDirOptions,
-    DeleteOptions, DirEntry, FileKind, FileLocation, FileMetadata, FileSystemCapabilities,
-    FileSystemCapability, FileSystemId, FileSystemInfo, FileSystemLimit, FileSystemLimits,
-    FileSystemProperties, FsFuture, FsPath, ListOptions, OpenedFileInfo, PathSemantics,
-    PublicationMethod, ReadOptions, RenameOptions, RenameOutcome, ServerSidePreference,
-    WriteFuture, WriteOptions, WriteOutcome,
+    AchievedAtomicity,
+    AsyncDirectoryStream,
+    AsyncDirectoryStreamSession,
+    AsyncFileReader,
+    AsyncFileResource,
+    AsyncFileSystem,
+    AsyncFileWriteSession,
+    AsyncFileWriter,
+    AtomicityRequirement,
+    CopyMethod,
+    CopyOptions,
+    CopyOutcome,
+    CopyStats,
+    CreateDirOptions,
+    DeleteOptions,
+    DirEntry,
+    FileKind,
+    FileLocation,
+    FileMetadata,
+    FileSystemCapabilities,
+    FileSystemCapability,
+    FileSystemId,
+    FileSystemInfo,
+    FileSystemLimit,
+    FileSystemLimits,
+    FileSystemProperties,
+    FsFuture,
+    FsPath,
+    ListOptions,
+    OpenedFileInfo,
+    PathSemantics,
+    PublicationMethod,
+    ReadOptions,
+    RenameOptions,
+    RenameOutcome,
+    ServerSidePreference,
+    WriteFuture,
+    WriteOptions,
+    WriteOutcome,
 };
-use qubit_io::{AsyncInput, AsyncOutput};
+use qubit_io::{
+    AsyncInput,
+    AsyncOutput,
+};
 
 struct ResourceAsyncFs {
     info: FileSystemInfo,
@@ -71,7 +109,10 @@ impl FileSystemProperties for ResourceAsyncFs {
 }
 
 impl AsyncFileSystem for ResourceAsyncFs {
-    fn stat_async<'a>(&'a self, _path: &'a FsPath) -> FsFuture<'a, FileMetadata> {
+    fn stat_async<'a>(
+        &'a self,
+        _path: &'a FsPath,
+    ) -> FsFuture<'a, FileMetadata> {
         Box::pin(async { Ok(FileMetadata::new(FileKind::File)) })
     }
 
@@ -114,7 +155,9 @@ impl AsyncFileSystem for ResourceAsyncFs {
         _options: WriteOptions,
     ) -> FsFuture<'a, AsyncFileWriter> {
         let info = opened_info(path);
-        Box::pin(async move { Ok(AsyncFileWriter::new(ResourceWriteSession, info)) })
+        Box::pin(
+            async move { Ok(AsyncFileWriter::new(ResourceWriteSession, info)) },
+        )
     }
 
     fn create_dir_async<'a>(
@@ -125,7 +168,11 @@ impl AsyncFileSystem for ResourceAsyncFs {
         Box::pin(async { Ok(()) })
     }
 
-    fn delete_async<'a>(&'a self, _path: &'a FsPath, _options: DeleteOptions) -> FsFuture<'a, ()> {
+    fn delete_async<'a>(
+        &'a self,
+        _path: &'a FsPath,
+        _options: DeleteOptions,
+    ) -> FsFuture<'a, ()> {
         Box::pin(async { Ok(()) })
     }
 
@@ -209,7 +256,10 @@ impl AsyncOutput for ResourceWriteSession {
         Poll::Ready(Ok(count))
     }
 
-    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<IoResult<()>> {
+    fn poll_flush(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+    ) -> Poll<IoResult<()>> {
         Poll::Ready(Ok(()))
     }
 }
@@ -276,18 +326,20 @@ fn async_file_resource_delegates_every_operation_and_binds_handles() {
     let error = ready(resource.read_all_async(3)).unwrap_err();
     assert_eq!(qubit_fs::FsErrorKind::ResourceLimitExceeded, error.kind());
     assert_eq!(qubit_fs::FsOperation::Read, error.operation());
-    let outcome = ready(resource.write_all_async(b"updated")).expect("write-all should succeed");
+    let outcome = ready(resource.write_all_async(b"updated"))
+        .expect("write-all should succeed");
     assert_eq!(PublicationMethod::Direct, outcome.method);
 
-    let mut stream = ready(resource.list_async(ListOptions::default())).unwrap();
+    let mut stream =
+        ready(resource.list_async(ListOptions::default())).unwrap();
     assert!(ready(stream.next_entry_async()).unwrap().is_some());
 
-    let reader =
-        ready(resource.open_reader_async(ReadOptions::default())).expect("reader should open");
+    let reader = ready(resource.open_reader_async(ReadOptions::default()))
+        .expect("reader should open");
     assert_eq!(resource.location(), reader.info().location());
 
-    let mut writer =
-        ready(resource.open_writer_async(WriteOptions::default())).expect("writer should open");
+    let mut writer = ready(resource.open_writer_async(WriteOptions::default()))
+        .expect("writer should open");
     assert_eq!(resource.location(), writer.info().location());
     ready(writer.abort_async()).expect("writer should abort");
 
@@ -328,7 +380,8 @@ fn async_file_resource_preflights_provider_path_and_range_limits() {
     let limits = FileSystemLimits::unknown()
         .with_max_path_text_bytes(FileSystemLimit::Maximum(4))
         .with_max_read_range_bytes(FileSystemLimit::Maximum(4));
-    let fs: Arc<dyn AsyncFileSystem> = Arc::new(ResourceAsyncFs::new().with_limits(limits));
+    let fs: Arc<dyn AsyncFileSystem> =
+        Arc::new(ResourceAsyncFs::new().with_limits(limits));
     let resource = AsyncFileResource::new(fs, FsPath::parse("/file").unwrap());
 
     let path_error = ready(resource.stat_async()).unwrap_err();
@@ -340,8 +393,10 @@ fn async_file_resource_preflights_provider_path_and_range_limits() {
     assert_eq!(Some("/file"), path_error.path().map(FsPath::as_str));
     assert_eq!(Some("async-resource"), path_error.provider());
 
-    let fs: Arc<dyn AsyncFileSystem> = Arc::new(ResourceAsyncFs::new().with_limits(limits));
-    let short_resource = AsyncFileResource::new(fs, FsPath::parse("/a").unwrap());
+    let fs: Arc<dyn AsyncFileSystem> =
+        Arc::new(ResourceAsyncFs::new().with_limits(limits));
+    let short_resource =
+        AsyncFileResource::new(fs, FsPath::parse("/a").unwrap());
     let range_error = ready(short_resource.open_reader_async(ReadOptions {
         length: Some(5),
         ..ReadOptions::default()
@@ -358,7 +413,8 @@ fn async_file_resource_preflights_provider_path_and_range_limits() {
 
 #[test]
 fn async_file_resource_preflights_paths_for_every_bound_operation() {
-    let limits = FileSystemLimits::unknown().with_max_path_text_bytes(FileSystemLimit::Maximum(3));
+    let limits = FileSystemLimits::unknown()
+        .with_max_path_text_bytes(FileSystemLimit::Maximum(3));
     let long = FsPath::parse("/long").unwrap();
     let short = FsPath::parse("/a").unwrap();
     let long_resource = AsyncFileResource::new(
@@ -368,31 +424,49 @@ fn async_file_resource_preflights_paths_for_every_bound_operation() {
 
     assert!(ready(long_resource.exists_async()).is_err());
     assert!(ready(long_resource.list_async(ListOptions::default())).is_err());
-    assert!(ready(long_resource.open_reader_async(ReadOptions::default())).is_err());
-    assert!(ready(long_resource.open_writer_async(WriteOptions::default())).is_err());
-    assert!(ready(long_resource.create_dir_async(CreateDirOptions::default())).is_err());
-    assert!(ready(long_resource.delete_async(DeleteOptions::default())).is_err());
-    assert!(ready(long_resource.rename_to_async(&short, RenameOptions::default())).is_err());
-    assert!(ready(long_resource.copy_to_async(&short, CopyOptions::default())).is_err());
+    assert!(
+        ready(long_resource.open_reader_async(ReadOptions::default())).is_err()
+    );
+    assert!(
+        ready(long_resource.open_writer_async(WriteOptions::default()))
+            .is_err()
+    );
+    assert!(
+        ready(long_resource.create_dir_async(CreateDirOptions::default()))
+            .is_err()
+    );
+    assert!(
+        ready(long_resource.delete_async(DeleteOptions::default())).is_err()
+    );
+    assert!(
+        ready(long_resource.rename_to_async(&short, RenameOptions::default()))
+            .is_err()
+    );
+    assert!(
+        ready(long_resource.copy_to_async(&short, CopyOptions::default()))
+            .is_err()
+    );
 
     let short_resource = AsyncFileResource::new(
         Arc::new(ResourceAsyncFs::new().with_limits(limits)),
         short.clone(),
     );
     let rename_error =
-        ready(short_resource.rename_to_async(&long, RenameOptions::default())).unwrap_err();
+        ready(short_resource.rename_to_async(&long, RenameOptions::default()))
+            .unwrap_err();
     assert_eq!(Some(&short), rename_error.path());
     assert_eq!(Some(&long), rename_error.target());
     let copy_error =
-        ready(short_resource.copy_to_async(&long, CopyOptions::default())).unwrap_err();
+        ready(short_resource.copy_to_async(&long, CopyOptions::default()))
+            .unwrap_err();
     assert_eq!(Some(&short), copy_error.path());
     assert_eq!(Some(&long), copy_error.target());
 }
 
 #[test]
 fn async_file_resource_clamps_list_page_size_before_delegation() {
-    let limits =
-        FileSystemLimits::unknown().with_max_list_page_entries(FileSystemLimit::Maximum(64));
+    let limits = FileSystemLimits::unknown()
+        .with_max_list_page_entries(FileSystemLimit::Maximum(64));
     let fs: Arc<dyn AsyncFileSystem> = Arc::new(
         ResourceAsyncFs::new()
             .with_limits(limits)

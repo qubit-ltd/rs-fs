@@ -6,7 +6,10 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::{FsAuthority, FsUriAuthority};
+use qubit_fs::{
+    FsAuthority,
+    FsUriAuthority,
+};
 
 #[test]
 fn fs_uri_authority_distinguishes_absent_empty_and_present_components() {

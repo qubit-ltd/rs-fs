@@ -13,4 +13,5 @@ use std::pin::Pin;
 use crate::FsResult;
 
 /// Boxed, sendable future used by object-safe asynchronous filesystem APIs.
-pub type FsFuture<'a, T> = Pin<Box<dyn Future<Output = FsResult<T>> + Send + 'a>>;
+pub type FsFuture<'a, T> =
+    Pin<Box<dyn Future<Output = FsResult<T>> + Send + 'a>>;

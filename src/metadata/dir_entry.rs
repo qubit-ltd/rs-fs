@@ -7,7 +7,11 @@
 // =============================================================================
 //! Directory entry model.
 
-use crate::{FileKind, FileMetadata, FsPath};
+use crate::{
+    FileKind,
+    FileMetadata,
+    FsPath,
+};
 
 /// One entry returned by directory listing.
 #[derive(Clone, Debug, PartialEq)]

@@ -7,9 +7,20 @@
 // =============================================================================
 //! Full filesystem URI model.
 
-use std::fmt::{Display, Formatter, Result as FmtResult};
+use std::fmt::{
+    Display,
+    Formatter,
+    Result as FmtResult,
+};
 
-use crate::{FsAuthority, FsResult, FsScheme, FsUriAuthority, FsUriPath, FsUriQuery};
+use crate::{
+    FsAuthority,
+    FsResult,
+    FsScheme,
+    FsUriAuthority,
+    FsUriPath,
+    FsUriQuery,
+};
 
 use super::uri_codec::invalid_uri;
 
@@ -43,7 +54,9 @@ impl FsUri {
     /// invalid decoded UTF-8, or control characters.
     pub fn parse(uri: &str) -> FsResult<Self> {
         if uri.chars().any(char::is_control) {
-            return Err(invalid_uri("filesystem URI must not contain controls"));
+            return Err(invalid_uri(
+                "filesystem URI must not contain controls",
+            ));
         }
         if uri.contains('#') {
             return Err(invalid_uri("filesystem URI fragments are forbidden"));

@@ -5,18 +5,46 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use std::sync::{Arc, Mutex};
-
-use std::io::{Error as IoError, ErrorKind as IoErrorKind, Read, Result as IoResult};
-
-use qubit_fs::{
-    FileKind, FileLocation, FileMetadata, FileReader, FileSystem, FileSystemCapabilities,
-    FileSystemExt, FileSystemId, FileSystemInfo, FileSystemLimit, FileSystemLimits,
-    FileSystemProperties, FileWriter, FsError, FsErrorKind, FsOperation, FsPath, OpenedFileInfo,
-    PathSemantics, ReadOptions, WriteOptions,
+use std::sync::{
+    Arc,
+    Mutex,
 };
 
-use crate::common::{MockFs, MockState};
+use std::io::{
+    Error as IoError,
+    ErrorKind as IoErrorKind,
+    Read,
+    Result as IoResult,
+};
+
+use qubit_fs::{
+    FileKind,
+    FileLocation,
+    FileMetadata,
+    FileReader,
+    FileSystem,
+    FileSystemCapabilities,
+    FileSystemExt,
+    FileSystemId,
+    FileSystemInfo,
+    FileSystemLimit,
+    FileSystemLimits,
+    FileSystemProperties,
+    FileWriter,
+    FsError,
+    FsErrorKind,
+    FsOperation,
+    FsPath,
+    OpenedFileInfo,
+    PathSemantics,
+    ReadOptions,
+    WriteOptions,
+};
+
+use crate::common::{
+    MockFs,
+    MockState,
+};
 
 #[test]
 fn test_read_all_and_write_all_success_paths() {
@@ -112,8 +140,10 @@ fn read_all_restores_embedded_file_system_error_context() {
 #[test]
 fn extension_methods_preflight_provider_write_limits() {
     let state = Arc::new(Mutex::new(MockState::default()));
-    let fs = MockFs::with_state(state.clone())
-        .with_limits(FileSystemLimits::unknown().with_max_write_bytes(FileSystemLimit::Maximum(3)));
+    let fs = MockFs::with_state(state.clone()).with_limits(
+        FileSystemLimits::unknown()
+            .with_max_write_bytes(FileSystemLimit::Maximum(3)),
+    );
     let path = FsPath::parse("/file").unwrap();
 
     let error = fs.write_all(&path, b"data").unwrap_err();
@@ -125,7 +155,8 @@ fn extension_methods_preflight_provider_write_limits() {
 
 #[test]
 fn extension_methods_preflight_provider_path_limits() {
-    let limits = FileSystemLimits::unknown().with_max_path_text_bytes(FileSystemLimit::Maximum(3));
+    let limits = FileSystemLimits::unknown()
+        .with_max_path_text_bytes(FileSystemLimit::Maximum(3));
     let path = FsPath::parse("/file").unwrap();
 
     let read_error = MockFs::default()
@@ -195,7 +226,8 @@ impl FileSystemProperties for ExtFileSystem {
     }
 
     fn limits(&self) -> &qubit_fs::FileSystemLimits {
-        static LIMITS: qubit_fs::FileSystemLimits = qubit_fs::FileSystemLimits::unknown();
+        static LIMITS: qubit_fs::FileSystemLimits =
+            qubit_fs::FileSystemLimits::unknown();
         &LIMITS
     }
 }
@@ -205,7 +237,11 @@ impl FileSystem for ExtFileSystem {
         Ok(FileMetadata::new(FileKind::File))
     }
 
-    fn open_reader(&self, path: &FsPath, _options: ReadOptions) -> qubit_fs::FsResult<FileReader> {
+    fn open_reader(
+        &self,
+        path: &FsPath,
+        _options: ReadOptions,
+    ) -> qubit_fs::FsResult<FileReader> {
         match self.mode {
             ExtMode::InterruptedReader => Ok(FileReader::new(
                 InterruptedOnceReader(true),
@@ -215,7 +251,9 @@ impl FileSystem for ExtFileSystem {
                 ProbeErrorReader { emitted: false },
                 opened_info(path),
             )),
-            ExtMode::TimedOutReader => Ok(FileReader::new(TimedOutReader, opened_info(path))),
+            ExtMode::TimedOutReader => {
+                Ok(FileReader::new(TimedOutReader, opened_info(path)))
+            }
             ExtMode::EmbeddedFsErrorReader => {
                 Ok(FileReader::new(EmbeddedFsErrorReader, opened_info(path)))
             }

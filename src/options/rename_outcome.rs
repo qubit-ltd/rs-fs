@@ -7,7 +7,12 @@
 // =============================================================================
 //! Rename operation outcome.
 
-use crate::{AchievedAtomicity, NonSensitiveMetadata, PublicationMethod, UserMetadata};
+use crate::{
+    AchievedAtomicity,
+    NonSensitiveMetadata,
+    PublicationMethod,
+    UserMetadata,
+};
 
 /// Outcome of a rename, move, or provider-equivalent publication.
 #[derive(Clone, Debug, PartialEq)]
@@ -31,7 +36,10 @@ impl RenameOutcome {
     /// A rename outcome without diagnostics.
     #[inline]
     #[must_use]
-    pub fn new(atomicity: AchievedAtomicity, method: PublicationMethod) -> Self {
+    pub fn new(
+        atomicity: AchievedAtomicity,
+        method: PublicationMethod,
+    ) -> Self {
         Self {
             atomicity,
             method,

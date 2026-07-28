@@ -6,7 +6,12 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::{FsError, FsErrorKind, FsOperation, FsResult};
+use qubit_fs::{
+    FsError,
+    FsErrorKind,
+    FsOperation,
+    FsResult,
+};
 
 fn succeed() -> FsResult<()> {
     Ok(())

@@ -6,8 +6,13 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 use qubit_fs::{
-    CopyConflictPolicy, CopyMode, CopyOptions, FileSystemCapabilities, FileSystemCapability,
-    MetadataPreservePolicy, ServerSidePreference,
+    CopyConflictPolicy,
+    CopyMode,
+    CopyOptions,
+    FileSystemCapabilities,
+    FileSystemCapability,
+    MetadataPreservePolicy,
+    ServerSidePreference,
 };
 
 #[test]
@@ -33,7 +38,8 @@ fn required_server_side_copy_is_checked_before_side_effects() {
     assert!(
         options
             .validate_against(
-                FileSystemCapabilities::default().with(FileSystemCapability::ServerSideCopy),
+                FileSystemCapabilities::default()
+                    .with(FileSystemCapability::ServerSideCopy),
             )
             .is_ok()
     );

@@ -8,10 +8,30 @@
 //! Asynchronous filesystem operations.
 
 use crate::{
-    AsyncDirectoryStream, AsyncFileReader, AsyncFileWriter, AsyncTempDir, AsyncTempFile,
-    CopyOptions, CopyOutcome, CreateDirOptions, DeleteOptions, FileMetadata, FileSystemCapability,
-    FileSystemProperties, FsError, FsErrorKind, FsFuture, FsOperation, FsPath, ListOptions,
-    ReadOptions, RenameOptions, RenameOutcome, TempDirOptions, TempFileOptions, WriteOptions,
+    AsyncDirectoryStream,
+    AsyncFileReader,
+    AsyncFileWriter,
+    AsyncTempDir,
+    AsyncTempFile,
+    CopyOptions,
+    CopyOutcome,
+    CreateDirOptions,
+    DeleteOptions,
+    FileMetadata,
+    FileSystemCapability,
+    FileSystemProperties,
+    FsError,
+    FsErrorKind,
+    FsFuture,
+    FsOperation,
+    FsPath,
+    ListOptions,
+    ReadOptions,
+    RenameOptions,
+    RenameOutcome,
+    TempDirOptions,
+    TempFileOptions,
+    WriteOptions,
 };
 
 /// Provider-neutral asynchronous filesystem interface.
@@ -24,7 +44,8 @@ pub trait AsyncFileSystem: FileSystemProperties {
     ///
     /// # Returns
     /// A future resolving to current provider metadata.
-    fn stat_async<'a>(&'a self, path: &'a FsPath) -> FsFuture<'a, FileMetadata>;
+    fn stat_async<'a>(&'a self, path: &'a FsPath)
+    -> FsFuture<'a, FileMetadata>;
 
     /// Asynchronously checks whether a path currently exists.
     ///
@@ -37,7 +58,9 @@ pub trait AsyncFileSystem: FileSystemProperties {
         Box::pin(async move {
             match self.stat_async(path).await {
                 Ok(_) => Ok(true),
-                Err(error) if error.kind() == FsErrorKind::NotFound => Ok(false),
+                Err(error) if error.kind() == FsErrorKind::NotFound => {
+                    Ok(false)
+                }
                 Err(error) => Err(error.with_operation(FsOperation::Exists)),
             }
         })
@@ -58,7 +81,12 @@ pub trait AsyncFileSystem: FileSystemProperties {
         path: &'a FsPath,
         _options: ListOptions,
     ) -> FsFuture<'a, AsyncDirectoryStream> {
-        let error = unsupported(self, path, FsOperation::List, FileSystemCapability::List);
+        let error = unsupported(
+            self,
+            path,
+            FsOperation::List,
+            FileSystemCapability::List,
+        );
         Box::pin(async move { Err(error) })
     }
 
@@ -123,7 +151,11 @@ pub trait AsyncFileSystem: FileSystemProperties {
     ///
     /// Implementations must call [`DeleteOptions::validate_against`] before
     /// modifying the resource.
-    fn delete_async<'a>(&'a self, path: &'a FsPath, _options: DeleteOptions) -> FsFuture<'a, ()> {
+    fn delete_async<'a>(
+        &'a self,
+        path: &'a FsPath,
+        _options: DeleteOptions,
+    ) -> FsFuture<'a, ()> {
         let error = unsupported(
             self,
             path,
@@ -163,8 +195,13 @@ pub trait AsyncFileSystem: FileSystemProperties {
         to: &'a FsPath,
         _options: CopyOptions,
     ) -> FsFuture<'a, CopyOutcome> {
-        let error = unsupported(self, from, FsOperation::Copy, FileSystemCapability::Copy)
-            .with_target(to.clone());
+        let error = unsupported(
+            self,
+            from,
+            FsOperation::Copy,
+            FileSystemCapability::Copy,
+        )
+        .with_target(to.clone());
         Box::pin(async move { Err(error) })
     }
 
@@ -184,7 +221,10 @@ pub trait AsyncFileSystem: FileSystemProperties {
     }
 
     /// Asynchronously creates an explicitly supported temporary directory.
-    fn create_temp_dir_async<'a>(&'a self, _options: TempDirOptions) -> FsFuture<'a, AsyncTempDir> {
+    fn create_temp_dir_async<'a>(
+        &'a self,
+        _options: TempDirOptions,
+    ) -> FsFuture<'a, AsyncTempDir> {
         let error = FsError::new(
             FsErrorKind::UnsupportedCapability,
             FsOperation::CreateTemp,

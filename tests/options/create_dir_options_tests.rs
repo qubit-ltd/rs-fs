@@ -5,7 +5,11 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use qubit_fs::{CreateDirOptions, NonSensitiveMetadata, UserMetadata};
+use qubit_fs::{
+    CreateDirOptions,
+    NonSensitiveMetadata,
+    UserMetadata,
+};
 
 #[test]
 fn test_create_dir_options_full_configuration_is_usable() {

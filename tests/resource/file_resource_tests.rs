@@ -8,14 +8,39 @@
 
 use std::sync::Arc;
 
-use qubit_io::{Input, Output};
+use qubit_io::{
+    Input,
+    Output,
+};
 
 use qubit_fs::{
-    AtomicityRequirement, CopyOptions, CreateDirOptions, DeleteOptions, DirectoryStream,
-    DirectoryStreamExt, FileResource, FileSystem, FileSystemCapabilities, FileSystemCapability,
-    FileSystemId, FileSystemInfo, FileSystemLimit, FileSystemLimits, FileSystemProperties, FsError,
-    FsErrorKind, FsOperation, FsPath, FsResult, FsUri, ListOptions, PathSemantics, ReadOptions,
-    RenameOptions, ServerSidePreference, WriteOptions,
+    AtomicityRequirement,
+    CopyOptions,
+    CreateDirOptions,
+    DeleteOptions,
+    DirectoryStream,
+    DirectoryStreamExt,
+    FileResource,
+    FileSystem,
+    FileSystemCapabilities,
+    FileSystemCapability,
+    FileSystemId,
+    FileSystemInfo,
+    FileSystemLimit,
+    FileSystemLimits,
+    FileSystemProperties,
+    FsError,
+    FsErrorKind,
+    FsOperation,
+    FsPath,
+    FsResult,
+    FsUri,
+    ListOptions,
+    PathSemantics,
+    ReadOptions,
+    RenameOptions,
+    ServerSidePreference,
+    WriteOptions,
 };
 
 use crate::common::MockFs;
@@ -23,7 +48,8 @@ use crate::common::MockFs;
 #[test]
 fn test_file_resource_delegates_operations_to_resolved_file_system() {
     let fs = MockFs::default();
-    let resource_uri = FsUri::parse("mock:///file.txt").expect("URI should parse");
+    let resource_uri =
+        FsUri::parse("mock:///file.txt").expect("URI should parse");
     let resource = resource_with_mock(fs, "/file.txt", resource_uri.clone());
     let _: FileResource = resource.clone();
 
@@ -122,7 +148,8 @@ impl FileSystemProperties for NoCapabilitiesFs {
     }
 
     fn limits(&self) -> &qubit_fs::FileSystemLimits {
-        static LIMITS: qubit_fs::FileSystemLimits = qubit_fs::FileSystemLimits::unknown();
+        static LIMITS: qubit_fs::FileSystemLimits =
+            qubit_fs::FileSystemLimits::unknown();
         &LIMITS
     }
 }
@@ -207,7 +234,8 @@ fn file_resource_preflights_provider_path_and_range_limits() {
     assert_eq!(FsErrorKind::ResourceLimitExceeded, path_error.kind());
     assert_eq!(qubit_fs::FsOperation::Stat, path_error.operation());
 
-    let short_resource = FileResource::new(Arc::new(fs), FsPath::parse("/a").unwrap());
+    let short_resource =
+        FileResource::new(Arc::new(fs), FsPath::parse("/a").unwrap());
     let range_error = short_resource
         .open_reader(ReadOptions {
             length: Some(5),
@@ -220,7 +248,8 @@ fn file_resource_preflights_provider_path_and_range_limits() {
 
 #[test]
 fn file_resource_preflights_paths_for_every_bound_operation() {
-    let limits = FileSystemLimits::unknown().with_max_path_text_bytes(FileSystemLimit::Maximum(3));
+    let limits = FileSystemLimits::unknown()
+        .with_max_path_text_bytes(FileSystemLimit::Maximum(3));
     let long = FsPath::parse("/long").unwrap();
     let short = FsPath::parse("/a").unwrap();
     let long_resource = FileResource::new(
@@ -289,7 +318,11 @@ impl FileSystem for ListPageLimitFs {
         unreachable!("stat is not used by this test")
     }
 
-    fn list(&self, path: &FsPath, options: ListOptions) -> FsResult<DirectoryStream> {
+    fn list(
+        &self,
+        path: &FsPath,
+        options: ListOptions,
+    ) -> FsResult<DirectoryStream> {
         assert_eq!(Some(64), options.page_size);
         Err(FsError::new(
             FsErrorKind::Other,

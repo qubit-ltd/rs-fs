@@ -5,7 +5,10 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use qubit_fs::{FsAuthority, FsUri};
+use qubit_fs::{
+    FsAuthority,
+    FsUri,
+};
 
 #[test]
 fn test_authority_builder_sets_optional_port_and_username() {
@@ -74,7 +77,8 @@ fn uri_authority_accepts_valid_ipv6_and_encoded_usernames() {
     assert_eq!("2001:db8::1", plain_authority.host());
     assert_eq!(None, plain_authority.port());
 
-    let with_details = FsUri::parse("mock://alice%20smith@[2001:db8::1]:443/path").unwrap();
+    let with_details =
+        FsUri::parse("mock://alice%20smith@[2001:db8::1]:443/path").unwrap();
     let authority = with_details.authority().unwrap();
     assert_eq!(Some("alice smith"), authority.username());
     assert_eq!(Some(443), authority.port());

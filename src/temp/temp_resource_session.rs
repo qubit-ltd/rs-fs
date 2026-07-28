@@ -8,7 +8,13 @@
 // qubit-style: allow source-test-pair
 //! Provider-side temporary resource lifecycle sessions.
 
-use crate::{FsPath, FsResult, PersistFailure, PersistOptions, PersistOutcome};
+use crate::{
+    FsPath,
+    FsResult,
+    PersistFailure,
+    PersistOptions,
+    PersistOutcome,
+};
 
 /// Provider lifecycle session underlying a concrete temp file or directory.
 pub trait TempResourceSession: Send {

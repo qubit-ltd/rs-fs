@@ -6,7 +6,10 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::{NativePathCodec, OsStrPathCodec};
+use qubit_fs::{
+    NativePathCodec,
+    OsStrPathCodec,
+};
 
 use std::borrow::Cow;
 use std::ffi::OsStr;
@@ -57,7 +60,9 @@ fn os_str_path_codec_round_trips_unpaired_windows_surrogates() {
     use std::os::windows::ffi::OsStringExt;
 
     let codec = OsStrPathCodec;
-    for (wide, text) in [(vec![0xd800], "%ED%A0%80"), (vec![0xdc00], "%ED%B0%80")] {
+    for (wide, text) in
+        [(vec![0xd800], "%ED%A0%80"), (vec![0xdc00], "%ED%B0%80")]
+    {
         let native = OsString::from_wide(&wide);
         let decoded = codec
             .decode(native.as_os_str())

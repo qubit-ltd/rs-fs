@@ -8,20 +8,58 @@
 
 use std::error::Error;
 use std::future::Future;
-use std::io::{Error as IoError, ErrorKind as IoErrorKind, Result as IoResult};
+use std::io::{
+    Error as IoError,
+    ErrorKind as IoErrorKind,
+    Result as IoResult,
+};
 use std::pin::Pin;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::task::{Context, Poll, Waker};
+use std::sync::atomic::{
+    AtomicUsize,
+    Ordering,
+};
+use std::task::{
+    Context,
+    Poll,
+    Waker,
+};
 
 use qubit_fs::{
-    AchievedAtomicity, AsyncFileReader, AsyncFileSystem, AsyncFileSystemExt, AsyncFileWriteSession,
-    AsyncFileWriter, FileKind, FileLocation, FileMetadata, FileSystemCapabilities, FileSystemId,
-    FileSystemInfo, FileSystemLimit, FileSystemLimits, FileSystemProperties, FsError, FsErrorKind,
-    FsFuture, FsOperation, FsPath, OpenedFileInfo, PathSemantics, PublicationMethod, ReadOptions,
-    WriteFailure, WriteFailureState, WriteFuture, WriteOptions, WriteOutcome,
+    AchievedAtomicity,
+    AsyncFileReader,
+    AsyncFileSystem,
+    AsyncFileSystemExt,
+    AsyncFileWriteSession,
+    AsyncFileWriter,
+    FileKind,
+    FileLocation,
+    FileMetadata,
+    FileSystemCapabilities,
+    FileSystemId,
+    FileSystemInfo,
+    FileSystemLimit,
+    FileSystemLimits,
+    FileSystemProperties,
+    FsError,
+    FsErrorKind,
+    FsFuture,
+    FsOperation,
+    FsPath,
+    OpenedFileInfo,
+    PathSemantics,
+    PublicationMethod,
+    ReadOptions,
+    WriteFailure,
+    WriteFailureState,
+    WriteFuture,
+    WriteOptions,
+    WriteOutcome,
 };
-use qubit_io::{AsyncInput, AsyncOutput};
+use qubit_io::{
+    AsyncInput,
+    AsyncOutput,
+};
 
 #[derive(Clone, Copy)]
 enum ExtMode {
@@ -79,7 +117,10 @@ impl FileSystemProperties for ExtAsyncFs {
 }
 
 impl AsyncFileSystem for ExtAsyncFs {
-    fn stat_async<'a>(&'a self, _path: &'a FsPath) -> FsFuture<'a, FileMetadata> {
+    fn stat_async<'a>(
+        &'a self,
+        _path: &'a FsPath,
+    ) -> FsFuture<'a, FileMetadata> {
         Box::pin(async { Ok(FileMetadata::new(FileKind::File)) })
     }
 
@@ -94,7 +135,9 @@ impl AsyncFileSystem for ExtAsyncFs {
                 FsOperation::OpenReader,
                 "open reader failed",
             )),
-            ExtMode::EmptyRead => Ok(AsyncFileReader::new(ExtInput::Eof, opened_info(path))),
+            ExtMode::EmptyRead => {
+                Ok(AsyncFileReader::new(ExtInput::Eof, opened_info(path)))
+            }
             ExtMode::InterruptedRead => Ok(AsyncFileReader::new(
                 ExtInput::Interrupted,
                 opened_info(path),
@@ -173,7 +216,9 @@ impl AsyncInput for ExtInput {
                 Poll::Ready(Ok(1))
             }
             Self::ProbeError { .. } => Poll::Ready(Ok(0)),
-            Self::TimedOut => Poll::Ready(Err(IoError::from(IoErrorKind::TimedOut))),
+            Self::TimedOut => {
+                Poll::Ready(Err(IoError::from(IoErrorKind::TimedOut)))
+            }
             Self::EmbeddedFsError => Poll::Ready(Err(FsError::new(
                 FsErrorKind::QuotaExceeded,
                 FsOperation::OpenReader,
@@ -210,7 +255,10 @@ impl AsyncOutput for ExtWriteSession {
         }
     }
 
-    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<IoResult<()>> {
+    fn poll_flush(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+    ) -> Poll<IoResult<()>> {
         Poll::Ready(Ok(()))
     }
 }
@@ -220,7 +268,11 @@ impl AsyncFileWriteSession for ExtWriteSession {
         if self.fail_commit {
             Box::pin(async {
                 Err(WriteFailure::new(
-                    FsError::new(FsErrorKind::Io, FsOperation::CommitWriter, "commit failed"),
+                    FsError::new(
+                        FsErrorKind::Io,
+                        FsOperation::CommitWriter,
+                        "commit failed",
+                    ),
                     WriteFailureState::Retryable,
                 ))
             })
@@ -298,8 +350,10 @@ fn async_read_all_rejects_a_nonempty_resource_with_a_zero_budget() {
 #[test]
 fn async_read_all_preserves_probe_errors() {
     let path = FsPath::parse("/probe-error").unwrap();
-    let error =
-        ready(ExtAsyncFs::new(ExtMode::ProbeErrorRead).read_all_async(&path, 1)).unwrap_err();
+    let error = ready(
+        ExtAsyncFs::new(ExtMode::ProbeErrorRead).read_all_async(&path, 1),
+    )
+    .unwrap_err();
 
     assert_eq!(FsErrorKind::Io, error.kind());
     assert_eq!(FsOperation::Read, error.operation());
@@ -310,8 +364,9 @@ fn async_read_all_preserves_probe_errors() {
 fn async_read_all_preserves_specific_standard_io_error_kinds() {
     let path = FsPath::parse("/timeout").expect("path should parse");
 
-    let error = ready(ExtAsyncFs::new(ExtMode::TimedOutRead).read_all_async(&path, 1))
-        .expect_err("timed-out stream should fail");
+    let error =
+        ready(ExtAsyncFs::new(ExtMode::TimedOutRead).read_all_async(&path, 1))
+            .expect_err("timed-out stream should fail");
 
     assert_eq!(FsErrorKind::Timeout, error.kind());
     assert_eq!(FsOperation::Read, error.operation());
@@ -322,8 +377,10 @@ fn async_read_all_preserves_specific_standard_io_error_kinds() {
 fn async_read_all_restores_embedded_file_system_error_context() {
     let path = FsPath::parse("/quota").expect("path should parse");
 
-    let error = ready(ExtAsyncFs::new(ExtMode::EmbeddedFsErrorRead).read_all_async(&path, 1))
-        .expect_err("quota error should fail the read");
+    let error = ready(
+        ExtAsyncFs::new(ExtMode::EmbeddedFsErrorRead).read_all_async(&path, 1),
+    )
+    .expect_err("quota error should fail the read");
 
     assert_eq!(FsErrorKind::QuotaExceeded, error.kind());
     assert_eq!(FsOperation::Read, error.operation());
@@ -334,8 +391,10 @@ fn async_read_all_restores_embedded_file_system_error_context() {
 #[test]
 fn async_extension_methods_preflight_provider_write_limits() {
     let path = FsPath::parse("/file").unwrap();
-    let fs = ExtAsyncFs::new(ExtMode::InterruptedRead)
-        .with_limits(FileSystemLimits::unknown().with_max_write_bytes(FileSystemLimit::Maximum(3)));
+    let fs = ExtAsyncFs::new(ExtMode::InterruptedRead).with_limits(
+        FileSystemLimits::unknown()
+            .with_max_write_bytes(FileSystemLimit::Maximum(3)),
+    );
 
     let error = ready(fs.write_all_async(&path, b"data")).unwrap_err();
     assert_eq!(FsErrorKind::ResourceLimitExceeded, error.kind());
@@ -345,7 +404,8 @@ fn async_extension_methods_preflight_provider_write_limits() {
 
 #[test]
 fn async_extension_methods_preflight_provider_path_limits() {
-    let limits = FileSystemLimits::unknown().with_max_path_text_bytes(FileSystemLimit::Maximum(3));
+    let limits = FileSystemLimits::unknown()
+        .with_max_path_text_bytes(FileSystemLimit::Maximum(3));
     let path = FsPath::parse("/file").unwrap();
 
     let read_error = ready(
@@ -371,15 +431,22 @@ fn async_extension_methods_preflight_provider_path_limits() {
 fn async_file_system_extensions_preserve_open_and_transfer_errors() {
     let path = FsPath::parse("/file").unwrap();
 
-    let error =
-        ready(ExtAsyncFs::new(ExtMode::OpenReaderError).read_all_async(&path, 16)).unwrap_err();
+    let error = ready(
+        ExtAsyncFs::new(ExtMode::OpenReaderError).read_all_async(&path, 16),
+    )
+    .unwrap_err();
     assert_eq!(FsOperation::OpenReader, error.operation());
 
-    let error = ready(ExtAsyncFs::new(ExtMode::ReadError).read_all_async(&path, 16)).unwrap_err();
+    let error =
+        ready(ExtAsyncFs::new(ExtMode::ReadError).read_all_async(&path, 16))
+            .unwrap_err();
     assert_eq!(FsOperation::Read, error.operation());
 
-    let error = ready(ExtAsyncFs::new(ExtMode::OpenWriterError).write_all_async(&path, b"data"))
-        .unwrap_err();
+    let error = ready(
+        ExtAsyncFs::new(ExtMode::OpenWriterError)
+            .write_all_async(&path, b"data"),
+    )
+    .unwrap_err();
     assert_eq!(FsOperation::OpenWriter, error.operation());
 
     let fs = ExtAsyncFs::new(ExtMode::WriteError);
@@ -387,7 +454,9 @@ fn async_file_system_extensions_preserve_open_and_transfer_errors() {
     assert_eq!(FsOperation::Write, error.operation());
     assert_eq!(1, fs.aborts.load(Ordering::Relaxed));
 
-    let error =
-        ready(ExtAsyncFs::new(ExtMode::CommitError).write_all_async(&path, b"data")).unwrap_err();
+    let error = ready(
+        ExtAsyncFs::new(ExtMode::CommitError).write_all_async(&path, b"data"),
+    )
+    .unwrap_err();
     assert_eq!(FsOperation::CommitWriter, error.operation());
 }

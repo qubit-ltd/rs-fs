@@ -8,7 +8,11 @@
 
 use std::borrow::Cow;
 
-use qubit_fs::{NativePathCodec, NativePathCodecError, Utf8PathCodec};
+use qubit_fs::{
+    NativePathCodec,
+    NativePathCodecError,
+    Utf8PathCodec,
+};
 
 #[test]
 fn utf8_path_codec_borrows_plain_utf8() {

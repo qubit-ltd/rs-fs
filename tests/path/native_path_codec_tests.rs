@@ -6,7 +6,12 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::{EscapedBytePathCodec, NativePathCodec, NativePathCodecError, Utf8PathCodec};
+use qubit_fs::{
+    EscapedBytePathCodec,
+    NativePathCodec,
+    NativePathCodecError,
+    Utf8PathCodec,
+};
 
 #[test]
 fn test_byte_codecs_preserve_their_supported_domains() {

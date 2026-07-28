@@ -7,14 +7,36 @@
 // =============================================================================
 //! Bound asynchronous filesystem resources.
 
-use std::fmt::{Debug, Formatter, Result as FmtResult};
+use std::fmt::{
+    Debug,
+    Formatter,
+    Result as FmtResult,
+};
 use std::sync::Arc;
 
 use crate::{
-    AsyncDirectoryStream, AsyncFileReader, AsyncFileSystem, AsyncFileSystemExt, AsyncFileWriter,
-    CopyOptions, CopyOutcome, CreateDirOptions, DeleteOptions, FileLocation, FileMetadata,
-    FsFuture, FsOperation, FsPath, FsResult, FsUri, ListOptions, ReadOptions, RenameOptions,
-    RenameOutcome, WriteOptions, WriteOutcome,
+    AsyncDirectoryStream,
+    AsyncFileReader,
+    AsyncFileSystem,
+    AsyncFileSystemExt,
+    AsyncFileWriter,
+    CopyOptions,
+    CopyOutcome,
+    CreateDirOptions,
+    DeleteOptions,
+    FileLocation,
+    FileMetadata,
+    FsFuture,
+    FsOperation,
+    FsPath,
+    FsResult,
+    FsUri,
+    ListOptions,
+    ReadOptions,
+    RenameOptions,
+    RenameOutcome,
+    WriteOptions,
+    WriteOutcome,
 };
 
 /// A provider-local path bound to an asynchronous filesystem object.
@@ -44,8 +66,13 @@ impl AsyncFileResource {
     /// A resource whose location identity is derived from `fs`.
     #[inline]
     #[must_use]
-    pub fn from_resolved(fs: Arc<dyn AsyncFileSystem>, path: FsPath, canonical_uri: FsUri) -> Self {
-        let location = FileLocation::new(fs.info().id().clone(), path).with_uri(canonical_uri);
+    pub fn from_resolved(
+        fs: Arc<dyn AsyncFileSystem>,
+        path: FsPath,
+        canonical_uri: FsUri,
+    ) -> Self {
+        let location = FileLocation::new(fs.info().id().clone(), path)
+            .with_uri(canonical_uri);
         Self { fs, location }
     }
 
@@ -87,7 +114,8 @@ impl AsyncFileResource {
     /// Asynchronously checks observed existence.
     #[inline]
     pub fn exists_async(&self) -> FsFuture<'_, bool> {
-        if let Err(error) = self.validate_path(self.path(), FsOperation::Exists) {
+        if let Err(error) = self.validate_path(self.path(), FsOperation::Exists)
+        {
             return Box::pin(async move { Err(error) });
         }
         Box::pin(async move {
@@ -100,11 +128,15 @@ impl AsyncFileResource {
 
     /// Asynchronously opens a directory enumeration.
     #[inline]
-    pub fn list_async(&self, mut options: ListOptions) -> FsFuture<'_, AsyncDirectoryStream> {
+    pub fn list_async(
+        &self,
+        mut options: ListOptions,
+    ) -> FsFuture<'_, AsyncDirectoryStream> {
         if let Err(error) = self.validate_path(self.path(), FsOperation::List) {
             return Box::pin(async move { Err(error) });
         }
-        options.page_size = self.fs.limits().clamp_list_page_size(options.page_size);
+        options.page_size =
+            self.fs.limits().clamp_list_page_size(options.page_size);
         Box::pin(async move {
             self.fs
                 .list_async(self.path(), options)
@@ -115,8 +147,13 @@ impl AsyncFileResource {
 
     /// Asynchronously opens an already-initialized file reader.
     #[inline]
-    pub fn open_reader_async(&self, options: ReadOptions) -> FsFuture<'_, AsyncFileReader> {
-        if let Err(error) = self.validate_path(self.path(), FsOperation::OpenReader) {
+    pub fn open_reader_async(
+        &self,
+        options: ReadOptions,
+    ) -> FsFuture<'_, AsyncFileReader> {
+        if let Err(error) =
+            self.validate_path(self.path(), FsOperation::OpenReader)
+        {
             let error = self.with_context(error, None);
             return Box::pin(async move { Err(error) });
         }
@@ -146,8 +183,13 @@ impl AsyncFileResource {
 
     /// Asynchronously opens an already-initialized file writer.
     #[inline]
-    pub fn open_writer_async(&self, options: WriteOptions) -> FsFuture<'_, AsyncFileWriter> {
-        if let Err(error) = self.validate_path(self.path(), FsOperation::OpenWriter) {
+    pub fn open_writer_async(
+        &self,
+        options: WriteOptions,
+    ) -> FsFuture<'_, AsyncFileWriter> {
+        if let Err(error) =
+            self.validate_path(self.path(), FsOperation::OpenWriter)
+        {
             let error = self.with_context(error, None);
             return Box::pin(async move { Err(error) });
         }
@@ -207,7 +249,10 @@ impl AsyncFileResource {
     /// write, abort, or commit the resource, or when a declared finite provider
     /// limit is exceeded.
     #[inline(always)]
-    pub fn write_all_async<'a>(&'a self, bytes: &'a [u8]) -> FsFuture<'a, WriteOutcome> {
+    pub fn write_all_async<'a>(
+        &'a self,
+        bytes: &'a [u8],
+    ) -> FsFuture<'a, WriteOutcome> {
         Box::pin(async move {
             self.fs
                 .write_all_async(self.path(), bytes)
@@ -218,8 +263,13 @@ impl AsyncFileResource {
 
     /// Asynchronously creates this resource as a directory.
     #[inline]
-    pub fn create_dir_async(&self, options: CreateDirOptions) -> FsFuture<'_, ()> {
-        if let Err(error) = self.validate_path(self.path(), FsOperation::CreateDir) {
+    pub fn create_dir_async(
+        &self,
+        options: CreateDirOptions,
+    ) -> FsFuture<'_, ()> {
+        if let Err(error) =
+            self.validate_path(self.path(), FsOperation::CreateDir)
+        {
             let error = self.with_context(error, None);
             return Box::pin(async move { Err(error) });
         }
@@ -234,7 +284,8 @@ impl AsyncFileResource {
     /// Asynchronously deletes this resource.
     #[inline]
     pub fn delete_async(&self, options: DeleteOptions) -> FsFuture<'_, ()> {
-        if let Err(error) = self.validate_path(self.path(), FsOperation::Delete) {
+        if let Err(error) = self.validate_path(self.path(), FsOperation::Delete)
+        {
             let error = self.with_context(error, None);
             return Box::pin(async move { Err(error) });
         }
@@ -257,11 +308,14 @@ impl AsyncFileResource {
         target: &'a FsPath,
         options: RenameOptions,
     ) -> FsFuture<'a, RenameOutcome> {
-        if let Err(error) = self.validate_path(self.path(), FsOperation::Rename) {
+        if let Err(error) = self.validate_path(self.path(), FsOperation::Rename)
+        {
             let error = self.with_context(error, Some(target));
             return Box::pin(async move { Err(error) });
         }
-        if let Err(error) = self.validate_target_path(target, FsOperation::Rename) {
+        if let Err(error) =
+            self.validate_target_path(target, FsOperation::Rename)
+        {
             return Box::pin(async move { Err(error) });
         }
         if let Err(error) = options.validate_against(self.fs.capabilities()) {
@@ -287,7 +341,8 @@ impl AsyncFileResource {
             let error = self.with_context(error, Some(target));
             return Box::pin(async move { Err(error) });
         }
-        if let Err(error) = self.validate_target_path(target, FsOperation::Copy) {
+        if let Err(error) = self.validate_target_path(target, FsOperation::Copy)
+        {
             return Box::pin(async move { Err(error) });
         }
         if let Err(error) = options.validate_against(self.fs.capabilities()) {
@@ -309,7 +364,11 @@ impl AsyncFileResource {
     }
 
     /// Validates `path` against the owning filesystem's declared limits.
-    pub(crate) fn validate_path(&self, path: &FsPath, operation: FsOperation) -> FsResult<()> {
+    pub(crate) fn validate_path(
+        &self,
+        path: &FsPath,
+        operation: FsOperation,
+    ) -> FsResult<()> {
         self.fs
             .limits()
             .validate_path(path, self.fs.info().path_semantics(), operation)
@@ -317,7 +376,11 @@ impl AsyncFileResource {
     }
 
     /// Validates a destination path while retaining source and target roles.
-    fn validate_target_path(&self, target: &FsPath, operation: FsOperation) -> FsResult<()> {
+    fn validate_target_path(
+        &self,
+        target: &FsPath,
+        operation: FsOperation,
+    ) -> FsResult<()> {
         self.fs
             .limits()
             .validate_path(target, self.fs.info().path_semantics(), operation)
@@ -333,8 +396,16 @@ impl AsyncFileResource {
 
     /// Adds resource identity to an error that crossed this abstraction
     /// boundary without replacing provider-supplied context.
-    fn with_context(&self, error: crate::FsError, target: Option<&FsPath>) -> crate::FsError {
-        error.with_missing_context(self.path(), target, self.fs.info().provider_id())
+    fn with_context(
+        &self,
+        error: crate::FsError,
+        target: Option<&FsPath>,
+    ) -> crate::FsError {
+        error.with_missing_context(
+            self.path(),
+            target,
+            self.fs.info().provider_id(),
+        )
     }
 }
 

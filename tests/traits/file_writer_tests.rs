@@ -7,12 +7,27 @@
 // =============================================================================
 
 use std::io::Result as IoResult;
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc,
+    Mutex,
+};
 
 use qubit_fs::{
-    AchievedAtomicity, FileLocation, FileSystemId, FileWriteSession, FileWriter, FsError,
-    FsErrorKind, FsOperation, FsPath, OpenedFileInfo, PublicationMethod, WriteFailure,
-    WriteFailureState, WriteOutcome, WriterState,
+    AchievedAtomicity,
+    FileLocation,
+    FileSystemId,
+    FileWriteSession,
+    FileWriter,
+    FsError,
+    FsErrorKind,
+    FsOperation,
+    FsPath,
+    OpenedFileInfo,
+    PublicationMethod,
+    WriteFailure,
+    WriteFailureState,
+    WriteOutcome,
+    WriterState,
 };
 use qubit_io::Output;
 
@@ -72,7 +87,11 @@ impl FileWriteSession for TestWriteSession {
     fn abort(&mut self) -> qubit_fs::FsResult<()> {
         *self.aborts.lock().expect("abort lock should succeed") += 1;
         if let Some(kind) = self.abort_error {
-            return Err(FsError::new(kind, FsOperation::AbortWriter, "abort failed"));
+            return Err(FsError::new(
+                kind,
+                FsOperation::AbortWriter,
+                "abort failed",
+            ));
         }
         Ok(())
     }
@@ -193,7 +212,8 @@ fn writer_rejects_io_after_commit_and_repeated_lifecycle_calls() {
     let commit_error = writer.commit().expect_err("second commit should fail");
     assert_eq!(FsErrorKind::InvalidState, commit_error.kind());
     assert_eq!(FsOperation::CommitWriter, commit_error.operation());
-    let abort_error = writer.abort().expect_err("abort after commit should fail");
+    let abort_error =
+        writer.abort().expect_err("abort after commit should fail");
     assert_eq!(FsErrorKind::InvalidState, abort_error.kind());
     assert_eq!(FsOperation::AbortWriter, abort_error.operation());
     assert_eq!(

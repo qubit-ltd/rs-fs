@@ -6,13 +6,19 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::{FileSystemId, FileSystemInfo, PathSemantics, UserMetadata};
+use qubit_fs::{
+    FileSystemId,
+    FileSystemInfo,
+    PathSemantics,
+    UserMetadata,
+};
 
 /// Verifies core provider identity is represented without an SPI wrapper.
 #[test]
 fn test_file_system_info_stores_provider_as_text() {
     let info = FileSystemInfo::new(
-        FileSystemId::new("local-instance").expect("the filesystem ID should validate"),
+        FileSystemId::new("local-instance")
+            .expect("the filesystem ID should validate"),
         "local",
         PathSemantics::Hierarchical,
     );

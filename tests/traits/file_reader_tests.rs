@@ -9,7 +9,14 @@
 use std::io::Result as IoResult;
 
 use qubit_fs::{
-    FileKind, FileLocation, FileMetadata, FileReader, FileSystemId, FsPath, FsUri, OpenedFileInfo,
+    FileKind,
+    FileLocation,
+    FileMetadata,
+    FileReader,
+    FileSystemId,
+    FsPath,
+    FsUri,
+    OpenedFileInfo,
 };
 use qubit_io::Input;
 
@@ -44,7 +51,8 @@ fn concrete_file_reader_combines_an_explicit_file_identity_and_input() {
         FsPath::parse_normalized("/notes.txt").expect("path should parse"),
     )
     .with_uri(FsUri::parse("mock:///notes.txt").expect("URI should parse"));
-    let info = OpenedFileInfo::new(location).with_metadata(FileMetadata::new(FileKind::File));
+    let info = OpenedFileInfo::new(location)
+        .with_metadata(FileMetadata::new(FileKind::File));
     let mut reader = FileReader::new(
         InputOnly {
             bytes: b"abc".to_vec(),

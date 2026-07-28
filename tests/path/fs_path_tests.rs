@@ -5,7 +5,10 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use qubit_fs::{FsName, FsPath};
+use qubit_fs::{
+    FsName,
+    FsPath,
+};
 
 #[test]
 fn test_root_path_reports_root_properties() {

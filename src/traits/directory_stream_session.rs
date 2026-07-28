@@ -8,7 +8,10 @@
 // qubit-style: allow source-test-pair
 //! Provider-side synchronous directory enumeration sessions.
 
-use crate::{DirEntry, FsResult};
+use crate::{
+    DirEntry,
+    FsResult,
+};
 
 /// Provider session underlying a concrete [`crate::DirectoryStream`].
 pub trait DirectoryStreamSession: Send {

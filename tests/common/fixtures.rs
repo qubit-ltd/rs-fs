@@ -8,17 +8,59 @@
 
 use std::collections::HashSet;
 use std::fmt::Debug;
-use std::io::{Cursor, Read, Result as IoResult, Write};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::io::{
+    Cursor,
+    Read,
+    Result as IoResult,
+    Write,
+};
+use std::sync::{
+    Arc,
+    Mutex,
+    OnceLock,
+};
 
 use qubit_fs::{
-    AchievedAtomicity, CopyMethod, CopyOptions, CopyOutcome, CopyStats, CreateDirOptions,
-    DeleteOptions, DirEntry, DirectoryStream, DirectoryStreamSession, FileKind, FileLocation,
-    FileMetadata, FileReader, FileSystem, FileSystemCapabilities, FileSystemCapability,
-    FileSystemId, FileSystemInfo, FileSystemLimits, FileSystemProperties, FileWriteSession,
-    FileWriter, FsError, FsErrorKind, FsOperation, FsPath, FsResult, ListOptions, OpenedFileInfo,
-    PathSemantics, PublicationMethod, ReadOptions, RenameOptions, RenameOutcome, ResourceVersion,
-    WriteFailure, WriteFailureState, WriteOptions, WriteOutcome,
+    AchievedAtomicity,
+    CopyMethod,
+    CopyOptions,
+    CopyOutcome,
+    CopyStats,
+    CreateDirOptions,
+    DeleteOptions,
+    DirEntry,
+    DirectoryStream,
+    DirectoryStreamSession,
+    FileKind,
+    FileLocation,
+    FileMetadata,
+    FileReader,
+    FileSystem,
+    FileSystemCapabilities,
+    FileSystemCapability,
+    FileSystemId,
+    FileSystemInfo,
+    FileSystemLimits,
+    FileSystemProperties,
+    FileWriteSession,
+    FileWriter,
+    FsError,
+    FsErrorKind,
+    FsOperation,
+    FsPath,
+    FsResult,
+    ListOptions,
+    OpenedFileInfo,
+    PathSemantics,
+    PublicationMethod,
+    ReadOptions,
+    RenameOptions,
+    RenameOutcome,
+    ResourceVersion,
+    WriteFailure,
+    WriteFailureState,
+    WriteOptions,
+    WriteOutcome,
 };
 
 #[derive(Debug, Default)]
@@ -69,7 +111,8 @@ impl FileSystemProperties for MockFs {
         static INFO: OnceLock<FileSystemInfo> = OnceLock::new();
         INFO.get_or_init(|| {
             FileSystemInfo::new(
-                FileSystemId::new("mock-instance").expect("mock filesystem id should be valid"),
+                FileSystemId::new("mock-instance")
+                    .expect("mock filesystem id should be valid"),
                 "mock",
                 PathSemantics::Hierarchical,
             )
@@ -120,25 +163,39 @@ impl FileSystem for MockFs {
             metadata.etag = Some(ResourceVersion::from("v1"));
             Ok(metadata)
         } else {
-            Err(
-                FsError::new(FsErrorKind::NotFound, FsOperation::Stat, "missing")
-                    .with_path(path.clone()),
+            Err(FsError::new(
+                FsErrorKind::NotFound,
+                FsOperation::Stat,
+                "missing",
             )
+            .with_path(path.clone()))
         }
     }
 
     fn exists(&self, path: &FsPath) -> FsResult<bool> {
         let state = self.state.lock().expect("state lock should succeed");
-        Ok(state.files.contains(path.as_str()) || state.dirs.contains(path.as_str()))
+        Ok(state.files.contains(path.as_str())
+            || state.dirs.contains(path.as_str()))
     }
 
-    fn list(&self, _path: &FsPath, _options: ListOptions) -> FsResult<DirectoryStream> {
+    fn list(
+        &self,
+        _path: &FsPath,
+        _options: ListOptions,
+    ) -> FsResult<DirectoryStream> {
         Ok(DirectoryStream::new(MockDirectoryStream {
-            entries: vec![DirEntry::new(FsPath::parse("/a.txt")?, FileKind::File)],
+            entries: vec![DirEntry::new(
+                FsPath::parse("/a.txt")?,
+                FileKind::File,
+            )],
         }))
     }
 
-    fn open_reader(&self, path: &FsPath, _options: ReadOptions) -> FsResult<FileReader> {
+    fn open_reader(
+        &self,
+        path: &FsPath,
+        _options: ReadOptions,
+    ) -> FsResult<FileReader> {
         let info = mock_opened_info(path);
         if self
             .state
@@ -151,7 +208,11 @@ impl FileSystem for MockFs {
         Ok(FileReader::new(Cursor::new(b"data".to_vec()), info))
     }
 
-    fn open_writer(&self, path: &FsPath, _options: WriteOptions) -> FsResult<FileWriter> {
+    fn open_writer(
+        &self,
+        path: &FsPath,
+        _options: WriteOptions,
+    ) -> FsResult<FileWriter> {
         let fail_write = self
             .state
             .lock()
@@ -174,7 +235,11 @@ impl FileSystem for MockFs {
         ))
     }
 
-    fn create_dir(&self, path: &FsPath, _options: CreateDirOptions) -> FsResult<()> {
+    fn create_dir(
+        &self,
+        path: &FsPath,
+        _options: CreateDirOptions,
+    ) -> FsResult<()> {
         let mut state = self.state.lock().expect("state lock should succeed");
         if state.fail_create_dir {
             return Err(FsError::new(
@@ -231,7 +296,12 @@ impl FileSystem for MockFs {
         ))
     }
 
-    fn copy(&self, from: &FsPath, to: &FsPath, _options: CopyOptions) -> FsResult<CopyOutcome> {
+    fn copy(
+        &self,
+        from: &FsPath,
+        to: &FsPath,
+        _options: CopyOptions,
+    ) -> FsResult<CopyOutcome> {
         let mut state = self.state.lock().expect("state lock should succeed");
         state
             .copies
@@ -277,14 +347,21 @@ impl FileWriteSession for MockWriter {
     fn commit(&mut self) -> Result<WriteOutcome, WriteFailure> {
         if self.fail_commit {
             return Err(WriteFailure::new(
-                FsError::new(FsErrorKind::Io, FsOperation::OpenWriter, "commit failed"),
+                FsError::new(
+                    FsErrorKind::Io,
+                    FsOperation::OpenWriter,
+                    "commit failed",
+                ),
                 WriteFailureState::Retryable,
             ));
         }
         let mut state = self.state.lock().expect("state lock should succeed");
         state.files.insert(self.path.as_str().to_owned());
         state.writes.push(self.path.as_str().to_owned());
-        let mut outcome = WriteOutcome::new(AchievedAtomicity::Atomic, PublicationMethod::Direct);
+        let mut outcome = WriteOutcome::new(
+            AchievedAtomicity::Atomic,
+            PublicationMethod::Direct,
+        );
         outcome.bytes_written = Some(self.bytes.len() as u64);
         outcome.version = Some(ResourceVersion::new("committed"));
         Ok(outcome)

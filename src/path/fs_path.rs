@@ -7,9 +7,18 @@
 // =============================================================================
 //! Provider-local filesystem path model.
 
-use std::fmt::{Display, Formatter, Result as FmtResult};
+use std::fmt::{
+    Display,
+    Formatter,
+    Result as FmtResult,
+};
 
-use crate::{FsName, FsOperation, FsResult, RelativeFsPath};
+use crate::{
+    FsName,
+    FsOperation,
+    FsResult,
+    RelativeFsPath,
+};
 
 use super::native_path_text::validate_canonical_text;
 
@@ -202,7 +211,8 @@ impl FsPath {
     /// Returns [`crate::FsError`] when `child` is empty, absolute, contains a
     /// control character, or escapes above the base with `..`.
     pub fn join(&self, child: &str) -> FsResult<Self> {
-        RelativeFsPath::parse(child).map(|relative| self.join_relative(&relative))
+        RelativeFsPath::parse(child)
+            .map(|relative| self.join_relative(&relative))
     }
 
     /// Gets this path's parent.

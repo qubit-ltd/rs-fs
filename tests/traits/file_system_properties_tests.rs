@@ -7,8 +7,14 @@
 // =============================================================================
 
 use qubit_fs::{
-    FileSystemCapabilities, FileSystemCapability, FileSystemId, FileSystemInfo, FileSystemLimit,
-    FileSystemLimits, FileSystemProperties, PathSemantics,
+    FileSystemCapabilities,
+    FileSystemCapability,
+    FileSystemId,
+    FileSystemInfo,
+    FileSystemLimit,
+    FileSystemLimits,
+    FileSystemProperties,
+    PathSemantics,
 };
 
 #[derive(Debug)]
@@ -40,8 +46,10 @@ fn common_properties_are_object_safe_local_snapshots() {
             "mock",
             PathSemantics::Hierarchical,
         ),
-        capabilities: FileSystemCapabilities::default().with(FileSystemCapability::Read),
-        limits: FileSystemLimits::unknown().with_max_write_bytes(FileSystemLimit::Maximum(1024)),
+        capabilities: FileSystemCapabilities::default()
+            .with(FileSystemCapability::Read),
+        limits: FileSystemLimits::unknown()
+            .with_max_write_bytes(FileSystemLimit::Maximum(1024)),
     });
 
     assert_eq!("properties-instance", properties.info().id().as_str());

@@ -9,13 +9,34 @@
 use std::future::Future;
 use std::io::Result as IoResult;
 use std::pin::Pin;
-use std::sync::{Arc, Mutex};
-use std::task::{Context, Poll, Waker};
+use std::sync::{
+    Arc,
+    Mutex,
+};
+use std::task::{
+    Context,
+    Poll,
+    Waker,
+};
 
 use qubit_fs::{
-    AchievedAtomicity, AsyncFileWriteSession, AsyncFileWriter, FileLocation, FileSystemId, FsError,
-    FsErrorKind, FsFuture, FsOperation, FsPath, OpenedFileInfo, PublicationMethod, WriteFailure,
-    WriteFailureState, WriteFuture, WriteOutcome, WriterState,
+    AchievedAtomicity,
+    AsyncFileWriteSession,
+    AsyncFileWriter,
+    FileLocation,
+    FileSystemId,
+    FsError,
+    FsErrorKind,
+    FsFuture,
+    FsOperation,
+    FsPath,
+    OpenedFileInfo,
+    PublicationMethod,
+    WriteFailure,
+    WriteFailureState,
+    WriteFuture,
+    WriteOutcome,
+    WriterState,
 };
 use qubit_io::AsyncOutput;
 
@@ -50,7 +71,10 @@ impl AsyncOutput for ReadyWriteSession {
         Poll::Ready(Ok(count))
     }
 
-    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<IoResult<()>> {
+    fn poll_flush(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+    ) -> Poll<IoResult<()>> {
         Poll::Ready(Ok(()))
     }
 }
@@ -67,7 +91,11 @@ impl AsyncFileWriteSession for ReadyWriteSession {
             };
             return Box::pin(async move {
                 Err(WriteFailure::new(
-                    FsError::new(kind, FsOperation::CommitWriter, "commit failed"),
+                    FsError::new(
+                        kind,
+                        FsOperation::CommitWriter,
+                        "commit failed",
+                    ),
                     state,
                 ))
             });
@@ -84,7 +112,11 @@ impl AsyncFileWriteSession for ReadyWriteSession {
         let abort_error = self.abort_error;
         Box::pin(async move {
             if let Some(kind) = abort_error {
-                Err(FsError::new(kind, FsOperation::AbortWriter, "abort failed"))
+                Err(FsError::new(
+                    kind,
+                    FsOperation::AbortWriter,
+                    "abort failed",
+                ))
             } else {
                 Ok(())
             }
@@ -168,7 +200,8 @@ fn async_commit_failure_preserves_definitive_publication_state() {
             ready(writer.commit_async()).unwrap_err().kind()
         );
         assert_eq!(expected_writer_state, writer.state());
-        ready(writer.abort_async()).expect("definitive commit failure should remain abortable");
+        ready(writer.abort_async())
+            .expect("definitive commit failure should remain abortable");
         assert_eq!(WriterState::Aborted, writer.state());
     }
 }
@@ -254,7 +287,8 @@ fn async_writer_forwards_io_and_rejects_it_after_commit() {
 
     ready(writer.commit_async()).expect("commit should succeed");
     assert_eq!(WriterState::Committed, writer.state());
-    let Poll::Ready(Err(write_error)) = Pin::new(&mut writer).poll_write(&mut context, b"late")
+    let Poll::Ready(Err(write_error)) =
+        Pin::new(&mut writer).poll_write(&mut context, b"late")
     else {
         panic!("closed writer should reject I/O");
     };
@@ -370,7 +404,10 @@ impl AsyncOutput for PendingLifecycleSession {
         Poll::Ready(Ok(count))
     }
 
-    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<IoResult<()>> {
+    fn poll_flush(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+    ) -> Poll<IoResult<()>> {
         Poll::Ready(Ok(()))
     }
 }
@@ -438,7 +475,10 @@ impl AsyncOutput for DefaultCancellationSession {
         Poll::Ready(Ok(count))
     }
 
-    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<IoResult<()>> {
+    fn poll_flush(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+    ) -> Poll<IoResult<()>> {
         Poll::Ready(Ok(()))
     }
 }
@@ -460,5 +500,6 @@ impl AsyncFileWriteSession for DefaultCancellationSession {
 
 #[test]
 fn async_session_default_drop_cancellation_is_nonblocking_noop() {
-    let _writer = AsyncFileWriter::new(DefaultCancellationSession, opened_info());
+    let _writer =
+        AsyncFileWriter::new(DefaultCancellationSession, opened_info());
 }

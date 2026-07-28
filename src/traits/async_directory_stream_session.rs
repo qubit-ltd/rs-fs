@@ -8,7 +8,10 @@
 // qubit-style: allow source-test-pair
 //! Provider-side asynchronous directory enumeration sessions.
 
-use crate::{DirEntry, FsFuture};
+use crate::{
+    DirEntry,
+    FsFuture,
+};
 
 /// Provider session underlying a concrete [`crate::AsyncDirectoryStream`].
 pub trait AsyncDirectoryStreamSession: Send {

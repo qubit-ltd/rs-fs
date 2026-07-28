@@ -7,11 +7,23 @@
 // =============================================================================
 
 use std::future::Future;
-use std::task::{Context, Poll, Waker};
+use std::task::{
+    Context,
+    Poll,
+    Waker,
+};
 
 use qubit_fs::{
-    AsyncDirectoryStream, AsyncDirectoryStreamExt, AsyncDirectoryStreamSession, DirEntry, FileKind,
-    FsError, FsErrorKind, FsFuture, FsOperation, FsPath,
+    AsyncDirectoryStream,
+    AsyncDirectoryStreamExt,
+    AsyncDirectoryStreamSession,
+    DirEntry,
+    FileKind,
+    FsError,
+    FsErrorKind,
+    FsFuture,
+    FsOperation,
+    FsPath,
 };
 
 #[derive(Debug)]
@@ -31,19 +43,22 @@ struct PartiallyFailingDirectorySession {
 fn async_directory_stream_collects_remaining_entries() {
     let stream = AsyncDirectoryStream::new(ReadyDirectorySession {
         entry: Some(DirEntry::new(
-            FsPath::parse_normalized("/collected.txt").expect("path should parse"),
+            FsPath::parse_normalized("/collected.txt")
+                .expect("path should parse"),
             FileKind::File,
         )),
     });
 
-    let entries = ready(stream.collect_entries_async(1)).expect("collection should succeed");
+    let entries = ready(stream.collect_entries_async(1))
+        .expect("collection should succeed");
     assert_eq!(1, entries.len());
     assert_eq!("/collected.txt", entries[0].path.as_str());
 }
 
 #[test]
 fn async_directory_stream_collects_an_empty_stream_below_the_budget() {
-    let stream = AsyncDirectoryStream::new(ReadyDirectorySession { entry: None });
+    let stream =
+        AsyncDirectoryStream::new(ReadyDirectorySession { entry: None });
 
     assert!(
         ready(stream.collect_entries_async(1))
@@ -124,8 +139,11 @@ fn async_directory_stream_is_a_concrete_type_erased_handle() {
 
 #[test]
 fn async_directory_stream_collection_propagates_enumeration_errors() {
-    let error = ready(AsyncDirectoryStream::new(FailingDirectorySession).collect_entries_async(1))
-        .expect_err("collection should preserve the enumeration failure");
+    let error = ready(
+        AsyncDirectoryStream::new(FailingDirectorySession)
+            .collect_entries_async(1),
+    )
+    .expect_err("collection should preserve the enumeration failure");
 
     assert_eq!(FsErrorKind::Io, error.kind());
     assert_eq!(FsOperation::List, error.operation());

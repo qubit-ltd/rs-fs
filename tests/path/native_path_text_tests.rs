@@ -6,7 +6,11 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::{EscapedBytePathCodec, NativePathCodec, NativePathCodecError};
+use qubit_fs::{
+    EscapedBytePathCodec,
+    NativePathCodec,
+    NativePathCodecError,
+};
 
 #[test]
 fn canonical_native_path_text_rejects_aliases_and_malformed_escapes() {

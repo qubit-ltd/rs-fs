@@ -7,14 +7,40 @@
 // =============================================================================
 
 use std::collections::VecDeque;
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc,
+    Mutex,
+};
 
 use qubit_fs::{
-    AchievedAtomicity, AtomicityRequirement, FileKind, FileMetadata, FileResource, FileSystem,
-    FileSystemCapabilities, FileSystemId, FileSystemInfo, FileSystemLimit, FileSystemLimits,
-    FileSystemProperties, FsError, FsErrorKind, FsOperation, FsPath, FsUri, PathSemantics,
-    PersistFailure, PersistFailureState, PersistOptions, PersistOutcome, PublicationMethod,
-    ReadOptions, TempFile, TempResourceSession, TempResourceState, WriteOptions,
+    AchievedAtomicity,
+    AtomicityRequirement,
+    FileKind,
+    FileMetadata,
+    FileResource,
+    FileSystem,
+    FileSystemCapabilities,
+    FileSystemId,
+    FileSystemInfo,
+    FileSystemLimit,
+    FileSystemLimits,
+    FileSystemProperties,
+    FsError,
+    FsErrorKind,
+    FsOperation,
+    FsPath,
+    FsUri,
+    PathSemantics,
+    PersistFailure,
+    PersistFailureState,
+    PersistOptions,
+    PersistOutcome,
+    PublicationMethod,
+    ReadOptions,
+    TempFile,
+    TempResourceSession,
+    TempResourceState,
+    WriteOptions,
 };
 
 use crate::common::MockFs;
@@ -63,14 +89,16 @@ impl TempResourceSession for TestTempSession {
                     PersistFailureState::NotPublished,
                 ))
             }
-            PersistBehavior::PublishedSourceRetained => Err(PersistFailure::new(
-                FsError::new(
-                    FsErrorKind::Io,
-                    FsOperation::CleanupTemp,
-                    "target published but source cleanup failed",
-                ),
-                PersistFailureState::PublishedSourceRetained,
-            )),
+            PersistBehavior::PublishedSourceRetained => {
+                Err(PersistFailure::new(
+                    FsError::new(
+                        FsErrorKind::Io,
+                        FsOperation::CleanupTemp,
+                        "target published but source cleanup failed",
+                    ),
+                    PersistFailureState::PublishedSourceRetained,
+                ))
+            }
             PersistBehavior::Indeterminate => Err(PersistFailure::new(
                 FsError::new(
                     FsErrorKind::Indeterminate,
@@ -88,7 +116,10 @@ impl TempResourceSession for TestTempSession {
     }
 }
 
-fn temp_file(behavior: PersistBehavior, cleanup_calls: Arc<Mutex<usize>>) -> TempFile {
+fn temp_file(
+    behavior: PersistBehavior,
+    cleanup_calls: Arc<Mutex<usize>>,
+) -> TempFile {
     let fs: Arc<dyn FileSystem> = Arc::new(MockFs::default());
     TempFile::new(
         FileResource::new(
@@ -105,7 +136,8 @@ fn temp_file(behavior: PersistBehavior, cleanup_calls: Arc<Mutex<usize>>) -> Tem
 #[test]
 fn not_published_failure_retains_handle_and_allows_retry() {
     let cleanup_calls = Arc::new(Mutex::new(0));
-    let mut temp = temp_file(PersistBehavior::FailNotPublishedOnce, cleanup_calls.clone());
+    let mut temp =
+        temp_file(PersistBehavior::FailNotPublishedOnce, cleanup_calls.clone());
     let target = FsPath::parse_normalized("/final").expect("path should parse");
 
     let failure = temp
@@ -146,7 +178,8 @@ fn published_source_retained_is_reported_as_partial_success() {
 #[test]
 fn indeterminate_persist_is_not_automatically_retried_or_cleaned() {
     let cleanup_calls = Arc::new(Mutex::new(0));
-    let mut temp = temp_file(PersistBehavior::Indeterminate, cleanup_calls.clone());
+    let mut temp =
+        temp_file(PersistBehavior::Indeterminate, cleanup_calls.clone());
     let target = FsPath::parse_normalized("/final").expect("path should parse");
 
     let failure = temp
@@ -235,7 +268,8 @@ fn temp_file_accessors_streams_and_keep_preserve_resource_identity() {
     let cleanup_calls = Arc::new(Mutex::new(0));
     let persist_calls = Arc::new(Mutex::new(0));
     let fs: Arc<dyn FileSystem> = Arc::new(MockFs::default());
-    let mut temp = lifecycle_temp_file(fs, [], None, cleanup_calls.clone(), persist_calls);
+    let mut temp =
+        lifecycle_temp_file(fs, [], None, cleanup_calls.clone(), persist_calls);
 
     assert_eq!("/tmp/source", temp.path().as_str());
     assert_eq!(temp.path(), temp.resource().path());
@@ -350,7 +384,8 @@ impl FileSystemProperties for NoAtomicFileSystem {
     }
 
     fn limits(&self) -> &qubit_fs::FileSystemLimits {
-        static LIMITS: qubit_fs::FileSystemLimits = qubit_fs::FileSystemLimits::unknown();
+        static LIMITS: qubit_fs::FileSystemLimits =
+            qubit_fs::FileSystemLimits::unknown();
         &LIMITS
     }
 }
@@ -372,7 +407,8 @@ fn temp_file_required_atomicity_fails_before_provider_persist() {
     });
     let cleanup_calls = Arc::new(Mutex::new(0));
     let persist_calls = Arc::new(Mutex::new(0));
-    let mut temp = lifecycle_temp_file(fs, [], None, cleanup_calls, persist_calls.clone());
+    let mut temp =
+        lifecycle_temp_file(fs, [], None, cleanup_calls, persist_calls.clone());
     let target = FsPath::parse("/final").unwrap();
     let options = PersistOptions {
         atomicity: AtomicityRequirement::Required,
@@ -388,11 +424,18 @@ fn temp_file_required_atomicity_fails_before_provider_persist() {
 
 #[test]
 fn temp_file_persist_preflights_target_path_limits() {
-    let limits = FileSystemLimits::unknown().with_max_path_text_bytes(FileSystemLimit::Maximum(4));
-    let fs: Arc<dyn FileSystem> = Arc::new(MockFs::default().with_limits(limits));
+    let limits = FileSystemLimits::unknown()
+        .with_max_path_text_bytes(FileSystemLimit::Maximum(4));
+    let fs: Arc<dyn FileSystem> =
+        Arc::new(MockFs::default().with_limits(limits));
     let persist_calls = Arc::new(Mutex::new(0));
-    let mut temp =
-        lifecycle_temp_file(fs, [], None, Arc::new(Mutex::new(0)), persist_calls.clone());
+    let mut temp = lifecycle_temp_file(
+        fs,
+        [],
+        None,
+        Arc::new(Mutex::new(0)),
+        persist_calls.clone(),
+    );
     let target = FsPath::parse("/final").unwrap();
 
     let failure = temp

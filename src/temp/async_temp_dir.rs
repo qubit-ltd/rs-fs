@@ -8,13 +8,31 @@
 // qubit-style: allow source-test-pair
 //! Concrete asynchronous temporary directory handle.
 
-use std::fmt::{Debug, Formatter, Result as FmtResult};
+use std::fmt::{
+    Debug,
+    Formatter,
+    Result as FmtResult,
+};
 use std::pin::Pin;
 
 use crate::{
-    AsyncDirectoryStream, AsyncFileResource, AsyncTempResourceSession, CreateDirOptions, FsError,
-    FsErrorKind, FsFuture, FsName, FsOperation, FsPath, ListOptions, PersistFailure,
-    PersistFailureState, PersistFuture, PersistOptions, RelativeFsPath, TempResourceState,
+    AsyncDirectoryStream,
+    AsyncFileResource,
+    AsyncTempResourceSession,
+    CreateDirOptions,
+    FsError,
+    FsErrorKind,
+    FsFuture,
+    FsName,
+    FsOperation,
+    FsPath,
+    ListOptions,
+    PersistFailure,
+    PersistFailureState,
+    PersistFuture,
+    PersistOptions,
+    RelativeFsPath,
+    TempResourceState,
 };
 
 /// Type-erased asynchronous temporary directory with explicit lifecycle.
@@ -62,7 +80,10 @@ impl AsyncTempDir {
 
     /// Asynchronously lists the temporary directory.
     #[inline]
-    pub fn list_async(&self, options: ListOptions) -> FsFuture<'_, AsyncDirectoryStream> {
+    pub fn list_async(
+        &self,
+        options: ListOptions,
+    ) -> FsFuture<'_, AsyncDirectoryStream> {
         self.resource.list_async(options)
     }
 
@@ -77,7 +98,10 @@ impl AsyncTempDir {
     #[inline]
     #[must_use]
     pub fn descendant(&self, path: &RelativeFsPath) -> AsyncFileResource {
-        AsyncFileResource::new(self.resource.fs_arc(), self.path().join_relative(path))
+        AsyncFileResource::new(
+            self.resource.fs_arc(),
+            self.path().join_relative(path),
+        )
     }
 
     /// Asynchronously creates and returns a validated child directory.
@@ -197,7 +221,9 @@ impl AsyncTempDir {
             );
             return Box::pin(async move { Err(failure) });
         }
-        if let Err(error) = options.validate_against(self.resource.fs().capabilities()) {
+        if let Err(error) =
+            options.validate_against(self.resource.fs().capabilities())
+        {
             let failure = PersistFailure::new(
                 error
                     .with_path(self.path().clone())
@@ -208,7 +234,8 @@ impl AsyncTempDir {
         }
         Box::pin(async move {
             self.state = TempResourceState::Indeterminate;
-            let result = self.session.as_mut().persist_async(target, options).await;
+            let result =
+                self.session.as_mut().persist_async(target, options).await;
             match result {
                 Ok(outcome) => {
                     self.state = TempResourceState::Persisted;
@@ -216,11 +243,15 @@ impl AsyncTempDir {
                 }
                 Err(failure) => {
                     self.state = match failure.state() {
-                        PersistFailureState::NotPublished => TempResourceState::Owned,
+                        PersistFailureState::NotPublished => {
+                            TempResourceState::Owned
+                        }
                         PersistFailureState::PublishedSourceRetained => {
                             TempResourceState::CleanupRequired
                         }
-                        PersistFailureState::Indeterminate => TempResourceState::Indeterminate,
+                        PersistFailureState::Indeterminate => {
+                            TempResourceState::Indeterminate
+                        }
                     };
                     Err(failure)
                 }
@@ -230,7 +261,8 @@ impl AsyncTempDir {
 
     /// Builds an invalid-state error for this handle.
     fn invalid_state(&self, operation: FsOperation, message: &str) -> FsError {
-        FsError::new(FsErrorKind::InvalidState, operation, message).with_path(self.path().clone())
+        FsError::new(FsErrorKind::InvalidState, operation, message)
+            .with_path(self.path().clone())
     }
 }
 

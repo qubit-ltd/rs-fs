@@ -6,10 +6,20 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 use qubit_fs::{
-    DirEntry, DirectoryStream, DirectoryStreamExt, FileKind, FsErrorKind, FsOperation, FsPath,
+    DirEntry,
+    DirectoryStream,
+    DirectoryStreamExt,
+    FileKind,
+    FsErrorKind,
+    FsOperation,
+    FsPath,
 };
 
-use crate::common::{FailingDirectoryStream, MockDirectoryStream, PartiallyFailingDirectoryStream};
+use crate::common::{
+    FailingDirectoryStream,
+    MockDirectoryStream,
+    PartiallyFailingDirectoryStream,
+};
 
 #[test]
 fn test_collect_entries_collects_all_entries() {

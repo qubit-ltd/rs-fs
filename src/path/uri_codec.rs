@@ -7,7 +7,11 @@
 // =============================================================================
 // qubit-style: allow source-test-pair
 
-use crate::{FsError, FsOperation, FsResult};
+use crate::{
+    FsError,
+    FsOperation,
+    FsResult,
+};
 
 /// Validates percent encoding and returns a canonical encoded representation.
 pub(super) fn canonicalize_encoded(value: &str) -> FsResult<String> {
@@ -55,8 +59,8 @@ pub(super) fn percent_decode(value: &str) -> FsResult<String> {
             }
         }
     }
-    let decoded =
-        String::from_utf8(decoded).map_err(|_| invalid_uri("URI component is not valid UTF-8"))?;
+    let decoded = String::from_utf8(decoded)
+        .map_err(|_| invalid_uri("URI component is not valid UTF-8"))?;
     if decoded.chars().any(char::is_control) {
         return Err(invalid_uri(
             "URI component must not contain control characters",
@@ -69,7 +73,9 @@ pub(super) fn percent_decode(value: &str) -> FsResult<String> {
 pub(super) fn percent_encode_query(value: &str) -> String {
     let mut output = String::new();
     for byte in value.as_bytes() {
-        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
+        if byte.is_ascii_alphanumeric()
+            || matches!(byte, b'-' | b'.' | b'_' | b'~')
+        {
             output.push(char::from(*byte));
         } else {
             output.push('%');

@@ -6,7 +6,11 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::{DirEntry, FileKind, FsPath};
+use qubit_fs::{
+    DirEntry,
+    FileKind,
+    FsPath,
+};
 
 #[test]
 fn test_dir_entry_new_derives_file_name() {

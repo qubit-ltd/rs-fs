@@ -7,7 +7,11 @@
 // =============================================================================
 //! Properties shared by synchronous and asynchronous filesystems.
 
-use crate::{FileSystemCapabilities, FileSystemInfo, FileSystemLimits};
+use crate::{
+    FileSystemCapabilities,
+    FileSystemInfo,
+    FileSystemLimits,
+};
 
 /// Construction-time local snapshots shared by all filesystem operation modes.
 pub trait FileSystemProperties: Send + Sync {

@@ -8,10 +8,30 @@
 //! Synchronous filesystem operations.
 
 use crate::{
-    CopyOptions, CopyOutcome, CreateDirOptions, DeleteOptions, DirectoryStream, FileMetadata,
-    FileReader, FileSystemCapability, FileSystemProperties, FileWriter, FsError, FsErrorKind,
-    FsOperation, FsPath, FsResult, ListOptions, ReadOptions, RenameOptions, RenameOutcome, TempDir,
-    TempDirOptions, TempFile, TempFileOptions, WriteOptions,
+    CopyOptions,
+    CopyOutcome,
+    CreateDirOptions,
+    DeleteOptions,
+    DirectoryStream,
+    FileMetadata,
+    FileReader,
+    FileSystemCapability,
+    FileSystemProperties,
+    FileWriter,
+    FsError,
+    FsErrorKind,
+    FsOperation,
+    FsPath,
+    FsResult,
+    ListOptions,
+    ReadOptions,
+    RenameOptions,
+    RenameOutcome,
+    TempDir,
+    TempDirOptions,
+    TempFile,
+    TempFileOptions,
+    WriteOptions,
 };
 
 /// Provider-neutral synchronous filesystem interface.
@@ -66,7 +86,11 @@ pub trait FileSystem: FileSystemProperties {
     ///
     /// # Errors
     /// Returns an unsupported-capability error by default.
-    fn list(&self, path: &FsPath, _options: ListOptions) -> FsResult<DirectoryStream> {
+    fn list(
+        &self,
+        path: &FsPath,
+        _options: ListOptions,
+    ) -> FsResult<DirectoryStream> {
         Err(unsupported(
             self,
             path,
@@ -82,7 +106,11 @@ pub trait FileSystem: FileSystemProperties {
     ///
     /// # Errors
     /// Returns an unsupported-capability error by default.
-    fn open_reader(&self, path: &FsPath, _options: ReadOptions) -> FsResult<FileReader> {
+    fn open_reader(
+        &self,
+        path: &FsPath,
+        _options: ReadOptions,
+    ) -> FsResult<FileReader> {
         Err(unsupported(
             self,
             path,
@@ -98,7 +126,11 @@ pub trait FileSystem: FileSystemProperties {
     ///
     /// # Errors
     /// Returns an unsupported-capability error by default.
-    fn open_writer(&self, path: &FsPath, _options: WriteOptions) -> FsResult<FileWriter> {
+    fn open_writer(
+        &self,
+        path: &FsPath,
+        _options: WriteOptions,
+    ) -> FsResult<FileWriter> {
         Err(unsupported(
             self,
             path,
@@ -111,7 +143,11 @@ pub trait FileSystem: FileSystemProperties {
     ///
     /// # Errors
     /// Returns an unsupported-capability error by default.
-    fn create_dir(&self, path: &FsPath, _options: CreateDirOptions) -> FsResult<()> {
+    fn create_dir(
+        &self,
+        path: &FsPath,
+        _options: CreateDirOptions,
+    ) -> FsResult<()> {
         Err(unsupported(
             self,
             path,
@@ -171,11 +207,19 @@ pub trait FileSystem: FileSystemProperties {
     ///
     /// # Errors
     /// Returns an unsupported-capability error by default.
-    fn copy(&self, from: &FsPath, to: &FsPath, _options: CopyOptions) -> FsResult<CopyOutcome> {
-        Err(
-            unsupported(self, from, FsOperation::Copy, FileSystemCapability::Copy)
-                .with_target(to.clone()),
+    fn copy(
+        &self,
+        from: &FsPath,
+        to: &FsPath,
+        _options: CopyOptions,
+    ) -> FsResult<CopyOutcome> {
+        Err(unsupported(
+            self,
+            from,
+            FsOperation::Copy,
+            FileSystemCapability::Copy,
         )
+        .with_target(to.clone()))
     }
 
     /// Creates a provider-native or explicitly configured temporary file.
@@ -185,7 +229,10 @@ pub trait FileSystem: FileSystemProperties {
     ///
     /// # Errors
     /// Returns an unsupported-capability error by default.
-    fn create_temp_file(&self, _options: TempFileOptions) -> FsResult<TempFile> {
+    fn create_temp_file(
+        &self,
+        _options: TempFileOptions,
+    ) -> FsResult<TempFile> {
         Err(FsError::new(
             FsErrorKind::UnsupportedCapability,
             FsOperation::CreateTemp,

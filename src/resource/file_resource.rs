@@ -7,13 +7,35 @@
 // =============================================================================
 //! Bound filesystem resource.
 
-use std::fmt::{Debug, Formatter, Result as FmtResult};
+use std::fmt::{
+    Debug,
+    Formatter,
+    Result as FmtResult,
+};
 use std::sync::Arc;
 
 use crate::{
-    CopyOptions, CopyOutcome, CreateDirOptions, DeleteOptions, DirectoryStream, FileLocation,
-    FileMetadata, FileReader, FileSystem, FileSystemExt, FileWriter, FsOperation, FsPath, FsResult,
-    FsUri, ListOptions, ReadOptions, RenameOptions, RenameOutcome, WriteOptions, WriteOutcome,
+    CopyOptions,
+    CopyOutcome,
+    CreateDirOptions,
+    DeleteOptions,
+    DirectoryStream,
+    FileLocation,
+    FileMetadata,
+    FileReader,
+    FileSystem,
+    FileSystemExt,
+    FileWriter,
+    FsOperation,
+    FsPath,
+    FsResult,
+    FsUri,
+    ListOptions,
+    ReadOptions,
+    RenameOptions,
+    RenameOutcome,
+    WriteOptions,
+    WriteOutcome,
 };
 
 /// A filesystem path bound to the filesystem that owns it.
@@ -54,8 +76,13 @@ impl FileResource {
     /// A resource whose location identity is derived from `fs`.
     #[inline]
     #[must_use]
-    pub fn from_resolved(fs: Arc<dyn FileSystem>, path: FsPath, canonical_uri: FsUri) -> Self {
-        let location = FileLocation::new(fs.info().id().clone(), path).with_uri(canonical_uri);
+    pub fn from_resolved(
+        fs: Arc<dyn FileSystem>,
+        path: FsPath,
+        canonical_uri: FsUri,
+    ) -> Self {
+        let location = FileLocation::new(fs.info().id().clone(), path)
+            .with_uri(canonical_uri);
         Self { fs, location }
     }
 
@@ -132,7 +159,8 @@ impl FileResource {
     /// stream for the resource path.
     pub fn list(&self, mut options: ListOptions) -> FsResult<DirectoryStream> {
         self.validate_path(self.path(), FsOperation::List)?;
-        options.page_size = self.fs.limits().clamp_list_page_size(options.page_size);
+        options.page_size =
+            self.fs.limits().clamp_list_page_size(options.page_size);
         self.fs
             .list(self.path(), options)
             .map_err(|error| self.with_context(error, None))
@@ -275,7 +303,11 @@ impl FileResource {
     ///
     /// # Errors
     /// Returns an error when the owning filesystem cannot rename the resource.
-    pub fn rename_to(&self, target: &FsPath, options: RenameOptions) -> FsResult<RenameOutcome> {
+    pub fn rename_to(
+        &self,
+        target: &FsPath,
+        options: RenameOptions,
+    ) -> FsResult<RenameOutcome> {
         self.validate_path(self.path(), FsOperation::Rename)?;
         self.validate_target_path(target, FsOperation::Rename)?;
         options
@@ -297,7 +329,11 @@ impl FileResource {
     ///
     /// # Errors
     /// Returns an error when the owning filesystem cannot copy the resource.
-    pub fn copy_to(&self, target: &FsPath, options: CopyOptions) -> FsResult<CopyOutcome> {
+    pub fn copy_to(
+        &self,
+        target: &FsPath,
+        options: CopyOptions,
+    ) -> FsResult<CopyOutcome> {
         self.validate_path(self.path(), FsOperation::Copy)?;
         self.validate_target_path(target, FsOperation::Copy)?;
         options
@@ -315,7 +351,11 @@ impl FileResource {
     }
 
     /// Validates `path` against the owning filesystem's declared limits.
-    pub(crate) fn validate_path(&self, path: &FsPath, operation: FsOperation) -> FsResult<()> {
+    pub(crate) fn validate_path(
+        &self,
+        path: &FsPath,
+        operation: FsOperation,
+    ) -> FsResult<()> {
         self.fs
             .limits()
             .validate_path(path, self.fs.info().path_semantics(), operation)
@@ -323,7 +363,11 @@ impl FileResource {
     }
 
     /// Validates a destination path while retaining source and target roles.
-    fn validate_target_path(&self, target: &FsPath, operation: FsOperation) -> FsResult<()> {
+    fn validate_target_path(
+        &self,
+        target: &FsPath,
+        operation: FsOperation,
+    ) -> FsResult<()> {
         self.fs
             .limits()
             .validate_path(target, self.fs.info().path_semantics(), operation)
@@ -339,8 +383,16 @@ impl FileResource {
 
     /// Adds resource identity to an error that crossed this abstraction
     /// boundary without replacing provider-supplied context.
-    fn with_context(&self, error: crate::FsError, target: Option<&FsPath>) -> crate::FsError {
-        error.with_missing_context(self.path(), target, self.fs.info().provider_id())
+    fn with_context(
+        &self,
+        error: crate::FsError,
+        target: Option<&FsPath>,
+    ) -> crate::FsError {
+        error.with_missing_context(
+            self.path(),
+            target,
+            self.fs.info().provider_id(),
+        )
     }
 }
 

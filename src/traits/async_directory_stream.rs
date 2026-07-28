@@ -7,9 +7,17 @@
 // =============================================================================
 //! Concrete asynchronous directory stream handle.
 
-use std::fmt::{Debug, Formatter, Result as FmtResult};
+use std::fmt::{
+    Debug,
+    Formatter,
+    Result as FmtResult,
+};
 
-use crate::{AsyncDirectoryStreamSession, DirEntry, FsFuture};
+use crate::{
+    AsyncDirectoryStreamSession,
+    DirEntry,
+    FsFuture,
+};
 
 /// Type-erased asynchronous directory enumeration handle.
 pub struct AsyncDirectoryStream {

@@ -7,11 +7,23 @@
 // =============================================================================
 //! Convenience extension methods for [`crate::AsyncFileSystem`].
 
-use qubit_io::{AsyncInput, AsyncOutput};
+use qubit_io::{
+    AsyncInput,
+    AsyncOutput,
+};
 
 use crate::{
-    AsyncFileReader, AsyncFileSystem, AsyncFileWriter, FsError, FsErrorKind, FsFuture, FsOperation,
-    FsPath, ReadOptions, WriteOptions, WriteOutcome,
+    AsyncFileReader,
+    AsyncFileSystem,
+    AsyncFileWriter,
+    FsError,
+    FsErrorKind,
+    FsFuture,
+    FsOperation,
+    FsPath,
+    ReadOptions,
+    WriteOptions,
+    WriteOutcome,
 };
 
 /// Future-based convenience methods for asynchronous filesystem objects.
@@ -31,7 +43,11 @@ pub trait AsyncFileSystemExt {
     ///
     /// The future resolves to an error when opening or reading fails, or when
     /// the resource contains more than `max_bytes` bytes.
-    fn read_all_async<'a>(&'a self, path: &'a FsPath, max_bytes: usize) -> FsFuture<'a, Vec<u8>>;
+    fn read_all_async<'a>(
+        &'a self,
+        path: &'a FsPath,
+        max_bytes: usize,
+    ) -> FsFuture<'a, Vec<u8>>;
 
     /// Writes all bytes and commits the asynchronous writer.
     ///
@@ -64,11 +80,19 @@ impl<T> AsyncFileSystemExt for T
 where
     T: AsyncFileSystem + ?Sized,
 {
-    fn read_all_async<'a>(&'a self, path: &'a FsPath, max_bytes: usize) -> FsFuture<'a, Vec<u8>> {
+    fn read_all_async<'a>(
+        &'a self,
+        path: &'a FsPath,
+        max_bytes: usize,
+    ) -> FsFuture<'a, Vec<u8>> {
         Box::pin(async move {
-            self.limits()
-                .validate_path(path, self.info().path_semantics(), FsOperation::Read)?;
-            let reader = self.open_reader_async(path, ReadOptions::default()).await?;
+            self.limits().validate_path(
+                path,
+                self.info().path_semantics(),
+                FsOperation::Read,
+            )?;
+            let reader =
+                self.open_reader_async(path, ReadOptions::default()).await?;
             read_all_from_async(reader, path, max_bytes).await
         })
     }
@@ -79,8 +103,11 @@ where
         bytes: &'a [u8],
     ) -> FsFuture<'a, WriteOutcome> {
         Box::pin(async move {
-            self.limits()
-                .validate_path(path, self.info().path_semantics(), FsOperation::Write)?;
+            self.limits().validate_path(
+                path,
+                self.info().path_semantics(),
+                FsOperation::Write,
+            )?;
             self.limits().validate_write_size(path, bytes.len())?;
             let writer = self
                 .open_writer_async(path, WriteOptions::default())

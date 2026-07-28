@@ -8,7 +8,13 @@
 
 use std::error::Error;
 
-use qubit_fs::{FsError, FsErrorKind, FsOperation, WriteFailure, WriteFailureState};
+use qubit_fs::{
+    FsError,
+    FsErrorKind,
+    FsOperation,
+    WriteFailure,
+    WriteFailureState,
+};
 
 #[test]
 fn write_failure_preserves_error_and_recovery_state() {

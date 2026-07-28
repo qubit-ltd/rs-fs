@@ -8,7 +8,15 @@
 // qubit-style: allow source-test-pair
 //! Stable configured filesystem limits.
 
-use crate::{FileSystemLimit, FsError, FsErrorKind, FsOperation, FsPath, FsResult, PathSemantics};
+use crate::{
+    FileSystemLimit,
+    FsError,
+    FsErrorKind,
+    FsOperation,
+    FsPath,
+    FsResult,
+    PathSemantics,
+};
 
 /// Stable limits declared by a configured filesystem provider.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -37,7 +45,10 @@ impl FileSystemLimits {
     /// Returns a copy with the path-text byte limit replaced by `limit`.
     #[inline]
     #[must_use]
-    pub const fn with_max_path_text_bytes(mut self, limit: FileSystemLimit) -> Self {
+    pub const fn with_max_path_text_bytes(
+        mut self,
+        limit: FileSystemLimit,
+    ) -> Self {
         self.max_path_text_bytes = limit;
         self
     }
@@ -45,7 +56,10 @@ impl FileSystemLimits {
     /// Returns a copy with the component-text byte limit replaced by `limit`.
     #[inline]
     #[must_use]
-    pub const fn with_max_component_text_bytes(mut self, limit: FileSystemLimit) -> Self {
+    pub const fn with_max_component_text_bytes(
+        mut self,
+        limit: FileSystemLimit,
+    ) -> Self {
         self.max_component_text_bytes = limit;
         self
     }
@@ -53,7 +67,10 @@ impl FileSystemLimits {
     /// Returns a copy with the range-read byte limit replaced by `limit`.
     #[inline]
     #[must_use]
-    pub const fn with_max_read_range_bytes(mut self, limit: FileSystemLimit) -> Self {
+    pub const fn with_max_read_range_bytes(
+        mut self,
+        limit: FileSystemLimit,
+    ) -> Self {
         self.max_read_range_bytes = limit;
         self
     }
@@ -61,7 +78,10 @@ impl FileSystemLimits {
     /// Returns a copy with the write-session byte limit replaced by `limit`.
     #[inline]
     #[must_use]
-    pub const fn with_max_write_bytes(mut self, limit: FileSystemLimit) -> Self {
+    pub const fn with_max_write_bytes(
+        mut self,
+        limit: FileSystemLimit,
+    ) -> Self {
         self.max_write_bytes = limit;
         self
     }
@@ -70,7 +90,10 @@ impl FileSystemLimits {
     /// `limit`.
     #[inline]
     #[must_use]
-    pub const fn with_max_list_page_entries(mut self, limit: FileSystemLimit) -> Self {
+    pub const fn with_max_list_page_entries(
+        mut self,
+        limit: FileSystemLimit,
+    ) -> Self {
         self.max_list_page_entries = limit;
         self
     }
@@ -124,11 +147,16 @@ impl FileSystemLimits {
     /// The effective page-size hint forwarded to the provider.
     #[inline]
     #[must_use]
-    pub fn clamp_list_page_size(&self, requested: Option<usize>) -> Option<usize> {
+    pub fn clamp_list_page_size(
+        &self,
+        requested: Option<usize>,
+    ) -> Option<usize> {
         let requested = requested?;
         match self.max_list_page_entries {
             FileSystemLimit::Maximum(maximum) => usize::try_from(maximum)
-                .map_or(Some(requested), |maximum| Some(requested.min(maximum))),
+                .map_or(Some(requested), |maximum| {
+                    Some(requested.min(maximum))
+                }),
             FileSystemLimit::Unknown
             | FileSystemLimit::NotApplicable
             | FileSystemLimit::Unbounded => Some(requested),
@@ -158,7 +186,10 @@ impl FileSystemLimits {
         if semantics == PathSemantics::Hierarchical
             && path.as_str().split('/').any(|component| {
                 !component.is_empty()
-                    && exceeds_usize(self.max_component_text_bytes, component.len())
+                    && exceeds_usize(
+                        self.max_component_text_bytes,
+                        component.len(),
+                    )
             })
         {
             return Err(limit_error(
@@ -178,8 +209,14 @@ impl FileSystemLimits {
     /// # Errors
     /// Returns [`FsErrorKind::ResourceLimitExceeded`] when `length` exceeds
     /// the declared finite range-read maximum.
-    pub fn validate_read_range(&self, path: &FsPath, length: Option<u64>) -> FsResult<()> {
-        if length.is_some_and(|length| self.max_read_range_bytes.is_exceeded_by(length)) {
+    pub fn validate_read_range(
+        &self,
+        path: &FsPath,
+        length: Option<u64>,
+    ) -> FsResult<()> {
+        if length.is_some_and(|length| {
+            self.max_read_range_bytes.is_exceeded_by(length)
+        }) {
             Err(limit_error(
                 FsOperation::OpenReader,
                 "requested range exceeds the provider byte limit",
@@ -195,7 +232,11 @@ impl FileSystemLimits {
     /// # Errors
     /// Returns [`FsErrorKind::ResourceLimitExceeded`] when `bytes` exceeds the
     /// declared finite write-session maximum.
-    pub fn validate_write_size(&self, path: &FsPath, bytes: usize) -> FsResult<()> {
+    pub fn validate_write_size(
+        &self,
+        path: &FsPath,
+        bytes: usize,
+    ) -> FsResult<()> {
         if exceeds_usize(self.max_write_bytes, bytes) {
             Err(limit_error(
                 FsOperation::Write,
@@ -219,6 +260,11 @@ fn exceeds_usize(limit: FileSystemLimit, actual: usize) -> bool {
 }
 
 /// Builds a path-contextual resource-limit error for `operation`.
-fn limit_error(operation: FsOperation, message: &'static str, path: &FsPath) -> FsError {
-    FsError::new(FsErrorKind::ResourceLimitExceeded, operation, message).with_path(path.clone())
+fn limit_error(
+    operation: FsOperation,
+    message: &'static str,
+    path: &FsPath,
+) -> FsError {
+    FsError::new(FsErrorKind::ResourceLimitExceeded, operation, message)
+        .with_path(path.clone())
 }

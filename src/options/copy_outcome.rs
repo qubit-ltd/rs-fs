@@ -7,7 +7,13 @@
 // =============================================================================
 //! Copy operation outcome.
 
-use crate::{AchievedAtomicity, CopyMethod, CopyStats, NonSensitiveMetadata, UserMetadata};
+use crate::{
+    AchievedAtomicity,
+    CopyMethod,
+    CopyStats,
+    NonSensitiveMetadata,
+    UserMetadata,
+};
 
 /// Outcome returned by copy operations.
 #[derive(Clone, Debug, PartialEq)]
@@ -34,7 +40,11 @@ impl CopyOutcome {
     /// New copy outcome without diagnostics.
     #[inline]
     #[must_use]
-    pub fn new(stats: CopyStats, method: CopyMethod, atomicity: AchievedAtomicity) -> Self {
+    pub fn new(
+        stats: CopyStats,
+        method: CopyMethod,
+        atomicity: AchievedAtomicity,
+    ) -> Self {
         Self {
             stats,
             method,

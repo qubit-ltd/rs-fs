@@ -8,13 +8,36 @@
 
 use std::future::Future;
 use std::sync::Arc;
-use std::task::{Context, Poll, Waker};
+use std::task::{
+    Context,
+    Poll,
+    Waker,
+};
 
 use qubit_fs::{
-    AsyncFileSystem, CopyOptions, CreateDirOptions, DeleteOptions, FileKind, FileMetadata,
-    FileSystemCapabilities, FileSystemCapability, FileSystemId, FileSystemInfo,
-    FileSystemProperties, FsError, FsErrorKind, FsFuture, FsOperation, FsPath, ListOptions,
-    PathSemantics, ReadOptions, RenameOptions, TempDirOptions, TempFileOptions, WriteOptions,
+    AsyncFileSystem,
+    CopyOptions,
+    CreateDirOptions,
+    DeleteOptions,
+    FileKind,
+    FileMetadata,
+    FileSystemCapabilities,
+    FileSystemCapability,
+    FileSystemId,
+    FileSystemInfo,
+    FileSystemProperties,
+    FsError,
+    FsErrorKind,
+    FsFuture,
+    FsOperation,
+    FsPath,
+    ListOptions,
+    PathSemantics,
+    ReadOptions,
+    RenameOptions,
+    TempDirOptions,
+    TempFileOptions,
+    WriteOptions,
 };
 
 #[derive(Debug)]
@@ -33,13 +56,17 @@ impl FileSystemProperties for AsyncStatFs {
     }
 
     fn limits(&self) -> &qubit_fs::FileSystemLimits {
-        static LIMITS: qubit_fs::FileSystemLimits = qubit_fs::FileSystemLimits::unknown();
+        static LIMITS: qubit_fs::FileSystemLimits =
+            qubit_fs::FileSystemLimits::unknown();
         &LIMITS
     }
 }
 
 impl AsyncFileSystem for AsyncStatFs {
-    fn stat_async<'a>(&'a self, path: &'a FsPath) -> FsFuture<'a, FileMetadata> {
+    fn stat_async<'a>(
+        &'a self,
+        path: &'a FsPath,
+    ) -> FsFuture<'a, FileMetadata> {
         Box::pin(async move {
             match path.as_str() {
                 "/file" => Ok(FileMetadata::new(FileKind::File)),
@@ -78,7 +105,8 @@ fn async_file_system_is_object_safe_and_uses_suffixed_operations() {
             "mock",
             PathSemantics::Hierarchical,
         ),
-        capabilities: FileSystemCapabilities::default().with(FileSystemCapability::Read),
+        capabilities: FileSystemCapabilities::default()
+            .with(FileSystemCapability::Read),
     });
     let path = FsPath::parse_normalized("/file").expect("path should parse");
 
@@ -113,22 +141,28 @@ fn async_file_system_defaults_are_awaitable_capability_failures() {
     assert_eq!(FsOperation::Exists, denied_error.operation());
 
     let rename_error =
-        ready(fs.rename_async(&path, &target, RenameOptions::default())).unwrap_err();
+        ready(fs.rename_async(&path, &target, RenameOptions::default()))
+            .unwrap_err();
     assert_eq!(Some(&path), rename_error.path());
     assert_eq!(Some(&target), rename_error.target());
-    let copy_error = ready(fs.copy_async(&path, &target, CopyOptions::default())).unwrap_err();
+    let copy_error =
+        ready(fs.copy_async(&path, &target, CopyOptions::default()))
+            .unwrap_err();
     assert_eq!(Some(&path), copy_error.path());
     assert_eq!(Some(&target), copy_error.target());
 
     let failures = [
         ready(fs.list_async(&path, ListOptions::default())).unwrap_err(),
         ready(fs.open_reader_async(&path, ReadOptions::default())).unwrap_err(),
-        ready(fs.open_writer_async(&path, WriteOptions::default())).unwrap_err(),
-        ready(fs.create_dir_async(&path, CreateDirOptions::default())).unwrap_err(),
+        ready(fs.open_writer_async(&path, WriteOptions::default()))
+            .unwrap_err(),
+        ready(fs.create_dir_async(&path, CreateDirOptions::default()))
+            .unwrap_err(),
         ready(fs.delete_async(&path, DeleteOptions::default())).unwrap_err(),
         rename_error,
         copy_error,
-        ready(fs.create_temp_file_async(TempFileOptions::default())).unwrap_err(),
+        ready(fs.create_temp_file_async(TempFileOptions::default()))
+            .unwrap_err(),
         ready(fs.create_temp_dir_async(TempDirOptions::default())).unwrap_err(),
     ];
     for error in failures {

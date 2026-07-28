@@ -5,11 +5,20 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use qubit_fs::{FsAuthority, FsScheme, FsUri, FsUriAuthority, FsUriPath, FsUriQuery};
+use qubit_fs::{
+    FsAuthority,
+    FsScheme,
+    FsUri,
+    FsUriAuthority,
+    FsUriPath,
+    FsUriQuery,
+};
 
 #[test]
 fn test_uri_preserves_encoded_path_and_repeated_query_values() {
-    let uri = FsUri::parse("mock://bucket/a%2Fb/../c%20d?tag=one&tag=two&empty=").unwrap();
+    let uri =
+        FsUri::parse("mock://bucket/a%2Fb/../c%20d?tag=one&tag=two&empty=")
+            .unwrap();
 
     assert_eq!("/a%2Fb/../c%20d", uri.path().as_encoded());
     assert_eq!(vec!["one", "two"], uri.query().get_all("tag"));
@@ -22,7 +31,8 @@ fn test_uri_preserves_encoded_path_and_repeated_query_values() {
 
 #[test]
 fn test_uri_path_decodes_validated_percent_encoded_text() {
-    let path = FsUriPath::parse("/caf%C3%A9%2F100%25").expect("path should parse");
+    let path =
+        FsUriPath::parse("/caf%C3%A9%2F100%25").expect("path should parse");
 
     assert_eq!("/café/100%", path.decode());
 }
@@ -42,8 +52,9 @@ fn test_uri_rejects_unsafe_or_ambiguous_syntax() {
 
 #[test]
 fn test_parse_uri_with_authority_port_user_path_and_query() {
-    let uri = FsUri::parse("mock://user@example.com:8080/root/file.txt?region=test")
-        .expect("URI should parse");
+    let uri =
+        FsUri::parse("mock://user@example.com:8080/root/file.txt?region=test")
+            .expect("URI should parse");
     let authority = uri.authority().expect("authority should exist");
 
     assert_eq!("mock", uri.scheme().as_str());
@@ -62,7 +73,8 @@ fn test_parse_uri_rejects_invalid_uri_strings() {
 
 #[test]
 fn test_parse_uri_supports_missing_authority_and_host_only_authority() {
-    let no_authority = FsUri::parse("mock:/plain").expect("URI without authority should parse");
+    let no_authority = FsUri::parse("mock:/plain")
+        .expect("URI without authority should parse");
     assert!(no_authority.authority().is_none());
     assert!(!no_authority.has_authority_component());
     assert_eq!("/plain", no_authority.path().as_encoded());
@@ -78,12 +90,14 @@ fn test_parse_uri_supports_missing_authority_and_host_only_authority() {
     assert_eq!(None, host_authority.username());
     assert!(host_without_details.has_authority_component());
 
-    let empty_authority = FsUri::parse("file:///tmp/data").expect("empty authority should parse");
+    let empty_authority =
+        FsUri::parse("file:///tmp/data").expect("empty authority should parse");
     assert!(empty_authority.has_authority_component());
     assert!(empty_authority.authority().is_none());
     assert_eq!("file:///tmp/data", empty_authority.to_string());
 
-    let authority_only = FsUri::parse("mock://bucket").expect("authority-only URI should parse");
+    let authority_only =
+        FsUri::parse("mock://bucket").expect("authority-only URI should parse");
     assert_eq!("/", authority_only.path().as_encoded());
     assert_eq!("mock://bucket/", authority_only.to_string());
 
@@ -171,7 +185,8 @@ fn uri_component_types_validate_iterate_and_display_canonical_text() {
     assert!(empty_query.is_empty());
     assert_eq!("", empty_query.to_string());
 
-    let query = FsUriQuery::parse("flag&x=a%20b&x=%7e&plus=+&unicode=é").unwrap();
+    let query =
+        FsUriQuery::parse("flag&x=a%20b&x=%7e&plus=+&unicode=é").unwrap();
     assert_eq!(
         vec![
             ("flag", ""),

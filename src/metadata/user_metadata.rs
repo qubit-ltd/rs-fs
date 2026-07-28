@@ -8,9 +8,17 @@
 //! Provider-neutral user metadata.
 
 use std::collections::BTreeMap;
-use std::fmt::{Debug, Formatter, Result as FmtResult};
+use std::fmt::{
+    Debug,
+    Formatter,
+    Result as FmtResult,
+};
 
-use crate::{FsError, FsErrorKind, FsOperation};
+use crate::{
+    FsError,
+    FsErrorKind,
+    FsOperation,
+};
 
 /// An ordered string-to-string metadata map with safe structural formatting.
 #[derive(Clone, Default, Eq, PartialEq)]

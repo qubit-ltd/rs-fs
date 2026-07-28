@@ -7,7 +7,14 @@
 // =============================================================================
 //! Convenience methods for directory streams.
 
-use crate::{DirEntry, DirectoryStream, FsError, FsErrorKind, FsOperation, FsResult};
+use crate::{
+    DirEntry,
+    DirectoryStream,
+    FsError,
+    FsErrorKind,
+    FsOperation,
+    FsResult,
+};
 
 /// Convenience methods for directory streams.
 pub trait DirectoryStreamExt {
@@ -26,7 +33,10 @@ pub trait DirectoryStreamExt {
 }
 
 impl DirectoryStreamExt for DirectoryStream {
-    fn collect_entries(mut self, max_entries: usize) -> FsResult<Vec<DirEntry>> {
+    fn collect_entries(
+        mut self,
+        max_entries: usize,
+    ) -> FsResult<Vec<DirEntry>> {
         let mut entries = Vec::new();
         while entries.len() < max_entries {
             match self.next_entry()? {

@@ -7,7 +7,12 @@
 // =============================================================================
 
 use qubit_fs::{
-    FileSystemLimit, FileSystemLimits, FsErrorKind, FsOperation, FsPath, PathSemantics,
+    FileSystemLimit,
+    FileSystemLimits,
+    FsErrorKind,
+    FsOperation,
+    FsPath,
+    PathSemantics,
 };
 
 #[test]
@@ -105,8 +110,8 @@ fn path_limits_validate_canonical_text_and_hierarchical_components() {
 #[test]
 fn component_limit_does_not_apply_to_object_keys() {
     let path = FsPath::parse_literal("abc/long-key").unwrap();
-    let limits =
-        FileSystemLimits::unknown().with_max_component_text_bytes(FileSystemLimit::Maximum(1));
+    let limits = FileSystemLimits::unknown()
+        .with_max_component_text_bytes(FileSystemLimit::Maximum(1));
 
     limits
         .validate_path(&path, PathSemantics::ObjectKey, FsOperation::Stat)
@@ -134,8 +139,8 @@ fn operation_limits_validate_ranges_and_write_sessions() {
 
 #[test]
 fn list_page_size_hints_are_clamped_to_finite_provider_limits() {
-    let finite =
-        FileSystemLimits::unknown().with_max_list_page_entries(FileSystemLimit::Maximum(64));
+    let finite = FileSystemLimits::unknown()
+        .with_max_list_page_entries(FileSystemLimit::Maximum(64));
 
     assert_eq!(Some(32), finite.clamp_list_page_size(Some(32)));
     assert_eq!(Some(64), finite.clamp_list_page_size(Some(128)));
@@ -146,7 +151,8 @@ fn list_page_size_hints_are_clamped_to_finite_provider_limits() {
         FileSystemLimit::NotApplicable,
         FileSystemLimit::Unbounded,
     ] {
-        let limits = FileSystemLimits::unknown().with_max_list_page_entries(limit);
+        let limits =
+            FileSystemLimits::unknown().with_max_list_page_entries(limit);
         assert_eq!(Some(128), limits.clamp_list_page_size(Some(128)));
     }
 }
