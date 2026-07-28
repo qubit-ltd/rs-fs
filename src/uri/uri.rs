@@ -1,6 +1,10 @@
 //! Secret-free resource URI values.
 
-use std::fmt::{Display, Formatter, Result as FmtResult};
+use std::fmt::{
+    Display,
+    Formatter,
+    Result as FmtResult,
+};
 
 use fluent_uri::Uri as FluentUri;
 use qubit_redact::RedactionPolicy;
@@ -39,7 +43,8 @@ impl Uri {
         self.parsed.authority().map(|authority| authority.as_str())
     }
 
-    /// Returns whether an authority delimiter was present, including empty authority.
+    /// Returns whether an authority delimiter was present, including empty
+    /// authority.
     #[must_use]
     pub fn has_authority(&self) -> bool {
         self.parsed.has_authority()
@@ -94,11 +99,12 @@ pub(crate) fn reject_secrets(parsed: &FluentUri<String>) -> FsResult<()> {
     {
         return Err(invalid_uri("URI userinfo is not supported"));
     }
-    if parsed
-        .query()
-        .is_some_and(|query| query.as_str().split('&').any(query_pair_is_sensitive))
-    {
-        return Err(invalid_uri("sensitive URI query fields are not supported"));
+    if parsed.query().is_some_and(|query| {
+        query.as_str().split('&').any(query_pair_is_sensitive)
+    }) {
+        return Err(invalid_uri(
+            "sensitive URI query fields are not supported",
+        ));
     }
     Ok(())
 }
@@ -106,8 +112,6 @@ pub(crate) fn reject_secrets(parsed: &FluentUri<String>) -> FsResult<()> {
 /// Classifies one raw query pair without decoding or reordering it.
 pub(crate) fn query_pair_is_sensitive(pair: &str) -> bool {
     let key = pair.split_once('=').map_or(pair, |(key, _)| key);
-    RedactionPolicy::default()
-        .classify_field(key)
-        .sensitivity()
-        .is_some()
+    RedactionPolicy::standard().sensitivity_for(key).is_some()
+        || RedactionPolicy::default().sensitivity_for(key).is_some()
 }

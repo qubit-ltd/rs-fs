@@ -36,6 +36,9 @@ fn inspect<S: FileSystemSpi + 'static>(provider: S) -> qubit_fs::FsResult<()> {
 credential 的 query field。它们是传输/配置值，不能取代 provider 对逻辑 `Path` 的验证。
 `UserMetadata` 同样拒绝 credential-like key，且 `Debug` 不显示 value。
 
+这些 URI 凭据边界会同时使用内置保守分类与应用规则；进程级脱敏策略中的 allow 规则不能
+让含凭据 URI 变为有效，也不能通过普通格式化暴露它。
+
 ## 同步 I/O
 
 直接从 `FileSystem` 打开 reader 或 writer。句柄在 `OpenedFileInfo` 中保留 provider-opened

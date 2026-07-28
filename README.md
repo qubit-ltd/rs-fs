@@ -33,6 +33,8 @@ recoverable failures. `AsyncFileSystem::begin_copy` returns an `AsyncCopyOperati
 execution future with the application's runtime and inspect its state after cancellation.
 
 `Uri` and `ConnectionUri` preserve URI syntax while rejecting credential-bearing fields.
+Those credential boundaries remain enforced even when an application installs
+allow rules in its process-wide redaction default.
 `UserMetadata` likewise rejects credential-like keys. `FileSystemProperties` is an immutable,
 non-I/O snapshot with capabilities, limits, and logical-path constraints.
 

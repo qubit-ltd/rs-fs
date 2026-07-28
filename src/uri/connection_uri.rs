@@ -1,15 +1,24 @@
 //! Redacted connection URI values.
 
-use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
+use std::fmt::{
+    Debug,
+    Display,
+    Formatter,
+    Result as FmtResult,
+};
 
 use fluent_uri::Uri as FluentUri;
 use qubit_redact::{
-    MaskingPolicy, Redact, RedactValue, RedactedValue, RedactionPolicy, Redactor, Sensitivity,
+    Redactor,
+    Sensitivity,
 };
 
 use crate::FsResult;
 
-use super::{invalid_uri, uri::parse_canonical};
+use super::{
+    invalid_uri,
+    uri::parse_canonical,
+};
 
 /// A connection URI whose normal formatting always redacts credentials.
 #[derive(Clone, Eq, PartialEq)]
@@ -38,7 +47,8 @@ impl ConnectionUri {
         inspect(self.parsed.as_str())
     }
 
-    /// Renders a URI while preserving component order and masking sensitive values.
+    /// Renders a URI while preserving component order and masking sensitive
+    /// values.
     fn redacted_text(&self) -> String {
         let scheme = self.parsed.scheme().as_str();
         let mut rendered = String::from(scheme);
@@ -75,7 +85,8 @@ impl Debug for ConnectionUri {
     }
 }
 
-/// Redacts a password in an authority while retaining non-secret user and host text.
+/// Redacts a password in an authority while retaining non-secret user and host
+/// text.
 fn redact_authority(authority: &str) -> String {
     let Some((userinfo, host)) = authority.rsplit_once('@') else {
         return authority.to_owned();
@@ -83,15 +94,14 @@ fn redact_authority(authority: &str) -> String {
     let Some((username, password)) = userinfo.split_once(':') else {
         return authority.to_owned();
     };
-    let password = KeyedSecret(password);
-    let masked = format!(
-        "{}",
-        Redactor::default().redact_keyed("password", &password)
-    );
+    let masked = Redactor::default()
+        .redact_at(Sensitivity::Secret, password)
+        .into_owned();
     format!("{username}:{masked}@{host}")
 }
 
-/// Redacts sensitive ordered query values without decoding or collapsing duplicates.
+/// Redacts sensitive ordered query values without decoding or collapsing
+/// duplicates.
 fn redact_query(query: &str) -> String {
     query
         .split('&')
@@ -106,31 +116,11 @@ fn redact_query_pair(pair: &str) -> String {
         return pair.to_owned();
     };
     if super::uri::query_pair_is_sensitive(pair) {
-        let value = KeyedSecret(value);
-        let masked = format!("{}", Redactor::default().redact_keyed(key, &value));
+        let masked = Redactor::default()
+            .redact_at(Sensitivity::Secret, value)
+            .into_owned();
         format!("{key}={masked}")
     } else {
         pair.to_owned()
-    }
-}
-
-/// Adapts one raw URI value to the keyed redaction contract without exposing it.
-struct KeyedSecret<'a>(&'a str);
-
-impl Redact for KeyedSecret<'_> {
-    /// Never formats the raw secret through recursive redaction.
-    fn fmt_redacted(&self, _: &RedactionPolicy, formatter: &mut Formatter<'_>) -> FmtResult {
-        formatter.write_str("[REDACTED]")
-    }
-}
-
-impl RedactValue for KeyedSecret<'_> {
-    /// Uses the selected sensitivity's masking algorithm for the raw value.
-    fn redact_value<'a>(
-        &'a self,
-        level: Sensitivity,
-        masking: &'a MaskingPolicy,
-    ) -> RedactedValue<'a> {
-        self.0.redact_value(level, masking)
     }
 }

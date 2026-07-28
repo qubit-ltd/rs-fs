@@ -40,6 +40,10 @@ userinfo, and credential-bearing query fields. They are transport/configuration 
 replacement for a provider's logical `Path` validation. `UserMetadata` likewise rejects
 credential-like keys and does not show values in `Debug` output.
 
+These URI credential boundaries use the built-in conservative classification in addition to
+application rules, so a process-wide redaction allow rule cannot make a credential-bearing URI
+valid or reveal it through normal formatting.
+
 ## Synchronous I/O
 
 Open a reader or writer directly from `FileSystem`. Handles retain the provider-opened identity

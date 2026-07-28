@@ -32,7 +32,8 @@ copy 和 rename 会返回带恢复状态的 typed failure。writer 与临时资�
 `AsyncFileSystem::begin_copy` 返回 `AsyncCopyOperation`；应用应通过自己的运行时轮询
 其执行 future，并在取消后检查操作状态。
 
-`Uri` 和 `ConnectionUri` 保留 URI 语法，同时拒绝含凭据的字段；`UserMetadata` 同样
+`Uri` 和 `ConnectionUri` 保留 URI 语法，同时拒绝含凭据的字段；即使应用在进程级默认
+脱敏策略中安装 allow 规则，这些凭据边界也不会放宽。`UserMetadata` 同样
 拒绝 credential-like key。`FileSystemProperties` 是不触发 I/O 的不可变快照，包含
 capability、limit 和逻辑路径约束。
 
