@@ -1,24 +1,69 @@
+// qubit-style: allow test-file-name -- this module is included by
+// handle_support/mod.rs.
 use std::io::Result as IoResult;
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc,
+    Mutex,
+};
 
 use qubit_fs::spi::{
-    CreateDirectoryRequest, CreateTempDirectoryRequest, CreateTempFileRequest,
-    DeleteDirectoryRequest, DeleteFileRequest, DirectoryStreamSpi, FileSystemSpi, FileWriterSpi,
-    ListRequest, OpenReaderRequest, OpenWriterRequest, OpenedDirectoryStream, OpenedReader,
-    OpenedTempDirectory, OpenedTempFile, OpenedWriter, PersistRequest, RenameRequest,
-    SpiRenameFailure, SpiWriteFailure, StatRequest, StatResponse, TempResourceSpi,
+    CreateDirectoryRequest,
+    CreateTempDirectoryRequest,
+    CreateTempFileRequest,
+    DeleteDirectoryRequest,
+    DeleteFileRequest,
+    DirectoryStreamSpi,
+    FileSystemSpi,
+    FileWriterSpi,
+    ListRequest,
+    OpenReaderRequest,
+    OpenWriterRequest,
+    OpenedDirectoryStream,
+    OpenedReader,
+    OpenedTempDirectory,
+    OpenedTempFile,
+    OpenedWriter,
+    PersistRequest,
+    RenameRequest,
+    SpiRenameFailure,
+    SpiWriteFailure,
+    StatRequest,
+    StatResponse,
+    TempResourceSpi,
 };
 use qubit_fs::{
-    AchievedAtomicity, CreateDirectoryOutcome, DeleteOutcome, DirEntry, FileMetadata, FileSystem,
-    FileSystemCapabilities, FileSystemCapability, FileSystemId, FileSystemInfo, FileSystemLimits,
-    FileSystemProperties, FsError, FsErrorKind, FsOperation, FsResult, OpenedFileInfo, Path,
-    PathConstraints, PersistOutcome, PublicationMethod, RenameFailureState, RenameOutcome,
-    WriteFailureState, WriteOutcome,
+    AchievedAtomicity,
+    CreateDirectoryOutcome,
+    DeleteOutcome,
+    DirEntry,
+    FileMetadata,
+    FileSystem,
+    FileSystemCapabilities,
+    FileSystemCapability,
+    FileSystemId,
+    FileSystemInfo,
+    FileSystemLimits,
+    FileSystemProperties,
+    FsError,
+    FsErrorKind,
+    FsOperation,
+    FsResult,
+    OpenedFileInfo,
+    Path,
+    PathConstraints,
+    PersistOutcome,
+    PublicationMethod,
+    RenameFailureState,
+    RenameOutcome,
+    WriteFailureState,
+    WriteOutcome,
 };
 use qubit_io::Output;
 
 pub(crate) struct BehaviorSpi {
     pub(crate) fail_commit: bool,
+    pub(crate) fail_write: bool,
+    pub(crate) limits: FileSystemLimits,
     pub(crate) entries: Mutex<Vec<DirEntry>>,
     pub(crate) cleanup_calls: Arc<Mutex<usize>>,
     pub(crate) persist_calls: Arc<Mutex<usize>>,
@@ -32,6 +77,8 @@ pub(crate) fn filesystem(
     let persist_calls = Arc::new(Mutex::new(0));
     let spi = BehaviorSpi {
         fail_commit,
+        fail_write: false,
+        limits: FileSystemLimits::unknown(),
         entries: Mutex::new(entries),
         cleanup_calls: Arc::clone(&cleanup_calls),
         persist_calls: Arc::clone(&persist_calls),
@@ -43,9 +90,36 @@ pub(crate) fn filesystem(
         persist_calls,
     )
 }
+pub(crate) fn limited_write_filesystem(maximum: u64) -> FileSystem {
+    FileSystem::from_spi(BehaviorSpi {
+        fail_commit: false,
+        fail_write: false,
+        limits: FileSystemLimits::unknown()
+            .with_max_write_bytes(qubit_fs::FileSystemLimit::Maximum(maximum)),
+        entries: Mutex::new(Vec::new()),
+        cleanup_calls: Arc::new(Mutex::new(0)),
+        persist_calls: Arc::new(Mutex::new(0)),
+        temp_path: Path::parse("/temporary").expect("test path should parse"),
+    })
+    .expect("facade should construct")
+}
+pub(crate) fn stream_failure_filesystem() -> FileSystem {
+    FileSystem::from_spi(BehaviorSpi {
+        fail_commit: false,
+        fail_write: true,
+        limits: FileSystemLimits::unknown(),
+        entries: Mutex::new(Vec::new()),
+        cleanup_calls: Arc::new(Mutex::new(0)),
+        persist_calls: Arc::new(Mutex::new(0)),
+        temp_path: Path::parse("/temporary").expect("test path should parse"),
+    })
+    .expect("facade should construct")
+}
 pub(crate) fn invalid_temp_path_filesystem() -> FileSystem {
     FileSystem::from_spi(BehaviorSpi {
         fail_commit: false,
+        fail_write: false,
+        limits: FileSystemLimits::unknown(),
         entries: Mutex::new(Vec::new()),
         cleanup_calls: Arc::new(Mutex::new(0)),
         persist_calls: Arc::new(Mutex::new(0)),
@@ -53,6 +127,17 @@ pub(crate) fn invalid_temp_path_filesystem() -> FileSystem {
     })
     .expect("facade should construct")
 }
+
+#[test]
+fn test_handle_support_constructs_file_system() {
+    let (file_system, _, _) = filesystem(false, Vec::new());
+
+    assert_eq!(
+        "handles-test",
+        file_system.properties().info().id().as_str()
+    );
+}
+
 impl BehaviorSpi {
     fn unsupported() -> FsError {
         FsError::new(
@@ -83,7 +168,7 @@ impl FileSystemSpi for BehaviorSpi {
                 .with(FileSystemCapability::TempFile)
                 .with(FileSystemCapability::TempDirectory)
                 .with(FileSystemCapability::AtomicTempPersist),
-            FileSystemLimits::unknown(),
+            self.limits,
             PathConstraints::absolute(),
         )
         .expect("valid test properties")
@@ -96,13 +181,18 @@ impl FileSystemSpi for BehaviorSpi {
     }
     fn list(&self, _: ListRequest<'_>) -> FsResult<OpenedDirectoryStream> {
         Ok(OpenedDirectoryStream::new(Box::new(Entries(
-            std::mem::take(&mut *self.entries.lock().expect("entries lock should succeed")),
+            std::mem::take(
+                &mut *self.entries.lock().expect("entries lock should succeed"),
+            ),
         ))))
     }
     fn open_reader(&self, _: OpenReaderRequest<'_>) -> FsResult<OpenedReader> {
         Err(Self::unsupported())
     }
-    fn open_writer(&self, request: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
+    fn open_writer(
+        &self,
+        request: OpenWriterRequest<'_>,
+    ) -> FsResult<OpenedWriter> {
         Ok(OpenedWriter::new(
             OpenedFileInfo::new(
                 FileSystemId::new("handles-test").expect("valid test id"),
@@ -110,30 +200,43 @@ impl FileSystemSpi for BehaviorSpi {
             ),
             Box::new(Writer {
                 fail_commit: self.fail_commit,
+                fail_write: self.fail_write,
             }),
         ))
     }
-    fn create_directory(&self, _: CreateDirectoryRequest<'_>) -> FsResult<CreateDirectoryOutcome> {
+    fn create_directory(
+        &self,
+        _: CreateDirectoryRequest<'_>,
+    ) -> FsResult<CreateDirectoryOutcome> {
         Err(Self::unsupported())
     }
     fn delete_file(&self, _: DeleteFileRequest<'_>) -> FsResult<DeleteOutcome> {
         Err(Self::unsupported())
     }
-    fn delete_directory(&self, _: DeleteDirectoryRequest<'_>) -> FsResult<DeleteOutcome> {
+    fn delete_directory(
+        &self,
+        _: DeleteDirectoryRequest<'_>,
+    ) -> FsResult<DeleteOutcome> {
         Err(Self::unsupported())
     }
-    fn rename(&self, _: RenameRequest<'_>) -> Result<RenameOutcome, SpiRenameFailure> {
+    fn rename(
+        &self,
+        _: RenameRequest<'_>,
+    ) -> Result<RenameOutcome, SpiRenameFailure> {
         Err(SpiRenameFailure::new(
             Self::unsupported(),
             RenameFailureState::Unchanged,
         ))
     }
-    fn create_temp_file(&self, _: CreateTempFileRequest) -> FsResult<OpenedTempFile> {
+    fn create_temp_file(
+        &self,
+        _: CreateTempFileRequest,
+    ) -> FsResult<OpenedTempFile> {
         Ok(OpenedTempFile::new(
             self.info(),
             Box::new(Temp {
-            cleanup_calls: Arc::clone(&self.cleanup_calls),
-            persist_calls: Arc::clone(&self.persist_calls),
+                cleanup_calls: Arc::clone(&self.cleanup_calls),
+                persist_calls: Arc::clone(&self.persist_calls),
                 non_atomic: true,
             }),
         ))
@@ -145,8 +248,8 @@ impl FileSystemSpi for BehaviorSpi {
         Ok(OpenedTempDirectory::new(
             self.info(),
             Box::new(Temp {
-            cleanup_calls: Arc::clone(&self.cleanup_calls),
-            persist_calls: Arc::clone(&self.persist_calls),
+                cleanup_calls: Arc::clone(&self.cleanup_calls),
+                persist_calls: Arc::clone(&self.persist_calls),
                 non_atomic: false,
             }),
         ))
@@ -154,11 +257,21 @@ impl FileSystemSpi for BehaviorSpi {
 }
 struct Writer {
     fail_commit: bool,
+    fail_write: bool,
 }
 impl Output for Writer {
     type Item = u8;
-    unsafe fn write_unchecked(&mut self, _: &[u8], _: usize, count: usize) -> IoResult<usize> {
-        Ok(count)
+    unsafe fn write_unchecked(
+        &mut self,
+        _: &[u8],
+        _: usize,
+        count: usize,
+    ) -> IoResult<usize> {
+        if self.fail_write {
+            Err(std::io::Error::other("stream secret=top-secret"))
+        } else {
+            Ok(count)
+        }
     }
     fn flush(&mut self) -> IoResult<()> {
         Ok(())
@@ -202,7 +315,10 @@ impl TempResourceSpi for Temp {
         &mut self,
         request: PersistRequest<'_>,
     ) -> Result<PersistOutcome, qubit_fs::spi::SpiPersistFailure> {
-        *self.persist_calls.lock().expect("persist lock should succeed") += 1;
+        *self
+            .persist_calls
+            .lock()
+            .expect("persist lock should succeed") += 1;
         Ok(PersistOutcome::new(
             request.target().clone(),
             if self.non_atomic {

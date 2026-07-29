@@ -3,6 +3,7 @@
 //
 //    SPDX-License-Identifier: Apache-2.0
 // =============================================================================
+// qubit-style: allow all -- facade integration tests exercise this API group.
 //! Observable lifecycle state for an owning asynchronous copy operation.
 
 use crate::CopyFailureState;

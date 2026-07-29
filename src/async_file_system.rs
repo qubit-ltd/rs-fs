@@ -146,10 +146,17 @@ impl AsyncFileSystem {
         };
         let opened = self
             .spi
-            .list(ListRequest::new(path, ResolvedListOptions::new(options)))
+            .list(ListRequest::new(
+                path,
+                ResolvedListOptions::new(options.clone()),
+            ))
             .await
             .map_err(|error| self.enrich(error, path, FsOperation::List))?;
-        Ok(opened.into_stream(path.clone()))
+        Ok(opened.into_stream(
+            path.clone(),
+            options,
+            self.properties.info().provider_id(),
+        ))
     }
 
     /// Asynchronously opens a validated reader and verifies its identity.
@@ -207,7 +214,11 @@ impl AsyncFileSystem {
                 self.enrich(error, path, FsOperation::OpenWriter)
             })?;
         self.validate_opened_info(opened.info(), path)?;
-        Ok(opened.into_writer(atomicity))
+        Ok(opened.into_writer(
+            atomicity,
+            self.properties.info().provider_id(),
+            self.properties.limits().max_write_bytes().maximum(),
+        ))
     }
 
     /// Asynchronously creates a directory after local validation.
@@ -341,13 +352,10 @@ impl AsyncFileSystem {
                     FsErrorKind::ProviderContractViolation,
                     FsOperation::ValidateProviderOutcome,
                     "provider returned an invalid temporary identity and cleanup failed",
-                    FsError::with_source(
-                        cleanup.kind(),
-                        cleanup.operation(),
-                        "temporary cleanup failed",
-                        error,
-                    ),
-                ),
+                    cleanup,
+                )
+                .with_path(error.path().cloned().unwrap_or_else(Path::root))
+                .with_provider(self.properties.info().provider_id()),
             });
         }
         Ok(AsyncTempFile::new(
@@ -385,13 +393,10 @@ impl AsyncFileSystem {
                     FsErrorKind::ProviderContractViolation,
                     FsOperation::ValidateProviderOutcome,
                     "provider returned an invalid temporary identity and cleanup failed",
-                    FsError::with_source(
-                        cleanup.kind(),
-                        cleanup.operation(),
-                        "temporary cleanup failed",
-                        error,
-                    ),
-                ),
+                    cleanup,
+                )
+                .with_path(error.path().cloned().unwrap_or_else(Path::root))
+                .with_provider(self.properties.info().provider_id()),
             });
         }
         Ok(AsyncTempDirectory::new(
@@ -414,10 +419,12 @@ impl AsyncFileSystem {
     ) -> Result<AsyncCopyOperation, AsyncCopyFailure> {
         self.copy_preflight(&source, &target, &options)
             .map_err(|error| {
-                self.copy_failure(
+                self.contextual_copy_failure(
                     error,
                     CopyFailureState::Unchanged,
                     CopyStats::default(),
+                    &source,
+                    &target,
                 )
             })?;
         Ok(AsyncCopyOperation::new(
@@ -453,7 +460,9 @@ impl AsyncFileSystem {
             }
             Err(failure) => {
                 let (error, state, stats) = failure.into_parts();
-                Err(self.copy_failure(error, state, stats))
+                Err(self.contextual_copy_failure(
+                    error, state, stats, source, target,
+                ))
             }
         }
     }
@@ -467,6 +476,19 @@ impl AsyncFileSystem {
         source: &Path,
         target: &Path,
     ) -> Result<CopyOutcome, AsyncCopyFailure> {
+        if let Some(message) = outcome.contract_violation(options) {
+            return Err(self.contextual_copy_failure(
+                FsError::new(
+                    FsErrorKind::ProviderContractViolation,
+                    FsOperation::Copy,
+                    message,
+                ),
+                CopyFailureState::Published,
+                *outcome.stats(),
+                source,
+                target,
+            ));
+        }
         if options.atomicity == crate::AtomicityRequirement::Required
             && outcome.atomicity() != crate::AchievedAtomicity::Atomic
         {
@@ -824,27 +846,6 @@ impl AsyncFileSystem {
         }
     }
 
-    /// Adds required copy context to a facade or provider failure.
-    fn copy_failure(
-        &self,
-        error: FsError,
-        state: CopyFailureState,
-        stats: CopyStats,
-    ) -> AsyncCopyFailure {
-        AsyncCopyFailure::new(
-            error
-                .with_operation(FsOperation::Copy)
-                .with_missing_context(
-                    &Path::root(),
-                    None,
-                    self.properties.info().provider_id(),
-                ),
-            state,
-            stats,
-            None,
-        )
-    }
-
     /// Contextualizes a copy failure with its source, target, and provider
     /// facts.
     fn contextual_copy_failure(
@@ -865,7 +866,6 @@ impl AsyncFileSystem {
                 ),
             state,
             stats,
-            None,
         )
     }
 

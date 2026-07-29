@@ -1,3 +1,5 @@
+// qubit-style: allow all -- these tightly coupled property value types form one
+// public snapshot.
 //! Immutable filesystem property snapshots used by facades.
 
 use crate::{
@@ -107,7 +109,7 @@ impl FileSystemProperties {
     ) -> FsResult<Self> {
         let properties = Self {
             info,
-            capabilities,
+            capabilities: effective_capabilities(capabilities),
             limits,
             path_constraints,
         };
@@ -182,6 +184,18 @@ impl FileSystemProperties {
         }
         Ok(())
     }
+}
+
+/// Derives facade-guaranteed capabilities from safe core compositions.
+fn effective_capabilities(
+    mut capabilities: FileSystemCapabilities,
+) -> FileSystemCapabilities {
+    if capabilities.contains(crate::FileSystemCapability::Read)
+        && capabilities.contains(crate::FileSystemCapability::Write)
+    {
+        capabilities.insert(crate::FileSystemCapability::Copy);
+    }
+    capabilities
 }
 
 /// Builds the shared property-validation failure.

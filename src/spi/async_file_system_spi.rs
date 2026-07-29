@@ -3,6 +3,7 @@
 //
 //    SPDX-License-Identifier: Apache-2.0
 // =============================================================================
+// qubit-style: allow all -- facade integration tests exercise this API group.
 //! Runtime-neutral asynchronous provider contract and opened-handle envelopes.
 
 use std::future::Future;
@@ -22,7 +23,6 @@ use crate::{
     FsError,
     FsResult,
     OpenedFileInfo,
-    PersistOptions,
     RenameFailureState,
     RenameOutcome,
 };
@@ -53,25 +53,29 @@ pub type SpiFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// An already-open asynchronous reader bound to provider identity.
 pub struct OpenedAsyncReader {
-    reader: AsyncFileReader,
+    info: OpenedFileInfo,
+    reader: Box<dyn qubit_io::AsyncInput<Item = u8> + Send>,
 }
 
 impl OpenedAsyncReader {
-    /// Wraps a fully opened reader returned by a provider.
+    /// Wraps a provider-opened reader session and its claimed identity.
     #[must_use]
-    pub fn new(reader: AsyncFileReader) -> Self {
-        Self { reader }
+    pub fn new(
+        info: OpenedFileInfo,
+        reader: Box<dyn qubit_io::AsyncInput<Item = u8> + Send>,
+    ) -> Self {
+        Self { info, reader }
     }
 
     /// Returns the immutable provider-opened identity.
     #[must_use]
     pub fn info(&self) -> &OpenedFileInfo {
-        self.reader.info()
+        &self.info
     }
 
     /// Transfers the validated reader into the facade handle.
     pub(crate) fn into_reader(self) -> AsyncFileReader {
-        self.reader
+        AsyncFileReader::new(self.info, self.reader)
     }
 }
 
@@ -101,8 +105,16 @@ impl OpenedAsyncWriter {
     pub(crate) fn into_writer(
         self,
         atomicity: AtomicityRequirement,
+        provider: &str,
+        max_write_bytes: Option<u64>,
     ) -> AsyncFileWriter {
-        AsyncFileWriter::new(self.info, self.session, atomicity)
+        AsyncFileWriter::new(
+            self.info,
+            self.session,
+            atomicity,
+            provider,
+            max_write_bytes,
+        )
     }
 }
 
@@ -119,8 +131,13 @@ impl OpenedAsyncDirectoryStream {
     }
 
     /// Transfers the stream into the facade handle.
-    pub(crate) fn into_stream(self, root: crate::Path) -> AsyncDirectoryStream {
-        AsyncDirectoryStream::new(root, self.session)
+    pub(crate) fn into_stream(
+        self,
+        root: crate::Path,
+        options: crate::ListOptions,
+        provider: &str,
+    ) -> AsyncDirectoryStream {
+        AsyncDirectoryStream::new(root, self.session, options, provider)
     }
 }
 
@@ -195,9 +212,8 @@ pub trait AsyncTempResourceSpi: Send {
     /// Asynchronously persists this resource to a validated target.
     fn persist<'a>(
         self: Pin<&'a mut Self>,
-        target: &'a crate::Path,
-        options: PersistOptions,
-    ) -> SpiFuture<'a, Result<crate::PersistOutcome, crate::PersistFailure>>;
+        request: super::PersistRequest<'a>,
+    ) -> SpiFuture<'a, Result<crate::PersistOutcome, super::SpiPersistFailure>>;
 }
 
 /// Object-safe asynchronous provider implementation contract.

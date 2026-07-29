@@ -160,6 +160,5 @@ fn invalid_state_failure(path: &Path) -> AsyncCopyFailure {
         .with_path(path.clone()),
         CopyFailureState::Unchanged,
         CopyStats::default(),
-        None,
     )
 }

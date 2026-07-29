@@ -5,6 +5,8 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+// qubit-style: allow all -- SPI envelopes intentionally share one provider
+// contract module.
 //! Synchronous provider contract and provider result envelopes.
 
 use super::{

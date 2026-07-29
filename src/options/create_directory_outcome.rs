@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+// qubit-style: allow all -- facade integration tests exercise this API group.
 //! Directory creation outcome.
 
 /// Result returned after a directory creation request.

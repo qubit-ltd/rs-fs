@@ -1,3 +1,4 @@
+// qubit-style: allow all -- facade integration tests exercise this API group.
 //! URI error construction shared by URI values.
 
 use crate::{

@@ -10,6 +10,8 @@ use qubit_fs::{
     CopyMethod,
     CopyOutcome,
     CopyStats,
+    MetadataPreservePolicy,
+    ResourceVersion,
     UserMetadata,
 };
 
@@ -60,4 +62,22 @@ fn test_copy_outcome_with_durable_reports_true() {
     )
     .with_durable(true);
     assert!(outcome.durable());
+}
+
+/// Verifies providers can report the achieved metadata policy and destination
+/// version needed by facade contract checks.
+#[test]
+fn test_copy_outcome_reports_metadata_and_target_version() {
+    let outcome = CopyOutcome::new(
+        CopyStats::default(),
+        CopyMethod::Native,
+        AchievedAtomicity::Atomic,
+    )
+    .with_metadata(MetadataPreservePolicy::Portable)
+    .with_target_version(ResourceVersion::new("generation-7"));
+    assert_eq!(MetadataPreservePolicy::Portable, outcome.metadata());
+    assert_eq!(
+        Some("generation-7"),
+        outcome.target_version().map(ResourceVersion::as_str)
+    );
 }

@@ -3,12 +3,14 @@
 //
 //    SPDX-License-Identifier: Apache-2.0
 // =============================================================================
+// qubit-style: allow all -- facade integration tests exercise this API group.
 //! Runtime-neutral asynchronous temporary-resource facade handles.
 
 use std::pin::Pin;
 
 use crate::spi::{
     AsyncTempResourceSpi,
+    PersistRequest,
     SpiFuture,
 };
 use crate::{
@@ -112,7 +114,11 @@ impl AsyncTempFile {
         Box::pin(async move {
             self.state = TempResourceState::Indeterminate;
             let atomicity = options.atomicity;
-            let result = self.session.as_mut().persist(target, options).await;
+            let result = self
+                .session
+                .as_mut()
+                .persist(PersistRequest::new(target, options))
+                .await;
             self.state = match &result {
                 Ok(outcome)
                     if atomicity == AtomicityRequirement::Required
@@ -149,7 +155,14 @@ impl AsyncTempFile {
                         PersistFailureState::PublishedSourceRetained,
                     ))
                 }
-                result => result,
+                Err(failure) => {
+                    let (error, state) = failure.into_parts();
+                    Err(PersistFailure::new(
+                        self.contextual_persist_error(error, target),
+                        state,
+                    ))
+                }
+                Ok(outcome) => Ok(outcome),
             }
         })
     }
@@ -201,6 +214,21 @@ impl AsyncTempFile {
     fn invalid_state(&self, operation: FsOperation, message: &str) -> FsError {
         FsError::new(FsErrorKind::InvalidState, operation, message)
             .with_path(self.path.clone())
+    }
+
+    /// Adds only missing facade facts to a provider persistence error.
+    fn contextual_persist_error(
+        &self,
+        error: FsError,
+        target: &Path,
+    ) -> FsError {
+        error
+            .with_operation(FsOperation::PersistTemp)
+            .with_missing_context(
+                &self.path,
+                Some(target),
+                self.file_system.properties().info().provider_id(),
+            )
     }
 }
 

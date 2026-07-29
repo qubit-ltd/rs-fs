@@ -64,11 +64,13 @@ use qubit_fs::{
     FsErrorKind,
     FsOperation,
     FsResult,
+    MetadataPreservePolicy,
     OpenedFileInfo,
     Path,
     PathConstraints,
     RenameFailureState,
     RenameOutcome,
+    ServerSidePreference,
     WriteOutcome,
 };
 use qubit_io::Output;
@@ -78,6 +80,9 @@ enum CopyResponse {
     Completed,
     CompletedAtomicDowngrade,
     CompletedDurabilityDowngrade,
+    CompletedServerSideRequiredButNative,
+    CompletedMetadataDowngrade,
+    CompletedInvalidSkippedStats,
     Declined,
     DeclinedSkipAtomic,
     Failed,
@@ -126,6 +131,9 @@ fn properties(response: &CopyResponse) -> FileSystemProperties {
     }
     if matches!(response, CopyResponse::CompletedDurabilityDowngrade) {
         capabilities = capabilities.with(FileSystemCapability::DurableCopy);
+    }
+    if matches!(response, CopyResponse::CompletedServerSideRequiredButNative) {
+        capabilities = capabilities.with(FileSystemCapability::ServerSideCopy);
     }
     FileSystemProperties::new(
         FileSystemInfo::new(
@@ -234,6 +242,24 @@ impl FileSystemSpi for RecordingSpi {
             CopyResponse::CompletedDurabilityDowngrade => {
                 Ok(CopyAttempt::Completed(CopyOutcome::new(
                     CopyStats::default(),
+                    CopyMethod::Native,
+                    AchievedAtomicity::Atomic,
+                )))
+            }
+            CopyResponse::CompletedServerSideRequiredButNative
+            | CopyResponse::CompletedMetadataDowngrade => {
+                Ok(CopyAttempt::Completed(CopyOutcome::new(
+                    CopyStats::default(),
+                    CopyMethod::Native,
+                    AchievedAtomicity::Atomic,
+                )))
+            }
+            CopyResponse::CompletedInvalidSkippedStats => {
+                Ok(CopyAttempt::Completed(CopyOutcome::new(
+                    CopyStats {
+                        skipped: 1,
+                        ..CopyStats::default()
+                    },
                     CopyMethod::Native,
                     AchievedAtomicity::Atomic,
                 )))
@@ -478,6 +504,77 @@ fn test_copy_completed_durability_downgrade_is_contract_failure() {
     assert_eq!(
         ["try_copy"],
         calls.lock().expect("calls lock should succeed").as_slice()
+    );
+}
+
+/// Verifies a completed result cannot claim to satisfy required server-side
+/// copy when its reported method is not server-side.
+#[test]
+fn test_copy_completed_non_server_side_method_violates_required_server_side() {
+    let (filesystem, calls, _) = recording_filesystem(
+        CopyResponse::CompletedServerSideRequiredButNative,
+    );
+    let failure = filesystem
+        .copy(
+            &path("/source"),
+            &path("/target"),
+            CopyOptions {
+                server_side: ServerSidePreference::Require,
+                ..CopyOptions::default()
+            },
+        )
+        .expect_err("native result cannot satisfy required server-side copy");
+    assert_eq!(CopyFailureState::Published, failure.state());
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
+    assert_eq!(
+        ["try_copy"],
+        calls.lock().expect("calls lock should succeed").as_slice()
+    );
+}
+
+/// Verifies a provider-completed result reports the requested metadata
+/// preservation fact rather than silently returning its default none value.
+#[test]
+fn test_copy_completed_missing_metadata_preservation_is_contract_failure() {
+    let (filesystem, calls, _) =
+        recording_filesystem(CopyResponse::CompletedMetadataDowngrade);
+    let failure = filesystem
+        .copy(
+            &path("/source"),
+            &path("/target"),
+            CopyOptions {
+                preserve_metadata: MetadataPreservePolicy::Portable,
+                ..CopyOptions::default()
+            },
+        )
+        .expect_err("missing metadata preservation must be rejected");
+    assert_eq!(CopyFailureState::Published, failure.state());
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
+    assert_eq!(
+        ["try_copy"],
+        calls.lock().expect("calls lock should succeed").as_slice()
+    );
+}
+
+/// Verifies a successful copy cannot report skipped entries under a
+/// fail-on-conflict request.
+#[test]
+fn test_copy_completed_skipped_stats_violate_fail_conflict_policy() {
+    let (filesystem, _, _) =
+        recording_filesystem(CopyResponse::CompletedInvalidSkippedStats);
+    let failure = filesystem
+        .copy(&path("/source"), &path("/target"), CopyOptions::default())
+        .expect_err("skipped stats must match the conflict policy");
+    assert_eq!(CopyFailureState::Published, failure.state());
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
     );
 }
 

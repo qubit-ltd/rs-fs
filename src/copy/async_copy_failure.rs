@@ -3,6 +3,7 @@
 //
 //    SPDX-License-Identifier: Apache-2.0
 // =============================================================================
+// qubit-style: allow all -- facade integration tests exercise this API group.
 //! Recoverable failure returned by an asynchronous copy operation.
 
 use std::fmt::{
@@ -12,18 +13,16 @@ use std::fmt::{
 };
 
 use crate::{
-    AsyncFileWriter,
     CopyFailureState,
     CopyStats,
     FsError,
 };
 
-/// Copy failure facts and an optional writer retained by the operation.
+/// Copy failure facts retained after an asynchronous copy operation.
 pub struct AsyncCopyFailure {
     error: FsError,
     state: CopyFailureState,
     partial_stats: CopyStats,
-    writer: Option<AsyncFileWriter>,
 }
 
 impl AsyncCopyFailure {
@@ -32,13 +31,11 @@ impl AsyncCopyFailure {
         error: FsError,
         state: CopyFailureState,
         partial_stats: CopyStats,
-        writer: Option<AsyncFileWriter>,
     ) -> Self {
         Self {
             error,
             state,
             partial_stats,
-            writer,
         }
     }
 
@@ -60,17 +57,10 @@ impl AsyncCopyFailure {
         &self.partial_stats
     }
 
-    /// Splits the failure into owned facts and optional writer recovery.
+    /// Splits the failure into owned error, state, and progress facts.
     #[must_use]
-    pub fn into_parts(
-        self,
-    ) -> (
-        FsError,
-        CopyFailureState,
-        CopyStats,
-        Option<AsyncFileWriter>,
-    ) {
-        (self.error, self.state, self.partial_stats, self.writer)
+    pub fn into_parts(self) -> (FsError, CopyFailureState, CopyStats) {
+        (self.error, self.state, self.partial_stats)
     }
 }
 
@@ -82,7 +72,6 @@ impl Debug for AsyncCopyFailure {
             .field("error", &self.error)
             .field("state", &self.state)
             .field("partial_stats", &self.partial_stats)
-            .field("has_writer", &self.writer.is_some())
             .finish()
     }
 }

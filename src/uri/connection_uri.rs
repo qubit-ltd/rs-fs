@@ -85,19 +85,15 @@ impl Debug for ConnectionUri {
     }
 }
 
-/// Redacts a password in an authority while retaining non-secret user and host
-/// text.
+/// Redacts all userinfo in an authority while retaining the host text.
 fn redact_authority(authority: &str) -> String {
     let Some((userinfo, host)) = authority.rsplit_once('@') else {
         return authority.to_owned();
     };
-    let Some((username, password)) = userinfo.split_once(':') else {
-        return authority.to_owned();
-    };
     let masked = Redactor::default()
-        .redact_at(Sensitivity::Secret, password)
+        .redact_at(Sensitivity::Secret, userinfo)
         .into_owned();
-    format!("{username}:{masked}@{host}")
+    format!("{masked}@{host}")
 }
 
 /// Redacts sensitive ordered query values without decoding or collapsing

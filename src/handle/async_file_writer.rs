@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+// qubit-style: allow all -- facade integration tests exercise this API group.
 //! Concrete asynchronous file writer handle.
 
 use std::fmt::{
@@ -47,6 +48,9 @@ pub struct AsyncFileWriter {
     info: OpenedFileInfo,
     state: WriterState,
     atomicity: AtomicityRequirement,
+    provider: Box<str>,
+    max_write_bytes: Option<u64>,
+    written_bytes: u64,
 }
 
 impl AsyncFileWriter {
@@ -64,12 +68,17 @@ impl AsyncFileWriter {
         info: OpenedFileInfo,
         session: Box<dyn AsyncFileWriteSession>,
         atomicity: AtomicityRequirement,
+        provider: &str,
+        max_write_bytes: Option<u64>,
     ) -> Self {
         Self {
             session: Box::into_pin(session),
             info,
             state: WriterState::Open,
             atomicity,
+            provider: provider.into(),
+            max_write_bytes,
+            written_bytes: 0,
         }
     }
 
@@ -119,15 +128,11 @@ impl AsyncFileWriter {
             let result = self.session.as_mut().commit_async().await;
             match result {
                 Ok(outcome) => {
-                    self.state =
-                        if outcome.atomicity == AchievedAtomicity::Atomic {
-                            WriterState::Committed
-                        } else {
-                            WriterState::Published
-                        };
+                    self.state = WriterState::Committed;
                     if self.atomicity == AtomicityRequirement::Required
                         && outcome.atomicity != AchievedAtomicity::Atomic
                     {
+                        self.state = WriterState::Published;
                         return Err(FsError::new(
                             FsErrorKind::ProviderContractViolation,
                             FsOperation::CommitWriter,
@@ -150,7 +155,10 @@ impl AsyncFileWriter {
                             WriterState::Indeterminate
                         }
                     };
-                    Err(failure.into_error())
+                    Err(self.contextual_error(
+                        failure.into_error(),
+                        FsOperation::CommitWriter,
+                    ))
                 }
             }
         })
@@ -195,7 +203,7 @@ impl AsyncFileWriter {
                     if error.kind() != FsErrorKind::Indeterminate {
                         self.state = previous_state;
                     }
-                    Err(error)
+                    Err(self.contextual_error(error, FsOperation::AbortWriter))
                 }
             }
         })
@@ -215,6 +223,41 @@ impl AsyncFileWriter {
                 FsOperation::Write,
                 "writer no longer accepts bytes",
             ),
+        )
+    }
+
+    /// Builds a typed I/O error when a write would exceed the session limit.
+    fn write_limit_error(&self) -> IoError {
+        FsError::new(
+            FsErrorKind::ResourceLimitExceeded,
+            FsOperation::Write,
+            "write session exceeds the provider byte limit",
+        )
+        .with_path(self.info.path().clone())
+        .into_io_error()
+    }
+
+    /// Returns whether accepting `count` more bytes exceeds the finite limit.
+    fn exceeds_write_limit(&self, count: usize) -> bool {
+        let Some(maximum) = self.max_write_bytes else {
+            return false;
+        };
+        match u64::try_from(count) {
+            Ok(count) => self.written_bytes.saturating_add(count) > maximum,
+            Err(_) => true,
+        }
+    }
+
+    /// Adds only missing facade context to a provider lifecycle error.
+    fn contextual_error(
+        &self,
+        error: FsError,
+        operation: FsOperation,
+    ) -> FsError {
+        error.with_operation(operation).with_missing_context(
+            self.info.path(),
+            None,
+            &self.provider,
         )
     }
 }
@@ -238,12 +281,26 @@ impl AsyncOutput for AsyncFileWriter {
         if this.state != WriterState::Open {
             return Poll::Ready(Err(this.closed_io_error()));
         }
+        if this.exceeds_write_limit(count) {
+            return Poll::Ready(Err(this.write_limit_error()));
+        }
         // SAFETY: The caller guarantees the same range contract required by
         // the wrapped asynchronous output session.
-        unsafe {
+        match unsafe {
             this.session
                 .as_mut()
                 .poll_write_unchecked(cx, input, index, count)
+        } {
+            Poll::Ready(Ok(written)) => {
+                this.written_bytes =
+                    this.written_bytes.saturating_add(written as u64);
+                Poll::Ready(Ok(written))
+            }
+            Poll::Ready(Err(error)) => {
+                this.state = WriterState::Indeterminate;
+                Poll::Ready(Err(error))
+            }
+            Poll::Pending => Poll::Pending,
         }
     }
 
@@ -255,7 +312,14 @@ impl AsyncOutput for AsyncFileWriter {
         if this.state != WriterState::Open {
             return Poll::Ready(Err(this.closed_io_error()));
         }
-        this.session.as_mut().poll_flush(cx)
+        match this.session.as_mut().poll_flush(cx) {
+            Poll::Ready(Ok(())) => Poll::Ready(Ok(())),
+            Poll::Ready(Err(error)) => {
+                this.state = WriterState::Indeterminate;
+                Poll::Ready(Err(error))
+            }
+            Poll::Pending => Poll::Pending,
+        }
     }
 }
 

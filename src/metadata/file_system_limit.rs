@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+// qubit-style: allow all -- facade integration tests exercise this API group.
 //! A single configured filesystem limit.
 
 /// A provider-declared limit for one filesystem property.

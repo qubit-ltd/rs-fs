@@ -49,7 +49,6 @@ use qubit_fs::spi::{
 };
 use qubit_fs::{
     AchievedAtomicity,
-    AsyncFileReader,
     AsyncFileSystem,
     CreateDirectoryOutcome,
     DeleteOutcome,
@@ -69,7 +68,6 @@ use qubit_fs::{
     Path,
     PathConstraints,
     PathSemantics,
-    PersistOptions,
     PersistOutcome,
     PublicationMethod,
     RenameFailureState,
@@ -105,8 +103,11 @@ pub(crate) struct AsyncRecordingConfig {
     pub(crate) invalid_temp_identity: bool,
     pub(crate) atomic_temp_persist: bool,
     pub(crate) completed_copy: Option<AchievedAtomicity>,
+    pub(crate) server_side_copy: bool,
+    pub(crate) copy_failure: bool,
     pub(crate) rename_atomicity: Option<AchievedAtomicity>,
     pub(crate) temp_persist_indeterminate: bool,
+    pub(crate) temp_cleanup_failure: bool,
     pub(crate) writer_atomicity: Option<AchievedAtomicity>,
     pub(crate) writer_commit_failure: Option<WriteFailureState>,
     pub(crate) temp_persist_atomicity: Option<AchievedAtomicity>,
@@ -177,6 +178,10 @@ impl AsyncRecordingSpi {
             capabilities = capabilities
                 .with(FileSystemCapability::AtomicReplace)
                 .with(FileSystemCapability::DurableCopy);
+        }
+        if self.config.server_side_copy {
+            capabilities =
+                capabilities.with(FileSystemCapability::ServerSideCopy);
         }
         if self.config.rename_atomicity.is_some() {
             capabilities = capabilities
@@ -270,13 +275,13 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
         let info = Self::info(request.path());
         let config = self.config.clone();
         Box::pin(async move {
-            Ok(OpenedAsyncReader::new(AsyncFileReader::new(
-                RecordingInput {
+            Ok(OpenedAsyncReader::new(
+                info,
+                Box::new(RecordingInput {
                     position: 0,
                     config,
-                },
-                info,
-            )))
+                }),
+            ))
         })
     }
     fn open_writer<'a>(
@@ -328,6 +333,19 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
         if self.config.pending_stage == Some(AsyncCopyStage::TryCopy) {
             return Box::pin(std::future::pending());
         }
+        if self.config.copy_failure {
+            return Box::pin(async {
+                Err(SpiCopyFailure::new(
+                    FsError::new(
+                        FsErrorKind::Io,
+                        FsOperation::Copy,
+                        "injected copy failure",
+                    ),
+                    qubit_fs::CopyFailureState::Indeterminate,
+                    qubit_fs::CopyStats::default(),
+                ))
+            });
+        }
         if let Some(atomicity) = self.config.completed_copy {
             return Box::pin(async move {
                 Ok(CopyAttempt::Completed(qubit_fs::CopyOutcome::new(
@@ -376,6 +394,7 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
                     indeterminate_persist: self
                         .config
                         .temp_persist_indeterminate,
+                    cleanup_failure: self.config.temp_cleanup_failure,
                     atomicity: self.config.temp_persist_atomicity,
                 }),
             ))
@@ -398,6 +417,7 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
                         .temp_persist_atomicity
                         .is_none()
                         && self.config.temp_persist_indeterminate,
+                    cleanup_failure: self.config.temp_cleanup_failure,
                     atomicity: self.config.temp_persist_atomicity,
                 }),
             ))
@@ -543,6 +563,7 @@ struct RecordingTempSession {
     calls: Arc<Mutex<Vec<&'static str>>>,
     indeterminate_persist: bool,
     atomicity: Option<AchievedAtomicity>,
+    cleanup_failure: bool,
 }
 impl RecordingTempSession {
     /// Records one temporary lifecycle call.
@@ -556,7 +577,19 @@ impl RecordingTempSession {
 impl AsyncTempResourceSpi for RecordingTempSession {
     fn cleanup<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<()>> {
         self.as_ref().get_ref().record("cleanup");
-        Box::pin(async { Ok(()) })
+        let cleanup_failure = self.as_ref().get_ref().cleanup_failure;
+        Box::pin(async move {
+            if cleanup_failure {
+                Err(FsError::with_source(
+                    FsErrorKind::Io,
+                    FsOperation::CleanupTemp,
+                    "injected cleanup failure",
+                    IoError::other("underlying cleanup failure"),
+                ))
+            } else {
+                Ok(())
+            }
+        })
     }
     fn keep<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<()>> {
         self.as_ref().get_ref().record("keep");
@@ -564,15 +597,15 @@ impl AsyncTempResourceSpi for RecordingTempSession {
     }
     fn persist<'a>(
         self: Pin<&'a mut Self>,
-        target: &'a Path,
-        _: PersistOptions,
-    ) -> SpiFuture<'a, Result<PersistOutcome, qubit_fs::PersistFailure>> {
+        request: qubit_fs::spi::PersistRequest<'a>,
+    ) -> SpiFuture<'a, Result<PersistOutcome, qubit_fs::spi::SpiPersistFailure>>
+    {
         self.as_ref().get_ref().record("persist");
-        let target = target.clone();
+        let target = request.target().clone();
         let indeterminate = self.as_ref().get_ref().indeterminate_persist;
         Box::pin(async move {
             if indeterminate {
-                return Err(qubit_fs::PersistFailure::new(
+                return Err(qubit_fs::spi::SpiPersistFailure::new(
                     FsError::new(
                         FsErrorKind::Indeterminate,
                         FsOperation::PersistTemp,

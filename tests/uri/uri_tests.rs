@@ -27,6 +27,13 @@ fn test_uri_rejects_any_userinfo() {
     assert!(Uri::parse("s3://user@bucket/key").is_err());
 }
 
+/// Verifies percent-encoded sensitive query keys are rejected before a
+/// secret-free URI crosses the public boundary.
+#[test]
+fn test_uri_rejects_percent_encoded_sensitive_query_key() {
+    assert!(Uri::parse("s3://bucket/key?t%6fken=secret").is_err());
+}
+
 /// Verifies lexical escaped separators, normalized schemes, and query order
 /// survive parsing.
 #[test]

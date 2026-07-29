@@ -2,6 +2,7 @@
 
 use qubit_fs::{
     FileSystemCapabilities,
+    FileSystemCapability,
     FileSystemId,
     FileSystemInfo,
     FileSystemLimit,
@@ -65,4 +66,28 @@ fn test_path_constraints_validate_path_form() {
     let constraints = PathConstraints::absolute();
     let relative = Path::parse("child").expect("relative path should parse");
     assert!(constraints.validate(&relative).is_err());
+}
+
+/// Verifies a safe facade stream fallback is exposed as an effective copy
+/// capability when the provider supplies both required byte primitives.
+#[test]
+fn test_file_system_properties_derives_copy_from_read_and_write() {
+    let properties = FileSystemProperties::new(
+        FileSystemInfo::new(
+            FileSystemId::new("effective-copy").expect("id should parse"),
+            "effective-provider",
+            PathSemantics::Hierarchical,
+        ),
+        FileSystemCapabilities::new()
+            .with(FileSystemCapability::Read)
+            .with(FileSystemCapability::Write),
+        FileSystemLimits::unknown(),
+        PathConstraints::absolute(),
+    )
+    .expect("properties should validate");
+    assert!(
+        properties
+            .capabilities()
+            .contains(FileSystemCapability::Copy)
+    );
 }

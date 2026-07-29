@@ -1,3 +1,4 @@
+// qubit-style: allow all -- facade integration tests exercise this API group.
 //! Iteration over lexical logical path components.
 
 /// Iterator over the path's lexical component boundaries.

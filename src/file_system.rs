@@ -196,6 +196,22 @@ impl FileSystem {
         source: &Path,
         target: &Path,
     ) -> Result<CopyOutcome, CopyFailure> {
+        if let Some(message) = outcome.contract_violation(options) {
+            return Err(self.contextualize_copy_failure(
+                self.copy_failure(
+                    FsError::new(
+                        FsErrorKind::ProviderContractViolation,
+                        FsOperation::Copy,
+                        message,
+                    ),
+                    CopyFailureState::Published,
+                    *outcome.stats(),
+                    None,
+                ),
+                source,
+                target,
+            ));
+        }
         if options.atomicity == crate::AtomicityRequirement::Required
             && outcome.atomicity() != crate::AchievedAtomicity::Atomic
         {
@@ -316,9 +332,17 @@ impl FileSystem {
             ..options
         };
         self.spi
-            .list(ListRequest::new(path, ResolvedListOptions::new(options)))
+            .list(ListRequest::new(
+                path,
+                ResolvedListOptions::new(options.clone()),
+            ))
             .map(|opened| {
-                DirectoryStream::new(path.clone(), opened.into_stream())
+                DirectoryStream::new(
+                    path.clone(),
+                    opened.into_stream(),
+                    options,
+                    self.properties.info().provider_id(),
+                )
             })
             .map_err(|error| self.enrich(error, path, FsOperation::List))
     }
@@ -382,7 +406,13 @@ impl FileSystem {
                     path,
                     FsOperation::OpenWriter,
                 )?;
-                Ok(FileWriter::new(info, writer, atomicity))
+                Ok(FileWriter::new(
+                    info,
+                    writer,
+                    atomicity,
+                    self.properties.info().provider_id(),
+                    self.properties.limits().max_write_bytes().maximum(),
+                ))
             })
             .map_err(|error| self.enrich(error, path, FsOperation::OpenWriter))
     }
@@ -1015,6 +1045,13 @@ impl FileSystem {
         bytes: &[u8],
         options: WriteOptions,
     ) -> Result<crate::WriteOutcome, WriteAllFailure> {
+        if let Err(error) = self
+            .properties
+            .limits()
+            .validate_write_size(path, bytes.len())
+        {
+            return Err(WriteAllFailure::new(error, None));
+        }
         let mut writer = self
             .open_writer(path, options)
             .map_err(|error| WriteAllFailure::new(error, None))?;
@@ -1039,8 +1076,7 @@ impl FileSystem {
         operation: FsOperation,
         error: IoError,
     ) -> FsError {
-        FsError::new(FsErrorKind::Io, operation, &error.to_string())
-            .with_path(path.clone())
+        FsError::from_stream_io(error, operation, path)
     }
 }
 

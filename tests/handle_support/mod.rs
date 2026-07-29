@@ -1,6 +1,4 @@
 #[allow(dead_code)]
-mod implementation {
-    include!("implementation.rs");
-}
+mod implementation;
 
 pub(crate) use implementation::*;

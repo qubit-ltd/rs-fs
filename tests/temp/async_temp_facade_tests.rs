@@ -44,6 +44,25 @@ fn test_async_temp_creation_rejects_mismatched_provider_identity() {
     assert_eq!(vec!["create_temp_file", "cleanup"], probe.calls());
 }
 
+/// Verifies failed invalid-session cleanup remains the inspectable source of
+/// the facade contract failure.
+#[test]
+fn test_async_invalid_temp_identity_preserves_cleanup_error_source() {
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
+        invalid_temp_identity: true,
+        temp_cleanup_failure: true,
+        ..AsyncRecordingConfig::default()
+    });
+    let Err(error) =
+        ready(file_system.create_temp_file(TempFileOptions::default()))
+    else {
+        panic!("invalid temporary identity must fail");
+    };
+    let cleanup = error.source().expect("cleanup error should be retained");
+    assert!(cleanup.to_string().contains("injected cleanup failure"));
+    assert!(cleanup.source().is_some());
+}
+
 /// Verifies persistence preflight fails before calling a temporary session.
 #[test]
 fn test_async_temp_persist_preflight_has_no_session_call() {
@@ -125,5 +144,9 @@ fn test_async_temp_persist_indeterminate_is_preserved() {
     let error = ready(temp.persist(&path("/final"), PersistOptions::default()))
         .expect_err("persistence should be indeterminate");
     assert_eq!(FsErrorKind::Indeterminate, error.error().kind());
+    assert_eq!(Some(&path("/tmp/recording")), error.error().path(),);
+    assert_eq!(Some(&path("/final")), error.error().target());
+    assert_eq!(Some("async-recording"), error.error().provider());
     assert_eq!(TempResourceState::Indeterminate, temp.state());
 }
+use std::error::Error;

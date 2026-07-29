@@ -12,7 +12,9 @@ use qubit_fs::{
     CopyFailureState,
     CopyOptions,
     FsErrorKind,
+    MetadataPreservePolicy,
     Path,
+    ServerSidePreference,
 };
 
 use crate::async_recording_spi::{
@@ -175,10 +177,85 @@ fn test_async_completed_copy_rechecks_required_atomicity() {
     assert_eq!(CopyFailureState::Published, failure.state());
 }
 
-/// Taking and dropping recovery invokes only the writer's local cancellation
-/// hook.
+/// Verifies an asynchronous native completion cannot satisfy a required
+/// server-side request merely because the provider advertises the capability.
 #[test]
-fn test_async_recovery_writer_drop_uses_local_cancellation() {
+fn test_async_completed_native_copy_violates_required_server_side() {
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
+        completed_copy: Some(AchievedAtomicity::Atomic),
+        server_side_copy: true,
+        ..AsyncRecordingConfig::default()
+    });
+    let mut operation = file_system
+        .begin_copy(
+            path("/source"),
+            path("/target"),
+            CopyOptions {
+                server_side: ServerSidePreference::Require,
+                ..CopyOptions::default()
+            },
+        )
+        .expect("server-side capability should pass preflight");
+    let failure = ready(operation.execute())
+        .expect_err("native completion cannot satisfy server-side requirement");
+    assert_eq!(CopyFailureState::Published, failure.state());
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
+}
+
+/// Verifies asynchronous successful completion cannot omit a requested
+/// metadata preservation fact.
+#[test]
+fn test_async_completed_copy_missing_metadata_is_contract_failure() {
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
+        completed_copy: Some(AchievedAtomicity::Atomic),
+        ..AsyncRecordingConfig::default()
+    });
+    let mut operation = file_system
+        .begin_copy(
+            path("/source"),
+            path("/target"),
+            CopyOptions {
+                preserve_metadata: MetadataPreservePolicy::Portable,
+                ..CopyOptions::default()
+            },
+        )
+        .expect("metadata policy needs no capability preflight");
+    let failure = ready(operation.execute())
+        .expect_err("missing metadata preservation must be rejected");
+    assert_eq!(CopyFailureState::Published, failure.state());
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
+}
+
+/// Verifies an asynchronous provider failure retains the requested source and
+/// target instead of the facade root placeholder.
+#[test]
+fn test_async_native_copy_failure_has_source_and_target_context() {
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
+        copy_failure: true,
+        ..AsyncRecordingConfig::default()
+    });
+    let source = path("/source");
+    let target = path("/target");
+    let mut operation = file_system
+        .begin_copy(source.clone(), target.clone(), CopyOptions::default())
+        .expect("preflight should succeed");
+    let failure = ready(operation.execute())
+        .expect_err("provider failure should propagate");
+    assert_eq!(Some(&source), failure.error().path());
+    assert_eq!(Some(&target), failure.error().target());
+    assert_eq!(Some("async-recording"), failure.error().provider());
+}
+
+/// Taking and dropping an indeterminate recovery writer does not request
+/// unconfirmed provider cancellation.
+#[test]
+fn test_async_indeterminate_recovery_writer_drop_skips_cancellation() {
     let (file_system, probe) =
         async_recording_file_system(AsyncRecordingConfig {
             failing_stage: Some(AsyncCopyStage::WriterFlush),
@@ -192,5 +269,5 @@ fn test_async_recovery_writer_drop_uses_local_cancellation() {
         .take_recovery_writer()
         .expect("writer should be retained");
     drop(writer);
-    assert_eq!(1, probe.writer_cancellations());
+    assert_eq!(0, probe.writer_cancellations());
 }

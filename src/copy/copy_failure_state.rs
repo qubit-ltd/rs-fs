@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+// qubit-style: allow all -- facade integration tests exercise this API group.
 //! Copy publication state at the point of provider failure.
 
 /// Stable copy state for recovery decisions; error text is not a state

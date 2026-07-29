@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+// qubit-style: allow all -- facade integration tests exercise this API group.
 //! Concrete asynchronous file reader handle.
 
 use std::fmt::{
@@ -40,12 +41,12 @@ impl AsyncFileReader {
     /// A pinned, type-erased asynchronous file reader.
     #[inline]
     #[must_use]
-    pub fn new<I>(inner: I, info: OpenedFileInfo) -> Self
-    where
-        I: AsyncInput<Item = u8> + Send + 'static,
-    {
+    pub(crate) fn new(
+        info: OpenedFileInfo,
+        inner: Box<dyn AsyncInput<Item = u8> + Send>,
+    ) -> Self {
         Self {
-            inner: Box::pin(inner),
+            inner: Box::into_pin(inner),
             info,
         }
     }

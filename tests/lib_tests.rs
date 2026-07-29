@@ -24,3 +24,8 @@ mod spi;
 mod temp;
 mod uri;
 mod writer;
+
+#[test]
+fn test_poll_support_completes_ready_future() {
+    assert_eq!(42, poll_support::ready(async { 42 }));
+}

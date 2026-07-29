@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+// qubit-style: allow all -- facade integration tests exercise this API group.
 //! Concrete asynchronous directory stream handle.
 
 use std::fmt::{
@@ -23,6 +24,7 @@ use crate::{
     FsErrorKind,
     FsOperation,
     FsResult,
+    ListOptions,
     Path,
 };
 
@@ -30,6 +32,8 @@ use crate::{
 pub struct AsyncDirectoryStream {
     session: Box<dyn AsyncDirectoryStreamSession>,
     root: Path,
+    options: ListOptions,
+    provider: Box<str>,
     terminal: bool,
 }
 
@@ -46,10 +50,14 @@ impl AsyncDirectoryStream {
     pub(crate) fn new(
         root: Path,
         session: Box<dyn AsyncDirectoryStreamSession>,
+        options: ListOptions,
+        provider: &str,
     ) -> Self {
         Self {
             session,
             root,
+            options,
+            provider: provider.into(),
             terminal: false,
         }
     }
@@ -72,17 +80,17 @@ impl AsyncDirectoryStream {
         }
         Box::pin(async move {
             match self.session.next_entry_async().await {
-                Ok(Some(entry)) if is_within(&self.root, &entry.path) => {
+                Ok(Some(entry)) if self.entry_satisfies_options(&entry) => {
                     Ok(Some(entry))
                 }
                 Ok(Some(_)) => {
                     self.terminal = true;
-                    Err(FsError::new(
+                    Err(self.contextual_error(FsError::new(
                         FsErrorKind::ProviderContractViolation,
                         FsOperation::ValidateProviderOutcome,
                         "provider returned directory entry outside requested root",
                     )
-                    .with_path(self.root.clone()))
+                    .with_path(self.root.clone())))
                 }
                 Ok(None) => {
                     self.terminal = true;
@@ -90,20 +98,51 @@ impl AsyncDirectoryStream {
                 }
                 Err(error) => {
                     self.terminal = true;
-                    Err(error)
+                    Err(self.contextual_error(error))
                 }
             }
         })
     }
+
+    /// Checks one provider entry against the request retained by this stream.
+    fn entry_satisfies_options(&self, entry: &DirEntry) -> bool {
+        let Some(relative) = relative_path(&self.root, &entry.path) else {
+            return false;
+        };
+        if !self.options.recursive && relative.contains('/') {
+            return false;
+        }
+        if self.options.include_metadata && entry.metadata.is_none() {
+            return false;
+        }
+        self.options.prefix.as_deref().is_none_or(|prefix| {
+            relative == prefix
+                || relative
+                    .strip_prefix(prefix)
+                    .is_some_and(|remaining| remaining.starts_with('/'))
+        })
+    }
+
+    /// Adds only missing facade facts to a provider stream error.
+    fn contextual_error(&self, error: FsError) -> FsError {
+        error
+            .with_operation(FsOperation::List)
+            .with_missing_context(&self.root, None, &self.provider)
+    }
 }
 
-/// Returns whether an entry remains inside the stream's requested logical root.
-fn is_within(root: &Path, entry: &Path) -> bool {
-    root == entry
-        || (entry.as_str().starts_with(root.as_str())
-            && (root.as_str() == "/"
-                || entry.as_str().as_bytes().get(root.as_str().len())
-                    == Some(&b'/')))
+/// Returns the entry path relative to `root` when it remains in the root.
+fn relative_path<'a>(root: &Path, entry: &'a Path) -> Option<&'a str> {
+    if root == entry {
+        Some("")
+    } else if root.as_str() == "/" {
+        entry.as_str().strip_prefix('/')
+    } else {
+        entry
+            .as_str()
+            .strip_prefix(root.as_str())?
+            .strip_prefix('/')
+    }
 }
 
 impl Debug for AsyncDirectoryStream {

@@ -9,11 +9,14 @@
 
 use crate::{
     AchievedAtomicity,
+    CopyConflictPolicy,
     CopyMethod,
+    CopyOptions,
     CopyStats,
     MetadataPreservePolicy,
     NonSensitiveMetadata,
     ResourceVersion,
+    ServerSidePreference,
     UserMetadata,
 };
 
@@ -93,6 +96,24 @@ impl CopyOutcome {
         self.durable = durable;
         self
     }
+
+    /// Records the metadata preservation policy actually achieved by the
+    /// provider.
+    #[must_use]
+    pub fn with_metadata(mut self, metadata: MetadataPreservePolicy) -> Self {
+        self.metadata = metadata;
+        self
+    }
+
+    /// Records the destination version reported after publication.
+    #[must_use]
+    pub fn with_target_version(
+        mut self,
+        target_version: ResourceVersion,
+    ) -> Self {
+        self.target_version = Some(target_version);
+        self
+    }
     /// Returns the metadata preservation result represented by this outcome.
     #[must_use]
     pub const fn metadata(&self) -> MetadataPreservePolicy {
@@ -129,5 +150,50 @@ impl CopyOutcome {
             used_fallback: true,
             diagnostics: NonSensitiveMetadata::new(),
         }
+    }
+
+    /// Returns the first provider-completed outcome fact that contradicts the
+    /// resolved copy request.
+    pub(crate) fn contract_violation(
+        &self,
+        options: &CopyOptions,
+    ) -> Option<&'static str> {
+        if self.used_fallback || self.method == CopyMethod::Streamed {
+            return Some(
+                "provider returned a facade streamed-fallback outcome as native success",
+            );
+        }
+        if options.server_side == ServerSidePreference::Require
+            && self.method != CopyMethod::ServerSide
+        {
+            return Some(
+                "provider reported a non-server-side success for a server-side-required copy",
+            );
+        }
+        if self.metadata != options.preserve_metadata {
+            return Some(
+                "provider reported metadata preservation different from the copy request",
+            );
+        }
+        if !options.continue_on_error && self.stats.failed != 0 {
+            return Some(
+                "provider reported failed copy entries without continue-on-error",
+            );
+        }
+        if options.conflict != CopyConflictPolicy::Skip
+            && self.stats.skipped != 0
+        {
+            return Some(
+                "provider reported skipped copy entries without a skip conflict policy",
+            );
+        }
+        if options.conflict != CopyConflictPolicy::Overwrite
+            && self.stats.overwritten != 0
+        {
+            return Some(
+                "provider reported overwritten copy entries without an overwrite conflict policy",
+            );
+        }
+        None
     }
 }
