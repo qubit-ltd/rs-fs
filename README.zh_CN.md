@@ -7,49 +7,36 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![English Document](https://img.shields.io/badge/Document-English-blue.svg)](README.md)
 
-Qubit FS 是 provider-neutral 的文件系统抽象。应用使用具体的 `FileSystem` 和
-`AsyncFileSystem` facade；provider 只在 `qubit_fs::spi` 命名空间实现契约。运行时
-provider 发现和配置属于
-[`qubit-fs-registry`](https://crates.io/crates/qubit-fs-registry)。
+`qubit-fs` 0.2.0 是 Rust 1.94 及以上版本可用的 provider-neutral 文件系统抽象，
+同时提供同步和异步 API。它向应用提供具体门面 `FileSystem` 与
+`AsyncFileSystem`，但不会替应用选择存储后端或异步运行时。
+
+核心 crate 不含内置后端。provider 在 `qubit_fs::spi` 下实现扩展契约；provider 的
+发现、配置和凭据处理由 `qubit-fs-registry` 负责。因此应用代码只依赖公共门面，
+而 provider 的选择留在核心 crate 之外。
 
 ```toml
 [dependencies]
 qubit-fs = "0.2"
 ```
 
-## 应用 API
+## 门面明确表达的语义
 
-由 provider SPI 创建具体 facade，再用 `Path` 表示逻辑资源路径。
+- `Path` 是一个已配置 filesystem 内的逻辑名称。`Uri` 是不含 secret 的 canonical
+  地址；`ConnectionUri` 是配置入口，可以接受凭据，但在 `Display` 和 `Debug` 中会
+  脱敏。
+- copy、rename、写入和临时资源发布会保留带类型的恢复事实。重试、清理或核对已经
+  可见的目标前，应先检查对应的 failure state。
+- `exists` 只有在 `stat` 明确返回 `NotFound` 时才返回 `false`；权限、认证、超时和
+  I/O 失败仍会作为错误返回。
+- `DirectoryStream` 按条目增量读取。应在有界循环中消费它，不应把目录假定为已加载的
+  集合。
 
-```rust,ignore
-use qubit_fs::{FileSystem, Path, ReadOptions};
-use qubit_fs::spi::FileSystemSpi;
+## 从这里开始
 
-fn read_metadata<S: FileSystemSpi + 'static>(provider: S) -> qubit_fs::FsResult<()> {
-    let filesystem = FileSystem::from_spi(provider)?;
-    let path = Path::parse("/reports/2026/summary.csv")?;
-    let _metadata = filesystem.stat(&path)?;
-    let _reader = filesystem.open_reader(&path, ReadOptions::default())?;
-    Ok(())
-}
-```
-
-copy 和 rename 会返回带恢复状态的 typed failure。writer 与临时资源句柄在可恢复失败后
-仍提供显式的 `abort`、`cleanup`、`keep` 或 `persist` 生命周期操作。
-`AsyncFileSystem::begin_copy` 返回 `AsyncCopyOperation`；应用应通过自己的运行时轮询
-其执行 future，并在取消后检查操作状态。
-
-`Uri` 会拒绝含凭据的字段。`ConnectionUri` 可为连接用途携带凭据，但其 `Display` 与
-`Debug` 输出会遮蔽凭据；应用仍不得暴露原始值。即使应用在进程级默认脱敏策略中安装
-allow 规则，`UserMetadata` 仍会拒绝 credential-like key。`FileSystemProperties`
-是不触发 I/O 的不可变快照，包含
-capability、limit 和逻辑路径约束。
-
-## 文档
-
-- [User guide](doc/user_guide.md)
-- [用户指南](doc/user_guide.zh_CN.md)
-- [文件系统架构设计](doc/file_system_design.zh_CN.md)
+- [English user guide](doc/user_guide.md)
+- [中文用户指南](doc/user_guide.zh_CN.md)
+- [中文架构设计](doc/file_system_design.zh_CN.md)
 - [API 文档](https://docs.rs/qubit-fs)
 
 ## 测试
