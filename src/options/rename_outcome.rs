@@ -7,7 +7,13 @@
 // =============================================================================
 //! Rename operation outcome.
 
-use crate::{AchievedAtomicity, NonSensitiveMetadata, Path, PublicationMethod, UserMetadata};
+use crate::{
+    AchievedAtomicity,
+    NonSensitiveMetadata,
+    Path,
+    PublicationMethod,
+    UserMetadata,
+};
 
 /// Outcome of a rename, move, or provider-equivalent publication.
 #[derive(Clone, Debug, PartialEq)]
@@ -80,7 +86,11 @@ impl RenameOutcome {
         &self.diagnostics
     }
     /// Binds the facade-validated operation identities.
-    pub(crate) fn with_identity(mut self, source: &Path, target: &Path) -> Self {
+    pub(crate) fn with_identity(
+        mut self,
+        source: &Path,
+        target: &Path,
+    ) -> Self {
         self.source = source.clone();
         self.target = target.clone();
         self

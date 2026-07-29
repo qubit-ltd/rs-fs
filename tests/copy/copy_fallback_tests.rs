@@ -7,23 +7,71 @@
 // =============================================================================
 //! Recording-provider coverage for copy dispatch and fallback.
 
-use std::io::{Cursor, Result as IoResult};
-use std::sync::{Arc, Mutex};
+use std::io::{
+    Cursor,
+    Result as IoResult,
+};
+use std::sync::{
+    Arc,
+    Mutex,
+};
 
 use qubit_fs::spi::{
-    CopyAttempt, CopyDeclineReason, CopyRequest, CreateDirectoryRequest,
-    CreateTempDirectoryRequest, CreateTempFileRequest, DeleteDirectoryRequest, DeleteFileRequest,
-    FileSystemSpi, FileWriterSpi, ListRequest, OpenReaderRequest, OpenWriterRequest,
-    OpenedDirectoryStream, OpenedReader, OpenedTempDirectory, OpenedTempFile, OpenedWriter,
-    RenameRequest, SpiCopyFailure, SpiRenameFailure, StatRequest, StatResponse,
+    CopyAttempt,
+    CopyDeclineReason,
+    CopyRequest,
+    CreateDirectoryRequest,
+    CreateTempDirectoryRequest,
+    CreateTempFileRequest,
+    DeleteDirectoryRequest,
+    DeleteFileRequest,
+    FileSystemSpi,
+    FileWriterSpi,
+    ListRequest,
+    OpenReaderRequest,
+    OpenWriterRequest,
+    OpenedDirectoryStream,
+    OpenedReader,
+    OpenedTempDirectory,
+    OpenedTempFile,
+    OpenedWriter,
+    RenameRequest,
+    SpiCopyFailure,
+    SpiRenameFailure,
+    StatRequest,
+    StatResponse,
 };
 use qubit_fs::{
-    AchievedAtomicity, AtomicityRequirement, CopyFailureState, CopyMethod, CopyOptions,
-    CopyOutcome, CopyStats, CreateDirectoryOutcome, DeleteOutcome, FileKind, FileMetadata,
-    FileSystem, FileSystemCapabilities, FileSystemCapability, FileSystemId, FileSystemInfo,
-    FileSystemLimits, FileSystemProperties, FsError, FsErrorKind, FsOperation, FsResult,
-    MetadataPreservePolicy, OpenedFileInfo, Path, PathConstraints, RenameFailureState,
-    RenameOutcome, ServerSidePreference, WriteOutcome,
+    AchievedAtomicity,
+    AtomicityRequirement,
+    CopyFailureState,
+    CopyMethod,
+    CopyOptions,
+    CopyOutcome,
+    CopyStats,
+    CreateDirectoryOutcome,
+    DeleteOutcome,
+    FileKind,
+    FileMetadata,
+    FileSystem,
+    FileSystemCapabilities,
+    FileSystemCapability,
+    FileSystemId,
+    FileSystemInfo,
+    FileSystemLimits,
+    FileSystemProperties,
+    FsError,
+    FsErrorKind,
+    FsOperation,
+    FsResult,
+    MetadataPreservePolicy,
+    OpenedFileInfo,
+    Path,
+    PathConstraints,
+    RenameFailureState,
+    RenameOutcome,
+    ServerSidePreference,
+    WriteOutcome,
 };
 use qubit_io::Output;
 
@@ -76,7 +124,8 @@ fn properties(response: &CopyResponse) -> FileSystemProperties {
         .with(FileSystemCapability::AtomicRename);
     if matches!(
         response,
-        CopyResponse::CompletedAtomicDowngrade | CopyResponse::DeclinedSkipAtomic
+        CopyResponse::CompletedAtomicDowngrade
+            | CopyResponse::DeclinedSkipAtomic
     ) {
         capabilities = capabilities.with(FileSystemCapability::AtomicReplace);
     }
@@ -120,7 +169,10 @@ impl FileSystemSpi for RecordingSpi {
     fn list(&self, _: ListRequest<'_>) -> FsResult<OpenedDirectoryStream> {
         Err(unused())
     }
-    fn open_reader(&self, request: OpenReaderRequest<'_>) -> FsResult<OpenedReader> {
+    fn open_reader(
+        &self,
+        request: OpenReaderRequest<'_>,
+    ) -> FsResult<OpenedReader> {
         self.calls
             .lock()
             .expect("calls lock should succeed")
@@ -130,7 +182,10 @@ impl FileSystemSpi for RecordingSpi {
             Box::new(Cursor::new(b"bytes".to_vec())),
         ))
     }
-    fn open_writer(&self, request: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
+    fn open_writer(
+        &self,
+        request: OpenWriterRequest<'_>,
+    ) -> FsResult<OpenedWriter> {
         self.calls
             .lock()
             .expect("calls lock should succeed")
@@ -139,35 +194,51 @@ impl FileSystemSpi for RecordingSpi {
             info(request.path()),
             Box::new(RecordingWriter {
                 bytes: Arc::clone(&self.bytes),
-                fail_flush: matches!(self.response, CopyResponse::DeclinedFlushFailure),
+                fail_flush: matches!(
+                    self.response,
+                    CopyResponse::DeclinedFlushFailure
+                ),
             }),
         ))
     }
-    fn create_directory(&self, _: CreateDirectoryRequest<'_>) -> FsResult<CreateDirectoryOutcome> {
+    fn create_directory(
+        &self,
+        _: CreateDirectoryRequest<'_>,
+    ) -> FsResult<CreateDirectoryOutcome> {
         Err(unused())
     }
     fn delete_file(&self, _: DeleteFileRequest<'_>) -> FsResult<DeleteOutcome> {
         Err(unused())
     }
-    fn delete_directory(&self, _: DeleteDirectoryRequest<'_>) -> FsResult<DeleteOutcome> {
+    fn delete_directory(
+        &self,
+        _: DeleteDirectoryRequest<'_>,
+    ) -> FsResult<DeleteOutcome> {
         Err(unused())
     }
-    fn try_copy(&self, _: CopyRequest<'_>) -> Result<CopyAttempt, SpiCopyFailure> {
+    fn try_copy(
+        &self,
+        _: CopyRequest<'_>,
+    ) -> Result<CopyAttempt, SpiCopyFailure> {
         self.calls
             .lock()
             .expect("calls lock should succeed")
             .push("try_copy");
         match self.response {
-            CopyResponse::Completed => Ok(CopyAttempt::Completed(CopyOutcome::new(
-                CopyStats::default(),
-                CopyMethod::Native,
-                AchievedAtomicity::Atomic,
-            ))),
-            CopyResponse::CompletedAtomicDowngrade => Ok(CopyAttempt::Completed(CopyOutcome::new(
-                CopyStats::default(),
-                CopyMethod::Native,
-                AchievedAtomicity::NonAtomic,
-            ))),
+            CopyResponse::Completed => {
+                Ok(CopyAttempt::Completed(CopyOutcome::new(
+                    CopyStats::default(),
+                    CopyMethod::Native,
+                    AchievedAtomicity::Atomic,
+                )))
+            }
+            CopyResponse::CompletedAtomicDowngrade => {
+                Ok(CopyAttempt::Completed(CopyOutcome::new(
+                    CopyStats::default(),
+                    CopyMethod::Native,
+                    AchievedAtomicity::NonAtomic,
+                )))
+            }
             CopyResponse::CompletedDurabilityDowngrade => {
                 Ok(CopyAttempt::Completed(CopyOutcome::new(
                     CopyStats::default(),
@@ -199,19 +270,29 @@ impl FileSystemSpi for RecordingSpi {
                 Ok(CopyAttempt::Declined(CopyDeclineReason::NotApplicable))
             }
             CopyResponse::Failed => Err(SpiCopyFailure::new(
-                FsError::new(FsErrorKind::Io, FsOperation::BeginCopy, "injected"),
+                FsError::new(
+                    FsErrorKind::Io,
+                    FsOperation::BeginCopy,
+                    "injected",
+                ),
                 CopyFailureState::Indeterminate,
                 CopyStats::default(),
             )),
         }
     }
-    fn rename(&self, _: RenameRequest<'_>) -> Result<RenameOutcome, SpiRenameFailure> {
+    fn rename(
+        &self,
+        _: RenameRequest<'_>,
+    ) -> Result<RenameOutcome, SpiRenameFailure> {
         Err(SpiRenameFailure::new(
             unused(),
             RenameFailureState::Unchanged,
         ))
     }
-    fn create_temp_file(&self, _: CreateTempFileRequest) -> FsResult<OpenedTempFile> {
+    fn create_temp_file(
+        &self,
+        _: CreateTempFileRequest,
+    ) -> FsResult<OpenedTempFile> {
         Err(unused())
     }
     fn create_temp_directory(
@@ -244,7 +325,12 @@ struct RecordingWriter {
 /// Implements byte output for the recording writer.
 impl Output for RecordingWriter {
     type Item = u8;
-    unsafe fn write_unchecked(&mut self, buffer: &[u8], _: usize, count: usize) -> IoResult<usize> {
+    unsafe fn write_unchecked(
+        &mut self,
+        buffer: &[u8],
+        _: usize,
+        count: usize,
+    ) -> IoResult<usize> {
         self.bytes
             .lock()
             .expect("bytes lock should succeed")
@@ -261,7 +347,9 @@ impl Output for RecordingWriter {
 }
 /// Publishes recording-writer data without additional effects.
 impl FileWriterSpi for RecordingWriter {
-    fn commit(&mut self) -> Result<WriteOutcome, qubit_fs::spi::SpiWriteFailure> {
+    fn commit(
+        &mut self,
+    ) -> Result<WriteOutcome, qubit_fs::spi::SpiWriteFailure> {
         Ok(WriteOutcome::new(
             AchievedAtomicity::NonAtomic,
             qubit_fs::PublicationMethod::StreamCopy,
@@ -289,7 +377,8 @@ fn test_copy_completed_does_not_open_fallback_handles() {
 /// Verifies that a provider decline alone reaches the explicit stream fallback.
 #[test]
 fn test_copy_declined_uses_allowlisted_stream_fallback() {
-    let (filesystem, calls, bytes) = recording_filesystem(CopyResponse::Declined);
+    let (filesystem, calls, bytes) =
+        recording_filesystem(CopyResponse::Declined);
     let outcome = filesystem
         .copy(&path("/source"), &path("/target"), CopyOptions::default())
         .expect("safe fallback should succeed");
@@ -391,7 +480,8 @@ fn test_copy_required_durability_preflight_has_zero_spi_calls() {
 /// Verifies a completed non-atomic result cannot satisfy an atomic requirement.
 #[test]
 fn test_copy_completed_atomicity_downgrade_is_contract_failure() {
-    let (filesystem, calls, _) = recording_filesystem(CopyResponse::CompletedAtomicDowngrade);
+    let (filesystem, calls, _) =
+        recording_filesystem(CopyResponse::CompletedAtomicDowngrade);
     let failure = filesystem
         .copy(
             &path("/source"),
@@ -417,7 +507,8 @@ fn test_copy_completed_atomicity_downgrade_is_contract_failure() {
 /// outcome.
 #[test]
 fn test_copy_completed_durability_downgrade_is_contract_failure() {
-    let (filesystem, calls, _) = recording_filesystem(CopyResponse::CompletedDurabilityDowngrade);
+    let (filesystem, calls, _) =
+        recording_filesystem(CopyResponse::CompletedDurabilityDowngrade);
     let failure = filesystem
         .copy(
             &path("/source"),
@@ -443,8 +534,9 @@ fn test_copy_completed_durability_downgrade_is_contract_failure() {
 /// copy when its reported method is not server-side.
 #[test]
 fn test_copy_completed_non_server_side_method_violates_required_server_side() {
-    let (filesystem, calls, _) =
-        recording_filesystem(CopyResponse::CompletedServerSideRequiredButNative);
+    let (filesystem, calls, _) = recording_filesystem(
+        CopyResponse::CompletedServerSideRequiredButNative,
+    );
     let failure = filesystem
         .copy(
             &path("/source"),
@@ -470,7 +562,8 @@ fn test_copy_completed_non_server_side_method_violates_required_server_side() {
 /// preservation fact rather than silently returning its default none value.
 #[test]
 fn test_copy_completed_missing_metadata_preservation_is_contract_failure() {
-    let (filesystem, calls, _) = recording_filesystem(CopyResponse::CompletedMetadataDowngrade);
+    let (filesystem, calls, _) =
+        recording_filesystem(CopyResponse::CompletedMetadataDowngrade);
     let failure = filesystem
         .copy(
             &path("/source"),
@@ -496,7 +589,8 @@ fn test_copy_completed_missing_metadata_preservation_is_contract_failure() {
 /// fail-on-conflict request.
 #[test]
 fn test_copy_completed_skipped_stats_violate_fail_conflict_policy() {
-    let (filesystem, _, _) = recording_filesystem(CopyResponse::CompletedInvalidSkippedStats);
+    let (filesystem, _, _) =
+        recording_filesystem(CopyResponse::CompletedInvalidSkippedStats);
     let failure = filesystem
         .copy(&path("/source"), &path("/target"), CopyOptions::default())
         .expect_err("skipped stats must match the conflict policy");
@@ -510,8 +604,10 @@ fn test_copy_completed_skipped_stats_violate_fail_conflict_policy() {
 /// Verifies a declined atomic skip request opens neither fallback stream
 /// handle.
 #[test]
-fn test_copy_declined_skip_required_atomicity_rejects_without_opening_handles() {
-    let (filesystem, calls, _) = recording_filesystem(CopyResponse::DeclinedSkipAtomic);
+fn test_copy_declined_skip_required_atomicity_rejects_without_opening_handles()
+{
+    let (filesystem, calls, _) =
+        recording_filesystem(CopyResponse::DeclinedSkipAtomic);
     let failure = filesystem
         .copy(
             &path("/source"),
@@ -532,8 +628,10 @@ fn test_copy_declined_skip_required_atomicity_rejects_without_opening_handles() 
 
 /// Verifies post-writer fallback failure retains recovery and transfer facts.
 #[test]
-fn test_copy_fallback_flush_failure_is_partially_published_with_stats_and_writer() {
-    let (filesystem, _, _) = recording_filesystem(CopyResponse::DeclinedFlushFailure);
+fn test_copy_fallback_flush_failure_is_partially_published_with_stats_and_writer()
+ {
+    let (filesystem, _, _) =
+        recording_filesystem(CopyResponse::DeclinedFlushFailure);
     let failure = filesystem
         .copy(&path("/source"), &path("/target"), CopyOptions::default())
         .expect_err("flush failure should be recoverable");

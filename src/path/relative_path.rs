@@ -1,8 +1,16 @@
 //! Safe normalized relative logical paths.
 
-use std::fmt::{Display, Formatter, Result as FmtResult};
+use std::fmt::{
+    Display,
+    Formatter,
+    Result as FmtResult,
+};
 
-use crate::{FsError, FsOperation, FsResult};
+use crate::{
+    FsError,
+    FsOperation,
+    FsResult,
+};
 
 /// A non-empty normalized relative path that cannot escape its base.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]

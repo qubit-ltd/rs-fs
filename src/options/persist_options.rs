@@ -8,8 +8,13 @@
 //! Temporary resource persistence options.
 
 use crate::{
-    AtomicityRequirement, FileSystemCapabilities, FileSystemCapability, FsError, FsErrorKind,
-    FsOperation, MetadataPreservePolicy,
+    AtomicityRequirement,
+    FileSystemCapabilities,
+    FileSystemCapability,
+    FsError,
+    FsErrorKind,
+    FsOperation,
+    MetadataPreservePolicy,
 };
 
 /// Options controlling temporary resource persistence.
@@ -29,7 +34,10 @@ impl PersistOptions {
     /// # Errors
     /// Returns [`FsErrorKind::RequirementNotMet`] when atomic persistence is
     /// required but the configured filesystem does not guarantee it.
-    pub fn validate_against(&self, capabilities: FileSystemCapabilities) -> Result<(), FsError> {
+    pub fn validate_against(
+        &self,
+        capabilities: FileSystemCapabilities,
+    ) -> Result<(), FsError> {
         if self.atomicity == AtomicityRequirement::Required
             && !capabilities.contains(FileSystemCapability::AtomicTempPersist)
         {
@@ -38,7 +46,9 @@ impl PersistOptions {
                 FsOperation::PersistTemp,
                 "atomic temporary persistence is required but not guaranteed",
             )
-            .with_required_capability(FileSystemCapability::AtomicTempPersist));
+            .with_required_capability(
+                FileSystemCapability::AtomicTempPersist,
+            ));
         }
         Ok(())
     }

@@ -9,10 +9,20 @@
 //! Concrete facade request values.
 
 use super::super::{
-    ResolvedCopyOptions, ResolvedCreateDirectoryOptions, ResolvedDeleteOptions,
-    ResolvedListOptions, ResolvedReadOptions, ResolvedRenameOptions, ResolvedWriteOptions,
+    ResolvedCopyOptions,
+    ResolvedCreateDirectoryOptions,
+    ResolvedDeleteOptions,
+    ResolvedListOptions,
+    ResolvedReadOptions,
+    ResolvedRenameOptions,
+    ResolvedWriteOptions,
 };
-use crate::{Path, PersistOptions, TempDirectoryOptions, TempFileOptions};
+use crate::{
+    Path,
+    PersistOptions,
+    TempDirectoryOptions,
+    TempFileOptions,
+};
 
 macro_rules! path_request {
     ($name:ident, $options:ty) => {

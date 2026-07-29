@@ -8,18 +8,52 @@
 //! Recording-provider tests for the non-emulated rename primitive.
 
 use qubit_fs::spi::{
-    CreateDirectoryRequest, CreateTempDirectoryRequest, CreateTempFileRequest,
-    DeleteDirectoryRequest, DeleteFileRequest, FileSystemSpi, ListRequest, OpenReaderRequest,
-    OpenWriterRequest, OpenedDirectoryStream, OpenedReader, OpenedTempDirectory, OpenedTempFile,
-    OpenedWriter, RenameRequest, SpiRenameFailure, StatRequest, StatResponse,
+    CreateDirectoryRequest,
+    CreateTempDirectoryRequest,
+    CreateTempFileRequest,
+    DeleteDirectoryRequest,
+    DeleteFileRequest,
+    FileSystemSpi,
+    ListRequest,
+    OpenReaderRequest,
+    OpenWriterRequest,
+    OpenedDirectoryStream,
+    OpenedReader,
+    OpenedTempDirectory,
+    OpenedTempFile,
+    OpenedWriter,
+    RenameRequest,
+    SpiRenameFailure,
+    StatRequest,
+    StatResponse,
 };
 use qubit_fs::{
-    AchievedAtomicity, AtomicityRequirement, CreateDirectoryOutcome, DeleteOutcome, FileSystem,
-    FileSystemCapabilities, FileSystemCapability, FileSystemId, FileSystemInfo, FileSystemLimits,
-    FileSystemProperties, FsError, FsErrorKind, FsOperation, FsResult, Path, PathConstraints,
-    PublicationMethod, RenameFailureState, RenameOptions, RenameOutcome,
+    AchievedAtomicity,
+    AtomicityRequirement,
+    CreateDirectoryOutcome,
+    DeleteOutcome,
+    FileSystem,
+    FileSystemCapabilities,
+    FileSystemCapability,
+    FileSystemId,
+    FileSystemInfo,
+    FileSystemLimits,
+    FileSystemProperties,
+    FsError,
+    FsErrorKind,
+    FsOperation,
+    FsResult,
+    Path,
+    PathConstraints,
+    PublicationMethod,
+    RenameFailureState,
+    RenameOptions,
+    RenameOutcome,
 };
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc,
+    Mutex,
+};
 
 /// Selects an atomic or downgraded provider rename result.
 struct RenameSpi {
@@ -28,7 +62,9 @@ struct RenameSpi {
     calls: Arc<Mutex<Vec<&'static str>>>,
 }
 /// Builds a rename-capable facade and call probe.
-fn filesystem(atomicity: AchievedAtomicity) -> (FileSystem, Arc<Mutex<Vec<&'static str>>>) {
+fn filesystem(
+    atomicity: AchievedAtomicity,
+) -> (FileSystem, Arc<Mutex<Vec<&'static str>>>) {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let filesystem = FileSystem::from_spi(RenameSpi {
         atomicity,
@@ -91,7 +127,10 @@ impl FileSystemSpi for RenameSpi {
             .push("open_writer");
         Err(unused())
     }
-    fn create_directory(&self, _: CreateDirectoryRequest<'_>) -> FsResult<CreateDirectoryOutcome> {
+    fn create_directory(
+        &self,
+        _: CreateDirectoryRequest<'_>,
+    ) -> FsResult<CreateDirectoryOutcome> {
         Err(unused())
     }
     fn delete_file(&self, _: DeleteFileRequest<'_>) -> FsResult<DeleteOutcome> {
@@ -101,10 +140,16 @@ impl FileSystemSpi for RenameSpi {
             .push("delete");
         Err(unused())
     }
-    fn delete_directory(&self, _: DeleteDirectoryRequest<'_>) -> FsResult<DeleteOutcome> {
+    fn delete_directory(
+        &self,
+        _: DeleteDirectoryRequest<'_>,
+    ) -> FsResult<DeleteOutcome> {
         Err(unused())
     }
-    fn rename(&self, request: RenameRequest<'_>) -> Result<RenameOutcome, SpiRenameFailure> {
+    fn rename(
+        &self,
+        request: RenameRequest<'_>,
+    ) -> Result<RenameOutcome, SpiRenameFailure> {
         self.calls
             .lock()
             .expect("calls lock should succeed")
@@ -116,7 +161,10 @@ impl FileSystemSpi for RenameSpi {
             self.method,
         ))
     }
-    fn create_temp_file(&self, _: CreateTempFileRequest) -> FsResult<OpenedTempFile> {
+    fn create_temp_file(
+        &self,
+        _: CreateTempFileRequest,
+    ) -> FsResult<OpenedTempFile> {
         Err(unused())
     }
     fn create_temp_directory(
@@ -146,7 +194,8 @@ fn test_rename_uses_single_primitive_and_binds_identity() {
 /// Verifies a provider atomicity downgrade cannot be represented as an
 /// unchanged failure.
 #[test]
-fn test_rename_atomicity_downgrade_is_typed_contract_failure_without_emulation() {
+fn test_rename_atomicity_downgrade_is_typed_contract_failure_without_emulation()
+{
     let (filesystem, calls) = filesystem(AchievedAtomicity::NonAtomic);
     let failure = filesystem
         .rename(

@@ -8,8 +8,15 @@
 //! Copy operation outcome.
 
 use crate::{
-    AchievedAtomicity, CopyConflictPolicy, CopyMethod, CopyOptions, CopyStats,
-    MetadataPreservePolicy, NonSensitiveMetadata, ResourceVersion, ServerSidePreference,
+    AchievedAtomicity,
+    CopyConflictPolicy,
+    CopyMethod,
+    CopyOptions,
+    CopyStats,
+    MetadataPreservePolicy,
+    NonSensitiveMetadata,
+    ResourceVersion,
+    ServerSidePreference,
     UserMetadata,
 };
 
@@ -38,7 +45,11 @@ impl CopyOutcome {
     /// New copy outcome without diagnostics.
     #[inline]
     #[must_use]
-    pub fn new(stats: CopyStats, method: CopyMethod, atomicity: AchievedAtomicity) -> Self {
+    pub fn new(
+        stats: CopyStats,
+        method: CopyMethod,
+        atomicity: AchievedAtomicity,
+    ) -> Self {
         Self {
             stats,
             method,
@@ -96,7 +107,10 @@ impl CopyOutcome {
 
     /// Records the destination version reported after publication.
     #[must_use]
-    pub fn with_target_version(mut self, target_version: ResourceVersion) -> Self {
+    pub fn with_target_version(
+        mut self,
+        target_version: ResourceVersion,
+    ) -> Self {
         self.target_version = Some(target_version);
         self
     }
@@ -122,7 +136,10 @@ impl CopyOutcome {
         &self.diagnostics
     }
     /// Marks this result as the facade's streamed fallback.
-    pub(crate) fn streamed_fallback(stats: CopyStats, atomicity: AchievedAtomicity) -> Self {
+    pub(crate) fn streamed_fallback(
+        stats: CopyStats,
+        atomicity: AchievedAtomicity,
+    ) -> Self {
         Self {
             stats,
             method: CopyMethod::Streamed,
@@ -137,9 +154,14 @@ impl CopyOutcome {
 
     /// Returns the first provider-completed outcome fact that contradicts the
     /// resolved copy request.
-    pub(crate) fn contract_violation(&self, options: &CopyOptions) -> Option<&'static str> {
+    pub(crate) fn contract_violation(
+        &self,
+        options: &CopyOptions,
+    ) -> Option<&'static str> {
         if self.used_fallback || self.method == CopyMethod::Streamed {
-            return Some("provider returned a facade streamed-fallback outcome as native success");
+            return Some(
+                "provider returned a facade streamed-fallback outcome as native success",
+            );
         }
         if options.server_side == ServerSidePreference::Require
             && self.method != CopyMethod::ServerSide
@@ -149,15 +171,25 @@ impl CopyOutcome {
             );
         }
         if self.metadata != options.preserve_metadata {
-            return Some("provider reported metadata preservation different from the copy request");
+            return Some(
+                "provider reported metadata preservation different from the copy request",
+            );
         }
         if !options.continue_on_error && self.stats.failed != 0 {
-            return Some("provider reported failed copy entries without continue-on-error");
+            return Some(
+                "provider reported failed copy entries without continue-on-error",
+            );
         }
-        if options.conflict != CopyConflictPolicy::Skip && self.stats.skipped != 0 {
-            return Some("provider reported skipped copy entries without a skip conflict policy");
+        if options.conflict != CopyConflictPolicy::Skip
+            && self.stats.skipped != 0
+        {
+            return Some(
+                "provider reported skipped copy entries without a skip conflict policy",
+            );
         }
-        if options.conflict != CopyConflictPolicy::Overwrite && self.stats.overwritten != 0 {
+        if options.conflict != CopyConflictPolicy::Overwrite
+            && self.stats.overwritten != 0
+        {
             return Some(
                 "provider reported overwritten copy entries without an overwrite conflict policy",
             );

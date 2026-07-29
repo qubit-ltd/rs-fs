@@ -9,7 +9,13 @@
 
 use std::time::SystemTime;
 
-use crate::{Checksum, FileKind, NonSensitiveMetadata, ResourceVersion, UserMetadata};
+use crate::{
+    Checksum,
+    FileKind,
+    NonSensitiveMetadata,
+    ResourceVersion,
+    UserMetadata,
+};
 
 /// Stable and extensible metadata for one filesystem resource.
 #[derive(Clone, Debug, PartialEq)]

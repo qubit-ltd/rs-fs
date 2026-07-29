@@ -3,8 +3,15 @@
 //! Immutable filesystem property snapshots used by facades.
 
 use crate::{
-    FileSystemCapabilities, FileSystemInfo, FileSystemLimits, FsError, FsErrorKind, FsOperation,
-    FsResult, Path, PathSemantics,
+    FileSystemCapabilities,
+    FileSystemInfo,
+    FileSystemLimits,
+    FsError,
+    FsErrorKind,
+    FsOperation,
+    FsResult,
+    Path,
+    PathSemantics,
 };
 
 /// Permitted absolute or relative form for paths accepted by a filesystem.
@@ -147,7 +154,9 @@ impl FileSystemProperties {
                 "provider id must be non-empty and contain no controls",
             ));
         }
-        if let Some((_capability, _dependency)) = self.capabilities.missing_dependency() {
+        if let Some((_capability, _dependency)) =
+            self.capabilities.missing_dependency()
+        {
             return Err(invalid_properties(
                 "advertised capability dependency is missing",
             ));
@@ -178,7 +187,9 @@ impl FileSystemProperties {
 }
 
 /// Derives facade-guaranteed capabilities from safe core compositions.
-fn effective_capabilities(mut capabilities: FileSystemCapabilities) -> FileSystemCapabilities {
+fn effective_capabilities(
+    mut capabilities: FileSystemCapabilities,
+) -> FileSystemCapabilities {
     if capabilities.contains(crate::FileSystemCapability::Read)
         && capabilities.contains(crate::FileSystemCapability::Write)
     {

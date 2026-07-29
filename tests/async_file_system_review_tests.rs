@@ -11,10 +11,22 @@ mod async_recording_spi;
 mod poll_support;
 
 use crate::async_recording_spi::{
-    AsyncCopyStage, AsyncRecordingConfig, async_recording_file_system,
+    AsyncCopyStage,
+    AsyncRecordingConfig,
+    async_recording_file_system,
 };
-use crate::poll_support::{assert_pending, ready};
-use qubit_fs::{AchievedAtomicity, FsErrorKind, Path, ReadOptions, RenameOptions, WriteOptions};
+use crate::poll_support::{
+    assert_pending,
+    ready,
+};
+use qubit_fs::{
+    AchievedAtomicity,
+    FsErrorKind,
+    Path,
+    ReadOptions,
+    RenameOptions,
+    WriteOptions,
+};
 
 /// Parses one stable test path.
 fn path(value: &str) -> Path {
@@ -34,12 +46,20 @@ fn test_async_facade_stat_and_open_pending_and_error() {
             ..AsyncRecordingConfig::default()
         });
         match stage {
-            AsyncCopyStage::Stat => assert_pending(Box::pin(fs.stat(&path("/file"))).as_mut()),
+            AsyncCopyStage::Stat => {
+                assert_pending(Box::pin(fs.stat(&path("/file"))).as_mut())
+            }
             AsyncCopyStage::OpenReader => assert_pending(
-                Box::pin(fs.open_reader(&path("/file"), ReadOptions::default())).as_mut(),
+                Box::pin(
+                    fs.open_reader(&path("/file"), ReadOptions::default()),
+                )
+                .as_mut(),
             ),
             AsyncCopyStage::OpenWriter => assert_pending(
-                Box::pin(fs.open_writer(&path("/file"), WriteOptions::default())).as_mut(),
+                Box::pin(
+                    fs.open_writer(&path("/file"), WriteOptions::default()),
+                )
+                .as_mut(),
             ),
             _ => unreachable!(),
         }
@@ -48,19 +68,20 @@ fn test_async_facade_stat_and_open_pending_and_error() {
             ..AsyncRecordingConfig::default()
         });
         let error = match stage {
-            AsyncCopyStage::Stat => {
-                ready(fs.stat(&path("/file"))).expect_err("provider failure expected")
-            }
+            AsyncCopyStage::Stat => ready(fs.stat(&path("/file")))
+                .expect_err("provider failure expected"),
             AsyncCopyStage::OpenReader => {
-                let Err(error) = ready(fs.open_reader(&path("/file"), ReadOptions::default()))
-                else {
+                let Err(error) = ready(
+                    fs.open_reader(&path("/file"), ReadOptions::default()),
+                ) else {
                     panic!("provider failure expected");
                 };
                 error
             }
             AsyncCopyStage::OpenWriter => {
-                let Err(error) = ready(fs.open_writer(&path("/file"), WriteOptions::default()))
-                else {
+                let Err(error) = ready(
+                    fs.open_writer(&path("/file"), WriteOptions::default()),
+                ) else {
                     panic!("provider failure expected");
                 };
                 error

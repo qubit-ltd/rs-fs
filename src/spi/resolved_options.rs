@@ -9,7 +9,12 @@
 //! Facade-resolved option values exposed read-only to providers.
 
 use crate::{
-    CopyOptions, CreateDirectoryOptions, DeleteOptions, ListOptions, ReadOptions, RenameOptions,
+    CopyOptions,
+    CreateDirectoryOptions,
+    DeleteOptions,
+    ListOptions,
+    ReadOptions,
+    RenameOptions,
     WriteOptions,
 };
 

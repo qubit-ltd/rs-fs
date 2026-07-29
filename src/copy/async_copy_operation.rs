@@ -7,8 +7,18 @@
 
 use crate::spi::ResolvedCopyOptions;
 use crate::{
-    AsyncCopyFailure, AsyncCopyOperationState, AsyncFileSystem, AsyncFileWriter, CopyFailureState,
-    CopyOptions, CopyOutcome, CopyStats, FsError, FsErrorKind, FsOperation, Path,
+    AsyncCopyFailure,
+    AsyncCopyOperationState,
+    AsyncFileSystem,
+    AsyncFileWriter,
+    CopyFailureState,
+    CopyOptions,
+    CopyOutcome,
+    CopyStats,
+    FsError,
+    FsErrorKind,
+    FsOperation,
+    Path,
 };
 
 /// An owning copy request whose recovery writer remains accessible after
@@ -132,7 +142,9 @@ impl Drop for CopyCancellationGuard<'_> {
     /// Records only local state; drop never calls a provider.
     fn drop(&mut self) {
         if !self.finished && *self.state == AsyncCopyOperationState::Running {
-            *self.state = AsyncCopyOperationState::Failed(CopyFailureState::Indeterminate);
+            *self.state = AsyncCopyOperationState::Failed(
+                CopyFailureState::Indeterminate,
+            );
         }
     }
 }

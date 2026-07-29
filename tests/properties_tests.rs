@@ -1,8 +1,17 @@
 //! Tests for immutable filesystem property snapshots.
 
 use qubit_fs::{
-    FileSystemCapabilities, FileSystemCapability, FileSystemId, FileSystemInfo, FileSystemLimit,
-    FileSystemLimits, FileSystemProperties, Path, PathConstraints, PathForm, PathSemantics,
+    FileSystemCapabilities,
+    FileSystemCapability,
+    FileSystemId,
+    FileSystemInfo,
+    FileSystemLimit,
+    FileSystemLimits,
+    FileSystemProperties,
+    Path,
+    PathConstraints,
+    PathForm,
+    PathSemantics,
 };
 
 /// Builds the smallest valid properties snapshot for validation tests.
@@ -30,7 +39,8 @@ fn test_file_system_properties_rejects_invalid_limit_value() {
         "test-provider",
         PathSemantics::Hierarchical,
     );
-    let limits = FileSystemLimits::unknown().with_max_path_text_bytes(FileSystemLimit::Maximum(0));
+    let limits = FileSystemLimits::unknown()
+        .with_max_path_text_bytes(FileSystemLimit::Maximum(0));
     assert!(
         FileSystemProperties::new(
             info,

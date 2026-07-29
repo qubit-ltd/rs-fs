@@ -18,24 +18,56 @@ mod session;
 
 pub use async_directory_stream_session::AsyncDirectoryStreamSession;
 pub use async_file_system_spi::{
-    AsyncFileSystemSpi, AsyncTempResourceSpi, OpenedAsyncDirectoryStream, OpenedAsyncReader,
-    OpenedAsyncTempDirectory, OpenedAsyncTempFile, OpenedAsyncWriter, SpiFuture,
+    AsyncFileSystemSpi,
+    AsyncTempResourceSpi,
+    OpenedAsyncDirectoryStream,
+    OpenedAsyncReader,
+    OpenedAsyncTempDirectory,
+    OpenedAsyncTempFile,
+    OpenedAsyncWriter,
+    SpiFuture,
 };
 pub use async_file_write_session::AsyncFileWriteSession;
 pub use file_system_spi::{
-    CopyAttempt, CopyDeclineReason, FileSystemSpi, OpenedDirectoryStream, OpenedReader,
-    OpenedTempDirectory, OpenedTempFile, OpenedWriter, SpiCopyFailure, SpiRenameFailure,
+    CopyAttempt,
+    CopyDeclineReason,
+    FileSystemSpi,
+    OpenedDirectoryStream,
+    OpenedReader,
+    OpenedTempDirectory,
+    OpenedTempFile,
+    OpenedWriter,
+    SpiCopyFailure,
+    SpiRenameFailure,
     StatResponse,
 };
 pub use request::{
-    CopyRequest, CreateDirectoryRequest, CreateTempDirectoryRequest, CreateTempFileRequest,
-    DeleteDirectoryRequest, DeleteFileRequest, ListRequest, OpenReaderRequest, OpenWriterRequest,
-    PersistRequest, RenameRequest, StatRequest,
+    CopyRequest,
+    CreateDirectoryRequest,
+    CreateTempDirectoryRequest,
+    CreateTempFileRequest,
+    DeleteDirectoryRequest,
+    DeleteFileRequest,
+    ListRequest,
+    OpenReaderRequest,
+    OpenWriterRequest,
+    PersistRequest,
+    RenameRequest,
+    StatRequest,
 };
 pub use resolved_options::{
-    ResolvedCopyOptions, ResolvedCreateDirectoryOptions, ResolvedDeleteOptions,
-    ResolvedListOptions, ResolvedReadOptions, ResolvedRenameOptions, ResolvedWriteOptions,
+    ResolvedCopyOptions,
+    ResolvedCreateDirectoryOptions,
+    ResolvedDeleteOptions,
+    ResolvedListOptions,
+    ResolvedReadOptions,
+    ResolvedRenameOptions,
+    ResolvedWriteOptions,
 };
 pub use session::{
-    DirectoryStreamSpi, FileWriterSpi, SpiPersistFailure, SpiWriteFailure, TempResourceSpi,
+    DirectoryStreamSpi,
+    FileWriterSpi,
+    SpiPersistFailure,
+    SpiWriteFailure,
+    TempResourceSpi,
 };

@@ -6,7 +6,10 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::{FileSystemCapabilities, FileSystemCapability};
+use qubit_fs::{
+    FileSystemCapabilities,
+    FileSystemCapability,
+};
 
 #[test]
 fn capability_set_reports_typed_guarantees() {
@@ -47,7 +50,8 @@ fn capability_set_iterates_and_formats_semantic_values() {
 
 #[test]
 fn capability_set_reports_the_first_missing_dependency() {
-    let capabilities = FileSystemCapabilities::new().with(FileSystemCapability::AtomicRename);
+    let capabilities =
+        FileSystemCapabilities::new().with(FileSystemCapability::AtomicRename);
 
     assert_eq!(
         Some((

@@ -1,21 +1,62 @@
 // qubit-style: allow test-file-name -- this module is included by
 // handle_support/mod.rs.
 use std::io::Result as IoResult;
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc,
+    Mutex,
+};
 
 use qubit_fs::spi::{
-    CreateDirectoryRequest, CreateTempDirectoryRequest, CreateTempFileRequest,
-    DeleteDirectoryRequest, DeleteFileRequest, DirectoryStreamSpi, FileSystemSpi, FileWriterSpi,
-    ListRequest, OpenReaderRequest, OpenWriterRequest, OpenedDirectoryStream, OpenedReader,
-    OpenedTempDirectory, OpenedTempFile, OpenedWriter, PersistRequest, RenameRequest,
-    SpiRenameFailure, SpiWriteFailure, StatRequest, StatResponse, TempResourceSpi,
+    CreateDirectoryRequest,
+    CreateTempDirectoryRequest,
+    CreateTempFileRequest,
+    DeleteDirectoryRequest,
+    DeleteFileRequest,
+    DirectoryStreamSpi,
+    FileSystemSpi,
+    FileWriterSpi,
+    ListRequest,
+    OpenReaderRequest,
+    OpenWriterRequest,
+    OpenedDirectoryStream,
+    OpenedReader,
+    OpenedTempDirectory,
+    OpenedTempFile,
+    OpenedWriter,
+    PersistRequest,
+    RenameRequest,
+    SpiRenameFailure,
+    SpiWriteFailure,
+    StatRequest,
+    StatResponse,
+    TempResourceSpi,
 };
 use qubit_fs::{
-    AchievedAtomicity, CreateDirectoryOutcome, DeleteOutcome, DirEntry, FileMetadata, FileSystem,
-    FileSystemCapabilities, FileSystemCapability, FileSystemId, FileSystemInfo, FileSystemLimits,
-    FileSystemProperties, FsError, FsErrorKind, FsOperation, FsResult, OpenedFileInfo, Path,
-    PathConstraints, PersistOutcome, PublicationMethod, RenameFailureState, RenameOutcome,
-    WriteFailureState, WriteOutcome,
+    AchievedAtomicity,
+    CreateDirectoryOutcome,
+    DeleteOutcome,
+    DirEntry,
+    FileMetadata,
+    FileSystem,
+    FileSystemCapabilities,
+    FileSystemCapability,
+    FileSystemId,
+    FileSystemInfo,
+    FileSystemLimits,
+    FileSystemProperties,
+    FsError,
+    FsErrorKind,
+    FsOperation,
+    FsResult,
+    OpenedFileInfo,
+    Path,
+    PathConstraints,
+    PersistOutcome,
+    PublicationMethod,
+    RenameFailureState,
+    RenameOutcome,
+    WriteFailureState,
+    WriteOutcome,
 };
 use qubit_io::Output;
 
@@ -140,13 +181,18 @@ impl FileSystemSpi for BehaviorSpi {
     }
     fn list(&self, _: ListRequest<'_>) -> FsResult<OpenedDirectoryStream> {
         Ok(OpenedDirectoryStream::new(Box::new(Entries(
-            std::mem::take(&mut *self.entries.lock().expect("entries lock should succeed")),
+            std::mem::take(
+                &mut *self.entries.lock().expect("entries lock should succeed"),
+            ),
         ))))
     }
     fn open_reader(&self, _: OpenReaderRequest<'_>) -> FsResult<OpenedReader> {
         Err(Self::unsupported())
     }
-    fn open_writer(&self, request: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
+    fn open_writer(
+        &self,
+        request: OpenWriterRequest<'_>,
+    ) -> FsResult<OpenedWriter> {
         Ok(OpenedWriter::new(
             OpenedFileInfo::new(
                 FileSystemId::new("handles-test").expect("valid test id"),
@@ -158,22 +204,34 @@ impl FileSystemSpi for BehaviorSpi {
             }),
         ))
     }
-    fn create_directory(&self, _: CreateDirectoryRequest<'_>) -> FsResult<CreateDirectoryOutcome> {
+    fn create_directory(
+        &self,
+        _: CreateDirectoryRequest<'_>,
+    ) -> FsResult<CreateDirectoryOutcome> {
         Err(Self::unsupported())
     }
     fn delete_file(&self, _: DeleteFileRequest<'_>) -> FsResult<DeleteOutcome> {
         Err(Self::unsupported())
     }
-    fn delete_directory(&self, _: DeleteDirectoryRequest<'_>) -> FsResult<DeleteOutcome> {
+    fn delete_directory(
+        &self,
+        _: DeleteDirectoryRequest<'_>,
+    ) -> FsResult<DeleteOutcome> {
         Err(Self::unsupported())
     }
-    fn rename(&self, _: RenameRequest<'_>) -> Result<RenameOutcome, SpiRenameFailure> {
+    fn rename(
+        &self,
+        _: RenameRequest<'_>,
+    ) -> Result<RenameOutcome, SpiRenameFailure> {
         Err(SpiRenameFailure::new(
             Self::unsupported(),
             RenameFailureState::Unchanged,
         ))
     }
-    fn create_temp_file(&self, _: CreateTempFileRequest) -> FsResult<OpenedTempFile> {
+    fn create_temp_file(
+        &self,
+        _: CreateTempFileRequest,
+    ) -> FsResult<OpenedTempFile> {
         Ok(OpenedTempFile::new(
             self.info(),
             Box::new(Temp {
@@ -203,7 +261,12 @@ struct Writer {
 }
 impl Output for Writer {
     type Item = u8;
-    unsafe fn write_unchecked(&mut self, _: &[u8], _: usize, count: usize) -> IoResult<usize> {
+    unsafe fn write_unchecked(
+        &mut self,
+        _: &[u8],
+        _: usize,
+        count: usize,
+    ) -> IoResult<usize> {
         if self.fail_write {
             Err(std::io::Error::other("stream secret=top-secret"))
         } else {

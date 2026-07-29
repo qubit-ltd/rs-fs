@@ -17,7 +17,10 @@ mod temp_file;
 mod temp_file_options;
 mod temp_resource_state;
 
-pub use async_temp_resource::{AsyncTempDirectory, AsyncTempFile};
+pub use async_temp_resource::{
+    AsyncTempDirectory,
+    AsyncTempFile,
+};
 pub use persist_failure::PersistFailure;
 pub use persist_failure_state::PersistFailureState;
 pub use persist_outcome::PersistOutcome;
