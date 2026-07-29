@@ -669,43 +669,56 @@ impl FileSystem {
             ));
         }
         if let Some(length) = metadata.len {
-            self.properties
+            if let Err(error) = self
+                .properties
                 .limits()
                 .validate_read_range(source, Some(length))
-                .and_then(|_| {
-                    usize::try_from(length)
-                        .map_err(|_| {
-                            FsError::new(
-                                FsErrorKind::ResourceLimitExceeded,
-                                FsOperation::Copy,
-                                "source length cannot fit in a write session",
-                            )
-                        })
-                        .and_then(|length| {
-                            self.properties
-                                .limits()
-                                .validate_write_size(target, length)
-                        })
-                })
-                .map_err(|error| {
-                    self.copy_failure(
-                        error,
-                        CopyFailureState::Unchanged,
-                        CopyStats::default(),
-                        None,
-                    )
-                })?;
-        }
-        let mut reader = self
-            .open_reader(source, ReadOptions::default())
-            .map_err(|error| {
-                self.copy_failure(
+            {
+                return Err(self.copy_failure(
                     error,
                     CopyFailureState::Unchanged,
                     CopyStats::default(),
                     None,
-                )
-            })?;
+                ));
+            }
+            let length = match usize::try_from(length) {
+                Ok(length) => length,
+                Err(_) => {
+                    return Err(self.copy_failure(
+                        FsError::new(
+                            FsErrorKind::ResourceLimitExceeded,
+                            FsOperation::Copy,
+                            "source length cannot fit in a write session",
+                        ),
+                        CopyFailureState::Unchanged,
+                        CopyStats::default(),
+                        None,
+                    ));
+                }
+            };
+            if let Err(error) =
+                self.properties.limits().validate_write_size(target, length)
+            {
+                return Err(self.copy_failure(
+                    error,
+                    CopyFailureState::Unchanged,
+                    CopyStats::default(),
+                    None,
+                ));
+            }
+        }
+        let mut reader = match self.open_reader(source, ReadOptions::default())
+        {
+            Ok(reader) => reader,
+            Err(error) => {
+                return Err(self.copy_failure(
+                    error,
+                    CopyFailureState::Unchanged,
+                    CopyStats::default(),
+                    None,
+                ));
+            }
+        };
         let writer_options = WriteOptions {
             disposition: WriteDisposition::CreateNew,
             atomicity: options.atomicity,

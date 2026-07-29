@@ -9,15 +9,22 @@
 
 use qubit_fs::spi::{
     SpiCopyFailure,
+    SpiPersistFailure,
     SpiRenameFailure,
+    SpiWriteFailure,
 };
 use qubit_fs::{
     CopyFailureState,
     CopyStats,
+    FileKind,
+    FileMetadata,
     FsError,
     FsErrorKind,
     FsOperation,
+    Path,
+    PersistFailureState,
     RenameFailureState,
+    WriteFailureState,
 };
 
 /// Verifies provider copy failures retain typed recovery state and statistics.
@@ -33,6 +40,7 @@ fn test_spi_copy_failure_preserves_typed_state() {
         CopyStats::default(),
     );
     assert_eq!(CopyFailureState::Indeterminate, failure.state());
+    assert_eq!(FsErrorKind::Indeterminate, failure.error().kind());
     let (_, state, stats) = failure.into_parts();
     assert_eq!(CopyFailureState::Indeterminate, state);
     assert_eq!(CopyStats::default(), stats);
@@ -50,6 +58,55 @@ fn test_spi_rename_failure_preserves_typed_state() {
         RenameFailureState::Indeterminate,
     );
     assert_eq!(RenameFailureState::Indeterminate, failure.state());
+    assert_eq!(FsErrorKind::Indeterminate, failure.error().kind());
     let (_, state) = failure.into_parts();
     assert_eq!(RenameFailureState::Indeterminate, state);
+}
+
+/// Exposes the metadata getter on a provider response before ownership is
+/// transferred into the validating facade.
+#[test]
+fn test_stat_response_exposes_path_and_metadata_snapshot() {
+    let path = Path::parse("/file").expect("test path should parse");
+    let response = qubit_fs::spi::StatResponse::new(
+        path.clone(),
+        FileMetadata::new(FileKind::File),
+    );
+    assert_eq!(&path, response.path());
+    assert_eq!(FileKind::File, response.metadata().kind);
+}
+
+/// Verifies provider write failures preserve their error and recovery state.
+#[test]
+fn test_spi_write_failure_preserves_typed_state() {
+    let failure = SpiWriteFailure::new(
+        FsError::new(
+            FsErrorKind::Io,
+            FsOperation::CommitWriter,
+            "test failure",
+        ),
+        WriteFailureState::RetryableNotPublished,
+    );
+    assert_eq!(FsErrorKind::Io, failure.error().kind());
+    assert_eq!(WriteFailureState::RetryableNotPublished, failure.state());
+    let (error, state) = failure.into_parts();
+    assert_eq!(FsErrorKind::Io, error.kind());
+    assert_eq!(WriteFailureState::RetryableNotPublished, state);
+}
+
+/// Verifies provider temporary-persist failures retain partial-progress facts.
+#[test]
+fn test_spi_persist_failure_preserves_typed_state() {
+    let failure = SpiPersistFailure::new(
+        FsError::new(FsErrorKind::Io, FsOperation::PersistTemp, "test failure"),
+        PersistFailureState::PublishedSourceRetained,
+    );
+    assert_eq!(FsErrorKind::Io, failure.error().kind());
+    assert_eq!(
+        PersistFailureState::PublishedSourceRetained,
+        failure.state()
+    );
+    let (error, state) = failure.into_parts();
+    assert_eq!(FsErrorKind::Io, error.kind());
+    assert_eq!(PersistFailureState::PublishedSourceRetained, state);
 }

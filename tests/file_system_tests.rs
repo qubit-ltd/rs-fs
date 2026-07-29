@@ -59,6 +59,10 @@ struct CountingSpi {
     property_calls: Arc<AtomicUsize>,
     stat_calls: Arc<AtomicUsize>,
     wrong_stat_path: bool,
+    stat_error: Option<FsErrorKind>,
+    direct_error: bool,
+    unexpected_create: bool,
+    unexpected_delete: bool,
 }
 
 impl CountingSpi {
@@ -78,6 +82,13 @@ impl FileSystemSpi for CountingSpi {
     }
     fn stat(&self, request: StatRequest<'_>) -> FsResult<StatResponse> {
         self.stat_calls.fetch_add(1, Ordering::SeqCst);
+        if let Some(kind) = self.stat_error {
+            return Err(FsError::new(
+                kind,
+                FsOperation::Stat,
+                "injected stat error",
+            ));
+        }
         let path = if self.wrong_stat_path {
             Path::parse("/wrong").expect("test path should parse")
         } else {
@@ -101,25 +112,46 @@ impl FileSystemSpi for CountingSpi {
         &self,
         _: CreateDirectoryRequest<'_>,
     ) -> FsResult<CreateDirectoryOutcome> {
-        Err(Self::unsupported())
+        if self.direct_error {
+            Err(Self::unsupported())
+        } else {
+            Ok(CreateDirectoryOutcome::new(self.unexpected_create))
+        }
     }
     fn delete_file(&self, _: DeleteFileRequest<'_>) -> FsResult<DeleteOutcome> {
-        Err(Self::unsupported())
+        if self.direct_error {
+            Err(Self::unsupported())
+        } else {
+            Ok(DeleteOutcome::new(self.unexpected_delete))
+        }
     }
     fn delete_directory(
         &self,
         _: DeleteDirectoryRequest<'_>,
     ) -> FsResult<DeleteOutcome> {
-        Err(Self::unsupported())
+        if self.direct_error {
+            Err(Self::unsupported())
+        } else {
+            Ok(DeleteOutcome::new(self.unexpected_delete))
+        }
     }
     fn rename(
         &self,
-        _: RenameRequest<'_>,
+        request: RenameRequest<'_>,
     ) -> Result<RenameOutcome, SpiRenameFailure> {
-        Err(SpiRenameFailure::new(
-            Self::unsupported(),
-            qubit_fs::RenameFailureState::Unchanged,
-        ))
+        if self.direct_error {
+            Err(SpiRenameFailure::new(
+                Self::unsupported(),
+                qubit_fs::RenameFailureState::Unchanged,
+            ))
+        } else {
+            Ok(RenameOutcome::new(
+                request.source().clone(),
+                request.target().clone(),
+                qubit_fs::AchievedAtomicity::Atomic,
+                qubit_fs::PublicationMethod::AtomicRename,
+            ))
+        }
     }
     fn create_temp_file(
         &self,
@@ -155,6 +187,10 @@ fn test_file_system_from_spi_caches_properties_snapshot() {
         property_calls: Arc::clone(&property_calls),
         stat_calls: Arc::clone(&stat_calls),
         wrong_stat_path: false,
+        stat_error: None,
+        direct_error: false,
+        unexpected_create: false,
+        unexpected_delete: false,
     })
     .expect("facade should construct");
     let clone = filesystem.clone();
@@ -190,6 +226,10 @@ fn test_stat_rejects_path_with_different_semantics_before_spi_call() {
         property_calls: Arc::new(AtomicUsize::new(0)),
         stat_calls: Arc::clone(&stat_calls),
         wrong_stat_path: false,
+        stat_error: None,
+        direct_error: false,
+        unexpected_create: false,
+        unexpected_delete: false,
     })
     .expect("facade should construct");
     let hierarchical =
@@ -219,6 +259,10 @@ fn test_stat_rejects_provider_response_for_a_different_path() {
         property_calls: Arc::new(AtomicUsize::new(0)),
         stat_calls: Arc::new(AtomicUsize::new(0)),
         wrong_stat_path: true,
+        stat_error: None,
+        direct_error: false,
+        unexpected_create: false,
+        unexpected_delete: false,
     })
     .expect("facade should construct");
     let path = Path::parse("/requested").expect("path should parse");
@@ -226,4 +270,264 @@ fn test_stat_rejects_provider_response_for_a_different_path() {
         .stat(&path)
         .expect_err("mismatched provider response must fail");
     assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
+}
+
+/// Distinguishes a confirmed missing path from operational stat failures.
+#[test]
+fn test_exists_maps_not_found_only_and_contextualizes_other_errors() {
+    let properties = FileSystemProperties::new(
+        FileSystemInfo::new(
+            FileSystemId::new("test").expect("test id should be valid"),
+            "test",
+            qubit_fs::PathSemantics::Hierarchical,
+        ),
+        FileSystemCapabilities::new(),
+        FileSystemLimits::unknown(),
+        PathConstraints::absolute(),
+    )
+    .expect("properties should be valid");
+    let path = Path::parse("/requested").expect("path should parse");
+
+    let missing = FileSystem::from_spi(CountingSpi {
+        properties: properties.clone(),
+        property_calls: Arc::new(AtomicUsize::new(0)),
+        stat_calls: Arc::new(AtomicUsize::new(0)),
+        wrong_stat_path: false,
+        stat_error: Some(FsErrorKind::NotFound),
+        direct_error: false,
+        unexpected_create: false,
+        unexpected_delete: false,
+    })
+    .expect("facade should construct");
+    assert!(!missing.exists(&path).expect("not found is a false result"));
+
+    let failed = FileSystem::from_spi(CountingSpi {
+        properties,
+        property_calls: Arc::new(AtomicUsize::new(0)),
+        stat_calls: Arc::new(AtomicUsize::new(0)),
+        wrong_stat_path: false,
+        stat_error: Some(FsErrorKind::Io),
+        direct_error: false,
+        unexpected_create: false,
+        unexpected_delete: false,
+    })
+    .expect("facade should construct");
+    let error = failed
+        .exists(&path)
+        .expect_err("non-not-found errors must propagate");
+    assert_eq!(FsErrorKind::Io, error.kind());
+    assert_eq!(FsOperation::Exists, error.operation());
+}
+
+/// Preserves provider failures from synchronous directory mutations and rename
+/// while adding the public operation and provider context.
+#[test]
+fn test_direct_sync_provider_failures_are_enriched() {
+    let properties = FileSystemProperties::new(
+        FileSystemInfo::new(
+            FileSystemId::new("test").expect("test id should be valid"),
+            "test",
+            qubit_fs::PathSemantics::Hierarchical,
+        ),
+        FileSystemCapabilities::new()
+            .with(qubit_fs::FileSystemCapability::CreateDirectory)
+            .with(qubit_fs::FileSystemCapability::Delete)
+            .with(qubit_fs::FileSystemCapability::Rename)
+            .with(qubit_fs::FileSystemCapability::AtomicRename),
+        FileSystemLimits::unknown(),
+        PathConstraints::absolute(),
+    )
+    .expect("properties should be valid");
+    let file_system = FileSystem::from_spi(CountingSpi {
+        properties,
+        property_calls: Arc::new(AtomicUsize::new(0)),
+        stat_calls: Arc::new(AtomicUsize::new(0)),
+        wrong_stat_path: false,
+        stat_error: None,
+        direct_error: true,
+        unexpected_create: false,
+        unexpected_delete: false,
+    })
+    .expect("facade should construct");
+    let target = Path::parse("/target").expect("path should parse");
+
+    for error in [
+        file_system
+            .create_directory(
+                &target,
+                qubit_fs::CreateDirectoryOptions::default(),
+            )
+            .expect_err("provider create failure should propagate"),
+        file_system
+            .delete_file(&target, qubit_fs::DeleteOptions::default())
+            .expect_err("provider delete failure should propagate"),
+        file_system
+            .delete_directory(&target, qubit_fs::DeleteOptions::default())
+            .expect_err("provider delete failure should propagate"),
+    ] {
+        assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
+        assert_eq!(Some(&target), error.path());
+        assert_eq!(Some("test"), error.provider());
+    }
+    let rename = file_system
+        .rename(
+            &Path::parse("/source").expect("path should parse"),
+            &target,
+            qubit_fs::RenameOptions::default(),
+        )
+        .expect_err("provider rename failure should propagate");
+    assert_eq!(FsErrorKind::UnsupportedOperation, rename.error().kind());
+    assert_eq!(qubit_fs::RenameFailureState::Unchanged, rename.state());
+}
+
+/// Returns a provider-confirmed rename outcome with facade-bound identity.
+#[test]
+fn test_sync_rename_returns_successful_provider_outcome() {
+    let properties = FileSystemProperties::new(
+        FileSystemInfo::new(
+            FileSystemId::new("test").expect("test id should be valid"),
+            "test",
+            qubit_fs::PathSemantics::Hierarchical,
+        ),
+        FileSystemCapabilities::new()
+            .with(qubit_fs::FileSystemCapability::Rename)
+            .with(qubit_fs::FileSystemCapability::AtomicRename),
+        FileSystemLimits::unknown(),
+        PathConstraints::absolute(),
+    )
+    .expect("properties should be valid");
+    let file_system = FileSystem::from_spi(CountingSpi {
+        properties,
+        property_calls: Arc::new(AtomicUsize::new(0)),
+        stat_calls: Arc::new(AtomicUsize::new(0)),
+        wrong_stat_path: false,
+        stat_error: None,
+        direct_error: false,
+        unexpected_create: false,
+        unexpected_delete: false,
+    })
+    .expect("facade should construct");
+    let source = Path::parse("/source").expect("path should parse");
+    let target = Path::parse("/target").expect("path should parse");
+    let outcome = file_system
+        .rename(&source, &target, qubit_fs::RenameOptions::default())
+        .expect("provider rename should succeed");
+    assert_eq!(&source, outcome.source());
+    assert_eq!(&target, outcome.target());
+}
+
+/// Rejects provider idempotency claims and same-path mutations before any
+/// unintended public result can be exposed.
+#[test]
+fn test_sync_facade_rejects_unrequested_outcomes_and_same_path_mutations() {
+    let properties = FileSystemProperties::new(
+        FileSystemInfo::new(
+            FileSystemId::new("test").expect("test id should be valid"),
+            "test",
+            qubit_fs::PathSemantics::Hierarchical,
+        ),
+        FileSystemCapabilities::new()
+            .with(qubit_fs::FileSystemCapability::Copy)
+            .with(qubit_fs::FileSystemCapability::CreateDirectory)
+            .with(qubit_fs::FileSystemCapability::Delete)
+            .with(qubit_fs::FileSystemCapability::Rename)
+            .with(qubit_fs::FileSystemCapability::AtomicRename),
+        FileSystemLimits::unknown(),
+        PathConstraints::absolute(),
+    )
+    .expect("properties should be valid");
+    let file_system = FileSystem::from_spi(CountingSpi {
+        properties,
+        property_calls: Arc::new(AtomicUsize::new(0)),
+        stat_calls: Arc::new(AtomicUsize::new(0)),
+        wrong_stat_path: false,
+        stat_error: None,
+        direct_error: false,
+        unexpected_create: true,
+        unexpected_delete: true,
+    })
+    .expect("facade should construct");
+    let path = Path::parse("/target").expect("path should parse");
+
+    for error in [
+        file_system
+            .create_directory(
+                &path,
+                qubit_fs::CreateDirectoryOptions::default(),
+            )
+            .expect_err("unexpected existing directory must be rejected"),
+        file_system
+            .delete_file(&path, qubit_fs::DeleteOptions::default())
+            .expect_err("unexpected missing file must be rejected"),
+        file_system
+            .delete_directory(&path, qubit_fs::DeleteOptions::default())
+            .expect_err("unexpected missing directory must be rejected"),
+    ] {
+        assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
+    }
+    let copy = file_system
+        .copy(&path, &path, qubit_fs::CopyOptions::default())
+        .expect_err("copy source and target must differ");
+    assert_eq!(FsErrorKind::InvalidOptions, copy.error().kind());
+    let rename = file_system
+        .rename(&path, &path, qubit_fs::RenameOptions::default())
+        .expect_err("rename source and target must differ");
+    assert_eq!(FsErrorKind::InvalidOptions, rename.error().kind());
+    assert_eq!(Some("test"), rename.error().provider());
+}
+
+/// Rejects synchronous operations whose advertised provider capabilities are
+/// absent before dispatching any provider I/O.
+#[test]
+fn test_sync_facade_requires_operation_capabilities_before_dispatch() {
+    let properties = FileSystemProperties::new(
+        FileSystemInfo::new(
+            FileSystemId::new("test").expect("test id should be valid"),
+            "test",
+            qubit_fs::PathSemantics::Hierarchical,
+        ),
+        FileSystemCapabilities::new(),
+        FileSystemLimits::unknown(),
+        PathConstraints::absolute(),
+    )
+    .expect("properties should be valid");
+    let file_system = FileSystem::from_spi(CountingSpi {
+        properties,
+        property_calls: Arc::new(AtomicUsize::new(0)),
+        stat_calls: Arc::new(AtomicUsize::new(0)),
+        wrong_stat_path: false,
+        stat_error: None,
+        direct_error: false,
+        unexpected_create: false,
+        unexpected_delete: false,
+    })
+    .expect("facade should construct");
+    let path = Path::parse("/target").expect("path should parse");
+
+    for error in [
+        file_system
+            .open_reader(&path, qubit_fs::ReadOptions::default())
+            .expect_err("reader requires advertised capability"),
+        file_system
+            .open_writer(&path, qubit_fs::WriteOptions::default())
+            .expect_err("writer requires advertised capability"),
+        file_system
+            .create_temp_file(qubit_fs::TempFileOptions::default())
+            .expect_err("temporary file requires advertised capability"),
+        file_system
+            .create_temp_directory(qubit_fs::TempDirectoryOptions::default())
+            .expect_err("temporary directory requires advertised capability"),
+        file_system
+            .create_directory(
+                &path,
+                qubit_fs::CreateDirectoryOptions::default(),
+            )
+            .expect_err("directory creation requires advertised capability"),
+    ] {
+        assert_eq!(FsErrorKind::UnsupportedCapability, error.kind());
+    }
+    let rename = file_system
+        .rename(&path, &Path::root(), qubit_fs::RenameOptions::default())
+        .expect_err("rename requires advertised capability");
+    assert_eq!(FsErrorKind::UnsupportedCapability, rename.error().kind());
 }

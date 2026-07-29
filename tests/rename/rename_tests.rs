@@ -242,3 +242,26 @@ fn test_rename_rejects_copy_then_delete_provider_outcome() {
         calls.lock().expect("calls lock should succeed").as_slice()
     );
 }
+
+/// Verifies a typed facade rename failure can be safely formatted and consumed
+/// as the error-state pair needed by a caller's recovery policy.
+#[test]
+fn test_rename_failure_exposes_context_state_and_parts() {
+    let (filesystem, _) = filesystem(AchievedAtomicity::NonAtomic);
+    let failure = filesystem
+        .rename(
+            &path("/source"),
+            &path("/target"),
+            RenameOptions {
+                overwrite: false,
+                atomicity: AtomicityRequirement::Required,
+            },
+        )
+        .expect_err("non-atomic outcome must produce a typed failure");
+    assert!(format!("{failure:?}").contains("RenameFailure"));
+    assert_eq!(FsOperation::Rename, failure.error().operation());
+
+    let (error, state) = failure.into_parts();
+    assert_eq!(RenameFailureState::Renamed, state);
+    assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
+}

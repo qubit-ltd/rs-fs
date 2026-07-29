@@ -16,16 +16,11 @@ use crate::{
     AsyncFileReader,
     AsyncFileWriter,
     AtomicityRequirement,
-    CopyFailureState,
-    CopyStats,
     CreateDirectoryOutcome,
     DeleteOutcome,
-    FileMetadata,
     FileSystemProperties,
-    FsError,
     FsResult,
     OpenedFileInfo,
-    RenameFailureState,
     RenameOutcome,
 };
 
@@ -293,15 +288,4 @@ pub trait AsyncFileSystemSpi: Send + Sync {
         &'a self,
         request: CreateTempDirectoryRequest,
     ) -> SpiFuture<'a, FsResult<OpenedAsyncTempDirectory>>;
-}
-
-/// Retains imports used by the parallel synchronous failure envelopes.
-#[allow(dead_code)]
-fn _typed_failure_facts(
-    _: CopyFailureState,
-    _: CopyStats,
-    _: RenameFailureState,
-    _: FsError,
-    _: FileMetadata,
-) {
 }

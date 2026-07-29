@@ -64,3 +64,17 @@ fn test_connection_uri_redacts_percent_encoded_sensitive_query_key() {
     assert!(rendered.contains("t%6fken="));
     assert!(!rendered.contains("raw-secret"));
 }
+
+/// Verifies controlled inspection receives the original URI while ordinary
+/// formatting remains redacted and preserves a URI without authority.
+#[test]
+fn test_connection_uri_exposes_unredacted_text_only_to_callback() {
+    let uri = ConnectionUri::parse("s3:/key?token=raw-secret")
+        .expect("connection URI should parse");
+
+    assert_eq!(
+        "s3:/key?token=raw-secret",
+        uri.expose_unredacted(str::to_owned)
+    );
+    assert!(!uri.to_string().contains("raw-secret"));
+}

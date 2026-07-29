@@ -16,3 +16,13 @@ fn resource_version_preserves_and_displays_opaque_text() {
     assert_eq!("etag-42", version.as_ref());
     assert_eq!("etag-42", version.to_string());
 }
+
+/// Verifies owned provider version text can be converted without changing its
+/// opaque representation.
+#[test]
+fn test_resource_version_converts_owned_text() {
+    let version = ResourceVersion::from(String::from("generation-8"));
+
+    assert_eq!("generation-8", version.as_str());
+    assert_eq!("generation-8", version.to_string());
+}

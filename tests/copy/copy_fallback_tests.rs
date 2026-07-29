@@ -73,7 +73,10 @@ use qubit_fs::{
     ServerSidePreference,
     WriteOutcome,
 };
-use qubit_io::Output;
+use qubit_io::{
+    Input,
+    Output,
+};
 
 /// Selects the provider's response to the copy fast path.
 enum CopyResponse {
@@ -83,10 +86,26 @@ enum CopyResponse {
     CompletedServerSideRequiredButNative,
     CompletedMetadataDowngrade,
     CompletedInvalidSkippedStats,
+    CompletedInvalidFailedStats,
+    CompletedInvalidOverwrittenStats,
+    CompletedStreamedOutcome,
     Declined,
     DeclinedSkipAtomic,
     Failed,
     DeclinedFlushFailure,
+    DeclinedWithoutRead,
+    DeclinedWithoutWrite,
+    DeclinedStatFailure,
+    DeclinedUnsupportedSourceKind,
+    DeclinedReaderFailure,
+    DeclinedReadFailure,
+    DeclinedWriterAlreadyExists,
+    DeclinedWriterFailure,
+    DeclinedWriterInvalidIdentity,
+    DeclinedWriteFailure,
+    DeclinedCommitFailure,
+    DeclinedCommitPublished,
+    DeclinedCommitIndeterminate,
 }
 /// Records facade-to-provider calls and stream-fallback bytes.
 struct RecordingSpi {
@@ -118,10 +137,14 @@ fn recording_filesystem(
 fn properties(response: &CopyResponse) -> FileSystemProperties {
     let mut capabilities = FileSystemCapabilities::new()
         .with(FileSystemCapability::Copy)
-        .with(FileSystemCapability::Read)
-        .with(FileSystemCapability::Write)
         .with(FileSystemCapability::Rename)
         .with(FileSystemCapability::AtomicRename);
+    if !matches!(response, CopyResponse::DeclinedWithoutRead) {
+        capabilities = capabilities.with(FileSystemCapability::Read);
+    }
+    if !matches!(response, CopyResponse::DeclinedWithoutWrite) {
+        capabilities = capabilities.with(FileSystemCapability::Write);
+    }
     if matches!(
         response,
         CopyResponse::CompletedAtomicDowngrade
@@ -162,7 +185,18 @@ impl FileSystemSpi for RecordingSpi {
             .lock()
             .expect("calls lock should succeed")
             .push("stat");
+        if matches!(self.response, CopyResponse::DeclinedStatFailure) {
+            return Err(FsError::new(
+                FsErrorKind::Io,
+                FsOperation::Stat,
+                "injected stat failure",
+            ));
+        }
         let mut metadata = FileMetadata::new(FileKind::File);
+        if matches!(self.response, CopyResponse::DeclinedUnsupportedSourceKind)
+        {
+            metadata.kind = FileKind::Directory;
+        }
         metadata.len = Some(5);
         Ok(StatResponse::new(request.path().clone(), metadata))
     }
@@ -177,10 +211,20 @@ impl FileSystemSpi for RecordingSpi {
             .lock()
             .expect("calls lock should succeed")
             .push("open_reader");
-        Ok(OpenedReader::new(
-            info(request.path()),
-            Box::new(Cursor::new(b"bytes".to_vec())),
-        ))
+        if matches!(self.response, CopyResponse::DeclinedReaderFailure) {
+            return Err(FsError::new(
+                FsErrorKind::Io,
+                FsOperation::OpenReader,
+                "injected reader failure",
+            ));
+        }
+        let reader: Box<dyn Input<Item = u8> + Send> =
+            if matches!(self.response, CopyResponse::DeclinedReadFailure) {
+                Box::new(FailingReader)
+            } else {
+                Box::new(Cursor::new(b"bytes".to_vec()))
+            };
+        Ok(OpenedReader::new(info(request.path()), reader))
     }
     fn open_writer(
         &self,
@@ -190,14 +234,52 @@ impl FileSystemSpi for RecordingSpi {
             .lock()
             .expect("calls lock should succeed")
             .push("open_writer");
+        if matches!(self.response, CopyResponse::DeclinedWriterAlreadyExists) {
+            return Err(FsError::new(
+                FsErrorKind::AlreadyExists,
+                FsOperation::OpenWriter,
+                "injected existing target",
+            ));
+        }
+        if matches!(self.response, CopyResponse::DeclinedWriterFailure) {
+            return Err(FsError::new(
+                FsErrorKind::Io,
+                FsOperation::OpenWriter,
+                "injected writer failure",
+            ));
+        }
+        let opened_path = if matches!(
+            self.response,
+            CopyResponse::DeclinedWriterInvalidIdentity
+        ) {
+            path("/wrong")
+        } else {
+            request.path().clone()
+        };
         Ok(OpenedWriter::new(
-            info(request.path()),
+            info(&opened_path),
             Box::new(RecordingWriter {
                 bytes: Arc::clone(&self.bytes),
                 fail_flush: matches!(
                     self.response,
                     CopyResponse::DeclinedFlushFailure
                 ),
+                fail_write: matches!(
+                    self.response,
+                    CopyResponse::DeclinedWriteFailure
+                ),
+                commit_failure_state: match self.response {
+                    CopyResponse::DeclinedCommitFailure => {
+                        Some(qubit_fs::WriteFailureState::NotPublished)
+                    }
+                    CopyResponse::DeclinedCommitPublished => {
+                        Some(qubit_fs::WriteFailureState::Published)
+                    }
+                    CopyResponse::DeclinedCommitIndeterminate => {
+                        Some(qubit_fs::WriteFailureState::Indeterminate)
+                    }
+                    _ => None,
+                },
             }),
         ))
     }
@@ -264,9 +346,49 @@ impl FileSystemSpi for RecordingSpi {
                     AchievedAtomicity::Atomic,
                 )))
             }
+            CopyResponse::CompletedInvalidFailedStats => {
+                Ok(CopyAttempt::Completed(CopyOutcome::new(
+                    CopyStats {
+                        failed: 1,
+                        ..CopyStats::default()
+                    },
+                    CopyMethod::Native,
+                    AchievedAtomicity::Atomic,
+                )))
+            }
+            CopyResponse::CompletedInvalidOverwrittenStats => {
+                Ok(CopyAttempt::Completed(CopyOutcome::new(
+                    CopyStats {
+                        overwritten: 1,
+                        ..CopyStats::default()
+                    },
+                    CopyMethod::Native,
+                    AchievedAtomicity::Atomic,
+                )))
+            }
+            CopyResponse::CompletedStreamedOutcome => {
+                Ok(CopyAttempt::Completed(CopyOutcome::new(
+                    CopyStats::default(),
+                    CopyMethod::Streamed,
+                    AchievedAtomicity::Atomic,
+                )))
+            }
             CopyResponse::Declined
             | CopyResponse::DeclinedSkipAtomic
-            | CopyResponse::DeclinedFlushFailure => {
+            | CopyResponse::DeclinedFlushFailure
+            | CopyResponse::DeclinedWithoutRead
+            | CopyResponse::DeclinedWithoutWrite
+            | CopyResponse::DeclinedStatFailure
+            | CopyResponse::DeclinedUnsupportedSourceKind
+            | CopyResponse::DeclinedReaderFailure
+            | CopyResponse::DeclinedReadFailure
+            | CopyResponse::DeclinedWriterAlreadyExists
+            | CopyResponse::DeclinedWriterFailure
+            | CopyResponse::DeclinedWriterInvalidIdentity
+            | CopyResponse::DeclinedWriteFailure
+            | CopyResponse::DeclinedCommitFailure
+            | CopyResponse::DeclinedCommitPublished
+            | CopyResponse::DeclinedCommitIndeterminate => {
                 Ok(CopyAttempt::Declined(CopyDeclineReason::NotApplicable))
             }
             CopyResponse::Failed => Err(SpiCopyFailure::new(
@@ -321,6 +443,25 @@ fn unused() -> FsError {
 struct RecordingWriter {
     bytes: Arc<Mutex<Vec<u8>>>,
     fail_flush: bool,
+    fail_write: bool,
+    commit_failure_state: Option<qubit_fs::WriteFailureState>,
+}
+
+/// Reports a deterministic failure from the fallback reader after its writer
+/// has been opened.
+struct FailingReader;
+
+impl Input for FailingReader {
+    type Item = u8;
+
+    unsafe fn read_unchecked(
+        &mut self,
+        _: &mut [u8],
+        _: usize,
+        _: usize,
+    ) -> IoResult<usize> {
+        Err(std::io::Error::other("injected read failure"))
+    }
 }
 /// Implements byte output for the recording writer.
 impl Output for RecordingWriter {
@@ -331,6 +472,9 @@ impl Output for RecordingWriter {
         _: usize,
         count: usize,
     ) -> IoResult<usize> {
+        if self.fail_write {
+            return Err(std::io::Error::other("injected write failure"));
+        }
         self.bytes
             .lock()
             .expect("bytes lock should succeed")
@@ -350,6 +494,16 @@ impl FileWriterSpi for RecordingWriter {
     fn commit(
         &mut self,
     ) -> Result<WriteOutcome, qubit_fs::spi::SpiWriteFailure> {
+        if let Some(state) = self.commit_failure_state {
+            return Err(qubit_fs::spi::SpiWriteFailure::new(
+                FsError::new(
+                    FsErrorKind::Io,
+                    FsOperation::CommitWriter,
+                    "injected commit failure",
+                ),
+                state,
+            ));
+        }
         Ok(WriteOutcome::new(
             AchievedAtomicity::NonAtomic,
             qubit_fs::PublicationMethod::StreamCopy,
@@ -415,6 +569,145 @@ fn test_copy_declined_with_preferred_server_side_uses_stream_fallback() {
         b"bytes",
         bytes.lock().expect("bytes lock should succeed").as_slice()
     );
+}
+
+/// Rejects copy options the synchronous stream fallback cannot faithfully
+/// implement, without opening source or destination handles.
+#[test]
+fn test_copy_declined_rejects_incompatible_fallback_options() {
+    let options = [
+        CopyOptions {
+            continue_on_error: true,
+            ..CopyOptions::default()
+        },
+        CopyOptions {
+            preserve_metadata: MetadataPreservePolicy::Portable,
+            ..CopyOptions::default()
+        },
+        CopyOptions {
+            create_parent: true,
+            ..CopyOptions::default()
+        },
+        CopyOptions {
+            conflict: qubit_fs::CopyConflictPolicy::Overwrite,
+            ..CopyOptions::default()
+        },
+    ];
+    for options in options {
+        let (filesystem, calls, _) =
+            recording_filesystem(CopyResponse::Declined);
+        let failure = filesystem
+            .copy(&path("/source"), &path("/target"), options)
+            .expect_err(
+                "declined copy must reject an incompatible fallback option",
+            );
+        assert_eq!(CopyFailureState::Unchanged, failure.state());
+        assert_eq!(FsErrorKind::RequirementNotMet, failure.error().kind());
+        assert_eq!(
+            ["try_copy"],
+            calls.lock().expect("calls lock should succeed").as_slice()
+        );
+    }
+}
+
+/// Covers fallback failures before either stream is opened, preserving their
+/// unchanged recovery state and provider context.
+#[test]
+fn test_copy_declined_propagates_pre_stream_failures() {
+    for response in [
+        CopyResponse::DeclinedWithoutRead,
+        CopyResponse::DeclinedWithoutWrite,
+        CopyResponse::DeclinedStatFailure,
+        CopyResponse::DeclinedUnsupportedSourceKind,
+    ] {
+        let (filesystem, _, _) = recording_filesystem(response);
+        let failure = filesystem
+            .copy(&path("/source"), &path("/target"), CopyOptions::default())
+            .expect_err("pre-stream fallback failure should be reported");
+        assert_eq!(CopyFailureState::Unchanged, failure.state());
+        assert_eq!(Some("recording"), failure.error().provider());
+    }
+}
+
+/// Covers reader and writer failures that occur while preparing or transferring
+/// a declined copy fallback.
+#[test]
+fn test_copy_declined_preserves_stream_and_writer_recovery_states() {
+    let (reader_filesystem, _, _) =
+        recording_filesystem(CopyResponse::DeclinedReaderFailure);
+    let reader = reader_filesystem
+        .copy(&path("/source"), &path("/target"), CopyOptions::default())
+        .expect_err("reader-open failure should stop before publication");
+    assert_eq!(CopyFailureState::Unchanged, reader.state());
+
+    let (filesystem, _, _) =
+        recording_filesystem(CopyResponse::DeclinedWriterAlreadyExists);
+    let skipped = filesystem
+        .copy(
+            &path("/source"),
+            &path("/target"),
+            CopyOptions {
+                conflict: qubit_fs::CopyConflictPolicy::Skip,
+                ..CopyOptions::default()
+            },
+        )
+        .expect("an existing target should be skipped when explicitly allowed");
+    assert_eq!(1, skipped.stats().skipped);
+
+    for response in [
+        CopyResponse::DeclinedWriterFailure,
+        CopyResponse::DeclinedWriterInvalidIdentity,
+        CopyResponse::DeclinedReadFailure,
+        CopyResponse::DeclinedWriteFailure,
+        CopyResponse::DeclinedCommitFailure,
+        CopyResponse::DeclinedCommitPublished,
+        CopyResponse::DeclinedCommitIndeterminate,
+    ] {
+        let (filesystem, _, _) = recording_filesystem(response);
+        let failure = filesystem
+            .copy(&path("/source"), &path("/target"), CopyOptions::default())
+            .expect_err("fallback writer failure should preserve recovery");
+        assert!(
+            matches!(
+                failure.state(),
+                CopyFailureState::Unchanged
+                    | CopyFailureState::PartiallyPublished
+                    | CopyFailureState::Published
+                    | CopyFailureState::Indeterminate
+            ),
+            "failure state must reflect whether a writer was opened"
+        );
+    }
+}
+
+/// Maps fallback reader I/O failures through the public whole-file convenience
+/// operation without exposing the provider's raw error.
+#[test]
+fn test_read_all_contextualizes_reader_failure() {
+    let (filesystem, _, _) =
+        recording_filesystem(CopyResponse::DeclinedReadFailure);
+    let source = path("/source");
+    let error = filesystem
+        .read_all(&source, qubit_fs::ReadOptions::default(), 16)
+        .expect_err("reader failure should be contextualized");
+    assert_eq!(FsErrorKind::Io, error.kind());
+    assert_eq!(FsOperation::Read, error.operation());
+    assert_eq!(Some(&source), error.path());
+}
+
+/// Retains the public write-all failure type when the writer cannot be opened.
+#[test]
+fn test_write_all_wraps_writer_open_failure() {
+    let (filesystem, _, _) =
+        recording_filesystem(CopyResponse::DeclinedWriterFailure);
+    let target = path("/target");
+    let failure = filesystem
+        .write_all(&target, b"bytes", qubit_fs::WriteOptions::default())
+        .expect_err(
+            "writer-open failure should use the write-all failure type",
+        );
+    assert_eq!(FsErrorKind::Io, failure.error().kind());
+    assert!(failure.writer().is_none());
 }
 /// Verifies that a typed provider failure terminates without a fallback retry.
 #[test]
@@ -601,6 +894,54 @@ fn test_copy_completed_skipped_stats_violate_fail_conflict_policy() {
     );
 }
 
+/// Verifies a native provider result cannot report failed entries unless the
+/// caller explicitly accepted continued errors.
+#[test]
+fn test_copy_completed_failed_stats_violate_stop_on_error_policy() {
+    let (filesystem, _, _) =
+        recording_filesystem(CopyResponse::CompletedInvalidFailedStats);
+    let failure = filesystem
+        .copy(&path("/source"), &path("/target"), CopyOptions::default())
+        .expect_err("failed stats must match the continue-on-error policy");
+    assert_eq!(CopyFailureState::Published, failure.state());
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
+}
+
+/// Verifies a native provider result cannot report overwritten entries unless
+/// the request selected overwrite conflict handling.
+#[test]
+fn test_copy_completed_overwritten_stats_violate_fail_conflict_policy() {
+    let (filesystem, _, _) =
+        recording_filesystem(CopyResponse::CompletedInvalidOverwrittenStats);
+    let failure = filesystem
+        .copy(&path("/source"), &path("/target"), CopyOptions::default())
+        .expect_err("overwritten stats must match the conflict policy");
+    assert_eq!(CopyFailureState::Published, failure.state());
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
+}
+
+/// Verifies only the facade may return a streamed fallback outcome; providers
+/// must not present it as a native fast-path completion.
+#[test]
+fn test_copy_completed_streamed_outcome_violates_native_contract() {
+    let (filesystem, _, _) =
+        recording_filesystem(CopyResponse::CompletedStreamedOutcome);
+    let failure = filesystem
+        .copy(&path("/source"), &path("/target"), CopyOptions::default())
+        .expect_err("providers must not return facade fallback outcomes");
+    assert_eq!(CopyFailureState::Published, failure.state());
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
+}
+
 /// Verifies a declined atomic skip request opens neither fallback stream
 /// handle.
 #[test]
@@ -638,4 +979,11 @@ fn test_copy_fallback_flush_failure_is_partially_published_with_stats_and_writer
     assert_eq!(CopyFailureState::PartiallyPublished, failure.state());
     assert_eq!(5, failure.partial_stats().bytes);
     assert!(failure.has_writer());
+    assert!(format!("{failure:?}").contains("CopyFailure"));
+
+    let (error, state, stats, writer) = failure.into_parts();
+    assert_eq!(FsErrorKind::Io, error.kind());
+    assert_eq!(CopyFailureState::PartiallyPublished, state);
+    assert_eq!(5, stats.bytes);
+    assert!(writer.is_some());
 }

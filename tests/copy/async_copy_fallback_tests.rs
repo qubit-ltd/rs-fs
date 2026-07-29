@@ -11,6 +11,7 @@ use qubit_fs::{
     AchievedAtomicity,
     AsyncCopyOperationState,
     AtomicityRequirement,
+    CopyConflictPolicy,
     CopyFailureState,
     CopyOptions,
     FsErrorKind,
@@ -69,6 +70,129 @@ fn test_async_stream_fallback_failures_retain_recovery_writer() {
             ),
             operation.state()
         );
+    }
+}
+
+/// Maps provider-confirmed writer publication certainty into the copy recovery
+/// state when the declined native copy reaches commit.
+#[test]
+fn test_async_stream_fallback_commit_failure_preserves_certainty() {
+    for (writer_failure, expected) in [
+        (
+            qubit_fs::WriteFailureState::Published,
+            CopyFailureState::Published,
+        ),
+        (
+            qubit_fs::WriteFailureState::Indeterminate,
+            CopyFailureState::Indeterminate,
+        ),
+    ] {
+        let (file_system, _) =
+            async_recording_file_system(AsyncRecordingConfig {
+                writer_commit_failure: Some(writer_failure),
+                ..AsyncRecordingConfig::default()
+            });
+        let mut operation = file_system
+            .begin_copy(
+                path("/source"),
+                path("/target"),
+                CopyOptions::default(),
+            )
+            .expect("copy preflight should succeed");
+        let failure = ready(operation.execute())
+            .expect_err("writer commit failure should propagate");
+        assert_eq!(expected, failure.state());
+    }
+}
+
+/// Rejects every fallback-incompatible option after the provider explicitly
+/// declines native copy, before opening either stream handle.
+#[test]
+fn test_async_declined_copy_rejects_incompatible_fallback_options() {
+    let options = [
+        CopyOptions {
+            continue_on_error: true,
+            ..CopyOptions::default()
+        },
+        CopyOptions {
+            preserve_metadata: MetadataPreservePolicy::Portable,
+            ..CopyOptions::default()
+        },
+        CopyOptions {
+            create_parent: true,
+            ..CopyOptions::default()
+        },
+        CopyOptions {
+            conflict: CopyConflictPolicy::Overwrite,
+            ..CopyOptions::default()
+        },
+    ];
+    for options in options {
+        let (file_system, probe) =
+            async_recording_file_system(AsyncRecordingConfig::default());
+        let mut operation = file_system
+            .begin_copy(path("/source"), path("/target"), options)
+            .expect("these options pass copy preflight");
+        let failure = ready(operation.execute()).expect_err(
+            "declined native copy must reject this fallback option",
+        );
+        assert_eq!(CopyFailureState::Unchanged, failure.state());
+        assert_eq!(FsErrorKind::RequirementNotMet, failure.error().kind());
+        assert_eq!(vec!["try_copy"], probe.calls());
+    }
+}
+
+/// Applies the same no-fallback rule to requirements that pass normal copy
+/// preflight because the provider advertises the corresponding capability.
+#[test]
+fn test_async_declined_copy_rejects_required_fallback_guarantees() {
+    let cases = [
+        (
+            AsyncRecordingConfig {
+                completed_copy: Some(AchievedAtomicity::Atomic),
+                decline_copy: true,
+                ..AsyncRecordingConfig::default()
+            },
+            CopyOptions {
+                atomicity: AtomicityRequirement::Required,
+                conflict: CopyConflictPolicy::Skip,
+                ..CopyOptions::default()
+            },
+        ),
+        (
+            AsyncRecordingConfig {
+                completed_copy: Some(AchievedAtomicity::Atomic),
+                decline_copy: true,
+                ..AsyncRecordingConfig::default()
+            },
+            CopyOptions {
+                durability: qubit_fs::DurabilityRequirement::Required,
+                ..CopyOptions::default()
+            },
+        ),
+        (
+            AsyncRecordingConfig {
+                server_side_copy: true,
+                decline_copy: true,
+                ..AsyncRecordingConfig::default()
+            },
+            CopyOptions {
+                server_side: ServerSidePreference::Require,
+                ..CopyOptions::default()
+            },
+        ),
+    ];
+    for (config, options) in cases {
+        let (file_system, probe) = async_recording_file_system(config);
+        let mut operation = file_system
+            .begin_copy(path("/source"), path("/target"), options)
+            .expect("capability should make preflight succeed");
+        let failure = ready(operation.execute()).expect_err(
+            "declined native copy must reject the required guarantee",
+        );
+        assert_eq!(FsErrorKind::RequirementNotMet, failure.error().kind());
+        assert_eq!(CopyFailureState::Unchanged, failure.state());
+        assert_eq!(vec!["try_copy"], probe.calls());
     }
 }
 
@@ -252,6 +376,28 @@ fn test_async_native_copy_failure_has_source_and_target_context() {
     assert_eq!(Some(&source), failure.error().path());
     assert_eq!(Some(&target), failure.error().target());
     assert_eq!(Some("async-recording"), failure.error().provider());
+}
+
+/// Verifies asynchronous copy failures are safely formattable and can be
+/// consumed into the owned recovery facts required by a caller.
+#[test]
+fn test_async_copy_failure_exposes_owned_error_state_and_stats() {
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
+        copy_failure: true,
+        ..AsyncRecordingConfig::default()
+    });
+    let mut operation = file_system
+        .begin_copy(path("/source"), path("/target"), CopyOptions::default())
+        .expect("preflight should succeed");
+    let failure = ready(operation.execute())
+        .expect_err("provider failure should propagate");
+    assert!(format!("{failure:?}").contains("AsyncCopyFailure"));
+    assert_eq!(0, failure.partial_stats().bytes);
+
+    let (error, state, stats) = failure.into_parts();
+    assert_eq!(FsErrorKind::Io, error.kind());
+    assert_eq!(CopyFailureState::Indeterminate, state);
+    assert_eq!(0, stats.bytes);
 }
 
 /// Taking and dropping an indeterminate recovery writer does not request

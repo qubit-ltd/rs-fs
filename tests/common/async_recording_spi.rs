@@ -100,21 +100,43 @@ pub(crate) enum AsyncCopyStage {
 /// Controls the recording provider's externally observable behavior.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct AsyncRecordingConfig {
+    pub(crate) omitted_capability: Option<FileSystemCapability>,
+    pub(crate) omit_read_and_write: bool,
     pub(crate) pending_stage: Option<AsyncCopyStage>,
     pub(crate) failing_stage: Option<AsyncCopyStage>,
     pub(crate) invalid_temp_identity: bool,
+    pub(crate) invalid_temp_path: bool,
+    pub(crate) invalid_opened_identity: bool,
+    pub(crate) invalid_stat_path: bool,
+    pub(crate) stat_kind: Option<FileKind>,
     pub(crate) atomic_temp_persist: bool,
     pub(crate) completed_copy: Option<AchievedAtomicity>,
+    pub(crate) decline_copy: bool,
     pub(crate) server_side_copy: bool,
     pub(crate) copy_failure: bool,
     pub(crate) rename_atomicity: Option<AchievedAtomicity>,
+    pub(crate) rename_copy_then_delete: bool,
     pub(crate) temp_persist_indeterminate: bool,
+    pub(crate) temp_persist_failure: Option<qubit_fs::PersistFailureState>,
     pub(crate) temp_cleanup_failure: bool,
+    pub(crate) temp_keep_failure: bool,
+    pub(crate) temp_create_error: bool,
     pub(crate) writer_atomicity: Option<AchievedAtomicity>,
     pub(crate) writer_commit_failure: Option<WriteFailureState>,
+    pub(crate) writer_abort_failure: Option<FsErrorKind>,
+    pub(crate) writer_open_error: Option<FsErrorKind>,
+    pub(crate) range_read: bool,
+    pub(crate) maximum_read_range_bytes: Option<u64>,
+    pub(crate) maximum_write_bytes: Option<u64>,
     pub(crate) temp_persist_atomicity: Option<AchievedAtomicity>,
     pub(crate) directory_entries: Vec<qubit_fs::DirEntry>,
     pub(crate) directory_error: bool,
+    pub(crate) list_open_error: bool,
+    pub(crate) create_directory_already_existed: bool,
+    pub(crate) delete_already_missing: bool,
+    pub(crate) create_directory_error: bool,
+    pub(crate) delete_error: bool,
+    pub(crate) rename_error: bool,
 }
 
 /// Exposes ordered provider call facts without leaking session internals.
@@ -169,13 +191,28 @@ impl AsyncRecordingSpi {
     }
     /// Builds the property snapshot used by tests.
     fn properties_for(&self) -> FileSystemProperties {
-        let mut capabilities = FileSystemCapabilities::new()
-            .with(FileSystemCapability::Copy)
-            .with(FileSystemCapability::Read)
-            .with(FileSystemCapability::Write)
-            .with(FileSystemCapability::TempFile)
-            .with(FileSystemCapability::TempDirectory)
-            .with(FileSystemCapability::List);
+        let mut capabilities = FileSystemCapabilities::new();
+        for capability in [
+            FileSystemCapability::Copy,
+            FileSystemCapability::Read,
+            FileSystemCapability::Write,
+            FileSystemCapability::TempFile,
+            FileSystemCapability::TempDirectory,
+            FileSystemCapability::List,
+            FileSystemCapability::CreateDirectory,
+            FileSystemCapability::Delete,
+        ] {
+            let omitted = self.config.omitted_capability == Some(capability)
+                || (self.config.omit_read_and_write
+                    && matches!(
+                        capability,
+                        FileSystemCapability::Read
+                            | FileSystemCapability::Write
+                    ));
+            if !omitted {
+                capabilities = capabilities.with(capability);
+            }
+        }
         if self.config.completed_copy.is_some() {
             capabilities = capabilities
                 .with(FileSystemCapability::AtomicReplace)
@@ -185,7 +222,10 @@ impl AsyncRecordingSpi {
             capabilities =
                 capabilities.with(FileSystemCapability::ServerSideCopy);
         }
-        if self.config.rename_atomicity.is_some() {
+        if self.config.range_read {
+            capabilities = capabilities.with(FileSystemCapability::RangeRead);
+        }
+        if self.config.rename_atomicity.is_some() || self.config.rename_error {
             capabilities = capabilities
                 .with(FileSystemCapability::Rename)
                 .with(FileSystemCapability::AtomicRename);
@@ -202,18 +242,33 @@ impl AsyncRecordingSpi {
                 PathSemantics::Hierarchical,
             ),
             capabilities,
-            FileSystemLimits::unknown(),
+            FileSystemLimits::unknown()
+                .with_max_read_range_bytes(
+                    self.config
+                        .maximum_read_range_bytes
+                        .map(qubit_fs::FileSystemLimit::Maximum)
+                        .unwrap_or(qubit_fs::FileSystemLimit::Unknown),
+                )
+                .with_max_write_bytes(
+                    self.config
+                        .maximum_write_bytes
+                        .map(qubit_fs::FileSystemLimit::Maximum)
+                        .unwrap_or(qubit_fs::FileSystemLimit::Unknown),
+                ),
             PathConstraints::absolute(),
         )
         .expect("test properties should be valid")
     }
     /// Returns an opened identity for one requested path.
-    fn info(path: &Path) -> OpenedFileInfo {
-        OpenedFileInfo::new(
+    fn info(&self, path: &Path) -> OpenedFileInfo {
+        let id = if self.config.invalid_opened_identity {
+            FileSystemId::new("other-provider")
+                .expect("test id should be valid")
+        } else {
             FileSystemId::new("async-recording")
-                .expect("test id should be valid"),
-            path.clone(),
-        )
+                .expect("test id should be valid")
+        };
+        OpenedFileInfo::new(id, path.clone())
     }
     /// Returns a temporary identity, optionally invalid for boundary testing.
     fn temp_info(&self) -> OpenedFileInfo {
@@ -226,7 +281,12 @@ impl AsyncRecordingSpi {
         };
         OpenedFileInfo::new(
             id,
-            Path::parse("/tmp/recording").expect("test path should parse"),
+            Path::parse(if self.config.invalid_temp_path {
+                "relative-temp"
+            } else {
+                "/tmp/recording"
+            })
+            .expect("test path should parse"),
         )
     }
 }
@@ -239,22 +299,33 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
         request: StatRequest<'a>,
     ) -> SpiFuture<'a, FsResult<StatResponse>> {
         self.record("stat");
+        let _ = request.options();
         if self.config.pending_stage == Some(AsyncCopyStage::Stat) {
             return Box::pin(std::future::pending());
         }
         if self.config.failing_stage == Some(AsyncCopyStage::Stat) {
             return Box::pin(async { Err(unused()) });
         }
-        let mut metadata = FileMetadata::new(FileKind::File);
+        let mut metadata = FileMetadata::new(
+            self.config.stat_kind.clone().unwrap_or(FileKind::File),
+        );
         metadata.len = Some(5);
-        Box::pin(async move {
-            Ok(StatResponse::new(request.path().clone(), metadata))
-        })
+        let path = if self.config.invalid_stat_path {
+            Path::parse("/different").expect("test path should parse")
+        } else {
+            request.path().clone()
+        };
+        Box::pin(async move { Ok(StatResponse::new(path, metadata)) })
     }
     fn list<'a>(
         &'a self,
-        _: ListRequest<'a>,
+        request: ListRequest<'a>,
     ) -> SpiFuture<'a, FsResult<OpenedAsyncDirectoryStream>> {
+        let _ = request.path();
+        let _ = request.options();
+        if self.config.list_open_error {
+            return Box::pin(async { Err(unused()) });
+        }
         let entries = self.config.directory_entries.clone();
         let fail = self.config.directory_error;
         Box::pin(async move {
@@ -268,22 +339,25 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
         request: OpenReaderRequest<'a>,
     ) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
         self.record("open_reader");
+        let _ = request.options();
         if self.config.pending_stage == Some(AsyncCopyStage::OpenReader) {
             return Box::pin(std::future::pending());
         }
         if self.config.failing_stage == Some(AsyncCopyStage::OpenReader) {
             return Box::pin(async { Err(unused()) });
         }
-        let info = Self::info(request.path());
+        let info = self.info(request.path());
         let config = self.config.clone();
         Box::pin(async move {
-            Ok(OpenedAsyncReader::new(
+            let opened = OpenedAsyncReader::new(
                 info,
                 Box::new(RecordingInput {
                     position: 0,
                     config,
                 }),
-            ))
+            );
+            let _ = opened.info();
+            Ok(opened)
         })
     }
     fn open_writer<'a>(
@@ -291,47 +365,85 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
         request: OpenWriterRequest<'a>,
     ) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
         self.record("open_writer");
+        let _ = request.options();
         if self.config.pending_stage == Some(AsyncCopyStage::OpenWriter) {
             return Box::pin(std::future::pending());
         }
         if self.config.failing_stage == Some(AsyncCopyStage::OpenWriter) {
             return Box::pin(async { Err(unused()) });
         }
-        let info = Self::info(request.path());
+        if let Some(kind) = self.config.writer_open_error {
+            return Box::pin(async move {
+                Err(FsError::new(
+                    kind,
+                    FsOperation::OpenWriter,
+                    "injected writer-open failure",
+                ))
+            });
+        }
+        let info = self.info(request.path());
         let config = self.config.clone();
         Box::pin(async move {
-            Ok(OpenedAsyncWriter::new(
+            let opened = OpenedAsyncWriter::new(
                 info,
                 Box::new(RecordingWriter {
                     config,
                     cancellations: Arc::clone(&self.cancellations),
                 }),
-            ))
+            );
+            let _ = opened.info();
+            Ok(opened)
         })
     }
     fn create_directory<'a>(
         &'a self,
-        _: CreateDirectoryRequest<'a>,
+        request: CreateDirectoryRequest<'a>,
     ) -> SpiFuture<'a, FsResult<CreateDirectoryOutcome>> {
-        Box::pin(async { Err(unused()) })
+        self.record("create_directory");
+        let _ = request.path();
+        let _ = request.options();
+        if self.config.create_directory_error {
+            return Box::pin(async { Err(unused()) });
+        }
+        let already_existed = self.config.create_directory_already_existed;
+        Box::pin(
+            async move { Ok(CreateDirectoryOutcome::new(already_existed)) },
+        )
     }
     fn delete_file<'a>(
         &'a self,
-        _: DeleteFileRequest<'a>,
+        request: DeleteFileRequest<'a>,
     ) -> SpiFuture<'a, FsResult<DeleteOutcome>> {
-        Box::pin(async { Err(unused()) })
+        self.record("delete_file");
+        let _ = request.path();
+        let _ = request.options();
+        if self.config.delete_error {
+            return Box::pin(async { Err(unused()) });
+        }
+        let already_missing = self.config.delete_already_missing;
+        Box::pin(async move { Ok(DeleteOutcome::new(already_missing)) })
     }
     fn delete_directory<'a>(
         &'a self,
-        _: DeleteDirectoryRequest<'a>,
+        request: DeleteDirectoryRequest<'a>,
     ) -> SpiFuture<'a, FsResult<DeleteOutcome>> {
-        Box::pin(async { Err(unused()) })
+        self.record("delete_directory");
+        let _ = request.path();
+        let _ = request.options();
+        if self.config.delete_error {
+            return Box::pin(async { Err(unused()) });
+        }
+        let already_missing = self.config.delete_already_missing;
+        Box::pin(async move { Ok(DeleteOutcome::new(already_missing)) })
     }
     fn try_copy<'a>(
         &'a self,
-        _: CopyRequest<'a>,
+        request: CopyRequest<'a>,
     ) -> SpiFuture<'a, Result<CopyAttempt, SpiCopyFailure>> {
         self.record("try_copy");
+        let _ = request.source();
+        let _ = request.target();
+        let _ = request.options();
         if self.config.pending_stage == Some(AsyncCopyStage::TryCopy) {
             return Box::pin(std::future::pending());
         }
@@ -346,6 +458,11 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
                     qubit_fs::CopyFailureState::Indeterminate,
                     qubit_fs::CopyStats::default(),
                 ))
+            });
+        }
+        if self.config.decline_copy {
+            return Box::pin(async {
+                Ok(CopyAttempt::Declined(CopyDeclineReason::NotApplicable))
             });
         }
         if let Some(atomicity) = self.config.completed_copy {
@@ -366,6 +483,15 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
         request: RenameRequest<'a>,
     ) -> SpiFuture<'a, Result<RenameOutcome, SpiRenameFailure>> {
         self.record("rename");
+        let _ = request.options();
+        if self.config.rename_error {
+            return Box::pin(async {
+                Err(SpiRenameFailure::new(
+                    unused(),
+                    RenameFailureState::Indeterminate,
+                ))
+            });
+        }
         if let Some(atomicity) = self.config.rename_atomicity {
             let source = request.source().clone();
             let target = request.target().clone();
@@ -374,7 +500,11 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
                     source,
                     target,
                     atomicity,
-                    PublicationMethod::AtomicRename,
+                    if self.config.rename_copy_then_delete {
+                        PublicationMethod::CopyThenDelete
+                    } else {
+                        PublicationMethod::AtomicRename
+                    },
                 ))
             });
         }
@@ -387,34 +517,46 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
     }
     fn create_temp_file<'a>(
         &'a self,
-        _: CreateTempFileRequest,
+        request: CreateTempFileRequest,
     ) -> SpiFuture<'a, FsResult<OpenedAsyncTempFile>> {
         self.record("create_temp_file");
+        let _ = request.options();
+        if self.config.temp_create_error {
+            return Box::pin(async { Err(unused()) });
+        }
         let info = self.temp_info();
         let calls = Arc::clone(&self.calls);
         Box::pin(async move {
-            Ok(OpenedAsyncTempFile::new(
+            let opened = OpenedAsyncTempFile::new(
                 info,
                 Box::new(RecordingTempSession {
                     calls,
                     indeterminate_persist: self
                         .config
                         .temp_persist_indeterminate,
+                    persist_failure: self.config.temp_persist_failure,
                     cleanup_failure: self.config.temp_cleanup_failure,
+                    keep_failure: self.config.temp_keep_failure,
                     atomicity: self.config.temp_persist_atomicity,
                 }),
-            ))
+            );
+            let _ = opened.info();
+            Ok(opened)
         })
     }
     fn create_temp_directory<'a>(
         &'a self,
-        _: CreateTempDirectoryRequest,
+        request: CreateTempDirectoryRequest,
     ) -> SpiFuture<'a, FsResult<OpenedAsyncTempDirectory>> {
         self.record("create_temp_directory");
+        let _ = request.options();
+        if self.config.temp_create_error {
+            return Box::pin(async { Err(unused()) });
+        }
         let info = self.temp_info();
         let calls = Arc::clone(&self.calls);
         Box::pin(async move {
-            Ok(OpenedAsyncTempDirectory::new(
+            let opened = OpenedAsyncTempDirectory::new(
                 info,
                 Box::new(RecordingTempSession {
                     calls,
@@ -423,10 +565,14 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
                         .temp_persist_atomicity
                         .is_none()
                         && self.config.temp_persist_indeterminate,
+                    persist_failure: self.config.temp_persist_failure,
                     cleanup_failure: self.config.temp_cleanup_failure,
+                    keep_failure: self.config.temp_keep_failure,
                     atomicity: self.config.temp_persist_atomicity,
                 }),
-            ))
+            );
+            let _ = opened.info();
+            Ok(opened)
         })
     }
 }
@@ -553,7 +699,17 @@ impl AsyncFileWriteSession for RecordingWriter {
         })
     }
     fn abort_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<()>> {
-        Box::pin(async { Ok(()) })
+        let failure = self.get_mut().config.writer_abort_failure;
+        Box::pin(async move {
+            match failure {
+                Some(kind) => Err(FsError::new(
+                    kind,
+                    FsOperation::AbortWriter,
+                    "injected abort failure",
+                )),
+                None => Ok(()),
+            }
+        })
     }
     fn cancel_on_drop(self: Pin<&mut Self>) {
         *self
@@ -568,8 +724,10 @@ impl AsyncFileWriteSession for RecordingWriter {
 struct RecordingTempSession {
     calls: Arc<Mutex<Vec<&'static str>>>,
     indeterminate_persist: bool,
+    persist_failure: Option<qubit_fs::PersistFailureState>,
     atomicity: Option<AchievedAtomicity>,
     cleanup_failure: bool,
+    keep_failure: bool,
 }
 impl RecordingTempSession {
     /// Records one temporary lifecycle call.
@@ -599,7 +757,18 @@ impl AsyncTempResourceSpi for RecordingTempSession {
     }
     fn keep<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<()>> {
         self.as_ref().get_ref().record("keep");
-        Box::pin(async { Ok(()) })
+        let keep_failure = self.as_ref().get_ref().keep_failure;
+        Box::pin(async move {
+            if keep_failure {
+                Err(FsError::new(
+                    FsErrorKind::Io,
+                    FsOperation::KeepTemp,
+                    "injected keep failure",
+                ))
+            } else {
+                Ok(())
+            }
+        })
     }
     fn persist<'a>(
         self: Pin<&'a mut Self>,
@@ -608,8 +777,20 @@ impl AsyncTempResourceSpi for RecordingTempSession {
     {
         self.as_ref().get_ref().record("persist");
         let target = request.target().clone();
+        let _ = request.options();
         let indeterminate = self.as_ref().get_ref().indeterminate_persist;
+        let failure = self.as_ref().get_ref().persist_failure;
         Box::pin(async move {
+            if let Some(state) = failure {
+                return Err(qubit_fs::spi::SpiPersistFailure::new(
+                    FsError::new(
+                        FsErrorKind::Io,
+                        FsOperation::PersistTemp,
+                        "injected persist failure",
+                    ),
+                    state,
+                ));
+            }
             if indeterminate {
                 return Err(qubit_fs::spi::SpiPersistFailure::new(
                     FsError::new(

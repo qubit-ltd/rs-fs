@@ -8,7 +8,10 @@
 
 // qubit-style: allow test-file-name -- this module is included by
 // handle_support/mod.rs.
-use std::io::Result as IoResult;
+use std::io::{
+    Cursor,
+    Result as IoResult,
+};
 use std::sync::{
     Arc,
     Mutex,
@@ -33,6 +36,7 @@ use qubit_fs::spi::{
     OpenedWriter,
     PersistRequest,
     RenameRequest,
+    SpiPersistFailure,
     SpiRenameFailure,
     SpiWriteFailure,
     StatRequest,
@@ -59,6 +63,7 @@ use qubit_fs::{
     OpenedFileInfo,
     Path,
     PathConstraints,
+    PersistFailureState,
     PersistOutcome,
     PublicationMethod,
     RenameFailureState,
@@ -71,11 +76,18 @@ use qubit_io::Output;
 pub(crate) struct BehaviorSpi {
     pub(crate) fail_commit: bool,
     pub(crate) fail_write: bool,
+    pub(crate) commit_failure: Option<WriteFailureState>,
+    pub(crate) abort_failure: Option<FsErrorKind>,
     pub(crate) limits: FileSystemLimits,
     pub(crate) entries: Mutex<Vec<DirEntry>>,
     pub(crate) cleanup_calls: Arc<Mutex<usize>>,
     pub(crate) persist_calls: Arc<Mutex<usize>>,
     pub(crate) temp_path: Path,
+    pub(crate) temp_failure: Option<PersistFailureState>,
+    pub(crate) temp_keep_error: Option<FsErrorKind>,
+    pub(crate) temp_cleanup_error: Option<FsErrorKind>,
+    pub(crate) directory_persist_non_atomic: bool,
+    pub(crate) provider_open_error: bool,
 }
 pub(crate) fn filesystem(
     fail_commit: bool,
@@ -86,11 +98,18 @@ pub(crate) fn filesystem(
     let spi = BehaviorSpi {
         fail_commit,
         fail_write: false,
+        commit_failure: None,
+        abort_failure: None,
         limits: FileSystemLimits::unknown(),
         entries: Mutex::new(entries),
         cleanup_calls: Arc::clone(&cleanup_calls),
         persist_calls: Arc::clone(&persist_calls),
         temp_path: Path::parse("/temporary").expect("test path should parse"),
+        temp_failure: None,
+        temp_keep_error: None,
+        temp_cleanup_error: None,
+        directory_persist_non_atomic: false,
+        provider_open_error: false,
     };
     (
         FileSystem::from_spi(spi).expect("facade should construct"),
@@ -102,12 +121,19 @@ pub(crate) fn limited_write_filesystem(maximum: u64) -> FileSystem {
     FileSystem::from_spi(BehaviorSpi {
         fail_commit: false,
         fail_write: false,
+        commit_failure: None,
+        abort_failure: None,
         limits: FileSystemLimits::unknown()
             .with_max_write_bytes(qubit_fs::FileSystemLimit::Maximum(maximum)),
         entries: Mutex::new(Vec::new()),
         cleanup_calls: Arc::new(Mutex::new(0)),
         persist_calls: Arc::new(Mutex::new(0)),
         temp_path: Path::parse("/temporary").expect("test path should parse"),
+        temp_failure: None,
+        temp_keep_error: None,
+        temp_cleanup_error: None,
+        directory_persist_non_atomic: false,
+        provider_open_error: false,
     })
     .expect("facade should construct")
 }
@@ -115,11 +141,64 @@ pub(crate) fn stream_failure_filesystem() -> FileSystem {
     FileSystem::from_spi(BehaviorSpi {
         fail_commit: false,
         fail_write: true,
+        commit_failure: None,
+        abort_failure: None,
         limits: FileSystemLimits::unknown(),
         entries: Mutex::new(Vec::new()),
         cleanup_calls: Arc::new(Mutex::new(0)),
         persist_calls: Arc::new(Mutex::new(0)),
         temp_path: Path::parse("/temporary").expect("test path should parse"),
+        temp_failure: None,
+        temp_keep_error: None,
+        temp_cleanup_error: None,
+        directory_persist_non_atomic: false,
+        provider_open_error: false,
+    })
+    .expect("facade should construct")
+}
+
+/// Builds a filesystem whose handle-opening and temporary-creation calls fail
+/// at the provider boundary after facade validation has succeeded.
+pub(crate) fn provider_open_failure_filesystem() -> FileSystem {
+    FileSystem::from_spi(BehaviorSpi {
+        fail_commit: false,
+        fail_write: false,
+        commit_failure: None,
+        abort_failure: None,
+        limits: FileSystemLimits::unknown(),
+        entries: Mutex::new(Vec::new()),
+        cleanup_calls: Arc::new(Mutex::new(0)),
+        persist_calls: Arc::new(Mutex::new(0)),
+        temp_path: Path::parse("/temporary").expect("test path should parse"),
+        temp_failure: None,
+        temp_keep_error: None,
+        temp_cleanup_error: None,
+        directory_persist_non_atomic: false,
+        provider_open_error: true,
+    })
+    .expect("facade should construct")
+}
+
+/// Builds a filesystem with explicit provider write lifecycle failures.
+pub(crate) fn writer_lifecycle_filesystem(
+    commit_failure: Option<WriteFailureState>,
+    abort_failure: Option<FsErrorKind>,
+) -> FileSystem {
+    FileSystem::from_spi(BehaviorSpi {
+        fail_commit: false,
+        fail_write: false,
+        commit_failure,
+        abort_failure,
+        limits: FileSystemLimits::unknown(),
+        entries: Mutex::new(Vec::new()),
+        cleanup_calls: Arc::new(Mutex::new(0)),
+        persist_calls: Arc::new(Mutex::new(0)),
+        temp_path: Path::parse("/temporary").expect("test path should parse"),
+        temp_failure: None,
+        temp_keep_error: None,
+        temp_cleanup_error: None,
+        directory_persist_non_atomic: false,
+        provider_open_error: false,
     })
     .expect("facade should construct")
 }
@@ -127,11 +206,113 @@ pub(crate) fn invalid_temp_path_filesystem() -> FileSystem {
     FileSystem::from_spi(BehaviorSpi {
         fail_commit: false,
         fail_write: false,
+        commit_failure: None,
+        abort_failure: None,
         limits: FileSystemLimits::unknown(),
         entries: Mutex::new(Vec::new()),
         cleanup_calls: Arc::new(Mutex::new(0)),
         persist_calls: Arc::new(Mutex::new(0)),
         temp_path: Path::parse("relative").expect("test path should parse"),
+        temp_failure: None,
+        temp_keep_error: None,
+        temp_cleanup_error: None,
+        directory_persist_non_atomic: false,
+        provider_open_error: false,
+    })
+    .expect("facade should construct")
+}
+
+/// Builds a filesystem whose temporary identities violate the provider binding
+/// and whose attempted cleanup also fails.
+fn invalid_temp_cleanup_filesystem() -> FileSystem {
+    FileSystem::from_spi(BehaviorSpi {
+        fail_commit: false,
+        fail_write: false,
+        commit_failure: None,
+        abort_failure: None,
+        limits: FileSystemLimits::unknown(),
+        entries: Mutex::new(Vec::new()),
+        cleanup_calls: Arc::new(Mutex::new(0)),
+        persist_calls: Arc::new(Mutex::new(0)),
+        temp_path: Path::parse("/foreign").expect("test path should parse"),
+        temp_failure: None,
+        temp_keep_error: None,
+        temp_cleanup_error: Some(FsErrorKind::Io),
+        directory_persist_non_atomic: false,
+        provider_open_error: false,
+    })
+    .expect("facade should construct")
+}
+/// Builds a filesystem whose temporary-resource persist operation reports
+/// the supplied provider-confirmed partial-progress state.
+pub(crate) fn temp_failure_filesystem(
+    state: PersistFailureState,
+) -> (FileSystem, Arc<Mutex<usize>>, Arc<Mutex<usize>>) {
+    let cleanup_calls = Arc::new(Mutex::new(0));
+    let persist_calls = Arc::new(Mutex::new(0));
+    let filesystem = FileSystem::from_spi(BehaviorSpi {
+        fail_commit: false,
+        fail_write: false,
+        commit_failure: None,
+        abort_failure: None,
+        limits: FileSystemLimits::unknown(),
+        entries: Mutex::new(Vec::new()),
+        cleanup_calls: Arc::clone(&cleanup_calls),
+        persist_calls: Arc::clone(&persist_calls),
+        temp_path: Path::parse("/temporary").expect("test path should parse"),
+        temp_failure: Some(state),
+        temp_keep_error: None,
+        temp_cleanup_error: None,
+        directory_persist_non_atomic: false,
+        provider_open_error: false,
+    })
+    .expect("facade should construct");
+    (filesystem, cleanup_calls, persist_calls)
+}
+/// Builds a filesystem whose temporary-resource lifecycle callbacks fail with
+/// the configured error kinds.
+pub(crate) fn temp_lifecycle_error_filesystem(
+    keep_error: Option<FsErrorKind>,
+    cleanup_error: Option<FsErrorKind>,
+) -> (FileSystem, Arc<Mutex<usize>>) {
+    let cleanup_calls = Arc::new(Mutex::new(0));
+    let filesystem = FileSystem::from_spi(BehaviorSpi {
+        fail_commit: false,
+        fail_write: false,
+        commit_failure: None,
+        abort_failure: None,
+        limits: FileSystemLimits::unknown(),
+        entries: Mutex::new(Vec::new()),
+        cleanup_calls: Arc::clone(&cleanup_calls),
+        persist_calls: Arc::new(Mutex::new(0)),
+        temp_path: Path::parse("/temporary").expect("test path should parse"),
+        temp_failure: None,
+        temp_keep_error: keep_error,
+        temp_cleanup_error: cleanup_error,
+        directory_persist_non_atomic: false,
+        provider_open_error: false,
+    })
+    .expect("facade should construct");
+    (filesystem, cleanup_calls)
+}
+/// Builds a filesystem whose temporary directory reports a non-atomic
+/// persistence outcome while still advertising atomic capability support.
+pub(crate) fn non_atomic_temp_directory_filesystem() -> FileSystem {
+    FileSystem::from_spi(BehaviorSpi {
+        fail_commit: false,
+        fail_write: false,
+        commit_failure: None,
+        abort_failure: None,
+        limits: FileSystemLimits::unknown(),
+        entries: Mutex::new(Vec::new()),
+        cleanup_calls: Arc::new(Mutex::new(0)),
+        persist_calls: Arc::new(Mutex::new(0)),
+        temp_path: Path::parse("/temporary").expect("test path should parse"),
+        temp_failure: None,
+        temp_keep_error: None,
+        temp_cleanup_error: None,
+        directory_persist_non_atomic: true,
+        provider_open_error: false,
     })
     .expect("facade should construct")
 }
@@ -146,6 +327,168 @@ fn test_handle_support_constructs_file_system() {
     );
 }
 
+/// Exercises synchronous facade dispatch for directory creation and both
+/// deletion primitives against the recording provider.
+#[test]
+fn test_handle_support_dispatches_directory_and_delete_operations() {
+    let (file_system, _, _) = filesystem(false, Vec::new());
+    let path = Path::parse("/target").expect("test path should parse");
+
+    assert!(
+        !file_system
+            .create_directory(
+                &path,
+                qubit_fs::CreateDirectoryOptions::default()
+            )
+            .expect("directory creation should succeed")
+            .already_existed()
+    );
+    assert!(
+        !file_system
+            .delete_file(&path, qubit_fs::DeleteOptions::default())
+            .expect("file deletion should succeed")
+            .already_missing()
+    );
+    assert!(
+        !file_system
+            .delete_directory(&path, qubit_fs::DeleteOptions::default())
+            .expect("directory deletion should succeed")
+            .already_missing()
+    );
+}
+
+/// Exercises each synchronous facade entry point on the successful provider
+/// path so that its public validation and handle-binding contracts remain
+/// covered together.
+#[test]
+fn test_handle_support_dispatches_successful_facade_operations() {
+    let (file_system, _, _) = filesystem(false, Vec::new());
+    let source = Path::parse("/source").expect("test path should parse");
+    let target = Path::parse("/target").expect("test path should parse");
+
+    assert!(file_system.exists(&source).expect("stat should succeed"));
+    let mut directory = file_system
+        .list(&source, qubit_fs::ListOptions::default())
+        .expect("list should succeed");
+    assert!(
+        directory
+            .next_entry()
+            .expect("stream should succeed")
+            .is_none()
+    );
+
+    let mut reader = file_system
+        .open_reader(&source, qubit_fs::ReadOptions::default())
+        .expect("reader should open");
+    let mut bytes = [0_u8; 5];
+    assert_eq!(
+        5,
+        qubit_io::Input::read(&mut reader, &mut bytes)
+            .expect("reader should transfer bytes")
+    );
+
+    let mut writer = file_system
+        .open_writer(&target, qubit_fs::WriteOptions::default())
+        .expect("writer should open");
+    qubit_io::Output::write_fully(&mut writer, b"bytes")
+        .expect("writer should accept bytes");
+    writer.commit().expect("writer should commit");
+
+    let mut temporary_file = file_system
+        .create_temp_file(qubit_fs::TempFileOptions::default())
+        .expect("temporary file should open");
+    temporary_file
+        .keep()
+        .expect("temporary file should be kept");
+    let mut temporary_directory = file_system
+        .create_temp_directory(qubit_fs::TempDirectoryOptions::default())
+        .expect("temporary directory should open");
+    temporary_directory
+        .keep()
+        .expect("temporary directory should be kept");
+}
+
+/// Invokes the synchronous SPI's optional default copy method and completes
+/// the facade-owned stream fallback.
+#[test]
+fn test_handle_support_uses_default_spi_copy_decline() {
+    let (file_system, _, _) = filesystem(false, Vec::new());
+    let outcome = file_system
+        .copy(
+            &Path::parse("/source").expect("test path should parse"),
+            &Path::parse("/target").expect("test path should parse"),
+            qubit_fs::CopyOptions::default(),
+        )
+        .expect("fallback should use reader and writer capabilities");
+    assert!(outcome.used_fallback());
+}
+
+/// Ensures provider open failures are enriched by each synchronous facade
+/// entry point after its local validation has completed.
+#[test]
+fn test_handle_support_enriches_open_and_temp_provider_failures() {
+    let file_system = provider_open_failure_filesystem();
+    let path = Path::parse("/target").expect("test path should parse");
+    for error in [
+        file_system
+            .list(&path, qubit_fs::ListOptions::default())
+            .expect_err("list provider failure should propagate"),
+        file_system
+            .open_writer(&path, qubit_fs::WriteOptions::default())
+            .expect_err("writer provider failure should propagate"),
+        file_system
+            .open_reader(&path, qubit_fs::ReadOptions::default())
+            .expect_err("reader provider failure should propagate"),
+        file_system
+            .create_temp_file(qubit_fs::TempFileOptions::default())
+            .expect_err("temporary-file provider failure should propagate"),
+        file_system
+            .create_temp_directory(qubit_fs::TempDirectoryOptions::default())
+            .expect_err(
+                "temporary-directory provider failure should propagate",
+            ),
+    ] {
+        assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
+        assert_eq!(Some("handles-test"), error.provider());
+    }
+}
+
+/// Rejects invalid temporary identities even when the provider also fails to
+/// clean up the invalid resource.
+#[test]
+fn test_handle_support_rejects_invalid_temp_identities_with_cleanup_failure() {
+    let file_system = invalid_temp_cleanup_filesystem();
+    for error in [
+        file_system
+            .create_temp_file(qubit_fs::TempFileOptions::default())
+            .expect_err("foreign temporary file identity must be rejected"),
+        file_system
+            .create_temp_directory(qubit_fs::TempDirectoryOptions::default())
+            .expect_err(
+                "foreign temporary directory identity must be rejected",
+            ),
+    ] {
+        assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
+        assert_eq!(FsOperation::CreateTemp, error.operation());
+    }
+}
+
+/// Rejects invalid temporary paths after a successful provider cleanup for both
+/// temporary resource kinds.
+#[test]
+fn test_handle_support_rejects_invalid_temp_paths_after_cleanup() {
+    for error in [
+        invalid_temp_path_filesystem()
+            .create_temp_file(qubit_fs::TempFileOptions::default())
+            .expect_err("relative temporary file path must be rejected"),
+        invalid_temp_path_filesystem()
+            .create_temp_directory(qubit_fs::TempDirectoryOptions::default())
+            .expect_err("relative temporary directory path must be rejected"),
+    ] {
+        assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
+    }
+}
+
 impl BehaviorSpi {
     fn unsupported() -> FsError {
         FsError::new(
@@ -156,7 +499,12 @@ impl BehaviorSpi {
     }
     fn info(&self) -> OpenedFileInfo {
         OpenedFileInfo::new(
-            FileSystemId::new("handles-test").expect("valid test id"),
+            FileSystemId::new(if self.temp_path.as_str() == "/foreign" {
+                "foreign"
+            } else {
+                "handles-test"
+            })
+            .expect("valid test id"),
             self.temp_path.clone(),
         )
     }
@@ -171,7 +519,11 @@ impl FileSystemSpi for BehaviorSpi {
             ),
             FileSystemCapabilities::new()
                 .with(FileSystemCapability::List)
+                .with(FileSystemCapability::Copy)
+                .with(FileSystemCapability::Read)
                 .with(FileSystemCapability::Write)
+                .with(FileSystemCapability::CreateDirectory)
+                .with(FileSystemCapability::Delete)
                 .with(FileSystemCapability::AtomicReplace)
                 .with(FileSystemCapability::TempFile)
                 .with(FileSystemCapability::TempDirectory)
@@ -182,25 +534,51 @@ impl FileSystemSpi for BehaviorSpi {
         .expect("valid test properties")
     }
     fn stat(&self, request: StatRequest<'_>) -> FsResult<StatResponse> {
+        let _ = request.options();
         Ok(StatResponse::new(
             request.path().clone(),
             FileMetadata::new(qubit_fs::FileKind::File),
         ))
     }
-    fn list(&self, _: ListRequest<'_>) -> FsResult<OpenedDirectoryStream> {
+    fn list(
+        &self,
+        request: ListRequest<'_>,
+    ) -> FsResult<OpenedDirectoryStream> {
+        let _ = request.path();
+        let _ = request.options();
+        if self.provider_open_error {
+            return Err(Self::unsupported());
+        }
         Ok(OpenedDirectoryStream::new(Box::new(Entries(
             std::mem::take(
                 &mut *self.entries.lock().expect("entries lock should succeed"),
             ),
         ))))
     }
-    fn open_reader(&self, _: OpenReaderRequest<'_>) -> FsResult<OpenedReader> {
-        Err(Self::unsupported())
+    fn open_reader(
+        &self,
+        request: OpenReaderRequest<'_>,
+    ) -> FsResult<OpenedReader> {
+        if self.provider_open_error {
+            return Err(Self::unsupported());
+        }
+        let _ = request.options();
+        Ok(OpenedReader::new(
+            OpenedFileInfo::new(
+                FileSystemId::new("handles-test").expect("valid test id"),
+                request.path().clone(),
+            ),
+            Box::new(Cursor::new(b"bytes".to_vec())),
+        ))
     }
     fn open_writer(
         &self,
         request: OpenWriterRequest<'_>,
     ) -> FsResult<OpenedWriter> {
+        let _ = request.options();
+        if self.provider_open_error {
+            return Err(Self::unsupported());
+        }
         Ok(OpenedWriter::new(
             OpenedFileInfo::new(
                 FileSystemId::new("handles-test").expect("valid test id"),
@@ -209,28 +587,43 @@ impl FileSystemSpi for BehaviorSpi {
             Box::new(Writer {
                 fail_commit: self.fail_commit,
                 fail_write: self.fail_write,
+                commit_failure: self.commit_failure,
+                abort_failure: self.abort_failure,
+                non_atomic_commit: self.directory_persist_non_atomic,
             }),
         ))
     }
     fn create_directory(
         &self,
-        _: CreateDirectoryRequest<'_>,
+        request: CreateDirectoryRequest<'_>,
     ) -> FsResult<CreateDirectoryOutcome> {
-        Err(Self::unsupported())
+        let _ = request.path();
+        let _ = request.options();
+        Ok(CreateDirectoryOutcome::new(false))
     }
-    fn delete_file(&self, _: DeleteFileRequest<'_>) -> FsResult<DeleteOutcome> {
-        Err(Self::unsupported())
+    fn delete_file(
+        &self,
+        request: DeleteFileRequest<'_>,
+    ) -> FsResult<DeleteOutcome> {
+        let _ = request.path();
+        let _ = request.options();
+        Ok(DeleteOutcome::new(false))
     }
     fn delete_directory(
         &self,
-        _: DeleteDirectoryRequest<'_>,
+        request: DeleteDirectoryRequest<'_>,
     ) -> FsResult<DeleteOutcome> {
-        Err(Self::unsupported())
+        let _ = request.path();
+        let _ = request.options();
+        Ok(DeleteOutcome::new(false))
     }
     fn rename(
         &self,
-        _: RenameRequest<'_>,
+        request: RenameRequest<'_>,
     ) -> Result<RenameOutcome, SpiRenameFailure> {
+        let _ = request.source();
+        let _ = request.target();
+        let _ = request.options();
         Err(SpiRenameFailure::new(
             Self::unsupported(),
             RenameFailureState::Unchanged,
@@ -238,27 +631,41 @@ impl FileSystemSpi for BehaviorSpi {
     }
     fn create_temp_file(
         &self,
-        _: CreateTempFileRequest,
+        request: CreateTempFileRequest,
     ) -> FsResult<OpenedTempFile> {
+        let _ = request.options();
+        if self.provider_open_error {
+            return Err(Self::unsupported());
+        }
         Ok(OpenedTempFile::new(
             self.info(),
             Box::new(Temp {
                 cleanup_calls: Arc::clone(&self.cleanup_calls),
                 persist_calls: Arc::clone(&self.persist_calls),
                 non_atomic: true,
+                failure: self.temp_failure,
+                keep_error: self.temp_keep_error,
+                cleanup_error: self.temp_cleanup_error,
             }),
         ))
     }
     fn create_temp_directory(
         &self,
-        _: CreateTempDirectoryRequest,
+        request: CreateTempDirectoryRequest,
     ) -> FsResult<OpenedTempDirectory> {
+        let _ = request.options();
+        if self.provider_open_error {
+            return Err(Self::unsupported());
+        }
         Ok(OpenedTempDirectory::new(
             self.info(),
             Box::new(Temp {
                 cleanup_calls: Arc::clone(&self.cleanup_calls),
                 persist_calls: Arc::clone(&self.persist_calls),
-                non_atomic: false,
+                non_atomic: self.directory_persist_non_atomic,
+                failure: self.temp_failure,
+                keep_error: self.temp_keep_error,
+                cleanup_error: self.temp_cleanup_error,
             }),
         ))
     }
@@ -266,6 +673,9 @@ impl FileSystemSpi for BehaviorSpi {
 struct Writer {
     fail_commit: bool,
     fail_write: bool,
+    commit_failure: Option<WriteFailureState>,
+    abort_failure: Option<FsErrorKind>,
+    non_atomic_commit: bool,
 }
 impl Output for Writer {
     type Item = u8;
@@ -276,7 +686,10 @@ impl Output for Writer {
         count: usize,
     ) -> IoResult<usize> {
         if self.fail_write {
-            Err(std::io::Error::other("stream secret=top-secret"))
+            Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "stream secret=top-secret",
+            ))
         } else {
             Ok(count)
         }
@@ -287,6 +700,16 @@ impl Output for Writer {
 }
 impl FileWriterSpi for Writer {
     fn commit(&mut self) -> Result<WriteOutcome, SpiWriteFailure> {
+        if let Some(state) = self.commit_failure {
+            return Err(SpiWriteFailure::new(
+                FsError::new(
+                    FsErrorKind::Io,
+                    FsOperation::CommitWriter,
+                    "injected commit failure",
+                ),
+                state,
+            ));
+        }
         if self.fail_commit {
             Err(SpiWriteFailure::new(
                 FsError::new(
@@ -298,13 +721,24 @@ impl FileWriterSpi for Writer {
             ))
         } else {
             Ok(WriteOutcome::new(
-                AchievedAtomicity::Atomic,
+                if self.non_atomic_commit {
+                    AchievedAtomicity::NonAtomic
+                } else {
+                    AchievedAtomicity::Atomic
+                },
                 PublicationMethod::Direct,
             ))
         }
     }
     fn abort(&mut self) -> FsResult<()> {
-        Ok(())
+        match self.abort_failure {
+            Some(kind) => Err(FsError::new(
+                kind,
+                FsOperation::AbortWriter,
+                "injected abort failure",
+            )),
+            None => Ok(()),
+        }
     }
 }
 struct Entries(Vec<DirEntry>);
@@ -317,6 +751,9 @@ struct Temp {
     cleanup_calls: Arc<Mutex<usize>>,
     persist_calls: Arc<Mutex<usize>>,
     non_atomic: bool,
+    failure: Option<PersistFailureState>,
+    keep_error: Option<FsErrorKind>,
+    cleanup_error: Option<FsErrorKind>,
 }
 impl TempResourceSpi for Temp {
     fn persist(
@@ -327,6 +764,16 @@ impl TempResourceSpi for Temp {
             .persist_calls
             .lock()
             .expect("persist lock should succeed") += 1;
+        if let Some(state) = self.failure {
+            return Err(SpiPersistFailure::new(
+                FsError::new(
+                    FsErrorKind::Io,
+                    FsOperation::PersistTemp,
+                    "injected temporary persist failure",
+                ),
+                state,
+            ));
+        }
         Ok(PersistOutcome::new(
             request.target().clone(),
             if self.non_atomic {
@@ -338,13 +785,25 @@ impl TempResourceSpi for Temp {
         ))
     }
     fn keep(&mut self) -> FsResult<()> {
-        Ok(())
+        self.keep_error.map_or(Ok(()), |kind| {
+            Err(FsError::new(
+                kind,
+                FsOperation::KeepTemp,
+                "injected temporary keep failure",
+            ))
+        })
     }
     fn cleanup(&mut self) -> FsResult<()> {
         *self
             .cleanup_calls
             .lock()
             .expect("cleanup lock should succeed") += 1;
-        Ok(())
+        self.cleanup_error.map_or(Ok(()), |kind| {
+            Err(FsError::new(
+                kind,
+                FsOperation::CleanupTemp,
+                "injected temporary cleanup failure",
+            ))
+        })
     }
 }

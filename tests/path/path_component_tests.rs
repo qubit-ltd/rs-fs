@@ -20,3 +20,13 @@ fn test_path_component_rejects_hierarchy_and_traversal() {
         );
     }
 }
+
+/// Verifies a valid component remains an opaque lexical value for display and
+/// generic string consumers.
+#[test]
+fn test_path_component_preserves_valid_text() {
+    let component =
+        PathComponent::parse("report.csv").expect("component should parse");
+    assert_eq!("report.csv", component.as_str());
+    assert_eq!("report.csv", component.to_string());
+}

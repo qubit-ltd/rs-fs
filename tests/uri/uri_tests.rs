@@ -52,3 +52,35 @@ fn test_uri_preserves_raw_path_and_ordered_duplicate_query() {
     assert_eq!(uri.path(), "/a%2Fb");
     assert_eq!(uri.query(), Some("x=1&x=2"));
 }
+
+/// Verifies parsed URI accessors distinguish a missing authority and query
+/// while preserving the complete canonical spelling.
+#[test]
+fn test_uri_accessors_preserve_authority_presence_and_full_text() {
+    let without_authority = Uri::parse("S3:/object").expect("URI should parse");
+    assert_eq!("s3", without_authority.scheme());
+    assert_eq!(None, without_authority.authority());
+    assert!(!without_authority.has_authority());
+    assert_eq!(None, without_authority.query());
+    assert_eq!("s3:/object", without_authority.as_str());
+
+    let empty_authority = Uri::parse("s3:///object").expect("URI should parse");
+    assert!(empty_authority.has_authority());
+    assert_eq!(Some(""), empty_authority.authority());
+}
+
+/// Verifies URI parser failures report missing, empty, and malformed schemes
+/// before a value reaches the secret-free URI boundary.
+#[test]
+fn test_uri_rejects_missing_empty_and_malformed_scheme_forms() {
+    assert!(Uri::parse("object-only").is_err());
+    assert!(Uri::parse(":/object").is_err());
+    assert!(Uri::parse("1bad:/object").is_err());
+}
+
+/// Verifies uppercase hexadecimal escapes are decoded before sensitive query
+/// key classification, just like lowercase escapes.
+#[test]
+fn test_uri_rejects_uppercase_percent_encoded_sensitive_query_key() {
+    assert!(Uri::parse("s3://bucket/key?t%6Fken=secret").is_err());
+}

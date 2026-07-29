@@ -55,10 +55,10 @@ capability、limit 和逻辑路径约束。
 ## 测试
 
 ```bash
-# 运行默认功能集测试
+# 使用默认 feature 集运行测试
 cargo test
 
-# 运行所有声明功能测试
+# 使用项目声明的全部 feature 运行测试
 cargo test --all-features
 
 # 运行项目 CI 检查
@@ -78,7 +78,7 @@ Copyright (c) 2025 - 2026. Haixing Hu. All rights reserved.
 ## 贡献
 
 欢迎贡献。请遵循 Rust API 指南，及时更新公共 API 文档与测试，并在提交
-Pull Request 前运行 `./align-ci.sh` 格式化代码，运行 `./ci-check.sh` 对齐 CI 要求。
+Pull Request 前运行 `./align-ci.sh`格式化代码，运行`./ci-check.sh`对齐CI要求。
 
 ## 作者
 

@@ -12,6 +12,7 @@ mod file_system_capabilities_tests;
 mod file_system_id_tests;
 mod file_system_info_tests;
 mod non_sensitive_metadata_tests;
+mod opened_file_info_tests;
 mod resource_version_tests;
 mod user_metadata_tests;
 mod write_outcome_tests;

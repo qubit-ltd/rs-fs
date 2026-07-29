@@ -73,3 +73,27 @@ fn test_open_writer_rejects_cumulative_bytes_over_finite_write_limit() {
         .expect_err("the cumulative write should exceed the limit");
     assert!(error.to_string().contains("provider byte limit"));
 }
+
+/// Keeps a recoverable writer inspectable without exposing its private session
+/// details through formatting or the causal error interface.
+#[test]
+fn test_write_all_failure_exposes_recovery_accessors_and_formatting() {
+    let (filesystem, _, _) =
+        crate::handle_support::filesystem(true, Vec::new());
+    let mut failure = filesystem
+        .write_all(
+            &qubit_fs::Path::parse("/target").expect("path should parse"),
+            b"bytes",
+            qubit_fs::WriteOptions::default(),
+        )
+        .expect_err("commit failure should retain a writer");
+    assert_eq!(qubit_fs::FsErrorKind::Io, failure.error().kind());
+    assert!(failure.writer().is_some());
+    assert!(failure.writer_mut().is_some());
+    assert!(failure.to_string().contains("commit failure"));
+    assert!(format!("{failure:?}").contains("has_writer"));
+    assert!(Error::source(&failure).is_some());
+    let (error, writer) = failure.into_parts();
+    assert_eq!(qubit_fs::FsErrorKind::Io, error.kind());
+    assert!(writer.is_some());
+}

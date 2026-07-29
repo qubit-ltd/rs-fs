@@ -7,7 +7,14 @@
 // =============================================================================
 //! External contract coverage for the asynchronous facade boundary.
 
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{
+    Context,
+    Poll,
+    Waker,
+};
 
 use qubit_fs::spi::{
     AsyncFileSystemSpi,
@@ -25,6 +32,7 @@ use qubit_fs::spi::{
 };
 use qubit_fs::{
     AsyncFileSystem,
+    CopyOptions,
     CreateDirectoryOutcome,
     DeleteOutcome,
     FileSystemCapabilities,
@@ -36,6 +44,7 @@ use qubit_fs::{
     FsErrorKind,
     FsOperation,
     FsResult,
+    Path,
     PathConstraints,
     PathSemantics,
     RenameFailureState,
@@ -53,7 +62,8 @@ impl AsyncFileSystemSpi for PropertiesOnlySpi {
                 "async-test",
                 PathSemantics::Hierarchical,
             ),
-            FileSystemCapabilities::new(),
+            FileSystemCapabilities::new()
+                .with(qubit_fs::FileSystemCapability::Copy),
             FileSystemLimits::unknown(),
             PathConstraints::absolute(),
         )
@@ -139,6 +149,20 @@ fn unused() -> FsError {
 
 fn assert_async_spi_object_safe(_: Arc<dyn AsyncFileSystemSpi>) {}
 
+/// Resolves an immediately-ready runtime-neutral test future.
+fn ready<F>(future: F) -> F::Output
+where
+    F: Future,
+{
+    let waker = Waker::noop();
+    let mut context = Context::from_waker(waker);
+    let mut future = Box::pin(future);
+    match Pin::as_mut(&mut future).poll(&mut context) {
+        Poll::Ready(value) => value,
+        Poll::Pending => panic!("test future must complete immediately"),
+    }
+}
+
 #[test]
 fn test_async_file_system_is_clone_but_not_a_trait_object() {
     let file_system = AsyncFileSystem::from_spi(PropertiesOnlySpi)
@@ -149,4 +173,22 @@ fn test_async_file_system_is_clone_but_not_a_trait_object() {
         clone.properties().info().provider_id()
     );
     assert_async_spi_object_safe(Arc::new(PropertiesOnlySpi));
+}
+
+/// Exercises the optional trait default which explicitly declines a provider
+/// native copy primitive before the facade reports missing fallback support.
+#[test]
+fn test_async_spi_default_copy_declines_without_provider_override() {
+    let file_system = AsyncFileSystem::from_spi(PropertiesOnlySpi)
+        .expect("facade construction should succeed");
+    let mut operation = file_system
+        .begin_copy(
+            Path::parse("/source").expect("source path should parse"),
+            Path::parse("/target").expect("target path should parse"),
+            CopyOptions::default(),
+        )
+        .expect("copy preflight should accept advertised copy capability");
+    let error = ready(operation.execute())
+        .expect_err("fallback must require reader and writer capabilities");
+    assert_eq!(FsErrorKind::UnsupportedCapability, error.error().kind());
 }

@@ -75,3 +75,21 @@ fn persist_failure_debug_does_not_expand_secret_fs_error_source() {
     assert!(!debug.contains(SECRET_SOURCE_TEXT));
     assert!(debug.contains("source_present"));
 }
+
+/// Verifies callers that need both recovery state and error ownership can
+/// consume a persistence failure as a pair.
+#[test]
+fn test_persist_failure_into_parts_preserves_error_and_state() {
+    let failure = PersistFailure::new(
+        FsError::new(
+            FsErrorKind::Io,
+            FsOperation::PersistTemp,
+            "persistence lost its source",
+        ),
+        PersistFailureState::NotPublished,
+    );
+
+    let (error, state) = failure.into_parts();
+    assert_eq!(PersistFailureState::NotPublished, state);
+    assert_eq!(FsErrorKind::Io, error.kind());
+}

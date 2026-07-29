@@ -231,10 +231,7 @@ impl FileWriter {
         let Some(maximum) = self.max_write_bytes else {
             return false;
         };
-        match u64::try_from(count) {
-            Ok(count) => self.written_bytes.saturating_add(count) > maximum,
-            Err(_) => true,
-        }
+        self.written_bytes.saturating_add(count as u64) > maximum
     }
 
     /// Adds only missing facade context to a provider lifecycle error.

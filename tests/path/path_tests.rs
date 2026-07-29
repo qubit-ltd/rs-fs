@@ -53,3 +53,43 @@ fn test_path_components_preserve_literal_leading_separator_boundary() {
         vec!["", "bucket", "key"]
     );
 }
+
+/// Verifies hierarchical parsing normalizes dots and separators, and exposes
+/// its resulting spelling, semantics, and display form consistently.
+#[test]
+fn test_path_normalizes_hierarchical_text_and_exposes_attributes() {
+    let path = Path::parse("/bucket//./folder/../object")
+        .expect("hierarchical path should normalize");
+    assert_eq!("/bucket/object", path.as_str());
+    assert_eq!("/bucket/object", path.to_string());
+    assert_eq!("/bucket/object", path.as_ref());
+    assert!(path.is_absolute());
+    assert_eq!(PathSemantics::Hierarchical, path.semantics());
+    assert_eq!(
+        vec!["bucket", "object"],
+        path.components().collect::<Vec<_>>()
+    );
+}
+
+/// Verifies provider-specific path semantics preserve lexical text without
+/// treating separators or dots as hierarchy.
+#[test]
+fn test_path_provider_specific_semantics_preserves_literal_text() {
+    let path = Path::parse_with_semantics(
+        "provider//./key",
+        PathSemantics::ProviderSpecific,
+    )
+    .expect("provider-specific path should parse");
+    assert_eq!("provider//./key", path.as_str());
+    assert_eq!(PathSemantics::ProviderSpecific, path.semantics());
+    assert!(!path.is_absolute());
+}
+
+/// Verifies invalid hierarchical input cannot represent an empty path, NUL,
+/// or a traversal above the provider root.
+#[test]
+fn test_path_rejects_empty_nul_and_root_escape() {
+    for invalid in ["", "nul\0byte", "../outside", "/../../outside", "."] {
+        assert!(Path::parse(invalid).is_err(), "{invalid:?} must fail");
+    }
+}

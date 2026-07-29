@@ -9,6 +9,8 @@
 use std::io::Cursor;
 use std::sync::Arc;
 
+use qubit_io::Input;
+
 use qubit_fs::spi::{
     CreateDirectoryRequest,
     CreateTempDirectoryRequest,
@@ -50,7 +52,9 @@ use qubit_fs::{
     RenameOutcome,
 };
 
-struct ReaderSpi;
+struct ReaderSpi {
+    wrong_opened_path: bool,
+}
 
 impl FileSystemSpi for ReaderSpi {
     fn properties(&self) -> FileSystemProperties {
@@ -76,12 +80,19 @@ impl FileSystemSpi for ReaderSpi {
     fn list(&self, _: ListRequest<'_>) -> FsResult<OpenedDirectoryStream> {
         Err(unsupported())
     }
-    fn open_reader(&self, _: OpenReaderRequest<'_>) -> FsResult<OpenedReader> {
-        let different = Path::parse("/different").expect("valid path");
+    fn open_reader(
+        &self,
+        request: OpenReaderRequest<'_>,
+    ) -> FsResult<OpenedReader> {
+        let path = if self.wrong_opened_path {
+            Path::parse("/different").expect("valid path")
+        } else {
+            request.path().clone()
+        };
         Ok(OpenedReader::new(
             OpenedFileInfo::new(
                 FileSystemId::new("reader-test").expect("valid id"),
-                different,
+                path,
             ),
             Box::new(Cursor::new(b"bytes".to_vec())),
         ))
@@ -137,11 +148,57 @@ fn unsupported() -> FsError {
 
 #[test]
 fn test_open_reader_rejects_wrong_opened_identity() {
-    let file_system = FileSystem::from_shared_spi(Arc::new(ReaderSpi))
-        .expect("facade should open");
+    let file_system = FileSystem::from_shared_spi(Arc::new(ReaderSpi {
+        wrong_opened_path: true,
+    }))
+    .expect("facade should open");
     let requested = Path::parse("/requested").expect("valid path");
     let error = file_system
         .open_reader(&requested, Default::default())
         .expect_err("wrong identity must be rejected");
     assert_eq!(error.kind(), FsErrorKind::ProviderContractViolation);
+}
+
+/// Delegates regular byte transfer while preserving the opened identity.
+#[test]
+fn test_open_reader_reads_bytes_and_exposes_identity() {
+    let file_system = FileSystem::from_spi(ReaderSpi {
+        wrong_opened_path: false,
+    })
+    .expect("facade should open");
+    let requested = Path::parse("/requested").expect("valid path");
+    let mut reader = file_system
+        .open_reader(&requested, Default::default())
+        .expect("matching reader identity should open");
+    assert_eq!(&requested, reader.info().path());
+    assert!(!reader.is_buffered());
+    assert!(format!("{reader:?}").contains("FileReader"));
+    let mut bytes = [0; 5];
+    assert_eq!(
+        5,
+        reader
+            .read_fully(&mut bytes)
+            .expect("reader should fill bytes")
+    );
+    assert_eq!(b"bytes", &bytes);
+}
+
+/// Reads a complete file through the facade convenience API and applies its
+/// caller-supplied memory bound before extending the result buffer.
+#[test]
+fn test_read_all_returns_bytes_and_enforces_maximum() {
+    let file_system = FileSystem::from_spi(ReaderSpi {
+        wrong_opened_path: false,
+    })
+    .expect("facade should open");
+    let requested = Path::parse("/requested").expect("valid path");
+
+    let bytes = file_system
+        .read_all(&requested, Default::default(), 5)
+        .expect("sufficient maximum should read every byte");
+    assert_eq!(b"bytes", bytes.as_slice());
+    let error = file_system
+        .read_all(&requested, Default::default(), 4)
+        .expect_err("a too-small maximum must reject the complete chunk");
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, error.kind());
 }

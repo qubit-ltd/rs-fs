@@ -7,10 +7,13 @@
 // =============================================================================
 //! External SPI-bound temporary resource behavior tests.
 
+use std::error::Error;
+
 use qubit_fs::{
     AtomicityRequirement,
     FsErrorKind,
     Path,
+    PersistFailureState,
     PersistOptions,
     TempDirectoryOptions,
     TempFileOptions,
@@ -44,6 +47,24 @@ fn test_async_temp_creation_rejects_mismatched_provider_identity() {
     };
     assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
     assert_eq!(vec!["create_temp_file", "cleanup"], probe.calls());
+}
+
+/// Applies the same identity and compensating-cleanup contract to temporary
+/// directories as it does to temporary files.
+#[test]
+fn test_async_temp_directory_rejects_mismatched_provider_identity() {
+    let (file_system, probe) =
+        async_recording_file_system(AsyncRecordingConfig {
+            invalid_temp_identity: true,
+            ..AsyncRecordingConfig::default()
+        });
+    let Err(error) = ready(
+        file_system.create_temp_directory(TempDirectoryOptions::default()),
+    ) else {
+        panic!("mismatched temporary directory identity must be rejected");
+    };
+    assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
+    assert_eq!(vec!["create_temp_directory", "cleanup"], probe.calls());
 }
 
 /// Verifies failed invalid-session cleanup remains the inspectable source of
@@ -151,4 +172,89 @@ fn test_async_temp_persist_indeterminate_is_preserved() {
     assert_eq!(Some("async-recording"), error.error().provider());
     assert_eq!(TempResourceState::Indeterminate, temp.state());
 }
-use std::error::Error;
+
+/// Keeps definite lifecycle failures recoverable and makes cleanup failure
+/// require a later explicit cleanup decision.
+#[test]
+fn test_async_temp_lifecycle_failures_preserve_expected_states() {
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
+        temp_keep_failure: true,
+        ..AsyncRecordingConfig::default()
+    });
+    let mut file =
+        ready(file_system.create_temp_file(TempFileOptions::default()))
+            .expect("temporary file should open");
+    let keep = ready(file.keep())
+        .expect_err("configured keep failure should propagate");
+    assert_eq!(FsErrorKind::Io, keep.kind());
+    assert_eq!(TempResourceState::Owned, file.state());
+
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
+        temp_cleanup_failure: true,
+        ..AsyncRecordingConfig::default()
+    });
+    let mut directory = ready(
+        file_system.create_temp_directory(TempDirectoryOptions::default()),
+    )
+    .expect("temporary directory should open");
+    let cleanup = ready(directory.cleanup())
+        .expect_err("configured cleanup failure should propagate");
+    assert_eq!(FsErrorKind::Io, cleanup.kind());
+    assert_eq!(TempResourceState::CleanupRequired, directory.state());
+}
+
+/// Exposes the temporary-directory wrapper's path, persistence, and terminal
+/// lifecycle validation through the public asynchronous facade.
+#[test]
+fn test_async_temp_directory_persists_and_rejects_later_lifecycle_calls() {
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
+        atomic_temp_persist: true,
+        ..AsyncRecordingConfig::default()
+    });
+    let mut directory = ready(
+        file_system.create_temp_directory(TempDirectoryOptions::default()),
+    )
+    .expect("temporary directory should open");
+    assert_eq!(&path("/tmp/recording"), directory.path());
+    let outcome =
+        ready(directory.persist(&path("/final"), PersistOptions::default()))
+            .expect("temporary directory should persist");
+    assert_eq!(path("/final"), outcome.target);
+    assert_eq!(TempResourceState::Persisted, directory.state());
+    let persist =
+        ready(directory.persist(&path("/other"), PersistOptions::default()))
+            .expect_err("persisted directory must reject a second persist");
+    assert_eq!(FsErrorKind::InvalidState, persist.error().kind());
+    let cleanup = ready(directory.cleanup())
+        .expect_err("persisted directory must reject later cleanup");
+    assert_eq!(FsErrorKind::InvalidState, cleanup.kind());
+}
+
+/// Retains the provider-confirmed state after both definite and partially
+/// published temporary persistence failures.
+#[test]
+fn test_async_temp_persist_failure_states_drive_lifecycle() {
+    for (failure_state, expected_state) in [
+        (PersistFailureState::NotPublished, TempResourceState::Owned),
+        (
+            PersistFailureState::PublishedSourceRetained,
+            TempResourceState::CleanupRequired,
+        ),
+    ] {
+        let (file_system, _) =
+            async_recording_file_system(AsyncRecordingConfig {
+                atomic_temp_persist: true,
+                temp_persist_failure: Some(failure_state),
+                ..AsyncRecordingConfig::default()
+            });
+        let mut file =
+            ready(file_system.create_temp_file(TempFileOptions::default()))
+                .expect("temporary file should open");
+        let failure =
+            ready(file.persist(&path("/final"), PersistOptions::default()))
+                .expect_err("configured persist failure should propagate");
+        assert_eq!(failure_state, failure.state());
+        assert_eq!(FsErrorKind::Io, failure.error().kind());
+        assert_eq!(expected_state, file.state());
+    }
+}
