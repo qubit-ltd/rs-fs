@@ -20,13 +20,16 @@ use std::task::{
     Poll,
 };
 
-use qubit_io::AsyncInput;
+use qubit_io::{
+    AsyncInput,
+    BoxAsyncInput,
+};
 
 use crate::OpenedFileInfo;
 
 /// Type-erased asynchronous byte input associated with an opened file.
 pub struct AsyncFileReader {
-    inner: Pin<Box<dyn AsyncInput<Item = u8> + Send>>,
+    inner: BoxAsyncInput<dyn AsyncInput<Item = u8> + Send>,
     info: OpenedFileInfo,
 }
 
@@ -46,7 +49,7 @@ impl AsyncFileReader {
         inner: Box<dyn AsyncInput<Item = u8> + Send>,
     ) -> Self {
         Self {
-            inner: Box::into_pin(inner),
+            inner: BoxAsyncInput::new(inner),
             info,
         }
     }
@@ -82,8 +85,8 @@ impl AsyncInput for AsyncFileReader {
         // SAFETY: The caller guarantees the same range contract required by
         // the wrapped asynchronous input.
         unsafe {
-            this.inner
-                .as_mut()
+            Pin::new(&mut this.inner)
+                .get_pin_mut()
                 .poll_read_unchecked(cx, output, index, count)
         }
     }
