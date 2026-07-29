@@ -1,98 +1,193 @@
 # Qubit FS 用户指南
 
-`qubit-fs` 将应用层 filesystem facade 与 provider 层契约分开。核心 crate 不内置
-后端，也不选择异步运行时；provider 发现、凭据和配置属于
-[`qubit-fs-registry`](https://crates.io/crates/qubit-fs-registry)。
+`qubit-fs` 0.2.0 是适用于 Rust 1.94 及以上版本的 provider-neutral 文件系统抽象。它提供
+同步和异步应用门面，但不内置存储后端，也不绑定异步 runtime。
 
-## 应用与 provider 边界
+## 目的与读者
 
-应用通过 provider 实现创建具体 facade，并用逻辑 `Path` 表示每个资源。provider trait、
-request、session 和 envelope 只位于 `qubit_fs::spi`。
+本指南面向需要访问已配置 filesystem、但不希望把文件操作耦合到 provider 实现的应用开发者。
+它说明如何使用 `FileSystem` 与 `AsyncFileSystem`，以及如何根据可恢复失败的状态作出安全
+决策。
+
+provider 作者在 `qubit_fs::spi` 中实现扩展契约。provider 的发现、配置和凭据由
+`qubit-fs-registry` 负责；核心 crate 不会自行发现 provider，也不会自行选择 runtime。
+
+## 概念模型
+
+```text
+应用
+  │  使用 FileSystem / AsyncFileSystem 和逻辑 Path
+  ▼
+qubit-fs 门面 ───────────────► handle、option、outcome、typed failure
+  │
+  └── qubit_fs::spi ◄──────── provider 实现
+
+qubit-fs-registry ───────────► provider 发现、配置、凭据
+```
+
+一个 `FileSystem` 或 `AsyncFileSystem` 代表一次完成配置的 filesystem。endpoint、bucket、
+root、region 或 credential profile 不同，同一 provider 也可以产生多个门面。
+`FileSystemProperties` 是 identity、capability、limit 与路径约束的不可变快照，读取它不执行
+I/O。
+
+### 名称、地址与 secret
+
+| 类型 | 职责 | 凭据边界 |
+| --- | --- | --- |
+| `Path` | 一个已配置 filesystem 内的已验证逻辑名称 | 不是跨 filesystem 地址；门面操作还会按该 filesystem 的路径约束校验。 |
+| `Uri` | 用于持久化和选择的、不含 secret 的 canonical 地址 | 拒绝 userinfo、credential-like query field 与 fragment，并保留 RFC 3986 词法差异。 |
+| `ConnectionUri` | registry/配置入口 | 可以携带连接凭据，但 `Display` 与 `Debug` 会脱敏；不得记录或持久化原始连接文本。 |
+
+`ConnectionUri` 让 registry/provider 在受控边界消费凭据，再生成安全的 canonical `Uri`。
+它并不允许把 secret 放进 metadata、日志、普通 URI 或错误消息。
+
+## 安装与取得门面
+
+```toml
+[dependencies]
+qubit-fs = "0.2.0"
+```
+
+通过 provider 配置或 registry 集成取得已配置的 `FileSystem` 或 `AsyncFileSystem`。下列公共
+构造边界适用于实现 provider 或编写聚焦测试：
 
 ```rust,ignore
 use qubit_fs::{FileSystem, Path, ReadOptions};
 use qubit_fs::spi::FileSystemSpi;
 
 fn inspect<S: FileSystemSpi + 'static>(provider: S) -> qubit_fs::FsResult<()> {
-    let filesystem = FileSystem::from_spi(provider)?;
-    let path = Path::parse("/reports/2026/summary.csv")?;
-    let _metadata = filesystem.stat(&path)?;
-    let _reader = filesystem.open_reader(&path, ReadOptions::default())?;
+    let fs = FileSystem::from_spi(provider)?;
+    let report = Path::parse("/reports/2026/summary.csv")?;
+    let _metadata = fs.stat(&report)?;
+    let _reader = fs.open_reader(&report, ReadOptions::default())?;
     Ok(())
 }
 ```
 
-`FileSystemProperties` 是构造时不可变快照，包含 provider identity、capability、limit
-和 path constraint。`stat`、list、open、create、delete、copy、rename 与临时资源操作
-都可能执行 I/O。
+应用代码应停留在 `FileSystem` 和 `AsyncFileSystem`；provider trait、request、session 与
+envelope 都位于 `qubit_fs::spi`。
 
-## 路径与 URI
+## 真实场景：发布日报
 
-`Path` 表示经过验证的逻辑资源名。`Path::parse` 使用 hierarchical 验证；配置的
-`PathSemantics` 允许时，`Path::parse_literal` 保留 provider-specific 拼写。
-`RelativePath` 和 `PathComponent` 可构造安全的后代路径，且不能向上逃逸。
+假设一个任务需要把完成的报告复制到发布位置，再枚举发布目录供下游处理。失败后的决策取决于
+typed state 已证明了什么，而不仅是是否返回了 error。
 
-`Uri` 与 `ConnectionUri` 保留 RFC 3986 的词法结构，但拒绝 fragment、userinfo 和含
-credential 的 query field。它们是传输/配置值，不能取代 provider 对逻辑 `Path` 的验证。
-`UserMetadata` 同样拒绝 credential-like key，且 `Debug` 不显示 value。
-
-这些 URI 凭据边界会同时使用内置保守分类与应用规则；进程级脱敏策略中的 allow 规则不能
-让含凭据 URI 变为有效，也不能通过普通格式化暴露它。
-
-## 同步 I/O
-
-直接从 `FileSystem` 打开 reader 或 writer。句柄在 `OpenedFileInfo` 中保留 provider-opened
-identity，调用 `info()` 不会触发额外 provider I/O。
+### 同步工作流
 
 ```rust,ignore
-use qubit_fs::{FileSystem, Path, WriteOptions};
-use qubit_io::Output;
+use qubit_fs::{CopyOptions, FileSystem, ListOptions, Path};
 
-fn replace(fs: &FileSystem, path: &Path, bytes: &[u8]) -> qubit_fs::FsResult<()> {
-    let mut writer = fs.open_writer(path, WriteOptions::default())?;
-    writer.write_fully(bytes).map_err(|error| {
-        qubit_fs::FsError::from_io(error, qubit_fs::FsOperation::Write)
-    })?;
-    writer.commit().map_err(|failure| failure.into_error())?;
+fn publish(fs: &FileSystem, source: &Path, release_dir: &Path) -> qubit_fs::FsResult<()> {
+    let target = Path::parse("/releases/2026-07-30/summary.csv")?;
+
+    match fs.copy(source, &target, CopyOptions::default()) {
+        Ok(_outcome) => {}
+        Err(failure) => {
+            // 记录 failure.state() 与 failure.partial_stats()。若保留 writer，
+            // 在其 state 得到处理前继续持有它。
+            let (error, _, _, _) = failure.into_parts();
+            return Err(error);
+        }
+    }
+
+    let mut entries = fs.list(release_dir, ListOptions::default())?;
+    while let Some(entry) = entries.next_entry()? {
+        // 每次处理一个条目，并由应用设置数量上限。
+        let _path = entry.path;
+    }
     Ok(())
 }
 ```
 
-`FileWriter::commit` 返回带状态的 `WriteFailure`，用于区分 retryable、not-published、
-published 和 indeterminate；需要确认清理时保留 writer 并调用 `abort`。
-`DirectoryStream::next_entry` 是增量读取，应用必须自行限制收集数量。
+`DirectoryStream::next_entry` 按条目增量枚举。它避免把目录无界地收集到内存，也意味着已处理
+部分条目后仍可能发生错误。下游工作应具备幂等性，或在请求下一条目前记录检查点。
 
-`FileSystem::copy` 和 `FileSystem::rename` 分别返回 `CopyFailure` 与 `RenameFailure`。
-Required atomicity/durability 会在副作用前预检，成功 outcome 会报告实际达到的保证。
+`open_writer` 返回 `FileWriter`；写入字节后调用 `commit`。commit 失败会返回
+`WriteFailure`，其 state 区分 retryable/not-published、published 与 indeterminate。
+`write_all` 在需要恢复时会通过 typed `WriteAllFailure` 保留 writer。`rename` 返回
+`RenameFailure`；`copy` 返回 `CopyFailure`，其中包含 partial statistics，并会在适用时保留
+recovery writer。重试、`abort`、cleanup 或核对 source/target 前，都应先检查 state。
 
-## 异步 I/O
+只要门面能在本地确定所要求的 atomicity、durability 或其他 guarantee 无法满足，就会在产生
+副作用前进行检查。成功 outcome 会报告实际达到的保证。
 
-`AsyncFileSystem` 提供与同步 facade 对应的 runtime-neutral 方法；provider 契约是
-`spi::AsyncFileSystemSpi`，调用方可在任意运行时中 await facade 方法。
+### 异步工作流
+
+`AsyncFileSystem` 通过 runtime-neutral future 提供对应的门面操作。请在应用已有的 runtime
+上运行它们；`qubit-fs` 不要求 Tokio、`futures-io` 或其他 executor。
 
 ```rust,ignore
-use qubit_fs::{AsyncFileSystem, Path, ReadOptions};
+use qubit_fs::{AsyncFileSystem, CopyOptions, Path};
 
-async fn inspect(fs: &AsyncFileSystem, path: &Path) -> qubit_fs::FsResult<()> {
-    let _metadata = fs.stat(path).await?;
-    let _reader = fs.open_reader(path, ReadOptions::default()).await?;
-    Ok(())
+async fn publish_async(
+    fs: &AsyncFileSystem,
+    source: Path,
+    target: Path,
+) -> qubit_fs::FsResult<()> {
+    let mut operation = fs.begin_copy(source, target, CopyOptions::default())?;
+    match operation.execute().await {
+        Ok(_outcome) => Ok(()),
+        Err(failure) => {
+            // 保留 operation，并检查 failure.state() 以决定恢复动作。
+            let (error, _, _) = failure.into_parts();
+            Err(error)
+        }
+    }
 }
 ```
 
-`AsyncFileSystem::begin_copy` 会创建 `AsyncCopyOperation`。执行 future 一旦被 poll，
-若在完成前被 drop，操作会记录 indeterminate 状态且不启动额外 cleanup I/O。需要确认
-async writer 或临时资源的清理时必须显式 await。
+`begin_copy` 返回 `AsyncCopyOperation`，因为流式 copy 可能保留需要恢复的 async writer。
+调用 `execute(&mut self).await`，并在恢复责任结束前保留 operation。若 execution future
+已经被 poll、却在完成前被 drop，operation 会记录 indeterminate state；未被 poll 的 future
+被 drop 后 operation 仍是 ready。需要确认完成时，应显式 await async writer 和临时资源的
+cleanup。
 
-## 临时资源
+## 错误诊断与恢复
 
-`create_temp_file` 和 `create_temp_directory` 返回 facade-owned handle。`TempFile`、
-`TempDirectory`、`AsyncTempFile` 与 `AsyncTempDirectory` 都提供 `cleanup`、`keep`、
-`persist` 的显式生命周期操作。persist failure 保留 `NotPublished`、
-`PublishedSourceRetained` 或 `Indeterminate`，调用方可据此重试、清理或对账。
+`FsError` 包含 error kind、operation，以及可用的逻辑 path、source、target 与 provider
+context。诊断时先查看 kind 和 operation，再依据 typed failure state 选择安全的下一步。
 
-## 错误与保证
+| 场景 | API 表达的事实 | 常见下一步 |
+| --- | --- | --- |
+| `exists` 返回 `Ok(false)` | `stat` 明确返回 `NotFound` | 将资源视为不存在。 |
+| `exists` 返回 `Err` | 原因不是 `NotFound` | 处理该错误；权限、认证、超时和 I/O 不表示不存在。 |
+| copy/rename/write 失败 | typed state；copy 还提供 partial statistics，且可能保留 writer | 仅在 state 支持时重试；否则 abort、cleanup 或核对。 |
+| 临时资源 persist 失败 | `PersistFailureState` 为 `NotPublished`、`PublishedSourceRetained` 或 `Indeterminate` | 保留所有权、清理 retained source，或在再次发布前对账。 |
+| 所要求的保证不可用 | capability/requirement failure 可在副作用前被发现 | 更换 provider/options，或放宽要求。 |
 
-`FsError` 包含 error kind、operation 与可用的逻辑 source/target context。`exists` 只有
-明确收到 not-found 才返回 `false`；权限、认证、网络和超时仍是错误。只要 facade 能在
-本地判断某项保证不可满足，就会在副作用前完成 capability preflight。
+临时文件和目录是由门面拥有的 handle。`TempFile`、`TempDirectory` 及其 async 对应类型都
+提供显式 `cleanup`、`keep` 与 `persist`。可恢复失败后它们的 state 仍然有意义；不要依赖
+`Drop` 完成必须确认的 I/O 操作。
+
+## 排障
+
+**没有可用的 filesystem。** 仅使用 `qubit-fs` 时这是预期现象：它不含后端，也不选择
+provider。请通过 registry 或 provider 集成完成配置，再取得具体门面。
+
+**URI 校验失败，或日志只显示被遮蔽的值。** 仅在配置入口使用 `ConnectionUri`，通过受控的
+registry/provider 路径转换，并保存产生的 `Uri`。canonical `Uri` 不允许 userinfo、
+credential-like query field 或 fragment。
+
+**`exists` 没有返回 `false`。** 只有 `NotFound` 才映射为不存在。权限、认证、网络、超时和
+I/O error 表明尚未确定资源是否存在。
+
+**目录枚举在中途停止。** 目录读取是增量的，不是原子快照或预加载 vector。请在应用层保存进度，
+然后从安全检查点恢复或重启。
+
+**copy、write、rename 或临时发布可能已产生副作用。** 先读取 typed state。`Published` 与
+`Indeterminate` 需要对账；在完成恢复决策前，应保留所有 writer 或 temp handle。
+
+## 限制与非目标
+
+- 核心 crate 不提供本地、远程或对象存储后端。
+- 它不发现 provider、不管理凭据，也不绑定 async runtime。
+- 它不承诺每个 provider 支持全部操作或 guarantee。
+- 它不会把 object key 强制解释为层级路径，也不会在公共契约外规范化 provider 语义。
+- 它不会把增量目录枚举变成完整且原子的目录快照。
+
+## 交叉链接
+
+- [English README](../README.md) · [中文 README](../README.zh_CN.md)
+- [English user guide](user_guide.md)
+- [文件系统架构设计](file_system_design.zh_CN.md)
+- [API 文档](https://docs.rs/qubit-fs)
