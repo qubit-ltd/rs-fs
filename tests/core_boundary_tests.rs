@@ -19,12 +19,7 @@
 //! ```
 
 use qubit_fs::{
-    AsyncFileSystem,
-    FileSystem,
-    FileSystemId,
-    FileSystemInfo,
-    PathSemantics,
-    UserMetadata,
+    AsyncFileSystem, FileSystem, FileSystemId, FileSystemInfo, PathSemantics, UserMetadata,
 };
 
 /// Asserts that a facade can be cloned without requiring it to be copyable.
@@ -41,8 +36,7 @@ fn test_file_system_facades_are_clone() {
 #[test]
 fn test_file_system_info_stores_provider_as_text() {
     let info = FileSystemInfo::new(
-        FileSystemId::new("local-instance")
-            .expect("the filesystem ID should validate"),
+        FileSystemId::new("local-instance").expect("the filesystem ID should validate"),
         "local",
         PathSemantics::Hierarchical,
     );

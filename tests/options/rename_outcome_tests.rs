@@ -6,16 +6,13 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::{
-    AchievedAtomicity,
-    PublicationMethod,
-    RenameOutcome,
-    UserMetadata,
-};
+use qubit_fs::{AchievedAtomicity, Path, PublicationMethod, RenameOutcome, UserMetadata};
 
 #[test]
 fn rename_outcome_reports_actual_method_and_atomicity() {
     let outcome = RenameOutcome::new(
+        Path::parse("/source").expect("path must parse"),
+        Path::parse("/target").expect("path must parse"),
         AchievedAtomicity::NonAtomic,
         PublicationMethod::CopyThenDelete,
     );
@@ -27,6 +24,8 @@ fn rename_outcome_reports_actual_method_and_atomicity() {
 #[test]
 fn rename_outcome_preserves_validated_diagnostics() {
     let outcome = RenameOutcome::new(
+        Path::parse("/source").expect("path must parse"),
+        Path::parse("/target").expect("path must parse"),
         AchievedAtomicity::NonAtomic,
         PublicationMethod::CopyThenDelete,
     )

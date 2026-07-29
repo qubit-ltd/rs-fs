@@ -11,12 +11,7 @@
 use qubit_io::Output;
 
 use crate::{
-    DirEntry,
-    FsError,
-    FsResult,
-    PersistFailureState,
-    PersistOutcome,
-    WriteFailureState,
+    DirEntry, FsError, FsResult, PersistFailureState, PersistOutcome, WriteFailureState,
     WriteOutcome,
 };
 
@@ -83,10 +78,8 @@ impl SpiPersistFailure {
 /// Provider temporary-resource lifecycle session.
 pub trait TempResourceSpi: Send {
     /// Persists a temporary resource.
-    fn persist(
-        &mut self,
-        request: PersistRequest<'_>,
-    ) -> Result<PersistOutcome, SpiPersistFailure>;
+    fn persist(&mut self, request: PersistRequest<'_>)
+    -> Result<PersistOutcome, SpiPersistFailure>;
     /// Transfers source ownership to the caller.
     fn keep(&mut self) -> FsResult<()>;
     /// Cleans the temporary source.

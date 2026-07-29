@@ -8,17 +8,9 @@
 //! Copy operation options and policy types.
 
 use crate::{
-    AtomicityRequirement,
-    CopyConflictPolicy,
-    CopyMode,
-    DurabilityRequirement,
-    FileSystemCapabilities,
-    FileSystemCapability,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    MetadataPreservePolicy,
-    ServerSidePreference,
+    AtomicityRequirement, CopyConflictPolicy, CopyMode, DurabilityRequirement,
+    FileSystemCapabilities, FileSystemCapability, FsError, FsErrorKind, FsOperation,
+    MetadataPreservePolicy, ServerSidePreference,
 };
 
 /// Options controlling file, object, or tree copy operations.
@@ -82,10 +74,7 @@ impl CopyOptions {
     /// Returns [`FsErrorKind::RequirementNotMet`] with
     /// [`FileSystemCapability::ServerSideCopy`] when required server-side copy
     /// is unavailable.
-    pub fn validate_against(
-        &self,
-        capabilities: FileSystemCapabilities,
-    ) -> Result<(), FsError> {
+    pub fn validate_against(&self, capabilities: FileSystemCapabilities) -> Result<(), FsError> {
         if self.server_side == ServerSidePreference::Require
             && !capabilities.contains(FileSystemCapability::ServerSideCopy)
         {

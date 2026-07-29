@@ -32,10 +32,11 @@ handles retain explicit `abort`, `cleanup`, `keep`, or `persist` lifecycle opera
 recoverable failures. `AsyncFileSystem::begin_copy` returns an `AsyncCopyOperation`; poll its
 execution future with the application's runtime and inspect its state after cancellation.
 
-`Uri` and `ConnectionUri` preserve URI syntax while rejecting credential-bearing fields.
-Those credential boundaries remain enforced even when an application installs
-allow rules in its process-wide redaction default.
-`UserMetadata` likewise rejects credential-like keys. `FileSystemProperties` is an immutable,
+`Uri` rejects credential-bearing fields. `ConnectionUri` can carry credentials
+for connection use, but masks them in `Display` and `Debug`; applications must
+still avoid exposing the original value. `UserMetadata` keeps rejecting
+credential-like keys even when an application installs allow rules in its
+process-wide redaction default. `FileSystemProperties` is an immutable,
 non-I/O snapshot with capabilities, limits, and logical-path constraints.
 
 ## Documentation

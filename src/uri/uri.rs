@@ -1,10 +1,6 @@
 //! Secret-free resource URI values.
 
-use std::fmt::{
-    Display,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::{Display, Formatter, Result as FmtResult};
 
 use fluent_uri::Uri as FluentUri;
 use qubit_redact::RedactionPolicy;
@@ -99,12 +95,11 @@ pub(crate) fn reject_secrets(parsed: &FluentUri<String>) -> FsResult<()> {
     {
         return Err(invalid_uri("URI userinfo is not supported"));
     }
-    if parsed.query().is_some_and(|query| {
-        query.as_str().split('&').any(query_pair_is_sensitive)
-    }) {
-        return Err(invalid_uri(
-            "sensitive URI query fields are not supported",
-        ));
+    if parsed
+        .query()
+        .is_some_and(|query| query.as_str().split('&').any(query_pair_is_sensitive))
+    {
+        return Err(invalid_uri("sensitive URI query fields are not supported"));
     }
     Ok(())
 }

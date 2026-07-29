@@ -1,16 +1,8 @@
 //! One validated logical path component.
 
-use std::fmt::{
-    Display,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::{Display, Formatter, Result as FmtResult};
 
-use crate::{
-    FsError,
-    FsOperation,
-    FsResult,
-};
+use crate::{FsError, FsOperation, FsResult};
 
 /// A non-empty logical component that cannot express hierarchy or traversal.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]

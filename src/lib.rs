@@ -60,107 +60,36 @@ mod uri;
 
 pub use async_file_system::AsyncFileSystem;
 pub use copy::{
-    AsyncCopyFailure,
-    AsyncCopyOperation,
-    AsyncCopyOperationState,
-    CopyFailure,
-    CopyFailureState,
+    AsyncCopyFailure, AsyncCopyOperation, AsyncCopyOperationState, CopyFailure, CopyFailureState,
 };
-pub use error::{
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    FsResult,
-};
+pub use error::{FsError, FsErrorKind, FsOperation, FsResult};
 pub use file_system::FileSystem;
 pub use handle::{
-    AsyncDirectoryStream,
-    AsyncFileReader,
-    AsyncFileWriter,
-    DirectoryStream,
-    FileReader,
-    FileWriter,
-    WriteAllFailure,
-    WriteFailure,
-    WriteFailureState,
-    WriterState,
+    AsyncDirectoryStream, AsyncFileReader, AsyncFileWriter, DirectoryStream, FileReader,
+    FileWriter, WriteAllFailure, WriteFailure, WriteFailureState, WriterState,
 };
 pub use metadata::{
-    AchievedAtomicity,
-    Checksum,
-    ChecksumAlgorithm,
-    DirEntry,
-    FileKind,
-    FileMetadata,
-    FileSystemCapabilities,
-    FileSystemCapability,
-    FileSystemId,
-    FileSystemInfo,
-    FileSystemLimit,
-    FileSystemLimits,
-    NonSensitiveMetadata,
-    OpenedFileInfo,
-    PublicationMethod,
-    ResourceVersion,
-    UserMetadata,
-    WriteOutcome,
+    AchievedAtomicity, Checksum, ChecksumAlgorithm, DirEntry, FileKind, FileMetadata,
+    FileSystemCapabilities, FileSystemCapability, FileSystemId, FileSystemInfo, FileSystemLimit,
+    FileSystemLimits, NonSensitiveMetadata, OpenedFileInfo, PublicationMethod, ResourceVersion,
+    UserMetadata, WriteOutcome,
 };
 pub use options::{
-    AtomicityRequirement,
-    ChecksumPolicy,
-    CopyConflictPolicy,
-    CopyMethod,
-    CopyMode,
-    CopyOptions,
-    CopyOutcome,
-    CopyStats,
-    CreateDirectoryOptions,
-    CreateDirectoryOutcome,
-    DeleteOptions,
-    DeleteOutcome,
-    DurabilityRequirement,
-    ListOptions,
-    MetadataPreservePolicy,
-    PersistOptions,
-    ReadOptions,
-    RenameOptions,
-    RenameOutcome,
-    ServerSidePreference,
-    WriteDisposition,
-    WriteOptions,
-    WritePrecondition,
+    AtomicityRequirement, ChecksumPolicy, CopyConflictPolicy, CopyMethod, CopyMode, CopyOptions,
+    CopyOutcome, CopyStats, CreateDirectoryOptions, CreateDirectoryOutcome, DeleteOptions,
+    DeleteOutcome, DurabilityRequirement, ListOptions, MetadataPreservePolicy, PersistOptions,
+    ReadOptions, RenameOptions, RenameOutcome, ServerSidePreference, WriteDisposition,
+    WriteOptions, WritePrecondition,
 };
 pub use path::{
-    NativePathCodec,
-    NativePathCodecError,
-    Path,
-    PathComponent,
-    PathComponents,
-    PathSemantics,
+    NativePathCodec, NativePathCodecError, Path, PathComponent, PathComponents, PathSemantics,
     RelativePath,
 };
-pub use properties::{
-    FileSystemProperties,
-    PathConstraints,
-    PathForm,
-};
-pub use rename::{
-    RenameFailure,
-    RenameFailureState,
-};
+pub use properties::{FileSystemProperties, PathConstraints, PathForm};
+pub use rename::{RenameFailure, RenameFailureState};
 pub use temp::{
-    AsyncTempDirectory,
-    AsyncTempFile,
-    PersistFailure,
-    PersistFailureState,
-    PersistOutcome,
-    TempDirOptions as TempDirectoryOptions,
-    TempDirectory,
-    TempFile,
-    TempFileOptions,
+    AsyncTempDirectory, AsyncTempFile, PersistFailure, PersistFailureState, PersistOutcome,
+    TempDirOptions as TempDirectoryOptions, TempDirectory, TempFile, TempFileOptions,
     TempResourceState,
 };
-pub use uri::{
-    ConnectionUri,
-    Uri,
-};
+pub use uri::{ConnectionUri, Uri};

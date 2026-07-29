@@ -9,12 +9,7 @@
 //! Facade-resolved option values exposed read-only to providers.
 
 use crate::{
-    CopyOptions,
-    CreateDirectoryOptions,
-    DeleteOptions,
-    ListOptions,
-    ReadOptions,
-    RenameOptions,
+    CopyOptions, CreateDirectoryOptions, DeleteOptions, ListOptions, ReadOptions, RenameOptions,
     WriteOptions,
 };
 
@@ -47,13 +42,3 @@ resolved_options!(ResolvedCreateDirectoryOptions, CreateDirectoryOptions);
 resolved_options!(ResolvedDeleteOptions, DeleteOptions);
 resolved_options!(ResolvedCopyOptions, CopyOptions);
 resolved_options!(ResolvedRenameOptions, RenameOptions);
-
-/// Placeholder resolved persist options; persistence is implemented with temp
-/// handles.
-pub struct ResolvedPersistOptions;
-/// Placeholder resolved temporary-file options; temporary handles are
-/// implemented later.
-pub struct ResolvedTempFileOptions;
-/// Placeholder resolved temporary-directory options; temporary handles are
-/// implemented later.
-pub struct ResolvedTempDirectoryOptions;

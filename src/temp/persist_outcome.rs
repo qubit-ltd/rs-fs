@@ -8,13 +8,7 @@
 // qubit-style: allow all -- facade integration tests exercise this API group.
 //! Successful temporary resource persistence outcome.
 
-use crate::{
-    AchievedAtomicity,
-    NonSensitiveMetadata,
-    Path,
-    PublicationMethod,
-    UserMetadata,
-};
+use crate::{AchievedAtomicity, NonSensitiveMetadata, Path, PublicationMethod, UserMetadata};
 
 /// Confirmed result of publishing a temporary source to its final target.
 #[derive(Clone, Debug, PartialEq)]
@@ -41,11 +35,7 @@ impl PersistOutcome {
     /// An outcome without provider diagnostics.
     #[inline]
     #[must_use]
-    pub fn new(
-        target: Path,
-        atomicity: AchievedAtomicity,
-        method: PublicationMethod,
-    ) -> Self {
+    pub fn new(target: Path, atomicity: AchievedAtomicity, method: PublicationMethod) -> Self {
         Self {
             target,
             atomicity,

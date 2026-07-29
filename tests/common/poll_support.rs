@@ -7,10 +7,7 @@
 
 use std::future::Future;
 use std::pin::Pin;
-use std::task::{
-    Context,
-    Waker,
-};
+use std::task::{Context, Waker};
 
 /// Polls a future that is expected to complete without scheduling work.
 pub(crate) fn ready<F>(future: F) -> F::Output

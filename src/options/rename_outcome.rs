@@ -7,21 +7,15 @@
 // =============================================================================
 //! Rename operation outcome.
 
-use crate::{
-    AchievedAtomicity,
-    NonSensitiveMetadata,
-    Path,
-    PublicationMethod,
-    UserMetadata,
-};
+use crate::{AchievedAtomicity, NonSensitiveMetadata, Path, PublicationMethod, UserMetadata};
 
 /// Outcome of a rename, move, or provider-equivalent publication.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RenameOutcome {
     atomicity: AchievedAtomicity,
     method: PublicationMethod,
-    source: Option<Path>,
-    target: Option<Path>,
+    source: Path,
+    target: Path,
     diagnostics: NonSensitiveMetadata,
 }
 
@@ -29,6 +23,8 @@ impl RenameOutcome {
     /// Creates a rename outcome with explicit successful semantics.
     ///
     /// # Parameters
+    /// - `source`: Source identity supplied by the provider.
+    /// - `target`: Target identity supplied by the provider.
     /// - `atomicity`: Atomicity actually achieved.
     /// - `method`: Method used to publish the destination.
     ///
@@ -37,14 +33,16 @@ impl RenameOutcome {
     #[inline]
     #[must_use]
     pub fn new(
+        source: Path,
+        target: Path,
         atomicity: AchievedAtomicity,
         method: PublicationMethod,
     ) -> Self {
         Self {
             atomicity,
             method,
-            source: None,
-            target: None,
+            source,
+            target,
             diagnostics: NonSensitiveMetadata::new(),
         }
     }
@@ -56,19 +54,15 @@ impl RenameOutcome {
         self.diagnostics = NonSensitiveMetadata::from(diagnostics);
         self
     }
-    /// Returns the source identity attached by the facade.
+    /// Returns the source identity.
     #[must_use]
     pub fn source(&self) -> &Path {
-        self.source
-            .as_ref()
-            .expect("facade must bind rename source")
+        &self.source
     }
-    /// Returns the target identity attached by the facade.
+    /// Returns the target identity.
     #[must_use]
     pub fn target(&self) -> &Path {
-        self.target
-            .as_ref()
-            .expect("facade must bind rename target")
+        &self.target
     }
     /// Returns actual publication atomicity.
     #[must_use]
@@ -86,13 +80,9 @@ impl RenameOutcome {
         &self.diagnostics
     }
     /// Binds the facade-validated operation identities.
-    pub(crate) fn with_identity(
-        mut self,
-        source: &Path,
-        target: &Path,
-    ) -> Self {
-        self.source = Some(source.clone());
-        self.target = Some(target.clone());
+    pub(crate) fn with_identity(mut self, source: &Path, target: &Path) -> Self {
+        self.source = source.clone();
+        self.target = target.clone();
         self
     }
 }

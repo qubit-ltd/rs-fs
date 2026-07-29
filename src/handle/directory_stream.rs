@@ -8,22 +8,10 @@
 // qubit-style: allow source-test-pair
 //! Concrete synchronous directory stream handle.
 
-use std::fmt::{
-    Debug,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::{Debug, Formatter, Result as FmtResult};
 
 use crate::spi::DirectoryStreamSpi;
-use crate::{
-    DirEntry,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    FsResult,
-    ListOptions,
-    Path,
-};
+use crate::{DirEntry, FsError, FsErrorKind, FsOperation, FsResult, ListOptions, Path};
 
 /// Type-erased synchronous directory enumeration handle.
 pub struct DirectoryStream {
@@ -76,17 +64,17 @@ impl DirectoryStream {
             ));
         }
         match self.session.next_entry() {
-            Ok(Some(entry)) if self.entry_satisfies_options(&entry) => {
-                Ok(Some(entry))
-            }
+            Ok(Some(entry)) if self.entry_satisfies_options(&entry) => Ok(Some(entry)),
             Ok(Some(_)) => {
                 self.terminal = true;
-                Err(self.contextual_error(FsError::new(
-                    FsErrorKind::ProviderContractViolation,
-                    FsOperation::ValidateProviderOutcome,
-                    "provider returned directory entry outside requested root",
-                )
-                .with_path(self.root.clone())))
+                Err(self.contextual_error(
+                    FsError::new(
+                        FsErrorKind::ProviderContractViolation,
+                        FsOperation::ValidateProviderOutcome,
+                        "provider returned directory entry outside requested root",
+                    )
+                    .with_path(self.root.clone()),
+                ))
             }
             Ok(None) => {
                 self.terminal = true;
@@ -104,7 +92,7 @@ impl DirectoryStream {
         let Some(relative) = relative_path(&self.root, &entry.path) else {
             return false;
         };
-        if !self.options.recursive && relative.contains('/') {
+        if !self.options.recursive && self.options.prefix.is_none() && relative.contains('/') {
             return false;
         }
         if self.options.include_metadata && entry.metadata.is_none() {

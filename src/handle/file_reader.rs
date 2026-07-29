@@ -7,11 +7,7 @@
 // =============================================================================
 //! Concrete synchronous file reader handle.
 
-use std::fmt::{
-    Debug,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::{Debug, Formatter, Result as FmtResult};
 use std::io::Result as IoResult;
 
 use qubit_io::Input;
@@ -38,10 +34,7 @@ impl FileReader {
     /// A concrete file reader handle.
     #[inline]
     #[must_use]
-    pub(crate) fn new(
-        info: OpenedFileInfo,
-        inner: Box<dyn Input<Item = u8> + Send>,
-    ) -> Self {
+    pub(crate) fn new(info: OpenedFileInfo, inner: Box<dyn Input<Item = u8> + Send>) -> Self {
         Self { inner, info }
     }
 

@@ -1,7 +1,6 @@
 #[test]
 fn test_write_all_commit_failure_retains_open_writer_for_recovery() {
-    let (filesystem, _, _) =
-        crate::handle_support::filesystem(true, Vec::new());
+    let (filesystem, _, _) = crate::handle_support::filesystem(true, Vec::new());
     let failure = filesystem
         .write_all(
             &qubit_fs::Path::parse("/target").expect("path should parse"),

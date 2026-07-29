@@ -52,10 +52,7 @@ pub trait NativePathCodec {
     ///
     /// Returns an error when `text` is not canonical or cannot be represented
     /// by the selected native encoding.
-    fn encode(
-        &self,
-        text: &str,
-    ) -> Result<Self::NativePathBuf, NativePathCodecError>;
+    fn encode(&self, text: &str) -> Result<Self::NativePathBuf, NativePathCodecError>;
 
     /// Decodes a native path representation into canonical UTF-8 text.
     ///
@@ -63,8 +60,5 @@ pub trait NativePathCodec {
     ///
     /// Returns an error when `native` is invalid for the selected encoding or
     /// cannot be represented without loss.
-    fn decode(
-        &self,
-        native: &Self::NativePath,
-    ) -> Result<String, NativePathCodecError>;
+    fn decode(&self, native: &Self::NativePath) -> Result<String, NativePathCodecError>;
 }

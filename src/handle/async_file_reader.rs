@@ -8,17 +8,10 @@
 // qubit-style: allow all -- facade integration tests exercise this API group.
 //! Concrete asynchronous file reader handle.
 
-use std::fmt::{
-    Debug,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::{Debug, Formatter, Result as FmtResult};
 use std::io::Result as IoResult;
 use std::pin::Pin;
-use std::task::{
-    Context,
-    Poll,
-};
+use std::task::{Context, Poll};
 
 use qubit_io::AsyncInput;
 
@@ -41,10 +34,7 @@ impl AsyncFileReader {
     /// A pinned, type-erased asynchronous file reader.
     #[inline]
     #[must_use]
-    pub(crate) fn new(
-        info: OpenedFileInfo,
-        inner: Box<dyn AsyncInput<Item = u8> + Send>,
-    ) -> Self {
+    pub(crate) fn new(info: OpenedFileInfo, inner: Box<dyn AsyncInput<Item = u8> + Send>) -> Self {
         Self {
             inner: Box::into_pin(inner),
             info,

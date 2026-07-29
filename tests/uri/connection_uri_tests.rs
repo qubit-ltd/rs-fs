@@ -6,10 +6,8 @@ use qubit_fs::ConnectionUri;
 /// values.
 #[test]
 fn test_connection_uri_redacts_password_and_duplicate_sensitive_query() {
-    let uri = ConnectionUri::parse(
-        "s3://user:secret@bucket/key?token=one&x=1&token=two",
-    )
-    .expect("connection URI should parse");
+    let uri = ConnectionUri::parse("s3://user:secret@bucket/key?token=one&x=1&token=two")
+        .expect("connection URI should parse");
     let display = uri.to_string();
     let debug = format!("{uri:?}");
     for rendered in [display, debug] {
@@ -40,8 +38,8 @@ fn test_connection_uri_preserves_authority_and_redacts_userinfo_password() {
 /// Verifies a username-only authority is still treated as credential material.
 #[test]
 fn test_connection_uri_redacts_username_only_authority() {
-    let uri = ConnectionUri::parse("s3://access-key@bucket/key")
-        .expect("connection URI should parse");
+    let uri =
+        ConnectionUri::parse("s3://access-key@bucket/key").expect("connection URI should parse");
     let rendered = uri.to_string();
     assert!(!rendered.contains("access-key"));
     assert!(rendered.contains("@bucket/key"));

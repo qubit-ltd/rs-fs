@@ -8,11 +8,7 @@
 // qubit-style: allow all -- facade integration tests exercise this API group.
 //! Directory entry model.
 
-use crate::{
-    FileKind,
-    FileMetadata,
-    Path,
-};
+use crate::{FileKind, FileMetadata, Path};
 
 /// One entry returned by directory listing.
 #[derive(Clone, Debug, PartialEq)]

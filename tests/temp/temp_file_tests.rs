@@ -1,7 +1,6 @@
 #[test]
 fn test_required_non_atomic_temp_persist_retains_cleanup_responsibility() {
-    let (filesystem, cleanup_calls, _) =
-        crate::handle_support::filesystem(false, Vec::new());
+    let (filesystem, cleanup_calls, _) = crate::handle_support::filesystem(false, Vec::new());
     let mut temporary = filesystem
         .create_temp_file(qubit_fs::TempFileOptions::default())
         .expect("temporary file should open");
@@ -29,8 +28,7 @@ fn test_required_non_atomic_temp_persist_retains_cleanup_responsibility() {
 }
 
 #[test]
-fn test_temp_file_illegal_target_fails_preflight_without_provider_persist_and_remains_owned()
- {
+fn test_temp_file_illegal_target_fails_preflight_without_provider_persist_and_remains_owned() {
     let (filesystem, cleanup_calls, persist_calls) =
         crate::handle_support::filesystem(false, Vec::new());
     let mut temporary = filesystem
@@ -38,8 +36,7 @@ fn test_temp_file_illegal_target_fails_preflight_without_provider_persist_and_re
         .expect("temporary file should open");
     let error = temporary
         .persist(
-            &qubit_fs::Path::parse("relative")
-                .expect("relative path should parse"),
+            &qubit_fs::Path::parse("relative").expect("relative path should parse"),
             qubit_fs::PersistOptions::default(),
         )
         .expect_err("illegal target must fail before provider persist");

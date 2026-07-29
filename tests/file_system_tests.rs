@@ -9,49 +9,19 @@
 
 use std::sync::{
     Arc,
-    atomic::{
-        AtomicUsize,
-        Ordering,
-    },
+    atomic::{AtomicUsize, Ordering},
 };
 
 use qubit_fs::spi::{
-    CreateDirectoryRequest,
-    CreateTempDirectoryRequest,
-    CreateTempFileRequest,
-    DeleteDirectoryRequest,
-    DeleteFileRequest,
-    FileSystemSpi,
-    ListRequest,
-    OpenReaderRequest,
-    OpenWriterRequest,
-    OpenedDirectoryStream,
-    OpenedReader,
-    OpenedTempDirectory,
-    OpenedTempFile,
-    OpenedWriter,
-    RenameRequest,
-    SpiRenameFailure,
-    StatRequest,
-    StatResponse,
+    CreateDirectoryRequest, CreateTempDirectoryRequest, CreateTempFileRequest,
+    DeleteDirectoryRequest, DeleteFileRequest, FileSystemSpi, ListRequest, OpenReaderRequest,
+    OpenWriterRequest, OpenedDirectoryStream, OpenedReader, OpenedTempDirectory, OpenedTempFile,
+    OpenedWriter, RenameRequest, SpiRenameFailure, StatRequest, StatResponse,
 };
 use qubit_fs::{
-    CreateDirectoryOutcome,
-    DeleteOutcome,
-    FileMetadata,
-    FileSystem,
-    FileSystemCapabilities,
-    FileSystemId,
-    FileSystemInfo,
-    FileSystemLimits,
-    FileSystemProperties,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    FsResult,
-    Path,
-    PathConstraints,
-    RenameOutcome,
+    CreateDirectoryOutcome, DeleteOutcome, FileMetadata, FileSystem, FileSystemCapabilities,
+    FileSystemId, FileSystemInfo, FileSystemLimits, FileSystemProperties, FsError, FsErrorKind,
+    FsOperation, FsResult, Path, PathConstraints, RenameOutcome,
 };
 
 struct CountingSpi {
@@ -97,34 +67,22 @@ impl FileSystemSpi for CountingSpi {
     fn open_writer(&self, _: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
         Err(Self::unsupported())
     }
-    fn create_directory(
-        &self,
-        _: CreateDirectoryRequest<'_>,
-    ) -> FsResult<CreateDirectoryOutcome> {
+    fn create_directory(&self, _: CreateDirectoryRequest<'_>) -> FsResult<CreateDirectoryOutcome> {
         Err(Self::unsupported())
     }
     fn delete_file(&self, _: DeleteFileRequest<'_>) -> FsResult<DeleteOutcome> {
         Err(Self::unsupported())
     }
-    fn delete_directory(
-        &self,
-        _: DeleteDirectoryRequest<'_>,
-    ) -> FsResult<DeleteOutcome> {
+    fn delete_directory(&self, _: DeleteDirectoryRequest<'_>) -> FsResult<DeleteOutcome> {
         Err(Self::unsupported())
     }
-    fn rename(
-        &self,
-        _: RenameRequest<'_>,
-    ) -> Result<RenameOutcome, SpiRenameFailure> {
+    fn rename(&self, _: RenameRequest<'_>) -> Result<RenameOutcome, SpiRenameFailure> {
         Err(SpiRenameFailure::new(
             Self::unsupported(),
             qubit_fs::RenameFailureState::Unchanged,
         ))
     }
-    fn create_temp_file(
-        &self,
-        _: CreateTempFileRequest,
-    ) -> FsResult<OpenedTempFile> {
+    fn create_temp_file(&self, _: CreateTempFileRequest) -> FsResult<OpenedTempFile> {
         Err(Self::unsupported())
     }
     fn create_temp_directory(
@@ -192,8 +150,7 @@ fn test_stat_rejects_path_with_different_semantics_before_spi_call() {
         wrong_stat_path: false,
     })
     .expect("facade should construct");
-    let hierarchical =
-        Path::parse("object").expect("hierarchical path should parse");
+    let hierarchical = Path::parse("object").expect("hierarchical path should parse");
     let error = filesystem
         .stat(&hierarchical)
         .expect_err("different path semantics must fail before SPI");

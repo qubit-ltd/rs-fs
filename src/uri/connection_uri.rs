@@ -1,24 +1,13 @@
 //! Redacted connection URI values.
 
-use std::fmt::{
-    Debug,
-    Display,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
 
 use fluent_uri::Uri as FluentUri;
-use qubit_redact::{
-    Redactor,
-    Sensitivity,
-};
+use qubit_redact::{Redactor, Sensitivity};
 
 use crate::FsResult;
 
-use super::{
-    invalid_uri,
-    uri::parse_canonical,
-};
+use super::{invalid_uri, uri::parse_canonical};
 
 /// A connection URI whose normal formatting always redacts credentials.
 #[derive(Clone, Eq, PartialEq)]
