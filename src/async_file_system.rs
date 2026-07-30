@@ -129,6 +129,15 @@ impl AsyncFileSystem {
         Ok(response.into_metadata())
     }
 
+    /// Asynchronously reports whether the path exists.
+    pub async fn exists(&self, path: &Path) -> FsResult<bool> {
+        match self.stat(path).await {
+            Ok(_) => Ok(true),
+            Err(error) if error.kind() == FsErrorKind::NotFound => Ok(false),
+            Err(error) => Err(error.with_operation(FsOperation::Exists)),
+        }
+    }
+
     /// Asynchronously opens a validated directory stream.
     pub async fn list(
         &self,
@@ -136,6 +145,7 @@ impl AsyncFileSystem {
         options: ListOptions,
     ) -> FsResult<AsyncDirectoryStream> {
         self.validate_path(path, FsOperation::List)?;
+        options.validate()?;
         self.require(FileSystemCapability::List, FsOperation::List, path)?;
         let options = ListOptions {
             page_size: self
@@ -187,6 +197,45 @@ impl AsyncFileSystem {
             })?;
         self.validate_opened_info(opened.info(), path)?;
         Ok(opened.into_reader())
+    }
+
+    /// Asynchronously reads an entire file while enforcing a strict byte cap.
+    pub async fn read_all(
+        &self,
+        path: &Path,
+        options: ReadOptions,
+        max_bytes: usize,
+    ) -> FsResult<Vec<u8>> {
+        let mut reader = self.open_reader(path, options).await?;
+        let mut bytes = Vec::new();
+        let mut buffer = [0_u8; 8192];
+        loop {
+            let remaining = max_bytes.saturating_sub(bytes.len());
+            let read_len = remaining.saturating_add(1).min(buffer.len());
+            let read = reader
+                .read_async(&mut buffer[..read_len])
+                .await
+                .map_err(|error| {
+                    self.enrich(
+                        FsError::from_stream_io(error, FsOperation::Read, path),
+                        path,
+                        FsOperation::Read,
+                    )
+                })?;
+            if read == 0 {
+                return Ok(bytes);
+            }
+            if read > remaining {
+                return Err(FsError::new(
+                    FsErrorKind::ResourceLimitExceeded,
+                    FsOperation::Read,
+                    "file exceeds the configured read limit",
+                )
+                .with_path(path.clone())
+                .with_provider(self.properties.info().provider_id()));
+            }
+            bytes.extend_from_slice(&buffer[..read]);
+        }
     }
 
     /// Asynchronously opens a validated writer and verifies its identity.
@@ -317,7 +366,20 @@ impl AsyncFileSystem {
                     target,
                 ))
             }
-            Ok(outcome) => Ok(outcome.with_identity(source, target)),
+            Ok(outcome)
+                if outcome.source() != source || outcome.target() != target =>
+            {
+                Err(self.contextual_rename_failure(
+                    self.contract_error(
+                        source,
+                        "provider returned a rename outcome with different identities",
+                    ),
+                    RenameFailureState::Indeterminate,
+                    source,
+                    target,
+                ))
+            }
+            Ok(outcome) => Ok(outcome),
             Err(failure) => {
                 let (error, state) = failure.into_parts();
                 Err(self.contextual_rename_failure(error, state, source, target))
@@ -777,7 +839,12 @@ impl AsyncFileSystem {
                             source,
                         ),
                         CopyFailureState::PartiallyPublished,
-                        fallback_failure_stats(bytes),
+                        fallback_failure_stats(
+                            writer_slot
+                                .as_ref()
+                                .expect("writer is retained before transfer")
+                                .written_bytes(),
+                        ),
                         source,
                         target,
                     )
@@ -797,7 +864,7 @@ impl AsyncFileSystem {
                             target,
                         ),
                         CopyFailureState::PartiallyPublished,
-                        fallback_failure_stats(bytes),
+                        fallback_failure_stats(writer.written_bytes()),
                         source,
                         target,
                     )
@@ -812,7 +879,7 @@ impl AsyncFileSystem {
             self.contextual_copy_failure(
                 FsError::from_stream_io(error, FsOperation::Write, target),
                 CopyFailureState::PartiallyPublished,
-                fallback_failure_stats(bytes),
+                fallback_failure_stats(writer.written_bytes()),
                 source,
                 target,
             )
@@ -831,7 +898,7 @@ impl AsyncFileSystem {
             self.contextual_copy_failure(
                 error,
                 state,
-                fallback_failure_stats(bytes),
+                fallback_failure_stats(writer.written_bytes()),
                 source,
                 target,
             )
@@ -1008,7 +1075,6 @@ impl AsyncFileSystem {
 /// Builds partial statistics for a failed streamed copy.
 fn fallback_failure_stats(bytes: u64) -> CopyStats {
     CopyStats {
-        files: 1,
         bytes,
         failed: 1,
         ..CopyStats::default()

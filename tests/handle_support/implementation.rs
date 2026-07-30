@@ -774,8 +774,14 @@ impl TempResourceSpi for Temp {
                 state,
             ));
         }
+        let target = if request.target().as_str() == "/wrong-persist-target" {
+            Path::parse("/reported-persist-target")
+                .expect("generated path should parse")
+        } else {
+            request.target().clone()
+        };
         Ok(PersistOutcome::new(
-            request.target().clone(),
+            target,
             if self.non_atomic {
                 AchievedAtomicity::NonAtomic
             } else {

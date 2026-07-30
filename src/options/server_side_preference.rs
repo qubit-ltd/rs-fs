@@ -19,9 +19,9 @@ pub enum ServerSidePreference {
 }
 
 impl Default for ServerSidePreference {
-    /// Prefers server-side copy by default.
+    /// Disables server-side copy by default.
     #[inline]
     fn default() -> Self {
-        Self::Prefer
+        Self::Disable
     }
 }

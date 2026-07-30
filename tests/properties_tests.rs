@@ -89,10 +89,9 @@ fn test_path_constraints_accept_matching_forms() {
     assert!(PathConstraints::either().validate(&absolute).is_ok());
 }
 
-/// Verifies a safe facade stream fallback is exposed as an effective copy
-/// capability when the provider supplies both required byte primitives.
+/// Verifies stream fallback does not overstate a provider copy capability.
 #[test]
-fn test_file_system_properties_derives_copy_from_read_and_write() {
+fn test_file_system_properties_does_not_derive_copy_from_read_and_write() {
     let properties = FileSystemProperties::new(
         FileSystemInfo::new(
             FileSystemId::new("effective-copy").expect("id should parse"),
@@ -107,7 +106,7 @@ fn test_file_system_properties_derives_copy_from_read_and_write() {
     )
     .expect("properties should validate");
     assert!(
-        properties
+        !properties
             .capabilities()
             .contains(FileSystemCapability::Copy)
     );

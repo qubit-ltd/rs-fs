@@ -18,6 +18,7 @@ use qubit_fs::{
     MetadataPreservePolicy,
     Path,
     ServerSidePreference,
+    WriterState,
 };
 
 use crate::async_recording_spi::{
@@ -261,6 +262,14 @@ fn test_async_stream_fallback_cancellation_is_indeterminate_with_recovery() {
         assert!(
             operation.has_recovery_writer(),
             "{stage:?} should retain writer"
+        );
+        assert_eq!(
+            WriterState::Indeterminate,
+            operation
+                .recovery_writer()
+                .expect("cancelled fallback should retain its writer")
+                .state(),
+            "{stage:?} may have started writer I/O"
         );
         drop(operation);
         assert_eq!(

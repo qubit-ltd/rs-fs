@@ -84,6 +84,7 @@ enum CopyResponse {
     CompletedAtomicDowngrade,
     CompletedDurabilityDowngrade,
     CompletedServerSideRequiredButNative,
+    CompletedServerSideWhenDisabled,
     CompletedMetadataDowngrade,
     CompletedInvalidSkippedStats,
     CompletedInvalidFailedStats,
@@ -155,7 +156,11 @@ fn properties(response: &CopyResponse) -> FileSystemProperties {
     if matches!(response, CopyResponse::CompletedDurabilityDowngrade) {
         capabilities = capabilities.with(FileSystemCapability::DurableCopy);
     }
-    if matches!(response, CopyResponse::CompletedServerSideRequiredButNative) {
+    if matches!(
+        response,
+        CopyResponse::CompletedServerSideRequiredButNative
+            | CopyResponse::CompletedServerSideWhenDisabled
+    ) {
         capabilities = capabilities.with(FileSystemCapability::ServerSideCopy);
     }
     FileSystemProperties::new(
@@ -333,6 +338,13 @@ impl FileSystemSpi for RecordingSpi {
                 Ok(CopyAttempt::Completed(CopyOutcome::new(
                     CopyStats::default(),
                     CopyMethod::Native,
+                    AchievedAtomicity::Atomic,
+                )))
+            }
+            CopyResponse::CompletedServerSideWhenDisabled => {
+                Ok(CopyAttempt::Completed(CopyOutcome::new(
+                    CopyStats::default(),
+                    CopyMethod::ServerSide,
                     AchievedAtomicity::Atomic,
                 )))
             }
@@ -840,6 +852,33 @@ fn test_copy_completed_non_server_side_method_violates_required_server_side() {
             },
         )
         .expect_err("native result cannot satisfy required server-side copy");
+    assert_eq!(CopyFailureState::Published, failure.state());
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
+    assert_eq!(
+        ["try_copy"],
+        calls.lock().expect("calls lock should succeed").as_slice()
+    );
+}
+
+/// Verifies a provider cannot ignore an explicit request to avoid server-side
+/// copy while still reporting a server-side completed outcome.
+#[test]
+fn test_copy_completed_server_side_method_violates_disabled_preference() {
+    let (filesystem, calls, _) =
+        recording_filesystem(CopyResponse::CompletedServerSideWhenDisabled);
+    let failure = filesystem
+        .copy(
+            &path("/source"),
+            &path("/target"),
+            CopyOptions {
+                server_side: ServerSidePreference::Disable,
+                ..CopyOptions::default()
+            },
+        )
+        .expect_err("server-side outcome must honor the disabled preference");
     assert_eq!(CopyFailureState::Published, failure.state());
     assert_eq!(
         FsErrorKind::ProviderContractViolation,

@@ -103,9 +103,9 @@ impl AsyncCopyOperation {
             state,
             writer,
         } = self;
-        let mut guard = CopyCancellationGuard::start(state);
+        let mut guard = CopyCancellationGuard::start(state, writer);
         let result = file_system
-            .execute_copy(source, target, options, writer)
+            .execute_copy(source, target, options, guard.writer_mut())
             .await;
         guard.finish(&result);
         result
@@ -116,18 +116,28 @@ impl AsyncCopyOperation {
 /// I/O.
 struct CopyCancellationGuard<'a> {
     state: &'a mut AsyncCopyOperationState,
+    writer: &'a mut Option<AsyncFileWriter>,
     finished: bool,
 }
 
 impl<'a> CopyCancellationGuard<'a> {
     /// Starts tracking cancellation immediately before the first provider
     /// await.
-    fn start(state: &'a mut AsyncCopyOperationState) -> Self {
+    fn start(
+        state: &'a mut AsyncCopyOperationState,
+        writer: &'a mut Option<AsyncFileWriter>,
+    ) -> Self {
         *state = AsyncCopyOperationState::Running;
         Self {
             state,
+            writer,
             finished: false,
         }
+    }
+
+    /// Borrows the recovery writer slot for the running operation.
+    fn writer_mut(&mut self) -> &mut Option<AsyncFileWriter> {
+        self.writer
     }
 
     /// Records the completed result and disables cancellation handling.
@@ -147,6 +157,9 @@ impl Drop for CopyCancellationGuard<'_> {
             *self.state = AsyncCopyOperationState::Failed(
                 CopyFailureState::Indeterminate,
             );
+            if let Some(writer) = self.writer.as_mut() {
+                writer.mark_indeterminate();
+            }
         }
     }
 }

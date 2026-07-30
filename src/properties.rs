@@ -194,15 +194,10 @@ impl FileSystemProperties {
     }
 }
 
-/// Derives facade-guaranteed capabilities from safe core compositions.
+/// Preserves only capabilities explicitly advertised by the provider.
 fn effective_capabilities(
-    mut capabilities: FileSystemCapabilities,
+    capabilities: FileSystemCapabilities,
 ) -> FileSystemCapabilities {
-    if capabilities.contains(crate::FileSystemCapability::Read)
-        && capabilities.contains(crate::FileSystemCapability::Write)
-    {
-        capabilities.insert(crate::FileSystemCapability::Copy);
-    }
     capabilities
 }
 

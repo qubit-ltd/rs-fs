@@ -116,6 +116,41 @@ fn test_temp_file_persist_marks_resource_persisted() {
     );
 }
 
+/// Verifies a provider cannot claim that a temporary resource was persisted to
+/// a target different from the caller's requested final path.
+#[test]
+fn test_temp_file_persist_rejects_wrong_provider_target() {
+    let (filesystem, _, _) =
+        crate::handle_support::filesystem(false, Vec::new());
+    let mut temporary = filesystem
+        .create_temp_file(qubit_fs::TempFileOptions::default())
+        .expect("temporary file should open");
+    let requested = qubit_fs::Path::parse("/wrong-persist-target")
+        .expect("target should parse");
+
+    let failure = temporary
+        .persist(
+            &requested,
+            qubit_fs::PersistOptions {
+                atomicity: qubit_fs::AtomicityRequirement::Preferred,
+                ..qubit_fs::PersistOptions::default()
+            },
+        )
+        .expect_err("wrong provider target must violate the contract");
+    assert_eq!(
+        qubit_fs::FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
+    assert_eq!(
+        qubit_fs::PersistFailureState::Indeterminate,
+        failure.state()
+    );
+    assert_eq!(
+        qubit_fs::TempResourceState::Indeterminate,
+        temporary.state()
+    );
+}
+
 /// Verifies a cleaned temporary file cannot be persisted or kept and does not
 /// cause a second best-effort cleanup when dropped.
 #[test]

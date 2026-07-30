@@ -7,6 +7,14 @@
 // =============================================================================
 //! Directory listing options.
 
+use crate::{
+    FsError,
+    FsErrorKind,
+    FsOperation,
+    FsResult,
+    RelativePath,
+};
+
 /// Options controlling directory or prefix listing.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ListOptions {
@@ -25,4 +33,39 @@ pub struct ListOptions {
     /// `/root/nested/item`, while `prefix: Some("item")` only matches an
     /// immediate child named `item`.
     pub prefix: Option<String>,
+}
+
+impl ListOptions {
+    /// Validates pagination and canonical provider-facing prefix values.
+    ///
+    /// # Errors
+    ///
+    /// Returns an invalid-options error when the page size is zero or the
+    /// prefix is not a canonical relative path.
+    pub fn validate(&self) -> FsResult<()> {
+        if self.page_size == Some(0) {
+            return Err(FsError::new(
+                FsErrorKind::InvalidOptions,
+                FsOperation::List,
+                "list page size must be greater than zero",
+            ));
+        }
+        if let Some(prefix) = self.prefix.as_deref() {
+            let parsed = RelativePath::parse(prefix).map_err(|_| {
+                FsError::new(
+                    FsErrorKind::InvalidOptions,
+                    FsOperation::List,
+                    "list prefix must be a canonical relative path",
+                )
+            })?;
+            if parsed.as_str() != prefix {
+                return Err(FsError::new(
+                    FsErrorKind::InvalidOptions,
+                    FsOperation::List,
+                    "list prefix must be a canonical relative path",
+                ));
+            }
+        }
+        Ok(())
+    }
 }
