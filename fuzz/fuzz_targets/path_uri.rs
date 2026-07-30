@@ -5,6 +5,10 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+//! Exercises public path and URI parsers with arbitrary UTF-8 text.
+//!
+//! The target asserts the no-panic invariant and bounds each input to 4096
+//! bytes so parser allocations and runtime remain useful for fuzzing.
 
 #![no_main]
 
