@@ -25,7 +25,11 @@ use crate::FsResult;
 
 use super::{
     invalid_uri,
-    uri::parse_canonical,
+    uri::{
+        Uri,
+        parse_canonical,
+        query_pair_is_sensitive,
+    },
 };
 
 /// A connection URI whose normal formatting always redacts credentials.
@@ -45,6 +49,39 @@ impl ConnectionUri {
             return Err(invalid_uri("URI fragments are not supported"));
         }
         Ok(Self { parsed })
+    }
+
+    /// Returns the normalized URI scheme without exposing credential-bearing
+    /// components.
+    #[must_use]
+    #[inline(always)]
+    pub fn scheme(&self) -> &str {
+        self.parsed.scheme().as_str()
+    }
+
+    /// Returns whether the URI embeds a password or sensitive query value.
+    ///
+    /// Username-only userinfo is not considered a secret because it can be
+    /// paired with an external credential reference.
+    #[must_use]
+    pub fn has_embedded_secret(&self) -> bool {
+        let has_password = self.parsed.authority().is_some_and(|authority| {
+            authority_has_password(authority.as_str())
+        });
+        let has_sensitive_query = self.parsed.query().is_some_and(|query| {
+            query.as_str().split('&').any(query_pair_is_sensitive)
+        });
+        has_password || has_sensitive_query
+    }
+
+    /// Converts this connection URI to a secret-free resource URI.
+    ///
+    /// # Errors
+    ///
+    /// Returns an invalid-URI error when the connection URI contains userinfo
+    /// or sensitive query fields that cannot appear in [`Uri`].
+    pub fn try_to_uri(&self) -> FsResult<Uri> {
+        Uri::parse(self.parsed.as_str())
     }
 
     /// Gives `inspect` ephemeral access to the unredacted URI text.
@@ -74,6 +111,13 @@ impl ConnectionUri {
         }
         rendered
     }
+}
+
+/// Returns whether an authority embeds a userinfo password.
+fn authority_has_password(authority: &str) -> bool {
+    authority
+        .rsplit_once('@')
+        .is_some_and(|(userinfo, _)| userinfo.contains(':'))
 }
 
 impl Display for ConnectionUri {
