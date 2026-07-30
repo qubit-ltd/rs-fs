@@ -22,7 +22,14 @@ pub struct OpenedAsyncReader {
 
 impl OpenedAsyncReader {
     /// Wraps a provider-opened reader session and its claimed identity.
-    #[inline(always)]
+    ///
+    /// # Parameters
+    /// - `info`: Identity claimed for the opened resource.
+    /// - `reader`: Provider asynchronous byte-input session.
+    ///
+    /// # Returns
+    /// An opened-reader envelope for facade validation.
+    #[inline]
     #[must_use]
     pub fn new(
         info: OpenedFileInfo,
@@ -32,6 +39,9 @@ impl OpenedAsyncReader {
     }
 
     /// Returns the immutable provider-opened identity.
+    ///
+    /// # Returns
+    /// The identity claimed by the provider.
     #[inline(always)]
     #[must_use]
     pub fn info(&self) -> &OpenedFileInfo {
@@ -39,6 +49,9 @@ impl OpenedAsyncReader {
     }
 
     /// Transfers the validated reader into the facade handle.
+    ///
+    /// # Returns
+    /// A facade-owned asynchronous reader.
     #[inline(always)]
     #[must_use]
     pub(crate) fn into_reader(self) -> AsyncFileReader {

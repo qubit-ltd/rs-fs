@@ -20,7 +20,14 @@ pub struct OpenedAsyncTempFile {
 
 impl OpenedAsyncTempFile {
     /// Wraps an asynchronous temporary-file handle.
-    #[inline(always)]
+    ///
+    /// # Parameters
+    /// - `info`: Identity claimed for the temporary file.
+    /// - `session`: Provider lifecycle session.
+    ///
+    /// # Returns
+    /// An asynchronous temporary-file envelope for facade validation.
+    #[inline]
     #[must_use]
     pub fn new(
         info: OpenedFileInfo,
@@ -30,6 +37,9 @@ impl OpenedAsyncTempFile {
     }
 
     /// Returns the immutable provider-opened identity.
+    ///
+    /// # Returns
+    /// The identity claimed by the provider.
     #[inline(always)]
     #[must_use]
     pub const fn info(&self) -> &OpenedFileInfo {
@@ -37,6 +47,9 @@ impl OpenedAsyncTempFile {
     }
 
     /// Transfers the provider session into the facade handle.
+    ///
+    /// # Returns
+    /// The claimed identity and provider lifecycle session.
     #[inline(always)]
     #[must_use]
     pub(crate) fn into_parts(

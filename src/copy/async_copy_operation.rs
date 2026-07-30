@@ -55,7 +55,10 @@ impl AsyncCopyOperation {
     }
 
     /// Returns the immutable source path.
-    #[inline]
+    ///
+    /// # Returns
+    /// The source path captured when the operation was created.
+    #[inline(always)]
     #[must_use]
     pub const fn source(&self) -> &Path {
         &self.source

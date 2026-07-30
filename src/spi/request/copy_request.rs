@@ -21,8 +21,16 @@ pub struct CopyRequest<'a> {
 
 impl<'a> CopyRequest<'a> {
     /// Creates this request inside the facade boundary.
+    ///
+    /// # Parameters
+    /// - `source`: Validated source path.
+    /// - `target`: Validated destination path.
+    /// - `options`: Facade-resolved copy options.
+    ///
+    /// # Returns
+    /// A provider copy request borrowing both paths.
     #[allow(dead_code)]
-    #[inline(always)]
+    #[inline]
     pub(crate) const fn new(
         source: &'a Path,
         target: &'a Path,
@@ -36,6 +44,9 @@ impl<'a> CopyRequest<'a> {
     }
 
     /// Returns the source path.
+    ///
+    /// # Returns
+    /// The validated source path.
     #[inline(always)]
     #[must_use]
     pub const fn source(&self) -> &'a Path {
@@ -43,6 +54,9 @@ impl<'a> CopyRequest<'a> {
     }
 
     /// Returns the target path.
+    ///
+    /// # Returns
+    /// The validated destination path.
     #[inline(always)]
     #[must_use]
     pub const fn target(&self) -> &'a Path {
@@ -50,6 +64,9 @@ impl<'a> CopyRequest<'a> {
     }
 
     /// Returns resolved options.
+    ///
+    /// # Returns
+    /// The immutable facade-resolved copy options.
     #[inline(always)]
     #[must_use]
     pub const fn options(&self) -> &ResolvedCopyOptions {

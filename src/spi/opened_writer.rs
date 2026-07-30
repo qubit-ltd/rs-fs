@@ -27,7 +27,7 @@ impl OpenedWriter {
     ///
     /// # Returns
     /// An opened-writer envelope for facade validation.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn new(info: OpenedFileInfo, writer: Box<dyn FileWriterSpi>) -> Self {
         Self { info, writer }

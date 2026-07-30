@@ -18,13 +18,22 @@ pub struct CreateTempFileRequest {
 
 impl CreateTempFileRequest {
     /// Creates this request inside the facade boundary.
+    ///
+    /// # Parameters
+    /// - `options`: Validated temporary-file creation options.
+    ///
+    /// # Returns
+    /// A provider temporary-file request.
     #[allow(dead_code)]
-    #[inline(always)]
+    #[inline]
     pub(crate) const fn new(options: TempFileOptions) -> Self {
         Self { options }
     }
 
     /// Returns requested temporary-file options.
+    ///
+    /// # Returns
+    /// The immutable temporary-file creation options.
     #[inline(always)]
     #[must_use]
     pub const fn options(&self) -> &TempFileOptions {

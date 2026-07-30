@@ -28,7 +28,7 @@ impl OpenedReader {
     ///
     /// # Returns
     /// An opened-reader envelope for facade validation.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn new(
         info: OpenedFileInfo,

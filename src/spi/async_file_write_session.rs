@@ -26,6 +26,9 @@ pub trait AsyncFileWriteSession: AsyncOutput<Item = u8> + Send {
     /// # Returns
     /// A future resolving to the actual publication method and atomicity, or a
     /// typed failure that preserves provider-confirmed publication progress.
+    ///
+    /// # Errors
+    /// Resolves to a typed write failure when publication cannot be confirmed.
     fn commit_async<'a>(
         self: Pin<&'a mut Self>,
     ) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>>;
@@ -34,6 +37,9 @@ pub trait AsyncFileWriteSession: AsyncOutput<Item = u8> + Send {
     ///
     /// # Returns
     /// A future resolving when cleanup is confirmed.
+    ///
+    /// # Errors
+    /// Resolves to the provider cleanup failure with filesystem context.
     fn abort_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<()>>;
 
     /// Performs nonblocking local cancellation during writer drop.

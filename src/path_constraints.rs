@@ -25,6 +25,9 @@ pub struct PathConstraints {
 
 impl PathConstraints {
     /// Creates constraints accepting only absolute paths.
+    ///
+    /// # Returns
+    /// Constraints rejecting every relative path.
     #[inline(always)]
     #[must_use]
     pub const fn absolute() -> Self {
@@ -34,6 +37,9 @@ impl PathConstraints {
     }
 
     /// Creates constraints accepting only relative paths.
+    ///
+    /// # Returns
+    /// Constraints rejecting every absolute path.
     #[inline(always)]
     #[must_use]
     pub const fn relative() -> Self {
@@ -43,6 +49,9 @@ impl PathConstraints {
     }
 
     /// Creates constraints accepting either logical path form.
+    ///
+    /// # Returns
+    /// Constraints accepting absolute and relative paths.
     #[inline(always)]
     #[must_use]
     pub const fn either() -> Self {
@@ -52,6 +61,9 @@ impl PathConstraints {
     }
 
     /// Returns the configured accepted path form.
+    ///
+    /// # Returns
+    /// The immutable accepted path-form policy.
     #[inline(always)]
     #[must_use]
     pub const fn form(&self) -> PathForm {

@@ -28,6 +28,13 @@ pub(in crate::copy) struct CopyCancellationGuard<'a> {
 impl<'a> CopyCancellationGuard<'a> {
     /// Starts tracking cancellation immediately before the first provider
     /// await.
+    ///
+    /// # Parameters
+    /// - `state`: Operation lifecycle state updated on cancellation.
+    /// - `writer`: Recovery-writer slot retained across provider I/O.
+    ///
+    /// # Returns
+    /// An armed cancellation guard borrowing both state locations.
     #[inline]
     pub(in crate::copy) fn start(
         state: &'a mut AsyncCopyOperationState,
@@ -42,6 +49,9 @@ impl<'a> CopyCancellationGuard<'a> {
     }
 
     /// Borrows the recovery writer slot for the running operation.
+    ///
+    /// # Returns
+    /// The mutable slot used to retain an opened recovery writer.
     #[inline(always)]
     pub(in crate::copy) fn writer_mut(
         &mut self,
@@ -50,6 +60,12 @@ impl<'a> CopyCancellationGuard<'a> {
     }
 
     /// Records the completed result and disables cancellation handling.
+    ///
+    /// # Parameters
+    /// - `result`: Final copy outcome or typed failure.
+    ///
+    /// # Returns
+    /// The unchanged result after updating operation state and recovery facts.
     #[inline]
     pub(in crate::copy) fn finish(
         &mut self,

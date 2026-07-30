@@ -22,12 +22,22 @@ pub struct PersistRequest<'a> {
 
 impl<'a> PersistRequest<'a> {
     /// Creates the request within the facade boundary.
-    #[inline(always)]
+    ///
+    /// # Parameters
+    /// - `target`: Validated persistence destination.
+    /// - `options`: Validated persistence requirements.
+    ///
+    /// # Returns
+    /// A provider persistence request borrowing `target`.
+    #[inline]
     pub(crate) const fn new(target: &'a Path, options: PersistOptions) -> Self {
         Self { target, options }
     }
 
     /// Returns the validated destination path.
+    ///
+    /// # Returns
+    /// The validated persistence destination.
     #[inline(always)]
     #[must_use]
     pub const fn target(&self) -> &'a Path {
@@ -35,6 +45,9 @@ impl<'a> PersistRequest<'a> {
     }
 
     /// Returns persistence requirements.
+    ///
+    /// # Returns
+    /// The immutable persistence requirements.
     #[inline(always)]
     #[must_use]
     pub const fn options(&self) -> &PersistOptions {

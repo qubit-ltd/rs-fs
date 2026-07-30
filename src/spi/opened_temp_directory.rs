@@ -27,7 +27,7 @@ impl OpenedTempDirectory {
     ///
     /// # Returns
     /// A temporary-directory envelope for facade validation.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn new(
         info: OpenedFileInfo,

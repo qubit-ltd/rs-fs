@@ -29,7 +29,7 @@ impl StatResponse {
     ///
     /// # Returns
     /// A path-bound metadata response.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn new(path: Path, metadata: FileMetadata) -> Self {
         Self { path, metadata }

@@ -27,7 +27,7 @@ impl OpenedTempFile {
     ///
     /// # Returns
     /// A temporary-file envelope for facade validation.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn new(
         info: OpenedFileInfo,
