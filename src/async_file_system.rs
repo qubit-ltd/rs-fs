@@ -682,6 +682,48 @@ impl AsyncFileSystem {
                 target,
             ));
         }
+        if let Some(length) = metadata.len {
+            if let Err(error) = self
+                .properties
+                .limits()
+                .validate_read_range(source, Some(length))
+            {
+                return Err(self.contextual_copy_failure(
+                    error,
+                    CopyFailureState::Unchanged,
+                    CopyStats::default(),
+                    source,
+                    target,
+                ));
+            }
+            let length = match usize::try_from(length) {
+                Ok(length) => length,
+                Err(_) => {
+                    return Err(self.contextual_copy_failure(
+                        FsError::new(
+                            FsErrorKind::ResourceLimitExceeded,
+                            FsOperation::Copy,
+                            "source length cannot fit in a write session",
+                        ),
+                        CopyFailureState::Unchanged,
+                        CopyStats::default(),
+                        source,
+                        target,
+                    ));
+                }
+            };
+            if let Err(error) =
+                self.properties.limits().validate_write_size(target, length)
+            {
+                return Err(self.contextual_copy_failure(
+                    error,
+                    CopyFailureState::Unchanged,
+                    CopyStats::default(),
+                    source,
+                    target,
+                ));
+            }
+        }
         let mut reader = self
             .open_reader(source, ReadOptions::default())
             .await

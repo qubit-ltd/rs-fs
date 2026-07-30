@@ -142,6 +142,39 @@ fn test_async_declined_copy_rejects_incompatible_fallback_options() {
     }
 }
 
+/// Rejects a known source length over either stream limit before opening
+/// fallback handles or exposing a recovery writer.
+#[test]
+fn test_async_stream_fallback_rejects_known_length_over_limits_before_opening_handles()
+ {
+    let configs = [
+        AsyncRecordingConfig {
+            maximum_read_range_bytes: Some(4),
+            ..AsyncRecordingConfig::default()
+        },
+        AsyncRecordingConfig {
+            maximum_write_bytes: Some(4),
+            ..AsyncRecordingConfig::default()
+        },
+    ];
+    for config in configs {
+        let (file_system, probe) = async_recording_file_system(config);
+        let mut operation = file_system
+            .begin_copy(
+                path("/source"),
+                path("/target"),
+                CopyOptions::default(),
+            )
+            .expect("copy preflight should succeed before source stat");
+        let failure = ready(operation.execute())
+            .expect_err("known source length over a stream limit must fail");
+        assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
+        assert_eq!(CopyFailureState::Unchanged, failure.state());
+        assert!(!operation.has_recovery_writer());
+        assert_eq!(vec!["try_copy", "stat"], probe.calls());
+    }
+}
+
 /// Applies the same no-fallback rule to requirements that pass normal copy
 /// preflight because the provider advertises the corresponding capability.
 #[test]
