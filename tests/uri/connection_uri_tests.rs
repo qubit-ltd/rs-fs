@@ -31,6 +31,20 @@ fn test_connection_uri_redacts_password_and_duplicate_sensitive_query() {
     }
 }
 
+/// Verifies generated credential text never crosses a normal display or debug
+/// boundary.
+#[test]
+fn test_connection_uri_redacts_generated_secret_text() {
+    let secret = "fuzz-derived-secret-42";
+    let uri = ConnectionUri::parse(&format!(
+        "s3://user:{secret}@bucket/key?token={secret}"
+    ))
+    .expect("connection URI should parse");
+    assert!(uri.has_embedded_secret());
+    assert!(!uri.to_string().contains(secret));
+    assert!(!format!("{uri:?}").contains(secret));
+}
+
 /// Verifies connection URIs keep fragments outside their credential boundary.
 #[test]
 fn test_connection_uri_rejects_fragment() {

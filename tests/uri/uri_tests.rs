@@ -53,6 +53,17 @@ fn test_uri_preserves_raw_path_and_ordered_duplicate_query() {
     assert_eq!(uri.query(), Some("x=1&x=2"));
 }
 
+/// Verifies a canonical secret-free URI spelling can be parsed again without
+/// changing URI identity.
+#[test]
+fn test_uri_canonical_text_round_trips() {
+    let uri =
+        Uri::parse("S3://bucket/a%2Fb?x=1&x=2").expect("URI should parse");
+    let reparsed =
+        Uri::parse(uri.as_str()).expect("canonical URI should reparse");
+    assert_eq!(uri, reparsed);
+}
+
 /// Verifies parsed URI accessors distinguish a missing authority and query
 /// while preserving the complete canonical spelling.
 #[test]
