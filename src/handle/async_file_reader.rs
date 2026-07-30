@@ -29,7 +29,9 @@ use crate::OpenedFileInfo;
 
 /// Type-erased asynchronous byte input associated with an opened file.
 pub struct AsyncFileReader {
+    /// Pinned provider byte input.
     inner: BoxAsyncInput<dyn AsyncInput<Item = u8> + Send>,
+    /// Stable identity and metadata captured at open time.
     info: OpenedFileInfo,
 }
 

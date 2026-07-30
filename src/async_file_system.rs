@@ -14,6 +14,10 @@ use qubit_io::{
     AsyncOutput,
 };
 
+use crate::copy::{
+    fallback_failure_stats,
+    from_writer_state,
+};
 use crate::spi::{
     AsyncFileSystemSpi,
     CopyAttempt,
@@ -80,7 +84,9 @@ use crate::{
 /// the cancellation-safe copy operation entry point.
 #[derive(Clone)]
 pub struct AsyncFileSystem {
+    /// Provider implementation receiving validated asynchronous requests.
     spi: Arc<dyn AsyncFileSystemSpi>,
+    /// Immutable provider properties captured when the facade was created.
     properties: Arc<FileSystemProperties>,
 }
 
@@ -850,7 +856,14 @@ impl AsyncFileSystem {
                                 FsOperation::Read,
                                 source,
                             ),
-                            CopyFailureState::PartiallyPublished,
+                            from_writer_state(
+                                writer_slot
+                                    .as_ref()
+                                    .expect(
+                                        "writer is retained before transfer",
+                                    )
+                                    .state(),
+                            ),
                             fallback_failure_stats(
                                 writer_slot
                                     .as_ref()
@@ -877,7 +890,7 @@ impl AsyncFileSystem {
                                 FsOperation::Write,
                                 target,
                             ),
-                            CopyFailureState::PartiallyPublished,
+                            from_writer_state(writer.state()),
                             fallback_failure_stats(writer.written_bytes()),
                             source,
                             target,
@@ -892,7 +905,7 @@ impl AsyncFileSystem {
             writer.flush_async().await.map_err(|error| {
                 self.contextual_copy_failure(
                     FsError::from_stream_io(error, FsOperation::Write, target),
-                    CopyFailureState::PartiallyPublished,
+                    from_writer_state(writer.state()),
                     fallback_failure_stats(writer.written_bytes()),
                     source,
                     target,
@@ -903,15 +916,7 @@ impl AsyncFileSystem {
                 .expect("writer is retained before commit");
             let write_outcome =
                 writer.commit_async().await.map_err(|error| {
-                    let state = match writer.state() {
-                        crate::WriterState::Published => {
-                            CopyFailureState::Published
-                        }
-                        crate::WriterState::Indeterminate => {
-                            CopyFailureState::Indeterminate
-                        }
-                        _ => CopyFailureState::PartiallyPublished,
-                    };
+                    let state = from_writer_state(writer.state());
                     self.contextual_copy_failure(
                         error,
                         state,
@@ -1087,14 +1092,5 @@ impl AsyncFileSystem {
         self.validate_path(source, FsOperation::PersistTemp)?;
         self.validate_path(target, FsOperation::PersistTemp)?;
         options.validate_against(self.properties.capabilities())
-    }
-}
-
-/// Builds partial statistics for a failed streamed copy.
-fn fallback_failure_stats(bytes: u64) -> CopyStats {
-    CopyStats {
-        bytes,
-        failed: 1,
-        ..CopyStats::default()
     }
 }

@@ -39,11 +39,27 @@ fn path(value: &str) -> Path {
 /// Covers every failed streamed I/O stage while retaining the recovery writer.
 #[test]
 fn test_async_stream_fallback_failures_retain_recovery_writer() {
-    for stage in [
-        AsyncCopyStage::ReaderRead,
-        AsyncCopyStage::WriterWrite,
-        AsyncCopyStage::WriterFlush,
-        AsyncCopyStage::WriterCommit,
+    for (stage, expected, writer_state) in [
+        (
+            AsyncCopyStage::ReaderRead,
+            CopyFailureState::Unchanged,
+            WriterState::Open,
+        ),
+        (
+            AsyncCopyStage::WriterWrite,
+            CopyFailureState::Indeterminate,
+            WriterState::Indeterminate,
+        ),
+        (
+            AsyncCopyStage::WriterFlush,
+            CopyFailureState::Indeterminate,
+            WriterState::Indeterminate,
+        ),
+        (
+            AsyncCopyStage::WriterCommit,
+            CopyFailureState::Unchanged,
+            WriterState::NotPublished,
+        ),
     ] {
         let (file_system, _) =
             async_recording_file_system(AsyncRecordingConfig {
@@ -59,17 +75,22 @@ fn test_async_stream_fallback_failures_retain_recovery_writer() {
             .expect("preflight should succeed");
         let failure =
             ready(operation.execute()).expect_err("injected stage should fail");
-        assert_eq!(CopyFailureState::PartiallyPublished, failure.state());
+        assert_eq!(expected, failure.state());
         assert_eq!(FsErrorKind::Io, failure.error().kind());
         assert!(
             operation.has_recovery_writer(),
             "{stage:?} should retain writer"
         );
         assert_eq!(
-            AsyncCopyOperationState::Failed(
-                CopyFailureState::PartiallyPublished
-            ),
+            AsyncCopyOperationState::Failed(expected),
             operation.state()
+        );
+        assert_eq!(
+            writer_state,
+            operation
+                .recovery_writer()
+                .expect("failed fallback retains its writer")
+                .state()
         );
     }
 }
@@ -78,14 +99,26 @@ fn test_async_stream_fallback_failures_retain_recovery_writer() {
 /// state when the declined native copy reaches commit.
 #[test]
 fn test_async_stream_fallback_commit_failure_preserves_certainty() {
-    for (writer_failure, expected) in [
+    for (writer_failure, expected, writer_state) in [
+        (
+            qubit_fs::WriteFailureState::RetryableNotPublished,
+            CopyFailureState::Unchanged,
+            WriterState::Open,
+        ),
+        (
+            qubit_fs::WriteFailureState::NotPublished,
+            CopyFailureState::Unchanged,
+            WriterState::NotPublished,
+        ),
         (
             qubit_fs::WriteFailureState::Published,
             CopyFailureState::Published,
+            WriterState::Published,
         ),
         (
             qubit_fs::WriteFailureState::Indeterminate,
             CopyFailureState::Indeterminate,
+            WriterState::Indeterminate,
         ),
     ] {
         let (file_system, _) =
@@ -103,6 +136,13 @@ fn test_async_stream_fallback_commit_failure_preserves_certainty() {
         let failure = ready(operation.execute())
             .expect_err("writer commit failure should propagate");
         assert_eq!(expected, failure.state());
+        assert_eq!(
+            writer_state,
+            operation
+                .recovery_writer()
+                .expect("failed commit retains its writer")
+                .state()
+        );
     }
 }
 

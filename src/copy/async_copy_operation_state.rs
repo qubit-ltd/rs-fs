@@ -20,5 +20,8 @@ pub enum AsyncCopyOperationState {
     /// A copy outcome was returned successfully.
     Completed,
     /// The operation failed with its confirmed publication state.
-    Failed(CopyFailureState),
+    Failed(
+        /// Confirmed destination publication state at failure time.
+        CopyFailureState,
+    ),
 }

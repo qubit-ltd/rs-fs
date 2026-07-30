@@ -20,7 +20,9 @@ use crate::OpenedFileInfo;
 
 /// Type-erased byte input explicitly associated with an opened file.
 pub struct FileReader {
+    /// Provider byte input.
     inner: Box<dyn Input<Item = u8> + Send>,
+    /// Stable identity and metadata captured at open time.
     info: OpenedFileInfo,
 }
 

@@ -15,6 +15,11 @@ use qubit_io::{
     Output,
 };
 
+use crate::copy::{
+    fallback_failure_stats,
+    from_write_failure_state,
+    from_writer_state,
+};
 use crate::spi::{
     CopyAttempt,
     CopyRequest,
@@ -73,14 +78,15 @@ use crate::{
     TempFileOptions,
     WriteAllFailure,
     WriteDisposition,
-    WriteFailureState,
     WriteOptions,
 };
 
 /// Application-facing synchronous filesystem facade.
 #[derive(Clone)]
 pub struct FileSystem {
+    /// Provider implementation receiving validated synchronous requests.
     spi: Arc<dyn FileSystemSpi>,
+    /// Immutable provider properties captured when the facade was created.
     properties: Arc<FileSystemProperties>,
 }
 
@@ -774,7 +780,7 @@ impl FileSystem {
                 Err(error) => {
                     return Err(self.copy_failure(
                         self.io_error(source, FsOperation::Read, error),
-                        CopyFailureState::PartiallyPublished,
+                        from_writer_state(writer.state()),
                         fallback_failure_stats(writer.written_bytes()),
                         Some(writer),
                     ));
@@ -788,7 +794,7 @@ impl FileSystem {
             {
                 return Err(self.copy_failure(
                     self.io_error(target, FsOperation::Write, error),
-                    CopyFailureState::PartiallyPublished,
+                    from_writer_state(writer.state()),
                     fallback_failure_stats(writer.written_bytes()),
                     Some(writer),
                 ));
@@ -798,7 +804,7 @@ impl FileSystem {
         if let Err(error) = Output::flush(&mut writer) {
             return Err(self.copy_failure(
                 self.io_error(target, FsOperation::Write, error),
-                CopyFailureState::PartiallyPublished,
+                from_writer_state(writer.state()),
                 fallback_failure_stats(writer.written_bytes()),
                 Some(writer),
             ));
@@ -807,16 +813,7 @@ impl FileSystem {
             Ok(outcome) => outcome,
             Err(failure) => {
                 let (error, state) = failure.into_parts();
-                let state = match state {
-                    WriteFailureState::Published => CopyFailureState::Published,
-                    WriteFailureState::Indeterminate => {
-                        CopyFailureState::Indeterminate
-                    }
-                    WriteFailureState::RetryableNotPublished
-                    | WriteFailureState::NotPublished => {
-                        CopyFailureState::PartiallyPublished
-                    }
-                };
+                let state = from_write_failure_state(state);
                 return Err(self.copy_failure(
                     error,
                     state,
@@ -1109,15 +1106,5 @@ impl FileSystem {
         error: IoError,
     ) -> FsError {
         FsError::from_stream_io(error, operation, path)
-    }
-}
-
-/// Builds accurate progress for a fallback failure after its destination writer
-/// was opened.
-fn fallback_failure_stats(bytes: u64) -> CopyStats {
-    CopyStats {
-        bytes,
-        failed: 1,
-        ..CopyStats::default()
     }
 }

@@ -8,5 +8,11 @@
 //! Private implementation details for copy orchestration.
 
 mod copy_cancellation_guard;
+mod fallback_failure_state;
 
 pub(super) use copy_cancellation_guard::CopyCancellationGuard;
+pub(crate) use fallback_failure_state::{
+    fallback_failure_stats,
+    from_write_failure_state,
+    from_writer_state,
+};

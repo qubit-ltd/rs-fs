@@ -28,11 +28,17 @@ use super::internal::CopyCancellationGuard;
 /// An owning copy request whose recovery writer remains accessible after
 /// failure.
 pub struct AsyncCopyOperation {
+    /// Facade used to validate and execute the pending operation.
     pub(crate) file_system: AsyncFileSystem,
+    /// Immutable validated source path.
     source: Path,
+    /// Immutable validated destination path.
     target: Path,
+    /// Facade-resolved copy policy.
     options: ResolvedCopyOptions,
+    /// Observable lifecycle state.
     state: AsyncCopyOperationState,
+    /// Destination writer retained when recovery remains possible.
     writer: Option<AsyncFileWriter>,
 }
 

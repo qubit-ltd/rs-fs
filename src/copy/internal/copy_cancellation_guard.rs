@@ -20,8 +20,11 @@ use crate::{
 /// Marks a polled operation indeterminate if cancellation interrupts provider
 /// I/O.
 pub(in crate::copy) struct CopyCancellationGuard<'a> {
+    /// Borrowed operation state updated when execution finishes or is dropped.
     state: &'a mut AsyncCopyOperationState,
+    /// Borrowed slot retaining an opened destination writer.
     writer: &'a mut Option<AsyncFileWriter>,
+    /// Whether normal completion disarmed cancellation handling.
     finished: bool,
 }
 
