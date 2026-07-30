@@ -36,13 +36,11 @@ const MAX_FUZZ_INPUT_LEN: usize = 4096;
 /// query value.
 fn secret_text(data: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut secret = String::with_capacity(data.len().min(64) * 2);
+    let mut secret = String::from("fuzz-secret-");
+    secret.reserve(data.len().min(64) * 2);
     for byte in data.iter().take(64) {
         secret.push(HEX[usize::from(byte >> 4)] as char);
         secret.push(HEX[usize::from(byte & 0x0f)] as char);
-    }
-    if secret.is_empty() {
-        secret.push_str("00");
     }
     secret
 }
