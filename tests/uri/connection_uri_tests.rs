@@ -8,7 +8,10 @@
 
 //! Tests for redacted connection URIs.
 
-use qubit_fs::ConnectionUri;
+use qubit_fs::{
+    ConnectionUri,
+    Uri,
+};
 
 /// Verifies connection URI formatting redacts all sensitive duplicate query
 /// values.
@@ -77,4 +80,42 @@ fn test_connection_uri_exposes_unredacted_text_only_to_callback() {
         uri.expose_unredacted(str::to_owned)
     );
     assert!(!uri.to_string().contains("raw-secret"));
+}
+
+/// Verifies structured inspection exposes the normalized scheme without
+/// exposing credentials and classifies only secret-bearing URI components.
+#[test]
+fn test_connection_uri_exposes_safe_scheme_and_secret_presence() {
+    let password = ConnectionUri::parse("S3://user:secret@bucket/key")
+        .expect("connection URI should parse");
+    let sensitive_query = ConnectionUri::parse("s3://bucket/key?token=secret")
+        .expect("connection URI should parse");
+    let username_only = ConnectionUri::parse("s3://user@bucket/key")
+        .expect("connection URI should parse");
+
+    assert_eq!(password.scheme(), "s3");
+    assert!(password.has_embedded_secret());
+    assert!(sensitive_query.has_embedded_secret());
+    assert!(!username_only.has_embedded_secret());
+}
+
+/// Verifies converting a connection URI to a secret-free URI preserves valid
+/// resource locations and rejects embedded credentials.
+#[test]
+fn test_connection_uri_try_to_uri_rejects_embedded_secrets() {
+    let safe = ConnectionUri::parse("s3://bucket/key?region=cn")
+        .expect("connection URI should parse");
+    let password = ConnectionUri::parse("s3://user:secret@bucket/key")
+        .expect("connection URI should parse");
+    let sensitive_query = ConnectionUri::parse("s3://bucket/key?token=secret")
+        .expect("connection URI should parse");
+
+    assert_eq!(
+        safe.try_to_uri()
+            .expect("secret-free connection URI must convert"),
+        Uri::parse("s3://bucket/key?region=cn")
+            .expect("test resource URI must parse"),
+    );
+    assert!(password.try_to_uri().is_err());
+    assert!(sensitive_query.try_to_uri().is_err());
 }
