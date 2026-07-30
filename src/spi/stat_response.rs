@@ -16,7 +16,9 @@ use crate::{
 
 /// Provider metadata response bound to the path it describes.
 pub struct StatResponse {
+    /// Logical path described by the response.
     path: Path,
+    /// Provider metadata snapshot for `path`.
     metadata: FileMetadata,
 }
 

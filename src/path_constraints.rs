@@ -20,6 +20,7 @@ use crate::{
 /// Immutable path form constraints attached to one filesystem snapshot.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PathConstraints {
+    /// Accepted absolute-versus-relative path policy.
     form: PathForm,
 }
 

@@ -15,6 +15,8 @@ macro_rules! resolved_options {
         /// Immutable options resolved by the facade before provider dispatch.
         #[derive(Clone)]
         pub struct $name {
+            /// Caller options retained after facade validation and
+            /// normalization.
             options: $options,
         }
 

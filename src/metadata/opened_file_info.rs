@@ -17,8 +17,11 @@ use crate::{
 /// Stable file identity plus an optional metadata snapshot captured at open.
 #[derive(Clone, Debug, PartialEq)]
 pub struct OpenedFileInfo {
+    /// Stable identity of the filesystem that opened the handle.
     filesystem_id: FileSystemId,
+    /// Logical resource path fixed at open time.
     path: Path,
+    /// Optional metadata captured without an additional lookup.
     metadata: Option<FileMetadata>,
 }
 

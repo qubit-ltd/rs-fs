@@ -16,7 +16,13 @@ use crate::CopyOutcome;
 #[non_exhaustive]
 pub enum CopyAttempt {
     /// A provider completed the copy.
-    Completed(CopyOutcome),
+    Completed(
+        /// Provider-confirmed completed copy outcome.
+        CopyOutcome,
+    ),
     /// The facade may select its later fallback.
-    Declined(CopyDeclineReason),
+    Declined(
+        /// Reason the provider declined native execution.
+        CopyDeclineReason,
+    ),
 }

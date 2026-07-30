@@ -18,7 +18,10 @@ use crate::UserMetadata;
 /// The inner [`UserMetadata`] is not mutably exposed, so every value of this
 /// type retains the wrapper invariant after construction.
 #[derive(Clone, Debug, PartialEq, Default)]
-pub struct NonSensitiveMetadata(UserMetadata);
+pub struct NonSensitiveMetadata(
+    /// Validated metadata whose keys do not resemble credential material.
+    UserMetadata,
+);
 
 impl NonSensitiveMetadata {
     /// Creates empty validated metadata.

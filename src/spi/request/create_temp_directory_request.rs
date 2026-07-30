@@ -13,6 +13,7 @@ use crate::TempDirectoryOptions;
 
 /// A facade-created temporary-directory request.
 pub struct CreateTempDirectoryRequest {
+    /// Validated temporary-directory creation options.
     options: TempDirectoryOptions,
 }
 

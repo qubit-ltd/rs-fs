@@ -25,7 +25,10 @@ use crate::{
 };
 
 /// A facade-owned asynchronous temporary directory.
-pub struct AsyncTempDirectory(AsyncTempFile);
+pub struct AsyncTempDirectory(
+    /// Shared asynchronous temporary-resource lifecycle implementation.
+    AsyncTempFile,
+);
 
 impl AsyncTempDirectory {
     /// Binds a validated provider temporary-directory session to its facade.

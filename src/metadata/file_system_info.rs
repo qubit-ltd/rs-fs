@@ -20,10 +20,15 @@ use std::fmt::Display;
 /// Construction-time local snapshot describing one filesystem object.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FileSystemInfo {
+    /// Stable identity of the configured filesystem.
     id: FileSystemId,
+    /// Stable identity of the provider implementation.
     provider_id: Box<str>,
+    /// Validated URI schemes accepted by this filesystem.
     schemes: Vec<String>,
+    /// Logical path model used by the provider.
     path_semantics: PathSemantics,
+    /// Provider metadata safe for automatic structural formatting.
     provider_metadata: NonSensitiveMetadata,
 }
 

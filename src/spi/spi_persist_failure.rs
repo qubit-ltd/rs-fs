@@ -16,7 +16,9 @@ use crate::{
 
 /// Typed provider persist failure preserving partial publication state.
 pub struct SpiPersistFailure {
+    /// Provider failure with filesystem context.
     error: FsError,
+    /// Provider-confirmed persistence progress.
     state: PersistFailureState,
 }
 

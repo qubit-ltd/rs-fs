@@ -11,7 +11,9 @@
 /// Result returned after a directory creation request.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CreateDirectoryOutcome {
+    /// Whether an existing directory satisfied the request.
     already_existed: bool,
+    /// Number of ancestor directories created when the provider reports it.
     created_ancestors: Option<u64>,
 }
 

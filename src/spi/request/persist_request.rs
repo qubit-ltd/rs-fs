@@ -16,7 +16,9 @@ use crate::{
 
 /// A facade-created request to persist a temporary resource.
 pub struct PersistRequest<'a> {
+    /// Validated persistence destination.
     target: &'a Path,
+    /// Validated persistence requirements.
     options: PersistOptions,
 }
 

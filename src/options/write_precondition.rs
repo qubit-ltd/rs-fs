@@ -19,5 +19,8 @@ pub enum WritePrecondition {
     /// Require that no destination exists.
     IfAbsent,
     /// Require the destination to have the supplied version.
-    IfMatch(ResourceVersion),
+    IfMatch(
+        /// Resource version that must match the current destination.
+        ResourceVersion,
+    ),
 }

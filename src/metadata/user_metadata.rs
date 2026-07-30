@@ -22,7 +22,10 @@ use crate::{
 
 /// An ordered string-to-string metadata map with safe structural formatting.
 #[derive(Clone, Default, Eq, PartialEq)]
-pub struct UserMetadata(BTreeMap<String, String>);
+pub struct UserMetadata(
+    /// Ordered metadata pairs retained without automatic value formatting.
+    BTreeMap<String, String>,
+);
 
 impl UserMetadata {
     /// Creates empty metadata.

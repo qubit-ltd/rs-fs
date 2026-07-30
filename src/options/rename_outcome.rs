@@ -18,10 +18,15 @@ use crate::{
 /// Outcome of a rename, move, or provider-equivalent publication.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RenameOutcome {
+    /// Atomicity achieved while publishing the destination.
     atomicity: AchievedAtomicity,
+    /// Actual publication mechanism used.
     method: PublicationMethod,
+    /// Source identity confirmed by the provider.
     source: Path,
+    /// Destination identity confirmed by the provider.
     target: Path,
+    /// Scrubbed provider diagnostics.
     diagnostics: NonSensitiveMetadata,
 }
 

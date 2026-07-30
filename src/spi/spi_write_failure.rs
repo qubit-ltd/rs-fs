@@ -16,7 +16,9 @@ use crate::{
 
 /// Typed provider write failure preserving recovery state.
 pub struct SpiWriteFailure {
+    /// Provider failure with filesystem context.
     error: FsError,
+    /// Provider-confirmed publication and recovery state.
     state: WriteFailureState,
 }
 

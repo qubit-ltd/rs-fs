@@ -16,7 +16,9 @@ use crate::{
 
 /// Typed provider rename failure reserved for rename orchestration.
 pub struct SpiRenameFailure {
+    /// Provider failure with filesystem context.
     error: Box<FsError>,
+    /// Provider-confirmed source and destination transition state.
     state: RenameFailureState,
 }
 

@@ -13,6 +13,7 @@ use crate::TempFileOptions;
 
 /// A facade-created temporary-file request.
 pub struct CreateTempFileRequest {
+    /// Validated temporary-file creation options.
     options: TempFileOptions,
 }
 

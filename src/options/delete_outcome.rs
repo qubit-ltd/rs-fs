@@ -11,7 +11,9 @@
 /// Result returned after a deletion request.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DeleteOutcome {
+    /// Whether an already-missing target satisfied the request.
     already_missing: bool,
+    /// Number of deleted entries when the provider reports it.
     deleted_entries: Option<u64>,
 }
 

@@ -18,6 +18,7 @@ use crate::{
 
 /// An already-open asynchronous directory stream.
 pub struct OpenedAsyncDirectoryStream {
+    /// Provider enumeration session awaiting facade validation.
     session: Box<dyn AsyncDirectoryStreamSession>,
 }
 

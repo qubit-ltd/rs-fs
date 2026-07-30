@@ -22,7 +22,9 @@ use crate::{
 /// Persistence error paired with provider-confirmed partial progress.
 #[derive(Debug)]
 pub struct PersistFailure {
+    /// Contextual filesystem error that interrupted persistence.
     error: FsError,
+    /// Provider-confirmed source and destination progress.
     state: PersistFailureState,
 }
 

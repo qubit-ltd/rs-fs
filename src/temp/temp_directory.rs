@@ -39,9 +39,13 @@ use crate::{
 /// Temporary directory retaining the provider session until lifecycle
 /// completion.
 pub struct TempDirectory {
+    /// Facade that owns validation and persistence policy.
     filesystem: FileSystem,
+    /// Provider-local temporary directory path.
     path: Path,
+    /// Provider lifecycle session.
     session: Box<dyn TempResourceSpi>,
+    /// Current cleanup and publication lifecycle state.
     state: TempResourceState,
 }
 impl TempDirectory {

@@ -58,6 +58,7 @@ const CAPABILITY_DEPENDENCIES: &[(
 /// Stable typed capability guarantees for one configured filesystem.
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub struct FileSystemCapabilities {
+    /// Bit set indexed by stable [`FileSystemCapability`] discriminants.
     flags: u128,
 }
 

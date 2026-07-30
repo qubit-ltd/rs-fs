@@ -22,5 +22,8 @@ pub enum ChecksumAlgorithm {
     /// CRC32C checksum.
     Crc32c,
     /// Provider-specific checksum algorithm.
-    Other(String),
+    Other(
+        /// Provider-defined checksum algorithm name.
+        String,
+    ),
 }

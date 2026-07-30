@@ -34,9 +34,13 @@ use crate::{
 
 /// A facade-owned asynchronous temporary file.
 pub struct AsyncTempFile {
+    /// Facade that owns validation and persistence policy.
     file_system: AsyncFileSystem,
+    /// Provider-local temporary path.
     path: Path,
+    /// Pinned provider lifecycle session.
     session: Pin<Box<dyn AsyncTempResourceSpi>>,
+    /// Current cleanup and publication lifecycle state.
     state: TempResourceState,
 }
 

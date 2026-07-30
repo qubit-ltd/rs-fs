@@ -14,7 +14,9 @@ use crate::OpenedFileInfo;
 
 /// An already-created asynchronous temporary-directory handle.
 pub struct OpenedAsyncTempDirectory {
+    /// Temporary-directory identity claimed by the provider.
     info: OpenedFileInfo,
+    /// Provider lifecycle session.
     session: Box<dyn AsyncTempResourceSpi>,
 }
 

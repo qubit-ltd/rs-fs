@@ -20,7 +20,9 @@ use std::fmt::{
 
 /// A rename failure that preserves the provider's publication-state fact.
 pub struct RenameFailure {
+    /// Contextual filesystem error that interrupted the rename.
     error: FsError,
+    /// Provider-confirmed source and destination transition state.
     state: RenameFailureState,
 }
 impl RenameFailure {

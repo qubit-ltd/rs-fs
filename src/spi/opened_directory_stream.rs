@@ -13,6 +13,7 @@ use super::DirectoryStreamSpi;
 
 /// An already-open provider directory stream.
 pub struct OpenedDirectoryStream {
+    /// Provider enumeration session awaiting facade validation.
     stream: Box<dyn DirectoryStreamSpi>,
 }
 
