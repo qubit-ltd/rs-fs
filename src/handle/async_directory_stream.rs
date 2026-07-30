@@ -30,10 +30,15 @@ use crate::{
 
 /// Type-erased asynchronous directory enumeration handle.
 pub struct AsyncDirectoryStream {
+    /// Provider enumeration session.
     session: Box<dyn AsyncDirectoryStreamSession>,
+    /// Validated root constraining returned entries.
     root: Path,
+    /// Listing policy used to validate provider results.
     options: ListOptions,
+    /// Provider identifier attached to facade-generated errors.
     provider: Box<str>,
+    /// Whether enumeration has completed or encountered a terminal failure.
     terminal: bool,
 }
 

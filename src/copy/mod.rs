@@ -19,3 +19,9 @@ pub use async_copy_operation::AsyncCopyOperation;
 pub use async_copy_operation_state::AsyncCopyOperationState;
 pub use copy_failure::CopyFailure;
 pub use copy_failure_state::CopyFailureState;
+
+pub(crate) use internal::{
+    fallback_failure_stats,
+    from_write_failure_state,
+    from_writer_state,
+};

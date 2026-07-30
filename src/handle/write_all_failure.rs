@@ -21,7 +21,9 @@ use crate::{
 
 /// A whole-file write failure retaining the recoverable writer when available.
 pub struct WriteAllFailure {
+    /// Contextual filesystem error that interrupted the whole-file write.
     error: FsError,
+    /// Opened writer retained for explicit recovery when available.
     writer: Option<Box<FileWriter>>,
 }
 

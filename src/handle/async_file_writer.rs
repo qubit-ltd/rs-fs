@@ -44,12 +44,19 @@ use crate::{
 
 /// Type-erased asynchronous provider write session associated with a file.
 pub struct AsyncFileWriter {
+    /// Pinned provider write session.
     session: Pin<Box<dyn AsyncFileWriteSession>>,
+    /// Stable identity and metadata captured at open time.
     info: OpenedFileInfo,
+    /// Current publication lifecycle state.
     state: WriterState,
+    /// Atomicity required by the caller.
     atomicity: AtomicityRequirement,
+    /// Provider identifier attached to facade-generated errors.
     provider: Box<str>,
+    /// Optional inclusive byte limit for this write session.
     max_write_bytes: Option<u64>,
+    /// Bytes accepted by the provider session so far.
     written_bytes: u64,
 }
 

@@ -23,7 +23,9 @@ use crate::{
 /// Write error paired with provider-confirmed publication progress.
 #[derive(Debug)]
 pub struct WriteFailure {
+    /// Contextual filesystem error returned by the write attempt.
     error: FsError,
+    /// Provider-confirmed publication and recovery state.
     state: WriteFailureState,
 }
 

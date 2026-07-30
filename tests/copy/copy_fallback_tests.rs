@@ -105,6 +105,7 @@ enum CopyResponse {
     DeclinedWriterInvalidIdentity,
     DeclinedWriteFailure,
     DeclinedCommitFailure,
+    DeclinedCommitRetryable,
     DeclinedCommitPublished,
     DeclinedCommitIndeterminate,
 }
@@ -277,6 +278,9 @@ impl FileSystemSpi for RecordingSpi {
                     CopyResponse::DeclinedCommitFailure => {
                         Some(qubit_fs::WriteFailureState::NotPublished)
                     }
+                    CopyResponse::DeclinedCommitRetryable => {
+                        Some(qubit_fs::WriteFailureState::RetryableNotPublished)
+                    }
                     CopyResponse::DeclinedCommitPublished => {
                         Some(qubit_fs::WriteFailureState::Published)
                     }
@@ -399,6 +403,7 @@ impl FileSystemSpi for RecordingSpi {
             | CopyResponse::DeclinedWriterInvalidIdentity
             | CopyResponse::DeclinedWriteFailure
             | CopyResponse::DeclinedCommitFailure
+            | CopyResponse::DeclinedCommitRetryable
             | CopyResponse::DeclinedCommitPublished
             | CopyResponse::DeclinedCommitIndeterminate => {
                 Ok(CopyAttempt::Declined(CopyDeclineReason::NotApplicable))
@@ -666,29 +671,67 @@ fn test_copy_declined_preserves_stream_and_writer_recovery_states() {
         .expect("an existing target should be skipped when explicitly allowed");
     assert_eq!(1, skipped.stats().skipped);
 
-    for response in [
-        CopyResponse::DeclinedWriterFailure,
-        CopyResponse::DeclinedWriterInvalidIdentity,
-        CopyResponse::DeclinedReadFailure,
-        CopyResponse::DeclinedWriteFailure,
-        CopyResponse::DeclinedCommitFailure,
-        CopyResponse::DeclinedCommitPublished,
-        CopyResponse::DeclinedCommitIndeterminate,
+    for (response, expected, writer_state) in [
+        (
+            CopyResponse::DeclinedReadFailure,
+            CopyFailureState::Unchanged,
+            qubit_fs::WriterState::Open,
+        ),
+        (
+            CopyResponse::DeclinedWriteFailure,
+            CopyFailureState::Indeterminate,
+            qubit_fs::WriterState::Indeterminate,
+        ),
+        (
+            CopyResponse::DeclinedFlushFailure,
+            CopyFailureState::Indeterminate,
+            qubit_fs::WriterState::Indeterminate,
+        ),
+        (
+            CopyResponse::DeclinedCommitFailure,
+            CopyFailureState::Unchanged,
+            qubit_fs::WriterState::NotPublished,
+        ),
+        (
+            CopyResponse::DeclinedCommitRetryable,
+            CopyFailureState::Unchanged,
+            qubit_fs::WriterState::Open,
+        ),
+        (
+            CopyResponse::DeclinedCommitPublished,
+            CopyFailureState::Published,
+            qubit_fs::WriterState::Published,
+        ),
+        (
+            CopyResponse::DeclinedCommitIndeterminate,
+            CopyFailureState::Indeterminate,
+            qubit_fs::WriterState::Indeterminate,
+        ),
     ] {
         let (filesystem, _, _) = recording_filesystem(response);
         let failure = filesystem
             .copy(&path("/source"), &path("/target"), CopyOptions::default())
             .expect_err("fallback writer failure should preserve recovery");
-        assert!(
-            matches!(
-                failure.state(),
-                CopyFailureState::Unchanged
-                    | CopyFailureState::PartiallyPublished
-                    | CopyFailureState::Published
-                    | CopyFailureState::Indeterminate
-            ),
-            "failure state must reflect whether a writer was opened"
+        assert_eq!(expected, failure.state());
+        let (_, _, _, writer) = failure.into_parts();
+        assert_eq!(
+            writer_state,
+            writer
+                .expect("post-open fallback failure retains its writer")
+                .state()
         );
+    }
+
+    for response in [
+        CopyResponse::DeclinedWriterFailure,
+        CopyResponse::DeclinedWriterInvalidIdentity,
+    ] {
+        let (filesystem, _, _) = recording_filesystem(response);
+        let failure = filesystem
+            .copy(&path("/source"), &path("/target"), CopyOptions::default())
+            .expect_err("fallback writer failure should preserve recovery");
+        assert_eq!(CopyFailureState::Unchanged, failure.state());
+        assert!(!failure.has_writer());
     }
 }
 
@@ -1008,21 +1051,20 @@ fn test_copy_declined_skip_required_atomicity_rejects_without_opening_handles()
 
 /// Verifies post-writer fallback failure retains recovery and transfer facts.
 #[test]
-fn test_copy_fallback_flush_failure_is_partially_published_with_stats_and_writer()
- {
+fn test_copy_fallback_flush_failure_is_indeterminate_with_stats_and_writer() {
     let (filesystem, _, _) =
         recording_filesystem(CopyResponse::DeclinedFlushFailure);
     let failure = filesystem
         .copy(&path("/source"), &path("/target"), CopyOptions::default())
         .expect_err("flush failure should be recoverable");
-    assert_eq!(CopyFailureState::PartiallyPublished, failure.state());
+    assert_eq!(CopyFailureState::Indeterminate, failure.state());
     assert_eq!(5, failure.partial_stats().bytes);
     assert!(failure.has_writer());
     assert!(format!("{failure:?}").contains("CopyFailure"));
 
     let (error, state, stats, writer) = failure.into_parts();
     assert_eq!(FsErrorKind::Io, error.kind());
-    assert_eq!(CopyFailureState::PartiallyPublished, state);
+    assert_eq!(CopyFailureState::Indeterminate, state);
     assert_eq!(5, stats.bytes);
     assert!(writer.is_some());
 }

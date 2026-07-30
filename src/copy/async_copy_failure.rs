@@ -22,8 +22,11 @@ use crate::{
 
 /// Copy failure facts retained after an asynchronous copy operation.
 pub struct AsyncCopyFailure {
+    /// Contextual filesystem error that caused the copy to fail.
     error: FsError,
+    /// Confirmed destination publication state at failure time.
     state: CopyFailureState,
+    /// Transfer progress confirmed before the failure.
     partial_stats: CopyStats,
 }
 
