@@ -138,7 +138,7 @@ fn write_options_preserve_validated_user_metadata() {
     let options = WriteOptions::default().with_user_metadata(
         UserMetadata::new()
             .with("category", "private-category")
-            .unwrap(),
+            .expect("ordinary user metadata key must be accepted"),
     );
     assert!(options.user_metadata.contains_key("category"));
     assert!(!format!("{options:?}").contains("private-category"));

@@ -126,6 +126,30 @@ fn test_async_temp_file_persist_delegates_after_preflight() {
     assert_eq!(vec!["create_temp_file", "persist"], probe.calls());
 }
 
+/// Rejects a provider outcome that reports a different persistence target.
+#[test]
+fn test_async_temp_file_rejects_mismatched_persist_target() {
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
+        atomic_temp_persist: true,
+        ..AsyncRecordingConfig::default()
+    });
+    let mut temp =
+        ready(file_system.create_temp_file(TempFileOptions::default()))
+            .expect("temporary file should open");
+
+    let failure = ready(
+        temp.persist(&path("/wrong-persist-target"), PersistOptions::default()),
+    )
+    .expect_err("mismatched target should violate the provider contract");
+
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
+    assert_eq!(PersistFailureState::Indeterminate, failure.state());
+    assert_eq!(TempResourceState::Indeterminate, temp.state());
+}
+
 /// Covers cleanup and keep delegation for both opaque temporary resource kinds.
 #[test]
 fn test_async_temp_cleanup_and_keep_delegate_to_spi_sessions() {

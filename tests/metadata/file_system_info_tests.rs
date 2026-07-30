@@ -15,12 +15,13 @@ use qubit_fs::{
 
 #[test]
 fn file_system_info_is_a_validated_local_snapshot() {
-    let id = FileSystemId::new("mock-instance").unwrap();
+    let id = FileSystemId::new("mock-instance")
+        .expect("valid filesystem identity must be accepted");
     let provider_id = "mock";
     let info =
         FileSystemInfo::new(id.clone(), provider_id, PathSemantics::ObjectKey)
             .with_scheme("mock")
-            .unwrap();
+            .expect("valid provider scheme must be accepted");
 
     assert_eq!(&id, info.id());
     assert_eq!(provider_id, info.provider_id());
@@ -33,14 +34,15 @@ fn file_system_info_is_a_validated_local_snapshot() {
 #[test]
 fn file_system_info_deduplicates_schemes_and_replaces_provider_metadata() {
     let info = FileSystemInfo::new(
-        FileSystemId::new("mock-instance").unwrap(),
+        FileSystemId::new("mock-instance")
+            .expect("valid filesystem identity must be accepted"),
         "mock",
         PathSemantics::ProviderSpecific,
     )
     .with_scheme("MOCK")
-    .unwrap()
+    .expect("valid uppercase scheme must be normalized")
     .with_scheme("mock")
-    .unwrap()
+    .expect("duplicate normalized scheme must be accepted")
     .with_provider_metadata(UserMetadata::new());
 
     assert_eq!(&["mock"], info.schemes());
@@ -64,9 +66,12 @@ fn file_system_info_rejects_sensitive_provider_metadata_keys() {
 
 #[test]
 fn file_system_info_preserves_validated_provider_metadata() {
-    let metadata = UserMetadata::new().with("provider", "ready").unwrap();
+    let metadata = UserMetadata::new()
+        .with("provider", "ready")
+        .expect("ordinary provider metadata key must be accepted");
     let info = FileSystemInfo::new(
-        FileSystemId::new("mock-instance").unwrap(),
+        FileSystemId::new("mock-instance")
+            .expect("valid filesystem identity must be accepted"),
         "mock",
         PathSemantics::ProviderSpecific,
     )
@@ -77,7 +82,8 @@ fn file_system_info_preserves_validated_provider_metadata() {
 
 #[test]
 fn file_system_id_validates_and_displays_provider_identity() {
-    let id = FileSystemId::new("tenant-a").unwrap();
+    let id = FileSystemId::new("tenant-a")
+        .expect("valid filesystem identity must be accepted");
 
     assert_eq!("tenant-a", id.as_str());
     assert_eq!("tenant-a", id.to_string());

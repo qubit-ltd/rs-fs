@@ -37,7 +37,7 @@ fn write_outcome_validates_and_safely_formats_diagnostics() {
             .with_diagnostics(
                 UserMetadata::new()
                     .with("request_id", "private-request-id")
-                    .unwrap(),
+                    .expect("ordinary diagnostic key must be accepted"),
             );
     assert!(outcome.diagnostics.contains_key("request_id"));
     assert!(!format!("{outcome:?}").contains("private-request-id"));

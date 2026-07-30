@@ -306,6 +306,15 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
         if self.config.failing_stage == Some(AsyncCopyStage::Stat) {
             return Box::pin(async { Err(unused()) });
         }
+        if request.path().as_str() == "/missing" {
+            return Box::pin(async {
+                Err(FsError::new(
+                    FsErrorKind::NotFound,
+                    FsOperation::Stat,
+                    "injected missing path",
+                ))
+            });
+        }
         let mut metadata = FileMetadata::new(
             self.config.stat_kind.clone().unwrap_or(FileKind::File),
         );
@@ -494,7 +503,13 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
         }
         if let Some(atomicity) = self.config.rename_atomicity {
             let source = request.source().clone();
-            let target = request.target().clone();
+            let target = if request.target().as_str() == "/wrong-rename-target"
+            {
+                Path::parse("/reported-rename-target")
+                    .expect("generated path should parse")
+            } else {
+                request.target().clone()
+            };
             return Box::pin(async move {
                 Ok(RenameOutcome::new(
                     source,
@@ -776,7 +791,12 @@ impl AsyncTempResourceSpi for RecordingTempSession {
     ) -> SpiFuture<'a, Result<PersistOutcome, qubit_fs::spi::SpiPersistFailure>>
     {
         self.as_ref().get_ref().record("persist");
-        let target = request.target().clone();
+        let target = if request.target().as_str() == "/wrong-persist-target" {
+            Path::parse("/reported-persist-target")
+                .expect("generated path should parse")
+        } else {
+            request.target().clone()
+        };
         let _ = request.options();
         let indeterminate = self.as_ref().get_ref().indeterminate_persist;
         let failure = self.as_ref().get_ref().persist_failure;

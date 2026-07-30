@@ -15,3 +15,11 @@ fn test_create_directory_outcome_reports_existing_state() {
     assert!(!CreateDirectoryOutcome::new(false).already_existed());
     assert!(CreateDirectoryOutcome::new(true).already_existed());
 }
+
+/// Verifies outcomes retain the provider-reported ancestor count.
+#[test]
+fn test_create_directory_outcome_reports_created_ancestors() {
+    let outcome = CreateDirectoryOutcome::new(false).with_created_ancestors(3);
+
+    assert_eq!(Some(3), outcome.created_ancestors());
+}

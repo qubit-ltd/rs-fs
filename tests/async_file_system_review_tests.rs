@@ -127,6 +127,60 @@ fn test_async_rename_preflight_and_result_identity() {
     assert_eq!(vec!["rename"], probe.calls());
 }
 
+/// Covers convenience reads, existence mapping, and response identity checks.
+#[test]
+fn test_async_facade_convenience_operations_enforce_contracts() {
+    let (file_system, _) =
+        async_recording_file_system(AsyncRecordingConfig::default());
+    assert!(
+        ready(file_system.exists(&path("/file")))
+            .expect("existing path should be reported")
+    );
+    assert!(
+        !ready(file_system.exists(&path("/missing")))
+            .expect("missing path should be mapped to false")
+    );
+    assert_eq!(
+        b"bytes",
+        ready(file_system.read_all(&path("/file"), ReadOptions::default(), 5,))
+            .expect("reader bytes should be collected")
+            .as_slice()
+    );
+    let limit_error =
+        ready(file_system.read_all(&path("/file"), ReadOptions::default(), 4))
+            .expect_err("the byte cap should be enforced");
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, limit_error.kind());
+
+    let read_error_file_system =
+        async_recording_file_system(AsyncRecordingConfig {
+            failing_stage: Some(AsyncCopyStage::ReaderRead),
+            ..AsyncRecordingConfig::default()
+        })
+        .0;
+    let read_error = ready(read_error_file_system.read_all(
+        &path("/file"),
+        ReadOptions::default(),
+        5,
+    ))
+    .expect_err("reader failures should be contextualized");
+    assert_eq!(FsErrorKind::Io, read_error.kind());
+
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
+        rename_atomicity: Some(AchievedAtomicity::Atomic),
+        ..AsyncRecordingConfig::default()
+    });
+    let rename_error = ready(file_system.rename(
+        &path("/source"),
+        &path("/wrong-rename-target"),
+        RenameOptions::default(),
+    ))
+    .expect_err("mismatched rename identities should be rejected");
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        rename_error.error().kind()
+    );
+}
+
 /// Covers asynchronous facade contract failures and declined-copy boundary
 /// failures that must remain typed and contextualized.
 #[test]

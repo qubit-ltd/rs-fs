@@ -45,7 +45,7 @@ fn copy_outcome_preserves_validated_diagnostics() {
     .with_diagnostics(
         UserMetadata::new()
             .with("request_id", "private-copy-id")
-            .unwrap(),
+            .expect("ordinary copy diagnostic key must be accepted"),
     );
     assert!(outcome.diagnostics().contains_key("request_id"));
     assert!(!format!("{outcome:?}").contains("private-copy-id"));
