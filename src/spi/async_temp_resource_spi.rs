@@ -24,12 +24,48 @@ use crate::{
 /// Provider-side asynchronous temporary-resource lifecycle session.
 pub trait AsyncTempResourceSpi: Send {
     /// Asynchronously confirms provider cleanup.
+    ///
+    /// The returned future performs provider I/O when polled. Dropping it
+    /// before completion does not confirm cleanup.
+    ///
+    /// # Returns
+    /// A runtime-neutral future resolving after cleanup is confirmed.
+    ///
+    /// # Errors
+    /// Resolves to the provider cleanup failure, including an indeterminate
+    /// error when the provider cannot determine whether cleanup completed.
     fn cleanup<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<()>>;
 
     /// Asynchronously releases caller cleanup responsibility.
+    ///
+    /// The returned future performs provider I/O when polled. Dropping it
+    /// before completion does not transfer cleanup responsibility.
+    ///
+    /// # Returns
+    /// A runtime-neutral future resolving after ownership transfer is
+    /// confirmed.
+    ///
+    /// # Errors
+    /// Resolves to the provider failure when cleanup responsibility cannot be
+    /// transferred.
     fn keep<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<()>>;
 
     /// Asynchronously persists this resource to a validated target.
+    ///
+    /// The returned future performs provider I/O when polled. Cancellation may
+    /// leave publication state indeterminate, which implementations must
+    /// report through [`SpiPersistFailure`].
+    ///
+    /// # Parameters
+    /// - `request`: Validated target and persistence requirements.
+    ///
+    /// # Returns
+    /// A runtime-neutral future resolving to the confirmed persistence
+    /// outcome.
+    ///
+    /// # Errors
+    /// Resolves to a typed provider failure preserving confirmed publication
+    /// progress.
     fn persist<'a>(
         self: Pin<&'a mut Self>,
         request: PersistRequest<'a>,

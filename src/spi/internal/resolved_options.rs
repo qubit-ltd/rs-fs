@@ -20,13 +20,23 @@ macro_rules! resolved_options {
 
         impl $name {
             /// Creates this value inside the facade boundary.
+            ///
+            /// # Parameters
+            /// - `options`: Caller options after facade validation and
+            ///   normalization.
+            ///
+            /// # Returns
+            /// An immutable provider-facing option envelope.
             #[allow(dead_code)]
-            #[inline(always)]
+            #[inline]
             pub(crate) const fn new(options: $options) -> Self {
                 Self { options }
             }
 
             /// Returns the resolved options.
+            ///
+            /// # Returns
+            /// The validated options retained by this envelope.
             #[inline(always)]
             #[must_use]
             pub const fn options(&self) -> &$options {

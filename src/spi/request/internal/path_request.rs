@@ -20,7 +20,14 @@ macro_rules! path_request {
 
         impl<'a> $name<'a> {
             /// Creates this request inside the facade boundary.
-            #[inline(always)]
+            ///
+            /// # Parameters
+            /// - `path`: Validated logical resource path.
+            /// - `options`: Facade-resolved operation options.
+            ///
+            /// # Returns
+            /// A provider request borrowing `path` for the dispatch lifetime.
+            #[inline]
             pub(crate) const fn new(
                 path: &'a crate::Path,
                 options: $options,
@@ -29,6 +36,9 @@ macro_rules! path_request {
             }
 
             /// Returns the validated logical path.
+            ///
+            /// # Returns
+            /// The request path validated by the facade.
             #[inline(always)]
             #[must_use]
             pub const fn path(&self) -> &'a crate::Path {
@@ -36,6 +46,9 @@ macro_rules! path_request {
             }
 
             /// Returns the resolved operation options.
+            ///
+            /// # Returns
+            /// The immutable facade-resolved options.
             #[inline(always)]
             #[must_use]
             pub const fn options(&self) -> &$options {

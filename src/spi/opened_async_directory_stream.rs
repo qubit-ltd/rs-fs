@@ -23,13 +23,27 @@ pub struct OpenedAsyncDirectoryStream {
 
 impl OpenedAsyncDirectoryStream {
     /// Wraps an opened provider directory-enumeration session.
-    #[inline(always)]
+    ///
+    /// # Parameters
+    /// - `session`: Provider enumeration session.
+    ///
+    /// # Returns
+    /// An opened asynchronous stream envelope for facade validation.
+    #[inline]
     #[must_use]
     pub fn new(session: Box<dyn AsyncDirectoryStreamSession>) -> Self {
         Self { session }
     }
 
     /// Transfers the stream into the facade handle.
+    ///
+    /// # Parameters
+    /// - `root`: Validated directory root requested by the caller.
+    /// - `options`: Validated listing behavior.
+    /// - `provider`: Stable provider identifier used in generated errors.
+    ///
+    /// # Returns
+    /// A facade-owned asynchronous directory stream.
     #[inline]
     #[must_use]
     pub(crate) fn into_stream(

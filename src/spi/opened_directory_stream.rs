@@ -24,7 +24,7 @@ impl OpenedDirectoryStream {
     ///
     /// # Returns
     /// An opened-directory-stream envelope for the facade.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn new(stream: Box<dyn DirectoryStreamSpi>) -> Self {
         Self { stream }

@@ -29,7 +29,7 @@ impl SpiWriteFailure {
     ///
     /// # Returns
     /// A failure containing both facts.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn new(error: FsError, state: WriteFailureState) -> Self {
         Self { error, state }

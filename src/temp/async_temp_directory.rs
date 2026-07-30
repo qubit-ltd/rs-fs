@@ -29,7 +29,15 @@ pub struct AsyncTempDirectory(AsyncTempFile);
 
 impl AsyncTempDirectory {
     /// Binds a validated provider temporary-directory session to its facade.
-    #[inline]
+    ///
+    /// # Parameters
+    /// - `file_system`: Facade that owns validation and persistence policy.
+    /// - `path`: Validated provider-local temporary path.
+    /// - `session`: Provider lifecycle session.
+    ///
+    /// # Returns
+    /// An owned asynchronous temporary-directory handle.
+    #[inline(always)]
     pub(crate) fn new(
         file_system: AsyncFileSystem,
         path: Path,
@@ -39,6 +47,9 @@ impl AsyncTempDirectory {
     }
 
     /// Returns the provider-local temporary path.
+    ///
+    /// # Returns
+    /// The validated path supplied by the provider.
     #[inline(always)]
     #[must_use]
     pub const fn path(&self) -> &Path {
@@ -46,6 +57,9 @@ impl AsyncTempDirectory {
     }
 
     /// Returns the current ownership lifecycle state.
+    ///
+    /// # Returns
+    /// The handle's current cleanup and publication state.
     #[inline(always)]
     #[must_use]
     pub const fn state(&self) -> TempResourceState {
@@ -53,18 +67,43 @@ impl AsyncTempDirectory {
     }
 
     /// Asynchronously confirms cleanup of this temporary directory.
+    ///
+    /// # Returns
+    /// A future resolving after provider cleanup is confirmed.
+    ///
+    /// # Errors
+    /// Resolves to an invalid-state error when cleanup is no longer legal, or
+    /// to the provider cleanup failure.
     #[inline(always)]
     pub fn cleanup(&mut self) -> SpiFuture<'_, FsResult<()>> {
         self.0.cleanup()
     }
 
     /// Asynchronously transfers cleanup responsibility to the caller.
+    ///
+    /// # Returns
+    /// A future resolving after the provider confirms ownership transfer.
+    ///
+    /// # Errors
+    /// Resolves to an invalid-state error when the directory is no longer
+    /// owned, or to the provider ownership-transfer failure.
     #[inline(always)]
     pub fn keep(&mut self) -> SpiFuture<'_, FsResult<()>> {
         self.0.keep()
     }
 
     /// Asynchronously persists this directory to a validated destination.
+    ///
+    /// # Parameters
+    /// - `target`: Validated destination path.
+    /// - `options`: Persistence atomicity and publication requirements.
+    ///
+    /// # Returns
+    /// A future resolving to the confirmed persistence outcome.
+    ///
+    /// # Errors
+    /// Resolves to a typed failure for invalid lifecycle state, failed local
+    /// preflight, provider failure, or provider contract violation.
     #[inline(always)]
     pub fn persist<'a>(
         &'a mut self,

@@ -42,6 +42,14 @@ pub struct AsyncTempFile {
 
 impl AsyncTempFile {
     /// Binds a validated provider temporary session to its owning facade.
+    ///
+    /// # Parameters
+    /// - `file_system`: Facade that owns validation and persistence policy.
+    /// - `path`: Validated provider-local temporary path.
+    /// - `session`: Provider lifecycle session.
+    ///
+    /// # Returns
+    /// An owned asynchronous temporary-file handle.
     pub(crate) fn new(
         file_system: AsyncFileSystem,
         path: Path,
@@ -56,6 +64,9 @@ impl AsyncTempFile {
     }
 
     /// Returns the provider-local temporary path.
+    ///
+    /// # Returns
+    /// The validated path supplied by the provider.
     #[inline(always)]
     #[must_use]
     pub const fn path(&self) -> &Path {
@@ -63,6 +74,9 @@ impl AsyncTempFile {
     }
 
     /// Returns the current ownership lifecycle state.
+    ///
+    /// # Returns
+    /// The handle's current cleanup and publication state.
     #[inline(always)]
     #[must_use]
     pub const fn state(&self) -> TempResourceState {
@@ -70,6 +84,13 @@ impl AsyncTempFile {
     }
 
     /// Asynchronously confirms cleanup of this temporary resource.
+    ///
+    /// # Returns
+    /// A future resolving after provider cleanup is confirmed.
+    ///
+    /// # Errors
+    /// Resolves to an invalid-state error when cleanup is no longer legal, or
+    /// to the provider cleanup failure.
     #[inline]
     pub fn cleanup(&mut self) -> SpiFuture<'_, FsResult<()>> {
         self.lifecycle(
@@ -80,6 +101,13 @@ impl AsyncTempFile {
     }
 
     /// Asynchronously transfers cleanup responsibility to the caller.
+    ///
+    /// # Returns
+    /// A future resolving after the provider confirms ownership transfer.
+    ///
+    /// # Errors
+    /// Resolves to an invalid-state error when the file is no longer owned, or
+    /// to the provider ownership-transfer failure.
     #[inline]
     pub fn keep(&mut self) -> SpiFuture<'_, FsResult<()>> {
         self.lifecycle(
@@ -90,6 +118,17 @@ impl AsyncTempFile {
     }
 
     /// Asynchronously persists this resource to a validated destination.
+    ///
+    /// # Parameters
+    /// - `target`: Validated destination path.
+    /// - `options`: Persistence atomicity and publication requirements.
+    ///
+    /// # Returns
+    /// A future resolving to the confirmed persistence outcome.
+    ///
+    /// # Errors
+    /// Resolves to a typed failure for invalid lifecycle state, failed local
+    /// preflight, provider failure, or provider contract violation.
     pub fn persist<'a>(
         &'a mut self,
         target: &'a Path,
@@ -191,6 +230,21 @@ impl AsyncTempFile {
 
     /// Runs one lifecycle operation while retaining an indeterminate
     /// cancellation state.
+    ///
+    /// # Type Parameters
+    /// - `F`: One-shot provider lifecycle operation.
+    ///
+    /// # Parameters
+    /// - `message`: Error message used when the lifecycle state rejects the
+    ///   operation.
+    /// - `operation`: Filesystem operation recorded in generated errors.
+    /// - `call`: Provider operation invoked after local state validation.
+    ///
+    /// # Returns
+    /// A future resolving to the provider lifecycle result.
+    ///
+    /// # Errors
+    /// Resolves to an invalid-state error or the provider lifecycle failure.
     fn lifecycle<'a, F>(
         &'a mut self,
         message: &'static str,
@@ -233,12 +287,27 @@ impl AsyncTempFile {
     }
 
     /// Builds an invalid-state error for this handle.
+    ///
+    /// # Parameters
+    /// - `operation`: Rejected lifecycle operation.
+    /// - `message`: Stable explanation of the state violation.
+    ///
+    /// # Returns
+    /// A contextual invalid-state error containing the temporary path.
     fn invalid_state(&self, operation: FsOperation, message: &str) -> FsError {
         FsError::new(FsErrorKind::InvalidState, operation, message)
             .with_path(self.path.clone())
     }
 
     /// Adds only missing facade facts to a provider persistence error.
+    ///
+    /// # Parameters
+    /// - `error`: Provider persistence error.
+    /// - `target`: Requested persistence target.
+    ///
+    /// # Returns
+    /// The error enriched with missing operation, path, target, and provider
+    /// context.
     fn contextual_persist_error(
         &self,
         error: FsError,

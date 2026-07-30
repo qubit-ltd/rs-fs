@@ -29,7 +29,7 @@ impl SpiRenameFailure {
     ///
     /// # Returns
     /// A failure containing both facts.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn new(error: FsError, state: RenameFailureState) -> Self {
         Self {
