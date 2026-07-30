@@ -71,6 +71,17 @@ fn test_path_normalizes_hierarchical_text_and_exposes_attributes() {
     );
 }
 
+/// Verifies a canonical hierarchical spelling can be parsed again without
+/// changing path identity.
+#[test]
+fn test_path_canonical_text_round_trips() {
+    let path = Path::parse("/bucket//./folder/../object")
+        .expect("hierarchical path should normalize");
+    let reparsed =
+        Path::parse(path.as_str()).expect("canonical path should reparse");
+    assert_eq!(path, reparsed);
+}
+
 /// Verifies provider-specific path semantics preserve lexical text without
 /// treating separators or dots as hierarchy.
 #[test]
