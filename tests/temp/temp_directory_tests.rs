@@ -89,6 +89,37 @@ fn test_temp_directory_rejects_non_atomic_required_persist_outcome() {
     );
 }
 
+/// Rejects a provider outcome that reports a different persistence target.
+#[test]
+fn test_temp_directory_rejects_mismatched_persist_target() {
+    let (filesystem, _, _) =
+        crate::handle_support::filesystem(false, Vec::new());
+    let mut directory = filesystem
+        .create_temp_directory(qubit_fs::TempDirectoryOptions::default())
+        .expect("temporary directory should open");
+
+    let failure = directory
+        .persist(
+            &qubit_fs::Path::parse("/wrong-persist-target")
+                .expect("target should parse"),
+            qubit_fs::PersistOptions::default(),
+        )
+        .expect_err("mismatched target should violate the provider contract");
+
+    assert_eq!(
+        qubit_fs::FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
+    assert_eq!(
+        qubit_fs::PersistFailureState::Indeterminate,
+        failure.state()
+    );
+    assert_eq!(
+        qubit_fs::TempResourceState::Indeterminate,
+        directory.state()
+    );
+}
+
 /// Verifies keeping a temporary directory transfers cleanup responsibility and
 /// leaves the completed handle unusable for further persistence.
 #[test]

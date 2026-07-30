@@ -38,7 +38,7 @@ fn rename_outcome_preserves_validated_diagnostics() {
     .with_diagnostics(
         UserMetadata::new()
             .with("request_id", "private-rename-id")
-            .unwrap(),
+            .expect("ordinary rename diagnostic key must be accepted"),
     );
     assert!(outcome.diagnostics().contains_key("request_id"));
     assert!(!format!("{outcome:?}").contains("private-rename-id"));
