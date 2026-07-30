@@ -170,6 +170,13 @@ impl CopyOutcome {
                 "provider reported a non-server-side success for a server-side-required copy",
             );
         }
+        if options.server_side == ServerSidePreference::Disable
+            && self.method == CopyMethod::ServerSide
+        {
+            return Some(
+                "provider reported a server-side success for a server-side-disabled copy",
+            );
+        }
         if self.metadata != options.preserve_metadata {
             return Some(
                 "provider reported metadata preservation different from the copy request",

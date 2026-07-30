@@ -59,6 +59,7 @@ use std::sync::{
 struct RenameSpi {
     atomicity: AchievedAtomicity,
     method: PublicationMethod,
+    wrong_identity: bool,
     calls: Arc<Mutex<Vec<&'static str>>>,
 }
 /// Builds a rename-capable facade and call probe.
@@ -69,6 +70,7 @@ fn filesystem(
     let filesystem = FileSystem::from_spi(RenameSpi {
         atomicity,
         method: PublicationMethod::AtomicRename,
+        wrong_identity: false,
         calls: Arc::clone(&calls),
     })
     .expect("facade should construct");
@@ -155,8 +157,16 @@ impl FileSystemSpi for RenameSpi {
             .expect("calls lock should succeed")
             .push("rename");
         Ok(RenameOutcome::new(
-            request.source().clone(),
-            request.target().clone(),
+            if self.wrong_identity {
+                path("/reported-source")
+            } else {
+                request.source().clone()
+            },
+            if self.wrong_identity {
+                path("/reported-target")
+            } else {
+                request.target().clone()
+            },
             self.atomicity,
             self.method,
         ))
@@ -226,6 +236,7 @@ fn test_rename_rejects_copy_then_delete_provider_outcome() {
     let filesystem = FileSystem::from_spi(RenameSpi {
         atomicity: AchievedAtomicity::Atomic,
         method: PublicationMethod::CopyThenDelete,
+        wrong_identity: false,
         calls: Arc::clone(&calls),
     })
     .expect("facade should construct");
@@ -237,6 +248,33 @@ fn test_rename_rejects_copy_then_delete_provider_outcome() {
         failure.error().kind()
     );
     assert_eq!(RenameFailureState::Renamed, failure.state());
+    assert_eq!(
+        ["rename"],
+        calls.lock().expect("calls lock should succeed").as_slice()
+    );
+}
+
+/// Verifies provider-reported rename identities cannot be rewritten by the
+/// facade into a successful result.
+#[test]
+fn test_rename_rejects_provider_outcome_with_wrong_identity() {
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let filesystem = FileSystem::from_spi(RenameSpi {
+        atomicity: AchievedAtomicity::Atomic,
+        method: PublicationMethod::AtomicRename,
+        wrong_identity: true,
+        calls: Arc::clone(&calls),
+    })
+    .expect("facade should construct");
+
+    let failure = filesystem
+        .rename(&path("/source"), &path("/target"), RenameOptions::default())
+        .expect_err("wrong provider identity must violate the contract");
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
+    assert_eq!(RenameFailureState::Indeterminate, failure.state());
     assert_eq!(
         ["rename"],
         calls.lock().expect("calls lock should succeed").as_slice()

@@ -299,7 +299,20 @@ impl FileSystem {
                     RenameFailureState::Renamed,
                 ))
             }
-            Ok(outcome) => Ok(outcome.with_identity(source, target)),
+            Ok(outcome)
+                if outcome.source() != source || outcome.target() != target =>
+            {
+                Err(RenameFailure::new(
+                    self.contract_error(
+                        source,
+                        FsOperation::Rename,
+                        "provider returned a rename outcome with different identities",
+                    )
+                    .with_target(target.clone()),
+                    RenameFailureState::Indeterminate,
+                ))
+            }
+            Ok(outcome) => Ok(outcome),
             Err(failure) => {
                 let (error, state) = failure.into_parts();
                 Err(RenameFailure::new(
@@ -323,6 +336,7 @@ impl FileSystem {
         options: ListOptions,
     ) -> FsResult<DirectoryStream> {
         self.validate_path(path, FsOperation::List)?;
+        options.validate()?;
         self.require(FileSystemCapability::List, FsOperation::List, path)?;
         let options = ListOptions {
             page_size: self
@@ -756,7 +770,7 @@ impl FileSystem {
                     return Err(self.copy_failure(
                         self.io_error(source, FsOperation::Read, error),
                         CopyFailureState::PartiallyPublished,
-                        fallback_failure_stats(bytes),
+                        fallback_failure_stats(writer.written_bytes()),
                         Some(writer),
                     ));
                 }
@@ -770,7 +784,7 @@ impl FileSystem {
                 return Err(self.copy_failure(
                     self.io_error(target, FsOperation::Write, error),
                     CopyFailureState::PartiallyPublished,
-                    fallback_failure_stats(bytes),
+                    fallback_failure_stats(writer.written_bytes()),
                     Some(writer),
                 ));
             }
@@ -780,7 +794,7 @@ impl FileSystem {
             return Err(self.copy_failure(
                 self.io_error(target, FsOperation::Write, error),
                 CopyFailureState::PartiallyPublished,
-                fallback_failure_stats(bytes),
+                fallback_failure_stats(writer.written_bytes()),
                 Some(writer),
             ));
         }
@@ -801,7 +815,7 @@ impl FileSystem {
                 return Err(self.copy_failure(
                     error,
                     state,
-                    fallback_failure_stats(bytes),
+                    fallback_failure_stats(writer.written_bytes()),
                     Some(writer),
                 ));
             }

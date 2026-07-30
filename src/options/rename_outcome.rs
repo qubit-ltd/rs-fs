@@ -85,14 +85,4 @@ impl RenameOutcome {
     pub const fn diagnostics(&self) -> &NonSensitiveMetadata {
         &self.diagnostics
     }
-    /// Binds the facade-validated operation identities.
-    pub(crate) fn with_identity(
-        mut self,
-        source: &Path,
-        target: &Path,
-    ) -> Self {
-        self.source = source.clone();
-        self.target = target.clone();
-        self
-    }
 }

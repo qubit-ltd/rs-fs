@@ -102,6 +102,19 @@ impl AsyncFileWriter {
         self.state
     }
 
+    /// Returns the bytes accepted by the underlying write session.
+    #[inline(always)]
+    #[must_use]
+    pub(crate) const fn written_bytes(&self) -> u64 {
+        self.written_bytes
+    }
+
+    /// Records that cancellation interrupted an operation using this writer.
+    #[inline(always)]
+    pub(crate) fn mark_indeterminate(&mut self) {
+        self.state = WriterState::Indeterminate;
+    }
+
     /// Asynchronously publishes bytes accepted by this session.
     ///
     /// A definite failure retains the open session for retry or abort. An

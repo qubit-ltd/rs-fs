@@ -92,6 +92,19 @@ impl TempFile {
             .persist(PersistRequest::new(target, options.clone()))
         {
             Ok(outcome) => {
+                if outcome.target != *target {
+                    self.state = TempResourceState::Indeterminate;
+                    return Err(PersistFailure::new(
+                        FsError::new(
+                            FsErrorKind::ProviderContractViolation,
+                            FsOperation::PersistTemp,
+                            "provider reported a persistence target different from the request",
+                        )
+                        .with_path(self.path.clone())
+                        .with_target(target.clone()),
+                        PersistFailureState::Indeterminate,
+                    ));
+                }
                 if options.atomicity == AtomicityRequirement::Required
                     && outcome.atomicity != AchievedAtomicity::Atomic
                 {

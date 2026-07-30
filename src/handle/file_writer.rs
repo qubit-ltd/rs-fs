@@ -95,6 +95,13 @@ impl FileWriter {
         self.state
     }
 
+    /// Returns the bytes accepted by the underlying write session.
+    #[inline(always)]
+    #[must_use]
+    pub(crate) const fn written_bytes(&self) -> u64 {
+        self.written_bytes
+    }
+
     /// Publishes bytes accepted by this session.
     ///
     /// This method borrows rather than consumes the writer. The provider's
