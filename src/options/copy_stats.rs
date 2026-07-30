@@ -35,6 +35,7 @@ impl CopyStats {
     ///
     /// # Parameters
     /// - `other`: Statistics to add.
+    #[inline]
     pub fn add_assign(&mut self, other: &Self) {
         self.files += other.files;
         self.directories += other.directories;

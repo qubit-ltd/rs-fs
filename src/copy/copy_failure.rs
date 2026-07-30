@@ -45,26 +45,31 @@ impl CopyFailure {
         }
     }
     /// Returns the contextual filesystem error.
+    #[inline(always)]
     #[must_use]
     pub const fn error(&self) -> &FsError {
         &self.error
     }
     /// Returns the publication state at failure.
+    #[inline(always)]
     #[must_use]
     pub const fn state(&self) -> CopyFailureState {
         self.state
     }
     /// Returns statistics accumulated before failure.
+    #[inline(always)]
     #[must_use]
     pub const fn partial_stats(&self) -> &CopyStats {
         &self.partial_stats
     }
     /// Returns whether a writer is available for recovery.
+    #[inline(always)]
     #[must_use]
     pub const fn has_writer(&self) -> bool {
         self.writer.is_some()
     }
     /// Splits the failure into error, state, statistics, and writer recovery.
+    #[inline(always)]
     #[must_use]
     pub fn into_parts(
         self,
@@ -74,6 +79,7 @@ impl CopyFailure {
 }
 impl Debug for CopyFailure {
     /// Formats safe failure facts without exposing a provider writer session.
+    #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter
             .debug_struct("CopyFailure")

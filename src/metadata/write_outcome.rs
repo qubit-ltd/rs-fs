@@ -57,6 +57,7 @@ impl WriteOutcome {
     /// Replaces provider-native diagnostics that have already passed key
     /// validation.
     #[inline]
+    #[must_use]
     pub fn with_diagnostics(mut self, diagnostics: UserMetadata) -> Self {
         self.diagnostics = NonSensitiveMetadata::from(diagnostics);
         self

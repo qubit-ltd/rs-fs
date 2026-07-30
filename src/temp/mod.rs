@@ -7,7 +7,8 @@
 // =============================================================================
 //! Temporary filesystem resource handles and persistence outcomes.
 
-mod async_temp_resource;
+mod async_temp_directory;
+mod async_temp_file;
 mod persist_failure;
 mod persist_failure_state;
 mod persist_outcome;
@@ -17,10 +18,8 @@ mod temp_file;
 mod temp_file_options;
 mod temp_resource_state;
 
-pub use async_temp_resource::{
-    AsyncTempDirectory,
-    AsyncTempFile,
-};
+pub use async_temp_directory::AsyncTempDirectory;
+pub use async_temp_file::AsyncTempFile;
 pub use persist_failure::PersistFailure;
 pub use persist_failure_state::PersistFailureState;
 pub use persist_outcome::PersistOutcome;

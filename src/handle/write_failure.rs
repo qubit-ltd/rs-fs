@@ -73,6 +73,7 @@ impl WriteFailure {
     }
 
     /// Splits this facade failure into its causal error and state.
+    #[inline(always)]
     #[must_use]
     pub fn into_parts(self) -> (FsError, WriteFailureState) {
         (self.error, self.state)
@@ -80,12 +81,14 @@ impl WriteFailure {
 }
 
 impl Display for WriteFailure {
+    #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         write!(formatter, "write {:?}: {}", self.state, self.error)
     }
 }
 
 impl Error for WriteFailure {
+    #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(&self.error)
     }

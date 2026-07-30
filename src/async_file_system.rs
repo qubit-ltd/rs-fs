@@ -32,6 +32,7 @@ use crate::spi::{
     ResolvedReadOptions,
     ResolvedRenameOptions,
     ResolvedWriteOptions,
+    SpiFuture,
     StatRequest,
 };
 use crate::{
@@ -85,6 +86,7 @@ pub struct AsyncFileSystem {
 
 impl AsyncFileSystem {
     /// Constructs a facade and caches one validated provider snapshot.
+    #[inline]
     pub fn from_spi<S>(spi: S) -> FsResult<Self>
     where
         S: AsyncFileSystemSpi + 'static,
@@ -93,6 +95,7 @@ impl AsyncFileSystem {
     }
 
     /// Constructs a facade from a shared provider implementation.
+    #[inline]
     pub fn from_shared_spi(spi: Arc<dyn AsyncFileSystemSpi>) -> FsResult<Self> {
         let properties = spi.properties();
         properties.validate()?;
@@ -103,6 +106,7 @@ impl AsyncFileSystem {
     }
 
     /// Returns the immutable property snapshot without provider I/O.
+    #[inline(always)]
     #[must_use]
     pub fn properties(&self) -> &FileSystemProperties {
         &self.properties
@@ -303,6 +307,7 @@ impl AsyncFileSystem {
     }
 
     /// Asynchronously deletes a file after local validation.
+    #[inline]
     pub async fn delete_file(
         &self,
         path: &Path,
@@ -312,6 +317,7 @@ impl AsyncFileSystem {
     }
 
     /// Asynchronously deletes a directory after local validation.
+    #[inline]
     pub async fn delete_directory(
         &self,
         path: &Path,
@@ -670,27 +676,30 @@ impl AsyncFileSystem {
 
     /// Streams a declined native copy through facade-owned asynchronous
     /// handles.
-    async fn stream_copy_fallback(
-        &self,
-        source: &Path,
-        target: &Path,
-        options: &ResolvedCopyOptions,
-        writer_slot: &mut Option<crate::AsyncFileWriter>,
-    ) -> Result<CopyOutcome, AsyncCopyFailure> {
-        let options = options.options();
-        if options.continue_on_error
-            || options.preserve_metadata != crate::MetadataPreservePolicy::None
-            || options.server_side == ServerSidePreference::Require
-            || options.create_parent
-            || options.durability == crate::DurabilityRequirement::Required
-            || (options.conflict == CopyConflictPolicy::Skip
-                && options.atomicity == crate::AtomicityRequirement::Required)
-            || !matches!(
-                options.conflict,
-                CopyConflictPolicy::Fail | CopyConflictPolicy::Skip
-            )
-        {
-            return Err(self.contextual_copy_failure(
+    fn stream_copy_fallback<'a>(
+        &'a self,
+        source: &'a Path,
+        target: &'a Path,
+        options: &'a ResolvedCopyOptions,
+        writer_slot: &'a mut Option<crate::AsyncFileWriter>,
+    ) -> SpiFuture<'a, Result<CopyOutcome, AsyncCopyFailure>> {
+        Box::pin(async move {
+            let options = options.options();
+            if options.continue_on_error
+                || options.preserve_metadata
+                    != crate::MetadataPreservePolicy::None
+                || options.server_side == ServerSidePreference::Require
+                || options.create_parent
+                || options.durability == crate::DurabilityRequirement::Required
+                || (options.conflict == CopyConflictPolicy::Skip
+                    && options.atomicity
+                        == crate::AtomicityRequirement::Required)
+                || !matches!(
+                    options.conflict,
+                    CopyConflictPolicy::Fail | CopyConflictPolicy::Skip
+                )
+            {
+                return Err(self.contextual_copy_failure(
                 FsError::new(
                     FsErrorKind::RequirementNotMet,
                     FsOperation::Copy,
@@ -701,16 +710,25 @@ impl AsyncFileSystem {
                 source,
                 target,
             ));
-        }
-        self.require(FileSystemCapability::Read, FsOperation::Copy, source)
-            .and_then(|_| {
-                self.require(
-                    FileSystemCapability::Write,
-                    FsOperation::Copy,
-                    target,
-                )
-            })
-            .map_err(|error| {
+            }
+            self.require(FileSystemCapability::Read, FsOperation::Copy, source)
+                .and_then(|_| {
+                    self.require(
+                        FileSystemCapability::Write,
+                        FsOperation::Copy,
+                        target,
+                    )
+                })
+                .map_err(|error| {
+                    self.contextual_copy_failure(
+                        error,
+                        CopyFailureState::Unchanged,
+                        CopyStats::default(),
+                        source,
+                        target,
+                    )
+                })?;
+            let metadata = self.stat(source).await.map_err(|error| {
                 self.contextual_copy_failure(
                     error,
                     CopyFailureState::Unchanged,
@@ -719,20 +737,11 @@ impl AsyncFileSystem {
                     target,
                 )
             })?;
-        let metadata = self.stat(source).await.map_err(|error| {
-            self.contextual_copy_failure(
-                error,
-                CopyFailureState::Unchanged,
-                CopyStats::default(),
-                source,
-                target,
-            )
-        })?;
-        if !matches!(
-            metadata.kind,
-            crate::FileKind::File | crate::FileKind::Object
-        ) {
-            return Err(self.contextual_copy_failure(
+            if !matches!(
+                metadata.kind,
+                crate::FileKind::File | crate::FileKind::Object
+            ) {
+                return Err(self.contextual_copy_failure(
                 FsError::new(
                     FsErrorKind::InvalidOptions,
                     FsOperation::Copy,
@@ -743,175 +752,184 @@ impl AsyncFileSystem {
                 source,
                 target,
             ));
-        }
-        if let Some(length) = metadata.len {
-            if let Err(error) = self
-                .properties
-                .limits()
-                .validate_read_range(source, Some(length))
-            {
-                return Err(self.contextual_copy_failure(
-                    error,
-                    CopyFailureState::Unchanged,
-                    CopyStats::default(),
-                    source,
-                    target,
-                ));
             }
-            let length = match usize::try_from(length) {
-                Ok(length) => length,
-                Err(_) => {
+            if let Some(length) = metadata.len {
+                if let Err(error) = self
+                    .properties
+                    .limits()
+                    .validate_read_range(source, Some(length))
+                {
                     return Err(self.contextual_copy_failure(
-                        FsError::new(
-                            FsErrorKind::ResourceLimitExceeded,
-                            FsOperation::Copy,
-                            "source length cannot fit in a write session",
-                        ),
+                        error,
                         CopyFailureState::Unchanged,
                         CopyStats::default(),
                         source,
                         target,
                     ));
                 }
-            };
-            if let Err(error) =
-                self.properties.limits().validate_write_size(target, length)
-            {
-                return Err(self.contextual_copy_failure(
-                    error,
-                    CopyFailureState::Unchanged,
-                    CopyStats::default(),
-                    source,
-                    target,
-                ));
-            }
-        }
-        let mut reader = self
-            .open_reader(source, ReadOptions::default())
-            .await
-            .map_err(|error| {
-                self.contextual_copy_failure(
-                    error,
-                    CopyFailureState::Unchanged,
-                    CopyStats::default(),
-                    source,
-                    target,
-                )
-            })?;
-        let writer_options = WriteOptions {
-            disposition: WriteDisposition::CreateNew,
-            atomicity: options.atomicity,
-            ..WriteOptions::default()
-        };
-        match self.open_writer(target, writer_options).await {
-            Ok(writer) => *writer_slot = Some(writer),
-            Err(error)
-                if error.kind() == FsErrorKind::AlreadyExists
-                    && options.conflict == CopyConflictPolicy::Skip =>
-            {
-                return Ok(CopyOutcome::streamed_fallback(
-                    CopyStats {
-                        skipped: 1,
-                        ..CopyStats::default()
-                    },
-                    crate::AchievedAtomicity::NonAtomic,
-                ));
-            }
-            Err(error) => {
-                return Err(self.contextual_copy_failure(
-                    error,
-                    CopyFailureState::Unchanged,
-                    CopyStats::default(),
-                    source,
-                    target,
-                ));
-            }
-        }
-        let mut bytes = 0_u64;
-        let mut buffer = [0_u8; 8192];
-        loop {
-            let read =
-                reader.read_async(&mut buffer).await.map_err(|error| {
-                    self.contextual_copy_failure(
-                        FsError::from_stream_io(
-                            error,
-                            FsOperation::Read,
+                #[cfg(target_pointer_width = "64")]
+                let length = length as usize;
+                #[cfg(not(target_pointer_width = "64"))]
+                let length = match usize::try_from(length) {
+                    Ok(length) => length,
+                    Err(_) => {
+                        return Err(self.contextual_copy_failure(
+                            FsError::new(
+                                FsErrorKind::ResourceLimitExceeded,
+                                FsOperation::Copy,
+                                "source length cannot fit in a write session",
+                            ),
+                            CopyFailureState::Unchanged,
+                            CopyStats::default(),
                             source,
-                        ),
-                        CopyFailureState::PartiallyPublished,
-                        fallback_failure_stats(
-                            writer_slot
-                                .as_ref()
-                                .expect("writer is retained before transfer")
-                                .written_bytes(),
-                        ),
+                            target,
+                        ));
+                    }
+                };
+                if let Err(error) =
+                    self.properties.limits().validate_write_size(target, length)
+                {
+                    return Err(self.contextual_copy_failure(
+                        error,
+                        CopyFailureState::Unchanged,
+                        CopyStats::default(),
+                        source,
+                        target,
+                    ));
+                }
+            }
+            let mut reader = self
+                .open_reader(source, ReadOptions::default())
+                .await
+                .map_err(|error| {
+                    self.contextual_copy_failure(
+                        error,
+                        CopyFailureState::Unchanged,
+                        CopyStats::default(),
                         source,
                         target,
                     )
                 })?;
-            if read == 0 {
-                break;
+            let writer_options = WriteOptions {
+                disposition: WriteDisposition::CreateNew,
+                atomicity: options.atomicity,
+                ..WriteOptions::default()
+            };
+            match self.open_writer(target, writer_options).await {
+                Ok(writer) => *writer_slot = Some(writer),
+                Err(error)
+                    if error.kind() == FsErrorKind::AlreadyExists
+                        && options.conflict == CopyConflictPolicy::Skip =>
+                {
+                    return Ok(CopyOutcome::streamed_fallback(
+                        CopyStats {
+                            skipped: 1,
+                            ..CopyStats::default()
+                        },
+                        crate::AchievedAtomicity::NonAtomic,
+                    ));
+                }
+                Err(error) => {
+                    return Err(self.contextual_copy_failure(
+                        error,
+                        CopyFailureState::Unchanged,
+                        CopyStats::default(),
+                        source,
+                        target,
+                    ));
+                }
+            }
+            let mut bytes = 0_u64;
+            let mut buffer = [0_u8; 8192];
+            loop {
+                let read =
+                    reader.read_async(&mut buffer).await.map_err(|error| {
+                        self.contextual_copy_failure(
+                            FsError::from_stream_io(
+                                error,
+                                FsOperation::Read,
+                                source,
+                            ),
+                            CopyFailureState::PartiallyPublished,
+                            fallback_failure_stats(
+                                writer_slot
+                                    .as_ref()
+                                    .expect(
+                                        "writer is retained before transfer",
+                                    )
+                                    .written_bytes(),
+                            ),
+                            source,
+                            target,
+                        )
+                    })?;
+                if read == 0 {
+                    break;
+                }
+                let writer = writer_slot
+                    .as_mut()
+                    .expect("writer is retained before transfer");
+                writer.write_fully_async(&buffer[..read]).await.map_err(
+                    |error| {
+                        self.contextual_copy_failure(
+                            FsError::from_stream_io(
+                                error,
+                                FsOperation::Write,
+                                target,
+                            ),
+                            CopyFailureState::PartiallyPublished,
+                            fallback_failure_stats(writer.written_bytes()),
+                            source,
+                            target,
+                        )
+                    },
+                )?;
+                bytes = bytes.saturating_add(read as u64);
             }
             let writer = writer_slot
                 .as_mut()
-                .expect("writer is retained before transfer");
-            writer.write_fully_async(&buffer[..read]).await.map_err(
-                |error| {
+                .expect("writer is retained before flush");
+            writer.flush_async().await.map_err(|error| {
+                self.contextual_copy_failure(
+                    FsError::from_stream_io(error, FsOperation::Write, target),
+                    CopyFailureState::PartiallyPublished,
+                    fallback_failure_stats(writer.written_bytes()),
+                    source,
+                    target,
+                )
+            })?;
+            let writer = writer_slot
+                .as_mut()
+                .expect("writer is retained before commit");
+            let write_outcome =
+                writer.commit_async().await.map_err(|error| {
+                    let state = match writer.state() {
+                        crate::WriterState::Published => {
+                            CopyFailureState::Published
+                        }
+                        crate::WriterState::Indeterminate => {
+                            CopyFailureState::Indeterminate
+                        }
+                        _ => CopyFailureState::PartiallyPublished,
+                    };
                     self.contextual_copy_failure(
-                        FsError::from_stream_io(
-                            error,
-                            FsOperation::Write,
-                            target,
-                        ),
-                        CopyFailureState::PartiallyPublished,
+                        error,
+                        state,
                         fallback_failure_stats(writer.written_bytes()),
                         source,
                         target,
                     )
+                })?;
+            let _ = writer_slot.take();
+            Ok(CopyOutcome::streamed_fallback(
+                CopyStats {
+                    files: 1,
+                    bytes,
+                    ..CopyStats::default()
                 },
-            )?;
-            bytes = bytes.saturating_add(read as u64);
-        }
-        let writer = writer_slot
-            .as_mut()
-            .expect("writer is retained before flush");
-        writer.flush_async().await.map_err(|error| {
-            self.contextual_copy_failure(
-                FsError::from_stream_io(error, FsOperation::Write, target),
-                CopyFailureState::PartiallyPublished,
-                fallback_failure_stats(writer.written_bytes()),
-                source,
-                target,
-            )
-        })?;
-        let writer = writer_slot
-            .as_mut()
-            .expect("writer is retained before commit");
-        let write_outcome = writer.commit_async().await.map_err(|error| {
-            let state = match writer.state() {
-                crate::WriterState::Published => CopyFailureState::Published,
-                crate::WriterState::Indeterminate => {
-                    CopyFailureState::Indeterminate
-                }
-                _ => CopyFailureState::PartiallyPublished,
-            };
-            self.contextual_copy_failure(
-                error,
-                state,
-                fallback_failure_stats(writer.written_bytes()),
-                source,
-                target,
-            )
-        })?;
-        let _ = writer_slot.take();
-        Ok(CopyOutcome::streamed_fallback(
-            CopyStats {
-                files: 1,
-                bytes,
-                ..CopyStats::default()
-            },
-            write_outcome.atomicity,
-        ))
+                write_outcome.atomicity,
+            ))
+        })
     }
 
     /// Validates a logical path against the cached provider snapshot.

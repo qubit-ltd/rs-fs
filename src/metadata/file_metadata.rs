@@ -69,6 +69,7 @@ impl FileMetadata {
 
     /// Replaces user-defined metadata that has already passed key validation.
     #[inline]
+    #[must_use]
     pub fn with_user_metadata(mut self, metadata: UserMetadata) -> Self {
         self.user_metadata = NonSensitiveMetadata::from(metadata);
         self
@@ -77,6 +78,7 @@ impl FileMetadata {
     /// Replaces provider-native metadata that has already passed key
     /// validation.
     #[inline]
+    #[must_use]
     pub fn with_provider_metadata(mut self, metadata: UserMetadata) -> Self {
         self.provider_metadata = NonSensitiveMetadata::from(metadata);
         self

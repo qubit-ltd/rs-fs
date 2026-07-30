@@ -5,28 +5,19 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow all -- facade integration tests exercise this API group.
-//! Runtime-neutral asynchronous provider contract and opened-handle envelopes.
-
-use std::future::Future;
-use std::pin::Pin;
+// qubit-style: allow source-test-pair -- behavior is covered through the public
+// facade.
+//! Runtime-neutral asynchronous provider implementation contract.
 
 use crate::{
-    AsyncDirectoryStream,
-    AsyncFileReader,
-    AsyncFileWriter,
-    AtomicityRequirement,
     CreateDirectoryOutcome,
     DeleteOutcome,
     FileSystemProperties,
     FsResult,
-    OpenedFileInfo,
     RenameOutcome,
 };
 
 use super::{
-    AsyncDirectoryStreamSession,
-    AsyncFileWriteSession,
     CopyAttempt,
     CopyDeclineReason,
     CopyRequest,
@@ -38,180 +29,18 @@ use super::{
     ListRequest,
     OpenReaderRequest,
     OpenWriterRequest,
+    OpenedAsyncDirectoryStream,
+    OpenedAsyncReader,
+    OpenedAsyncTempDirectory,
+    OpenedAsyncTempFile,
+    OpenedAsyncWriter,
     RenameRequest,
     SpiCopyFailure,
+    SpiFuture,
     SpiRenameFailure,
     StatRequest,
     StatResponse,
 };
-
-/// Runtime-neutral boxed future used by asynchronous providers.
-pub type SpiFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
-
-/// An already-open asynchronous reader bound to provider identity.
-pub struct OpenedAsyncReader {
-    info: OpenedFileInfo,
-    reader: Box<dyn qubit_io::AsyncInput<Item = u8> + Send>,
-}
-
-impl OpenedAsyncReader {
-    /// Wraps a provider-opened reader session and its claimed identity.
-    #[must_use]
-    pub fn new(
-        info: OpenedFileInfo,
-        reader: Box<dyn qubit_io::AsyncInput<Item = u8> + Send>,
-    ) -> Self {
-        Self { info, reader }
-    }
-
-    /// Returns the immutable provider-opened identity.
-    #[must_use]
-    pub fn info(&self) -> &OpenedFileInfo {
-        &self.info
-    }
-
-    /// Transfers the validated reader into the facade handle.
-    pub(crate) fn into_reader(self) -> AsyncFileReader {
-        AsyncFileReader::new(self.info, self.reader)
-    }
-}
-
-/// An already-open asynchronous writer bound to provider identity.
-pub struct OpenedAsyncWriter {
-    info: OpenedFileInfo,
-    session: Box<dyn AsyncFileWriteSession>,
-}
-
-impl OpenedAsyncWriter {
-    /// Wraps an opened provider writer session and its validated identity.
-    #[must_use]
-    pub fn new(
-        info: OpenedFileInfo,
-        session: Box<dyn AsyncFileWriteSession>,
-    ) -> Self {
-        Self { info, session }
-    }
-
-    /// Returns the immutable provider-opened identity.
-    #[must_use]
-    pub fn info(&self) -> &OpenedFileInfo {
-        &self.info
-    }
-
-    /// Transfers the validated writer into the facade handle.
-    pub(crate) fn into_writer(
-        self,
-        atomicity: AtomicityRequirement,
-        provider: &str,
-        max_write_bytes: Option<u64>,
-    ) -> AsyncFileWriter {
-        AsyncFileWriter::new(
-            self.info,
-            self.session,
-            atomicity,
-            provider,
-            max_write_bytes,
-        )
-    }
-}
-
-/// An already-open asynchronous directory stream.
-pub struct OpenedAsyncDirectoryStream {
-    session: Box<dyn AsyncDirectoryStreamSession>,
-}
-
-impl OpenedAsyncDirectoryStream {
-    /// Wraps an opened provider directory-enumeration session.
-    #[must_use]
-    pub fn new(session: Box<dyn AsyncDirectoryStreamSession>) -> Self {
-        Self { session }
-    }
-
-    /// Transfers the stream into the facade handle.
-    pub(crate) fn into_stream(
-        self,
-        root: crate::Path,
-        options: crate::ListOptions,
-        provider: &str,
-    ) -> AsyncDirectoryStream {
-        AsyncDirectoryStream::new(root, self.session, options, provider)
-    }
-}
-
-/// An already-created asynchronous temporary-file handle.
-pub struct OpenedAsyncTempFile {
-    info: OpenedFileInfo,
-    session: Box<dyn AsyncTempResourceSpi>,
-}
-
-impl OpenedAsyncTempFile {
-    /// Wraps an asynchronous temporary-file handle.
-    #[must_use]
-    pub fn new(
-        info: OpenedFileInfo,
-        session: Box<dyn AsyncTempResourceSpi>,
-    ) -> Self {
-        Self { info, session }
-    }
-
-    /// Returns the immutable provider-opened identity.
-    #[must_use]
-    pub const fn info(&self) -> &OpenedFileInfo {
-        &self.info
-    }
-
-    /// Transfers the provider session into the facade handle.
-    pub(crate) fn into_parts(
-        self,
-    ) -> (OpenedFileInfo, Box<dyn AsyncTempResourceSpi>) {
-        (self.info, self.session)
-    }
-}
-
-/// An already-created asynchronous temporary-directory handle.
-pub struct OpenedAsyncTempDirectory {
-    info: OpenedFileInfo,
-    session: Box<dyn AsyncTempResourceSpi>,
-}
-
-impl OpenedAsyncTempDirectory {
-    /// Wraps an asynchronous temporary-directory handle.
-    #[must_use]
-    pub fn new(
-        info: OpenedFileInfo,
-        session: Box<dyn AsyncTempResourceSpi>,
-    ) -> Self {
-        Self { info, session }
-    }
-
-    /// Returns the immutable provider-opened identity.
-    #[must_use]
-    pub const fn info(&self) -> &OpenedFileInfo {
-        &self.info
-    }
-
-    /// Transfers the provider session into the facade handle.
-    pub(crate) fn into_parts(
-        self,
-    ) -> (OpenedFileInfo, Box<dyn AsyncTempResourceSpi>) {
-        (self.info, self.session)
-    }
-}
-
-/// Provider-side asynchronous temporary-resource lifecycle session.
-pub trait AsyncTempResourceSpi: Send {
-    /// Asynchronously confirms provider cleanup.
-    fn cleanup<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<()>>;
-
-    /// Asynchronously releases caller cleanup responsibility.
-    fn keep<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<()>>;
-
-    /// Asynchronously persists this resource to a validated target.
-    fn persist<'a>(
-        self: Pin<&'a mut Self>,
-        request: super::PersistRequest<'a>,
-    ) -> SpiFuture<'a, Result<crate::PersistOutcome, super::SpiPersistFailure>>;
-}
 
 /// Object-safe asynchronous provider implementation contract.
 pub trait AsyncFileSystemSpi: Send + Sync {
@@ -262,6 +91,7 @@ pub trait AsyncFileSystemSpi: Send + Sync {
     ) -> SpiFuture<'a, FsResult<DeleteOutcome>>;
 
     /// Attempts an optional native asynchronous copy primitive.
+    #[inline]
     fn try_copy<'a>(
         &'a self,
         _request: CopyRequest<'a>,

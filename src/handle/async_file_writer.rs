@@ -337,6 +337,7 @@ impl AsyncOutput for AsyncFileWriter {
 }
 
 impl Debug for AsyncFileWriter {
+    #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter
             .debug_struct("AsyncFileWriter")

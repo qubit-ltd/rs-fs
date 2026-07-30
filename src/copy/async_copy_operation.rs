@@ -23,6 +23,8 @@ use crate::{
     Path,
 };
 
+use super::internal::CopyCancellationGuard;
+
 /// An owning copy request whose recovery writer remains accessible after
 /// failure.
 pub struct AsyncCopyOperation {
@@ -53,35 +55,41 @@ impl AsyncCopyOperation {
     }
 
     /// Returns the immutable source path.
+    #[inline]
     #[must_use]
     pub const fn source(&self) -> &Path {
         &self.source
     }
 
     /// Returns the immutable destination path.
+    #[inline(always)]
     #[must_use]
     pub const fn target(&self) -> &Path {
         &self.target
     }
 
     /// Returns the current operation lifecycle state.
+    #[inline(always)]
     #[must_use]
     pub const fn state(&self) -> AsyncCopyOperationState {
         self.state
     }
 
     /// Returns whether a recovery writer is retained by this operation.
+    #[inline(always)]
     #[must_use]
     pub const fn has_recovery_writer(&self) -> bool {
         self.writer.is_some()
     }
 
     /// Borrows the retained recovery writer, if one exists.
+    #[inline(always)]
     pub fn recovery_writer(&mut self) -> Option<&mut AsyncFileWriter> {
         self.writer.as_mut()
     }
 
     /// Takes ownership of the retained recovery writer, if one exists.
+    #[inline(always)]
     pub fn take_recovery_writer(&mut self) -> Option<AsyncFileWriter> {
         self.writer.take()
     }
@@ -109,58 +117,6 @@ impl AsyncCopyOperation {
             .await;
         guard.finish(&result);
         result
-    }
-}
-
-/// Marks a polled operation indeterminate if cancellation interrupts provider
-/// I/O.
-struct CopyCancellationGuard<'a> {
-    state: &'a mut AsyncCopyOperationState,
-    writer: &'a mut Option<AsyncFileWriter>,
-    finished: bool,
-}
-
-impl<'a> CopyCancellationGuard<'a> {
-    /// Starts tracking cancellation immediately before the first provider
-    /// await.
-    fn start(
-        state: &'a mut AsyncCopyOperationState,
-        writer: &'a mut Option<AsyncFileWriter>,
-    ) -> Self {
-        *state = AsyncCopyOperationState::Running;
-        Self {
-            state,
-            writer,
-            finished: false,
-        }
-    }
-
-    /// Borrows the recovery writer slot for the running operation.
-    fn writer_mut(&mut self) -> &mut Option<AsyncFileWriter> {
-        self.writer
-    }
-
-    /// Records the completed result and disables cancellation handling.
-    fn finish(&mut self, result: &Result<CopyOutcome, AsyncCopyFailure>) {
-        *self.state = match result {
-            Ok(_) => AsyncCopyOperationState::Completed,
-            Err(failure) => AsyncCopyOperationState::Failed(failure.state()),
-        };
-        self.finished = true;
-    }
-}
-
-impl Drop for CopyCancellationGuard<'_> {
-    /// Records only local state; drop never calls a provider.
-    fn drop(&mut self) {
-        if !self.finished && *self.state == AsyncCopyOperationState::Running {
-            *self.state = AsyncCopyOperationState::Failed(
-                CopyFailureState::Indeterminate,
-            );
-            if let Some(writer) = self.writer.as_mut() {
-                writer.mark_indeterminate();
-            }
-        }
     }
 }
 

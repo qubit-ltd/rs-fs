@@ -44,6 +44,7 @@ impl PathComponent {
     }
 
     /// Returns the validated logical component text.
+    #[inline(always)]
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -52,6 +53,7 @@ impl PathComponent {
 
 impl Display for PathComponent {
     /// Formats the validated component without changing its lexical spelling.
+    #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter.write_str(self.as_str())
     }

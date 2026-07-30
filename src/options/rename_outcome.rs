@@ -56,31 +56,37 @@ impl RenameOutcome {
     /// Replaces provider-native diagnostics that have already passed key
     /// validation.
     #[inline]
+    #[must_use]
     pub fn with_diagnostics(mut self, diagnostics: UserMetadata) -> Self {
         self.diagnostics = NonSensitiveMetadata::from(diagnostics);
         self
     }
     /// Returns the source identity.
+    #[inline]
     #[must_use]
     pub fn source(&self) -> &Path {
         &self.source
     }
     /// Returns the target identity.
+    #[inline(always)]
     #[must_use]
     pub fn target(&self) -> &Path {
         &self.target
     }
     /// Returns actual publication atomicity.
+    #[inline(always)]
     #[must_use]
     pub const fn atomicity(&self) -> AchievedAtomicity {
         self.atomicity
     }
     /// Returns the provider's publication method.
+    #[inline(always)]
     #[must_use]
     pub const fn method(&self) -> PublicationMethod {
         self.method
     }
     /// Returns provider diagnostics that are safe to expose.
+    #[inline(always)]
     #[must_use]
     pub const fn diagnostics(&self) -> &NonSensitiveMetadata {
         &self.diagnostics

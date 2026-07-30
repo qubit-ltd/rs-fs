@@ -48,11 +48,13 @@ mod async_file_system;
 mod copy;
 mod error;
 mod file_system;
+mod file_system_properties;
 mod handle;
 mod metadata;
 mod options;
 mod path;
-mod properties;
+mod path_constraints;
+mod path_form;
 mod rename;
 pub mod spi;
 mod temp;
@@ -73,6 +75,7 @@ pub use error::{
     FsResult,
 };
 pub use file_system::FileSystem;
+pub use file_system_properties::FileSystemProperties;
 pub use handle::{
     AsyncDirectoryStream,
     AsyncFileReader,
@@ -139,11 +142,8 @@ pub use path::{
     PathSemantics,
     RelativePath,
 };
-pub use properties::{
-    FileSystemProperties,
-    PathConstraints,
-    PathForm,
-};
+pub use path_constraints::PathConstraints;
+pub use path_form::PathForm;
 pub use rename::{
     RenameFailure,
     RenameFailureState,

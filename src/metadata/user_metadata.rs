@@ -80,6 +80,7 @@ impl UserMetadata {
 }
 
 impl Debug for UserMetadata {
+    #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter
             .debug_struct("UserMetadata")

@@ -30,16 +30,19 @@ impl RenameFailure {
         Self { error, state }
     }
     /// Returns the contextual filesystem error.
+    #[inline(always)]
     #[must_use]
     pub const fn error(&self) -> &FsError {
         &self.error
     }
     /// Returns the state of the source/target transition at failure.
+    #[inline(always)]
     #[must_use]
     pub const fn state(&self) -> RenameFailureState {
         self.state
     }
     /// Splits the failure into its error and state.
+    #[inline(always)]
     #[must_use]
     pub fn into_parts(self) -> (FsError, RenameFailureState) {
         (self.error, self.state)
@@ -47,6 +50,7 @@ impl RenameFailure {
 }
 impl Debug for RenameFailure {
     /// Formats the safe typed failure facts.
+    #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter
             .debug_struct("RenameFailure")

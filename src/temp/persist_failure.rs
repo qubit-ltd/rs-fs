@@ -72,6 +72,7 @@ impl PersistFailure {
     }
 
     /// Splits this facade failure into its causal error and state.
+    #[inline(always)]
     #[must_use]
     pub fn into_parts(self) -> (FsError, PersistFailureState) {
         (self.error, self.state)
@@ -79,12 +80,14 @@ impl PersistFailure {
 }
 
 impl Display for PersistFailure {
+    #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         write!(formatter, "persist {:?}: {}", self.state, self.error)
     }
 }
 
 impl Error for PersistFailure {
+    #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(&self.error)
     }

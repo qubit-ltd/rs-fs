@@ -26,6 +26,7 @@ pub struct CreateDirectoryOptions {
 
 impl Default for CreateDirectoryOptions {
     /// Creates non-recursive options that reject an existing directory.
+    #[inline]
     fn default() -> Self {
         Self {
             recursive: false,
@@ -37,6 +38,7 @@ impl Default for CreateDirectoryOptions {
 
 impl CreateDirectoryOptions {
     /// Replaces user-defined metadata that has already passed key validation.
+    #[inline(always)]
     #[must_use]
     pub fn with_user_metadata(mut self, metadata: UserMetadata) -> Self {
         self.user_metadata = NonSensitiveMetadata::from(metadata);

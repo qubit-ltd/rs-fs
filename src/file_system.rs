@@ -87,6 +87,7 @@ pub struct FileSystem {
 impl FileSystem {
     /// Constructs a facade and caches the provider's single validated property
     /// snapshot.
+    #[inline]
     pub fn from_spi<S>(spi: S) -> FsResult<Self>
     where
         S: FileSystemSpi + 'static,
@@ -95,6 +96,7 @@ impl FileSystem {
     }
 
     /// Constructs a facade from a shared provider implementation.
+    #[inline]
     pub fn from_shared_spi(spi: Arc<dyn FileSystemSpi>) -> FsResult<Self> {
         let properties = spi.properties();
         properties.validate()?;
@@ -105,6 +107,7 @@ impl FileSystem {
     }
 
     /// Returns the immutable property snapshot without provider I/O.
+    #[inline(always)]
     #[must_use]
     pub fn properties(&self) -> &FileSystemProperties {
         &self.properties
@@ -539,6 +542,7 @@ impl FileSystem {
     }
 
     /// Deletes a file after local option validation.
+    #[inline]
     pub fn delete_file(
         &self,
         path: &Path,
@@ -548,6 +552,7 @@ impl FileSystem {
     }
 
     /// Deletes a directory after local option validation.
+    #[inline]
     pub fn delete_directory(
         &self,
         path: &Path,

@@ -34,21 +34,25 @@ impl WriteAllFailure {
         }
     }
     /// Returns the causal filesystem error.
+    #[inline(always)]
     #[must_use]
     pub const fn error(&self) -> &FsError {
         &self.error
     }
     /// Returns the retained writer, if opening had completed.
+    #[inline(always)]
     #[must_use]
     pub fn writer(&self) -> Option<&FileWriter> {
         self.writer.as_deref()
     }
     /// Returns a mutable retained writer for explicit recovery.
+    #[inline(always)]
     #[must_use]
     pub fn writer_mut(&mut self) -> Option<&mut FileWriter> {
         self.writer.as_deref_mut()
     }
     /// Returns the causal error and optional writer.
+    #[inline(always)]
     #[must_use]
     pub fn into_parts(self) -> (FsError, Option<FileWriter>) {
         (self.error, self.writer.map(|writer| *writer))
@@ -57,6 +61,7 @@ impl WriteAllFailure {
 
 impl Display for WriteAllFailure {
     /// Formats the causal failure without exposing writer internals.
+    #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         self.error.fmt(formatter)
     }
@@ -64,6 +69,7 @@ impl Display for WriteAllFailure {
 
 impl std::fmt::Debug for WriteAllFailure {
     /// Formats the causal error and whether recovery is available.
+    #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter
             .debug_struct("WriteAllFailure")
@@ -75,6 +81,7 @@ impl std::fmt::Debug for WriteAllFailure {
 
 impl Error for WriteAllFailure {
     /// Returns the underlying filesystem error.
+    #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(&self.error)
     }

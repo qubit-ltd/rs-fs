@@ -42,6 +42,7 @@ pub struct Path {
 
 impl Path {
     /// Creates the canonical hierarchical root path.
+    #[inline]
     #[must_use]
     pub fn root() -> Self {
         Self {
@@ -55,6 +56,7 @@ impl Path {
     /// Parses a hierarchical logical path using normalized semantics.
     ///
     /// Returns an invalid-path error for empty input, NUL, or root escape.
+    #[inline]
     pub fn parse(text: &str) -> FsResult<Self> {
         Self::parse_with_semantics(text, PathSemantics::Hierarchical)
     }
@@ -62,6 +64,7 @@ impl Path {
     /// Parses a provider-literal path without interpreting separators or dots.
     ///
     /// Returns an invalid-path error for empty input or NUL.
+    #[inline]
     pub fn parse_literal(text: &str) -> FsResult<Self> {
         Self::parse_with_semantics(text, PathSemantics::ObjectKey)
     }
@@ -119,30 +122,35 @@ impl Path {
     }
 
     /// Returns the validated logical path text.
+    #[inline(always)]
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.text
     }
 
     /// Returns whether this path is absolute.
+    #[inline(always)]
     #[must_use]
     pub const fn is_absolute(&self) -> bool {
         self.absolute
     }
 
     /// Returns the semantics used to validate this logical path.
+    #[inline(always)]
     #[must_use]
     pub const fn semantics(&self) -> PathSemantics {
         self.semantics
     }
 
     /// Iterates lexical component boundaries without using an empty root value.
+    #[inline(always)]
     #[must_use]
     pub fn components(&self) -> PathComponents<'_> {
         PathComponents::new(&self.text, self.absolute, self.literal)
     }
 
     /// Appends one validated component without re-parsing provider text.
+    #[inline(always)]
     #[must_use]
     pub fn child(&self, component: &PathComponent) -> Self {
         self.append(component.as_str())
@@ -150,6 +158,7 @@ impl Path {
 
     /// Appends a safe normalized relative path without re-parsing provider
     /// text.
+    #[inline(always)]
     #[must_use]
     pub fn join(&self, relative: &RelativePath) -> Self {
         self.append(relative.as_str())
@@ -173,6 +182,7 @@ impl Path {
 
 impl Display for Path {
     /// Formats the validated logical spelling.
+    #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter.write_str(self.as_str())
     }
@@ -180,6 +190,7 @@ impl Display for Path {
 
 impl AsRef<str> for Path {
     /// Returns the logical path text for generic text consumers.
+    #[inline(always)]
     fn as_ref(&self) -> &str {
         self.as_str()
     }
