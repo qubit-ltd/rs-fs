@@ -22,7 +22,10 @@ use crate::{
 
 /// A non-empty normalized relative path that cannot escape its base.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct RelativePath(String);
+pub struct RelativePath(
+    /// Normalized descendant path text.
+    String,
+);
 
 impl RelativePath {
     /// Parses a normalized relative path.

@@ -14,8 +14,11 @@ use crate::spi::ResolvedRenameOptions;
 
 /// A facade-created rename request.
 pub struct RenameRequest<'a> {
+    /// Validated source path.
     source: &'a Path,
+    /// Validated destination path.
     target: &'a Path,
+    /// Facade-resolved rename policy.
     options: ResolvedRenameOptions,
 }
 

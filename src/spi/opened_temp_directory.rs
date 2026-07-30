@@ -14,7 +14,9 @@ use crate::OpenedFileInfo;
 
 /// An already-created provider temporary-directory session.
 pub struct OpenedTempDirectory {
+    /// Temporary-directory identity claimed by the provider.
     info: OpenedFileInfo,
+    /// Provider lifecycle session.
     session: Box<dyn TempResourceSpi>,
 }
 

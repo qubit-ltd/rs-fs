@@ -16,7 +16,9 @@ use crate::{
 
 /// An already-open asynchronous reader bound to provider identity.
 pub struct OpenedAsyncReader {
+    /// Resource identity claimed by the provider.
     info: OpenedFileInfo,
+    /// Provider asynchronous byte-input session.
     reader: Box<dyn qubit_io::AsyncInput<Item = u8> + Send>,
 }
 

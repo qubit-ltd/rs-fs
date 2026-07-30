@@ -21,10 +21,15 @@ use crate::{
 /// Stable limits declared by a configured filesystem provider.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct FileSystemLimits {
+    /// Maximum encoded bytes accepted for a complete logical path.
     max_path_text_bytes: FileSystemLimit,
+    /// Maximum encoded bytes accepted for one path component.
     max_component_text_bytes: FileSystemLimit,
+    /// Maximum bytes accepted by one range-read request.
     max_read_range_bytes: FileSystemLimit,
+    /// Maximum bytes accepted by one write session.
     max_write_bytes: FileSystemLimit,
+    /// Maximum entries requested in one listing page.
     max_list_page_entries: FileSystemLimit,
 }
 

@@ -22,7 +22,10 @@ use crate::{
 
 /// A non-empty logical component that cannot express hierarchy or traversal.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct PathComponent(String);
+pub struct PathComponent(
+    /// Validated component text containing no hierarchy or traversal marker.
+    String,
+);
 
 impl PathComponent {
     /// Parses one logical component.

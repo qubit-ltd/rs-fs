@@ -18,7 +18,10 @@ pub enum FileSystemLimit {
     /// The provider imposes no finite limit at the `rs-fs` API layer.
     Unbounded,
     /// The inclusive maximum accepted value.
-    Maximum(u64),
+    Maximum(
+        /// Inclusive maximum accepted value.
+        u64,
+    ),
 }
 
 impl FileSystemLimit {

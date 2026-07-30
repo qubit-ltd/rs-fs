@@ -14,7 +14,9 @@ use crate::OpenedFileInfo;
 
 /// An already-open provider writer.
 pub struct OpenedWriter {
+    /// Resource identity claimed by the provider.
     info: OpenedFileInfo,
+    /// Provider write session.
     writer: Box<dyn FileWriterSpi>,
 }
 

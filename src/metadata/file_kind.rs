@@ -21,5 +21,8 @@ pub enum FileKind {
     /// Object-store prefix or WebDAV collection-like prefix.
     Prefix,
     /// Provider-specific resource type.
-    Other(String),
+    Other(
+        /// Provider-defined resource kind name.
+        String,
+    ),
 }

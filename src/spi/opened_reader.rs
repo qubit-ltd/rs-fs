@@ -15,7 +15,9 @@ use crate::OpenedFileInfo;
 
 /// An already-open provider reader.
 pub struct OpenedReader {
+    /// Resource identity claimed by the provider.
     info: OpenedFileInfo,
+    /// Provider byte-input session.
     reader: Box<dyn Input<Item = u8> + Send>,
 }
 

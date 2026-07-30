@@ -14,8 +14,11 @@ use crate::spi::ResolvedCopyOptions;
 
 /// A facade-created copy request.
 pub struct CopyRequest<'a> {
+    /// Validated source path.
     source: &'a Path,
+    /// Validated destination path.
     target: &'a Path,
+    /// Facade-resolved copy policy.
     options: ResolvedCopyOptions,
 }
 

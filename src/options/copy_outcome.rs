@@ -23,13 +23,21 @@ use crate::{
 /// Outcome returned by copy operations.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CopyOutcome {
+    /// Aggregate counts and bytes reported for the completed copy.
     stats: CopyStats,
+    /// Actual transfer method used by the provider or facade.
     method: CopyMethod,
+    /// Atomicity achieved while publishing the destination.
     atomicity: AchievedAtomicity,
+    /// Whether requested durability was confirmed.
     durable: bool,
+    /// Metadata preservation level actually achieved.
     metadata: MetadataPreservePolicy,
+    /// Optional version assigned to the destination.
     target_version: Option<ResourceVersion>,
+    /// Whether the facade completed the copy after provider decline.
     used_fallback: bool,
+    /// Scrubbed provider diagnostics.
     diagnostics: NonSensitiveMetadata,
 }
 

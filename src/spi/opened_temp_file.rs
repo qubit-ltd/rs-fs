@@ -14,7 +14,9 @@ use crate::OpenedFileInfo;
 
 /// An already-created provider temporary-file session.
 pub struct OpenedTempFile {
+    /// Temporary-file identity claimed by the provider.
     info: OpenedFileInfo,
+    /// Provider lifecycle session.
     session: Box<dyn TempResourceSpi>,
 }
 

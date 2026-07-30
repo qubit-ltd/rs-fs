@@ -14,7 +14,9 @@ macro_rules! path_request {
     ($name:ident, $options:ty) => {
         /// A facade-created request with a validated logical path.
         pub struct $name<'a> {
+            /// Validated logical path borrowed for provider dispatch.
             path: &'a crate::Path,
+            /// Facade-resolved operation options.
             options: $options,
         }
 

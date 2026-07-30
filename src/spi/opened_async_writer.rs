@@ -18,7 +18,9 @@ use crate::{
 
 /// An already-open asynchronous writer bound to provider identity.
 pub struct OpenedAsyncWriter {
+    /// Resource identity claimed by the provider.
     info: OpenedFileInfo,
+    /// Provider asynchronous write session.
     session: Box<dyn AsyncFileWriteSession>,
 }
 

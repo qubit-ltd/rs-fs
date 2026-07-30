@@ -15,7 +15,10 @@ use std::fmt::{
 
 /// Opaque version, generation, or ETag reported by a provider.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct ResourceVersion(String);
+pub struct ResourceVersion(
+    /// Provider-defined opaque version text.
+    String,
+);
 
 impl ResourceVersion {
     /// Creates an opaque resource version.

@@ -23,7 +23,10 @@ use crate::{
 
 /// Stable identity of one configured filesystem object.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct FileSystemId(Box<str>);
+pub struct FileSystemId(
+    /// Validated provider-supplied identity text.
+    Box<str>,
+);
 
 impl FileSystemId {
     /// Validates a filesystem identity supplied by a provider.

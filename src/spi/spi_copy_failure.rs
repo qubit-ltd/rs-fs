@@ -17,8 +17,11 @@ use crate::{
 
 /// Typed provider copy failure reserved for copy orchestration.
 pub struct SpiCopyFailure {
+    /// Provider failure with filesystem context.
     error: Box<FsError>,
+    /// Provider-confirmed destination publication state.
     state: CopyFailureState,
+    /// Transfer progress confirmed before failure.
     partial_stats: CopyStats,
 }
 
