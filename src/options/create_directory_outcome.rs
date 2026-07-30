@@ -18,6 +18,7 @@ pub struct CreateDirectoryOutcome {
 impl CreateDirectoryOutcome {
     /// Creates an outcome. `already_existed` reports an accepted existing
     /// directory.
+    #[inline]
     #[must_use]
     pub const fn new(already_existed: bool) -> Self {
         Self {
@@ -27,12 +28,14 @@ impl CreateDirectoryOutcome {
     }
 
     /// Returns whether an existing directory satisfied the request.
+    #[inline(always)]
     #[must_use]
     pub const fn already_existed(self) -> bool {
         self.already_existed
     }
 
     /// Attaches the number of ancestor directories created, when known.
+    #[inline(always)]
     #[must_use]
     pub const fn with_created_ancestors(mut self, count: u64) -> Self {
         self.created_ancestors = Some(count);
@@ -40,6 +43,7 @@ impl CreateDirectoryOutcome {
     }
 
     /// Returns the number of created ancestor directories, when reported.
+    #[inline(always)]
     #[must_use]
     pub const fn created_ancestors(self) -> Option<u64> {
         self.created_ancestors

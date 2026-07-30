@@ -36,6 +36,7 @@ impl DirEntry {
     ///
     /// # Returns
     /// New entry with no loaded metadata.
+    #[inline]
     #[must_use]
     pub fn new(path: Path, kind: FileKind) -> Self {
         let name = path

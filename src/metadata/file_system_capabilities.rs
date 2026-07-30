@@ -127,6 +127,7 @@ impl FileSystemCapabilities {
     /// `None` means that every advertised derived capability has its required
     /// base capability. The returned pair contains the derived capability
     /// followed by the missing base capability.
+    #[inline]
     #[must_use]
     pub fn missing_dependency(
         &self,
@@ -148,6 +149,7 @@ impl Default for FileSystemCapabilities {
 }
 
 impl Debug for FileSystemCapabilities {
+    #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter.debug_set().entries(self.iter()).finish()
     }

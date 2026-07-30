@@ -78,6 +78,7 @@ impl Input for FileReader {
 }
 
 impl Debug for FileReader {
+    #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter
             .debug_struct("FileReader")

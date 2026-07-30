@@ -305,6 +305,7 @@ impl Output for FileWriter {
 }
 
 impl Debug for FileWriter {
+    #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter
             .debug_struct("FileWriter")

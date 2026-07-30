@@ -63,6 +63,8 @@ impl FileSystemInfo {
     /// `metadata` has already rejected credential-like keys. Providers must
     /// expose secrets only through an external credential boundary, never
     /// through this debug-visible local snapshot.
+    #[inline(always)]
+    #[must_use]
     pub fn with_provider_metadata(mut self, metadata: UserMetadata) -> Self {
         self.provider_metadata = NonSensitiveMetadata::from(metadata);
         self

@@ -52,6 +52,7 @@ impl RelativePath {
     }
 
     /// Returns the normalized logical path text.
+    #[inline(always)]
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -60,6 +61,7 @@ impl RelativePath {
 
 impl Display for RelativePath {
     /// Formats the normalized relative path.
+    #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter.write_str(self.as_str())
     }

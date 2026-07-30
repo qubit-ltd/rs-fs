@@ -151,6 +151,7 @@ fn relative_path<'a>(root: &Path, entry: &'a Path) -> Option<&'a str> {
 }
 
 impl Debug for AsyncDirectoryStream {
+    #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter
             .debug_struct("AsyncDirectoryStream")

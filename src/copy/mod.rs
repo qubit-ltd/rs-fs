@@ -12,6 +12,7 @@ mod async_copy_operation;
 mod async_copy_operation_state;
 mod copy_failure;
 mod copy_failure_state;
+mod internal;
 
 pub use async_copy_failure::AsyncCopyFailure;
 pub use async_copy_operation::AsyncCopyOperation;

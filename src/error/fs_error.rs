@@ -62,6 +62,7 @@ impl FsError {
     /// # Returns
     /// New filesystem error.
     #[inline]
+    #[must_use]
     pub fn new(
         kind: FsErrorKind,
         operation: FsOperation,
@@ -228,6 +229,7 @@ impl FsError {
     /// # Returns
     /// Invalid-path filesystem error.
     #[inline]
+    #[must_use]
     pub fn invalid_path(operation: FsOperation, message: &str) -> Self {
         Self::new(FsErrorKind::InvalidPath, operation, message)
     }
@@ -405,6 +407,7 @@ impl FsError {
 }
 
 impl Debug for FsError {
+    #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter
             .debug_struct("FsError")

@@ -57,11 +57,13 @@ impl TempFile {
         }
     }
     /// Returns the temporary logical path.
+    #[inline(always)]
     #[must_use]
     pub const fn path(&self) -> &Path {
         &self.path
     }
     /// Returns the resource lifecycle state.
+    #[inline(always)]
     #[must_use]
     pub const fn state(&self) -> TempResourceState {
         self.state
@@ -200,6 +202,7 @@ impl TempFile {
 }
 
 impl Debug for TempFile {
+    #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         f.debug_struct("TempFile")
             .field("path", &self.path)

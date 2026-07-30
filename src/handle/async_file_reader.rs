@@ -93,6 +93,7 @@ impl AsyncInput for AsyncFileReader {
 }
 
 impl Debug for AsyncFileReader {
+    #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter
             .debug_struct("AsyncFileReader")

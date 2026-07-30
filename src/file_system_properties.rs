@@ -5,9 +5,9 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+// qubit-style: allow source-test-pair -- behavior is covered through the public
+// facade.
 
-// qubit-style: allow all -- these tightly coupled property value types form one
-// public snapshot.
 //! Immutable filesystem property snapshots used by facades.
 
 use crate::{
@@ -18,77 +18,10 @@ use crate::{
     FsErrorKind,
     FsOperation,
     FsResult,
-    Path,
+    PathConstraints,
+    PathForm,
     PathSemantics,
 };
-
-/// Permitted absolute or relative form for paths accepted by a filesystem.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum PathForm {
-    /// Only absolute paths are accepted.
-    Absolute,
-    /// Only relative paths are accepted.
-    Relative,
-    /// Both absolute and relative paths are accepted.
-    Either,
-}
-
-/// Immutable path form constraints attached to one filesystem snapshot.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PathConstraints {
-    form: PathForm,
-}
-
-impl PathConstraints {
-    /// Creates constraints accepting only absolute paths.
-    #[must_use]
-    pub const fn absolute() -> Self {
-        Self {
-            form: PathForm::Absolute,
-        }
-    }
-
-    /// Creates constraints accepting only relative paths.
-    #[must_use]
-    pub const fn relative() -> Self {
-        Self {
-            form: PathForm::Relative,
-        }
-    }
-
-    /// Creates constraints accepting either logical path form.
-    #[must_use]
-    pub const fn either() -> Self {
-        Self {
-            form: PathForm::Either,
-        }
-    }
-
-    /// Returns the configured accepted path form.
-    #[must_use]
-    pub const fn form(&self) -> PathForm {
-        self.form
-    }
-
-    /// Validates a logical path without performing I/O.
-    ///
-    /// Returns an invalid-path error when `path` has a disallowed form.
-    pub fn validate(&self, path: &Path) -> FsResult<()> {
-        let allowed = matches!(self.form, PathForm::Either)
-            || matches!(
-                (self.form, path.is_absolute()),
-                (PathForm::Absolute, true) | (PathForm::Relative, false)
-            );
-        if allowed {
-            Ok(())
-        } else {
-            Err(FsError::invalid_path(
-                FsOperation::ParsePath,
-                "path form is not accepted by this filesystem",
-            ))
-        }
-    }
-}
 
 /// Immutable construction-time properties cached by a filesystem facade.
 #[derive(Clone, Debug)]
@@ -109,6 +42,7 @@ impl FileSystemProperties {
     /// Returns an invalid-options error when the provider identity is invalid,
     /// advertised capabilities violate dependencies, or path configuration is
     /// internally inconsistent. This method performs no I/O.
+    #[inline]
     pub fn new(
         info: FileSystemInfo,
         capabilities: FileSystemCapabilities,
@@ -126,24 +60,28 @@ impl FileSystemProperties {
     }
 
     /// Returns the stable filesystem identity and configuration.
+    #[inline(always)]
     #[must_use]
     pub const fn info(&self) -> &FileSystemInfo {
         &self.info
     }
 
     /// Returns the stable advertised capabilities.
+    #[inline(always)]
     #[must_use]
     pub const fn capabilities(&self) -> FileSystemCapabilities {
         self.capabilities
     }
 
     /// Returns the stable filesystem limits.
+    #[inline(always)]
     #[must_use]
     pub const fn limits(&self) -> &FileSystemLimits {
         &self.limits
     }
 
     /// Returns the immutable accepted path constraints.
+    #[inline(always)]
     #[must_use]
     pub const fn path_constraints(&self) -> &PathConstraints {
         &self.path_constraints

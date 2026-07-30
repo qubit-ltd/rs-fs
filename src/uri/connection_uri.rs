@@ -63,6 +63,7 @@ impl ConnectionUri {
     ///
     /// Username-only userinfo is not considered a secret because it can be
     /// paired with an external credential reference.
+    #[inline]
     #[must_use]
     pub fn has_embedded_secret(&self) -> bool {
         let has_password = self.parsed.authority().is_some_and(|authority| {
@@ -80,6 +81,7 @@ impl ConnectionUri {
     ///
     /// Returns an invalid-URI error when the connection URI contains userinfo
     /// or sensitive query fields that cannot appear in [`Uri`].
+    #[inline(always)]
     pub fn try_to_uri(&self) -> FsResult<Uri> {
         Uri::parse(self.parsed.as_str())
     }
@@ -88,6 +90,7 @@ impl ConnectionUri {
     ///
     /// The callback result is returned unchanged; callers must not use it to
     /// expose secret data through ordinary formatting or serialization.
+    #[inline(always)]
     pub fn expose_unredacted<R>(&self, inspect: impl FnOnce(&str) -> R) -> R {
         inspect(self.parsed.as_str())
     }
@@ -122,6 +125,7 @@ fn authority_has_password(authority: &str) -> bool {
 
 impl Display for ConnectionUri {
     /// Formats only the redacted connection URI.
+    #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter.write_str(&self.redacted_text())
     }
@@ -129,6 +133,7 @@ impl Display for ConnectionUri {
 
 impl Debug for ConnectionUri {
     /// Formats only the redacted connection URI for diagnostics.
+    #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter
             .debug_tuple("ConnectionUri")

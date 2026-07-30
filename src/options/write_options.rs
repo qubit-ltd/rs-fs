@@ -58,6 +58,7 @@ impl Default for WriteOptions {
 impl WriteOptions {
     /// Replaces user-defined metadata that has already passed key validation.
     #[inline]
+    #[must_use]
     pub fn with_user_metadata(mut self, metadata: UserMetadata) -> Self {
         self.user_metadata = NonSensitiveMetadata::from(metadata);
         self
