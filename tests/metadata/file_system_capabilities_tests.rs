@@ -50,10 +50,11 @@ fn capability_set_iterates_and_formats_semantic_values() {
 
 #[test]
 fn capability_all_matches_stable_iteration_order() {
-    let capabilities = FileSystemCapability::ALL.into_iter().fold(
-        FileSystemCapabilities::new(),
-        |capabilities, capability| capabilities.with(capability),
-    );
+    let capabilities = FileSystemCapability::ALL
+        .into_iter()
+        .fold(FileSystemCapabilities::new(), |capabilities, capability| {
+            capabilities.with(capability)
+        });
     assert_eq!(
         FileSystemCapability::ALL.to_vec(),
         capabilities.iter().collect::<Vec<_>>(),
