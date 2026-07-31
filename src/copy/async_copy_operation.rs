@@ -9,8 +9,18 @@
 
 use crate::spi::ResolvedCopyOptions;
 use crate::{
-    AsyncCopyFailure, AsyncCopyOperationState, AsyncFileSystem, AsyncFileWriter, CopyFailureState,
-    CopyOptions, CopyOutcome, CopyStats, FsError, FsErrorKind, FsOperation, Path,
+    AsyncCopyFailure,
+    AsyncCopyOperationState,
+    AsyncFileSystem,
+    AsyncFileWriter,
+    CopyFailureState,
+    CopyOptions,
+    CopyOutcome,
+    CopyStats,
+    FsError,
+    FsErrorKind,
+    FsOperation,
+    Path,
 };
 
 use super::internal::CopyCancellationGuard;

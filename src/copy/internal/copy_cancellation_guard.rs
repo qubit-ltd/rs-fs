@@ -10,7 +10,11 @@
 //! Cancellation guard for an owning asynchronous copy operation.
 
 use crate::{
-    AsyncCopyFailure, AsyncCopyOperationState, AsyncFileWriter, CopyFailureState, CopyOutcome,
+    AsyncCopyFailure,
+    AsyncCopyOperationState,
+    AsyncFileWriter,
+    CopyFailureState,
+    CopyOutcome,
 };
 
 /// Marks a polled operation indeterminate if cancellation interrupts provider
@@ -52,7 +56,9 @@ impl<'a> CopyCancellationGuard<'a> {
     /// # Returns
     /// The mutable slot used to retain an opened recovery writer.
     #[inline(always)]
-    pub(in crate::copy) fn writer_mut(&mut self) -> &mut Option<Box<AsyncFileWriter>> {
+    pub(in crate::copy) fn writer_mut(
+        &mut self,
+    ) -> &mut Option<Box<AsyncFileWriter>> {
         self.writer
     }
 
@@ -64,7 +70,10 @@ impl<'a> CopyCancellationGuard<'a> {
     /// # Returns
     /// The unchanged result after updating operation state and recovery facts.
     #[inline]
-    pub(in crate::copy) fn finish(&mut self, result: &Result<CopyOutcome, AsyncCopyFailure>) {
+    pub(in crate::copy) fn finish(
+        &mut self,
+        result: &Result<CopyOutcome, AsyncCopyFailure>,
+    ) {
         *self.state = match result {
             Ok(_) => AsyncCopyOperationState::Completed,
             Err(failure) => AsyncCopyOperationState::Failed(failure.state()),
@@ -77,7 +86,9 @@ impl Drop for CopyCancellationGuard<'_> {
     /// Records only local state; drop never calls a provider.
     fn drop(&mut self) {
         if !self.finished && *self.state == AsyncCopyOperationState::Running {
-            *self.state = AsyncCopyOperationState::Failed(CopyFailureState::Indeterminate);
+            *self.state = AsyncCopyOperationState::Failed(
+                CopyFailureState::Indeterminate,
+            );
             if let Some(writer) = self.writer.as_mut() {
                 writer.mark_indeterminate();
             }
