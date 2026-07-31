@@ -19,6 +19,13 @@ fn test_is_directory_like_matches_directory_and_prefix() {
 }
 
 #[test]
+fn test_is_file_like_matches_file_and_object() {
+    assert!(FileMetadata::new(FileKind::File).is_file_like());
+    assert!(FileMetadata::new(FileKind::Object).is_file_like());
+    assert!(!FileMetadata::new(FileKind::Directory).is_file_like());
+}
+
+#[test]
 fn file_metadata_preserves_validated_provider_and_user_metadata() {
     let metadata = FileMetadata::new(FileKind::File).with_user_metadata(
         UserMetadata::new()
