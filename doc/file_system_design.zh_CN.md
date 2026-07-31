@@ -1,7 +1,6 @@
 # Qubit FS 文件系统抽象层设计
 
-> 状态：已批准的目标设计。本文定义重构完成后的长期架构与 provider 契约；
-> 在重构完成前，仓库中的现有 API 可能与本文不同。
+> 状态：目标设计已与仓库当前 API 与契约对齐。
 
 ## 1. 设计目标
 
@@ -342,7 +341,7 @@ pub fn begin_copy(
 `begin_copy` 只做同步的 options、path、capability 和静态 limit preflight，不调用
 provider。它失败时使用 `CopyFailureState::Unchanged`，且不存在 recovery handle。
 调用者通过 `AsyncCopyOperation::execute(&mut self).await` 执行。异步 `rename`
-仍返回 `Result<RenameOutcome, AsyncRenameFailure>`；它没有门面内部 writer
+仍返回 `Result<RenameOutcome, RenameFailure>`；它没有门面内部 writer
 recovery responsibility。
 
 ## 6. Provider SPI
@@ -858,7 +857,7 @@ diagnostics。
 会产生类型化部分成功状态的操作使用 operation-specific failure 包装 `FsError`：
 
 - `CopyFailure` / `AsyncCopyFailure`；
-- `RenameFailure` / `AsyncRenameFailure`；
+- `RenameFailure`；
 - 已定义的 `WriteAllFailure`、writer failure 和 persist failure。
 
 门面 preflight failure 统一映射为对应操作的 `Unchanged` / `NotStarted` 状态。
