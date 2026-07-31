@@ -8,21 +8,13 @@
 // qubit-style: allow all -- facade integration tests exercise this API group.
 //! Recoverable facade copy failure.
 
-use crate::{
-    CopyFailureState,
-    CopyStats,
-    FileWriter,
-    FsError,
-};
-use std::fmt::{
-    Debug,
-    Formatter,
-    Result as FmtResult,
-};
+use crate::{CopyFailureState, CopyStats, FileWriter, FsError};
+use std::error::Error;
+use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
 
 /// A copy error with publication state, partial statistics, and optional writer
 /// recovery.
-pub struct CopyFailure {
+struct CopyFailureParts {
     /// Contextual filesystem error that caused the copy to fail.
     error: FsError,
     /// Confirmed destination publication state at failure time.
@@ -30,7 +22,13 @@ pub struct CopyFailure {
     /// Transfer progress confirmed before the failure.
     partial_stats: CopyStats,
     /// Destination writer retained when explicit recovery remains possible.
-    writer: Option<FileWriter>,
+    writer: Option<Box<FileWriter>>,
+}
+
+/// A copy error with publication state, partial statistics, and optional writer
+/// recovery.
+pub struct CopyFailure {
+    parts: Box<CopyFailureParts>,
 }
 impl CopyFailure {
     /// Creates a typed copy failure from validated facade facts.
@@ -41,44 +39,74 @@ impl CopyFailure {
         partial_stats: CopyStats,
         writer: Option<FileWriter>,
     ) -> Self {
+        let writer = writer.map(Box::new);
         Self {
-            error,
-            state,
-            partial_stats,
-            writer,
+            parts: Box::new(CopyFailureParts {
+                error,
+                state,
+                partial_stats,
+                writer,
+            }),
         }
     }
     /// Returns the contextual filesystem error.
     #[inline(always)]
     #[must_use]
     pub const fn error(&self) -> &FsError {
-        &self.error
+        &self.parts.error
     }
     /// Returns the publication state at failure.
     #[inline(always)]
     #[must_use]
     pub const fn state(&self) -> CopyFailureState {
-        self.state
+        self.parts.state
     }
     /// Returns statistics accumulated before failure.
     #[inline(always)]
     #[must_use]
     pub const fn partial_stats(&self) -> &CopyStats {
-        &self.partial_stats
+        &self.parts.partial_stats
     }
     /// Returns whether a writer is available for recovery.
     #[inline(always)]
     #[must_use]
     pub const fn has_writer(&self) -> bool {
-        self.writer.is_some()
+        self.parts.writer.is_some()
     }
+
+    /// Returns the recovery writer if retained.
+    #[inline(always)]
+    #[must_use]
+    pub fn writer(&self) -> Option<&FileWriter> {
+        self.parts.writer.as_deref()
+    }
+
+    /// Returns a mutable recovery writer if retained.
+    #[inline(always)]
+    #[must_use]
+    pub fn writer_mut(&mut self) -> Option<&mut FileWriter> {
+        self.parts.writer.as_deref_mut()
+    }
+
+    /// Takes ownership of the recovery writer when recovery responsibility
+    /// remains with the caller.
+    #[inline(always)]
+    #[must_use]
+    pub fn take_writer(&mut self) -> Option<FileWriter> {
+        self.parts.writer.take().map(|writer| *writer)
+    }
+
     /// Splits the failure into error, state, statistics, and writer recovery.
     #[inline(always)]
     #[must_use]
-    pub fn into_parts(
-        self,
-    ) -> (FsError, CopyFailureState, CopyStats, Option<FileWriter>) {
-        (self.error, self.state, self.partial_stats, self.writer)
+    pub fn into_parts(self) -> (FsError, CopyFailureState, CopyStats, Option<FileWriter>) {
+        let mut parts = self.parts;
+        (
+            parts.error,
+            parts.state,
+            parts.partial_stats,
+            parts.writer.take().map(|writer| *writer),
+        )
     }
 }
 impl Debug for CopyFailure {
@@ -87,10 +115,27 @@ impl Debug for CopyFailure {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter
             .debug_struct("CopyFailure")
-            .field("error", &self.error)
-            .field("state", &self.state)
-            .field("partial_stats", &self.partial_stats)
-            .field("has_writer", &self.writer.is_some())
+            .field("error", &self.parts.error)
+            .field("state", &self.parts.state)
+            .field("partial_stats", &self.parts.partial_stats)
+            .field("has_writer", &self.parts.writer.is_some())
             .finish()
+    }
+}
+
+impl Display for CopyFailure {
+    /// Formats the wrapped file-system error while keeping the recovery state
+    /// intentionally separate.
+    #[inline]
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
+        Display::fmt(self.error(), formatter)
+    }
+}
+
+impl Error for CopyFailure {
+    /// Returns the underlying file-system error.
+    #[inline]
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(self.error())
     }
 }
