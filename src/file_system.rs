@@ -369,6 +369,7 @@ impl FileSystem {
             .and_then(|opened| {
                 let (info, mut session) = opened.into_parts();
                 if let Err(error) = self.validate_temp_info(&info) {
+                    let path = error.path().cloned().unwrap_or_else(Path::root);
                     return Err(match session.cleanup() {
                         Ok(()) => error,
                         Err(cleanup) => FsError::with_source(
@@ -381,7 +382,9 @@ impl FileSystem {
                                 "temporary cleanup failed",
                                 error,
                             ),
-                        ),
+                        )
+                        .with_path(path.clone())
+                        .with_provider(self.properties.info().provider_id()),
                     });
                 }
                 Ok(TempFile::new(self.clone(), info.path().clone(), session))
@@ -402,6 +405,7 @@ impl FileSystem {
             .and_then(|opened| {
                 let (info, mut session) = opened.into_parts();
                 if let Err(error) = self.validate_temp_info(&info) {
+                    let path = error.path().cloned().unwrap_or_else(Path::root);
                     return Err(match session.cleanup() {
                         Ok(()) => error,
                         Err(cleanup) => FsError::with_source(
@@ -414,7 +418,9 @@ impl FileSystem {
                                 "temporary cleanup failed",
                                 error,
                             ),
-                        ),
+                        )
+                        .with_path(path.clone())
+                        .with_provider(self.properties.info().provider_id()),
                     });
                 }
                 Ok(TempDirectory::new(
@@ -662,6 +668,26 @@ impl FileSystem {
             Err(failure) => {
                 let (error, state) = failure.into_parts();
                 let state = from_write_failure_state(state);
+                if error.kind() == FsErrorKind::AlreadyExists
+                    && options.conflict == CopyConflictPolicy::Skip
+                    && state == CopyFailureState::Unchanged
+                {
+                    if let Err(cleanup_error) = writer.abort() {
+                        return Err(self.copy_failure(
+                            cleanup_error,
+                            from_writer_state(writer.state()),
+                            fallback_failure_stats(writer.written_bytes()),
+                            Some(writer),
+                        ));
+                    }
+                    return Ok(CopyOutcome::streamed_fallback(
+                        CopyStats {
+                            skipped: 1,
+                            ..CopyStats::default()
+                        },
+                        crate::AchievedAtomicity::NonAtomic,
+                    ));
+                }
                 return Err(self.copy_failure(
                     error,
                     state,
