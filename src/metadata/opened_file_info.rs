@@ -8,11 +8,7 @@
 // qubit-style: allow source-test-pair
 //! File information captured as part of opening a stream.
 
-use crate::{
-    FileMetadata,
-    FileSystemId,
-    Path,
-};
+use crate::{FileMetadata, FileSystemId, Path};
 
 /// Stable file identity plus an optional metadata snapshot captured at open.
 #[derive(Clone, Debug, PartialEq)]
@@ -22,7 +18,7 @@ pub struct OpenedFileInfo {
     /// Logical resource path fixed at open time.
     path: Path,
     /// Optional metadata captured without an additional lookup.
-    metadata: Option<FileMetadata>,
+    metadata: Option<Box<FileMetadata>>,
 }
 
 impl OpenedFileInfo {
@@ -56,7 +52,7 @@ impl OpenedFileInfo {
     #[inline]
     #[must_use]
     pub fn with_metadata(mut self, metadata: FileMetadata) -> Self {
-        self.metadata = Some(metadata);
+        self.metadata = Some(Box::new(metadata));
         self
     }
 
@@ -87,6 +83,6 @@ impl OpenedFileInfo {
     #[inline]
     #[must_use]
     pub fn metadata(&self) -> Option<&FileMetadata> {
-        self.metadata.as_ref()
+        self.metadata.as_deref()
     }
 }

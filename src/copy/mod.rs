@@ -21,7 +21,10 @@ pub use copy_failure::CopyFailure;
 pub use copy_failure_state::CopyFailureState;
 
 pub(crate) use internal::{
+    fallback_options_supported,
     fallback_failure_stats,
     from_write_failure_state,
     from_writer_state,
+    is_file_kind_supported,
+    validate_stream_copy_length_limits,
 };
