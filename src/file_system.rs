@@ -572,17 +572,16 @@ impl FileSystem {
                 None,
             ));
         }
-        if let Some(length) = metadata.len {
-            if let Err(error) =
+        if let Some(length) = metadata.len
+            && let Err(error) =
                 validate_stream_copy_length_limits(self.properties.limits(), source, target, length)
-            {
-                return Err(self.copy_failure(
-                    error,
-                    CopyFailureState::Unchanged,
-                    CopyStats::default(),
-                    None,
-                ));
-            }
+        {
+            return Err(self.copy_failure(
+                error,
+                CopyFailureState::Unchanged,
+                CopyStats::default(),
+                None,
+            ));
         }
         let mut reader = match self.open_reader(source, ReadOptions::default()) {
             Ok(reader) => reader,

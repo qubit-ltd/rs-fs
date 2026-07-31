@@ -637,21 +637,21 @@ impl AsyncFileSystem {
                     target,
                 ));
             }
-            if let Some(length) = metadata.len {
-                if let Err(error) = validate_stream_copy_length_limits(
+            if let Some(length) = metadata.len
+                && let Err(error) = validate_stream_copy_length_limits(
                     self.properties.limits(),
                     source,
                     target,
                     length,
-                ) {
-                    return Err(self.contextual_copy_failure(
-                        error,
-                        CopyFailureState::Unchanged,
-                        CopyStats::default(),
-                        source,
-                        target,
-                    ));
-                }
+                )
+            {
+                return Err(self.contextual_copy_failure(
+                    error,
+                    CopyFailureState::Unchanged,
+                    CopyStats::default(),
+                    source,
+                    target,
+                ));
             }
             let mut reader = self
                 .open_reader(source, ReadOptions::default())
