@@ -8,17 +8,10 @@
 // qubit-style: allow all -- facade integration tests exercise this API group.
 //! Recoverable failure returned by an asynchronous copy operation.
 
-use std::fmt::{
-    Debug,
-    Formatter,
-    Result as FmtResult,
-};
+use std::error::Error;
+use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
 
-use crate::{
-    CopyFailureState,
-    CopyStats,
-    FsError,
-};
+use crate::{CopyFailureState, CopyStats, FsError};
 
 /// Copy failure facts retained after an asynchronous copy operation.
 pub struct AsyncCopyFailure {
@@ -32,11 +25,7 @@ pub struct AsyncCopyFailure {
 
 impl AsyncCopyFailure {
     /// Creates a failure from facade-confirmed facts.
-    pub(crate) fn new(
-        error: FsError,
-        state: CopyFailureState,
-        partial_stats: CopyStats,
-    ) -> Self {
+    pub(crate) fn new(error: FsError, state: CopyFailureState, partial_stats: CopyStats) -> Self {
         Self {
             error,
             state,
@@ -83,5 +72,21 @@ impl Debug for AsyncCopyFailure {
             .field("state", &self.state)
             .field("partial_stats", &self.partial_stats)
             .finish()
+    }
+}
+
+impl Display for AsyncCopyFailure {
+    /// Formats the wrapped file-system error.
+    #[inline]
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
+        Display::fmt(self.error(), formatter)
+    }
+}
+
+impl Error for AsyncCopyFailure {
+    /// Returns the underlying file-system error.
+    #[inline]
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(self.error())
     }
 }
