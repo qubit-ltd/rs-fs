@@ -9,18 +9,8 @@
 
 use crate::spi::ResolvedCopyOptions;
 use crate::{
-    AsyncCopyFailure,
-    AsyncCopyOperationState,
-    AsyncFileSystem,
-    AsyncFileWriter,
-    CopyFailureState,
-    CopyOptions,
-    CopyOutcome,
-    CopyStats,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    Path,
+    AsyncCopyFailure, AsyncCopyOperationState, AsyncFileSystem, AsyncFileWriter, CopyFailureState,
+    CopyOptions, CopyOutcome, CopyStats, FsError, FsErrorKind, FsOperation, Path,
 };
 
 use super::internal::CopyCancellationGuard;
@@ -39,7 +29,7 @@ pub struct AsyncCopyOperation {
     /// Observable lifecycle state.
     state: AsyncCopyOperationState,
     /// Destination writer retained when recovery remains possible.
-    writer: Option<AsyncFileWriter>,
+    writer: Option<Box<AsyncFileWriter>>,
 }
 
 impl AsyncCopyOperation {
@@ -94,13 +84,13 @@ impl AsyncCopyOperation {
     /// Borrows the retained recovery writer, if one exists.
     #[inline(always)]
     pub fn recovery_writer(&mut self) -> Option<&mut AsyncFileWriter> {
-        self.writer.as_mut()
+        self.writer.as_deref_mut()
     }
 
     /// Takes ownership of the retained recovery writer, if one exists.
     #[inline(always)]
     pub fn take_recovery_writer(&mut self) -> Option<AsyncFileWriter> {
-        self.writer.take()
+        self.writer.take().map(|writer| *writer)
     }
 
     /// Executes the operation exactly once.
