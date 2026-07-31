@@ -63,7 +63,7 @@ pub enum FileSystemCapability {
 
 impl FileSystemCapability {
     /// Stable list of every capability known by this crate version.
-    pub(crate) const ALL: [Self; 23] = [
+    pub const ALL: [Self; 23] = [
         Self::List,
         Self::Read,
         Self::RangeRead,

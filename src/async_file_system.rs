@@ -342,6 +342,7 @@ impl AsyncFileSystem {
             .map_err(|error| self.enrich(error, &Path::root(), FsOperation::CreateTemp))?;
         let (info, session) = opened.into_parts();
         if let Err(error) = self.validate_temp_info(&info) {
+            let path = error.path().cloned().unwrap_or_else(Path::root);
             let mut session = Box::into_pin(session);
             return Err(match session.as_mut().cleanup().await {
                 Ok(()) => error,
@@ -351,7 +352,7 @@ impl AsyncFileSystem {
                     "provider returned an invalid temporary identity and cleanup failed",
                     cleanup,
                 )
-                .with_path(error.path().cloned().unwrap_or_else(Path::root))
+                .with_path(path)
                 .with_provider(self.properties.info().provider_id()),
             });
         }
@@ -751,16 +752,42 @@ impl AsyncFileSystem {
             let writer = writer_slot
                 .as_mut()
                 .expect("writer is retained before commit");
-            let write_outcome = writer.commit_async().await.map_err(|error| {
-                let state = from_writer_state(writer.state());
-                self.contextual_copy_failure(
-                    error,
-                    state,
-                    fallback_failure_stats(writer.written_bytes()),
-                    source,
-                    target,
-                )
-            })?;
+            let write_outcome = match writer.commit_async().await {
+                Ok(outcome) => outcome,
+                Err(error)
+                    if error.kind() == FsErrorKind::AlreadyExists
+                        && options.conflict == CopyConflictPolicy::Skip
+                        && from_writer_state(writer.state())
+                            == CopyFailureState::Unchanged =>
+                {
+                    if let Err(cleanup_error) = writer.abort_async().await {
+                        return Err(self.contextual_copy_failure(
+                            cleanup_error,
+                            from_writer_state(writer.state()),
+                            fallback_failure_stats(writer.written_bytes()),
+                            source,
+                            target,
+                        ));
+                    }
+                    let _ = writer_slot.take();
+                    return Ok(CopyOutcome::streamed_fallback(
+                        CopyStats {
+                            skipped: 1,
+                            ..CopyStats::default()
+                        },
+                        crate::AchievedAtomicity::NonAtomic,
+                    ));
+                }
+                Err(error) => {
+                    return Err(self.contextual_copy_failure(
+                        error,
+                        from_writer_state(writer.state()),
+                        fallback_failure_stats(writer.written_bytes()),
+                        source,
+                        target,
+                    ));
+                }
+            };
             let _ = writer_slot.take();
             Ok(CopyOutcome::streamed_fallback(
                 CopyStats {
