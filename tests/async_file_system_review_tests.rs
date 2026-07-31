@@ -21,8 +21,35 @@ use crate::poll_support::{
     assert_pending,
     ready,
 };
+use qubit_fs::spi::{
+    AsyncFileSystemSpi,
+    AsyncFileWriteSession,
+    CopyAttempt,
+    CopyDeclineReason,
+    CopyRequest,
+    CreateDirectoryRequest,
+    CreateTempDirectoryRequest,
+    CreateTempFileRequest,
+    DeleteDirectoryRequest,
+    DeleteFileRequest,
+    ListRequest,
+    OpenReaderRequest,
+    OpenWriterRequest,
+    OpenedAsyncDirectoryStream,
+    OpenedAsyncReader,
+    OpenedAsyncTempDirectory,
+    OpenedAsyncTempFile,
+    OpenedAsyncWriter,
+    RenameRequest,
+    SpiCopyFailure,
+    SpiFuture,
+    SpiRenameFailure,
+    StatRequest,
+    StatResponse,
+};
 use qubit_fs::{
     AchievedAtomicity,
+    AsyncFileSystem,
     AtomicityRequirement,
     CopyConflictPolicy,
     CopyFailureState,
@@ -31,20 +58,314 @@ use qubit_fs::{
     DeleteOptions,
     DurabilityRequirement,
     FileKind,
+    FileMetadata,
+    FileSystemCapabilities,
     FileSystemCapability,
+    FileSystemId,
+    FileSystemInfo,
+    FileSystemLimits,
+    FileSystemProperties,
+    FsError,
     FsErrorKind,
+    FsOperation,
+    FsResult,
     ListOptions,
+    OpenedFileInfo,
     Path,
+    PathConstraints,
     PathSemantics,
     PersistOptions,
+    PublicationMethod,
     ReadOptions,
+    RenameFailureState,
     RenameOptions,
+    RenameOutcome,
+    WriteFailure,
+    WriteFailureState,
     WriteOptions,
+    WriteOutcome,
+};
+use qubit_io::{
+    AsyncInput,
+    AsyncOutput,
+};
+use std::{
+    io::Result as IoResult,
+    pin::Pin,
+    task::Poll,
 };
 
 /// Parses one stable test path.
 fn path(value: &str) -> Path {
     Path::parse(value).expect("test path should parse")
+}
+
+#[derive(Clone, Copy)]
+struct StreamCopyFallbackSpi {
+    commit_already_exists: bool,
+    stat_error: Option<FsErrorKind>,
+}
+
+impl StreamCopyFallbackSpi {
+    fn unavailable(operation: FsOperation) -> FsError {
+        FsError::new(
+            FsErrorKind::UnsupportedOperation,
+            operation,
+            "async test SPI does not implement this operation",
+        )
+    }
+    fn new(
+        commit_already_exists: bool,
+        stat_error: Option<FsErrorKind>,
+    ) -> Self {
+        Self {
+            commit_already_exists,
+            stat_error,
+        }
+    }
+    fn file_info(&self, path: &Path) -> OpenedFileInfo {
+        OpenedFileInfo::new(
+            FileSystemId::new("async-fallback-review")
+                .expect("test provider id should be valid"),
+            path.clone(),
+        )
+    }
+    fn properties(&self) -> FileSystemProperties {
+        let capabilities = FileSystemCapabilities::new()
+            .with(FileSystemCapability::Copy)
+            .with(FileSystemCapability::Read)
+            .with(FileSystemCapability::Write);
+        FileSystemProperties::new(
+            FileSystemInfo::new(
+                FileSystemId::new("async-fallback-review")
+                    .expect("test provider id should be valid"),
+                "async-fallback-review",
+                PathSemantics::Hierarchical,
+            ),
+            capabilities,
+            FileSystemLimits::unknown(),
+            PathConstraints::absolute(),
+        )
+        .expect("test properties should be valid")
+    }
+}
+
+impl AsyncFileSystemSpi for StreamCopyFallbackSpi {
+    fn properties(&self) -> FileSystemProperties {
+        self.properties()
+    }
+    fn stat<'a>(
+        &'a self,
+        request: StatRequest<'a>,
+    ) -> SpiFuture<'a, FsResult<StatResponse>> {
+        if let Some(kind) = self.stat_error {
+            return Box::pin(async move {
+                Err(FsError::new(
+                    kind,
+                    FsOperation::Stat,
+                    "injected stat failure",
+                ))
+            });
+        }
+        let path = request.path().clone();
+        let mut metadata = FileMetadata::new(FileKind::File);
+        metadata.len = Some(5);
+        Box::pin(async move { Ok(StatResponse::new(path, metadata)) })
+    }
+
+    fn list<'a>(
+        &'a self,
+        _: ListRequest<'a>,
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncDirectoryStream>> {
+        Box::pin(async { Err(Self::unavailable(FsOperation::List)) })
+    }
+    fn open_reader<'a>(
+        &'a self,
+        request: OpenReaderRequest<'a>,
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
+        let _ = request.options();
+        let info = self.file_info(request.path());
+        Box::pin(async move {
+            Ok(OpenedAsyncReader::new(info, Box::new(ZeroReader)))
+        })
+    }
+    fn open_writer<'a>(
+        &'a self,
+        request: OpenWriterRequest<'a>,
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
+        let _ = request.options();
+        let info = self.file_info(request.path());
+        let session = CommitWriter::new(self.commit_already_exists);
+        Box::pin(
+            async move { Ok(OpenedAsyncWriter::new(info, Box::new(session))) },
+        )
+    }
+    fn create_directory<'a>(
+        &'a self,
+        _: CreateDirectoryRequest<'a>,
+    ) -> SpiFuture<'a, FsResult<qubit_fs::CreateDirectoryOutcome>> {
+        Box::pin(async { Err(Self::unavailable(FsOperation::CreateDir)) })
+    }
+    fn delete_file<'a>(
+        &'a self,
+        _: DeleteFileRequest<'a>,
+    ) -> SpiFuture<'a, FsResult<qubit_fs::DeleteOutcome>> {
+        Box::pin(async { Err(Self::unavailable(FsOperation::Delete)) })
+    }
+    fn delete_directory<'a>(
+        &'a self,
+        _: DeleteDirectoryRequest<'a>,
+    ) -> SpiFuture<'a, FsResult<qubit_fs::DeleteOutcome>> {
+        Box::pin(async { Err(Self::unavailable(FsOperation::Delete)) })
+    }
+    fn try_copy<'a>(
+        &'a self,
+        _: CopyRequest<'a>,
+    ) -> SpiFuture<'a, Result<CopyAttempt, SpiCopyFailure>> {
+        Box::pin(async {
+            Ok(CopyAttempt::Declined(CopyDeclineReason::NotApplicable))
+        })
+    }
+    fn rename<'a>(
+        &'a self,
+        _: RenameRequest<'a>,
+    ) -> SpiFuture<'a, Result<RenameOutcome, SpiRenameFailure>> {
+        Box::pin(async {
+            Err(SpiRenameFailure::new(
+                Self::unavailable(FsOperation::Rename),
+                RenameFailureState::Indeterminate,
+            ))
+        })
+    }
+    fn create_temp_file<'a>(
+        &'a self,
+        _: CreateTempFileRequest,
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncTempFile>> {
+        Box::pin(async { Err(Self::unavailable(FsOperation::CreateTemp)) })
+    }
+    fn create_temp_directory<'a>(
+        &'a self,
+        _: CreateTempDirectoryRequest,
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncTempDirectory>> {
+        Box::pin(async { Err(Self::unavailable(FsOperation::CreateTemp)) })
+    }
+}
+
+struct ZeroReader;
+impl AsyncInput for ZeroReader {
+    type Item = u8;
+
+    unsafe fn poll_read_unchecked(
+        self: Pin<&mut Self>,
+        _: &mut std::task::Context<'_>,
+        _: &mut [u8],
+        _: usize,
+        _: usize,
+    ) -> Poll<IoResult<usize>> {
+        let _ = self;
+        Poll::Ready(Ok(0))
+    }
+}
+
+struct CommitWriter {
+    commit_already_exists: bool,
+}
+
+impl CommitWriter {
+    fn new(commit_already_exists: bool) -> Self {
+        Self {
+            commit_already_exists,
+        }
+    }
+}
+
+impl AsyncOutput for CommitWriter {
+    type Item = u8;
+
+    unsafe fn poll_write_unchecked(
+        self: Pin<&mut Self>,
+        _: &mut std::task::Context<'_>,
+        _: &[u8],
+        _: usize,
+        count: usize,
+    ) -> Poll<IoResult<usize>> {
+        let _ = self;
+        Poll::Ready(Ok(count))
+    }
+
+    fn poll_flush(
+        self: Pin<&mut Self>,
+        _: &mut std::task::Context<'_>,
+    ) -> Poll<IoResult<()>> {
+        let _ = self;
+        Poll::Ready(Ok(()))
+    }
+}
+
+impl AsyncFileWriteSession for CommitWriter {
+    fn commit_async<'a>(
+        self: Pin<&'a mut Self>,
+    ) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
+        let commit_already_exists = self.commit_already_exists;
+        Box::pin(async move {
+            if commit_already_exists {
+                return Err(WriteFailure::new(
+                    FsError::new(
+                        FsErrorKind::AlreadyExists,
+                        FsOperation::CommitWriter,
+                        "injected commit refusal",
+                    ),
+                    WriteFailureState::NotPublished,
+                ));
+            }
+            Ok(WriteOutcome::new(
+                AchievedAtomicity::NonAtomic,
+                PublicationMethod::StreamCopy,
+            ))
+        })
+    }
+
+    fn abort_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<()>> {
+        let _ = self;
+        Box::pin(async { Ok(()) })
+    }
+}
+
+/// Covers `exists` mapping for non-`NotFound` provider failures.
+#[test]
+fn test_async_facade_exists_contextualizes_other_errors() {
+    let file_system = AsyncFileSystem::from_spi(StreamCopyFallbackSpi::new(
+        false,
+        Some(FsErrorKind::Io),
+    ))
+    .expect("test SPI should construct");
+    let error = ready(file_system.exists(&path("/io-error")))
+        .expect_err("exists should contextualize non-`NotFound` failures");
+    assert_eq!(FsErrorKind::Io, error.kind());
+    assert_eq!(FsOperation::Exists, error.operation());
+}
+
+/// Covers the stream-copy commit `AlreadyExists` + `Skip` fallback-to-skip
+/// path.
+#[test]
+fn test_async_facade_stream_copy_commit_already_exists_with_skip_marks_skipped()
+{
+    let file_system =
+        AsyncFileSystem::from_spi(StreamCopyFallbackSpi::new(true, None))
+            .expect("test SPI should construct");
+    let mut operation = file_system
+        .begin_copy(
+            path("/source"),
+            path("/target"),
+            CopyOptions {
+                conflict: CopyConflictPolicy::Skip,
+                ..CopyOptions::default()
+            },
+        )
+        .expect("copy preflight should succeed");
+    let outcome = ready(operation.execute())
+        .expect("commit refusal after stream write should skip");
+    assert_eq!(1, outcome.stats().skipped);
 }
 
 /// Covers provider pending and failure propagation for facade I/O entry points.
