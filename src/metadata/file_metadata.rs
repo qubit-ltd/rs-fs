@@ -93,4 +93,14 @@ impl FileMetadata {
     pub fn is_directory_like(&self) -> bool {
         matches!(self.kind, FileKind::Directory | FileKind::Prefix)
     }
+
+    /// Tells whether this metadata describes a file-like resource.
+    ///
+    /// # Returns
+    /// `true` for regular files and object-store objects.
+    #[inline]
+    #[must_use]
+    pub fn is_file_like(&self) -> bool {
+        matches!(self.kind, FileKind::File | FileKind::Object)
+    }
 }
