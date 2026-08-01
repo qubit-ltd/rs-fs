@@ -47,6 +47,7 @@
 mod async_file_system;
 mod copy;
 mod error;
+mod facade_context;
 mod file_system;
 mod file_system_properties;
 mod handle;

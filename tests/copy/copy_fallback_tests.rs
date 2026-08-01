@@ -112,22 +112,53 @@ enum CopyResponse {
 /// Records facade-to-provider calls and stream-fallback bytes.
 struct RecordingSpi {
     response: CopyResponse,
+    advertise_copy: bool,
+    maximum_write_bytes: Option<u64>,
     calls: Arc<Mutex<Vec<&'static str>>>,
     bytes: Arc<Mutex<Vec<u8>>>,
 }
-/// Constructs a recording filesystem with a selected fast-path response.
-#[allow(clippy::type_complexity)]
-fn recording_filesystem(
-    response: CopyResponse,
-) -> (
+
+type RecordingHandles = (
     FileSystem,
     Arc<Mutex<Vec<&'static str>>>,
     Arc<Mutex<Vec<u8>>>,
-) {
+);
+
+/// Constructs a recording filesystem with a selected fast-path response.
+fn recording_filesystem(
+    response: CopyResponse,
+) -> RecordingHandles {
+    recording_filesystem_with_options(response, true, None)
+}
+/// Constructs a recording filesystem with no advertised copy capability.
+fn recording_filesystem_without_copy(
+    response: CopyResponse,
+) -> RecordingHandles {
+    recording_filesystem_with_options(response, false, None)
+}
+/// Constructs a recording filesystem with a finite write-session limit.
+fn recording_filesystem_with_write_limit(
+    response: CopyResponse,
+    maximum_write_bytes: u64,
+) -> RecordingHandles {
+    recording_filesystem_with_options(
+        response,
+        true,
+        Some(maximum_write_bytes),
+    )
+}
+/// Constructs a recording filesystem with explicit capability and limit flags.
+fn recording_filesystem_with_options(
+    response: CopyResponse,
+    advertise_copy: bool,
+    maximum_write_bytes: Option<u64>,
+) -> RecordingHandles {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let bytes = Arc::new(Mutex::new(Vec::new()));
     let filesystem = FileSystem::from_spi(RecordingSpi {
         response,
+        advertise_copy,
+        maximum_write_bytes,
         calls: Arc::clone(&calls),
         bytes: Arc::clone(&bytes),
     })
@@ -136,11 +167,17 @@ fn recording_filesystem(
 }
 /// Builds properties sufficient for native copy, stream fallback, and rename
 /// tests.
-fn properties(response: &CopyResponse) -> FileSystemProperties {
+fn properties(
+    response: &CopyResponse,
+    advertise_copy: bool,
+    maximum_write_bytes: Option<u64>,
+) -> FileSystemProperties {
     let mut capabilities = FileSystemCapabilities::new()
-        .with(FileSystemCapability::Copy)
         .with(FileSystemCapability::Rename)
         .with(FileSystemCapability::AtomicRename);
+    if advertise_copy {
+        capabilities = capabilities.with(FileSystemCapability::Copy);
+    }
     if !matches!(response, CopyResponse::DeclinedWithoutRead) {
         capabilities = capabilities.with(FileSystemCapability::Read);
     }
@@ -171,7 +208,12 @@ fn properties(response: &CopyResponse) -> FileSystemProperties {
             qubit_fs::PathSemantics::Hierarchical,
         ),
         capabilities,
-        FileSystemLimits::unknown(),
+        maximum_write_bytes.map_or_else(
+            FileSystemLimits::unknown,
+            |maximum| FileSystemLimits::unknown().with_max_write_bytes(
+                qubit_fs::FileSystemLimit::Maximum(maximum),
+            ),
+        ),
         PathConstraints::absolute(),
     )
     .expect("properties should be valid")
@@ -184,7 +226,11 @@ fn path(value: &str) -> Path {
 /// call.
 impl FileSystemSpi for RecordingSpi {
     fn properties(&self) -> FileSystemProperties {
-        properties(&self.response)
+        properties(
+            &self.response,
+            self.advertise_copy,
+            self.maximum_write_bytes,
+        )
     }
     fn stat(&self, request: StatRequest<'_>) -> FsResult<StatResponse> {
         self.calls
@@ -565,6 +611,22 @@ fn test_copy_declined_uses_allowlisted_stream_fallback() {
     );
 }
 
+/// Uses the facade stream fallback when the provider does not advertise copy.
+#[test]
+fn test_copy_fallback_does_not_require_copy_capability() {
+    let (filesystem, calls, _) =
+        recording_filesystem_without_copy(CopyResponse::Declined);
+    let outcome = filesystem
+        .copy(&path("/source"), &path("/target"), CopyOptions::default())
+        .expect("read and write capabilities should enable fallback");
+
+    assert!(outcome.used_fallback());
+    assert_eq!(
+        ["stat", "open_reader", "open_writer"],
+        calls.lock().expect("calls lock should succeed").as_slice()
+    );
+}
+
 /// Verifies a preferred server-side attempt may use the safe stream fallback.
 #[test]
 fn test_copy_declined_with_preferred_server_side_uses_stream_fallback() {
@@ -736,6 +798,18 @@ fn test_read_all_contextualizes_reader_failure() {
     assert_eq!(Some(&source), error.path());
 }
 
+/// Includes provider context when the synchronous read-all byte cap is hit.
+#[test]
+fn test_read_all_limit_error_includes_provider_context() {
+    let (filesystem, _, _) = recording_filesystem(CopyResponse::Declined);
+    let error = filesystem
+        .read_all(&path("/source"), qubit_fs::ReadOptions::default(), 2)
+        .expect_err("read-all limit should reject oversized content");
+
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, error.kind());
+    assert_eq!(Some("recording"), error.provider());
+}
+
 /// Retains the public write-all failure type when the writer cannot be opened.
 #[test]
 fn test_write_all_wraps_writer_open_failure() {
@@ -749,6 +823,23 @@ fn test_write_all_wraps_writer_open_failure() {
         );
     assert_eq!(FsErrorKind::Io, failure.error().kind());
     assert!(failure.writer().is_none());
+}
+
+/// Includes provider context when the synchronous write-all limit is hit.
+#[test]
+fn test_write_all_limit_error_includes_provider_context() {
+    let (filesystem, _, _) =
+        recording_filesystem_with_write_limit(CopyResponse::Declined, 1);
+    let failure = filesystem
+        .write_all(
+            &path("/target"),
+            b"bytes",
+            qubit_fs::WriteOptions::default(),
+        )
+        .expect_err("write-all limit should reject oversized content");
+
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
+    assert_eq!(Some("recording"), failure.error().provider());
 }
 /// Verifies that a typed provider failure terminates without a fallback retry.
 #[test]

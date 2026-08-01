@@ -200,7 +200,8 @@ impl AsyncFileSystem {
             })?;
         self.properties
             .limits()
-            .validate_read_range(path, options.length())?;
+            .validate_read_range(path, options.length())
+            .map_err(|error| self.enrich(error, path, FsOperation::OpenReader))?;
         self.require(
             FileSystemCapability::Read,
             FsOperation::OpenReader,
@@ -307,7 +308,10 @@ impl AsyncFileSystem {
             .limits()
             .validate_write_size(path, bytes.len())
         {
-            return Err(AsyncWriteAllFailure::new(error, None));
+            return Err(AsyncWriteAllFailure::new(
+                self.enrich(error, path, FsOperation::Write),
+                None,
+            ));
         }
         let mut writer = self
             .open_writer(path, options)
@@ -577,6 +581,15 @@ impl AsyncFileSystem {
         options: &ResolvedCopyOptions,
         writer: &mut Option<Box<crate::AsyncFileWriter>>,
     ) -> Result<CopyOutcome, AsyncCopyFailure> {
+        if !self
+            .properties
+            .capabilities()
+            .contains(FileSystemCapability::Copy)
+        {
+            return self
+                .stream_copy_fallback(source, target, options, writer)
+                .await;
+        }
         match self
             .spi
             .try_copy(CopyRequest::new(source, target, options.clone()))
@@ -623,36 +636,6 @@ impl AsyncFileSystem {
                 target,
             ));
         }
-        if options.atomicity() == crate::AtomicityRequirement::Required
-            && outcome.atomicity() != crate::AchievedAtomicity::Atomic
-        {
-            return Err(self.contextual_copy_failure(
-                FsError::new(
-                    FsErrorKind::ProviderContractViolation,
-                    FsOperation::Copy,
-                    "provider reported non-atomic success for an atomic-required copy",
-                ),
-                CopyFailureState::Published,
-                *outcome.stats(),
-                source,
-                target,
-            ));
-        }
-        if options.durability() == crate::DurabilityRequirement::Required
-            && !outcome.durable()
-        {
-            return Err(self.contextual_copy_failure(
-                FsError::new(
-                    FsErrorKind::ProviderContractViolation,
-                    FsOperation::Copy,
-                    "provider reported non-durable success for a durability-required copy",
-                ),
-                CopyFailureState::Published,
-                *outcome.stats(),
-                source,
-                target,
-            ));
-        }
         Ok(outcome)
     }
 
@@ -671,7 +654,6 @@ impl AsyncFileSystem {
                 self.enrich(error, source, FsOperation::Copy)
                     .with_target(target.clone())
             })?;
-        self.require(FileSystemCapability::Copy, FsOperation::Copy, source)?;
         if source == target {
             return Err(FsError::new(
                 crate::FsErrorKind::InvalidOptions,
@@ -993,26 +975,7 @@ impl AsyncFileSystem {
         path: &Path,
         operation: FsOperation,
     ) -> FsResult<()> {
-        if path.semantics() != self.properties.info().path_semantics() {
-            return Err(FsError::invalid_path(
-                operation,
-                "path semantics do not match this filesystem",
-            )
-            .with_path(path.clone())
-            .with_provider(self.properties.info().provider_id()));
-        }
-        self.properties
-            .path_constraints()
-            .validate(path)
-            .map_err(|error| self.enrich(error, path, operation))?;
-        self.properties
-            .limits()
-            .validate_path(
-                path,
-                self.properties.info().path_semantics(),
-                operation,
-            )
-            .map_err(|error| self.enrich(error, path, operation))
+        crate::facade_context::validate_path(&self.properties, path, operation)
     }
 
     /// Requires a provider-advertised capability before operation creation.
@@ -1022,18 +985,12 @@ impl AsyncFileSystem {
         operation: FsOperation,
         path: &Path,
     ) -> FsResult<()> {
-        if self.properties.capabilities().contains(capability) {
-            Ok(())
-        } else {
-            Err(FsError::new(
-                crate::FsErrorKind::UnsupportedCapability,
-                operation,
-                "filesystem capability is not supported",
-            )
-            .with_path(path.clone())
-            .with_provider(self.properties.info().provider_id())
-            .with_required_capability(capability))
-        }
+        crate::facade_context::require(
+            &self.properties,
+            capability,
+            operation,
+            path,
+        )
     }
 
     /// Contextualizes a copy failure with its source, target, and provider
@@ -1087,22 +1044,17 @@ impl AsyncFileSystem {
         path: &Path,
         operation: FsOperation,
     ) -> FsError {
-        error.with_operation(operation).with_missing_context(
-            path,
-            None,
-            self.properties.info().provider_id(),
-        )
+        crate::facade_context::enrich(&self.properties, error, path, operation)
     }
 
     /// Creates a provider-contract violation bound to the requested path.
     fn contract_error(&self, path: &Path, message: &'static str) -> FsError {
-        FsError::new(
-            FsErrorKind::ProviderContractViolation,
+        crate::facade_context::contract_error(
+            &self.properties,
+            path,
             FsOperation::ValidateProviderOutcome,
             message,
         )
-        .with_path(path.clone())
-        .with_provider(self.properties.info().provider_id())
     }
 
     /// Validates a provider-opened handle identity before exposing it to
