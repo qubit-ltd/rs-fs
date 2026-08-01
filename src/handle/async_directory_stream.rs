@@ -14,12 +14,14 @@ use std::fmt::{
     Result as FmtResult,
 };
 
+use crate::handle::directory_entry_validation;
 use crate::spi::{
     AsyncDirectoryStreamSession,
     SpiFuture,
 };
 use crate::{
     DirEntry,
+    FileSystemLimits,
     FsError,
     FsErrorKind,
     FsOperation,
@@ -38,6 +40,10 @@ pub struct AsyncDirectoryStream {
     options: ListOptions,
     /// Provider identifier attached to facade-generated errors.
     provider: Box<str>,
+    /// Provider path semantics used to validate every returned entry.
+    path_semantics: crate::PathSemantics,
+    /// Provider path limits used to validate every returned entry.
+    limits: FileSystemLimits,
     /// Whether enumeration has completed or encountered a terminal failure.
     terminal: bool,
 }
@@ -57,12 +63,16 @@ impl AsyncDirectoryStream {
         session: Box<dyn AsyncDirectoryStreamSession>,
         options: ListOptions,
         provider: &str,
+        path_semantics: crate::PathSemantics,
+        limits: FileSystemLimits,
     ) -> Self {
         Self {
             session,
             root,
             options,
             provider: provider.into(),
+            path_semantics,
+            limits,
             terminal: false,
         }
     }
@@ -85,10 +95,25 @@ impl AsyncDirectoryStream {
         }
         Box::pin(async move {
             match self.session.next_entry_async().await {
-                Ok(Some(entry)) if self.entry_satisfies_options(&entry) => {
-                    Ok(Some(entry))
-                }
-                Ok(Some(_)) => {
+                Ok(Some(entry)) => {
+                    if let Err(error) =
+                        directory_entry_validation::validate_entry(
+                            &entry,
+                            &self.root,
+                            self.path_semantics,
+                            self.limits,
+                        )
+                    {
+                        self.terminal = true;
+                        return Err(self.contextual_error(error));
+                    }
+                    if directory_entry_validation::matches_options(
+                        &entry,
+                        &self.root,
+                        &self.options,
+                    ) {
+                        return Ok(Some(entry));
+                    }
                     self.terminal = true;
                     Err(self.contextual_error(
                         FsError::new(
@@ -111,47 +136,11 @@ impl AsyncDirectoryStream {
         })
     }
 
-    /// Checks one provider entry against the request retained by this stream.
-    fn entry_satisfies_options(&self, entry: &DirEntry) -> bool {
-        let Some(relative) = relative_path(&self.root, &entry.path) else {
-            return false;
-        };
-        if !self.options.recursive
-            && self.options.prefix.is_none()
-            && relative.contains('/')
-        {
-            return false;
-        }
-        if self.options.include_metadata && entry.metadata.is_none() {
-            return false;
-        }
-        self.options.prefix.as_deref().is_none_or(|prefix| {
-            relative == prefix
-                || relative
-                    .strip_prefix(prefix)
-                    .is_some_and(|remaining| remaining.starts_with('/'))
-        })
-    }
-
     /// Adds only missing facade facts to a provider stream error.
     fn contextual_error(&self, error: FsError) -> FsError {
         error
             .with_operation(FsOperation::List)
             .with_missing_context(&self.root, None, &self.provider)
-    }
-}
-
-/// Returns the entry path relative to `root` when it remains in the root.
-fn relative_path<'a>(root: &Path, entry: &'a Path) -> Option<&'a str> {
-    if root == entry {
-        Some("")
-    } else if root.as_str() == "/" {
-        entry.as_str().strip_prefix('/')
-    } else {
-        entry
-            .as_str()
-            .strip_prefix(root.as_str())?
-            .strip_prefix('/')
     }
 }
 

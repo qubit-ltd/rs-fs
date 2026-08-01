@@ -11,6 +11,7 @@ mod async_directory_stream;
 mod async_file_reader;
 mod async_file_writer;
 mod async_write_all_failure;
+mod directory_entry_validation;
 mod directory_stream;
 mod file_reader;
 mod file_writer;

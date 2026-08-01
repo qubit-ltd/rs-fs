@@ -25,6 +25,7 @@ use crate::{
     FsOperation,
     FsResult,
     Path,
+    PathComponent,
     PersistFailure,
     PersistFailureState,
     PersistOptions,
@@ -85,6 +86,20 @@ impl AsyncTempFile {
     #[must_use]
     pub const fn state(&self) -> TempResourceState {
         self.state
+    }
+
+    /// Returns one lexically safe child path.
+    #[inline(always)]
+    #[must_use]
+    pub fn child(&self, component: &PathComponent) -> Path {
+        self.path.child(component)
+    }
+
+    /// Returns one lexically safe descendant path.
+    #[inline(always)]
+    #[must_use]
+    pub fn descendant(&self, relative: &crate::RelativePath) -> Path {
+        self.path.join(relative)
     }
 
     /// Asynchronously confirms cleanup of this temporary resource.

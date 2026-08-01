@@ -12,8 +12,10 @@
 use super::AsyncDirectoryStreamSession;
 use crate::{
     AsyncDirectoryStream,
+    FileSystemLimits,
     ListOptions,
     Path,
+    PathSemantics,
 };
 
 /// An already-open asynchronous directory stream.
@@ -52,7 +54,16 @@ impl OpenedAsyncDirectoryStream {
         root: Path,
         options: ListOptions,
         provider: &str,
+        path_semantics: PathSemantics,
+        limits: FileSystemLimits,
     ) -> AsyncDirectoryStream {
-        AsyncDirectoryStream::new(root, self.session, options, provider)
+        AsyncDirectoryStream::new(
+            root,
+            self.session,
+            options,
+            provider,
+            path_semantics,
+            limits,
+        )
     }
 }

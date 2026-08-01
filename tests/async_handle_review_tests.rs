@@ -233,16 +233,13 @@ fn test_async_writer_rechecks_required_atomic_commit_outcome() {
     });
     let mut writer = ready(file_system.open_writer(
         &path("/final"),
-        WriteOptions {
-            atomicity: AtomicityRequirement::Required,
-            ..WriteOptions::default()
-        },
+        WriteOptions::default().with_atomicity(AtomicityRequirement::Required),
     ))
     .expect("provider advertises atomic write support");
     let error = ready(writer.commit_async()).expect_err(
         "a non-atomic success must not satisfy a required atomic write",
     );
-    assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
+    assert_eq!(FsErrorKind::ProviderContractViolation, error.error().kind());
     assert_eq!(WriterState::Published, writer.state());
 }
 
@@ -330,10 +327,7 @@ fn test_async_directory_stream_accepts_nested_prefix_without_recursive_option()
     });
     let mut stream = ready(file_system.list(
         &path("/root"),
-        ListOptions {
-            prefix: Some("nested/item".to_owned()),
-            ..ListOptions::default()
-        },
+        ListOptions::default().with_prefix(Some("nested/item".to_owned())),
     ))
     .expect("directory stream should open");
 
@@ -395,16 +389,30 @@ fn test_async_directory_stream_rejects_missing_requested_metadata() {
     });
     let mut stream = ready(file_system.list(
         &path("/root"),
-        ListOptions {
-            include_metadata: true,
-            ..ListOptions::default()
-        },
+        ListOptions::default().with_include_metadata(true),
     ))
     .expect("directory stream should open");
 
     let error = ready(stream.next_entry_async()).expect_err(
         "metadata request must be enforced against provider entries",
     );
+    assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
+}
+
+/// Rejects asynchronous provider entries whose identity fields disagree.
+#[test]
+fn test_async_directory_stream_rejects_inconsistent_entry_identity() {
+    let mut entry = DirEntry::new(path("/root/file"), FileKind::File);
+    entry.name = "other".to_owned();
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
+        directory_entries: vec![entry],
+        ..AsyncRecordingConfig::default()
+    });
+    let mut stream =
+        ready(file_system.list(&path("/root"), ListOptions::default()))
+            .expect("directory stream should open");
+    let error = ready(stream.next_entry_async())
+        .expect_err("inconsistent entry name must fail");
     assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
 }
 
@@ -421,10 +429,7 @@ fn test_async_directory_stream_accepts_prefix_descendant_and_root_entry() {
     });
     let mut stream = ready(file_system.list(
         &path("/root"),
-        ListOptions {
-            prefix: Some("nested".to_owned()),
-            ..ListOptions::default()
-        },
+        ListOptions::default().with_prefix(Some("nested".to_owned())),
     ))
     .expect("directory stream should open");
     assert!(
@@ -463,7 +468,7 @@ fn test_async_facade_dispatches_successful_operations() {
         Some(5),
         ready(file_system.stat(&source))
             .expect("stat should succeed")
-            .len
+            .len()
     );
     let mut stream = ready(file_system.list(&source, ListOptions::default()))
         .expect("list should succeed");
@@ -573,7 +578,7 @@ fn test_async_writer_stream_failures_mark_writer_indeterminate() {
         assert_eq!(WriterState::Indeterminate, writer.state());
         let commit = ready(writer.commit_async())
             .expect_err("indeterminate writer must not commit again");
-        assert_eq!(FsErrorKind::InvalidState, commit.kind());
+        assert_eq!(FsErrorKind::InvalidState, commit.error().kind());
     }
 }
 
@@ -596,7 +601,7 @@ fn test_async_writer_commit_failures_preserve_recovery_state() {
         .expect("writer should open");
         let error = ready(writer.commit_async())
             .expect_err("configured commit failure should propagate");
-        assert_eq!(FsErrorKind::Io, error.kind());
+        assert_eq!(FsErrorKind::Io, error.error().kind());
         assert_eq!(expected_state, writer.state());
         if expected_state == WriterState::Open {
             ready(writer.abort_async()).expect("open writer should abort");

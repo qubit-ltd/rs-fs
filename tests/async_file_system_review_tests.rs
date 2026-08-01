@@ -206,7 +206,7 @@ impl AsyncFileSystemSpi for StreamCopyFallbackSpi {
         }
         let path = request.path().clone();
         let mut metadata = FileMetadata::new(FileKind::File);
-        metadata.len = Some(5);
+        metadata = metadata.with_len(Some(5));
         Box::pin(async move { Ok(StatResponse::new(path, metadata)) })
     }
 
@@ -394,10 +394,7 @@ fn test_async_facade_stream_copy_commit_already_exists_with_skip_marks_skipped()
         .begin_copy(
             path("/source"),
             path("/target"),
-            CopyOptions {
-                conflict: CopyConflictPolicy::Skip,
-                ..CopyOptions::default()
-            },
+            CopyOptions::default().with_conflict(CopyConflictPolicy::Skip),
         )
         .expect("copy preflight should succeed");
     let outcome = ready(operation.execute())
@@ -617,10 +614,8 @@ fn test_async_facade_rejects_contract_and_fallback_boundary_failures() {
         .begin_copy(
             source.clone(),
             target.clone(),
-            CopyOptions {
-                durability: qubit_fs::DurabilityRequirement::Required,
-                ..CopyOptions::default()
-            },
+            CopyOptions::default()
+                .with_durability(qubit_fs::DurabilityRequirement::Required),
         )
         .expect("durable-copy capability should satisfy preflight");
     let durability = ready(operation.execute())
@@ -676,10 +671,7 @@ fn test_async_facade_rejects_contract_and_fallback_boundary_failures() {
         .begin_copy(
             source,
             target,
-            CopyOptions {
-                conflict: CopyConflictPolicy::Skip,
-                ..CopyOptions::default()
-            },
+            CopyOptions::default().with_conflict(CopyConflictPolicy::Skip),
         )
         .expect("skip fallback preflight should succeed");
     let outcome =
@@ -759,6 +751,9 @@ fn test_async_facade_rejects_unsupported_capabilities_and_path_semantics() {
     let error = ready(file_system.stat(&object_key))
         .expect_err("foreign path semantics must be rejected");
     assert_eq!(FsErrorKind::InvalidPath, error.kind());
+    assert_eq!(FsOperation::Stat, error.operation());
+    assert_eq!(Some(&object_key), error.path());
+    assert_eq!(Some("async-recording"), error.provider());
 }
 
 /// Covers successful stream fallback completion after all provider boundaries.
@@ -799,13 +794,12 @@ fn test_async_facade_preflight_rejects_invalid_paths_options_and_capabilities()
             .is_err()
     );
     assert!(
-        ready(file_system.open_reader(
-            &source,
-            ReadOptions {
-                length: Some(1),
-                ..ReadOptions::default()
-            },
-        ),)
+        ready(
+            file_system.open_reader(
+                &source,
+                ReadOptions::default().with_length(Some(1)),
+            ),
+        )
         .is_err()
     );
     let (read_limited, _) = async_recording_file_system(AsyncRecordingConfig {
@@ -814,13 +808,12 @@ fn test_async_facade_preflight_rejects_invalid_paths_options_and_capabilities()
         ..AsyncRecordingConfig::default()
     });
     assert!(
-        ready(read_limited.open_reader(
-            &source,
-            ReadOptions {
-                length: Some(2),
-                ..ReadOptions::default()
-            },
-        ),)
+        ready(
+            read_limited.open_reader(
+                &source,
+                ReadOptions::default().with_length(Some(2)),
+            ),
+        )
         .is_err()
     );
     assert!(
@@ -828,13 +821,13 @@ fn test_async_facade_preflight_rejects_invalid_paths_options_and_capabilities()
             .is_err()
     );
     assert!(
-        ready(file_system.open_writer(
-            &target,
-            WriteOptions {
-                atomicity: AtomicityRequirement::Required,
-                ..WriteOptions::default()
-            },
-        ),)
+        ready(
+            file_system.open_writer(
+                &target,
+                WriteOptions::default()
+                    .with_atomicity(AtomicityRequirement::Required),
+            ),
+        )
         .is_err()
     );
     assert!(
@@ -868,10 +861,8 @@ fn test_async_facade_preflight_rejects_invalid_paths_options_and_capabilities()
             .begin_copy(
                 source.clone(),
                 target.clone(),
-                CopyOptions {
-                    durability: DurabilityRequirement::Required,
-                    ..CopyOptions::default()
-                },
+                CopyOptions::default()
+                    .with_durability(DurabilityRequirement::Required),
             )
             .is_err()
     );

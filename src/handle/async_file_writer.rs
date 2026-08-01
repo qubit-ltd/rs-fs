@@ -37,6 +37,7 @@ use crate::{
     FsErrorKind,
     FsOperation,
     OpenedFileInfo,
+    WriteFailure,
     WriteFailureState,
     WriteOutcome,
     WriterState,
@@ -135,13 +136,15 @@ impl AsyncFileWriter {
     /// A future resolving to the actual publication outcome.
     pub fn commit_async(
         &mut self,
-    ) -> SpiFuture<'_, crate::FsResult<WriteOutcome>> {
+    ) -> SpiFuture<'_, Result<WriteOutcome, WriteFailure>> {
         if self.state != WriterState::Open {
             let error = self.invalid_state(
                 FsOperation::CommitWriter,
                 "writer cannot be committed in its current state",
             );
-            return Box::pin(async move { Err(error) });
+            return Box::pin(async move {
+                Err(WriteFailure::new(error, WriteFailureState::NotPublished))
+            });
         }
         Box::pin(async move {
             self.state = WriterState::Indeterminate;
@@ -153,23 +156,29 @@ impl AsyncFileWriter {
                         && outcome.atomicity() != AchievedAtomicity::Atomic
                     {
                         self.state = WriterState::Published;
-                        return Err(FsError::new(
-                            FsErrorKind::ProviderContractViolation,
-                            FsOperation::CommitWriter,
-                            "provider reported non-atomic success for an atomic-required write",
-                        )
-                        .with_path(self.info.path().clone()));
+                        return Err(WriteFailure::new(
+                            FsError::new(
+                                FsErrorKind::ProviderContractViolation,
+                                FsOperation::CommitWriter,
+                                "provider reported non-atomic success for an atomic-required write",
+                            )
+                            .with_path(self.info.path().clone()),
+                            WriteFailureState::Published,
+                        ));
                     }
                     if let Some(bytes_written) = outcome.bytes_written()
                         && bytes_written != self.written_bytes
                     {
                         self.state = WriterState::Published;
-                        return Err(FsError::new(
-                            FsErrorKind::ProviderContractViolation,
-                            FsOperation::CommitWriter,
-                            "provider reported a byte count different from the bytes accepted by the writer",
-                        )
-                        .with_path(self.info.path().clone()));
+                        return Err(WriteFailure::new(
+                            FsError::new(
+                                FsErrorKind::ProviderContractViolation,
+                                FsOperation::CommitWriter,
+                                "provider reported a byte count different from the bytes accepted by the writer",
+                            )
+                            .with_path(self.info.path().clone()),
+                            WriteFailureState::Published,
+                        ));
                     }
                     Ok(outcome)
                 }
@@ -186,9 +195,10 @@ impl AsyncFileWriter {
                             WriterState::Indeterminate
                         }
                     };
-                    Err(self.contextual_error(
-                        failure.into_error(),
-                        FsOperation::CommitWriter,
+                    let (error, state) = failure.into_parts();
+                    Err(WriteFailure::new(
+                        self.contextual_error(error, FsOperation::CommitWriter),
+                        state,
                     ))
                 }
             }

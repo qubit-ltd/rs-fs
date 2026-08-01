@@ -151,22 +151,11 @@ fn test_async_stream_fallback_commit_failure_preserves_certainty() {
 #[test]
 fn test_async_declined_copy_rejects_incompatible_fallback_options() {
     let options = [
-        CopyOptions {
-            continue_on_error: true,
-            ..CopyOptions::default()
-        },
-        CopyOptions {
-            preserve_metadata: MetadataPreservePolicy::Portable,
-            ..CopyOptions::default()
-        },
-        CopyOptions {
-            create_parent: true,
-            ..CopyOptions::default()
-        },
-        CopyOptions {
-            conflict: CopyConflictPolicy::Overwrite,
-            ..CopyOptions::default()
-        },
+        CopyOptions::default().with_continue_on_error(true),
+        CopyOptions::default()
+            .with_preserve_metadata(MetadataPreservePolicy::Portable),
+        CopyOptions::default().with_create_parent(true),
+        CopyOptions::default().with_conflict(CopyConflictPolicy::Overwrite),
     ];
     for options in options {
         let (file_system, probe) =
@@ -227,11 +216,9 @@ fn test_async_declined_copy_rejects_required_fallback_guarantees() {
                 decline_copy: true,
                 ..AsyncRecordingConfig::default()
             },
-            CopyOptions {
-                atomicity: AtomicityRequirement::Required,
-                conflict: CopyConflictPolicy::Skip,
-                ..CopyOptions::default()
-            },
+            CopyOptions::default()
+                .with_atomicity(AtomicityRequirement::Required)
+                .with_conflict(CopyConflictPolicy::Skip),
         ),
         (
             AsyncRecordingConfig {
@@ -239,10 +226,8 @@ fn test_async_declined_copy_rejects_required_fallback_guarantees() {
                 decline_copy: true,
                 ..AsyncRecordingConfig::default()
             },
-            CopyOptions {
-                durability: qubit_fs::DurabilityRequirement::Required,
-                ..CopyOptions::default()
-            },
+            CopyOptions::default()
+                .with_durability(qubit_fs::DurabilityRequirement::Required),
         ),
         (
             AsyncRecordingConfig {
@@ -250,10 +235,8 @@ fn test_async_declined_copy_rejects_required_fallback_guarantees() {
                 decline_copy: true,
                 ..AsyncRecordingConfig::default()
             },
-            CopyOptions {
-                server_side: ServerSidePreference::Require,
-                ..CopyOptions::default()
-            },
+            CopyOptions::default()
+                .with_server_side(ServerSidePreference::Require),
         ),
     ];
     for (config, options) in cases {
@@ -370,10 +353,8 @@ fn test_async_completed_copy_rechecks_required_atomicity() {
         .begin_copy(
             path("/source"),
             path("/target"),
-            CopyOptions {
-                atomicity: AtomicityRequirement::Required,
-                ..CopyOptions::default()
-            },
+            CopyOptions::default()
+                .with_atomicity(AtomicityRequirement::Required),
         )
         .expect("preflight should succeed");
     let failure = ready(operation.execute())
@@ -398,10 +379,8 @@ fn test_async_completed_native_copy_violates_required_server_side() {
         .begin_copy(
             path("/source"),
             path("/target"),
-            CopyOptions {
-                server_side: ServerSidePreference::Require,
-                ..CopyOptions::default()
-            },
+            CopyOptions::default()
+                .with_server_side(ServerSidePreference::Require),
         )
         .expect("server-side capability should pass preflight");
     let failure = ready(operation.execute())
@@ -425,10 +404,8 @@ fn test_async_completed_copy_missing_metadata_is_contract_failure() {
         .begin_copy(
             path("/source"),
             path("/target"),
-            CopyOptions {
-                preserve_metadata: MetadataPreservePolicy::Portable,
-                ..CopyOptions::default()
-            },
+            CopyOptions::default()
+                .with_preserve_metadata(MetadataPreservePolicy::Portable),
         )
         .expect("metadata policy needs no capability preflight");
     let failure = ready(operation.execute())

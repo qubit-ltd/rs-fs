@@ -222,7 +222,7 @@ impl FileSystem {
                 target,
             ));
         }
-        if options.atomicity == crate::AtomicityRequirement::Required
+        if options.atomicity() == crate::AtomicityRequirement::Required
             && outcome.atomicity() != crate::AchievedAtomicity::Atomic
         {
             return Err(self.contextualize_copy_failure(
@@ -240,7 +240,7 @@ impl FileSystem {
                 target,
             ));
         }
-        if options.durability == crate::DurabilityRequirement::Required
+        if options.durability() == crate::DurabilityRequirement::Required
             && !outcome.durable()
         {
             return Err(self.contextualize_copy_failure(
@@ -344,15 +344,17 @@ impl FileSystem {
         options: ListOptions,
     ) -> FsResult<DirectoryStream> {
         self.validate_path(path, FsOperation::List)?;
-        options.validate()?;
+        options
+            .validate()
+            .map_err(|error| self.enrich(error, path, FsOperation::List))?;
         self.require(FileSystemCapability::List, FsOperation::List, path)?;
-        let options = ListOptions {
-            page_size: self
-                .properties
-                .limits()
-                .clamp_list_page_size(options.page_size),
-            ..options
-        };
+        let page_size = self
+            .properties
+            .limits()
+            .clamp_list_page_size(options.page_size());
+        let options = options.with_page_size(
+            page_size,
+        );
         self.spi
             .list(ListRequest::new(
                 path,
@@ -364,6 +366,8 @@ impl FileSystem {
                     opened.into_stream(),
                     options,
                     self.properties.info().provider_id(),
+                    self.properties.info().path_semantics(),
+                    *self.properties.limits(),
                 )
             })
             .map_err(|error| self.enrich(error, path, FsOperation::List))
@@ -376,10 +380,14 @@ impl FileSystem {
         options: ReadOptions,
     ) -> FsResult<FileReader> {
         self.validate_path(path, FsOperation::OpenReader)?;
-        options.validate_against(self.properties.capabilities())?;
+        options
+            .validate_against(self.properties.capabilities())
+            .map_err(|error| {
+                self.enrich(error, path, FsOperation::OpenReader)
+            })?;
         self.properties
             .limits()
-            .validate_read_range(path, options.length)?;
+            .validate_read_range(path, options.length())?;
         self.require(
             FileSystemCapability::Read,
             FsOperation::OpenReader,
@@ -409,13 +417,17 @@ impl FileSystem {
         options: WriteOptions,
     ) -> FsResult<FileWriter> {
         self.validate_path(path, FsOperation::OpenWriter)?;
-        options.validate_against(self.properties.capabilities())?;
+        options
+            .validate_against(self.properties.capabilities())
+            .map_err(|error| {
+                self.enrich(error, path, FsOperation::OpenWriter)
+            })?;
         self.require(
             FileSystemCapability::Write,
             FsOperation::OpenWriter,
             path,
         )?;
-        let atomicity = options.atomicity;
+        let atomicity = options.atomicity();
         self.spi
             .open_writer(OpenWriterRequest::new(
                 path,
@@ -453,7 +465,10 @@ impl FileSystem {
             .create_temp_file(CreateTempFileRequest::new(options))
             .and_then(|opened| {
                 let (info, mut session) = opened.into_parts();
-                if let Err(error) = self.validate_temp_info(&info) {
+                if let Err(error) = self.validate_temp_info(
+                    &info,
+                    crate::FileKind::File,
+                ) {
                     let path = error.path().cloned().unwrap_or_else(Path::root);
                     return Err(match session.cleanup() {
                         Ok(()) => error,
@@ -461,12 +476,7 @@ impl FileSystem {
                             FsErrorKind::ProviderContractViolation,
                             FsOperation::ValidateProviderOutcome,
                             "provider returned an invalid temporary identity and cleanup failed",
-                            FsError::with_source(
-                                cleanup.kind(),
-                                cleanup.operation(),
-                                "temporary cleanup failed",
-                                error,
-                            ),
+                            cleanup,
                         )
                         .with_path(path.clone())
                         .with_provider(self.properties.info().provider_id()),
@@ -492,7 +502,10 @@ impl FileSystem {
             .create_temp_directory(CreateTempDirectoryRequest::new(options))
             .and_then(|opened| {
                 let (info, mut session) = opened.into_parts();
-                if let Err(error) = self.validate_temp_info(&info) {
+                if let Err(error) = self.validate_temp_info(
+                    &info,
+                    crate::FileKind::Directory,
+                ) {
                     let path = error.path().cloned().unwrap_or_else(Path::root);
                     return Err(match session.cleanup() {
                         Ok(()) => error,
@@ -500,12 +513,7 @@ impl FileSystem {
                             FsErrorKind::ProviderContractViolation,
                             FsOperation::ValidateProviderOutcome,
                             "provider returned an invalid temporary identity and cleanup failed",
-                            FsError::with_source(
-                                cleanup.kind(),
-                                cleanup.operation(),
-                                "temporary cleanup failed",
-                                error,
-                            ),
+                            cleanup,
                         )
                         .with_path(path.clone())
                         .with_provider(self.properties.info().provider_id()),
@@ -580,7 +588,9 @@ impl FileSystem {
         directory: bool,
     ) -> FsResult<DeleteOutcome> {
         self.validate_path(path, FsOperation::Delete)?;
-        options.validate_against(self.properties.capabilities())?;
+        options
+            .validate_against(self.properties.capabilities())
+            .map_err(|error| self.enrich(error, path, FsOperation::Delete))?;
         self.require(FileSystemCapability::Delete, FsOperation::Delete, path)?;
         let missing_ok = options.missing_ok;
         let outcome = if directory {
@@ -615,7 +625,12 @@ impl FileSystem {
     ) -> FsResult<()> {
         self.validate_path(source, FsOperation::Copy)?;
         self.validate_path(target, FsOperation::Copy)?;
-        options.validate_against(self.properties.capabilities())?;
+        options
+            .validate_against(self.properties.capabilities())
+            .map_err(|error| {
+                self.enrich(error, source, FsOperation::Copy)
+                    .with_target(target.clone())
+            })?;
         self.require(FileSystemCapability::Copy, FsOperation::Copy, source)?;
         if source == target {
             return Err(FsError::new(
@@ -674,7 +689,7 @@ impl FileSystem {
                 None,
             )
         })?;
-        if !is_file_kind_supported(metadata.kind) {
+        if !is_file_kind_supported(metadata.kind().clone()) {
             return Err(self.copy_failure(
                 FsError::new(
                     FsErrorKind::InvalidOptions,
@@ -687,7 +702,7 @@ impl FileSystem {
                 None,
             ));
         }
-        if let Some(length) = metadata.len
+        if let Some(length) = metadata.len()
             && let Err(error) = validate_stream_copy_length_limits(
                 self.properties.limits(),
                 source,
@@ -714,16 +729,14 @@ impl FileSystem {
                 ));
             }
         };
-        let writer_options = WriteOptions {
-            disposition: WriteDisposition::CreateNew,
-            atomicity: options.atomicity,
-            ..WriteOptions::default()
-        };
+        let writer_options = WriteOptions::default()
+            .with_disposition(WriteDisposition::CreateNew)
+            .with_atomicity(options.atomicity());
         let mut writer = match self.open_writer(target, writer_options) {
             Ok(writer) => writer,
             Err(error)
                 if error.kind() == FsErrorKind::AlreadyExists
-                    && options.conflict == CopyConflictPolicy::Skip =>
+                    && options.conflict() == CopyConflictPolicy::Skip =>
             {
                 return Ok(CopyOutcome::streamed_fallback(
                     CopyStats {
@@ -785,7 +798,7 @@ impl FileSystem {
                 let (error, state) = failure.into_parts();
                 let state = from_write_failure_state(state);
                 if error.kind() == FsErrorKind::AlreadyExists
-                    && options.conflict == CopyConflictPolicy::Skip
+                    && options.conflict() == CopyConflictPolicy::Skip
                     && state == CopyFailureState::Unchanged
                 {
                     if let Err(cleanup_error) = writer.abort() {
@@ -831,7 +844,12 @@ impl FileSystem {
     ) -> FsResult<()> {
         self.validate_path(source, FsOperation::Rename)?;
         self.validate_path(target, FsOperation::Rename)?;
-        options.validate_against(self.properties.capabilities())?;
+        options
+            .validate_against(self.properties.capabilities())
+            .map_err(|error| {
+                self.enrich(error, source, FsOperation::Rename)
+                    .with_target(target.clone())
+            })?;
         self.require(
             FileSystemCapability::Rename,
             FsOperation::Rename,
@@ -915,14 +933,22 @@ impl FileSystem {
             return Err(FsError::invalid_path(
                 operation,
                 "path semantics do not match this filesystem",
-            ));
+            )
+            .with_path(path.clone())
+            .with_provider(self.properties.info().provider_id()));
         }
-        self.properties.path_constraints().validate(path)?;
-        self.properties.limits().validate_path(
-            path,
-            self.properties.info().path_semantics(),
-            operation,
-        )
+        self.properties
+            .path_constraints()
+            .validate(path)
+            .map_err(|error| self.enrich(error, path, operation))?;
+        self.properties
+            .limits()
+            .validate_path(
+                path,
+                self.properties.info().path_semantics(),
+                operation,
+            )
+            .map_err(|error| self.enrich(error, path, operation))
     }
 
     /// Requires an advertised capability before I/O.
@@ -994,7 +1020,11 @@ impl FileSystem {
 
     /// Validates the filesystem identity captured for a newly-created temporary
     /// resource.
-    fn validate_temp_info(&self, info: &crate::OpenedFileInfo) -> FsResult<()> {
+    fn validate_temp_info(
+        &self,
+        info: &crate::OpenedFileInfo,
+        expected_kind: crate::FileKind,
+    ) -> FsResult<()> {
         if info.filesystem_id() != self.properties.info().id() {
             return Err(self.contract_error(
                 info.path(),
@@ -1010,6 +1040,16 @@ impl FileSystem {
                     "provider returned a temporary handle with an invalid logical path",
                 )
             })?;
+        if info
+            .metadata()
+            .is_none_or(|metadata| metadata.kind() != &expected_kind)
+        {
+            return Err(self.contract_error(
+                info.path(),
+                FsOperation::ValidateProviderOutcome,
+                "provider returned a temporary handle with an inconsistent resource kind",
+            ));
+        }
         Ok(())
     }
 
@@ -1023,7 +1063,12 @@ impl FileSystem {
     ) -> FsResult<()> {
         self.validate_path(source, FsOperation::PersistTemp)?;
         self.validate_path(target, FsOperation::PersistTemp)?;
-        options.validate_against(self.properties.capabilities())?;
+        options
+            .validate_against(self.properties.capabilities())
+            .map_err(|error| {
+                self.enrich(error, source, FsOperation::PersistTemp)
+                    .with_target(target.clone())
+            })?;
         Ok(())
     }
 
@@ -1038,8 +1083,10 @@ impl FileSystem {
         let mut result = Vec::new();
         let mut buffer = [0_u8; 8192];
         loop {
-            let read =
-                Input::read(&mut reader, &mut buffer).map_err(|error| {
+            let remaining = max_bytes.saturating_sub(result.len());
+            let read_len = remaining.saturating_add(1).min(buffer.len());
+            let read = Input::read(&mut reader, &mut buffer[..read_len])
+                .map_err(|error| {
                     self.io_error(path, FsOperation::Read, error)
                 })?;
             if read == 0 {

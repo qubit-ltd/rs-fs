@@ -7,7 +7,10 @@
 // =============================================================================
 
 use std::io::Cursor;
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    Mutex,
+};
 
 use qubit_io::Input;
 
@@ -54,6 +57,7 @@ use qubit_fs::{
 
 struct ReaderSpi {
     wrong_opened_path: bool,
+    read_requests: Arc<Mutex<Vec<usize>>>,
 }
 
 impl FileSystemSpi for ReaderSpi {
@@ -94,7 +98,10 @@ impl FileSystemSpi for ReaderSpi {
                 FileSystemId::new("reader-test").expect("valid id"),
                 path,
             ),
-            Box::new(Cursor::new(b"bytes".to_vec())),
+            Box::new(RecordingReader {
+                inner: Cursor::new(b"bytes".to_vec()),
+                read_requests: Arc::clone(&self.read_requests),
+            }),
         ))
     }
     fn open_writer(&self, _: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
@@ -150,6 +157,7 @@ fn unsupported() -> FsError {
 fn test_open_reader_rejects_wrong_opened_identity() {
     let file_system = FileSystem::from_shared_spi(Arc::new(ReaderSpi {
         wrong_opened_path: true,
+        read_requests: Arc::new(Mutex::new(Vec::new())),
     }))
     .expect("facade should open");
     let requested = Path::parse("/requested").expect("valid path");
@@ -164,6 +172,7 @@ fn test_open_reader_rejects_wrong_opened_identity() {
 fn test_open_reader_reads_bytes_and_exposes_identity() {
     let file_system = FileSystem::from_spi(ReaderSpi {
         wrong_opened_path: false,
+        read_requests: Arc::new(Mutex::new(Vec::new())),
     })
     .expect("facade should open");
     let requested = Path::parse("/requested").expect("valid path");
@@ -187,8 +196,10 @@ fn test_open_reader_reads_bytes_and_exposes_identity() {
 /// caller-supplied memory bound before extending the result buffer.
 #[test]
 fn test_read_all_returns_bytes_and_enforces_maximum() {
+    let read_requests = Arc::new(Mutex::new(Vec::new()));
     let file_system = FileSystem::from_spi(ReaderSpi {
         wrong_opened_path: false,
+        read_requests: Arc::clone(&read_requests),
     })
     .expect("facade should open");
     let requested = Path::parse("/requested").expect("valid path");
@@ -197,8 +208,34 @@ fn test_read_all_returns_bytes_and_enforces_maximum() {
         .read_all(&requested, Default::default(), 5)
         .expect("sufficient maximum should read every byte");
     assert_eq!(b"bytes", bytes.as_slice());
+    read_requests.lock().expect("requests lock").clear();
     let error = file_system
         .read_all(&requested, Default::default(), 4)
         .expect_err("a too-small maximum must reject the complete chunk");
     assert_eq!(FsErrorKind::ResourceLimitExceeded, error.kind());
+    assert_eq!(vec![5], *read_requests.lock().expect("requests lock"));
+}
+
+/// Records the requested read slice while delegating byte transfer to a
+/// cursor.
+struct RecordingReader {
+    inner: Cursor<Vec<u8>>,
+    read_requests: Arc<Mutex<Vec<usize>>>,
+}
+
+impl Input for RecordingReader {
+    type Item = u8;
+
+    unsafe fn read_unchecked(
+        &mut self,
+        output: &mut [u8],
+        index: usize,
+        count: usize,
+    ) -> std::io::Result<usize> {
+        self.read_requests
+            .lock()
+            .expect("requests lock")
+            .push(count);
+        std::io::Read::read(&mut self.inner, &mut output[index..index + count])
+    }
 }
