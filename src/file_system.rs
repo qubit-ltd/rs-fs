@@ -818,7 +818,7 @@ impl FileSystem {
                 bytes,
                 ..CopyStats::default()
             },
-                write_outcome.atomicity(),
+            write_outcome.atomicity(),
         ))
     }
 
