@@ -6,6 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use std::error::Error;
+
 // qubit-style: allow test-file-name -- this module is included by
 // handle_support/mod.rs.
 use std::io::{
@@ -48,6 +50,7 @@ use qubit_fs::{
     CreateDirectoryOutcome,
     DeleteOutcome,
     DirEntry,
+    FileKind,
     FileMetadata,
     FileSystem,
     FileSystemCapabilities,
@@ -213,6 +216,27 @@ pub(crate) fn invalid_temp_path_filesystem() -> FileSystem {
         cleanup_calls: Arc::new(Mutex::new(0)),
         persist_calls: Arc::new(Mutex::new(0)),
         temp_path: Path::parse("relative").expect("test path should parse"),
+        temp_failure: None,
+        temp_keep_error: None,
+        temp_cleanup_error: None,
+        directory_persist_non_atomic: false,
+        provider_open_error: false,
+    })
+    .expect("facade should construct")
+}
+
+/// Builds a filesystem whose temporary-file metadata claims a directory kind.
+pub(crate) fn wrong_temp_kind_filesystem() -> FileSystem {
+    FileSystem::from_spi(BehaviorSpi {
+        fail_commit: false,
+        fail_write: false,
+        commit_failure: None,
+        abort_failure: None,
+        limits: FileSystemLimits::unknown(),
+        entries: Mutex::new(Vec::new()),
+        cleanup_calls: Arc::new(Mutex::new(0)),
+        persist_calls: Arc::new(Mutex::new(0)),
+        temp_path: Path::parse("/wrong-kind").expect("test path should parse"),
         temp_failure: None,
         temp_keep_error: None,
         temp_cleanup_error: None,
@@ -470,6 +494,12 @@ fn test_handle_support_rejects_invalid_temp_identities_with_cleanup_failure() {
     ] {
         assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
         assert_eq!(FsOperation::CreateTemp, error.operation());
+        assert!(
+            error.source().is_some_and(|source| source
+                .to_string()
+                .contains("injected temporary cleanup failure")),
+            "cleanup failure must remain the inspectable source"
+        );
     }
 }
 
@@ -489,6 +519,15 @@ fn test_handle_support_rejects_invalid_temp_paths_after_cleanup() {
     }
 }
 
+/// Rejects a temporary-file envelope whose metadata claims a directory.
+#[test]
+fn test_handle_support_rejects_wrong_temp_kind() {
+    let error = wrong_temp_kind_filesystem()
+        .create_temp_file(qubit_fs::TempFileOptions::default())
+        .expect_err("temporary-file kind must be validated");
+    assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
+}
+
 impl BehaviorSpi {
     fn unsupported() -> FsError {
         FsError::new(
@@ -497,7 +536,7 @@ impl BehaviorSpi {
             "unused test operation",
         )
     }
-    fn info(&self) -> OpenedFileInfo {
+    fn info(&self, kind: FileKind) -> OpenedFileInfo {
         OpenedFileInfo::new(
             FileSystemId::new(if self.temp_path.as_str() == "/foreign" {
                 "foreign"
@@ -507,6 +546,7 @@ impl BehaviorSpi {
             .expect("valid test id"),
             self.temp_path.clone(),
         )
+        .with_metadata(FileMetadata::new(kind))
     }
 }
 impl FileSystemSpi for BehaviorSpi {
@@ -638,7 +678,11 @@ impl FileSystemSpi for BehaviorSpi {
             return Err(Self::unsupported());
         }
         Ok(OpenedTempFile::new(
-            self.info(),
+            self.info(if self.temp_path.as_str() == "/wrong-kind" {
+                FileKind::Directory
+            } else {
+                FileKind::File
+            }),
             Box::new(Temp {
                 cleanup_calls: Arc::clone(&self.cleanup_calls),
                 persist_calls: Arc::clone(&self.persist_calls),
@@ -658,7 +702,7 @@ impl FileSystemSpi for BehaviorSpi {
             return Err(Self::unsupported());
         }
         Ok(OpenedTempDirectory::new(
-            self.info(),
+            self.info(FileKind::Directory),
             Box::new(Temp {
                 cleanup_calls: Arc::clone(&self.cleanup_calls),
                 persist_calls: Arc::clone(&self.persist_calls),

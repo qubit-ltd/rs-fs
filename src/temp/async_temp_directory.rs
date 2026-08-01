@@ -18,9 +18,11 @@ use crate::{
     AsyncTempFile,
     FsResult,
     Path,
+    PathComponent,
     PersistFailure,
     PersistOptions,
     PersistOutcome,
+    RelativePath,
     TempResourceState,
 };
 
@@ -67,6 +69,20 @@ impl AsyncTempDirectory {
     #[must_use]
     pub const fn state(&self) -> TempResourceState {
         self.0.state()
+    }
+
+    /// Returns one lexically safe child path.
+    #[inline(always)]
+    #[must_use]
+    pub fn child(&self, component: &PathComponent) -> Path {
+        self.0.child(component)
+    }
+
+    /// Returns one lexically safe descendant path.
+    #[inline(always)]
+    #[must_use]
+    pub fn descendant(&self, relative: &RelativePath) -> Path {
+        self.0.descendant(relative)
     }
 
     /// Asynchronously confirms cleanup of this temporary directory.

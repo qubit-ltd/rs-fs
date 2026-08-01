@@ -13,6 +13,7 @@ use qubit_fs::{
     AtomicityRequirement,
     FsErrorKind,
     Path,
+    PathComponent,
     PersistFailureState,
     PersistOptions,
     TempDirectoryOptions,
@@ -84,6 +85,43 @@ fn test_async_invalid_temp_identity_preserves_cleanup_error_source() {
     let cleanup = error.source().expect("cleanup error should be retained");
     assert!(cleanup.to_string().contains("injected cleanup failure"));
     assert!(cleanup.source().is_some());
+}
+
+/// Rejects an asynchronous temporary-file envelope whose metadata claims a
+/// directory.
+#[test]
+fn test_async_temp_creation_rejects_wrong_kind() {
+    let (file_system, probe) =
+        async_recording_file_system(AsyncRecordingConfig {
+            invalid_temp_kind: true,
+            ..AsyncRecordingConfig::default()
+        });
+    let error =
+        match ready(file_system.create_temp_file(TempFileOptions::default())) {
+            Ok(_) => panic!("temporary-file kind must be validated"),
+            Err(error) => error,
+        };
+    assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
+    assert_eq!(vec!["create_temp_file", "cleanup"], probe.calls());
+}
+
+/// Mirrors synchronous temporary-directory path helpers in the async facade.
+#[test]
+fn test_async_temp_directory_builds_child_and_descendant_paths() {
+    let (file_system, _) =
+        async_recording_file_system(AsyncRecordingConfig::default());
+    let directory = ready(
+        file_system.create_temp_directory(TempDirectoryOptions::default()),
+    )
+    .expect("temporary directory should open");
+    let component = PathComponent::parse("child").expect("component parses");
+    let descendant = qubit_fs::RelativePath::parse("nested/item")
+        .expect("relative path parses");
+    assert_eq!("/tmp/recording/child", directory.child(&component).as_str());
+    assert_eq!(
+        "/tmp/recording/nested/item",
+        directory.descendant(&descendant).as_str()
+    );
 }
 
 /// Verifies persistence preflight fails before calling a temporary session.

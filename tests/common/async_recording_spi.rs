@@ -106,6 +106,7 @@ pub(crate) struct AsyncRecordingConfig {
     pub(crate) failing_stage: Option<AsyncCopyStage>,
     pub(crate) invalid_temp_identity: bool,
     pub(crate) invalid_temp_path: bool,
+    pub(crate) invalid_temp_kind: bool,
     pub(crate) invalid_opened_identity: bool,
     pub(crate) invalid_stat_path: bool,
     pub(crate) stat_kind: Option<FileKind>,
@@ -271,7 +272,7 @@ impl AsyncRecordingSpi {
         OpenedFileInfo::new(id, path.clone())
     }
     /// Returns a temporary identity, optionally invalid for boundary testing.
-    fn temp_info(&self) -> OpenedFileInfo {
+    fn temp_info(&self, kind: FileKind) -> OpenedFileInfo {
         let id = if self.config.invalid_temp_identity {
             FileSystemId::new("other-provider")
                 .expect("test id should be valid")
@@ -279,7 +280,7 @@ impl AsyncRecordingSpi {
             FileSystemId::new("async-recording")
                 .expect("test id should be valid")
         };
-        OpenedFileInfo::new(
+        let info = OpenedFileInfo::new(
             id,
             Path::parse(if self.config.invalid_temp_path {
                 "relative-temp"
@@ -287,7 +288,8 @@ impl AsyncRecordingSpi {
                 "/tmp/recording"
             })
             .expect("test path should parse"),
-        )
+        );
+        info.with_metadata(FileMetadata::new(kind))
     }
 }
 impl AsyncFileSystemSpi for AsyncRecordingSpi {
@@ -318,7 +320,7 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
         let mut metadata = FileMetadata::new(
             self.config.stat_kind.clone().unwrap_or(FileKind::File),
         );
-        metadata.len = Some(5);
+        metadata = metadata.with_len(Some(5));
         let path = if self.config.invalid_stat_path {
             Path::parse("/different").expect("test path should parse")
         } else {
@@ -539,7 +541,11 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
         if self.config.temp_create_error {
             return Box::pin(async { Err(unused()) });
         }
-        let info = self.temp_info();
+        let info = self.temp_info(if self.config.invalid_temp_kind {
+            FileKind::Directory
+        } else {
+            FileKind::File
+        });
         let calls = Arc::clone(&self.calls);
         Box::pin(async move {
             let opened = OpenedAsyncTempFile::new(
@@ -568,7 +574,7 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
         if self.config.temp_create_error {
             return Box::pin(async { Err(unused()) });
         }
-        let info = self.temp_info();
+        let info = self.temp_info(FileKind::Directory);
         let calls = Arc::clone(&self.calls);
         Box::pin(async move {
             let opened = OpenedAsyncTempDirectory::new(

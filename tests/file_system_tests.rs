@@ -238,6 +238,9 @@ fn test_stat_rejects_path_with_different_semantics_before_spi_call() {
         .stat(&hierarchical)
         .expect_err("different path semantics must fail before SPI");
     assert_eq!(FsErrorKind::InvalidPath, error.kind());
+    assert_eq!(FsOperation::Stat, error.operation());
+    assert_eq!(Some(&hierarchical), error.path());
+    assert_eq!(Some("test"), error.provider());
     assert_eq!(0, stat_calls.load(Ordering::SeqCst));
 }
 

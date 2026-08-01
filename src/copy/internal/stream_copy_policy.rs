@@ -23,15 +23,15 @@ use crate::{
 /// Returns true when copy options remain within the fallback policy allowlist.
 #[inline]
 pub(crate) fn fallback_options_supported(options: &CopyOptions) -> bool {
-    !options.continue_on_error
-        && options.preserve_metadata == MetadataPreservePolicy::None
-        && options.server_side != ServerSidePreference::Require
-        && !options.create_parent
-        && options.durability != DurabilityRequirement::Required
-        && !(options.conflict == CopyConflictPolicy::Skip
-            && options.atomicity == AtomicityRequirement::Required)
+    !options.continue_on_error()
+        && options.preserve_metadata() == MetadataPreservePolicy::None
+        && options.server_side() != ServerSidePreference::Require
+        && !options.create_parent()
+        && options.durability() != DurabilityRequirement::Required
+        && !(options.conflict() == CopyConflictPolicy::Skip
+            && options.atomicity() == AtomicityRequirement::Required)
         && matches!(
-            options.conflict,
+            options.conflict(),
             CopyConflictPolicy::Fail | CopyConflictPolicy::Skip
         )
 }

@@ -39,10 +39,8 @@ fn test_directory_stream_rejects_entry_outside_requested_prefix() {
     let mut stream = filesystem
         .list(
             &qubit_fs::Path::parse("/root").expect("root should parse"),
-            qubit_fs::ListOptions {
-                prefix: Some("nested".to_owned()),
-                ..qubit_fs::ListOptions::default()
-            },
+            qubit_fs::ListOptions::default()
+                .with_prefix(Some("nested".to_owned())),
         )
         .expect("stream should open");
     let error = stream
@@ -66,10 +64,8 @@ fn test_directory_stream_accepts_nested_prefix_without_recursive_option() {
     let mut stream = filesystem
         .list(
             &qubit_fs::Path::parse("/root").expect("root should parse"),
-            qubit_fs::ListOptions {
-                prefix: Some("nested/item".to_owned()),
-                ..qubit_fs::ListOptions::default()
-            },
+            qubit_fs::ListOptions::default()
+                .with_prefix(Some("nested/item".to_owned())),
         )
         .expect("stream should open");
 
@@ -123,10 +119,7 @@ fn test_directory_stream_validates_metadata_and_prefix_descendants() {
     let mut stream = filesystem
         .list(
             &qubit_fs::Path::parse("/root").expect("root should parse"),
-            qubit_fs::ListOptions {
-                include_metadata: true,
-                ..qubit_fs::ListOptions::default()
-            },
+            qubit_fs::ListOptions::default().with_include_metadata(true),
         )
         .expect("stream should open");
     let error = stream
@@ -147,10 +140,8 @@ fn test_directory_stream_validates_metadata_and_prefix_descendants() {
     let mut stream = filesystem
         .list(
             &qubit_fs::Path::parse("/root").expect("root should parse"),
-            qubit_fs::ListOptions {
-                prefix: Some("nested".to_owned()),
-                ..qubit_fs::ListOptions::default()
-            },
+            qubit_fs::ListOptions::default()
+                .with_prefix(Some("nested".to_owned())),
         )
         .expect("stream should open");
     assert!(
@@ -178,6 +169,81 @@ fn test_directory_stream_accepts_root_relative_entry() {
             .next_entry()
             .expect("root-relative entry should be accepted")
             .is_some()
+    );
+}
+
+/// Rejects provider entries whose path semantics disagree with the filesystem.
+#[test]
+fn test_directory_stream_rejects_foreign_path_semantics() {
+    let entry = qubit_fs::DirEntry::new(
+        qubit_fs::Path::parse_with_semantics(
+            "/root/file",
+            qubit_fs::PathSemantics::ObjectKey,
+        )
+        .expect("entry path should parse"),
+        qubit_fs::FileKind::File,
+    );
+    let (filesystem, _, _) =
+        crate::handle_support::filesystem(false, vec![entry]);
+    let mut stream = filesystem
+        .list(
+            &qubit_fs::Path::parse("/root").expect("root should parse"),
+            qubit_fs::ListOptions::default(),
+        )
+        .expect("stream should open");
+    let error = stream
+        .next_entry()
+        .expect_err("foreign path semantics must fail");
+    assert_eq!(
+        qubit_fs::FsErrorKind::ProviderContractViolation,
+        error.kind()
+    );
+}
+
+/// Rejects provider entries whose name or metadata kind disagrees with path.
+#[test]
+fn test_directory_stream_rejects_inconsistent_entry_identity() {
+    let mut wrong_name = qubit_fs::DirEntry::new(
+        qubit_fs::Path::parse("/root/file").expect("entry path should parse"),
+        qubit_fs::FileKind::File,
+    );
+    wrong_name.name = "other".to_owned();
+    let (filesystem, _, _) =
+        crate::handle_support::filesystem(false, vec![wrong_name]);
+    let mut stream = filesystem
+        .list(
+            &qubit_fs::Path::parse("/root").expect("root should parse"),
+            qubit_fs::ListOptions::default(),
+        )
+        .expect("stream should open");
+    assert_eq!(
+        qubit_fs::FsErrorKind::ProviderContractViolation,
+        stream
+            .next_entry()
+            .expect_err("inconsistent entry name must fail")
+            .kind()
+    );
+
+    let mut wrong_metadata = qubit_fs::DirEntry::new(
+        qubit_fs::Path::parse("/root/file").expect("entry path should parse"),
+        qubit_fs::FileKind::File,
+    );
+    wrong_metadata.metadata =
+        Some(qubit_fs::FileMetadata::new(qubit_fs::FileKind::Directory));
+    let (filesystem, _, _) =
+        crate::handle_support::filesystem(false, vec![wrong_metadata]);
+    let mut stream = filesystem
+        .list(
+            &qubit_fs::Path::parse("/root").expect("root should parse"),
+            qubit_fs::ListOptions::default(),
+        )
+        .expect("stream should open");
+    assert_eq!(
+        qubit_fs::FsErrorKind::ProviderContractViolation,
+        stream
+            .next_entry()
+            .expect_err("inconsistent metadata kind must fail")
+            .kind()
     );
 }
 

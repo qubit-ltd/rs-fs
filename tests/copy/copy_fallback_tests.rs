@@ -201,9 +201,9 @@ impl FileSystemSpi for RecordingSpi {
         let mut metadata = FileMetadata::new(FileKind::File);
         if matches!(self.response, CopyResponse::DeclinedUnsupportedSourceKind)
         {
-            metadata.kind = FileKind::Directory;
+            metadata = metadata.with_kind(FileKind::Directory);
         }
-        metadata.len = Some(5);
+        metadata = metadata.with_len(Some(5));
         Ok(StatResponse::new(request.path().clone(), metadata))
     }
     fn list(&self, _: ListRequest<'_>) -> FsResult<OpenedDirectoryStream> {
@@ -573,10 +573,8 @@ fn test_copy_declined_with_preferred_server_side_uses_stream_fallback() {
         .copy(
             &path("/source"),
             &path("/target"),
-            CopyOptions {
-                server_side: ServerSidePreference::Prefer,
-                ..CopyOptions::default()
-            },
+            CopyOptions::default()
+                .with_server_side(ServerSidePreference::Prefer),
         )
         .expect("preferred server-side copy may fall back");
 
@@ -593,22 +591,12 @@ fn test_copy_declined_with_preferred_server_side_uses_stream_fallback() {
 #[test]
 fn test_copy_declined_rejects_incompatible_fallback_options() {
     let options = [
-        CopyOptions {
-            continue_on_error: true,
-            ..CopyOptions::default()
-        },
-        CopyOptions {
-            preserve_metadata: MetadataPreservePolicy::Portable,
-            ..CopyOptions::default()
-        },
-        CopyOptions {
-            create_parent: true,
-            ..CopyOptions::default()
-        },
-        CopyOptions {
-            conflict: qubit_fs::CopyConflictPolicy::Overwrite,
-            ..CopyOptions::default()
-        },
+        CopyOptions::default().with_continue_on_error(true),
+        CopyOptions::default()
+            .with_preserve_metadata(MetadataPreservePolicy::Portable),
+        CopyOptions::default().with_create_parent(true),
+        CopyOptions::default()
+            .with_conflict(qubit_fs::CopyConflictPolicy::Overwrite),
     ];
     for options in options {
         let (filesystem, calls, _) =
@@ -663,10 +651,8 @@ fn test_copy_declined_preserves_stream_and_writer_recovery_states() {
         .copy(
             &path("/source"),
             &path("/target"),
-            CopyOptions {
-                conflict: qubit_fs::CopyConflictPolicy::Skip,
-                ..CopyOptions::default()
-            },
+            CopyOptions::default()
+                .with_conflict(qubit_fs::CopyConflictPolicy::Skip),
         )
         .expect("an existing target should be skipped when explicitly allowed");
     assert_eq!(1, skipped.stats().skipped);
@@ -789,10 +775,8 @@ fn test_copy_required_atomicity_preflight_has_zero_spi_calls() {
         .copy(
             &path("/source"),
             &path("/target"),
-            CopyOptions {
-                atomicity: AtomicityRequirement::Required,
-                ..CopyOptions::default()
-            },
+            CopyOptions::default()
+                .with_atomicity(AtomicityRequirement::Required),
         )
         .expect_err("missing atomic guarantee must fail locally");
     assert_eq!(CopyFailureState::Unchanged, failure.state());
@@ -811,10 +795,8 @@ fn test_copy_required_durability_preflight_has_zero_spi_calls() {
         .copy(
             &path("/source"),
             &path("/target"),
-            CopyOptions {
-                durability: qubit_fs::DurabilityRequirement::Required,
-                ..CopyOptions::default()
-            },
+            CopyOptions::default()
+                .with_durability(qubit_fs::DurabilityRequirement::Required),
         )
         .expect_err("missing durability guarantee must fail locally");
     assert_eq!(CopyFailureState::Unchanged, failure.state());
@@ -834,10 +816,8 @@ fn test_copy_completed_atomicity_downgrade_is_contract_failure() {
         .copy(
             &path("/source"),
             &path("/target"),
-            CopyOptions {
-                atomicity: AtomicityRequirement::Required,
-                ..CopyOptions::default()
-            },
+            CopyOptions::default()
+                .with_atomicity(AtomicityRequirement::Required),
         )
         .expect_err("downgrade must fail");
     assert_eq!(CopyFailureState::Published, failure.state());
@@ -861,10 +841,8 @@ fn test_copy_completed_durability_downgrade_is_contract_failure() {
         .copy(
             &path("/source"),
             &path("/target"),
-            CopyOptions {
-                durability: qubit_fs::DurabilityRequirement::Required,
-                ..CopyOptions::default()
-            },
+            CopyOptions::default()
+                .with_durability(qubit_fs::DurabilityRequirement::Required),
         )
         .expect_err("durability downgrade must fail");
     assert_eq!(CopyFailureState::Published, failure.state());
@@ -889,10 +867,8 @@ fn test_copy_completed_non_server_side_method_violates_required_server_side() {
         .copy(
             &path("/source"),
             &path("/target"),
-            CopyOptions {
-                server_side: ServerSidePreference::Require,
-                ..CopyOptions::default()
-            },
+            CopyOptions::default()
+                .with_server_side(ServerSidePreference::Require),
         )
         .expect_err("native result cannot satisfy required server-side copy");
     assert_eq!(CopyFailureState::Published, failure.state());
@@ -916,10 +892,8 @@ fn test_copy_completed_server_side_method_violates_disabled_preference() {
         .copy(
             &path("/source"),
             &path("/target"),
-            CopyOptions {
-                server_side: ServerSidePreference::Disable,
-                ..CopyOptions::default()
-            },
+            CopyOptions::default()
+                .with_server_side(ServerSidePreference::Disable),
         )
         .expect_err("server-side outcome must honor the disabled preference");
     assert_eq!(CopyFailureState::Published, failure.state());
@@ -943,10 +917,8 @@ fn test_copy_completed_missing_metadata_preservation_is_contract_failure() {
         .copy(
             &path("/source"),
             &path("/target"),
-            CopyOptions {
-                preserve_metadata: MetadataPreservePolicy::Portable,
-                ..CopyOptions::default()
-            },
+            CopyOptions::default()
+                .with_preserve_metadata(MetadataPreservePolicy::Portable),
         )
         .expect_err("missing metadata preservation must be rejected");
     assert_eq!(CopyFailureState::Published, failure.state());
@@ -1035,11 +1007,9 @@ fn test_copy_declined_skip_required_atomicity_rejects_without_opening_handles()
         .copy(
             &path("/source"),
             &path("/target"),
-            CopyOptions {
-                conflict: qubit_fs::CopyConflictPolicy::Skip,
-                atomicity: AtomicityRequirement::Required,
-                ..CopyOptions::default()
-            },
+            CopyOptions::default()
+                .with_conflict(qubit_fs::CopyConflictPolicy::Skip)
+                .with_atomicity(AtomicityRequirement::Required),
         )
         .expect_err("skip cannot satisfy atomic publication");
     assert_eq!(CopyFailureState::Unchanged, failure.state());
