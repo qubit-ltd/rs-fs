@@ -73,7 +73,7 @@ fn test_stat_response_exposes_path_and_metadata_snapshot() {
         FileMetadata::new(FileKind::File),
     );
     assert_eq!(&path, response.path());
-    assert_eq!(FileKind::File, response.metadata().kind);
+    assert_eq!(&FileKind::File, response.metadata().kind());
 }
 
 /// Verifies provider write failures preserve their error and recovery state.

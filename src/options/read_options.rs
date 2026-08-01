@@ -18,21 +18,100 @@ use crate::{
 };
 
 /// Options controlling a read operation.
+#[non_exhaustive]
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ReadOptions {
     /// Optional byte offset.
-    pub offset: Option<u64>,
+    offset: Option<u64>,
     /// Optional byte length.
-    pub length: Option<u64>,
+    length: Option<u64>,
     /// Optional required ETag or provider version.
-    pub if_match: Option<ResourceVersion>,
+    if_match: Option<ResourceVersion>,
     /// Optional ETag or provider version that must not match.
-    pub if_none_match: Option<ResourceVersion>,
+    if_none_match: Option<ResourceVersion>,
     /// Checksum validation policy.
-    pub checksum: ChecksumPolicy,
+    checksum: ChecksumPolicy,
 }
 
 impl ReadOptions {
+    /// Returns a copy with the byte offset replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_offset(mut self, offset: Option<u64>) -> Self {
+        self.offset = offset;
+        self
+    }
+
+    /// Returns the optional byte offset.
+    #[inline(always)]
+    #[must_use]
+    pub const fn offset(&self) -> Option<u64> {
+        self.offset
+    }
+
+    /// Returns a copy with the byte length replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_length(mut self, length: Option<u64>) -> Self {
+        self.length = length;
+        self
+    }
+
+    /// Returns the optional byte length.
+    #[inline(always)]
+    #[must_use]
+    pub const fn length(&self) -> Option<u64> {
+        self.length
+    }
+
+    /// Returns a copy with the positive version precondition replaced.
+    #[inline]
+    #[must_use]
+    pub fn with_if_match(mut self, if_match: Option<ResourceVersion>) -> Self {
+        self.if_match = if_match;
+        self
+    }
+
+    /// Returns the optional positive version precondition.
+    #[inline(always)]
+    #[must_use]
+    pub const fn if_match(&self) -> Option<&ResourceVersion> {
+        self.if_match.as_ref()
+    }
+
+    /// Returns a copy with the negative version precondition replaced.
+    #[inline]
+    #[must_use]
+    pub fn with_if_none_match(
+        mut self,
+        if_none_match: Option<ResourceVersion>,
+    ) -> Self {
+        self.if_none_match = if_none_match;
+        self
+    }
+
+    /// Returns the optional negative version precondition.
+    #[inline(always)]
+    #[must_use]
+    pub const fn if_none_match(&self) -> Option<&ResourceVersion> {
+        self.if_none_match.as_ref()
+    }
+
+    /// Returns a copy with the checksum policy replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_checksum(mut self, checksum: ChecksumPolicy) -> Self {
+        self.checksum = checksum;
+        self
+    }
+
+    /// Returns the checksum policy.
+    #[inline(always)]
+    #[must_use]
+    pub const fn checksum(&self) -> ChecksumPolicy {
+        self.checksum
+    }
+
     /// Validates required read semantics against configured capabilities.
     ///
     /// Providers should call this method before opening a reader or producing

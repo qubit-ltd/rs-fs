@@ -178,10 +178,8 @@ fn test_open_writer_rejects_non_atomic_required_commit_outcome() {
     let mut writer = filesystem
         .open_writer(
             &qubit_fs::Path::parse("/target").expect("path should parse"),
-            qubit_fs::WriteOptions {
-                atomicity: qubit_fs::AtomicityRequirement::Required,
-                ..qubit_fs::WriteOptions::default()
-            },
+            qubit_fs::WriteOptions::default()
+                .with_atomicity(qubit_fs::AtomicityRequirement::Required),
         )
         .expect("writer should open with advertised atomic capability");
     let error = writer

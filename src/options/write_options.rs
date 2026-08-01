@@ -22,22 +22,23 @@ use crate::{
 };
 
 /// Options controlling a write operation.
+#[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub struct WriteOptions {
     /// Whether missing parent directories should be created.
-    pub create_parent: bool,
+    create_parent: bool,
     /// How an existing destination is treated.
-    pub disposition: WriteDisposition,
+    disposition: WriteDisposition,
     /// Required atomicity of destination publication.
-    pub atomicity: AtomicityRequirement,
+    atomicity: AtomicityRequirement,
     /// Version precondition applied to the destination.
-    pub precondition: WritePrecondition,
+    precondition: WritePrecondition,
     /// Optional content type.
-    pub content_type: Option<String>,
+    content_type: Option<String>,
     /// User-defined metadata with validated non-sensitive structural keys.
-    pub user_metadata: NonSensitiveMetadata,
+    user_metadata: NonSensitiveMetadata,
     /// Optional expected content checksum.
-    pub checksum: Option<Checksum>,
+    checksum: Option<Checksum>,
 }
 
 impl Default for WriteOptions {
@@ -56,6 +57,112 @@ impl Default for WriteOptions {
 }
 
 impl WriteOptions {
+    /// Returns a copy with parent creation replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_create_parent(mut self, create: bool) -> Self {
+        self.create_parent = create;
+        self
+    }
+
+    /// Returns whether missing parent directories are created.
+    #[inline(always)]
+    #[must_use]
+    pub const fn create_parent(&self) -> bool {
+        self.create_parent
+    }
+
+    /// Returns a copy with the destination disposition replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_disposition(
+        mut self,
+        disposition: WriteDisposition,
+    ) -> Self {
+        self.disposition = disposition;
+        self
+    }
+
+    /// Returns the destination disposition.
+    #[inline(always)]
+    #[must_use]
+    pub const fn disposition(&self) -> WriteDisposition {
+        self.disposition
+    }
+
+    /// Returns a copy with the atomicity requirement replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_atomicity(
+        mut self,
+        atomicity: AtomicityRequirement,
+    ) -> Self {
+        self.atomicity = atomicity;
+        self
+    }
+
+    /// Returns the atomicity requirement.
+    #[inline(always)]
+    #[must_use]
+    pub const fn atomicity(&self) -> AtomicityRequirement {
+        self.atomicity
+    }
+
+    /// Returns a copy with the version precondition replaced.
+    #[inline]
+    #[must_use]
+    pub fn with_precondition(
+        mut self,
+        precondition: WritePrecondition,
+    ) -> Self {
+        self.precondition = precondition;
+        self
+    }
+
+    /// Returns the version precondition.
+    #[inline(always)]
+    #[must_use]
+    pub const fn precondition(&self) -> &WritePrecondition {
+        &self.precondition
+    }
+
+    /// Returns a copy with the content type replaced.
+    #[inline]
+    #[must_use]
+    pub fn with_content_type(mut self, content_type: Option<String>) -> Self {
+        self.content_type = content_type;
+        self
+    }
+
+    /// Returns the optional content type.
+    #[inline(always)]
+    #[must_use]
+    pub fn content_type(&self) -> Option<&str> {
+        self.content_type.as_deref()
+    }
+
+    /// Returns the user metadata attached to this write.
+    #[inline(always)]
+    #[must_use]
+    pub const fn user_metadata(&self) -> &NonSensitiveMetadata {
+        &self.user_metadata
+    }
+
+    /// Returns a copy with the expected checksum replaced.
+    #[inline]
+    #[must_use]
+    pub fn with_checksum(mut self, checksum: Option<Checksum>) -> Self {
+        self.checksum = checksum;
+        self
+    }
+
+    /// Returns the optional expected checksum.
+    #[inline(always)]
+    #[must_use]
+    pub const fn checksum(&self) -> Option<&Checksum> {
+        self.checksum.as_ref()
+    }
+
     /// Replaces user-defined metadata that has already passed key validation.
     #[inline]
     #[must_use]

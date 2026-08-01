@@ -183,38 +183,38 @@ impl CopyOutcome {
                 "provider returned a facade streamed-fallback outcome as native success",
             );
         }
-        if options.server_side == ServerSidePreference::Require
+        if options.server_side() == ServerSidePreference::Require
             && self.method != CopyMethod::ServerSide
         {
             return Some(
                 "provider reported a non-server-side success for a server-side-required copy",
             );
         }
-        if options.server_side == ServerSidePreference::Disable
+        if options.server_side() == ServerSidePreference::Disable
             && self.method == CopyMethod::ServerSide
         {
             return Some(
                 "provider reported a server-side success for a server-side-disabled copy",
             );
         }
-        if self.metadata != options.preserve_metadata {
+        if self.metadata != options.preserve_metadata() {
             return Some(
                 "provider reported metadata preservation different from the copy request",
             );
         }
-        if !options.continue_on_error && self.stats.failed != 0 {
+        if !options.continue_on_error() && self.stats.failed != 0 {
             return Some(
                 "provider reported failed copy entries without continue-on-error",
             );
         }
-        if options.conflict != CopyConflictPolicy::Skip
+        if options.conflict() != CopyConflictPolicy::Skip
             && self.stats.skipped != 0
         {
             return Some(
                 "provider reported skipped copy entries without a skip conflict policy",
             );
         }
-        if options.conflict != CopyConflictPolicy::Overwrite
+        if options.conflict() != CopyConflictPolicy::Overwrite
             && self.stats.overwritten != 0
         {
             return Some(

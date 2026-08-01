@@ -32,7 +32,7 @@ fn file_metadata_preserves_validated_provider_and_user_metadata() {
             .with("category", "private-category")
             .expect("ordinary user metadata key must be accepted"),
     );
-    assert!(metadata.user_metadata.contains_key("category"));
+    assert!(metadata.user_metadata().contains_key("category"));
     assert!(!format!("{metadata:?}").contains("private-category"));
 
     let provider = FileMetadata::new(FileKind::File).with_provider_metadata(
@@ -40,7 +40,7 @@ fn file_metadata_preserves_validated_provider_and_user_metadata() {
             .with("storage_class", "private-tier")
             .expect("ordinary provider metadata key must be accepted"),
     );
-    assert!(provider.provider_metadata.contains_key("storage_class"));
+    assert!(provider.provider_metadata().contains_key("storage_class"));
     assert!(!format!("{provider:?}").contains("private-tier"));
 
     assert!(
