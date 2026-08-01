@@ -388,6 +388,11 @@ SPI 并读取 request，但普通调用者不能在 safe Rust 中构造 request�
 
 Provider 不重复这些通用检查。
 
+公开的 `CopyOptions`、`ReadOptions`、`WriteOptions`、`ListOptions` 和
+`FileMetadata` 都是 `#[non_exhaustive]` 值类型。字段不作为跨 crate 的构造或变更
+接口；调用者使用 `Default`、具名构造方法、`with_*` builder 和只读 getter。这样新增
+语义只扩展统一的值类型 API，不要求 provider 或下游重新维护结构体字面量。
+
 Request 不携带 native path。Adapter 收到 request 后必须先转换该操作涉及的全部逻辑
 路径，转换失败时不得开始 provider I/O；provider session 可以在内部保存 native
 handle 或 native path。
@@ -986,9 +991,10 @@ pub enum TempResourceState {
 
 ### 12.3 Child 安全
 
-`TempDirectory::child(&PathComponent)` 只接受单一安全 component；
-`descendant(&RelativePath)` 只接受不能逃逸的相对路径。Provider 仍负责 symlink、
-mount point、race 和平台 canonicalization 等真实边界。
+`TempDirectory::child(&PathComponent)` 和 `AsyncTempDirectory::child` 只接受单一安全
+component；`descendant(&RelativePath)` 只接受不能逃逸的相对路径，同步和异步 handle
+保持相同的路径构造语义。Provider 仍负责 symlink、mount point、race 和平台
+canonicalization 等真实边界。
 
 ## 13. 异步生命周期
 
@@ -1093,18 +1099,15 @@ resolution 返回前通过 secret-free 结构校验。
 src/
 ├── file_system.rs
 ├── async_file_system.rs
-├── properties.rs
+├── file_system_properties.rs
 ├── spi/
-│   ├── file_system_spi.rs
-│   ├── async_file_system_spi.rs
-│   ├── request/
-│   ├── opened/
-│   └── session/
+│   ├── *_file_system_spi.rs
+│   ├── *_request.rs
+│   ├── opened_*.rs
+│   └── *_session.rs
 ├── copy/
 ├── rename/
-├── reader/
-├── writer/
-├── directory/
+├── handle/
 ├── temp/
 ├── options/
 ├── metadata/
