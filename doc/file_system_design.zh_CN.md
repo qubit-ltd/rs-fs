@@ -531,6 +531,11 @@ pub enum CopyDeclineReason {
 属于 `ProviderContractViolation`；`NotApplicable` 表示经过只读判断后，本次路径对
 不满足该 fast path 的动态前提。
 
+`FileSystemCapability::Copy` 表示 provider 声明了这个 native fast path。它不是普通文件
+流式 fallback 的必要前提：即使没有 `Copy`，只要 `Read`、`Write` 和 fallback allowlist
+满足，门面仍会直接执行流式 copy。`ServerSideCopy`、`DurableCopy` 等更强语义仍然要求
+各自的 capability，不能由流式 fallback 推导。
+
 ### 6.5 Provider 返回对象
 
 SPI 不直接构造公开 handle，而是返回 `spi` 模块的中间对象：
@@ -589,7 +594,7 @@ declined、failure 和副作用契约。
 6. 按属性快照中的 `PathConstraints` 检查 provider 声明的静态路径限制；
 7. 门面构造不可伪造、只携带逻辑 `Path` 的 SPI request；
 8. adapter 在任何 I/O 前转换本次请求的全部输入路径；
-9. provider 原生实现执行操作，或由可选 fast path 无副作用地 `Declined`；
+9. provider 原生实现执行操作，或在声明 `Copy` fast path 时由其无副作用地 `Declined`；
 10. adapter 将 provider 返回的 native path 解码为逻辑 `Path`；
 11. 门面校验 provider 返回的 metadata、entry、opened identity 和 outcome。
 
@@ -597,15 +602,16 @@ declined、failure 和副作用契约。
 执行。多路径操作在全部输入路径转换成功前不得产生副作用。Directory stream 等惰性
 结果可以逐项解码，但每个 entry 都必须在交给门面前完成转换并携带明确错误。
 
-`FileSystem::copy` 在通用步骤之后使用模板方法：
+`FileSystem::copy` 在通用步骤之后使用模板方法。声明 `Copy` 时先尝试 SPI fast path；未
+声明时直接进入 fallback：
 
 ```text
-spi.try_copy(request)
-  ├─ Completed ──► 门面复核 CopyOutcome
-  ├─ Declined
-  │    ├─ 满足通用 fallback 矩阵 ──► 门面流式复制
-  │    └─ 不满足 ──────────────────► 副作用前失败
-  └─ SpiCopyFailure ───────────────► 转换为 CopyFailure，不 fallback
+Copy capability?
+  ├─ yes ─► spi.try_copy(request)
+  │           ├─ Completed ──► 门面复核 CopyOutcome
+  │           ├─ Declined ──► 检查 fallback 矩阵并流式复制
+  │           └─ Failure ───► 转换为 CopyFailure，不 fallback
+  └─ no ──► 检查 fallback 矩阵并流式复制
 ```
 
 门面 fallback 重新调用公开 reader/writer 所对应的私有门面流程；每个组合原语仍执行
@@ -725,6 +731,10 @@ ACL/IAM 管理 API。这些模型的作用域和语义不同，不能放入所�
 - `Skip` 通过 create-new 的 already-exists 结果实现；
 - 不执行通用 `Overwrite` fallback；
 - 不隐式创建 parent 或执行其他未被 failure state 覆盖的前置副作用。
+
+Fallback 需要 `Read` 与 `Write`，但不需要 `Copy`；`Copy` 缺失只表示 provider-native
+fast path 不可用。要求 server-side、atomicity 或 durability 的 request 仍在副作用前
+根据对应 capability 失败。
 
 门面按 allowlist 判断 resolved options；不在列表中的组合在打开 target writer 前返回
 `RequirementNotMet`、`UnsupportedCapability` 或对应的 options error。以后只有在

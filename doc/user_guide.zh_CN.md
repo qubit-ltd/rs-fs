@@ -112,6 +112,11 @@ recovery writer。重试、`abort`、cleanup 或核对 source/target 前，都�
 检查。durability 目前只适用于 copy（`DurableCopy`）；write、rename 和临时资源 persist
 的 outcome 不宣称 durable publication。成功 outcome 只报告其实际建模的保证。
 
+`FileSystemCapability::Copy` 表示 provider-native copy fast path，并不是门面执行普通文件复制
+的唯一方式。未声明该 capability 时，门面会直接评估 allowlist 内的流式 fallback，并要求
+`Read` 与 `Write`。该 fallback 受文档规定的 copy options 限制，也不能满足 required
+server-side、atomic 或 durable copy guarantee。
+
 ### 异步工作流
 
 `AsyncFileSystem` 通过 runtime-neutral future 提供对应的门面操作。请在应用已有的 runtime
