@@ -53,6 +53,7 @@ const CAPABILITY_DEPENDENCIES: &[(
         FileSystemCapability::ServerSideCopy,
         FileSystemCapability::Copy,
     ),
+    (FileSystemCapability::DurableCopy, FileSystemCapability::Copy),
 ];
 
 /// Stable typed capability guarantees for one configured filesystem.

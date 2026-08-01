@@ -108,13 +108,17 @@ fn publish(fs: &FileSystem, source: &Path, release_dir: &Path) -> qubit_fs::FsRe
 `RenameFailure`；`copy` 返回 `CopyFailure`，其中包含 partial statistics，并会在适用时保留
 recovery writer。重试、`abort`、cleanup 或核对 source/target 前，都应先检查 state。
 
-只要门面能在本地确定所要求的 atomicity、durability 或其他 guarantee 无法满足，就会在产生
-副作用前进行检查。成功 outcome 会报告实际达到的保证。
+只要门面能在本地确定所要求的 atomicity 或其他 guarantee 无法满足，就会在产生副作用前进行
+检查。durability 目前只适用于 copy（`DurableCopy`）；write、rename 和临时资源 persist
+的 outcome 不宣称 durable publication。成功 outcome 只报告其实际建模的保证。
 
 ### 异步工作流
 
 `AsyncFileSystem` 通过 runtime-neutral future 提供对应的门面操作。请在应用已有的 runtime
 上运行它们；`qubit-fs` 不要求 Tokio、`futures-io` 或其他 executor。
+
+异步门面也提供 `write_all`；若必须保留 `AsyncFileWriter` 以便恢复，它会返回
+`AsyncWriteAllFailure`。
 
 ```rust,ignore
 use qubit_fs::{AsyncFileSystem, CopyOptions, Path};

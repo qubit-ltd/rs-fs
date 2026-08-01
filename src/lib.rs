@@ -80,6 +80,7 @@ pub use handle::{
     AsyncDirectoryStream,
     AsyncFileReader,
     AsyncFileWriter,
+    AsyncWriteAllFailure,
     DirectoryStream,
     FileReader,
     FileWriter,

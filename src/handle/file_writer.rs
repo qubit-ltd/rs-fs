@@ -136,7 +136,7 @@ impl FileWriter {
             Ok(outcome) => {
                 self.state = WriterState::Committed;
                 if self.atomicity == AtomicityRequirement::Required
-                    && outcome.atomicity != AchievedAtomicity::Atomic
+                    && outcome.atomicity() != AchievedAtomicity::Atomic
                 {
                     self.state = WriterState::Published;
                     return Err(WriteFailure::new(
@@ -144,6 +144,20 @@ impl FileWriter {
                             FsErrorKind::ProviderContractViolation,
                             FsOperation::CommitWriter,
                             "provider reported non-atomic success for an atomic-required write",
+                        )
+                        .with_path(self.info.path().clone()),
+                        WriteFailureState::Published,
+                    ));
+                }
+                if let Some(bytes_written) = outcome.bytes_written()
+                    && bytes_written != self.written_bytes
+                {
+                    self.state = WriterState::Published;
+                    return Err(WriteFailure::new(
+                        FsError::new(
+                            FsErrorKind::ProviderContractViolation,
+                            FsOperation::CommitWriter,
+                            "provider reported a byte count different from the bytes accepted by the writer",
                         )
                         .with_path(self.info.path().clone()),
                         WriteFailureState::Published,

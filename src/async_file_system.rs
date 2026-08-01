@@ -48,6 +48,7 @@ use crate::{
     AsyncDirectoryStream,
     AsyncFileReader,
     AsyncFileWriter,
+    AsyncWriteAllFailure,
     AsyncTempDirectory,
     AsyncTempFile,
     CopyConflictPolicy,
@@ -280,6 +281,50 @@ impl AsyncFileSystem {
             self.properties.info().provider_id(),
             self.properties.limits().max_write_bytes().maximum(),
         ))
+    }
+
+    /// Asynchronously writes all bytes and retains the writer on failure.
+    pub async fn write_all(
+        &self,
+        path: &Path,
+        bytes: &[u8],
+        options: WriteOptions,
+    ) -> Result<crate::WriteOutcome, AsyncWriteAllFailure> {
+        if let Err(error) = self
+            .properties
+            .limits()
+            .validate_write_size(path, bytes.len())
+        {
+            return Err(AsyncWriteAllFailure::new(error, None));
+        }
+        let mut writer = self
+            .open_writer(path, options)
+            .await
+            .map_err(|error| AsyncWriteAllFailure::new(error, None))?;
+        if let Err(error) = writer.write_fully_async(bytes).await {
+            return Err(AsyncWriteAllFailure::new(
+                self.enrich(
+                    FsError::from_stream_io(error, FsOperation::Write, path),
+                    path,
+                    FsOperation::Write,
+                ),
+                Some(writer),
+            ));
+        }
+        if let Err(error) = writer.flush_async().await {
+            return Err(AsyncWriteAllFailure::new(
+                self.enrich(
+                    FsError::from_stream_io(error, FsOperation::Write, path),
+                    path,
+                    FsOperation::Write,
+                ),
+                Some(writer),
+            ));
+        }
+        writer
+            .commit_async()
+            .await
+            .map_err(|error| AsyncWriteAllFailure::new(error, Some(writer)))
     }
 
     /// Asynchronously creates a directory after local validation.
@@ -912,7 +957,7 @@ impl AsyncFileSystem {
                     bytes,
                     ..CopyStats::default()
                 },
-                write_outcome.atomicity,
+                write_outcome.atomicity(),
             ))
         })
     }

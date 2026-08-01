@@ -47,7 +47,7 @@ fn test_temp_directory_persist_marks_resource_persisted() {
     let outcome = directory
         .persist(&target, qubit_fs::PersistOptions::default())
         .expect("atomic temporary directory persist should succeed");
-    assert_eq!(target, outcome.target);
+    assert_eq!(&target, outcome.target());
     assert_eq!(qubit_fs::TempResourceState::Persisted, directory.state());
     assert_eq!(
         1,

@@ -20,13 +20,13 @@ use crate::{
 #[derive(Clone, Debug, PartialEq)]
 pub struct PersistOutcome {
     /// Final provider-local target path.
-    pub target: Path,
+    target: Path,
     /// Atomicity actually achieved by publication.
-    pub atomicity: AchievedAtomicity,
+    atomicity: AchievedAtomicity,
     /// Concrete publication method used.
-    pub method: PublicationMethod,
+    method: PublicationMethod,
     /// Provider-native non-sensitive diagnostics.
-    pub diagnostics: NonSensitiveMetadata,
+    diagnostics: NonSensitiveMetadata,
 }
 
 impl PersistOutcome {
@@ -52,6 +52,34 @@ impl PersistOutcome {
             method,
             diagnostics: NonSensitiveMetadata::new(),
         }
+    }
+
+    /// Returns the final provider-local target path.
+    #[inline(always)]
+    #[must_use]
+    pub const fn target(&self) -> &Path {
+        &self.target
+    }
+
+    /// Returns the atomicity actually achieved by publication.
+    #[inline(always)]
+    #[must_use]
+    pub const fn atomicity(&self) -> AchievedAtomicity {
+        self.atomicity
+    }
+
+    /// Returns the concrete publication method used.
+    #[inline(always)]
+    #[must_use]
+    pub const fn method(&self) -> PublicationMethod {
+        self.method
+    }
+
+    /// Returns provider-native non-sensitive diagnostics.
+    #[inline(always)]
+    #[must_use]
+    pub const fn diagnostics(&self) -> &NonSensitiveMetadata {
+        &self.diagnostics
     }
 
     /// Replaces provider-native diagnostics that have already passed key

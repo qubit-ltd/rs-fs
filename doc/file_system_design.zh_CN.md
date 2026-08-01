@@ -802,9 +802,10 @@ Copy 的 source 必须保持不变。Provider 修改 source 属于
 ### 9.4 Rename 与 move
 
 `rename` 是真正的 namespace primitive，继续由 SPI 必须实现，不能用 copy+delete
-模拟。`RenameOutcome` 报告实际 publication method、atomicity 和 durability；
-`SpiRenameFailure` / `RenameFailure` 使用 `Unchanged`、`Renamed`、
-`Indeterminate` 等类型化状态表达 rename 已完成但后续 durability 步骤失败的情况。
+模拟。`RenameOutcome` 报告实际 publication method 与 atomicity。当前 durability
+只由 `CopyOutcome` 建模；write、rename 和临时资源 persist 不得宣称 durable
+publication。`SpiRenameFailure` / `RenameFailure` 使用 `Unchanged`、`Renamed`、
+`Indeterminate` 等类型化状态表达 rename 的已确认进度。
 `FileSystemCapability::Rename` 只表示 rename，不再使用“rename or move”的含混定义。
 
 ```rust
@@ -829,8 +830,8 @@ Requirement 决定什么结果可以称为成功；outcome 描述实际发生的
 - `NotRequired`：调用者不要求，provider 仍可采用更强实现。
 
 成功结果使用 `WriteOutcome`、`RenameOutcome`、`CopyOutcome` 和 `PersistOutcome`，
-报告 actual atomicity、durability、publication/copy method、版本、统计和非敏感
-diagnostics。
+报告各自模型所覆盖的 actual atomicity、copy durability、publication/copy method、版本、
+统计和非敏感 diagnostics。
 
 门面根据 request 复核 outcome。Provider 不能通过返回“成功”绕过 required semantics。
 

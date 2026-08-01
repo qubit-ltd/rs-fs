@@ -100,6 +100,46 @@ fn path(value: &str) -> Path {
     Path::parse(value).expect("test path should parse")
 }
 
+/// Verifies the asynchronous whole-file convenience API mirrors writer
+/// publication semantics and preserves the provider operation order.
+#[test]
+fn test_async_write_all_publishes_complete_bytes() {
+    let config = AsyncRecordingConfig {
+        writer_atomicity: Some(AchievedAtomicity::Atomic),
+        ..AsyncRecordingConfig::default()
+    };
+    let (filesystem, probe) = async_recording_file_system(config);
+    let outcome = ready(filesystem.write_all(
+        &path("/async-write-all"),
+        b"bytes",
+        WriteOptions::default(),
+    ))
+    .expect("async write-all should commit");
+    assert_eq!(AchievedAtomicity::Atomic, outcome.atomicity());
+    assert_eq!(
+        vec!["open_writer"],
+        probe.calls(),
+    );
+}
+
+/// Verifies a failed asynchronous commit retains the writer for recovery.
+#[test]
+fn test_async_write_all_commit_failure_retains_writer() {
+    let config = AsyncRecordingConfig {
+        writer_commit_failure: Some(WriteFailureState::NotPublished),
+        ..AsyncRecordingConfig::default()
+    };
+    let (filesystem, _) = async_recording_file_system(config);
+    let failure = ready(filesystem.write_all(
+        &path("/async-write-all-failure"),
+        b"bytes",
+        WriteOptions::default(),
+    ))
+    .expect_err("injected commit failure should retain writer");
+    assert_eq!(FsErrorKind::Io, failure.error().kind());
+    assert!(failure.writer().is_some());
+}
+
 #[derive(Clone, Copy)]
 struct StreamCopyFallbackSpi {
     commit_already_exists: bool,

@@ -170,12 +170,12 @@ impl AsyncTempFile {
                 .persist(PersistRequest::new(target, options))
                 .await;
             self.state = match &result {
-                Ok(outcome) if outcome.target != *target => {
+                Ok(outcome) if outcome.target() != target => {
                     TempResourceState::Indeterminate
                 }
                 Ok(outcome)
                     if atomicity == AtomicityRequirement::Required
-                        && outcome.atomicity != AchievedAtomicity::Atomic =>
+                        && outcome.atomicity() != AchievedAtomicity::Atomic =>
                 {
                     TempResourceState::CleanupRequired
                 }
@@ -193,21 +193,19 @@ impl AsyncTempFile {
                 },
             };
             match result {
-                Ok(outcome) if outcome.target != *target => {
-                    Err(PersistFailure::new(
-                        FsError::new(
-                            FsErrorKind::ProviderContractViolation,
-                            FsOperation::PersistTemp,
-                            "provider reported a persistence target different from the request",
-                        )
-                        .with_path(self.path.clone())
-                        .with_target(target.clone()),
-                        PersistFailureState::Indeterminate,
-                    ))
-                }
+                Ok(outcome) if outcome.target() != target => Err(PersistFailure::new(
+                    FsError::new(
+                        FsErrorKind::ProviderContractViolation,
+                        FsOperation::PersistTemp,
+                        "provider reported a persistence target different from the request",
+                    )
+                    .with_path(self.path.clone())
+                    .with_target(target.clone()),
+                    PersistFailureState::Indeterminate,
+                )),
                 Ok(outcome)
                     if atomicity == AtomicityRequirement::Required
-                        && outcome.atomicity != AchievedAtomicity::Atomic =>
+                        && outcome.atomicity() != AchievedAtomicity::Atomic =>
                 {
                     Err(PersistFailure::new(
                         FsError::new(
