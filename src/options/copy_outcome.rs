@@ -183,6 +183,20 @@ impl CopyOutcome {
                 "provider returned a facade streamed-fallback outcome as native success",
             );
         }
+        if options.atomicity() == crate::AtomicityRequirement::Required
+            && self.atomicity != AchievedAtomicity::Atomic
+        {
+            return Some(
+                "provider reported non-atomic success for an atomic-required copy",
+            );
+        }
+        if options.durability() == crate::DurabilityRequirement::Required
+            && !self.durable
+        {
+            return Some(
+                "provider reported non-durable success for a durability-required copy",
+            );
+        }
         if options.server_side() == ServerSidePreference::Require
             && self.method != CopyMethod::ServerSide
         {

@@ -45,7 +45,10 @@ pub enum FileSystemCapability {
     AtomicRename = 14,
     /// Atomic replacement publication.
     AtomicReplace = 15,
-    /// Same-filesystem copy.
+    /// Provider-native same-filesystem copy fast path.
+    ///
+    /// The facade may still provide an allowlisted stream fallback from
+    /// [`Self::Read`] and [`Self::Write`] when this capability is absent.
     Copy = 16,
     /// Server-side copy without downloading payload bytes.
     ServerSideCopy = 17,

@@ -137,6 +137,25 @@ fn test_async_write_all_commit_failure_retains_writer() {
     assert!(failure.writer().is_some());
 }
 
+/// Includes provider context when the asynchronous write-all limit is hit.
+#[test]
+fn test_async_write_all_limit_error_includes_provider_context() {
+    let config = AsyncRecordingConfig {
+        maximum_write_bytes: Some(1),
+        ..AsyncRecordingConfig::default()
+    };
+    let (filesystem, _) = async_recording_file_system(config);
+    let failure = ready(filesystem.write_all(
+        &path("/async-write-all-limit"),
+        b"bytes",
+        WriteOptions::default(),
+    ))
+    .expect_err("async write-all limit should reject oversized content");
+
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
+    assert_eq!(Some("async-recording"), failure.error().provider());
+}
+
 #[derive(Clone, Copy)]
 struct StreamCopyFallbackSpi {
     commit_already_exists: bool,
@@ -869,11 +888,12 @@ fn test_async_facade_preflight_rejects_invalid_paths_options_and_capabilities()
         omit_read_and_write: true,
         ..AsyncRecordingConfig::default()
     });
-    assert!(
-        without_copy
-            .begin_copy(source.clone(), target.clone(), CopyOptions::default())
-            .is_err()
-    );
+    let mut operation = without_copy
+        .begin_copy(source.clone(), target.clone(), CopyOptions::default())
+        .expect("copy preflight should allow fallback selection");
+    let failure = ready(operation.execute()).expect_err("fallback should require read and write");
+    assert_eq!(FsErrorKind::UnsupportedCapability, failure.error().kind());
+    assert_eq!(CopyFailureState::Unchanged, failure.state());
 
     assert!(
         ready(file_system.rename(&relative, &target, RenameOptions::default()))

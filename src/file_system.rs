@@ -172,6 +172,17 @@ impl FileSystem {
                 target,
             ));
         }
+        if !self
+            .properties
+            .capabilities()
+            .contains(FileSystemCapability::Copy)
+        {
+            return self
+                .stream_copy_fallback(source, target, &options)
+                .map_err(|failure| {
+                    self.contextualize_copy_failure(failure, source, target)
+                });
+        }
         match self.spi.try_copy(CopyRequest::new(
             source,
             target,
@@ -213,42 +224,6 @@ impl FileSystem {
                         FsErrorKind::ProviderContractViolation,
                         FsOperation::Copy,
                         message,
-                    ),
-                    CopyFailureState::Published,
-                    *outcome.stats(),
-                    None,
-                ),
-                source,
-                target,
-            ));
-        }
-        if options.atomicity() == crate::AtomicityRequirement::Required
-            && outcome.atomicity() != crate::AchievedAtomicity::Atomic
-        {
-            return Err(self.contextualize_copy_failure(
-                self.copy_failure(
-                    FsError::new(
-                        FsErrorKind::ProviderContractViolation,
-                        FsOperation::Copy,
-                        "provider reported non-atomic success for an atomic-required copy",
-                    ),
-                    CopyFailureState::Published,
-                    *outcome.stats(),
-                    None,
-                ),
-                source,
-                target,
-            ));
-        }
-        if options.durability() == crate::DurabilityRequirement::Required
-            && !outcome.durable()
-        {
-            return Err(self.contextualize_copy_failure(
-                self.copy_failure(
-                    FsError::new(
-                        FsErrorKind::ProviderContractViolation,
-                        FsOperation::Copy,
-                        "provider reported non-durable success for a durability-required copy",
                     ),
                     CopyFailureState::Published,
                     *outcome.stats(),
@@ -387,7 +362,8 @@ impl FileSystem {
             })?;
         self.properties
             .limits()
-            .validate_read_range(path, options.length())?;
+            .validate_read_range(path, options.length())
+            .map_err(|error| self.enrich(error, path, FsOperation::OpenReader))?;
         self.require(
             FileSystemCapability::Read,
             FsOperation::OpenReader,
@@ -403,7 +379,6 @@ impl FileSystem {
                 self.validate_opened_info(
                     &info,
                     path,
-                    FsOperation::OpenReader,
                 )?;
                 Ok(FileReader::new(info, reader))
             })
@@ -438,7 +413,6 @@ impl FileSystem {
                 self.validate_opened_info(
                     &info,
                     path,
-                    FsOperation::OpenWriter,
                 )?;
                 Ok(FileWriter::new(
                     info,
@@ -631,7 +605,6 @@ impl FileSystem {
                 self.enrich(error, source, FsOperation::Copy)
                     .with_target(target.clone())
             })?;
-        self.require(FileSystemCapability::Copy, FsOperation::Copy, source)?;
         if source == target {
             return Err(FsError::new(
                 FsErrorKind::InvalidOptions,
@@ -929,26 +902,7 @@ impl FileSystem {
         path: &Path,
         operation: FsOperation,
     ) -> FsResult<()> {
-        if path.semantics() != self.properties.info().path_semantics() {
-            return Err(FsError::invalid_path(
-                operation,
-                "path semantics do not match this filesystem",
-            )
-            .with_path(path.clone())
-            .with_provider(self.properties.info().provider_id()));
-        }
-        self.properties
-            .path_constraints()
-            .validate(path)
-            .map_err(|error| self.enrich(error, path, operation))?;
-        self.properties
-            .limits()
-            .validate_path(
-                path,
-                self.properties.info().path_semantics(),
-                operation,
-            )
-            .map_err(|error| self.enrich(error, path, operation))
+        crate::facade_context::validate_path(&self.properties, path, operation)
     }
 
     /// Requires an advertised capability before I/O.
@@ -958,18 +912,12 @@ impl FileSystem {
         operation: FsOperation,
         path: &Path,
     ) -> FsResult<()> {
-        if self.properties.capabilities().contains(capability) {
-            Ok(())
-        } else {
-            Err(FsError::new(
-                FsErrorKind::UnsupportedCapability,
-                operation,
-                "filesystem capability is not supported",
-            )
-            .with_path(path.clone())
-            .with_provider(self.properties.info().provider_id())
-            .with_required_capability(capability))
-        }
+        crate::facade_context::require(
+            &self.properties,
+            capability,
+            operation,
+            path,
+        )
     }
 
     /// Adds missing public error context to a provider error.
@@ -979,11 +927,7 @@ impl FileSystem {
         path: &Path,
         operation: FsOperation,
     ) -> FsError {
-        error.with_operation(operation).with_missing_context(
-            path,
-            None,
-            self.properties.info().provider_id(),
-        )
+        crate::facade_context::enrich(&self.properties, error, path, operation)
     }
 
     /// Builds a provider-contract error for an invalid outcome.
@@ -993,9 +937,12 @@ impl FileSystem {
         operation: FsOperation,
         message: &str,
     ) -> FsError {
-        FsError::new(FsErrorKind::ProviderContractViolation, operation, message)
-            .with_path(path.clone())
-            .with_provider(self.properties.info().provider_id())
+        crate::facade_context::contract_error(
+            &self.properties,
+            path,
+            operation,
+            message,
+        )
     }
 
     /// Validates the identity the provider attached to an opened file handle.
@@ -1003,7 +950,6 @@ impl FileSystem {
         &self,
         info: &crate::OpenedFileInfo,
         path: &Path,
-        operation: FsOperation,
     ) -> FsResult<()> {
         if info.filesystem_id() != self.properties.info().id()
             || info.path() != path
@@ -1014,7 +960,6 @@ impl FileSystem {
                 "provider returned an opened handle with a different identity",
             ));
         }
-        let _ = operation;
         Ok(())
     }
 
@@ -1098,7 +1043,8 @@ impl FileSystem {
                     FsOperation::Read,
                     "read exceeds maximum byte count",
                 )
-                .with_path(path.clone()));
+                .with_path(path.clone())
+                .with_provider(self.properties.info().provider_id()));
             }
             result.extend_from_slice(&buffer[..read]);
         }
@@ -1116,7 +1062,10 @@ impl FileSystem {
             .limits()
             .validate_write_size(path, bytes.len())
         {
-            return Err(WriteAllFailure::new(error, None));
+            return Err(WriteAllFailure::new(
+                self.enrich(error, path, FsOperation::Write),
+                None,
+            ));
         }
         let mut writer = self
             .open_writer(path, options)
@@ -1143,5 +1092,6 @@ impl FileSystem {
         error: IoError,
     ) -> FsError {
         FsError::from_stream_io(error, operation, path)
+            .with_provider(self.properties.info().provider_id())
     }
 }
