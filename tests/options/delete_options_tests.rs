@@ -14,26 +14,22 @@ use qubit_fs::{
 
 #[test]
 fn test_delete_options_full_configuration_is_usable() {
-    let options = DeleteOptions {
-        recursive: true,
-        missing_ok: true,
-        if_match: Some(ResourceVersion::from("v1")),
-    };
+    let options = DeleteOptions::default()
+        .with_recursive(true)
+        .with_missing_ok(true)
+        .with_if_match(Some(ResourceVersion::from("v1")));
 
-    assert!(options.recursive);
-    assert!(options.missing_ok);
+    assert!(options.recursive());
+    assert!(options.missing_ok());
     assert_eq!(
         Some("v1"),
-        options.if_match.as_ref().map(ResourceVersion::as_str),
+        options.if_match().map(ResourceVersion::as_str),
     );
 }
 
 #[test]
 fn delete_requirements_are_checked_against_typed_capabilities() {
-    let recursive = DeleteOptions {
-        recursive: true,
-        ..DeleteOptions::default()
-    };
+    let recursive = DeleteOptions::default().with_recursive(true);
     let error = recursive
         .validate_against(FileSystemCapabilities::default())
         .unwrap_err();
@@ -42,10 +38,8 @@ fn delete_requirements_are_checked_against_typed_capabilities() {
         error.required_capability(),
     );
 
-    let conditional = DeleteOptions {
-        if_match: Some(ResourceVersion::from("v1")),
-        ..DeleteOptions::default()
-    };
+    let conditional = DeleteOptions::default()
+        .with_if_match(Some(ResourceVersion::from("v1")));
     let error = conditional
         .validate_against(FileSystemCapabilities::default())
         .unwrap_err();

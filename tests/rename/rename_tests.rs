@@ -211,10 +211,8 @@ fn test_rename_atomicity_downgrade_is_typed_contract_failure_without_emulation()
         .rename(
             &path("/source"),
             &path("/target"),
-            RenameOptions {
-                overwrite: false,
-                atomicity: AtomicityRequirement::Required,
-            },
+            RenameOptions::default()
+                .with_atomicity(AtomicityRequirement::Required),
         )
         .expect_err("downgraded required rename must fail");
     assert_eq!(
@@ -290,10 +288,8 @@ fn test_rename_failure_exposes_context_state_and_parts() {
         .rename(
             &path("/source"),
             &path("/target"),
-            RenameOptions {
-                overwrite: false,
-                atomicity: AtomicityRequirement::Required,
-            },
+            RenameOptions::default()
+                .with_atomicity(AtomicityRequirement::Required),
         )
         .expect_err("non-atomic outcome must produce a typed failure");
     assert!(format!("{failure:?}").contains("RenameFailure"));

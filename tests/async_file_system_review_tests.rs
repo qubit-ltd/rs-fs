@@ -560,10 +560,8 @@ fn test_async_facade_rejects_contract_and_fallback_boundary_failures() {
             .capabilities()
             .contains(qubit_fs::FileSystemCapability::AtomicRename)
         {
-            RenameOptions {
-                atomicity: AtomicityRequirement::Required,
-                ..RenameOptions::default()
-            }
+            RenameOptions::default()
+                .with_atomicity(AtomicityRequirement::Required)
         } else {
             RenameOptions::default()
         };
@@ -889,10 +887,8 @@ fn test_async_facade_preflight_rejects_invalid_paths_options_and_capabilities()
         ready(file_system.rename(
             &source,
             &target,
-            RenameOptions {
-                atomicity: AtomicityRequirement::Required,
-                ..RenameOptions::default()
-            },
+            RenameOptions::default()
+                .with_atomicity(AtomicityRequirement::Required),
         ),)
         .is_err()
     );
@@ -904,10 +900,7 @@ fn test_async_facade_preflight_rejects_invalid_paths_options_and_capabilities()
     assert!(
         ready(file_system.delete_file(
             &target,
-            DeleteOptions {
-                recursive: true,
-                ..DeleteOptions::default()
-            },
+            DeleteOptions::default().with_recursive(true),
         ),)
         .is_err()
     );

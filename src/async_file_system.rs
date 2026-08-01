@@ -350,7 +350,7 @@ impl AsyncFileSystem {
             FsOperation::CreateDir,
             path,
         )?;
-        let exists_ok = options.exists_ok;
+        let exists_ok = options.exists_ok();
         let outcome = self
             .spi
             .create_directory(CreateDirectoryRequest::new(
@@ -415,7 +415,7 @@ impl AsyncFileSystem {
             .await
         {
             Ok(outcome)
-                if options.atomicity == crate::AtomicityRequirement::Required
+                if options.atomicity() == crate::AtomicityRequirement::Required
                     && outcome.atomicity() != crate::AchievedAtomicity::Atomic =>
             {
                 Err(self.contextual_rename_failure(
@@ -728,7 +728,7 @@ impl AsyncFileSystem {
             .validate_against(self.properties.capabilities())
             .map_err(|error| self.enrich(error, path, FsOperation::Delete))?;
         self.require(FileSystemCapability::Delete, FsOperation::Delete, path)?;
-        let missing_ok = options.missing_ok;
+        let missing_ok = options.missing_ok();
         let request_options = ResolvedDeleteOptions::new(options);
         let outcome = if directory {
             self.spi

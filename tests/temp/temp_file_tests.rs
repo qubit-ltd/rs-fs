@@ -95,10 +95,8 @@ fn test_temp_file_persist_marks_resource_persisted() {
     let outcome = temporary
         .persist(
             &target,
-            qubit_fs::PersistOptions {
-                atomicity: qubit_fs::AtomicityRequirement::Preferred,
-                ..qubit_fs::PersistOptions::default()
-            },
+            qubit_fs::PersistOptions::default()
+                .with_atomicity(qubit_fs::AtomicityRequirement::Preferred),
         )
         .expect("preferred atomicity may accept non-atomic persistence");
     assert_eq!(&target, outcome.target());
@@ -131,10 +129,8 @@ fn test_temp_file_persist_rejects_wrong_provider_target() {
     let failure = temporary
         .persist(
             &requested,
-            qubit_fs::PersistOptions {
-                atomicity: qubit_fs::AtomicityRequirement::Preferred,
-                ..qubit_fs::PersistOptions::default()
-            },
+            qubit_fs::PersistOptions::default()
+                .with_atomicity(qubit_fs::AtomicityRequirement::Preferred),
         )
         .expect_err("wrong provider target must violate the contract");
     assert_eq!(

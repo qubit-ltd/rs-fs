@@ -15,28 +15,23 @@ use qubit_fs::{
 
 #[test]
 fn test_rename_options_full_configuration_and_default_are_usable() {
-    let options = RenameOptions {
-        overwrite: true,
-        atomicity: AtomicityRequirement::Required,
-    };
+    let options = RenameOptions::default()
+        .with_overwrite(true)
+        .with_atomicity(AtomicityRequirement::Required);
 
-    assert!(options.overwrite);
-    assert_eq!(AtomicityRequirement::Required, options.atomicity);
+    assert!(options.overwrite());
+    assert_eq!(AtomicityRequirement::Required, options.atomicity());
+    assert!(!RenameOptions::default().overwrite());
     assert_eq!(
-        RenameOptions {
-            overwrite: false,
-            atomicity: AtomicityRequirement::Preferred,
-        },
-        RenameOptions::default(),
+        AtomicityRequirement::Preferred,
+        RenameOptions::default().atomicity(),
     );
 }
 
 #[test]
 fn required_rename_atomicity_fails_preflight_without_side_effects() {
-    let options = RenameOptions {
-        atomicity: AtomicityRequirement::Required,
-        ..RenameOptions::default()
-    };
+    let options = RenameOptions::default()
+        .with_atomicity(AtomicityRequirement::Required);
 
     let error = options
         .validate_against(FileSystemCapabilities::default())
