@@ -34,7 +34,7 @@ doctest = true
 [dependencies]
 fluent-uri = "0.4.1"
 qubit-io = "0.14"
-qubit-redact = "0.3"
+qubit-redact = "0.4"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)'] }
