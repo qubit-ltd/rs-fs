@@ -121,7 +121,7 @@ fn test_async_temp_file_persist_delegates_after_preflight() {
     let outcome =
         ready(temp.persist(&path("/final"), PersistOptions::default()))
             .expect("persistence should succeed");
-    assert_eq!(path("/final"), outcome.target);
+    assert_eq!(&path("/final"), outcome.target());
     assert_eq!(TempResourceState::Persisted, temp.state());
     assert_eq!(vec!["create_temp_file", "persist"], probe.calls());
 }
@@ -243,7 +243,7 @@ fn test_async_temp_directory_persists_and_rejects_later_lifecycle_calls() {
     let outcome =
         ready(directory.persist(&path("/final"), PersistOptions::default()))
             .expect("temporary directory should persist");
-    assert_eq!(path("/final"), outcome.target);
+    assert_eq!(&path("/final"), outcome.target());
     assert_eq!(TempResourceState::Persisted, directory.state());
     let persist =
         ready(directory.persist(&path("/other"), PersistOptions::default()))

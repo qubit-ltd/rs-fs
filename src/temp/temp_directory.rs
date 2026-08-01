@@ -112,7 +112,7 @@ impl TempDirectory {
             .persist(PersistRequest::new(target, options.clone()))
         {
             Ok(outcome) => {
-                if outcome.target != *target {
+                if outcome.target() != target {
                     self.state = TempResourceState::Indeterminate;
                     return Err(PersistFailure::new(
                         FsError::new(
@@ -126,7 +126,7 @@ impl TempDirectory {
                     ));
                 }
                 if options.atomicity == AtomicityRequirement::Required
-                    && outcome.atomicity != AchievedAtomicity::Atomic
+                    && outcome.atomicity() != AchievedAtomicity::Atomic
                 {
                     self.state = TempResourceState::CleanupRequired;
                     return Err(PersistFailure::new(

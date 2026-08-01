@@ -10,6 +10,7 @@
 mod async_directory_stream;
 mod async_file_reader;
 mod async_file_writer;
+mod async_write_all_failure;
 mod directory_stream;
 mod file_reader;
 mod file_writer;
@@ -21,6 +22,7 @@ mod writer_state;
 pub use async_directory_stream::AsyncDirectoryStream;
 pub use async_file_reader::AsyncFileReader;
 pub use async_file_writer::AsyncFileWriter;
+pub use async_write_all_failure::AsyncWriteAllFailure;
 pub use directory_stream::DirectoryStream;
 pub use file_reader::FileReader;
 pub use file_writer::FileWriter;

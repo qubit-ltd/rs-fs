@@ -131,8 +131,8 @@ pub(crate) fn query_pair_is_sensitive(pair: &str) -> bool {
     let Some(key) = percent_decode_utf8(raw_key) else {
         return false;
     };
-    RedactionPolicy::standard().sensitivity_for(&key).is_some()
-        || RedactionPolicy::default().sensitivity_for(&key).is_some()
+    let policy = RedactionPolicy::default();
+    policy.sensitivity_for(&key).is_some()
 }
 
 /// Strictly percent-decodes query-key text as UTF-8 without treating `+` as a

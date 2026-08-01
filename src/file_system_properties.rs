@@ -63,7 +63,7 @@ impl FileSystemProperties {
     ) -> FsResult<Self> {
         let properties = Self {
             info,
-            capabilities: effective_capabilities(capabilities),
+            capabilities,
             limits,
             path_constraints,
         };
@@ -160,19 +160,6 @@ impl FileSystemProperties {
         }
         Ok(())
     }
-}
-
-/// Preserves only capabilities explicitly advertised by the provider.
-///
-/// # Parameters
-/// - `capabilities`: Provider-advertised capability set.
-///
-/// # Returns
-/// The unchanged capability set after validating the no-derivation policy.
-fn effective_capabilities(
-    capabilities: FileSystemCapabilities,
-) -> FileSystemCapabilities {
-    capabilities
 }
 
 /// Builds the shared property-validation failure.

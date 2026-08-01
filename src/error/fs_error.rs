@@ -36,7 +36,7 @@ pub struct FsError {
     kind: FsErrorKind,
     /// Operation that produced the error.
     operation: FsOperation,
-    /// Primary path involved in the operation.
+    /// Concrete path where the operation failed.
     path: Option<Box<Path>>,
     /// Secondary path involved in the operation.
     target: Option<Box<Path>>,
@@ -112,7 +112,9 @@ impl FsError {
     /// Adds primary path context.
     ///
     /// # Parameters
-    /// - `path`: Primary path involved in the operation.
+    /// - `path`: Concrete path where the operation failed. For a two-path
+    ///   operation this may be either request path; use [`Self::target`] to
+    ///   identify the destination.
     ///
     /// # Returns
     /// Updated filesystem error.
@@ -144,7 +146,7 @@ impl FsError {
     /// Adds secondary target path context.
     ///
     /// # Parameters
-    /// - `target`: Secondary path involved in the operation.
+    /// - `target`: Destination path of a two-path operation.
     ///
     /// # Returns
     /// Updated filesystem error.

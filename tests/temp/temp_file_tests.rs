@@ -101,7 +101,7 @@ fn test_temp_file_persist_marks_resource_persisted() {
             },
         )
         .expect("preferred atomicity may accept non-atomic persistence");
-    assert_eq!(target, outcome.target);
+    assert_eq!(&target, outcome.target());
     assert_eq!(qubit_fs::TempResourceState::Persisted, temporary.state());
     assert_eq!(
         1,

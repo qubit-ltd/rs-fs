@@ -31,8 +31,8 @@ fn test_persist_outcome_preserves_publication_details_and_diagnostics() {
             .expect("diagnostic key should be safe"),
     );
 
-    assert_eq!(target, outcome.target);
-    assert_eq!(AchievedAtomicity::Atomic, outcome.atomicity);
-    assert_eq!(PublicationMethod::AtomicRename, outcome.method);
-    assert!(outcome.diagnostics.contains_key("storage_class"));
+    assert_eq!(&target, outcome.target());
+    assert_eq!(AchievedAtomicity::Atomic, outcome.atomicity());
+    assert_eq!(PublicationMethod::AtomicRename, outcome.method());
+    assert!(outcome.diagnostics().contains_key("storage_class"));
 }

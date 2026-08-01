@@ -18,7 +18,7 @@ use qubit_redact::RedactionPolicy;
 /// allow rule in the process-wide redaction default.
 #[test]
 fn test_uri_credential_boundaries_ignore_global_allow_rules() {
-    let policy = RedactionPolicy::builder()
+    let policy = RedactionPolicy::empty_builder()
         .allow_canonical_exact("password")
         .allow_canonical_exact("token")
         .build()

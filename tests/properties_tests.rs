@@ -157,6 +157,23 @@ fn test_file_system_properties_rejects_invalid_capabilities_and_constraints() {
         .is_err()
     );
 
+    let durable_copy_info = FileSystemInfo::new(
+        FileSystemId::new("durable-copy-without-copy")
+            .expect("id should parse"),
+        "provider",
+        PathSemantics::Hierarchical,
+    );
+    assert!(
+        FileSystemProperties::new(
+            durable_copy_info,
+            FileSystemCapabilities::new()
+                .with(FileSystemCapability::DurableCopy),
+            FileSystemLimits::unknown(),
+            PathConstraints::either(),
+        )
+        .is_err()
+    );
+
     let literal_info = FileSystemInfo::new(
         FileSystemId::new("literal-properties").expect("id should parse"),
         "provider",

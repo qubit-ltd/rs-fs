@@ -21,7 +21,7 @@ fn test_write_all_success_publishes_writer() {
             qubit_fs::WriteOptions::default(),
         )
         .expect("write should commit");
-    assert_eq!(qubit_fs::AchievedAtomicity::Atomic, outcome.atomicity);
+    assert_eq!(qubit_fs::AchievedAtomicity::Atomic, outcome.atomicity());
 }
 
 /// Verifies byte-stream diagnostics are retained as a source rather than

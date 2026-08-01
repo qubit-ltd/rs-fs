@@ -118,15 +118,20 @@ in typed `WriteAllFailure` when recovery is required. `rename` returns
 applicable, a recovery writer. Inspect the state before retrying, calling
 `abort`, cleaning up, or reconciling source and target.
 
-Required atomicity, durability, and other declared guarantees are checked before
-side effects when the facade can determine they cannot be met. A successful
-outcome reports the guarantee actually achieved.
+Required atomicity and other declared guarantees are checked before side effects
+when the facade can determine they cannot be met. Durability is currently a
+copy-only guarantee (`DurableCopy`); write, rename, and temporary persistence
+outcomes do not claim durable publication. A successful outcome reports only
+the guarantees it models.
 
 ### Asynchronous workflow
 
 `AsyncFileSystem` mirrors the facade through runtime-neutral futures. Run them
 on the runtime already used by the application; `qubit-fs` does not impose Tokio,
 `futures-io`, or another executor.
+
+`write_all` is also available asynchronously and returns `AsyncWriteAllFailure`
+when it must retain an `AsyncFileWriter` for recovery.
 
 ```rust,ignore
 use qubit_fs::{AsyncFileSystem, CopyOptions, Path};
