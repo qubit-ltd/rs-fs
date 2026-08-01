@@ -124,6 +124,13 @@ copy-only guarantee (`DurableCopy`); write, rename, and temporary persistence
 outcomes do not claim durable publication. A successful outcome reports only
 the guarantees it models.
 
+`FileSystemCapability::Copy` advertises the provider-native copy fast path; it
+is not the only way the facade can copy a regular file. When that capability is
+absent, the facade directly evaluates its allowlisted stream fallback and
+requires `Read` and `Write` instead. This fallback is limited to the documented
+copy options and does not satisfy required server-side, atomic, or durable copy
+guarantees.
+
 ### Asynchronous workflow
 
 `AsyncFileSystem` mirrors the facade through runtime-neutral futures. Run them
