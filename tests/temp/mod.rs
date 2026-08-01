@@ -11,3 +11,4 @@ mod persist_failure_tests;
 mod persist_outcome_tests;
 mod temp_directory_tests;
 mod temp_file_tests;
+mod temp_options_tests;
