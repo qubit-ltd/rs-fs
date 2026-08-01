@@ -16,14 +16,14 @@ use qubit_fs::{
 
 #[test]
 fn test_persist_options_full_configuration_is_usable() {
-    let options = PersistOptions {
-        overwrite: true,
-        atomicity: AtomicityRequirement::Preferred,
-        preserve_metadata: MetadataPreservePolicy::All,
-    };
+    let options = PersistOptions::default()
+        .with_overwrite(true)
+        .with_atomicity(AtomicityRequirement::Preferred)
+        .with_preserve_metadata(MetadataPreservePolicy::All);
 
-    assert!(options.overwrite);
-    assert_eq!(AtomicityRequirement::Preferred, options.atomicity);
+    assert!(options.overwrite());
+    assert_eq!(AtomicityRequirement::Preferred, options.atomicity());
+    assert_eq!(MetadataPreservePolicy::All, options.preserve_metadata());
 }
 
 #[test]

@@ -125,7 +125,7 @@ impl TempDirectory {
                         PersistFailureState::Indeterminate,
                     ));
                 }
-                if options.atomicity == AtomicityRequirement::Required
+                if options.atomicity() == AtomicityRequirement::Required
                     && outcome.atomicity() != AchievedAtomicity::Atomic
                 {
                     self.state = TempResourceState::CleanupRequired;

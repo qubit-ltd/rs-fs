@@ -134,10 +134,8 @@ fn test_async_temp_persist_preflight_has_no_session_call() {
             .expect("temporary file should open");
     let failure = ready(temp.persist(
         &path("/final"),
-        PersistOptions {
-            atomicity: AtomicityRequirement::Required,
-            ..PersistOptions::default()
-        },
+        PersistOptions::default()
+            .with_atomicity(AtomicityRequirement::Required),
     ))
     .expect_err("missing atomic persistence support must fail locally");
     assert_eq!(FsErrorKind::RequirementNotMet, failure.error().kind());

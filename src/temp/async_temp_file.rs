@@ -178,7 +178,7 @@ impl AsyncTempFile {
         }
         Box::pin(async move {
             self.state = TempResourceState::Indeterminate;
-            let atomicity = options.atomicity;
+            let atomicity = options.atomicity();
             let result = self
                 .session
                 .as_mut()

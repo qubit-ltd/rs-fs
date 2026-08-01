@@ -18,9 +18,9 @@ use qubit_fs::{
 fn test_create_directory_options_default_is_non_recursive_and_strict() {
     let options = CreateDirectoryOptions::default();
 
-    assert!(!options.recursive);
-    assert!(!options.exists_ok);
-    assert!(options.user_metadata.is_empty());
+    assert!(!options.recursive());
+    assert!(!options.exists_ok());
+    assert!(options.user_metadata().is_empty());
 }
 
 /// Verifies validated user metadata replaces the default empty metadata.
@@ -33,5 +33,5 @@ fn test_create_directory_options_with_user_metadata_replaces_metadata() {
     let options =
         CreateDirectoryOptions::default().with_user_metadata(metadata);
 
-    assert_eq!(options.user_metadata.get("owner"), Some("storage"));
+    assert_eq!(options.user_metadata().get("owner"), Some("storage"));
 }
