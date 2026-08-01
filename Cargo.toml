@@ -34,7 +34,7 @@ doctest = true
 [dependencies]
 fluent-uri = "0.4.1"
 qubit-io = "0.14"
-qubit-redact = { path = "../rs-redact", version = "0.4" }
+qubit-redact = { path = "../rs-redact", version = "0.5" }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)'] }
