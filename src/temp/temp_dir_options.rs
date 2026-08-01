@@ -11,14 +11,15 @@
 use crate::Path;
 
 /// Options controlling temporary directory creation.
+#[non_exhaustive]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TempDirOptions {
     /// Parent directory or prefix for the temporary directory.
-    pub parent: Option<Path>,
+    parent: Option<Path>,
     /// Name prefix.
-    pub prefix: String,
+    prefix: String,
     /// Name suffix.
-    pub suffix: String,
+    suffix: String,
 }
 
 impl Default for TempDirOptions {
@@ -29,5 +30,52 @@ impl Default for TempDirOptions {
             prefix: ".tmp-dir-".to_owned(),
             suffix: String::new(),
         }
+    }
+}
+
+impl TempDirOptions {
+    /// Returns the optional parent directory or prefix.
+    #[inline(always)]
+    #[must_use]
+    pub const fn parent(&self) -> Option<&Path> {
+        self.parent.as_ref()
+    }
+
+    /// Returns the generated directory name prefix.
+    #[inline(always)]
+    #[must_use]
+    pub fn prefix(&self) -> &str {
+        &self.prefix
+    }
+
+    /// Returns the generated directory name suffix.
+    #[inline(always)]
+    #[must_use]
+    pub fn suffix(&self) -> &str {
+        &self.suffix
+    }
+
+    /// Replaces the optional parent directory or prefix.
+    #[inline]
+    #[must_use]
+    pub fn with_parent(mut self, parent: Option<Path>) -> Self {
+        self.parent = parent;
+        self
+    }
+
+    /// Replaces the generated directory name prefix.
+    #[inline]
+    #[must_use]
+    pub fn with_prefix(mut self, prefix: String) -> Self {
+        self.prefix = prefix;
+        self
+    }
+
+    /// Replaces the generated directory name suffix.
+    #[inline]
+    #[must_use]
+    pub fn with_suffix(mut self, suffix: String) -> Self {
+        self.suffix = suffix;
+        self
     }
 }
