@@ -12,7 +12,6 @@ use qubit_fs::{
     FileSystemCapabilities,
     FileSystemCapability,
     FsErrorKind,
-    NonSensitiveMetadata,
     ResourceVersion,
     UserMetadata,
     WriteDisposition,
@@ -23,29 +22,27 @@ use qubit_fs::{
 #[test]
 fn test_write_options_full_configuration_is_usable() {
     let checksum = Checksum::new(ChecksumAlgorithm::Sha256, "abc");
-    let options = WriteOptions {
-        create_parent: true,
-        disposition: WriteDisposition::CreateOrReplace,
-        atomicity: AtomicityRequirement::Required,
-        precondition: WritePrecondition::IfMatch(ResourceVersion::new("v1")),
-        content_type: Some("text/plain".to_owned()),
-        user_metadata: NonSensitiveMetadata::new(),
-        checksum: Some(checksum),
-    };
+    let options = WriteOptions::default()
+        .with_create_parent(true)
+        .with_disposition(WriteDisposition::CreateOrReplace)
+        .with_atomicity(AtomicityRequirement::Required)
+        .with_precondition(WritePrecondition::IfMatch(ResourceVersion::new(
+            "v1",
+        )))
+        .with_content_type(Some("text/plain".to_owned()))
+        .with_checksum(Some(checksum));
 
-    assert!(options.create_parent);
-    assert_eq!(Some("text/plain"), options.content_type.as_deref());
-    assert!(options.checksum.is_some());
-    assert_eq!(AtomicityRequirement::Required, options.atomicity);
+    assert!(options.create_parent());
+    assert_eq!(Some("text/plain"), options.content_type());
+    assert!(options.checksum().is_some());
+    assert_eq!(AtomicityRequirement::Required, options.atomicity());
     assert!(options.validate().is_ok());
 }
 
 #[test]
 fn write_requirements_are_checked_against_typed_capabilities() {
-    let atomic = WriteOptions {
-        atomicity: AtomicityRequirement::Required,
-        ..WriteOptions::default()
-    };
+    let atomic =
+        WriteOptions::default().with_atomicity(AtomicityRequirement::Required);
     let error = atomic
         .validate_against(FileSystemCapabilities::default())
         .unwrap_err();
@@ -54,11 +51,9 @@ fn write_requirements_are_checked_against_typed_capabilities() {
         error.required_capability()
     );
 
-    let append = WriteOptions {
-        disposition: WriteDisposition::Append,
-        atomicity: AtomicityRequirement::NotRequired,
-        ..WriteOptions::default()
-    };
+    let append = WriteOptions::default()
+        .with_disposition(WriteDisposition::Append)
+        .with_atomicity(AtomicityRequirement::NotRequired);
     let error = append
         .validate_against(FileSystemCapabilities::default())
         .unwrap_err();
@@ -67,10 +62,8 @@ fn write_requirements_are_checked_against_typed_capabilities() {
         error.required_capability()
     );
 
-    let conditional = WriteOptions {
-        precondition: WritePrecondition::IfAbsent,
-        ..WriteOptions::default()
-    };
+    let conditional =
+        WriteOptions::default().with_precondition(WritePrecondition::IfAbsent);
     let error = conditional
         .validate_against(FileSystemCapabilities::default())
         .unwrap_err();
@@ -90,11 +83,9 @@ fn write_requirements_are_checked_against_typed_capabilities() {
 
 #[test]
 fn append_cannot_request_atomic_publication() {
-    let options = WriteOptions {
-        disposition: WriteDisposition::Append,
-        atomicity: AtomicityRequirement::Required,
-        ..WriteOptions::default()
-    };
+    let options = WriteOptions::default()
+        .with_disposition(WriteDisposition::Append)
+        .with_atomicity(AtomicityRequirement::Required);
 
     let error = options
         .validate()
@@ -104,28 +95,26 @@ fn append_cannot_request_atomic_publication() {
 
 #[test]
 fn append_rejects_version_preconditions_but_allows_plain_append() {
-    let invalid = WriteOptions {
-        disposition: WriteDisposition::Append,
-        precondition: WritePrecondition::IfMatch(ResourceVersion::new("v1")),
-        ..WriteOptions::default()
-    };
+    let invalid = WriteOptions::default()
+        .with_disposition(WriteDisposition::Append)
+        .with_precondition(WritePrecondition::IfMatch(ResourceVersion::new(
+            "v1",
+        )));
     assert!(invalid.validate().is_err());
 
-    let valid = WriteOptions {
-        disposition: WriteDisposition::Append,
-        atomicity: AtomicityRequirement::NotRequired,
-        ..WriteOptions::default()
-    };
+    let valid = WriteOptions::default()
+        .with_disposition(WriteDisposition::Append)
+        .with_atomicity(AtomicityRequirement::NotRequired);
     assert!(valid.validate().is_ok());
 }
 
 #[test]
 fn create_new_rejects_if_match_precondition() {
-    let options = WriteOptions {
-        disposition: WriteDisposition::CreateNew,
-        precondition: WritePrecondition::IfMatch(ResourceVersion::new("v1")),
-        ..WriteOptions::default()
-    };
+    let options = WriteOptions::default()
+        .with_disposition(WriteDisposition::CreateNew)
+        .with_precondition(WritePrecondition::IfMatch(ResourceVersion::new(
+            "v1",
+        )));
 
     let error = options
         .validate()
@@ -140,6 +129,6 @@ fn write_options_preserve_validated_user_metadata() {
             .with("category", "private-category")
             .expect("ordinary user metadata key must be accepted"),
     );
-    assert!(options.user_metadata.contains_key("category"));
+    assert!(options.user_metadata().contains_key("category"));
     assert!(!format!("{options:?}").contains("private-category"));
 }

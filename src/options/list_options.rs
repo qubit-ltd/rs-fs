@@ -16,26 +16,102 @@ use crate::{
 };
 
 /// Options controlling directory or prefix listing.
+#[non_exhaustive]
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ListOptions {
     /// Whether listing should recurse into child containers.
-    pub recursive: bool,
+    recursive: bool,
     /// Whether symbolic links should be followed.
-    pub follow_symlinks: bool,
+    follow_symlinks: bool,
     /// Whether entries should include metadata when available.
-    pub include_metadata: bool,
+    include_metadata: bool,
     /// Optional provider page size hint.
-    pub page_size: Option<usize>,
+    page_size: Option<usize>,
     /// Optional lexical prefix filter relative to the requested list root.
     ///
     /// The filter uses canonical `/`-separated relative paths. For example,
     /// listing `/root` with `prefix: Some("nested/item")` matches
     /// `/root/nested/item`, while `prefix: Some("item")` only matches an
     /// immediate child named `item`.
-    pub prefix: Option<String>,
+    prefix: Option<String>,
 }
 
 impl ListOptions {
+    /// Returns a copy with recursive traversal replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_recursive(mut self, recursive: bool) -> Self {
+        self.recursive = recursive;
+        self
+    }
+
+    /// Returns whether traversal recurses into child containers.
+    #[inline(always)]
+    #[must_use]
+    pub const fn recursive(&self) -> bool {
+        self.recursive
+    }
+
+    /// Returns a copy with symlink traversal replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_follow_symlinks(mut self, follow: bool) -> Self {
+        self.follow_symlinks = follow;
+        self
+    }
+
+    /// Returns whether symbolic links are followed.
+    #[inline(always)]
+    #[must_use]
+    pub const fn follow_symlinks(&self) -> bool {
+        self.follow_symlinks
+    }
+
+    /// Returns a copy with metadata inclusion replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_include_metadata(mut self, include: bool) -> Self {
+        self.include_metadata = include;
+        self
+    }
+
+    /// Returns whether metadata is requested for entries.
+    #[inline(always)]
+    #[must_use]
+    pub const fn include_metadata(&self) -> bool {
+        self.include_metadata
+    }
+
+    /// Returns a copy with the page-size hint replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_page_size(mut self, page_size: Option<usize>) -> Self {
+        self.page_size = page_size;
+        self
+    }
+
+    /// Returns the optional page-size hint.
+    #[inline(always)]
+    #[must_use]
+    pub const fn page_size(&self) -> Option<usize> {
+        self.page_size
+    }
+
+    /// Returns a copy with the lexical prefix replaced.
+    #[inline]
+    #[must_use]
+    pub fn with_prefix(mut self, prefix: Option<String>) -> Self {
+        self.prefix = prefix;
+        self
+    }
+
+    /// Returns the optional lexical prefix.
+    #[inline(always)]
+    #[must_use]
+    pub fn prefix(&self) -> Option<&str> {
+        self.prefix.as_deref()
+    }
+
     /// Validates pagination and canonical provider-facing prefix values.
     ///
     /// # Errors

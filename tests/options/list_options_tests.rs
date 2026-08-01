@@ -14,19 +14,18 @@ use qubit_fs::{
 
 #[test]
 fn test_list_options_full_configuration_is_usable() {
-    let options = ListOptions {
-        recursive: true,
-        follow_symlinks: true,
-        include_metadata: true,
-        page_size: Some(10),
-        prefix: Some("a".to_owned()),
-    };
+    let options = ListOptions::default()
+        .with_recursive(true)
+        .with_follow_symlinks(true)
+        .with_include_metadata(true)
+        .with_page_size(Some(10))
+        .with_prefix(Some("a".to_owned()));
 
-    assert!(options.recursive);
-    assert!(options.follow_symlinks);
-    assert!(options.include_metadata);
-    assert_eq!(Some(10), options.page_size);
-    assert_eq!(Some("a"), options.prefix.as_deref());
+    assert!(options.recursive());
+    assert!(options.follow_symlinks());
+    assert!(options.include_metadata());
+    assert_eq!(Some(10), options.page_size());
+    assert_eq!(Some("a"), options.prefix());
 }
 
 /// Rejects invalid provider-facing pagination and prefix values before they
@@ -34,18 +33,9 @@ fn test_list_options_full_configuration_is_usable() {
 #[test]
 fn test_list_options_reject_invalid_page_size_and_noncanonical_prefix() {
     for options in [
-        ListOptions {
-            page_size: Some(0),
-            ..ListOptions::default()
-        },
-        ListOptions {
-            prefix: Some("../escape".to_owned()),
-            ..ListOptions::default()
-        },
-        ListOptions {
-            prefix: Some("nested/../entry".to_owned()),
-            ..ListOptions::default()
-        },
+        ListOptions::default().with_page_size(Some(0)),
+        ListOptions::default().with_prefix(Some("../escape".to_owned())),
+        ListOptions::default().with_prefix(Some("nested/../entry".to_owned())),
     ] {
         let error = options
             .validate()

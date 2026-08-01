@@ -22,29 +22,180 @@ use crate::{
 };
 
 /// Options controlling file, object, or tree copy operations.
+#[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub struct CopyOptions {
     /// Copy source interpretation mode.
-    pub mode: CopyMode,
+    mode: CopyMode,
     /// Destination conflict policy.
-    pub conflict: CopyConflictPolicy,
+    conflict: CopyConflictPolicy,
     /// Metadata preservation policy.
-    pub preserve_metadata: MetadataPreservePolicy,
+    preserve_metadata: MetadataPreservePolicy,
     /// Server-side copy preference.
-    pub server_side: ServerSidePreference,
+    server_side: ServerSidePreference,
     /// Whether symbolic links should be followed.
-    pub follow_symlinks: bool,
+    follow_symlinks: bool,
     /// Whether missing destination parents should be created.
-    pub create_parent: bool,
+    create_parent: bool,
     /// Whether tree copy should continue after per-entry failures.
-    pub continue_on_error: bool,
+    continue_on_error: bool,
     /// Required atomicity of destination publication.
-    pub atomicity: AtomicityRequirement,
+    atomicity: AtomicityRequirement,
     /// Required durability of destination publication.
-    pub durability: DurabilityRequirement,
+    durability: DurabilityRequirement,
 }
 
 impl CopyOptions {
+    /// Returns a copy of these options with the source mode replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_mode(mut self, mode: CopyMode) -> Self {
+        self.mode = mode;
+        self
+    }
+
+    /// Returns the source interpretation mode.
+    #[inline(always)]
+    #[must_use]
+    pub const fn mode(&self) -> CopyMode {
+        self.mode
+    }
+
+    /// Returns a copy with the destination conflict policy replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_conflict(mut self, conflict: CopyConflictPolicy) -> Self {
+        self.conflict = conflict;
+        self
+    }
+
+    /// Returns the destination conflict policy.
+    #[inline(always)]
+    #[must_use]
+    pub const fn conflict(&self) -> CopyConflictPolicy {
+        self.conflict
+    }
+
+    /// Returns a copy with the metadata preservation policy replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_preserve_metadata(
+        mut self,
+        preserve_metadata: MetadataPreservePolicy,
+    ) -> Self {
+        self.preserve_metadata = preserve_metadata;
+        self
+    }
+
+    /// Returns the metadata preservation policy.
+    #[inline(always)]
+    #[must_use]
+    pub const fn preserve_metadata(&self) -> MetadataPreservePolicy {
+        self.preserve_metadata
+    }
+
+    /// Returns a copy with the server-side preference replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_server_side(
+        mut self,
+        server_side: ServerSidePreference,
+    ) -> Self {
+        self.server_side = server_side;
+        self
+    }
+
+    /// Returns the server-side preference.
+    #[inline(always)]
+    #[must_use]
+    pub const fn server_side(&self) -> ServerSidePreference {
+        self.server_side
+    }
+
+    /// Returns a copy with the symlink policy replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_follow_symlinks(mut self, follow: bool) -> Self {
+        self.follow_symlinks = follow;
+        self
+    }
+
+    /// Returns whether symbolic links are followed.
+    #[inline(always)]
+    #[must_use]
+    pub const fn follow_symlinks(&self) -> bool {
+        self.follow_symlinks
+    }
+
+    /// Returns a copy with parent creation replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_create_parent(mut self, create: bool) -> Self {
+        self.create_parent = create;
+        self
+    }
+
+    /// Returns whether missing destination parents are created.
+    #[inline(always)]
+    #[must_use]
+    pub const fn create_parent(&self) -> bool {
+        self.create_parent
+    }
+
+    /// Returns a copy with continuation policy replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_continue_on_error(
+        mut self,
+        continue_on_error: bool,
+    ) -> Self {
+        self.continue_on_error = continue_on_error;
+        self
+    }
+
+    /// Returns whether tree copy continues after per-entry failures.
+    #[inline(always)]
+    #[must_use]
+    pub const fn continue_on_error(&self) -> bool {
+        self.continue_on_error
+    }
+
+    /// Returns a copy with the atomicity requirement replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_atomicity(
+        mut self,
+        atomicity: AtomicityRequirement,
+    ) -> Self {
+        self.atomicity = atomicity;
+        self
+    }
+
+    /// Returns the atomicity requirement.
+    #[inline(always)]
+    #[must_use]
+    pub const fn atomicity(&self) -> AtomicityRequirement {
+        self.atomicity
+    }
+
+    /// Returns a copy with the durability requirement replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_durability(
+        mut self,
+        durability: DurabilityRequirement,
+    ) -> Self {
+        self.durability = durability;
+        self
+    }
+
+    /// Returns the durability requirement.
+    #[inline(always)]
+    #[must_use]
+    pub const fn durability(&self) -> DurabilityRequirement {
+        self.durability
+    }
+
     /// Creates options for copying one file-like resource.
     ///
     /// # Returns

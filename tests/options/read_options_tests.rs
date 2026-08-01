@@ -15,34 +15,28 @@ use qubit_fs::{
 
 #[test]
 fn test_read_options_full_configuration_is_usable() {
-    let options = ReadOptions {
-        offset: Some(1),
-        length: Some(2),
-        if_match: Some(ResourceVersion::from("a")),
-        if_none_match: Some(ResourceVersion::from("b")),
-        checksum: ChecksumPolicy::Required,
-    };
+    let options = ReadOptions::default()
+        .with_offset(Some(1))
+        .with_length(Some(2))
+        .with_if_match(Some(ResourceVersion::from("a")))
+        .with_if_none_match(Some(ResourceVersion::from("b")))
+        .with_checksum(ChecksumPolicy::Required);
 
-    assert_eq!(Some(1), options.offset);
-    assert_eq!(Some(2), options.length);
-    assert_eq!(
-        Some("a"),
-        options.if_match.as_ref().map(ResourceVersion::as_str),
-    );
+    assert_eq!(Some(1), options.offset());
+    assert_eq!(Some(2), options.length());
+    assert_eq!(Some("a"), options.if_match().map(ResourceVersion::as_str),);
     assert_eq!(
         Some("b"),
-        options.if_none_match.as_ref().map(ResourceVersion::as_str),
+        options.if_none_match().map(ResourceVersion::as_str),
     );
-    assert_eq!(ChecksumPolicy::Required, options.checksum);
+    assert_eq!(ChecksumPolicy::Required, options.checksum());
 }
 
 #[test]
 fn read_requirements_are_checked_against_typed_capabilities() {
-    let conflicting = ReadOptions {
-        if_match: Some(ResourceVersion::from("v1")),
-        if_none_match: Some(ResourceVersion::from("v2")),
-        ..ReadOptions::default()
-    };
+    let conflicting = ReadOptions::default()
+        .with_if_match(Some(ResourceVersion::from("v1")))
+        .with_if_none_match(Some(ResourceVersion::from("v2")));
     assert_eq!(
         qubit_fs::FsErrorKind::InvalidOptions,
         conflicting
@@ -51,10 +45,7 @@ fn read_requirements_are_checked_against_typed_capabilities() {
             .kind(),
     );
 
-    let range = ReadOptions {
-        offset: Some(1),
-        ..ReadOptions::default()
-    };
+    let range = ReadOptions::default().with_offset(Some(1));
     let error = range
         .validate_against(FileSystemCapabilities::default())
         .unwrap_err();
@@ -63,10 +54,8 @@ fn read_requirements_are_checked_against_typed_capabilities() {
         error.required_capability()
     );
 
-    let conditional = ReadOptions {
-        if_match: Some(ResourceVersion::from("v1")),
-        ..ReadOptions::default()
-    };
+    let conditional =
+        ReadOptions::default().with_if_match(Some(ResourceVersion::from("v1")));
     let error = conditional
         .validate_against(FileSystemCapabilities::default())
         .unwrap_err();
@@ -75,10 +64,8 @@ fn read_requirements_are_checked_against_typed_capabilities() {
         error.required_capability(),
     );
 
-    let checksummed = ReadOptions {
-        checksum: ChecksumPolicy::Required,
-        ..ReadOptions::default()
-    };
+    let checksummed =
+        ReadOptions::default().with_checksum(ChecksumPolicy::Required);
     let error = checksummed
         .validate_against(FileSystemCapabilities::default())
         .unwrap_err();
@@ -92,14 +79,12 @@ fn read_requirements_are_checked_against_typed_capabilities() {
         .with(FileSystemCapability::ConditionalRead)
         .with(FileSystemCapability::ChecksumValidation);
     assert!(
-        ReadOptions {
-            offset: Some(0),
-            length: Some(1),
-            if_none_match: Some(ResourceVersion::from("v2")),
-            checksum: ChecksumPolicy::Required,
-            ..ReadOptions::default()
-        }
-        .validate_against(capabilities)
-        .is_ok()
+        ReadOptions::default()
+            .with_offset(Some(0))
+            .with_length(Some(1))
+            .with_if_none_match(Some(ResourceVersion::from("v2")))
+            .with_checksum(ChecksumPolicy::Required)
+            .validate_against(capabilities)
+            .is_ok()
     );
 }
