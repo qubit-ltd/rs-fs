@@ -116,10 +116,7 @@ fn test_async_write_all_publishes_complete_bytes() {
     ))
     .expect("async write-all should commit");
     assert_eq!(AchievedAtomicity::Atomic, outcome.atomicity());
-    assert_eq!(
-        vec!["open_writer"],
-        probe.calls(),
-    );
+    assert_eq!(vec!["open_writer"], probe.calls(),);
 }
 
 /// Verifies a failed asynchronous commit retains the writer for recovery.

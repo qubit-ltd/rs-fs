@@ -24,10 +24,7 @@ fn write_outcome_reports_actual_publication_semantics() {
     assert_eq!(None, outcome.bytes_written());
     assert_eq!(AchievedAtomicity::Atomic, outcome.atomicity());
     assert_eq!(PublicationMethod::AtomicRename, outcome.method());
-    assert_eq!(
-        Some("v7"),
-        outcome.version().map(ResourceVersion::as_str)
-    );
+    assert_eq!(Some("v7"), outcome.version().map(ResourceVersion::as_str));
 }
 
 #[test]
