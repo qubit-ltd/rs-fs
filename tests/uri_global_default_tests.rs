@@ -12,18 +12,19 @@ use qubit_fs::{
     ConnectionUri,
     Uri,
 };
-use qubit_redact::RedactionPolicy;
+use qubit_redact::{GlobalRedactionConfig, RedactionPolicy};
 
 /// Verifies URI credential boundaries cannot be disabled by an application
 /// allow rule in the process-wide redaction default.
 #[test]
 fn test_uri_credential_boundaries_ignore_global_allow_rules() {
-    let policy = RedactionPolicy::empty_builder()
+    let policy = RedactionPolicy::builder()
         .allow_canonical_exact("password")
         .allow_canonical_exact("token")
         .build()
         .expect("the policy is valid");
-    RedactionPolicy::set_global_default(policy)
+    GlobalRedactionConfig::from_policy(policy)
+        .install()
         .expect("this test process installs its default only once");
 
     assert!(Uri::parse("s3://bucket/key?token=raw-token").is_err());
