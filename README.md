@@ -22,6 +22,14 @@ public facade while allowing providers to be selected outside the core crate.
 qubit-fs = "0.2"
 ```
 
+The `async` feature is enabled by default. Synchronous-only consumers can omit
+the asynchronous facade and SPI surface to reduce compile time and dependency
+graph size:
+
+```toml
+qubit-fs = { version = "0.2", default-features = false }
+```
+
 ## What the facade makes explicit
 
 - `Path` is a logical name inside one configured filesystem. `Uri` is the

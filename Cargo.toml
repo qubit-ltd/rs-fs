@@ -31,6 +31,10 @@ include = [
 name = "qubit_fs"
 doctest = true
 
+[features]
+default = ["async"]
+async = []
+
 [dependencies]
 fluent-uri = "0.4.1"
 qubit-io = "0.14"

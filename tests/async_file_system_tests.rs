@@ -7,6 +7,8 @@
 // =============================================================================
 //! External contract coverage for the asynchronous facade boundary.
 
+#![cfg(feature = "async")]
+
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;

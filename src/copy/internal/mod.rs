@@ -7,10 +7,12 @@
 // =============================================================================
 //! Private implementation details for copy orchestration.
 
+#[cfg(feature = "async")]
 mod copy_cancellation_guard;
 mod fallback_failure_state;
 mod stream_copy_policy;
 
+#[cfg(feature = "async")]
 pub(super) use copy_cancellation_guard::CopyCancellationGuard;
 pub(crate) use fallback_failure_state::{
     fallback_failure_stats,

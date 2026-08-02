@@ -8,6 +8,7 @@
 //! Runtime-neutral polling helpers for external asynchronous behavior tests.
 
 use std::future::Future;
+#[cfg(feature = "async")]
 use std::pin::Pin;
 use std::task::{
     Context,
@@ -30,6 +31,7 @@ where
 }
 
 /// Verifies that one poll leaves a future pending without a runtime.
+#[cfg(feature = "async")]
 pub(crate) fn assert_pending<F>(mut future: Pin<&mut F>)
 where
     F: Future + ?Sized,

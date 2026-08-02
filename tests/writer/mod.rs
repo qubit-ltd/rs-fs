@@ -6,6 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+#[cfg(feature = "async")]
 mod async_write_all_failure_tests;
 mod file_writer_tests;
 mod write_all_failure_tests;
