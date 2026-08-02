@@ -66,3 +66,41 @@ fn test_copy_options_full_configuration_is_usable() {
     assert_eq!(AtomicityRequirement::Required, options.atomicity());
     assert_eq!(DurabilityRequirement::Required, options.durability());
 }
+
+#[test]
+fn test_copy_options_validate_guarantees_for_explicit_source_mode() {
+    let file = CopyOptions::file()
+        .with_atomicity(AtomicityRequirement::Required)
+        .with_durability(DurabilityRequirement::Required);
+    let file_capabilities = FileSystemCapabilities::new()
+        .with(FileSystemCapability::AtomicFileCopy)
+        .with(FileSystemCapability::DurableFileCopy);
+    assert!(file.validate_against(file_capabilities).is_ok());
+    let tree_error = CopyOptions::tree()
+        .with_atomicity(AtomicityRequirement::Required)
+        .validate_against(file_capabilities)
+        .expect_err("file atomicity must not imply tree atomicity");
+    assert_eq!(
+        Some(FileSystemCapability::AtomicTreeCopy),
+        tree_error.required_capability(),
+    );
+}
+
+#[test]
+fn test_copy_options_auto_defers_when_one_source_kind_is_supported() {
+    let options = CopyOptions::default()
+        .with_atomicity(AtomicityRequirement::Required)
+        .with_durability(DurabilityRequirement::Required);
+    let file_capabilities = FileSystemCapabilities::new()
+        .with(FileSystemCapability::AtomicFileCopy)
+        .with(FileSystemCapability::DurableFileCopy);
+    assert!(options.validate_against(file_capabilities).is_ok());
+
+    let error = options
+        .validate_against(FileSystemCapabilities::new())
+        .expect_err("Auto must fail when no source kind has atomic support");
+    assert_eq!(
+        Some(FileSystemCapability::AtomicFileCopy),
+        error.required_capability(),
+    );
+}

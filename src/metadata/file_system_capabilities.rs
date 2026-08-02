@@ -54,7 +54,19 @@ const CAPABILITY_DEPENDENCIES: &[(
         FileSystemCapability::Copy,
     ),
     (
-        FileSystemCapability::DurableCopy,
+        FileSystemCapability::AtomicFileCopy,
+        FileSystemCapability::Copy,
+    ),
+    (
+        FileSystemCapability::AtomicTreeCopy,
+        FileSystemCapability::Copy,
+    ),
+    (
+        FileSystemCapability::DurableFileCopy,
+        FileSystemCapability::Copy,
+    ),
+    (
+        FileSystemCapability::DurableTreeCopy,
         FileSystemCapability::Copy,
     ),
 ];

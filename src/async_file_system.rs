@@ -166,9 +166,7 @@ impl AsyncFileSystem {
             .properties
             .limits()
             .clamp_list_page_size(options.page_size());
-        let options = options.with_page_size(
-            page_size,
-        );
+        let options = options.with_page_size(page_size);
         let opened = self
             .spi
             .list(ListRequest::new(
@@ -201,7 +199,9 @@ impl AsyncFileSystem {
         self.properties
             .limits()
             .validate_read_range(path, options.length())
-            .map_err(|error| self.enrich(error, path, FsOperation::OpenReader))?;
+            .map_err(|error| {
+                self.enrich(error, path, FsOperation::OpenReader)
+            })?;
         self.require(
             FileSystemCapability::Read,
             FsOperation::OpenReader,

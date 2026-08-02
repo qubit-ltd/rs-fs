@@ -208,11 +208,12 @@ fn test_async_stream_fallback_rejects_known_length_over_limits_before_opening_ha
 /// Uses the asynchronous stream fallback when copy is not advertised.
 #[test]
 fn test_async_copy_fallback_does_not_require_copy_capability() {
-    let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig {
-        omitted_capability: Some(qubit_fs::FileSystemCapability::Copy),
-        decline_copy: true,
-        ..AsyncRecordingConfig::default()
-    });
+    let (file_system, probe) =
+        async_recording_file_system(AsyncRecordingConfig {
+            omitted_capability: Some(qubit_fs::FileSystemCapability::Copy),
+            decline_copy: true,
+            ..AsyncRecordingConfig::default()
+        });
     let mut operation = file_system
         .begin_copy(path("/source"), path("/target"), CopyOptions::default())
         .expect("read and write capabilities should enable fallback");
