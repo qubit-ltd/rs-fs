@@ -292,6 +292,43 @@ fn test_async_temp_directory_persists_and_rejects_later_lifecycle_calls() {
     assert!(cleanup.to_string().contains("temporary directory"));
 }
 
+/// Notifies providers about local cancellation for owned and recoverable
+/// temporary resources without attempting asynchronous cleanup in `Drop`.
+#[test]
+fn test_async_temp_drop_notifies_provider_for_cleanup_owned_states() {
+    let (file_system, probe) =
+        async_recording_file_system(AsyncRecordingConfig::default());
+    {
+        let _file = ready(
+            file_system.create_temp_file(TempFileOptions::default()),
+        )
+        .expect("temporary file should open");
+    }
+    assert_eq!(1, probe.temp_cancellations());
+
+    let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig {
+        atomic_temp_persist: true,
+        temp_persist_failure: Some(PersistFailureState::PublishedSourceRetained),
+        ..AsyncRecordingConfig::default()
+    });
+    {
+        let mut directory = ready(
+            file_system.create_temp_directory(TempDirectoryOptions::default()),
+        )
+        .expect("temporary directory should open");
+        let failure = ready(
+            directory.persist(&path("/final"), PersistOptions::default()),
+        )
+        .expect_err("configured persistence failure should propagate");
+        assert_eq!(
+            PersistFailureState::PublishedSourceRetained,
+            failure.state()
+        );
+        assert_eq!(TempResourceState::CleanupRequired, directory.state());
+    }
+    assert_eq!(1, probe.temp_cancellations());
+}
+
 /// Retains the provider-confirmed state after both definite and partially
 /// published temporary persistence failures.
 #[test]

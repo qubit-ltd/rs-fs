@@ -146,6 +146,7 @@ pub(crate) struct AsyncRecordingConfig {
 pub(crate) struct AsyncRecordingProbe(
     Arc<Mutex<Vec<&'static str>>>,
     Arc<Mutex<usize>>,
+    Arc<Mutex<usize>>,
 );
 impl AsyncRecordingProbe {
     /// Returns the calls observed so far.
@@ -157,6 +158,11 @@ impl AsyncRecordingProbe {
     pub(crate) fn writer_cancellations(&self) -> usize {
         *self.1.lock().expect("cancellation lock should succeed")
     }
+    /// Returns local temporary-resource cancellation notifications.
+    #[allow(dead_code)]
+    pub(crate) fn temp_cancellations(&self) -> usize {
+        *self.2.lock().expect("temporary cancellation lock should succeed")
+    }
 }
 
 /// Creates an async facade with controllable fallback and temporary sessions.
@@ -165,12 +171,18 @@ pub(crate) fn async_recording_file_system(
 ) -> (AsyncFileSystem, AsyncRecordingProbe) {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let cancellations = Arc::new(Mutex::new(0));
+    let temp_cancellations = Arc::new(Mutex::new(0));
     let probe =
-        AsyncRecordingProbe(Arc::clone(&calls), Arc::clone(&cancellations));
+        AsyncRecordingProbe(
+            Arc::clone(&calls),
+            Arc::clone(&cancellations),
+            Arc::clone(&temp_cancellations),
+        );
     let file_system = AsyncFileSystem::from_spi(AsyncRecordingSpi {
         config,
         calls,
         cancellations,
+        temp_cancellations,
     })
     .expect("recording async facade should construct");
     (file_system, probe)
@@ -181,6 +193,7 @@ struct AsyncRecordingSpi {
     config: AsyncRecordingConfig,
     calls: Arc<Mutex<Vec<&'static str>>>,
     cancellations: Arc<Mutex<usize>>,
+    temp_cancellations: Arc<Mutex<usize>>,
 }
 impl AsyncRecordingSpi {
     /// Records an SPI invocation.
@@ -547,11 +560,13 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
             FileKind::File
         });
         let calls = Arc::clone(&self.calls);
+        let temp_cancellations = Arc::clone(&self.temp_cancellations);
         Box::pin(async move {
             let opened = OpenedAsyncTempFile::new(
                 info,
                 Box::new(RecordingTempSession {
                     calls,
+                    temp_cancellations,
                     indeterminate_persist: self
                         .config
                         .temp_persist_indeterminate,
@@ -576,11 +591,13 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
         }
         let info = self.temp_info(FileKind::Directory);
         let calls = Arc::clone(&self.calls);
+        let temp_cancellations = Arc::clone(&self.temp_cancellations);
         Box::pin(async move {
             let opened = OpenedAsyncTempDirectory::new(
                 info,
                 Box::new(RecordingTempSession {
                     calls,
+                    temp_cancellations,
                     indeterminate_persist: self
                         .config
                         .temp_persist_atomicity
@@ -756,6 +773,7 @@ impl AsyncFileWriteSession for RecordingWriter {
 /// Records temporary lifecycle calls and completes them successfully.
 struct RecordingTempSession {
     calls: Arc<Mutex<Vec<&'static str>>>,
+    temp_cancellations: Arc<Mutex<usize>>,
     indeterminate_persist: bool,
     persist_failure: Option<qubit_fs::PersistFailureState>,
     atomicity: Option<AchievedAtomicity>,
@@ -772,6 +790,14 @@ impl RecordingTempSession {
     }
 }
 impl AsyncTempResourceSpi for RecordingTempSession {
+    fn cancel_on_drop(self: Pin<&mut Self>) {
+        *self
+            .get_mut()
+            .temp_cancellations
+            .lock()
+            .expect("temporary cancellation lock should succeed") += 1;
+    }
+
     fn cleanup<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<()>> {
         self.as_ref().get_ref().record("cleanup");
         let cleanup_failure = self.as_ref().get_ref().cleanup_failure;

@@ -23,6 +23,16 @@ use crate::{
 
 /// Provider-side asynchronous temporary-resource lifecycle session.
 pub trait AsyncTempResourceSpi: Send {
+    /// Performs provider-local cancellation when the facade handle is dropped.
+    ///
+    /// This hook must be nonblocking: it must not start asynchronous work,
+    /// block the current thread, or claim that remote cleanup has completed.
+    /// Providers may use it to release local descriptors or enqueue cleanup
+    /// through an already-running mechanism. The default implementation is a
+    /// no-op for providers that do not need local cancellation.
+    #[inline]
+    fn cancel_on_drop(self: Pin<&mut Self>) {}
+
     /// Asynchronously confirms provider cleanup.
     ///
     /// The returned future performs provider I/O when polled. Dropping it

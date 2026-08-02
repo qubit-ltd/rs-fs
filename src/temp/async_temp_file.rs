@@ -344,3 +344,14 @@ impl AsyncTempFile {
             )
     }
 }
+
+impl Drop for AsyncTempFile {
+    fn drop(&mut self) {
+        if matches!(
+            self.state,
+            TempResourceState::Owned | TempResourceState::CleanupRequired
+        ) {
+            self.session.as_mut().cancel_on_drop();
+        }
+    }
+}
