@@ -125,9 +125,7 @@ type RecordingHandles = (
 );
 
 /// Constructs a recording filesystem with a selected fast-path response.
-fn recording_filesystem(
-    response: CopyResponse,
-) -> RecordingHandles {
+fn recording_filesystem(response: CopyResponse) -> RecordingHandles {
     recording_filesystem_with_options(response, true, None)
 }
 /// Constructs a recording filesystem with no advertised copy capability.
@@ -141,11 +139,7 @@ fn recording_filesystem_with_write_limit(
     response: CopyResponse,
     maximum_write_bytes: u64,
 ) -> RecordingHandles {
-    recording_filesystem_with_options(
-        response,
-        true,
-        Some(maximum_write_bytes),
-    )
+    recording_filesystem_with_options(response, true, Some(maximum_write_bytes))
 }
 /// Constructs a recording filesystem with explicit capability and limit flags.
 fn recording_filesystem_with_options(
@@ -189,10 +183,10 @@ fn properties(
         CopyResponse::CompletedAtomicDowngrade
             | CopyResponse::DeclinedSkipAtomic
     ) {
-        capabilities = capabilities.with(FileSystemCapability::AtomicReplace);
+        capabilities = capabilities.with(FileSystemCapability::AtomicFileCopy);
     }
     if matches!(response, CopyResponse::CompletedDurabilityDowngrade) {
-        capabilities = capabilities.with(FileSystemCapability::DurableCopy);
+        capabilities = capabilities.with(FileSystemCapability::DurableFileCopy);
     }
     if matches!(
         response,
@@ -208,12 +202,11 @@ fn properties(
             qubit_fs::PathSemantics::Hierarchical,
         ),
         capabilities,
-        maximum_write_bytes.map_or_else(
-            FileSystemLimits::unknown,
-            |maximum| FileSystemLimits::unknown().with_max_write_bytes(
+        maximum_write_bytes.map_or_else(FileSystemLimits::unknown, |maximum| {
+            FileSystemLimits::unknown().with_max_write_bytes(
                 qubit_fs::FileSystemLimit::Maximum(maximum),
-            ),
-        ),
+            )
+        }),
         PathConstraints::absolute(),
     )
     .expect("properties should be valid")
@@ -872,7 +865,7 @@ fn test_copy_required_atomicity_preflight_has_zero_spi_calls() {
         .expect_err("missing atomic guarantee must fail locally");
     assert_eq!(CopyFailureState::Unchanged, failure.state());
     assert_eq!(
-        Some(qubit_fs::FileSystemCapability::AtomicReplace),
+        Some(qubit_fs::FileSystemCapability::AtomicFileCopy),
         failure.error().required_capability()
     );
     assert!(calls.lock().expect("calls lock should succeed").is_empty());
@@ -892,7 +885,7 @@ fn test_copy_required_durability_preflight_has_zero_spi_calls() {
         .expect_err("missing durability guarantee must fail locally");
     assert_eq!(CopyFailureState::Unchanged, failure.state());
     assert_eq!(
-        Some(FileSystemCapability::DurableCopy),
+        Some(FileSystemCapability::DurableFileCopy),
         failure.error().required_capability()
     );
     assert!(calls.lock().expect("calls lock should succeed").is_empty());

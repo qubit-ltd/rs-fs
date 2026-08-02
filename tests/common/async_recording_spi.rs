@@ -161,7 +161,10 @@ impl AsyncRecordingProbe {
     /// Returns local temporary-resource cancellation notifications.
     #[allow(dead_code)]
     pub(crate) fn temp_cancellations(&self) -> usize {
-        *self.2.lock().expect("temporary cancellation lock should succeed")
+        *self
+            .2
+            .lock()
+            .expect("temporary cancellation lock should succeed")
     }
 }
 
@@ -172,12 +175,11 @@ pub(crate) fn async_recording_file_system(
     let calls = Arc::new(Mutex::new(Vec::new()));
     let cancellations = Arc::new(Mutex::new(0));
     let temp_cancellations = Arc::new(Mutex::new(0));
-    let probe =
-        AsyncRecordingProbe(
-            Arc::clone(&calls),
-            Arc::clone(&cancellations),
-            Arc::clone(&temp_cancellations),
-        );
+    let probe = AsyncRecordingProbe(
+        Arc::clone(&calls),
+        Arc::clone(&cancellations),
+        Arc::clone(&temp_cancellations),
+    );
     let file_system = AsyncFileSystem::from_spi(AsyncRecordingSpi {
         config,
         calls,
@@ -230,7 +232,8 @@ impl AsyncRecordingSpi {
         if self.config.completed_copy.is_some() {
             capabilities = capabilities
                 .with(FileSystemCapability::AtomicReplace)
-                .with(FileSystemCapability::DurableCopy);
+                .with(FileSystemCapability::AtomicFileCopy)
+                .with(FileSystemCapability::DurableFileCopy);
         }
         if self.config.server_side_copy {
             capabilities =

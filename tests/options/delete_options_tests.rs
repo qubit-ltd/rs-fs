@@ -21,10 +21,7 @@ fn test_delete_options_full_configuration_is_usable() {
 
     assert!(options.recursive());
     assert!(options.missing_ok());
-    assert_eq!(
-        Some("v1"),
-        options.if_match().map(ResourceVersion::as_str),
-    );
+    assert_eq!(Some("v1"), options.if_match().map(ResourceVersion::as_str),);
 }
 
 #[test]
