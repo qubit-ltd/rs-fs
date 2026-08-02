@@ -904,7 +904,9 @@ violation。
 ```text
 Open
  ├─ commit success ───────────────► Committed
- ├─ abort success ────────────────► Aborted
+ ├─ abort / NotPublished ─────────► Aborted
+ ├─ abort / Published ────────────► Published
+ ├─ abort / Indeterminate ────────► Indeterminate
  ├─ retryable/not published ──────► Open
  ├─ not published/not retryable ──► NotPublished
  ├─ published ────────────────────► Published
@@ -918,6 +920,14 @@ Open
 - `Published`；
 - `Indeterminate`。
 
+`WriteAbortOutcome` 独立报告 cleanup 完成后的 namespace 事实：
+
+- `NotPublished`；
+- `Published`；
+- `Indeterminate`。
+
+abort 的成功只表示 cleanup 已完成，不能被解释为 destination 一定未发布。
+
 `FileWriter` 保存 open 时解析的 write contract。`commit(&mut self)` 负责：
 
 - 调用 `FileWriterSpi::commit`；
@@ -928,8 +938,10 @@ Open
 
 `abort` 可用于清理 `Open`、`NotPublished`、`Published` 或 `Indeterminate` session。
 对 `Published` 的 abort 只能清理 staging，绝不能回滚已经发布的 target。
-`Open`/`NotPublished` abort 成功后进入 `Aborted`；`Published`/`Indeterminate`
-即使 session cleanup 成功也保留原事实状态，不能用 `Aborted` 抹去 namespace 事实。
+facade 必须以 `WriteAbortOutcome` 更新公开状态，不能从 `Ok` 自行推断
+`Aborted`。一次 abort 成功后 cleanup 即为终态；即使公开状态仍是 `Published` 或
+`Indeterminate`，重复 abort 也返回 `InvalidState`。abort 失败则保留 session，允许
+调用者重试；确定性失败恢复 abort 前状态，未知结果进入 `Indeterminate`。
 
 同步 drop 只在确定安全的状态下 best-effort abort；`Indeterminate` 不自动操作。
 

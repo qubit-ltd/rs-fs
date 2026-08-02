@@ -107,6 +107,8 @@ fn publish(fs: &FileSystem, source: &Path, release_dir: &Path) -> qubit_fs::FsRe
 `write_all` 在需要恢复时会通过 typed `WriteAllFailure` 保留 writer。`rename` 返回
 `RenameFailure`；`copy` 返回 `CopyFailure`，其中包含 partial statistics，并会在适用时保留
 recovery writer。重试、`abort`、cleanup 或核对 source/target 前，都应先检查 state。
+`abort` 成功会返回 `WriteAbortOutcome`；cleanup 完成并不等于 destination 未发布，
+调用者仍需检查其中的 `NotPublished`、`Published` 或 `Indeterminate`。
 
 只要门面能在本地确定所要求的 atomicity 或其他 guarantee 无法满足，就会在产生副作用前进行
 检查。durability 目前只适用于 copy（`DurableCopy`）；write、rename 和临时资源 persist

@@ -116,7 +116,9 @@ published, published, and indeterminate facts. `write_all` preserves its writer
 in typed `WriteAllFailure` when recovery is required. `rename` returns
 `RenameFailure`; `copy` returns `CopyFailure` with partial statistics and, when
 applicable, a recovery writer. Inspect the state before retrying, calling
-`abort`, cleaning up, or reconciling source and target.
+`abort`, cleaning up, or reconciling source and target. A successful `abort`
+returns `WriteAbortOutcome`; inspect it because cleanup can complete after the
+destination was published or while its final state remains indeterminate.
 
 Required atomicity and other declared guarantees are checked before side effects
 when the facade can determine they cannot be met. Durability is currently a
