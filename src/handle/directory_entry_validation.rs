@@ -108,10 +108,12 @@ fn relative_path<'a>(root: &Path, entry: &'a Path) -> Option<&'a str> {
     } else if root.as_str() == "/" {
         entry.as_str().strip_prefix('/')
     } else {
-        entry
-            .as_str()
-            .strip_prefix(root.as_str())?
-            .strip_prefix('/')
+        let remainder = entry.as_str().strip_prefix(root.as_str())?;
+        if root.as_str().ends_with('/') {
+            Some(remainder)
+        } else {
+            remainder.strip_prefix('/')
+        }
     }
 }
 
