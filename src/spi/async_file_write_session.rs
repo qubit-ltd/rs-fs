@@ -15,6 +15,7 @@ use qubit_io::AsyncOutput;
 use super::SpiFuture;
 use crate::{
     FsResult,
+    WriteAbortOutcome,
     WriteFailure,
     WriteOutcome,
 };
@@ -40,7 +41,9 @@ pub trait AsyncFileWriteSession: AsyncOutput<Item = u8> + Send {
     ///
     /// # Errors
     /// Resolves to the provider cleanup failure with filesystem context.
-    fn abort_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<()>>;
+    fn abort_async<'a>(
+        self: Pin<&'a mut Self>,
+    ) -> SpiFuture<'a, FsResult<WriteAbortOutcome>>;
 
     /// Performs nonblocking local cancellation during writer drop.
     ///

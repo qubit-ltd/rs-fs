@@ -37,6 +37,7 @@ use crate::{
     FsErrorKind,
     FsOperation,
     OpenedFileInfo,
+    WriteAbortOutcome,
     WriteFailure,
     WriteFailureState,
     WriteOutcome,
@@ -51,6 +52,8 @@ pub struct AsyncFileWriter {
     info: OpenedFileInfo,
     /// Current publication lifecycle state.
     state: WriterState,
+    /// Whether explicit provider cleanup has completed.
+    abort_completed: bool,
     /// Atomicity required by the caller.
     atomicity: AtomicityRequirement,
     /// Provider identifier attached to facade-generated errors.
@@ -83,6 +86,7 @@ impl AsyncFileWriter {
             session: Box::into_pin(session),
             info,
             state: WriterState::Open,
+            abort_completed: false,
             atomicity,
             provider: provider.into(),
             max_write_bytes,
@@ -213,15 +217,20 @@ impl AsyncFileWriter {
     /// Automatic drop cancellation is disabled for an indeterminate writer.
     ///
     /// # Returns
-    /// A future resolving when cleanup is confirmed.
-    pub fn abort_async(&mut self) -> SpiFuture<'_, crate::FsResult<()>> {
-        if !matches!(
+    /// A future resolving to the provider-confirmed destination publication
+    /// state after cleanup.
+    pub fn abort_async(
+        &mut self,
+    ) -> SpiFuture<'_, crate::FsResult<WriteAbortOutcome>> {
+        if self.abort_completed
+            || !matches!(
             self.state,
             WriterState::Open
                 | WriterState::NotPublished
                 | WriterState::Published
                 | WriterState::Indeterminate
-        ) {
+        )
+        {
             let error = self.invalid_state(
                 FsOperation::AbortWriter,
                 "writer cannot be aborted in its current state",
@@ -232,13 +241,18 @@ impl AsyncFileWriter {
             let previous_state = self.state;
             self.state = WriterState::Indeterminate;
             match self.session.as_mut().abort_async().await {
-                Ok(()) => {
-                    if previous_state != WriterState::Published {
-                        self.state = WriterState::Aborted;
-                    } else {
-                        self.state = WriterState::Published;
-                    }
-                    Ok(())
+                Ok(outcome) => {
+                    self.abort_completed = true;
+                    self.state = match outcome {
+                        WriteAbortOutcome::NotPublished => {
+                            WriterState::Aborted
+                        }
+                        WriteAbortOutcome::Published => WriterState::Published,
+                        WriteAbortOutcome::Indeterminate => {
+                            WriterState::Indeterminate
+                        }
+                    };
+                    Ok(outcome)
                 }
                 Err(error) => {
                     if error.kind() != FsErrorKind::Indeterminate {
@@ -377,12 +391,14 @@ impl Debug for AsyncFileWriter {
 
 impl Drop for AsyncFileWriter {
     fn drop(&mut self) {
-        if matches!(
+        if !self.abort_completed
+            && matches!(
             self.state,
             WriterState::Open
                 | WriterState::NotPublished
                 | WriterState::Published
-        ) {
+        )
+        {
             self.session.as_mut().cancel_on_drop();
         }
     }

@@ -86,6 +86,7 @@ pub use handle::{
     FileReader,
     FileWriter,
     WriteAllFailure,
+    WriteAbortOutcome,
     WriteFailure,
     WriteFailureState,
     WriterState,

@@ -572,8 +572,8 @@ impl FileWriterSpi for RecordingWriter {
             qubit_fs::PublicationMethod::StreamCopy,
         ))
     }
-    fn abort(&mut self) -> FsResult<()> {
-        Ok(())
+    fn abort(&mut self) -> FsResult<qubit_fs::WriteAbortOutcome> {
+        Ok(qubit_fs::WriteAbortOutcome::NotPublished)
     }
 }
 

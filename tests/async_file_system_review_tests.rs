@@ -381,9 +381,11 @@ impl AsyncFileWriteSession for CommitWriter {
         })
     }
 
-    fn abort_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<()>> {
+    fn abort_async<'a>(
+        self: Pin<&'a mut Self>,
+    ) -> SpiFuture<'a, FsResult<qubit_fs::WriteAbortOutcome>> {
         let _ = self;
-        Box::pin(async { Ok(()) })
+        Box::pin(async { Ok(qubit_fs::WriteAbortOutcome::NotPublished) })
     }
 }
 
