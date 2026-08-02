@@ -9,7 +9,10 @@
 //! Tests URI credential boundaries with an explicitly disabled redaction floor.
 
 use qubit_fs::Uri;
-use qubit_redact::{GlobalRedactionConfig, RedactionPolicy};
+use qubit_redact::{
+    GlobalRedactionConfig,
+    RedactionPolicy,
+};
 
 /// Verifies an application that explicitly disables its global floor controls
 /// URI query-key classification without a hidden standard-policy fallback.
