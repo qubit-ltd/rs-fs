@@ -50,11 +50,7 @@ pub(crate) fn validate_path(
         .map_err(|error| enrich(properties, error, path, operation))?;
     properties
         .limits()
-        .validate_path(
-            path,
-            properties.info().path_semantics(),
-            operation,
-        )
+        .validate_path(path, properties.info().path_semantics(), operation)
         .map_err(|error| enrich(properties, error, path, operation))
 }
 

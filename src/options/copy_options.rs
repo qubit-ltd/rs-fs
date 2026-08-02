@@ -247,25 +247,54 @@ impl CopyOptions {
             )
             .with_required_capability(FileSystemCapability::ServerSideCopy));
         }
-        if self.atomicity == AtomicityRequirement::Required
-            && !capabilities.contains(FileSystemCapability::AtomicReplace)
+        let atomic_capability = match self.mode {
+            CopyMode::Auto => FileSystemCapability::AtomicFileCopy,
+            CopyMode::File => FileSystemCapability::AtomicFileCopy,
+            CopyMode::Tree => FileSystemCapability::AtomicTreeCopy,
+        };
+        let atomic_supported = match self.mode {
+            CopyMode::Auto => {
+                capabilities.contains(FileSystemCapability::AtomicFileCopy)
+                    || capabilities
+                        .contains(FileSystemCapability::AtomicTreeCopy)
+            }
+            CopyMode::File | CopyMode::Tree => {
+                capabilities.contains(atomic_capability)
+            }
+        };
+        if self.atomicity == AtomicityRequirement::Required && !atomic_supported
         {
             return Err(FsError::new(
                 FsErrorKind::RequirementNotMet,
                 FsOperation::Copy,
                 "atomic copy publication is required but not guaranteed",
             )
-            .with_required_capability(FileSystemCapability::AtomicReplace));
+            .with_required_capability(atomic_capability));
         }
+        let durable_capability = match self.mode {
+            CopyMode::Auto => FileSystemCapability::DurableFileCopy,
+            CopyMode::File => FileSystemCapability::DurableFileCopy,
+            CopyMode::Tree => FileSystemCapability::DurableTreeCopy,
+        };
+        let durable_supported = match self.mode {
+            CopyMode::Auto => {
+                capabilities.contains(FileSystemCapability::DurableFileCopy)
+                    || capabilities
+                        .contains(FileSystemCapability::DurableTreeCopy)
+            }
+            CopyMode::File | CopyMode::Tree => {
+                capabilities.contains(durable_capability)
+            }
+        };
         if self.durability == DurabilityRequirement::Required
-            && !capabilities.contains(FileSystemCapability::DurableCopy)
+            && !durable_supported
         {
             return Err(FsError::new(
                 FsErrorKind::RequirementNotMet,
                 FsOperation::Copy,
                 "durable copy publication is required but not guaranteed",
             )
-            .with_required_capability(FileSystemCapability::DurableCopy));
+            .with_required_capability(durable_capability));
         }
         Ok(())
     }

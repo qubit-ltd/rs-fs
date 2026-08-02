@@ -86,7 +86,9 @@ pub(crate) fn matches_options(
     let Some(relative) = relative_path(root, &entry.path) else {
         return false;
     };
-    if !options.recursive() && options.prefix().is_none() && relative.contains('/')
+    if !options.recursive()
+        && options.prefix().is_none()
+        && relative.contains('/')
     {
         return false;
     }
