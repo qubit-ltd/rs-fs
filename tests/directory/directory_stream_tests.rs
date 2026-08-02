@@ -27,6 +27,79 @@ fn test_directory_entry_path_can_be_compared_with_requested_root() {
     );
 }
 
+/// Verifies object-key listing accepts a root prefix with a trailing slash.
+#[test]
+fn test_directory_stream_accepts_object_key_root_with_trailing_slash() {
+    struct Entries(std::vec::IntoIter<qubit_fs::DirEntry>);
+
+    impl qubit_fs::spi::DirectoryStreamSpi for Entries {
+        fn next_entry(
+            &mut self,
+        ) -> qubit_fs::FsResult<Option<qubit_fs::DirEntry>> {
+            Ok(self.0.next())
+        }
+    }
+
+    struct ObjectKeySpi;
+
+    impl qubit_fs::spi::FileSystemSpi for ObjectKeySpi {
+        fn properties(&self) -> qubit_fs::FileSystemProperties {
+            qubit_fs::FileSystemProperties::new(
+                qubit_fs::FileSystemInfo::new(
+                    qubit_fs::FileSystemId::new("object-key-test")
+                        .expect("test filesystem id should be valid"),
+                    "object-key-test",
+                    qubit_fs::PathSemantics::ObjectKey,
+                ),
+                qubit_fs::FileSystemCapabilities::new()
+                    .with(qubit_fs::FileSystemCapability::List),
+                qubit_fs::FileSystemLimits::unknown(),
+                qubit_fs::PathConstraints::either(),
+            )
+            .expect("test properties should be valid")
+        }
+
+        fn stat(
+            &self,
+            request: qubit_fs::spi::StatRequest<'_>,
+        ) -> qubit_fs::FsResult<qubit_fs::spi::StatResponse> {
+            Ok(qubit_fs::spi::StatResponse::new(
+                request.path().clone(),
+                qubit_fs::FileMetadata::new(qubit_fs::FileKind::File),
+            ))
+        }
+
+        fn list(
+            &self,
+            _request: qubit_fs::spi::ListRequest<'_>,
+        ) -> qubit_fs::FsResult<qubit_fs::spi::OpenedDirectoryStream> {
+            let entry = qubit_fs::DirEntry::new(
+                qubit_fs::Path::parse_literal("bucket/prefix/file")
+                    .expect("object-key entry should parse"),
+                qubit_fs::FileKind::File,
+            );
+            Ok(qubit_fs::spi::OpenedDirectoryStream::new(Box::new(
+                Entries(vec![entry].into_iter()),
+            )))
+        }
+    }
+
+    let filesystem = qubit_fs::FileSystem::from_spi(ObjectKeySpi)
+        .expect("object-key filesystem should construct");
+    let root = qubit_fs::Path::parse_literal("bucket/prefix/")
+        .expect("object-key root should parse");
+    let mut stream = filesystem
+        .list(&root, qubit_fs::ListOptions::default())
+        .expect("object-key stream should open");
+
+    assert!(
+        stream
+            .next_entry()
+            .expect("object-key entry should be accepted")
+            .is_some()
+    );
+}
+
 /// Verifies providers cannot silently ignore the requested lexical prefix.
 #[test]
 fn test_directory_stream_rejects_entry_outside_requested_prefix() {
