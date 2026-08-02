@@ -774,14 +774,24 @@ impl FileWriterSpi for Writer {
             ))
         }
     }
-    fn abort(&mut self) -> FsResult<()> {
+    fn abort(&mut self) -> FsResult<qubit_fs::WriteAbortOutcome> {
         match self.abort_failure {
             Some(kind) => Err(FsError::new(
                 kind,
                 FsOperation::AbortWriter,
                 "injected abort failure",
             )),
-            None => Ok(()),
+            None => Ok(match self.commit_failure {
+                Some(WriteFailureState::Published) => {
+                    qubit_fs::WriteAbortOutcome::Published
+                }
+                Some(WriteFailureState::Indeterminate) => {
+                    qubit_fs::WriteAbortOutcome::Indeterminate
+                }
+                Some(WriteFailureState::RetryableNotPublished)
+                | Some(WriteFailureState::NotPublished)
+                | None => qubit_fs::WriteAbortOutcome::NotPublished,
+            }),
         }
     }
 }

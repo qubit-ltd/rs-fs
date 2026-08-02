@@ -8,6 +8,19 @@
 
 use qubit_io::Output;
 
+/// Keeps abort publication certainty as a first-class provider result.
+#[test]
+fn test_write_abort_outcome_exposes_all_publication_states() {
+    assert_ne!(
+        qubit_fs::WriteAbortOutcome::NotPublished,
+        qubit_fs::WriteAbortOutcome::Published,
+    );
+    assert_ne!(
+        qubit_fs::WriteAbortOutcome::Published,
+        qubit_fs::WriteAbortOutcome::Indeterminate,
+    );
+}
+
 #[test]
 fn test_write_all_commit_failure_retains_open_writer_for_recovery() {
     let (filesystem, _, _) =
@@ -129,14 +142,25 @@ fn test_open_writer_preserves_provider_commit_and_abort_states() {
             .expect_err("configured commit failure should propagate");
         assert_eq!(failure_state, error.state());
         assert_eq!(expected_state, writer.state());
-        writer.abort().expect("failed writer should allow abort");
-        let expected_after_abort =
-            if expected_state == qubit_fs::WriterState::Published {
-                qubit_fs::WriterState::Published
-            } else {
+        let outcome = writer
+            .abort()
+            .expect("failed writer should allow abort");
+        let expected_after_abort = match outcome {
+            qubit_fs::WriteAbortOutcome::NotPublished => {
                 qubit_fs::WriterState::Aborted
-            };
+            }
+            qubit_fs::WriteAbortOutcome::Published => {
+                qubit_fs::WriterState::Published
+            }
+            qubit_fs::WriteAbortOutcome::Indeterminate => {
+                qubit_fs::WriterState::Indeterminate
+            }
+        };
         assert_eq!(expected_after_abort, writer.state());
+        let repeated = writer
+            .abort()
+            .expect_err("completed abort must reject a second abort");
+        assert_eq!(qubit_fs::FsErrorKind::InvalidState, repeated.kind());
     }
 }
 

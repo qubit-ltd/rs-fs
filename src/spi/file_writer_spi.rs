@@ -14,6 +14,7 @@ use qubit_io::Output;
 use super::SpiWriteFailure;
 use crate::{
     FsResult,
+    WriteAbortOutcome,
     WriteOutcome,
 };
 
@@ -32,9 +33,9 @@ pub trait FileWriterSpi: Output<Item = u8> + Send {
     /// Releases provider staging resources.
     ///
     /// # Returns
-    /// `Ok(())` after cleanup is confirmed.
+    /// The provider-confirmed destination state after cleanup.
     ///
     /// # Errors
     /// Returns the provider cleanup failure with filesystem context.
-    fn abort(&mut self) -> FsResult<()>;
+    fn abort(&mut self) -> FsResult<WriteAbortOutcome>;
 }

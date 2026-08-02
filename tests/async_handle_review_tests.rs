@@ -92,7 +92,7 @@ impl AsyncFileWriteSession for DefaultCancelSession {
 
     fn abort_async<'a>(
         self: Pin<&'a mut Self>,
-    ) -> SpiFuture<'a, qubit_fs::FsResult<()>> {
+    ) -> SpiFuture<'a, qubit_fs::FsResult<qubit_fs::WriteAbortOutcome>> {
         panic!("default cancellation test does not abort")
     }
 }
@@ -257,7 +257,7 @@ fn test_async_writer_abort_preserves_published_state() {
     .expect("writer should open");
     ready(writer.commit_async())
         .expect_err("provider should report published failure");
-    ready(writer.abort_async()).expect("cleanup should succeed");
+    let _ = ready(writer.abort_async()).expect("cleanup should succeed");
     assert_eq!(WriterState::Published, writer.state());
 }
 
@@ -580,13 +580,35 @@ fn test_async_writer_stream_failures_mark_writer_indeterminate() {
     }
 }
 
-/// Preserves each provider-confirmed commit state and permits cleanup from a
-/// retryable not-published result.
+/// Preserves every provider-confirmed commit state and applies the explicit
+/// abort publication outcome exactly once.
 #[test]
 fn test_async_writer_commit_failures_preserve_recovery_state() {
-    for (failure_state, expected_state) in [
-        (WriteFailureState::RetryableNotPublished, WriterState::Open),
-        (WriteFailureState::Indeterminate, WriterState::Indeterminate),
+    for (failure_state, expected_state, abort_outcome, aborted_state) in [
+        (
+            WriteFailureState::RetryableNotPublished,
+            WriterState::Open,
+            qubit_fs::WriteAbortOutcome::NotPublished,
+            WriterState::Aborted,
+        ),
+        (
+            WriteFailureState::NotPublished,
+            WriterState::NotPublished,
+            qubit_fs::WriteAbortOutcome::NotPublished,
+            WriterState::Aborted,
+        ),
+        (
+            WriteFailureState::Published,
+            WriterState::Published,
+            qubit_fs::WriteAbortOutcome::Published,
+            WriterState::Published,
+        ),
+        (
+            WriteFailureState::Indeterminate,
+            WriterState::Indeterminate,
+            qubit_fs::WriteAbortOutcome::Indeterminate,
+            WriterState::Indeterminate,
+        ),
     ] {
         let (file_system, _) =
             async_recording_file_system(AsyncRecordingConfig {
@@ -601,13 +623,14 @@ fn test_async_writer_commit_failures_preserve_recovery_state() {
             .expect_err("configured commit failure should propagate");
         assert_eq!(FsErrorKind::Io, error.error().kind());
         assert_eq!(expected_state, writer.state());
-        if expected_state == WriterState::Open {
-            ready(writer.abort_async()).expect("open writer should abort");
-            assert_eq!(WriterState::Aborted, writer.state());
-            let abort = ready(writer.abort_async())
-                .expect_err("aborted writer must reject a second abort");
-            assert_eq!(FsErrorKind::InvalidState, abort.kind());
-        }
+        assert_eq!(
+            abort_outcome,
+            ready(writer.abort_async()).expect("failed writer should abort"),
+        );
+        assert_eq!(aborted_state, writer.state());
+        let abort = ready(writer.abort_async())
+            .expect_err("completed abort must reject a second abort");
+        assert_eq!(FsErrorKind::InvalidState, abort.kind());
     }
 }
 

@@ -29,6 +29,7 @@ use crate::{
     FsOperation,
     FsResult,
     OpenedFileInfo,
+    WriteAbortOutcome,
     WriteFailure,
     WriteFailureState,
     WriteOutcome,
@@ -43,6 +44,8 @@ pub struct FileWriter {
     info: OpenedFileInfo,
     /// Current publication lifecycle state.
     state: WriterState,
+    /// Whether explicit provider cleanup has completed.
+    abort_completed: bool,
     /// Atomicity required by the caller.
     atomicity: AtomicityRequirement,
     /// Provider identifier attached to facade-generated errors.
@@ -75,6 +78,7 @@ impl FileWriter {
             session,
             info,
             state: WriterState::Open,
+            abort_completed: false,
             atomicity,
             provider: provider.into(),
             max_write_bytes,
@@ -194,28 +198,38 @@ impl FileWriter {
     /// An indeterminate abort disables automatic drop cleanup so the caller can
     /// inspect provider state before choosing a recovery action.
     ///
+    /// # Returns
+    /// Provider-confirmed destination publication state after cleanup.
+    ///
     /// # Errors
     /// Returns [`FsErrorKind::InvalidState`] after commit or a previous abort,
     /// or returns the provider cleanup error while retaining the session.
-    pub fn abort(&mut self) -> FsResult<()> {
-        if !matches!(
+    pub fn abort(&mut self) -> FsResult<WriteAbortOutcome> {
+        if self.abort_completed
+            || !matches!(
             self.state,
             WriterState::Open
                 | WriterState::NotPublished
                 | WriterState::Published
                 | WriterState::Indeterminate
-        ) {
+        )
+        {
             return Err(self.invalid_state(
                 FsOperation::AbortWriter,
                 "writer cannot be aborted in its current state",
             ));
         }
         match self.session.abort() {
-            Ok(()) => {
-                if self.state != WriterState::Published {
-                    self.state = WriterState::Aborted;
-                }
-                Ok(())
+            Ok(outcome) => {
+                self.abort_completed = true;
+                self.state = match outcome {
+                    WriteAbortOutcome::NotPublished => WriterState::Aborted,
+                    WriteAbortOutcome::Published => WriterState::Published,
+                    WriteAbortOutcome::Indeterminate => {
+                        WriterState::Indeterminate
+                    }
+                };
+                Ok(outcome)
             }
             Err(error) => {
                 if error.kind() == FsErrorKind::Indeterminate {
@@ -338,12 +352,14 @@ impl Debug for FileWriter {
 
 impl Drop for FileWriter {
     fn drop(&mut self) {
-        if matches!(
+        if !self.abort_completed
+            && matches!(
             self.state,
             WriterState::Open
                 | WriterState::NotPublished
                 | WriterState::Published
-        ) {
+        )
+        {
             let _ = self.session.abort();
         }
     }

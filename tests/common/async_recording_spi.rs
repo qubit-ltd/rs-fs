@@ -719,16 +719,28 @@ impl AsyncFileWriteSession for RecordingWriter {
             ))
         })
     }
-    fn abort_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<()>> {
-        let failure = self.get_mut().config.writer_abort_failure;
+    fn abort_async<'a>(
+        self: Pin<&'a mut Self>,
+    ) -> SpiFuture<'a, FsResult<qubit_fs::WriteAbortOutcome>> {
+        let config = self.get_mut().config.clone();
         Box::pin(async move {
-            match failure {
+            match config.writer_abort_failure {
                 Some(kind) => Err(FsError::new(
                     kind,
                     FsOperation::AbortWriter,
                     "injected abort failure",
                 )),
-                None => Ok(()),
+                None => Ok(match config.writer_commit_failure {
+                    Some(WriteFailureState::Published) => {
+                        qubit_fs::WriteAbortOutcome::Published
+                    }
+                    Some(WriteFailureState::Indeterminate) => {
+                        qubit_fs::WriteAbortOutcome::Indeterminate
+                    }
+                    Some(WriteFailureState::RetryableNotPublished)
+                    | Some(WriteFailureState::NotPublished)
+                    | None => qubit_fs::WriteAbortOutcome::NotPublished,
+                }),
             }
         })
     }
