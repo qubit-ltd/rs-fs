@@ -118,8 +118,10 @@ recovery writer。重试、`abort`、cleanup 或核对 source/target 前，都�
 调用者仍需检查其中的 `NotPublished`、`Published` 或 `Indeterminate`。
 
 只要门面能在本地确定所要求的 atomicity 或其他 guarantee 无法满足，就会在产生副作用前进行
-检查。durability 目前只适用于 copy（`DurableCopy`）；write、rename 和临时资源 persist
-的 outcome 不宣称 durable publication。成功 outcome 只报告其实际建模的保证。
+检查。Copy guarantee 会明确区分 source mode：`AtomicFileCopy` 和
+`DurableFileCopy` 用于普通文件，`AtomicTreeCopy` 和 `DurableTreeCopy` 用于目录树。
+write、rename 和临时资源 persist 的 outcome 不宣称 durable publication。成功
+outcome 只报告其实际建模的保证。
 
 `FileSystemCapability::Copy` 表示 provider-native copy fast path，并不是门面执行普通文件复制
 的唯一方式。未声明该 capability 时，门面会直接评估 allowlist 内的流式 fallback，并要求

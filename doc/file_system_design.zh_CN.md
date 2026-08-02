@@ -533,8 +533,9 @@ pub enum CopyDeclineReason {
 
 `FileSystemCapability::Copy` 表示 provider 声明了这个 native fast path。它不是普通文件
 流式 fallback 的必要前提：即使没有 `Copy`，只要 `Read`、`Write` 和 fallback allowlist
-满足，门面仍会直接执行流式 copy。`ServerSideCopy`、`DurableCopy` 等更强语义仍然要求
-各自的 capability，不能由流式 fallback 推导。
+满足，门面仍会直接执行流式 copy。`ServerSideCopy`、`AtomicFileCopy`、
+`AtomicTreeCopy`、`DurableFileCopy` 与 `DurableTreeCopy` 等更强语义仍然要求
+与实际 source mode 匹配的 capability，不能由流式 fallback 推导。
 
 ### 6.5 Provider 返回对象
 

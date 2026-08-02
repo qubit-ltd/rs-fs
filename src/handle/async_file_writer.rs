@@ -224,12 +224,12 @@ impl AsyncFileWriter {
     ) -> SpiFuture<'_, crate::FsResult<WriteAbortOutcome>> {
         if self.abort_completed
             || !matches!(
-            self.state,
-            WriterState::Open
-                | WriterState::NotPublished
-                | WriterState::Published
-                | WriterState::Indeterminate
-        )
+                self.state,
+                WriterState::Open
+                    | WriterState::NotPublished
+                    | WriterState::Published
+                    | WriterState::Indeterminate
+            )
         {
             let error = self.invalid_state(
                 FsOperation::AbortWriter,
@@ -244,9 +244,7 @@ impl AsyncFileWriter {
                 Ok(outcome) => {
                     self.abort_completed = true;
                     self.state = match outcome {
-                        WriteAbortOutcome::NotPublished => {
-                            WriterState::Aborted
-                        }
+                        WriteAbortOutcome::NotPublished => WriterState::Aborted,
                         WriteAbortOutcome::Published => WriterState::Published,
                         WriteAbortOutcome::Indeterminate => {
                             WriterState::Indeterminate
@@ -393,11 +391,11 @@ impl Drop for AsyncFileWriter {
     fn drop(&mut self) {
         if !self.abort_completed
             && matches!(
-            self.state,
-            WriterState::Open
-                | WriterState::NotPublished
-                | WriterState::Published
-        )
+                self.state,
+                WriterState::Open
+                    | WriterState::NotPublished
+                    | WriterState::Published
+            )
         {
             self.session.as_mut().cancel_on_drop();
         }

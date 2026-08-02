@@ -117,6 +117,10 @@ fn capability_discriminants_remain_stable_for_capability_sets() {
         FileSystemCapability::TempFile,
         FileSystemCapability::TempDirectory,
         FileSystemCapability::AtomicTempPersist,
+        FileSystemCapability::AtomicFileCopy,
+        FileSystemCapability::AtomicTreeCopy,
+        FileSystemCapability::DurableFileCopy,
+        FileSystemCapability::DurableTreeCopy,
     ];
 
     for (expected, capability) in capabilities.into_iter().enumerate() {

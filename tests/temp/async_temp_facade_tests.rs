@@ -132,11 +132,13 @@ fn test_async_temp_persist_preflight_has_no_session_call() {
     let mut temp =
         ready(file_system.create_temp_file(TempFileOptions::default()))
             .expect("temporary file should open");
-    let failure = ready(temp.persist(
-        &path("/final"),
-        PersistOptions::default()
-            .with_atomicity(AtomicityRequirement::Required),
-    ))
+    let failure = ready(
+        temp.persist(
+            &path("/final"),
+            PersistOptions::default()
+                .with_atomicity(AtomicityRequirement::Required),
+        ),
+    )
     .expect_err("missing atomic persistence support must fail locally");
     assert_eq!(FsErrorKind::RequirementNotMet, failure.error().kind());
     assert_eq!(TempResourceState::Owned, temp.state());
@@ -299,18 +301,20 @@ fn test_async_temp_drop_notifies_provider_for_cleanup_owned_states() {
     let (file_system, probe) =
         async_recording_file_system(AsyncRecordingConfig::default());
     {
-        let _file = ready(
-            file_system.create_temp_file(TempFileOptions::default()),
-        )
-        .expect("temporary file should open");
+        let _file =
+            ready(file_system.create_temp_file(TempFileOptions::default()))
+                .expect("temporary file should open");
     }
     assert_eq!(1, probe.temp_cancellations());
 
-    let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig {
-        atomic_temp_persist: true,
-        temp_persist_failure: Some(PersistFailureState::PublishedSourceRetained),
-        ..AsyncRecordingConfig::default()
-    });
+    let (file_system, probe) =
+        async_recording_file_system(AsyncRecordingConfig {
+            atomic_temp_persist: true,
+            temp_persist_failure: Some(
+                PersistFailureState::PublishedSourceRetained,
+            ),
+            ..AsyncRecordingConfig::default()
+        });
     {
         let mut directory = ready(
             file_system.create_temp_directory(TempDirectoryOptions::default()),

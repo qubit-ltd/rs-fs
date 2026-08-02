@@ -207,12 +207,12 @@ impl FileWriter {
     pub fn abort(&mut self) -> FsResult<WriteAbortOutcome> {
         if self.abort_completed
             || !matches!(
-            self.state,
-            WriterState::Open
-                | WriterState::NotPublished
-                | WriterState::Published
-                | WriterState::Indeterminate
-        )
+                self.state,
+                WriterState::Open
+                    | WriterState::NotPublished
+                    | WriterState::Published
+                    | WriterState::Indeterminate
+            )
         {
             return Err(self.invalid_state(
                 FsOperation::AbortWriter,
@@ -354,11 +354,11 @@ impl Drop for FileWriter {
     fn drop(&mut self) {
         if !self.abort_completed
             && matches!(
-            self.state,
-            WriterState::Open
-                | WriterState::NotPublished
-                | WriterState::Published
-        )
+                self.state,
+                WriterState::Open
+                    | WriterState::NotPublished
+                    | WriterState::Published
+            )
         {
             let _ = self.session.abort();
         }

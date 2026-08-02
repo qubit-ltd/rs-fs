@@ -167,7 +167,7 @@ fn test_file_system_properties_rejects_invalid_capabilities_and_constraints() {
         FileSystemProperties::new(
             durable_copy_info,
             FileSystemCapabilities::new()
-                .with(FileSystemCapability::DurableCopy),
+                .with(FileSystemCapability::DurableFileCopy),
             FileSystemLimits::unknown(),
             PathConstraints::either(),
         )
