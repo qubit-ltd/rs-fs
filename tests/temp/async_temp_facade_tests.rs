@@ -285,9 +285,11 @@ fn test_async_temp_directory_persists_and_rejects_later_lifecycle_calls() {
         ready(directory.persist(&path("/other"), PersistOptions::default()))
             .expect_err("persisted directory must reject a second persist");
     assert_eq!(FsErrorKind::InvalidState, persist.error().kind());
+    assert!(persist.error().to_string().contains("temporary directory"));
     let cleanup = ready(directory.cleanup())
         .expect_err("persisted directory must reject later cleanup");
     assert_eq!(FsErrorKind::InvalidState, cleanup.kind());
+    assert!(cleanup.to_string().contains("temporary directory"));
 }
 
 /// Retains the provider-confirmed state after both definite and partially

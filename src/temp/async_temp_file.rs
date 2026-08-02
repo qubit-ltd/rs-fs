@@ -43,6 +43,8 @@ pub struct AsyncTempFile {
     session: Pin<Box<dyn AsyncTempResourceSpi>>,
     /// Current cleanup and publication lifecycle state.
     state: TempResourceState,
+    /// Human-readable resource kind used in lifecycle diagnostics.
+    resource_name: &'static str,
 }
 
 impl AsyncTempFile {
@@ -59,12 +61,14 @@ impl AsyncTempFile {
         file_system: AsyncFileSystem,
         path: Path,
         session: Box<dyn AsyncTempResourceSpi>,
+        resource_name: &'static str,
     ) -> Self {
         Self {
             file_system,
             path,
             session: Box::into_pin(session),
             state: TempResourceState::Owned,
+            resource_name,
         }
     }
 
@@ -113,7 +117,7 @@ impl AsyncTempFile {
     #[inline]
     pub fn cleanup(&mut self) -> SpiFuture<'_, FsResult<()>> {
         self.lifecycle(
-            "temporary file cannot be cleaned now",
+            "cannot be cleaned now",
             FsOperation::CleanupTemp,
             |session| session.cleanup(),
         )
@@ -125,12 +129,12 @@ impl AsyncTempFile {
     /// A future resolving after the provider confirms ownership transfer.
     ///
     /// # Errors
-    /// Resolves to an invalid-state error when the file is no longer owned, or
+    /// Resolves to an invalid-state error when the resource is no longer owned, or
     /// to the provider ownership-transfer failure.
     #[inline]
     pub fn keep(&mut self) -> SpiFuture<'_, FsResult<()>> {
         self.lifecycle(
-            "temporary file cannot be kept now",
+            "cannot be kept now",
             FsOperation::KeepTemp,
             |session| session.keep(),
         )
@@ -156,7 +160,7 @@ impl AsyncTempFile {
         if self.state != TempResourceState::Owned {
             let error = self.invalid_state(
                 FsOperation::PersistTemp,
-                "temporary file cannot be persisted now",
+                "cannot be persisted now",
             );
             return Box::pin(async move {
                 Err(PersistFailure::new(
@@ -252,8 +256,8 @@ impl AsyncTempFile {
     /// - `F`: One-shot provider lifecycle operation.
     ///
     /// # Parameters
-    /// - `message`: Error message used when the lifecycle state rejects the
-    ///   operation.
+    /// - `action`: Resource-specific action text used when the lifecycle state
+    ///   rejects the operation.
     /// - `operation`: Filesystem operation recorded in generated errors.
     /// - `call`: Provider operation invoked after local state validation.
     ///
@@ -264,7 +268,7 @@ impl AsyncTempFile {
     /// Resolves to an invalid-state error or the provider lifecycle failure.
     fn lifecycle<'a, F>(
         &'a mut self,
-        message: &'static str,
+        action: &'static str,
         operation: FsOperation,
         call: F,
     ) -> SpiFuture<'a, FsResult<()>>
@@ -279,7 +283,7 @@ impl AsyncTempFile {
             self.state,
             TempResourceState::Owned | TempResourceState::CleanupRequired
         ) {
-            let error = self.invalid_state(operation, message);
+            let error = self.invalid_state(operation, action);
             return Box::pin(async move { Err(error) });
         }
         let previous_state = self.state;
@@ -307,12 +311,13 @@ impl AsyncTempFile {
     ///
     /// # Parameters
     /// - `operation`: Rejected lifecycle operation.
-    /// - `message`: Stable explanation of the state violation.
+    /// - `action`: Stable action text describing the rejected operation.
     ///
     /// # Returns
     /// A contextual invalid-state error containing the temporary path.
-    fn invalid_state(&self, operation: FsOperation, message: &str) -> FsError {
-        FsError::new(FsErrorKind::InvalidState, operation, message)
+    fn invalid_state(&self, operation: FsOperation, action: &str) -> FsError {
+        let message = format!("{} {}", self.resource_name, action);
+        FsError::new(FsErrorKind::InvalidState, operation, &message)
             .with_path(self.path.clone())
     }
 

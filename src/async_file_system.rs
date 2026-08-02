@@ -498,6 +498,7 @@ impl AsyncFileSystem {
             self.clone(),
             info.path().clone(),
             session,
+            "temporary file",
         ))
     }
 
