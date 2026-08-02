@@ -70,7 +70,10 @@ pub use copy::{
     AsyncCopyOperation,
     AsyncCopyOperationState,
 };
-pub use copy::{CopyFailure, CopyFailureState};
+pub use copy::{
+    CopyFailure,
+    CopyFailureState,
+};
 pub use error::{
     FsError,
     FsErrorKind,
@@ -90,8 +93,8 @@ pub use handle::{
     DirectoryStream,
     FileReader,
     FileWriter,
-    WriteAllFailure,
     WriteAbortOutcome,
+    WriteAllFailure,
     WriteFailure,
     WriteFailureState,
     WriterState,
@@ -157,7 +160,10 @@ pub use rename::{
     RenameFailureState,
 };
 #[cfg(feature = "async")]
-pub use temp::{AsyncTempDirectory, AsyncTempFile};
+pub use temp::{
+    AsyncTempDirectory,
+    AsyncTempFile,
+};
 pub use temp::{
     PersistFailure,
     PersistFailureState,

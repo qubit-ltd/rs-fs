@@ -327,9 +327,7 @@ impl FileSystem {
             .properties
             .limits()
             .clamp_list_page_size(options.page_size());
-        let options = options.with_page_size(
-            page_size,
-        );
+        let options = options.with_page_size(page_size);
         self.spi
             .list(ListRequest::new(
                 path,
@@ -363,7 +361,9 @@ impl FileSystem {
         self.properties
             .limits()
             .validate_read_range(path, options.length())
-            .map_err(|error| self.enrich(error, path, FsOperation::OpenReader))?;
+            .map_err(|error| {
+                self.enrich(error, path, FsOperation::OpenReader)
+            })?;
         self.require(
             FileSystemCapability::Read,
             FsOperation::OpenReader,
@@ -376,10 +376,7 @@ impl FileSystem {
             ))
             .and_then(|opened| {
                 let (info, reader) = opened.into_parts();
-                self.validate_opened_info(
-                    &info,
-                    path,
-                )?;
+                self.validate_opened_info(&info, path)?;
                 Ok(FileReader::new(info, reader))
             })
             .map_err(|error| self.enrich(error, path, FsOperation::OpenReader))
@@ -410,10 +407,7 @@ impl FileSystem {
             ))
             .and_then(|opened| {
                 let (info, writer) = opened.into_parts();
-                self.validate_opened_info(
-                    &info,
-                    path,
-                )?;
+                self.validate_opened_info(&info, path)?;
                 Ok(FileWriter::new(
                     info,
                     writer,

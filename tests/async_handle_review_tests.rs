@@ -275,11 +275,13 @@ fn test_async_temp_persist_rechecks_required_atomic_outcome() {
     let mut temp =
         ready(file_system.create_temp_file(TempFileOptions::default()))
             .expect("temporary file should open");
-    let failure = ready(temp.persist(
-        &path("/final"),
-        PersistOptions::default()
-            .with_atomicity(AtomicityRequirement::Required),
-    ))
+    let failure = ready(
+        temp.persist(
+            &path("/final"),
+            PersistOptions::default()
+                .with_atomicity(AtomicityRequirement::Required),
+        ),
+    )
     .expect_err("a non-atomic persist must fail the required atomic contract");
     assert_eq!(
         FsErrorKind::ProviderContractViolation,

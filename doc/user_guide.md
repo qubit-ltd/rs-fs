@@ -128,10 +128,11 @@ returns `WriteAbortOutcome`; inspect it because cleanup can complete after the
 destination was published or while its final state remains indeterminate.
 
 Required atomicity and other declared guarantees are checked before side effects
-when the facade can determine they cannot be met. Durability is currently a
-copy-only guarantee (`DurableCopy`); write, rename, and temporary persistence
-outcomes do not claim durable publication. A successful outcome reports only
-the guarantees it models.
+when the facade can determine they cannot be met. Copy guarantees are explicit
+about source mode: `AtomicFileCopy` and `DurableFileCopy` cover regular files,
+while `AtomicTreeCopy` and `DurableTreeCopy` cover directory trees. Write,
+rename, and temporary persistence outcomes do not claim durable publication. A
+successful outcome reports only the guarantees it models.
 
 `FileSystemCapability::Copy` advertises the provider-native copy fast path; it
 is not the only way the facade can copy a regular file. When that capability is
