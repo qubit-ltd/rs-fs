@@ -48,7 +48,12 @@ impl AsyncTempDirectory {
         path: Path,
         session: Box<dyn AsyncTempResourceSpi>,
     ) -> Self {
-        Self(AsyncTempFile::new(file_system, path, session))
+        Self(AsyncTempFile::new(
+            file_system,
+            path,
+            session,
+            "temporary directory",
+        ))
     }
 
     /// Returns the provider-local temporary path.
