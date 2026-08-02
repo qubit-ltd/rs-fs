@@ -7,9 +7,13 @@
 // =============================================================================
 //! Application-facing file, directory, and writer handles.
 
+#[cfg(feature = "async")]
 mod async_directory_stream;
+#[cfg(feature = "async")]
 mod async_file_reader;
+#[cfg(feature = "async")]
 mod async_file_writer;
+#[cfg(feature = "async")]
 mod async_write_all_failure;
 mod directory_entry_validation;
 mod directory_stream;
@@ -21,9 +25,13 @@ mod write_failure;
 mod write_failure_state;
 mod writer_state;
 
+#[cfg(feature = "async")]
 pub use async_directory_stream::AsyncDirectoryStream;
+#[cfg(feature = "async")]
 pub use async_file_reader::AsyncFileReader;
+#[cfg(feature = "async")]
 pub use async_file_writer::AsyncFileWriter;
+#[cfg(feature = "async")]
 pub use async_write_all_failure::AsyncWriteAllFailure;
 pub use directory_stream::DirectoryStream;
 pub use file_reader::FileReader;

@@ -52,6 +52,13 @@ metadata, logs, normal URI values, or error messages.
 qubit-fs = "0.2.0"
 ```
 
+The `async` feature is enabled by default. A synchronous-only application can
+disable default features to avoid compiling the asynchronous facade and SPI:
+
+```toml
+qubit-fs = { version = "0.2.0", default-features = false }
+```
+
 Obtain a configured `FileSystem` or `AsyncFileSystem` from provider setup or a
 registry integration. The following public construction boundary is useful to
 provider implementations and focused tests:

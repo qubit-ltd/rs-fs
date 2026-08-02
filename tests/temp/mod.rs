@@ -6,6 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+#[cfg(feature = "async")]
 mod async_temp_facade_tests;
 mod persist_failure_tests;
 mod persist_outcome_tests;

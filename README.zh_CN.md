@@ -20,6 +20,13 @@
 qubit-fs = "0.2"
 ```
 
+`async` feature 默认启用。只使用同步 API 的下游可以关闭默认 feature，从而减少编译时间和
+依赖图规模：
+
+```toml
+qubit-fs = { version = "0.2", default-features = false }
+```
+
 ## 门面明确表达的语义
 
 - `Path` 是一个已配置 filesystem 内的逻辑名称。`Uri` 是不含 secret 的 canonical

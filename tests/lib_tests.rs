@@ -7,6 +7,7 @@
 // =============================================================================
 
 #[path = "common/async_recording_spi.rs"]
+#[cfg(feature = "async")]
 mod async_recording_spi;
 mod copy;
 mod directory;

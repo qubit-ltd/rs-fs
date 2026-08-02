@@ -7,6 +7,8 @@
 // =============================================================================
 //! Regression coverage for asynchronous facade-handle contract boundaries.
 
+#![cfg(feature = "async")]
+
 #[allow(dead_code)]
 #[path = "common/async_recording_spi.rs"]
 mod async_recording_spi;

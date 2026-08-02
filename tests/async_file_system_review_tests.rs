@@ -7,6 +7,8 @@
 // =============================================================================
 //! External pending, failure, and rename coverage for the async facade.
 
+#![cfg(feature = "async")]
+
 #[path = "common/async_recording_spi.rs"]
 mod async_recording_spi;
 #[path = "common/poll_support.rs"]

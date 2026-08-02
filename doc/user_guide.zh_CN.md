@@ -48,6 +48,13 @@ I/O。
 qubit-fs = "0.2.0"
 ```
 
+`async` feature 默认启用。只使用同步 API 的应用可以关闭默认 feature，避免编译异步门面和
+SPI：
+
+```toml
+qubit-fs = { version = "0.2.0", default-features = false }
+```
+
 通过 provider 配置或 registry 集成取得已配置的 `FileSystem` 或 `AsyncFileSystem`。下列公共
 构造边界适用于实现 provider 或编写聚焦测试：
 

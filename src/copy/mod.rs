@@ -7,15 +7,21 @@
 // =============================================================================
 //! Typed copy failure state shared across the facade and provider boundary.
 
+#[cfg(feature = "async")]
 mod async_copy_failure;
+#[cfg(feature = "async")]
 mod async_copy_operation;
+#[cfg(feature = "async")]
 mod async_copy_operation_state;
 mod copy_failure;
 mod copy_failure_state;
 mod internal;
 
+#[cfg(feature = "async")]
 pub use async_copy_failure::AsyncCopyFailure;
+#[cfg(feature = "async")]
 pub use async_copy_operation::AsyncCopyOperation;
+#[cfg(feature = "async")]
 pub use async_copy_operation_state::AsyncCopyOperationState;
 pub use copy_failure::CopyFailure;
 pub use copy_failure_state::CopyFailureState;

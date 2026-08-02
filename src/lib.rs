@@ -44,6 +44,7 @@
 
 #![deny(missing_docs)]
 
+#[cfg(feature = "async")]
 mod async_file_system;
 mod copy;
 mod error;
@@ -61,14 +62,15 @@ pub mod spi;
 mod temp;
 mod uri;
 
+#[cfg(feature = "async")]
 pub use async_file_system::AsyncFileSystem;
+#[cfg(feature = "async")]
 pub use copy::{
     AsyncCopyFailure,
     AsyncCopyOperation,
     AsyncCopyOperationState,
-    CopyFailure,
-    CopyFailureState,
 };
+pub use copy::{CopyFailure, CopyFailureState};
 pub use error::{
     FsError,
     FsErrorKind,
@@ -77,11 +79,14 @@ pub use error::{
 };
 pub use file_system::FileSystem;
 pub use file_system_properties::FileSystemProperties;
+#[cfg(feature = "async")]
 pub use handle::{
     AsyncDirectoryStream,
     AsyncFileReader,
     AsyncFileWriter,
     AsyncWriteAllFailure,
+};
+pub use handle::{
     DirectoryStream,
     FileReader,
     FileWriter,
@@ -151,9 +156,9 @@ pub use rename::{
     RenameFailure,
     RenameFailureState,
 };
+#[cfg(feature = "async")]
+pub use temp::{AsyncTempDirectory, AsyncTempFile};
 pub use temp::{
-    AsyncTempDirectory,
-    AsyncTempFile,
     PersistFailure,
     PersistFailureState,
     PersistOutcome,

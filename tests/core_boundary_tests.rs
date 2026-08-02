@@ -18,8 +18,9 @@
 //! use qubit_fs::FileSystemSpi;
 //! ```
 
+#[cfg(feature = "async")]
+use qubit_fs::AsyncFileSystem;
 use qubit_fs::{
-    AsyncFileSystem,
     FileSystem,
     FileSystemId,
     FileSystemInfo,
@@ -34,6 +35,7 @@ fn assert_clone<T: Clone>() {}
 #[test]
 fn test_file_system_facades_are_clone() {
     assert_clone::<FileSystem>();
+    #[cfg(feature = "async")]
     assert_clone::<AsyncFileSystem>();
 }
 
