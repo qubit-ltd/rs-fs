@@ -129,15 +129,13 @@ impl AsyncTempFile {
     /// A future resolving after the provider confirms ownership transfer.
     ///
     /// # Errors
-    /// Resolves to an invalid-state error when the resource is no longer owned, or
-    /// to the provider ownership-transfer failure.
+    /// Resolves to an invalid-state error when the resource is no longer owned,
+    /// or to the provider ownership-transfer failure.
     #[inline]
     pub fn keep(&mut self) -> SpiFuture<'_, FsResult<()>> {
-        self.lifecycle(
-            "cannot be kept now",
-            FsOperation::KeepTemp,
-            |session| session.keep(),
-        )
+        self.lifecycle("cannot be kept now", FsOperation::KeepTemp, |session| {
+            session.keep()
+        })
     }
 
     /// Asynchronously persists this resource to a validated destination.

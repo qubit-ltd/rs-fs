@@ -128,43 +128,11 @@ pub(crate) fn reject_secrets(parsed: &FluentUri<String>) -> FsResult<()> {
 /// Classifies one raw query pair after strictly decoding only its key.
 pub(crate) fn query_pair_is_sensitive(pair: &str) -> bool {
     let raw_key = pair.split_once('=').map_or(pair, |(key, _)| key);
-    let Some(key) = percent_decode_utf8(raw_key) else {
+    let Some(key) =
+        qubit_redact::uri::decode_percent_encoded_field_name(raw_key)
+    else {
         return false;
     };
     let policy = RedactionPolicy::default();
     policy.sensitivity_for(&key).is_some()
-}
-
-/// Strictly percent-decodes query-key text as UTF-8 without treating `+` as a
-/// space.
-///
-/// Returns `None` when an escape is malformed or the decoded bytes are not
-/// valid UTF-8; callers then conservatively leave classification to the URI
-/// parser rather than guessing a key spelling.
-fn percent_decode_utf8(text: &str) -> Option<String> {
-    let mut bytes = Vec::with_capacity(text.len());
-    let input = text.as_bytes();
-    let mut index = 0;
-    while index < input.len() {
-        if input[index] != b'%' {
-            bytes.push(input[index]);
-            index += 1;
-            continue;
-        }
-        let high = *input.get(index + 1)?;
-        let low = *input.get(index + 2)?;
-        bytes.push((hex_value(high)? << 4) | hex_value(low)?);
-        index += 3;
-    }
-    String::from_utf8(bytes).ok()
-}
-
-/// Decodes one ASCII hexadecimal digit used by a percent escape.
-fn hex_value(value: u8) -> Option<u8> {
-    match value {
-        b'0'..=b'9' => Some(value - b'0'),
-        b'a'..=b'f' => Some(value - b'a' + 10),
-        b'A'..=b'F' => Some(value - b'A' + 10),
-        _ => None,
-    }
 }

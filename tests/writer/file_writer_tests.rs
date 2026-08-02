@@ -142,9 +142,7 @@ fn test_open_writer_preserves_provider_commit_and_abort_states() {
             .expect_err("configured commit failure should propagate");
         assert_eq!(failure_state, error.state());
         assert_eq!(expected_state, writer.state());
-        let outcome = writer
-            .abort()
-            .expect("failed writer should allow abort");
+        let outcome = writer.abort().expect("failed writer should allow abort");
         let expected_after_abort = match outcome {
             qubit_fs::WriteAbortOutcome::NotPublished => {
                 qubit_fs::WriterState::Aborted
