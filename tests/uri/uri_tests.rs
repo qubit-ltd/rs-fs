@@ -28,11 +28,12 @@ fn test_uri_rejects_password_sensitive_query_and_fragment() {
     assert!(Uri::parse("s3://bucket/key#fragment").is_err());
 }
 
-/// Verifies secret-free URIs reject all userinfo, including username-only
-/// forms.
+/// Verifies secret-free URIs allow a visible username but reject passwords.
 #[test]
-fn test_uri_rejects_any_userinfo() {
-    assert!(Uri::parse("s3://user@bucket/key").is_err());
+fn test_uri_allows_username_only_userinfo() {
+    let uri = Uri::parse("s3://user@bucket/key")
+        .expect("username-only URI should remain visible and valid");
+    assert_eq!(uri.authority(), Some("user@bucket"));
 }
 
 /// Verifies percent-encoded sensitive query keys are rejected before a
