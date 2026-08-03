@@ -71,6 +71,7 @@ use qubit_fs::{
     PublicationMethod,
     RenameFailureState,
     RenameOutcome,
+    SymlinkPolicy,
     WriteFailureState,
     WriteOutcome,
 };
@@ -570,6 +571,7 @@ impl FileSystemSpi for BehaviorSpi {
                 .with(FileSystemCapability::AtomicTempPersist),
             self.limits,
             PathConstraints::absolute(),
+            SymlinkPolicy::Reject,
         )
         .expect("valid test properties")
     }

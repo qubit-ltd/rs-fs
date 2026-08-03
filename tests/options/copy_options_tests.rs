@@ -15,6 +15,7 @@ use qubit_fs::{
     FileSystemCapability,
     MetadataPreservePolicy,
     ServerSidePreference,
+    SymlinkPolicy,
 };
 
 #[test]
@@ -52,7 +53,7 @@ fn test_copy_options_full_configuration_is_usable() {
         .with_conflict(CopyConflictPolicy::Skip)
         .with_preserve_metadata(MetadataPreservePolicy::ProviderNative)
         .with_server_side(ServerSidePreference::Disable)
-        .with_follow_symlinks(true)
+        .with_symlink_policy(SymlinkPolicy::FollowWithinFileSystem)
         .with_create_parent(true)
         .with_continue_on_error(true)
         .with_atomicity(AtomicityRequirement::Required)
@@ -60,7 +61,10 @@ fn test_copy_options_full_configuration_is_usable() {
 
     assert_eq!(CopyMode::Tree, options.mode());
     assert_eq!(CopyConflictPolicy::Skip, options.conflict());
-    assert!(options.follow_symlinks());
+    assert_eq!(
+        Some(SymlinkPolicy::FollowWithinFileSystem),
+        options.symlink_policy_override(),
+    );
     assert!(options.create_parent());
     assert!(options.continue_on_error());
     assert_eq!(AtomicityRequirement::Required, options.atomicity());
