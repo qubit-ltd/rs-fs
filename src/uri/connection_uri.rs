@@ -16,10 +16,7 @@ use std::fmt::{
 };
 
 use fluent_uri::Uri as FluentUri;
-use qubit_redact::{
-    Redactor,
-    Sensitivity,
-};
+use qubit_redact::UriRedactor;
 
 use crate::FsResult;
 
@@ -28,7 +25,6 @@ use super::{
     uri::{
         Uri,
         parse_canonical,
-        query_pair_is_sensitive,
     },
 };
 
@@ -59,28 +55,25 @@ impl ConnectionUri {
         self.parsed.scheme().as_str()
     }
 
-    /// Returns whether the URI embeds a password or sensitive query value.
+    /// Returns whether the URI contains any component classified as sensitive
+    /// by the process URI policy.
     ///
     /// Username-only userinfo is not considered a secret because it can be
     /// paired with an external credential reference.
     #[inline]
     #[must_use]
     pub fn has_embedded_secret(&self) -> bool {
-        let has_password = self.parsed.authority().is_some_and(|authority| {
-            authority_has_password(authority.as_str())
-        });
-        let has_sensitive_query = self.parsed.query().is_some_and(|query| {
-            query.as_str().split('&').any(query_pair_is_sensitive)
-        });
-        has_password || has_sensitive_query
+        UriRedactor::default()
+            .redact_uri_str(self.parsed.as_str())
+            .has_sensitive_components()
     }
 
     /// Converts this connection URI to a secret-free resource URI.
     ///
     /// # Errors
     ///
-    /// Returns an invalid-URI error when the connection URI contains userinfo
-    /// or sensitive query fields that cannot appear in [`Uri`].
+    /// Returns an invalid-URI error when the connection URI contains sensitive
+    /// components that cannot appear in [`Uri`].
     #[inline(always)]
     pub fn try_to_uri(&self) -> FsResult<Uri> {
         Uri::parse(self.parsed.as_str())
@@ -96,31 +89,12 @@ impl ConnectionUri {
     }
 
     /// Renders a URI while preserving component order and masking sensitive
-    /// values.
+    /// values through the shared URI redactor.
     fn redacted_text(&self) -> String {
-        let scheme = self.parsed.scheme().as_str();
-        let mut rendered = String::from(scheme);
-        rendered.push(':');
-        if self.parsed.has_authority() {
-            rendered.push_str("//");
-            if let Some(authority) = self.parsed.authority() {
-                rendered.push_str(&redact_authority(authority.as_str()));
-            }
-        }
-        rendered.push_str(self.parsed.path().as_str());
-        if let Some(query) = self.parsed.query() {
-            rendered.push('?');
-            rendered.push_str(&redact_query(query.as_str()));
-        }
-        rendered
+        UriRedactor::default()
+            .redact_uri_str(self.parsed.as_str())
+            .into_log_safe_text()
     }
-}
-
-/// Returns whether an authority embeds a userinfo password.
-fn authority_has_password(authority: &str) -> bool {
-    authority
-        .rsplit_once('@')
-        .is_some_and(|(userinfo, _)| userinfo.contains(':'))
 }
 
 impl Display for ConnectionUri {
@@ -139,41 +113,5 @@ impl Debug for ConnectionUri {
             .debug_tuple("ConnectionUri")
             .field(&self.redacted_text())
             .finish()
-    }
-}
-
-/// Redacts all userinfo in an authority while retaining the host text.
-fn redact_authority(authority: &str) -> String {
-    let Some((userinfo, host)) = authority.rsplit_once('@') else {
-        return authority.to_owned();
-    };
-    let masked = Redactor::default()
-        .redact_at(Sensitivity::Secret, userinfo)
-        .into_owned();
-    format!("{masked}@{host}")
-}
-
-/// Redacts sensitive ordered query values without decoding or collapsing
-/// duplicates.
-fn redact_query(query: &str) -> String {
-    query
-        .split('&')
-        .map(redact_query_pair)
-        .collect::<Vec<_>>()
-        .join("&")
-}
-
-/// Redacts one raw query pair while retaining its key and separator spelling.
-fn redact_query_pair(pair: &str) -> String {
-    let Some((key, value)) = pair.split_once('=') else {
-        return pair.to_owned();
-    };
-    if super::uri::query_pair_is_sensitive(pair) {
-        let masked = Redactor::default()
-            .redact_at(Sensitivity::Secret, value)
-            .into_owned();
-        format!("{key}={masked}")
-    } else {
-        pair.to_owned()
     }
 }
