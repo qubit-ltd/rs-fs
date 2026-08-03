@@ -140,6 +140,7 @@ pub use options::{
     RenameOptions,
     RenameOutcome,
     ServerSidePreference,
+    SymlinkPolicy,
     WriteDisposition,
     WriteOptions,
     WritePrecondition,

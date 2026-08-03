@@ -21,6 +21,7 @@ use crate::copy::{
     is_file_kind_supported,
     validate_stream_copy_length_limits,
 };
+use crate::rename::validate_rename_outcome;
 use crate::spi::{
     AsyncFileSystemSpi,
     CopyAttempt,
@@ -171,7 +172,12 @@ impl AsyncFileSystem {
             .spi
             .list(ListRequest::new(
                 path,
-                ResolvedListOptions::new(options.clone()),
+                ResolvedListOptions::new(
+                    options.clone(),
+                    options
+                        .symlink_policy_override()
+                        .unwrap_or(self.properties.symlink_policy()),
+                ),
             ))
             .await
             .map_err(|error| self.enrich(error, path, FsOperation::List))?;
@@ -418,56 +424,21 @@ impl AsyncFileSystem {
             ))
             .await
         {
-            Ok(outcome)
-                if options.atomicity() == crate::AtomicityRequirement::Required
-                    && outcome.atomicity() != crate::AchievedAtomicity::Atomic =>
-            {
-                Err(self.contextual_rename_failure(
-                    self.contract_error(
-                        source,
-                        "provider reported non-atomic success for an atomic-required rename",
-                    ),
-                    RenameFailureState::Renamed,
-                    source,
-                    target,
-                ))
-            }
-            Ok(outcome) if outcome.method() == crate::PublicationMethod::CopyThenDelete => {
-                Err(self.contextual_rename_failure(
-                    self.contract_error(source, "provider returned copy-then-delete for rename"),
-                    RenameFailureState::Renamed,
-                    source,
-                    target,
-                ))
-            }
-            Ok(outcome)
-                if options.durability() == crate::DurabilityRequirement::Required
-                    && !outcome.durable() =>
-            {
-                Err(self.contextual_rename_failure(
-                    self.contract_error(
-                        source,
-                        "provider reported non-durable success for a durability-required rename",
-                    ),
-                    RenameFailureState::Renamed,
-                    source,
-                    target,
-                ))
-            }
-            Ok(outcome) if outcome.source() != source || outcome.target() != target => Err(self
-                .contextual_rename_failure(
-                    self.contract_error(
-                        source,
-                        "provider returned a rename outcome with different identities",
-                    ),
-                    RenameFailureState::Indeterminate,
+            Ok(outcome) => match validate_rename_outcome(
+                &outcome, &options, source, target,
+            ) {
+                Some(violation) => Err(self.contextual_rename_failure(
+                    self.contract_error(source, violation.message),
+                    violation.state,
                     source,
                     target,
                 )),
-            Ok(outcome) => Ok(outcome),
+                None => Ok(outcome),
+            },
             Err(failure) => {
                 let (error, state) = failure.into_parts();
-                Err(self.contextual_rename_failure(error, state, source, target))
+                Err(self
+                    .contextual_rename_failure(error, state, source, target))
             }
         }
     }
@@ -580,11 +551,15 @@ impl AsyncFileSystem {
                     &target,
                 )
             })?;
+        let symlink_policy = options
+            .symlink_policy_override()
+            .unwrap_or(self.properties.symlink_policy());
         Ok(AsyncCopyOperation::new(
             self.clone(),
             source,
             target,
             options,
+            symlink_policy,
         ))
     }
 

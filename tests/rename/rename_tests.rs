@@ -50,6 +50,7 @@ use qubit_fs::{
     RenameFailureState,
     RenameOptions,
     RenameOutcome,
+    SymlinkPolicy,
 };
 use std::sync::{
     Arc,
@@ -112,6 +113,7 @@ impl FileSystemSpi for RenameSpi {
             capabilities,
             FileSystemLimits::unknown(),
             PathConstraints::absolute(),
+            SymlinkPolicy::Reject,
         )
         .expect("valid properties")
     }

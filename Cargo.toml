@@ -17,12 +17,8 @@ include = [
     "/LICENSE",
     "/README.md",
     "/README.zh_CN.md",
-    "/RUST_CODING_STYLE.md",
-    "/RUST_CODING_STYLE.zh_CN.md",
     "/doc/file_system_design.zh_CN.md",
     "/doc/**/user_guide*.md",
-    "/examples/**",
-    "/resources/**",
     "/src/**",
     "/tests/**",
 ]
@@ -38,7 +34,14 @@ async = []
 [dependencies]
 fluent-uri = "0.4.1"
 qubit-io = "0.14"
-qubit-redact = { path = "../rs-redact", version = "0.6" }
+qubit-redact = { path = "../rs-redact", version = "0.6", features = ["uri"] }
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "stream_copy_fallback"
+harness = false
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)'] }

@@ -31,7 +31,11 @@ qubit-fs-registry ───────────► provider discovery, confi
 A `FileSystem` or `AsyncFileSystem` is one configured filesystem. A provider
 may yield several facades when its endpoint, bucket, root, region, or credential
 profile differs. `FileSystemProperties` is an immutable snapshot of identity,
-capabilities, limits, and path constraints; reading it performs no I/O.
+capabilities, limits, path constraints, and the provider-declared symbolic-link
+policy; reading it performs no I/O. `ListOptions` and `CopyOptions` can provide
+an operation-scoped `SymlinkPolicy` override. The portable abstraction supports
+`Reject` and `FollowWithinFileSystem`; providers map the latter to their own
+namespace or root boundary.
 
 ### Names, addresses, and secrets
 
