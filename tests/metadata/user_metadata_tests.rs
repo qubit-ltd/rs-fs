@@ -24,3 +24,13 @@ fn test_user_metadata_debug_hides_values() {
         metadata.iter().collect::<Vec<_>>()
     );
 }
+
+/// Verifies metadata keys are classified directly instead of through a URI.
+#[test]
+fn test_user_metadata_accepts_keys_with_uri_delimiters() {
+    let metadata = UserMetadata::new()
+        .with("password=like", "ordinary-value")
+        .expect("a key containing URI delimiters is not itself sensitive");
+    assert!(metadata.contains_key("password=like"));
+    assert!(UserMetadata::new().with("password", "secret").is_err());
+}
