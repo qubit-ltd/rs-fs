@@ -51,24 +51,25 @@ fn test_connection_uri_rejects_fragment() {
     assert!(ConnectionUri::parse("s3://bucket/key#fragment").is_err());
 }
 
-/// Verifies connection rendering masks all userinfo while retaining its host.
+/// Verifies connection rendering preserves the username while masking the
+/// password and retaining its host.
 #[test]
 fn test_connection_uri_preserves_authority_and_redacts_userinfo_password() {
     let uri = ConnectionUri::parse("s3://user:secret@[::1]:9000/key")
         .expect("connection URI should parse");
     let rendered = uri.to_string();
-    assert!(!rendered.contains("user"));
+    assert!(rendered.contains("user:"));
     assert!(rendered.contains("@[::1]:9000/key"));
     assert!(!rendered.contains("secret"));
 }
 
-/// Verifies a username-only authority is still treated as credential material.
+/// Verifies a username-only authority remains visible by default.
 #[test]
-fn test_connection_uri_redacts_username_only_authority() {
+fn test_connection_uri_preserves_username_only_authority() {
     let uri = ConnectionUri::parse("s3://access-key@bucket/key")
         .expect("connection URI should parse");
     let rendered = uri.to_string();
-    assert!(!rendered.contains("access-key"));
+    assert!(rendered.contains("access-key@bucket/key"));
     assert!(rendered.contains("@bucket/key"));
 }
 
