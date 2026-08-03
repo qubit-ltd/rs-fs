@@ -25,6 +25,10 @@ fn rename_outcome_reports_actual_method_and_atomicity() {
 
     assert_eq!(AchievedAtomicity::NonAtomic, outcome.atomicity());
     assert_eq!(PublicationMethod::CopyThenDelete, outcome.method());
+    assert!(!outcome.durable());
+
+    let durable = outcome.with_durable(true);
+    assert!(durable.durable());
 }
 
 #[test]

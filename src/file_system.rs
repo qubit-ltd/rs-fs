@@ -284,6 +284,20 @@ impl FileSystem {
                     RenameFailureState::Renamed,
                 ))
             }
+            Ok(outcome)
+                if options.durability() == crate::DurabilityRequirement::Required
+                    && !outcome.durable() =>
+            {
+                Err(RenameFailure::new(
+                    self.contract_error(
+                        source,
+                        FsOperation::Rename,
+                        "provider reported non-durable success for a durability-required rename",
+                    )
+                    .with_target(target.clone()),
+                    RenameFailureState::Renamed,
+                ))
+            }
             Ok(outcome) if outcome.source() != source || outcome.target() != target => {
                 Err(RenameFailure::new(
                     self.contract_error(
