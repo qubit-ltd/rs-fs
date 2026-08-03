@@ -69,6 +69,10 @@ const CAPABILITY_DEPENDENCIES: &[(
         FileSystemCapability::DurableTreeCopy,
         FileSystemCapability::Copy,
     ),
+    (
+        FileSystemCapability::DurableRename,
+        FileSystemCapability::Rename,
+    ),
 ];
 
 /// Stable typed capability guarantees for one configured filesystem.

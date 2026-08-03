@@ -121,6 +121,7 @@ fn capability_discriminants_remain_stable_for_capability_sets() {
         FileSystemCapability::AtomicTreeCopy,
         FileSystemCapability::DurableFileCopy,
         FileSystemCapability::DurableTreeCopy,
+        FileSystemCapability::DurableRename,
     ];
 
     for (expected, capability) in capabilities.into_iter().enumerate() {
