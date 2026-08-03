@@ -15,13 +15,13 @@ use std::fmt::{
 };
 
 use fluent_uri::Uri as FluentUri;
-use qubit_redact::RedactionPolicy;
+use qubit_redact::UriRedactor;
 
 use crate::FsResult;
 
 use super::invalid_uri;
 
-/// A validated URI that cannot contain credentials or a fragment.
+/// A validated URI that cannot contain sensitive credentials or a fragment.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Uri {
     /// RFC 3986 parser-owned lexical URI representation.
@@ -31,8 +31,8 @@ pub struct Uri {
 impl Uri {
     /// Parses a secret-free RFC 3986 URI.
     ///
-    /// Returns an invalid-URI error for malformed syntax, fragments,
-    /// userinfo passwords, or sensitive query fields.
+    /// Returns an invalid-URI error for malformed syntax, fragments, or URI
+    /// components classified as sensitive by the process URI policy.
     #[inline]
     pub fn parse(text: &str) -> FsResult<Self> {
         let parsed = parse_canonical(text)?;
@@ -104,38 +104,25 @@ pub(crate) fn parse_canonical(text: &str) -> FsResult<FluentUri<String>> {
     FluentUri::parse(canonical).map_err(|_| invalid_uri("URI is malformed"))
 }
 
-/// Rejects credentials and fragments from the secret-free URI boundary.
+/// Rejects fragments and URI components classified as sensitive.
 pub(crate) fn reject_secrets(parsed: &FluentUri<String>) -> FsResult<()> {
     if parsed.fragment().is_some() {
         return Err(invalid_uri("URI fragments are not supported"));
     }
-    if parsed
-        .authority()
-        .is_some_and(|authority| authority.has_userinfo())
-    {
-        return Err(invalid_uri("URI userinfo is not supported"));
+    let result = UriRedactor::default().redact_uri_str(parsed.as_str());
+    if result.status() == qubit_redact::UriRedactionStatus::Invalid {
+        return Err(invalid_uri("URI contains invalid encoded components"));
     }
-    if parsed.query().is_some_and(|query| {
-        query.as_str().split('&').any(query_pair_is_sensitive)
-    }) {
-        return Err(invalid_uri(
-            "sensitive URI query fields are not supported",
-        ));
+    if result.has_sensitive_components() {
+        return Err(invalid_uri("sensitive URI components are not supported"));
     }
     Ok(())
 }
 
-/// Classifies one raw query pair after strictly decoding only its key.
-///
-/// Undecodable keys are treated as sensitive so malformed or non-UTF-8
-/// encodings cannot bypass the secret-free URI boundary.
-pub(crate) fn query_pair_is_sensitive(pair: &str) -> bool {
-    let raw_key = pair.split_once('=').map_or(pair, |(key, _)| key);
-    let Some(key) =
-        qubit_redact::uri::decode_percent_encoded_field_name(raw_key)
-    else {
-        return true;
-    };
-    let policy = RedactionPolicy::default();
-    policy.sensitivity_for(&key).is_some()
+/// Classifies a raw metadata key through the shared URI query policy.
+pub(crate) fn query_pair_is_sensitive(key: &str) -> bool {
+    let text = format!("s3://metadata/?{key}=value");
+    let result = UriRedactor::default().redact_uri_str(&text);
+    result.has_sensitive_component(qubit_redact::UriComponent::Query)
+        || result.status() == qubit_redact::UriRedactionStatus::Invalid
 }
