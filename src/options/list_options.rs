@@ -13,6 +13,7 @@ use crate::{
     FsOperation,
     FsResult,
     RelativePath,
+    SymlinkPolicy,
 };
 
 /// Options controlling directory or prefix listing.
@@ -21,8 +22,8 @@ use crate::{
 pub struct ListOptions {
     /// Whether listing should recurse into child containers.
     recursive: bool,
-    /// Whether symbolic links should be followed.
-    follow_symlinks: bool,
+    /// Optional symbolic-link policy overriding the filesystem default.
+    symlink_policy: Option<SymlinkPolicy>,
     /// Whether entries should include metadata when available.
     include_metadata: bool,
     /// Optional provider page size hint.
@@ -52,19 +53,19 @@ impl ListOptions {
         self.recursive
     }
 
-    /// Returns a copy with symlink traversal replaced.
+    /// Returns a copy with the symbolic-link policy override replaced.
     #[inline]
     #[must_use]
-    pub const fn with_follow_symlinks(mut self, follow: bool) -> Self {
-        self.follow_symlinks = follow;
+    pub const fn with_symlink_policy(mut self, policy: SymlinkPolicy) -> Self {
+        self.symlink_policy = Some(policy);
         self
     }
 
-    /// Returns whether symbolic links are followed.
+    /// Returns the optional symbolic-link policy override.
     #[inline(always)]
     #[must_use]
-    pub const fn follow_symlinks(&self) -> bool {
-        self.follow_symlinks
+    pub const fn symlink_policy_override(&self) -> Option<SymlinkPolicy> {
+        self.symlink_policy
     }
 
     /// Returns a copy with metadata inclusion replaced.

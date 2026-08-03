@@ -21,6 +21,7 @@ use crate::{
     PathConstraints,
     PathForm,
     PathSemantics,
+    SymlinkPolicy,
 };
 
 /// Immutable construction-time properties cached by a filesystem facade.
@@ -34,6 +35,8 @@ pub struct FileSystemProperties {
     limits: FileSystemLimits,
     /// Accepted logical path forms.
     path_constraints: PathConstraints,
+    /// Provider-declared symbolic-link traversal policy.
+    symlink_policy: SymlinkPolicy,
 }
 
 impl FileSystemProperties {
@@ -46,6 +49,7 @@ impl FileSystemProperties {
     /// - `capabilities`: Capabilities explicitly advertised by the provider.
     /// - `limits`: Provider resource and operation limits.
     /// - `path_constraints`: Accepted absolute and relative path forms.
+    /// - `symlink_policy`: Provider-declared symbolic-link traversal policy.
     ///
     /// # Returns
     /// A validated immutable property snapshot.
@@ -60,12 +64,14 @@ impl FileSystemProperties {
         capabilities: FileSystemCapabilities,
         limits: FileSystemLimits,
         path_constraints: PathConstraints,
+        symlink_policy: SymlinkPolicy,
     ) -> FsResult<Self> {
         let properties = Self {
             info,
             capabilities,
             limits,
             path_constraints,
+            symlink_policy,
         };
         properties.validate()?;
         Ok(properties)
@@ -109,6 +115,13 @@ impl FileSystemProperties {
     #[must_use]
     pub const fn path_constraints(&self) -> &PathConstraints {
         &self.path_constraints
+    }
+
+    /// Returns the provider-declared symbolic-link traversal policy.
+    #[inline(always)]
+    #[must_use = "the filesystem symbolic-link policy must be used"]
+    pub const fn symlink_policy(&self) -> SymlinkPolicy {
+        self.symlink_policy
     }
 
     /// Defensively validates a provider-supplied snapshot at the facade

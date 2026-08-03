@@ -23,6 +23,7 @@ use crate::copy::{
     is_file_kind_supported,
     validate_stream_copy_length_limits,
 };
+use crate::rename::validate_rename_outcome;
 use crate::spi::{
     CopyAttempt,
     CopyRequest,
@@ -186,7 +187,12 @@ impl FileSystem {
         match self.spi.try_copy(CopyRequest::new(
             source,
             target,
-            ResolvedCopyOptions::new(options.clone()),
+            ResolvedCopyOptions::new(
+                options.clone(),
+                options
+                    .symlink_policy_override()
+                    .unwrap_or(self.properties.symlink_policy()),
+            ),
         )) {
             Ok(CopyAttempt::Completed(outcome)) => {
                 self.verify_completed_copy(outcome, &options, source, target)
@@ -259,57 +265,20 @@ impl FileSystem {
             target,
             ResolvedRenameOptions::new(options.clone()),
         )) {
-            Ok(outcome)
-                if options.atomicity() == crate::AtomicityRequirement::Required
-                    && outcome.atomicity() != crate::AchievedAtomicity::Atomic =>
-            {
-                Err(RenameFailure::new(
+            Ok(outcome) => match validate_rename_outcome(
+                &outcome, &options, source, target,
+            ) {
+                Some(violation) => Err(RenameFailure::new(
                     self.contract_error(
                         source,
                         FsOperation::Rename,
-                        "provider reported non-atomic success for an atomic-required rename",
+                        violation.message,
                     )
                     .with_target(target.clone()),
-                    RenameFailureState::Renamed,
-                ))
-            }
-            Ok(outcome) if outcome.method() == crate::PublicationMethod::CopyThenDelete => {
-                Err(RenameFailure::new(
-                    self.contract_error(
-                        source,
-                        FsOperation::Rename,
-                        "provider returned copy-then-delete for rename",
-                    )
-                    .with_target(target.clone()),
-                    RenameFailureState::Renamed,
-                ))
-            }
-            Ok(outcome)
-                if options.durability() == crate::DurabilityRequirement::Required
-                    && !outcome.durable() =>
-            {
-                Err(RenameFailure::new(
-                    self.contract_error(
-                        source,
-                        FsOperation::Rename,
-                        "provider reported non-durable success for a durability-required rename",
-                    )
-                    .with_target(target.clone()),
-                    RenameFailureState::Renamed,
-                ))
-            }
-            Ok(outcome) if outcome.source() != source || outcome.target() != target => {
-                Err(RenameFailure::new(
-                    self.contract_error(
-                        source,
-                        FsOperation::Rename,
-                        "provider returned a rename outcome with different identities",
-                    )
-                    .with_target(target.clone()),
-                    RenameFailureState::Indeterminate,
-                ))
-            }
-            Ok(outcome) => Ok(outcome),
+                    violation.state,
+                )),
+                None => Ok(outcome),
+            },
             Err(failure) => {
                 let (error, state) = failure.into_parts();
                 Err(RenameFailure::new(
@@ -345,7 +314,12 @@ impl FileSystem {
         self.spi
             .list(ListRequest::new(
                 path,
-                ResolvedListOptions::new(options.clone()),
+                ResolvedListOptions::new(
+                    options.clone(),
+                    options
+                        .symlink_policy_override()
+                        .unwrap_or(self.properties.symlink_policy()),
+                ),
             ))
             .map(|opened| {
                 DirectoryStream::new(

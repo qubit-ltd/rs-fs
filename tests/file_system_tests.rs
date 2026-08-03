@@ -52,6 +52,7 @@ use qubit_fs::{
     Path,
     PathConstraints,
     RenameOutcome,
+    SymlinkPolicy,
 };
 
 struct CountingSpi {
@@ -178,6 +179,7 @@ fn test_file_system_from_spi_caches_properties_snapshot() {
         FileSystemCapabilities::new(),
         FileSystemLimits::unknown(),
         PathConstraints::absolute(),
+        SymlinkPolicy::Reject,
     );
     let properties = properties.expect("properties should be valid");
     let property_calls = Arc::new(AtomicUsize::new(0));
@@ -218,6 +220,7 @@ fn test_stat_rejects_path_with_different_semantics_before_spi_call() {
         FileSystemCapabilities::new(),
         FileSystemLimits::unknown(),
         PathConstraints::either(),
+        SymlinkPolicy::Reject,
     )
     .expect("properties should be valid");
     let stat_calls = Arc::new(AtomicUsize::new(0));
@@ -255,6 +258,7 @@ fn test_stat_rejects_provider_response_for_a_different_path() {
         FileSystemCapabilities::new(),
         FileSystemLimits::unknown(),
         PathConstraints::absolute(),
+        SymlinkPolicy::Reject,
     )
     .expect("properties should be valid");
     let filesystem = FileSystem::from_spi(CountingSpi {
@@ -287,6 +291,7 @@ fn test_exists_maps_not_found_only_and_contextualizes_other_errors() {
         FileSystemCapabilities::new(),
         FileSystemLimits::unknown(),
         PathConstraints::absolute(),
+        SymlinkPolicy::Reject,
     )
     .expect("properties should be valid");
     let path = Path::parse("/requested").expect("path should parse");
@@ -339,6 +344,7 @@ fn test_direct_sync_provider_failures_are_enriched() {
             .with(qubit_fs::FileSystemCapability::AtomicRename),
         FileSystemLimits::unknown(),
         PathConstraints::absolute(),
+        SymlinkPolicy::Reject,
     )
     .expect("properties should be valid");
     let file_system = FileSystem::from_spi(CountingSpi {
@@ -397,6 +403,7 @@ fn test_sync_rename_returns_successful_provider_outcome() {
             .with(qubit_fs::FileSystemCapability::AtomicRename),
         FileSystemLimits::unknown(),
         PathConstraints::absolute(),
+        SymlinkPolicy::Reject,
     )
     .expect("properties should be valid");
     let file_system = FileSystem::from_spi(CountingSpi {
@@ -437,6 +444,7 @@ fn test_sync_facade_rejects_unrequested_outcomes_and_same_path_mutations() {
             .with(qubit_fs::FileSystemCapability::AtomicRename),
         FileSystemLimits::unknown(),
         PathConstraints::absolute(),
+        SymlinkPolicy::Reject,
     )
     .expect("properties should be valid");
     let file_system = FileSystem::from_spi(CountingSpi {
@@ -492,6 +500,7 @@ fn test_sync_facade_requires_operation_capabilities_before_dispatch() {
         FileSystemCapabilities::new(),
         FileSystemLimits::unknown(),
         PathConstraints::absolute(),
+        SymlinkPolicy::Reject,
     )
     .expect("properties should be valid");
     let file_system = FileSystem::from_spi(CountingSpi {
