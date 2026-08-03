@@ -16,7 +16,10 @@ use std::fmt::{
 };
 
 use fluent_uri::Uri as FluentUri;
-use qubit_redact::UriRedactor;
+use qubit_redact::{
+    LogSafeText,
+    UriRedactor,
+};
 
 use crate::FsResult;
 
@@ -90,7 +93,7 @@ impl ConnectionUri {
 
     /// Renders a URI while preserving component order and masking sensitive
     /// values through the shared URI redactor.
-    fn redacted_text(&self) -> String {
+    fn redacted_text(&self) -> LogSafeText<'static> {
         UriRedactor::default()
             .redact_uri_str(self.parsed.as_str())
             .into_log_safe_text()
@@ -101,7 +104,7 @@ impl Display for ConnectionUri {
     /// Formats only the redacted connection URI.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
-        formatter.write_str(&self.redacted_text())
+        formatter.write_str(self.redacted_text().as_str())
     }
 }
 
@@ -109,9 +112,10 @@ impl Debug for ConnectionUri {
     /// Formats only the redacted connection URI for diagnostics.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
+        let redacted = self.redacted_text();
         formatter
             .debug_tuple("ConnectionUri")
-            .field(&self.redacted_text())
+            .field(&redacted.as_str())
             .finish()
     }
 }
