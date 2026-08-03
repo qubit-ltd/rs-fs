@@ -68,11 +68,13 @@ pub enum FileSystemCapability {
     DurableFileCopy = 24,
     /// Durable publication of a copied directory tree or prefix.
     DurableTreeCopy = 25,
+    /// Durable publication of a renamed resource.
+    DurableRename = 26,
 }
 
 impl FileSystemCapability {
     /// Stable list of every capability known by this crate version.
-    pub const ALL: [Self; 26] = [
+    pub const ALL: [Self; 27] = [
         Self::List,
         Self::Read,
         Self::RangeRead,
@@ -99,6 +101,7 @@ impl FileSystemCapability {
         Self::AtomicTreeCopy,
         Self::DurableFileCopy,
         Self::DurableTreeCopy,
+        Self::DurableRename,
     ];
 
     /// Returns the bit representing this capability in a capability set.

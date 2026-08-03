@@ -7,6 +7,7 @@
 // =============================================================================
 use qubit_fs::{
     AtomicityRequirement,
+    DurabilityRequirement,
     FileSystemCapabilities,
     FileSystemCapability,
     FsErrorKind,
@@ -17,14 +18,20 @@ use qubit_fs::{
 fn test_rename_options_full_configuration_and_default_are_usable() {
     let options = RenameOptions::default()
         .with_overwrite(true)
-        .with_atomicity(AtomicityRequirement::Required);
+        .with_atomicity(AtomicityRequirement::Required)
+        .with_durability(DurabilityRequirement::Preferred);
 
     assert!(options.overwrite());
     assert_eq!(AtomicityRequirement::Required, options.atomicity());
+    assert_eq!(DurabilityRequirement::Preferred, options.durability());
     assert!(!RenameOptions::default().overwrite());
     assert_eq!(
         AtomicityRequirement::Preferred,
         RenameOptions::default().atomicity(),
+    );
+    assert_eq!(
+        DurabilityRequirement::NotRequired,
+        RenameOptions::default().durability(),
     );
 }
 
@@ -46,6 +53,29 @@ fn required_rename_atomicity_fails_preflight_without_side_effects() {
             .validate_against(
                 FileSystemCapabilities::default()
                     .with(FileSystemCapability::AtomicRename),
+            )
+            .is_ok()
+    );
+}
+
+#[test]
+fn required_rename_durability_fails_without_provider_guarantee() {
+    let options = RenameOptions::default()
+        .with_durability(DurabilityRequirement::Required);
+
+    let error = options
+        .validate_against(FileSystemCapabilities::default())
+        .expect_err("missing durable rename guarantee should fail");
+    assert_eq!(FsErrorKind::RequirementNotMet, error.kind());
+    assert_eq!(
+        Some(FileSystemCapability::DurableRename),
+        error.required_capability(),
+    );
+    assert!(
+        options
+            .validate_against(
+                FileSystemCapabilities::default()
+                    .with(FileSystemCapability::DurableRename),
             )
             .is_ok()
     );
