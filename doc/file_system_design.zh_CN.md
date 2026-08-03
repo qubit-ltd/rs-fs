@@ -220,6 +220,7 @@ pub struct FileSystemProperties {
     capabilities: FileSystemCapabilities,
     limits: FileSystemLimits,
     path_constraints: PathConstraints,
+    symlink_policy: SymlinkPolicy,
 }
 
 impl FileSystemProperties {
@@ -228,6 +229,7 @@ impl FileSystemProperties {
         capabilities: FileSystemCapabilities,
         limits: FileSystemLimits,
         path_constraints: PathConstraints,
+        symlink_policy: SymlinkPolicy,
     ) -> FsResult<Self>;
 }
 ```
@@ -240,6 +242,9 @@ impl FileSystemProperties {
 - unknown、inapplicable、unbounded 和有限 limit 必须明确区分。
 - `PathConstraints` 以稳定数据声明 provider-specific path 限制，门面可在 I/O
   前统一执行；平台编码算法不进入该值对象。
+- `SymlinkPolicy` 声明 provider 默认的符号链接遍历边界；`ListOptions` 与
+  `CopyOptions` 可按操作覆盖。抽象层只承诺拒绝或在当前 filesystem 内跟随，不能把
+  host/rooted 的平台策略直接暴露给上层。
 
 字段私有，provider 通过 `FileSystemProperties::new` 构造。该方法检查属性内部一致性；
 `FileSystem::from_spi` 在 SPI trust boundary 再次执行防御性校验。

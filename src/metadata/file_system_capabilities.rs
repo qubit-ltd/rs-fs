@@ -138,7 +138,8 @@ impl FileSystemCapabilities {
     #[inline]
     pub fn iter(&self) -> impl Iterator<Item = FileSystemCapability> + '_ {
         FileSystemCapability::ALL
-            .into_iter()
+            .iter()
+            .copied()
             .filter(|capability| self.contains(*capability))
     }
 

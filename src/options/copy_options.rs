@@ -19,6 +19,7 @@ use crate::{
     FsOperation,
     MetadataPreservePolicy,
     ServerSidePreference,
+    SymlinkPolicy,
 };
 
 /// Options controlling file, object, or tree copy operations.
@@ -33,8 +34,8 @@ pub struct CopyOptions {
     preserve_metadata: MetadataPreservePolicy,
     /// Server-side copy preference.
     server_side: ServerSidePreference,
-    /// Whether symbolic links should be followed.
-    follow_symlinks: bool,
+    /// Optional symbolic-link policy overriding the filesystem default.
+    symlink_policy: Option<SymlinkPolicy>,
     /// Whether missing destination parents should be created.
     create_parent: bool,
     /// Whether tree copy should continue after per-entry failures.
@@ -112,19 +113,19 @@ impl CopyOptions {
         self.server_side
     }
 
-    /// Returns a copy with the symlink policy replaced.
+    /// Returns a copy with the symbolic-link policy override replaced.
     #[inline]
     #[must_use]
-    pub const fn with_follow_symlinks(mut self, follow: bool) -> Self {
-        self.follow_symlinks = follow;
+    pub const fn with_symlink_policy(mut self, policy: SymlinkPolicy) -> Self {
+        self.symlink_policy = Some(policy);
         self
     }
 
-    /// Returns whether symbolic links are followed.
+    /// Returns the optional symbolic-link policy override.
     #[inline(always)]
     #[must_use]
-    pub const fn follow_symlinks(&self) -> bool {
-        self.follow_symlinks
+    pub const fn symlink_policy_override(&self) -> Option<SymlinkPolicy> {
+        self.symlink_policy
     }
 
     /// Returns a copy with parent creation replaced.
@@ -308,7 +309,7 @@ impl Default for CopyOptions {
             conflict: CopyConflictPolicy::Fail,
             preserve_metadata: MetadataPreservePolicy::None,
             server_side: ServerSidePreference::Disable,
-            follow_symlinks: false,
+            symlink_policy: None,
             create_parent: false,
             continue_on_error: false,
             atomicity: AtomicityRequirement::NotRequired,

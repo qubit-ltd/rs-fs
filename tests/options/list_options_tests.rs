@@ -10,19 +10,23 @@ use qubit_fs::{
     FsErrorKind,
     FsOperation,
     ListOptions,
+    SymlinkPolicy,
 };
 
 #[test]
 fn test_list_options_full_configuration_is_usable() {
     let options = ListOptions::default()
         .with_recursive(true)
-        .with_follow_symlinks(true)
+        .with_symlink_policy(SymlinkPolicy::FollowWithinFileSystem)
         .with_include_metadata(true)
         .with_page_size(Some(10))
         .with_prefix(Some("a".to_owned()));
 
     assert!(options.recursive());
-    assert!(options.follow_symlinks());
+    assert_eq!(
+        Some(SymlinkPolicy::FollowWithinFileSystem),
+        options.symlink_policy_override(),
+    );
     assert!(options.include_metadata());
     assert_eq!(Some(10), options.page_size());
     assert_eq!(Some("a"), options.prefix());

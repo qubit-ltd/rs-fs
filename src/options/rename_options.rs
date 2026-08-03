@@ -103,8 +103,8 @@ impl RenameOptions {
     /// - `capabilities`: Stable capabilities of the configured filesystem.
     ///
     /// # Errors
-    /// Returns [`FsErrorKind::RequirementNotMet`] when atomic rename is
-    /// required but not guaranteed.
+    /// Returns [`FsErrorKind::RequirementNotMet`] when required atomic or
+    /// durable rename publication is not guaranteed.
     pub fn validate_against(
         &self,
         capabilities: FileSystemCapabilities,

@@ -21,6 +21,7 @@ use crate::{
     FsErrorKind,
     FsOperation,
     Path,
+    SymlinkPolicy,
 };
 
 use super::internal::CopyCancellationGuard;
@@ -49,12 +50,13 @@ impl AsyncCopyOperation {
         source: Path,
         target: Path,
         options: CopyOptions,
+        symlink_policy: SymlinkPolicy,
     ) -> Self {
         Self {
             file_system,
             source,
             target,
-            options: ResolvedCopyOptions::new(options),
+            options: ResolvedCopyOptions::new(options, symlink_policy),
             state: AsyncCopyOperationState::Ready,
             writer: None,
         }

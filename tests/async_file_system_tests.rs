@@ -51,6 +51,7 @@ use qubit_fs::{
     PathSemantics,
     RenameFailureState,
     RenameOutcome,
+    SymlinkPolicy,
 };
 
 struct PropertiesOnlySpi;
@@ -68,6 +69,7 @@ impl AsyncFileSystemSpi for PropertiesOnlySpi {
                 .with(qubit_fs::FileSystemCapability::Copy),
             FileSystemLimits::unknown(),
             PathConstraints::absolute(),
+            SymlinkPolicy::Reject,
         )
         .expect("test properties should be valid")
     }

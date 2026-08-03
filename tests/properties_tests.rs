@@ -20,6 +20,7 @@ use qubit_fs::{
     PathConstraints,
     PathForm,
     PathSemantics,
+    SymlinkPolicy,
 };
 
 /// Builds the smallest valid properties snapshot for validation tests.
@@ -34,6 +35,7 @@ fn test_properties(path_semantics: PathSemantics) -> FileSystemProperties {
         FileSystemCapabilities::new(),
         FileSystemLimits::unknown(),
         PathConstraints::either(),
+        SymlinkPolicy::Reject,
     )
     .expect("properties should validate")
 }
@@ -55,6 +57,7 @@ fn test_file_system_properties_rejects_invalid_limit_value() {
             FileSystemCapabilities::new(),
             limits,
             PathConstraints::either(),
+            SymlinkPolicy::Reject,
         )
         .is_err()
     );
@@ -66,6 +69,7 @@ fn test_file_system_properties_exposes_immutable_values() {
     let properties = test_properties(PathSemantics::Hierarchical);
     assert_eq!(properties.path_constraints().form(), PathForm::Either);
     assert_eq!(properties.info().provider_id(), "test-provider");
+    assert_eq!(SymlinkPolicy::Reject, properties.symlink_policy());
 }
 
 /// Verifies absolute-only constraints reject relative logical paths.
@@ -103,6 +107,7 @@ fn test_file_system_properties_does_not_derive_copy_from_read_and_write() {
             .with(FileSystemCapability::Write),
         FileSystemLimits::unknown(),
         PathConstraints::absolute(),
+        SymlinkPolicy::FollowWithinFileSystem,
     )
     .expect("properties should validate");
     assert!(
@@ -129,6 +134,7 @@ fn test_file_system_properties_exposes_limits_and_capabilities() {
         capabilities,
         limits,
         PathConstraints::relative(),
+        SymlinkPolicy::Reject,
     )
     .expect("properties should validate");
 
@@ -153,6 +159,7 @@ fn test_file_system_properties_rejects_invalid_capabilities_and_constraints() {
                 .with(FileSystemCapability::AtomicRename),
             FileSystemLimits::unknown(),
             PathConstraints::either(),
+            SymlinkPolicy::Reject,
         )
         .is_err()
     );
@@ -170,6 +177,7 @@ fn test_file_system_properties_rejects_invalid_capabilities_and_constraints() {
                 .with(FileSystemCapability::DurableFileCopy),
             FileSystemLimits::unknown(),
             PathConstraints::either(),
+            SymlinkPolicy::Reject,
         )
         .is_err()
     );
@@ -185,6 +193,7 @@ fn test_file_system_properties_rejects_invalid_capabilities_and_constraints() {
             FileSystemCapabilities::new(),
             FileSystemLimits::unknown(),
             PathConstraints::absolute(),
+            SymlinkPolicy::Reject,
         )
         .is_err()
     );

@@ -82,6 +82,7 @@ use qubit_fs::{
     RenameFailureState,
     RenameOptions,
     RenameOutcome,
+    SymlinkPolicy,
     WriteFailure,
     WriteFailureState,
     WriteOptions,
@@ -203,6 +204,7 @@ impl StreamCopyFallbackSpi {
             capabilities,
             FileSystemLimits::unknown(),
             PathConstraints::absolute(),
+            SymlinkPolicy::Reject,
         )
         .expect("test properties should be valid")
     }
