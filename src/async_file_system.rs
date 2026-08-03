@@ -440,6 +440,20 @@ impl AsyncFileSystem {
                     target,
                 ))
             }
+            Ok(outcome)
+                if options.durability() == crate::DurabilityRequirement::Required
+                    && !outcome.durable() =>
+            {
+                Err(self.contextual_rename_failure(
+                    self.contract_error(
+                        source,
+                        "provider reported non-durable success for a durability-required rename",
+                    ),
+                    RenameFailureState::Renamed,
+                    source,
+                    target,
+                ))
+            }
             Ok(outcome) if outcome.source() != source || outcome.target() != target => Err(self
                 .contextual_rename_failure(
                     self.contract_error(
