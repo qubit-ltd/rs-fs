@@ -82,6 +82,15 @@ fn test_connection_uri_redacts_percent_encoded_sensitive_query_key() {
     assert!(!rendered.contains("raw-secret"));
 }
 
+/// Verifies undecodable percent-encoded query keys fail closed.
+#[test]
+fn test_connection_uri_redacts_query_with_invalid_utf8_key() {
+    let uri = ConnectionUri::parse("s3://bucket/key?%FFtoken=raw-secret")
+        .expect("connection URI should parse");
+    let rendered = uri.to_string();
+    assert!(!rendered.contains("raw-secret"));
+}
+
 /// Verifies controlled inspection receives the original URI while ordinary
 /// formatting remains redacted and preserves a URI without authority.
 #[test]
