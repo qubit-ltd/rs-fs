@@ -71,6 +71,7 @@ use qubit_fs::{
     RenameFailureState,
     RenameOutcome,
     ServerSidePreference,
+    SymlinkPolicy,
     WriteOutcome,
 };
 use qubit_io::{
@@ -208,6 +209,7 @@ fn properties(
             )
         }),
         PathConstraints::absolute(),
+        SymlinkPolicy::Reject,
     )
     .expect("properties should be valid")
 }

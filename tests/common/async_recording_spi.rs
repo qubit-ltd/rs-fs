@@ -74,6 +74,7 @@ use qubit_fs::{
     PublicationMethod,
     RenameFailureState,
     RenameOutcome,
+    SymlinkPolicy,
     WriteFailure,
     WriteFailureState,
     WriteOutcome,
@@ -273,6 +274,7 @@ impl AsyncRecordingSpi {
                         .unwrap_or(qubit_fs::FileSystemLimit::Unknown),
                 ),
             PathConstraints::absolute(),
+            SymlinkPolicy::Reject,
         )
         .expect("test properties should be valid")
     }

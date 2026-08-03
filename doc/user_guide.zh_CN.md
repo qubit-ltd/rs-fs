@@ -27,8 +27,10 @@ qubit-fs-registry ───────────► provider 发现、配置�
 
 一个 `FileSystem` 或 `AsyncFileSystem` 代表一次完成配置的 filesystem。endpoint、bucket、
 root、region 或 credential profile 不同，同一 provider 也可以产生多个门面。
-`FileSystemProperties` 是 identity、capability、limit 与路径约束的不可变快照，读取它不执行
-I/O。
+`FileSystemProperties` 是 identity、capability、limit、路径约束与 provider 符号链接策略的不可变
+快照，读取它不执行 I/O。`ListOptions` 和 `CopyOptions` 可以按操作覆盖
+`SymlinkPolicy`；可移植抽象提供 `Reject` 与 `FollowWithinFileSystem`，provider 负责把后者映射到
+自己的 namespace 或 rooted 边界。
 
 ### 名称、地址与 secret
 
