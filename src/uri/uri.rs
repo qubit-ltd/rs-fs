@@ -126,12 +126,15 @@ pub(crate) fn reject_secrets(parsed: &FluentUri<String>) -> FsResult<()> {
 }
 
 /// Classifies one raw query pair after strictly decoding only its key.
+///
+/// Undecodable keys are treated as sensitive so malformed or non-UTF-8
+/// encodings cannot bypass the secret-free URI boundary.
 pub(crate) fn query_pair_is_sensitive(pair: &str) -> bool {
     let raw_key = pair.split_once('=').map_or(pair, |(key, _)| key);
     let Some(key) =
         qubit_redact::uri::decode_percent_encoded_field_name(raw_key)
     else {
-        return false;
+        return true;
     };
     let policy = RedactionPolicy::default();
     policy.sensitivity_for(&key).is_some()
