@@ -53,6 +53,7 @@ use qubit_fs::{
     PathConstraints,
     RenameFailureState,
     RenameOutcome,
+    SymlinkPolicy,
 };
 
 struct ReaderSpi {
@@ -72,6 +73,7 @@ impl FileSystemSpi for ReaderSpi {
                 .with(qubit_fs::FileSystemCapability::Read),
             FileSystemLimits::unknown(),
             PathConstraints::absolute(),
+            SymlinkPolicy::Reject,
         )
         .expect("valid properties")
     }
