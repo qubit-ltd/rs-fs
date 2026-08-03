@@ -32,6 +32,7 @@ use qubit_fs::{
     AtomicityRequirement,
     CreateDirectoryOutcome,
     DeleteOutcome,
+    DurabilityRequirement,
     FileSystem,
     FileSystemCapabilities,
     FileSystemCapability,
@@ -60,6 +61,8 @@ struct RenameSpi {
     atomicity: AchievedAtomicity,
     method: PublicationMethod,
     wrong_identity: bool,
+    durable_capability: bool,
+    durable_outcome: bool,
     calls: Arc<Mutex<Vec<&'static str>>>,
 }
 /// Builds a rename-capable facade and call probe.
@@ -71,6 +74,8 @@ fn filesystem(
         atomicity,
         method: PublicationMethod::AtomicRename,
         wrong_identity: false,
+        durable_capability: false,
+        durable_outcome: false,
         calls: Arc::clone(&calls),
     })
     .expect("facade should construct");
@@ -91,15 +96,20 @@ fn unused() -> FsError {
 /// Implements a provider that can only rename.
 impl FileSystemSpi for RenameSpi {
     fn properties(&self) -> FileSystemProperties {
+        let mut capabilities = FileSystemCapabilities::new()
+            .with(FileSystemCapability::Rename)
+            .with(FileSystemCapability::AtomicRename);
+        if self.durable_capability {
+            capabilities =
+                capabilities.with(FileSystemCapability::DurableRename);
+        }
         FileSystemProperties::new(
             FileSystemInfo::new(
                 FileSystemId::new("rename-recording").expect("valid id"),
                 "rename-recording",
                 qubit_fs::PathSemantics::Hierarchical,
             ),
-            FileSystemCapabilities::new()
-                .with(FileSystemCapability::Rename)
-                .with(FileSystemCapability::AtomicRename),
+            capabilities,
             FileSystemLimits::unknown(),
             PathConstraints::absolute(),
         )
@@ -169,7 +179,8 @@ impl FileSystemSpi for RenameSpi {
             },
             self.atomicity,
             self.method,
-        ))
+        )
+        .with_durable(self.durable_outcome))
     }
     fn create_temp_file(
         &self,
@@ -183,6 +194,35 @@ impl FileSystemSpi for RenameSpi {
     ) -> FsResult<OpenedTempDirectory> {
         Err(unused())
     }
+}
+
+/// Verifies a provider durability downgrade is rejected after publication.
+#[test]
+fn test_rename_durability_downgrade_is_typed_contract_failure() {
+    let filesystem = FileSystem::from_spi(RenameSpi {
+        atomicity: AchievedAtomicity::Atomic,
+        method: PublicationMethod::AtomicRename,
+        wrong_identity: false,
+        durable_capability: true,
+        durable_outcome: false,
+        calls: Arc::new(Mutex::new(Vec::new())),
+    })
+    .expect("facade should construct");
+
+    let failure = filesystem
+        .rename(
+            &path("/source"),
+            &path("/target"),
+            RenameOptions::default()
+                .with_durability(DurabilityRequirement::Required),
+        )
+        .expect_err("downgraded required durability must fail");
+
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind(),
+    );
+    assert_eq!(RenameFailureState::Renamed, failure.state());
 }
 /// Verifies the facade attaches validated source and target identities to a
 /// primitive rename result.
@@ -235,6 +275,8 @@ fn test_rename_rejects_copy_then_delete_provider_outcome() {
         atomicity: AchievedAtomicity::Atomic,
         method: PublicationMethod::CopyThenDelete,
         wrong_identity: false,
+        durable_capability: false,
+        durable_outcome: false,
         calls: Arc::clone(&calls),
     })
     .expect("facade should construct");
@@ -261,6 +303,8 @@ fn test_rename_rejects_provider_outcome_with_wrong_identity() {
         atomicity: AchievedAtomicity::Atomic,
         method: PublicationMethod::AtomicRename,
         wrong_identity: true,
+        durable_capability: false,
+        durable_outcome: false,
         calls: Arc::clone(&calls),
     })
     .expect("facade should construct");

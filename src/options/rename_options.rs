@@ -9,6 +9,7 @@
 
 use crate::{
     AtomicityRequirement,
+    DurabilityRequirement,
     FileSystemCapabilities,
     FileSystemCapability,
     FsError,
@@ -24,6 +25,8 @@ pub struct RenameOptions {
     overwrite: bool,
     /// Required atomicity level.
     atomicity: AtomicityRequirement,
+    /// Required destination durability level.
+    durability: DurabilityRequirement,
 }
 
 impl Default for RenameOptions {
@@ -32,6 +35,7 @@ impl Default for RenameOptions {
         Self {
             overwrite: false,
             atomicity: AtomicityRequirement::Preferred,
+            durability: DurabilityRequirement::NotRequired,
         }
     }
 }
@@ -49,6 +53,13 @@ impl RenameOptions {
     #[must_use]
     pub const fn atomicity(&self) -> AtomicityRequirement {
         self.atomicity
+    }
+
+    /// Returns the required destination durability level.
+    #[inline(always)]
+    #[must_use]
+    pub const fn durability(&self) -> DurabilityRequirement {
+        self.durability
     }
 
     /// Replaces whether the destination may be overwritten.
@@ -70,7 +81,19 @@ impl RenameOptions {
         self
     }
 
-    /// Validates required atomicity against a configured capability snapshot.
+    /// Replaces the required destination durability level.
+    #[inline]
+    #[must_use]
+    pub const fn with_durability(
+        mut self,
+        durability: DurabilityRequirement,
+    ) -> Self {
+        self.durability = durability;
+        self
+    }
+
+    /// Validates required atomicity and durability against a configured
+    /// capability snapshot.
     ///
     /// Providers should call this before making any source or destination
     /// change. Preferred and not-required requests always pass preflight and
@@ -95,6 +118,16 @@ impl RenameOptions {
                 "atomic rename is required but not guaranteed",
             )
             .with_required_capability(FileSystemCapability::AtomicRename));
+        }
+        if self.durability() == DurabilityRequirement::Required
+            && !capabilities.contains(FileSystemCapability::DurableRename)
+        {
+            return Err(FsError::new(
+                FsErrorKind::RequirementNotMet,
+                FsOperation::Rename,
+                "durable rename is required but not guaranteed",
+            )
+            .with_required_capability(FileSystemCapability::DurableRename));
         }
         Ok(())
     }
