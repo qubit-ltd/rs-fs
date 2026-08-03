@@ -109,7 +109,7 @@ pub(crate) fn reject_secrets(parsed: &FluentUri<String>) -> FsResult<()> {
     if parsed.fragment().is_some() {
         return Err(invalid_uri("URI fragments are not supported"));
     }
-    let result = UriRedactor::default().redact_uri_str(parsed.as_str());
+    let result = UriRedactor::default().inspect_uri_str(parsed.as_str());
     if result.status() == qubit_redact::UriRedactionStatus::Invalid {
         return Err(invalid_uri("URI contains invalid encoded components"));
     }
@@ -121,8 +121,9 @@ pub(crate) fn reject_secrets(parsed: &FluentUri<String>) -> FsResult<()> {
 
 /// Classifies a raw metadata key through the shared URI query policy.
 pub(crate) fn query_pair_is_sensitive(key: &str) -> bool {
-    let text = format!("s3://metadata/?{key}=value");
-    let result = UriRedactor::default().redact_uri_str(&text);
-    result.has_sensitive_component(qubit_redact::UriComponent::Query)
-        || result.status() == qubit_redact::UriRedactionStatus::Invalid
+    UriRedactor::default()
+        .policy()
+        .redaction_policy()
+        .sensitivity_for(key)
+        .is_some()
 }
