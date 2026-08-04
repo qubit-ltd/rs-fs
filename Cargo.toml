@@ -29,7 +29,7 @@ name = "qubit_fs"
 doctest = true
 
 [features]
-default = ["async"]
+default = []
 async = []
 
 [dependencies]

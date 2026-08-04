@@ -5,14 +5,12 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Baseline measurements for the synchronous stream-copy fallback loop.
+//! Public facade prefix-read benchmark with a deterministic provider stream.
 
-use std::io::{
-    Cursor,
-    Read,
-    Write,
+use std::{
+    io::Cursor,
+    sync::Arc,
 };
-use std::time::Duration;
 
 use criterion::{
     BenchmarkId,
@@ -22,46 +20,106 @@ use criterion::{
     criterion_group,
     criterion_main,
 };
+use qubit_fs::spi::{
+    FileSystemSpi,
+    OpenReaderRequest,
+    OpenedReader,
+    StatRequest,
+    StatResponse,
+};
+use qubit_fs::{
+    FileKind,
+    FileMetadata,
+    FileSystem,
+    FileSystemCapabilities,
+    FileSystemId,
+    FileSystemInfo,
+    FileSystemLimits,
+    FileSystemProperties,
+    FsResult,
+    OpenedFileInfo,
+    Path,
+    PathConstraints,
+    PathSemantics,
+    SymlinkPolicy,
+};
 
-/// Copies bytes with the fallback's current fixed 8 KiB transfer buffer.
-fn copy_with_buffer(input: &[u8], buffer_size: usize) -> usize {
-    let mut reader = Cursor::new(input);
-    let mut writer = Vec::with_capacity(input.len());
-    let mut buffer = vec![0_u8; buffer_size];
-    loop {
-        let read = reader
-            .read(&mut buffer)
-            .expect("in-memory benchmark read should succeed");
-        if read == 0 {
-            break;
-        }
-        writer
-            .write_all(&buffer[..read])
-            .expect("in-memory benchmark write should succeed");
-    }
-    writer.len()
+struct BenchmarkSpi {
+    payload: Arc<Vec<u8>>,
+    properties: FileSystemProperties,
 }
 
-/// Measures representative payload sizes and candidate buffer sizes before
-/// changing the production fallback loop.
+impl BenchmarkSpi {
+    fn new(payload: Vec<u8>) -> Self {
+        let properties = FileSystemProperties::new(
+            FileSystemInfo::new(
+                FileSystemId::new("bench").expect("benchmark id is valid"),
+                "bench",
+                PathSemantics::Hierarchical,
+            ),
+            FileSystemCapabilities::new()
+                .with(qubit_fs::FileSystemCapability::Read),
+            FileSystemLimits::unknown(),
+            PathConstraints::absolute(),
+            SymlinkPolicy::Reject,
+        )
+        .expect("benchmark properties are valid");
+        Self {
+            payload: Arc::new(payload),
+            properties,
+        }
+    }
+}
+
+impl FileSystemSpi for BenchmarkSpi {
+    fn properties(&self) -> FileSystemProperties {
+        self.properties.clone()
+    }
+
+    fn stat(&self, request: StatRequest<'_>) -> FsResult<StatResponse> {
+        Ok(StatResponse::new(
+            request.path().clone(),
+            FileMetadata::new(FileKind::File)
+                .with_len(Some(self.payload.len() as u64)),
+        ))
+    }
+
+    fn open_reader(
+        &self,
+        request: OpenReaderRequest<'_>,
+    ) -> FsResult<OpenedReader> {
+        Ok(OpenedReader::new(
+            OpenedFileInfo::new(
+                self.properties.info().id().clone(),
+                request.path().clone(),
+            ),
+            Box::new(Cursor::new(self.payload.as_ref().clone())),
+        ))
+    }
+}
+
 fn stream_copy_fallback(c: &mut Criterion) {
-    let mut group = c.benchmark_group("stream_copy_fallback");
-    group.sample_size(10);
-    group.warm_up_time(Duration::from_millis(100));
-    group.measurement_time(Duration::from_millis(500));
+    let path = Path::parse("/payload").expect("benchmark path is valid");
+    let mut group = c.benchmark_group("facade_read_prefix");
     for size in [1_usize << 10, 1_usize << 20, 1_usize << 26] {
-        let input = vec![0xA5_u8; size];
+        let filesystem =
+            FileSystem::from_spi(BenchmarkSpi::new(vec![0xA5; size]))
+                .expect("benchmark facade should construct");
         group.throughput(Throughput::Bytes(size as u64));
-        for buffer_size in [8 * 1024, 64 * 1024, 1024 * 1024] {
+        for max_bytes in [8 * 1024, 64 * 1024, 1024 * 1024] {
             group.bench_with_input(
-                BenchmarkId::new("buffer", buffer_size),
-                &input,
-                |bench, input| {
+                BenchmarkId::new("prefix", max_bytes),
+                &filesystem,
+                |bench, filesystem| {
                     bench.iter(|| {
-                        black_box(copy_with_buffer(
-                            black_box(input),
-                            buffer_size,
-                        ))
+                        let bytes = filesystem
+                            .read_prefix(
+                                black_box(&path),
+                                Default::default(),
+                                max_bytes,
+                            )
+                            .expect("benchmark prefix read should succeed");
+                        black_box(bytes.len());
                     });
                 },
             );

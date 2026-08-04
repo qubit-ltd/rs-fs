@@ -218,6 +218,37 @@ fn test_read_all_returns_bytes_and_enforces_maximum() {
     assert_eq!(vec![5], *read_requests.lock().expect("requests lock"));
 }
 
+/// Reads at most the requested prefix while allowing a larger source file.
+#[test]
+fn test_read_prefix_returns_bounded_bytes() {
+    let read_requests = Arc::new(Mutex::new(Vec::new()));
+    let file_system = FileSystem::from_spi(ReaderSpi {
+        wrong_opened_path: false,
+        read_requests: Arc::clone(&read_requests),
+    })
+    .expect("facade should open");
+    let requested = Path::parse("/requested").expect("valid path");
+
+    assert_eq!(
+        b"byt".as_slice(),
+        file_system
+            .read_prefix(&requested, Default::default(), 3)
+            .expect("prefix should read")
+            .as_slice()
+    );
+    read_requests.lock().expect("requests lock").clear();
+    assert!(
+        file_system
+            .read_prefix(&requested, Default::default(), 0)
+            .expect("zero prefix should open")
+            .is_empty()
+    );
+    assert!(
+        read_requests.lock().expect("requests lock").is_empty(),
+        "zero prefix should not issue a read"
+    );
+}
+
 /// Records the requested read slice while delegating byte transfer to a
 /// cursor.
 struct RecordingReader {

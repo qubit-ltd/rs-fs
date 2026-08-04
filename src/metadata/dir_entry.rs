@@ -39,11 +39,7 @@ impl DirEntry {
     #[inline]
     #[must_use]
     pub fn new(path: Path, kind: FileKind) -> Self {
-        let name = path
-            .components()
-            .last()
-            .map(|component| component.to_string())
-            .unwrap_or_default();
+        let name = path.file_name().unwrap_or_default().to_owned();
         Self {
             path,
             name,
