@@ -9,10 +9,7 @@
 //! Tests URI credential boundaries with an explicitly disabled redaction floor.
 
 use qubit_fs::Uri;
-use qubit_redact::{
-    GlobalRedactionConfig,
-    RedactionPolicy,
-};
+use qubit_redact::RedactionPolicy;
 
 /// Verifies an application that explicitly disables its global floor controls
 /// URI query-key classification without a hidden standard-policy fallback.
@@ -22,8 +19,7 @@ fn test_uri_query_policy_respects_explicitly_disabled_floor() {
         .disable_floor()
         .build()
         .expect("the policy without a floor is valid");
-    GlobalRedactionConfig::from_policy(policy)
-        .install()
+    RedactionPolicy::install_global(policy)
         .expect("this test process installs its default only once");
 
     Uri::parse("s3://bucket/key?token=raw-token").expect(
