@@ -123,7 +123,6 @@ pub(crate) fn reject_secrets(parsed: &FluentUri<String>) -> FsResult<()> {
 pub(crate) fn query_pair_is_sensitive(key: &str) -> bool {
     UriRedactor::default()
         .policy()
-        .redaction_policy()
         .sensitivity_for(key)
         .is_some()
 }
