@@ -27,6 +27,8 @@ pub struct PersistOptions {
     atomicity: AtomicityRequirement,
     /// Metadata preservation policy.
     preserve_metadata: MetadataPreservePolicy,
+    /// Whether a missing destination parent is created before publication.
+    create_parent: bool,
 }
 
 impl PersistOptions {
@@ -49,6 +51,21 @@ impl PersistOptions {
     #[must_use]
     pub const fn preserve_metadata(&self) -> MetadataPreservePolicy {
         self.preserve_metadata
+    }
+
+    /// Returns whether missing destination parents are created.
+    #[inline(always)]
+    #[must_use]
+    pub const fn creates_parent(&self) -> bool {
+        self.create_parent
+    }
+
+    /// Enables recursive creation of a missing destination parent.
+    #[inline]
+    #[must_use]
+    pub const fn with_create_parent(mut self) -> Self {
+        self.create_parent = true;
+        self
     }
 
     /// Replaces whether the destination may be overwritten.
@@ -113,6 +130,7 @@ impl Default for PersistOptions {
             overwrite: false,
             atomicity: AtomicityRequirement::Required,
             preserve_metadata: MetadataPreservePolicy::Portable,
+            create_parent: false,
         }
     }
 }
