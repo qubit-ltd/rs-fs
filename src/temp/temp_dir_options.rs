@@ -20,6 +20,8 @@ pub struct TempDirOptions {
     prefix: String,
     /// Name suffix.
     suffix: String,
+    /// Whether a missing parent directory is created.
+    create_parent: bool,
 }
 
 impl Default for TempDirOptions {
@@ -29,6 +31,7 @@ impl Default for TempDirOptions {
             parent: None,
             prefix: ".tmp-dir-".to_owned(),
             suffix: String::new(),
+            create_parent: false,
         }
     }
 }
@@ -53,6 +56,21 @@ impl TempDirOptions {
     #[must_use]
     pub fn suffix(&self) -> &str {
         &self.suffix
+    }
+
+    /// Returns whether missing parent directories are created.
+    #[inline(always)]
+    #[must_use]
+    pub const fn creates_parent(&self) -> bool {
+        self.create_parent
+    }
+
+    /// Enables recursive creation of a missing parent directory.
+    #[inline]
+    #[must_use]
+    pub const fn with_create_parent(mut self) -> Self {
+        self.create_parent = true;
+        self
     }
 
     /// Replaces the optional parent directory or prefix.
