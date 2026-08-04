@@ -25,6 +25,7 @@ fn test_directory_entry_path_can_be_compared_with_requested_root() {
         qubit_fs::FsErrorKind::ProviderContractViolation,
         error.kind()
     );
+    assert!(format!("{error}").contains("outside requested root"));
 }
 
 /// Verifies object-key listing accepts a root prefix with a trailing slash.
@@ -124,6 +125,7 @@ fn test_directory_stream_rejects_entry_outside_requested_prefix() {
         qubit_fs::FsErrorKind::ProviderContractViolation,
         error.kind()
     );
+    assert!(format!("{error}").contains("outside requested prefix"));
 }
 
 /// Verifies a nested prefix is evaluated before direct-child filtering.
@@ -177,6 +179,7 @@ fn test_directory_stream_rejects_nested_entry_for_direct_listing() {
         qubit_fs::FsErrorKind::ProviderContractViolation,
         error.kind()
     );
+    assert!(format!("{error}").contains("nested directory entry"));
     assert!(format!("{stream:?}").contains("DirectoryStream"));
 }
 
@@ -203,6 +206,7 @@ fn test_directory_stream_validates_metadata_and_prefix_descendants() {
         qubit_fs::FsErrorKind::ProviderContractViolation,
         error.kind()
     );
+    assert!(format!("{error}").contains("without requested metadata"));
 
     let descendant = qubit_fs::DirEntry::new(
         qubit_fs::Path::parse("/root/nested/item")
