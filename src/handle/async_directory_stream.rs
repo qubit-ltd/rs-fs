@@ -107,22 +107,21 @@ impl AsyncDirectoryStream {
                         self.terminal = true;
                         return Err(self.contextual_error(error));
                     }
-                    if directory_entry_validation::matches_options(
-                        &entry,
-                        &self.root,
-                        &self.options,
-                    ) {
-                        return Ok(Some(entry));
-                    }
-                    self.terminal = true;
-                    Err(self.contextual_error(
-                        FsError::new(
-                            FsErrorKind::ProviderContractViolation,
-                            FsOperation::ValidateProviderOutcome,
-                            "provider returned directory entry outside requested root",
+                    if let Err(message) =
+                        directory_entry_validation::matches_options(
+                            &entry,
+                            &self.root,
+                            &self.options,
                         )
-                        .with_path(self.root.clone()),
-                    ))
+                    {
+                        self.terminal = true;
+                        return Err(self.contextual_error(
+                            directory_entry_validation::option_error(
+                                &self.root, message,
+                            ),
+                        ));
+                    }
+                    Ok(Some(entry))
                 }
                 Ok(None) => {
                     self.terminal = true;

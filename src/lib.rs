@@ -52,6 +52,7 @@ mod facade_context;
 mod file_system;
 mod file_system_properties;
 mod handle;
+mod internal;
 mod metadata;
 mod options;
 mod path;
