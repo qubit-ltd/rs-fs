@@ -104,3 +104,28 @@ fn test_path_rejects_empty_nul_and_root_escape() {
         assert!(Path::parse(invalid).is_err(), "{invalid:?} must fail");
     }
 }
+
+/// Verifies file names distinguish roots, literal trailing separators, and
+/// ordinary final components.
+#[test]
+fn test_path_file_name_handles_root_and_trailing_separator() {
+    assert_eq!(None, Path::root().file_name());
+    assert_eq!(
+        Some("object"),
+        Path::parse("/bucket/object")
+            .expect("hierarchical path should parse")
+            .file_name()
+    );
+    assert_eq!(
+        Some("object"),
+        Path::parse_literal("/bucket/object")
+            .expect("literal path should parse")
+            .file_name()
+    );
+    assert_eq!(
+        None,
+        Path::parse_literal("/bucket/object/")
+            .expect("literal path should parse")
+            .file_name()
+    );
+}
