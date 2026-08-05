@@ -128,6 +128,22 @@ impl Path {
         &self.text
     }
 
+    /// Returns the final non-empty path component, when one is present.
+    ///
+    /// A root path and a literal path ending in a separator have no file
+    /// name. Hierarchical paths are canonicalized during parsing, so their
+    /// final component is always non-empty.
+    #[inline(always)]
+    #[must_use]
+    pub fn file_name(&self) -> Option<&str> {
+        if self.text == "/" || (self.literal && self.text.ends_with('/')) {
+            return None;
+        }
+        self.text
+            .rsplit('/')
+            .find(|component| !component.is_empty())
+    }
+
     /// Returns whether this path is absolute.
     #[inline(always)]
     #[must_use]
