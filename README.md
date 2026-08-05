@@ -22,12 +22,11 @@ public facade while allowing providers to be selected outside the core crate.
 qubit-fs = "0.2"
 ```
 
-The `async` feature is enabled by default. Synchronous-only consumers can omit
-the asynchronous facade and SPI surface to reduce compile time and dependency
-graph size:
+Synchronous APIs are enabled by default. Enable the asynchronous facade
+explicitly when it is needed:
 
 ```toml
-qubit-fs = { version = "0.2", default-features = false }
+qubit-fs = { version = "0.2", features = ["async"] }
 ```
 
 ## What the facade makes explicit

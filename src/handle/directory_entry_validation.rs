@@ -46,12 +46,7 @@ pub(crate) fn validate_entry(
             "provider returned a directory entry outside filesystem path limits",
         ));
     }
-    let expected_name = entry
-        .path
-        .components()
-        .last()
-        .map(|component| component.to_string())
-        .unwrap_or_default();
+    let expected_name = entry.path.file_name().unwrap_or_default();
     if entry.name != expected_name {
         return Err(contract_error(
             &entry.path,
@@ -82,25 +77,38 @@ pub(crate) fn matches_options(
     entry: &DirEntry,
     root: &Path,
     options: &ListOptions,
-) -> bool {
+) -> Result<(), &'static str> {
     let Some(relative) = relative_path(root, &entry.path) else {
-        return false;
+        return Err("provider returned directory entry outside requested root");
     };
     if !options.recursive()
         && options.prefix().is_none()
         && relative.contains('/')
     {
-        return false;
+        return Err(
+            "provider returned nested directory entry for non-recursive listing",
+        );
     }
     if options.include_metadata() && entry.metadata.is_none() {
-        return false;
+        return Err(
+            "provider returned directory entry without requested metadata",
+        );
     }
-    options.prefix().is_none_or(|prefix| {
+    if options.prefix().is_none_or(|prefix| {
         relative == prefix
             || relative
                 .strip_prefix(prefix)
                 .is_some_and(|remaining| remaining.starts_with('/'))
-    })
+    }) {
+        Ok(())
+    } else {
+        Err("provider returned directory entry outside requested prefix")
+    }
+}
+
+/// Builds a stable provider-contract error for list option filtering.
+pub(crate) fn option_error(root: &Path, message: &'static str) -> FsError {
+    contract_error(root, message)
 }
 
 /// Returns the entry path relative to `root` when it remains in the root.
