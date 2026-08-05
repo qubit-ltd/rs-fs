@@ -23,6 +23,10 @@ use crate::copy::{
     is_file_kind_supported,
     validate_stream_copy_length_limits,
 };
+use crate::internal::facade::read_policy::{
+    PREFIX_BUFFER_SIZE,
+    next_read_len,
+};
 use crate::rename::validate_rename_outcome;
 use crate::spi::{
     CopyAttempt,
@@ -1030,6 +1034,33 @@ impl FileSystem {
             }
             result.extend_from_slice(&buffer[..read]);
         }
+    }
+
+    /// Reads at most max_bytes from a file without requiring a complete read.
+    pub fn read_prefix(
+        &self,
+        path: &Path,
+        options: ReadOptions,
+        max_bytes: usize,
+    ) -> FsResult<Vec<u8>> {
+        let mut reader = self.open_reader(path, options)?;
+        if max_bytes == 0 {
+            return Ok(Vec::new());
+        }
+        let mut result = Vec::with_capacity(max_bytes.min(PREFIX_BUFFER_SIZE));
+        let mut buffer = [0_u8; PREFIX_BUFFER_SIZE];
+        while result.len() < max_bytes {
+            let read_len = next_read_len(result.len(), max_bytes);
+            let read = Input::read(&mut reader, &mut buffer[..read_len])
+                .map_err(|error| {
+                    self.io_error(path, FsOperation::Read, error)
+                })?;
+            if read == 0 {
+                break;
+            }
+            result.extend_from_slice(&buffer[..read]);
+        }
+        Ok(result)
     }
 
     /// Writes all bytes and retains the writer if transfer or commit fails.

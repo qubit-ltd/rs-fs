@@ -10,6 +10,7 @@
 
 /// Provider-neutral filesystem error category.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum FsErrorKind {
     /// The requested resource does not exist.
     NotFound,

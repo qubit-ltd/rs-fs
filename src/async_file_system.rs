@@ -21,6 +21,10 @@ use crate::copy::{
     is_file_kind_supported,
     validate_stream_copy_length_limits,
 };
+use crate::internal::facade::read_policy::{
+    PREFIX_BUFFER_SIZE,
+    next_read_len,
+};
 use crate::rename::validate_rename_outcome;
 use crate::spi::{
     AsyncFileSystemSpi,
@@ -264,6 +268,39 @@ impl AsyncFileSystem {
             }
             bytes.extend_from_slice(&buffer[..read]);
         }
+    }
+
+    /// Asynchronously reads at most max_bytes from a file.
+    pub async fn read_prefix(
+        &self,
+        path: &Path,
+        options: ReadOptions,
+        max_bytes: usize,
+    ) -> FsResult<Vec<u8>> {
+        let mut reader = self.open_reader(path, options).await?;
+        if max_bytes == 0 {
+            return Ok(Vec::new());
+        }
+        let mut bytes = Vec::with_capacity(max_bytes.min(PREFIX_BUFFER_SIZE));
+        let mut buffer = [0_u8; PREFIX_BUFFER_SIZE];
+        while bytes.len() < max_bytes {
+            let read_len = next_read_len(bytes.len(), max_bytes);
+            let read = reader
+                .read_async(&mut buffer[..read_len])
+                .await
+                .map_err(|error| {
+                    self.enrich(
+                        FsError::from_stream_io(error, FsOperation::Read, path),
+                        path,
+                        FsOperation::Read,
+                    )
+                })?;
+            if read == 0 {
+                break;
+            }
+            bytes.extend_from_slice(&buffer[..read]);
+        }
+        Ok(bytes)
     }
 
     /// Asynchronously opens a validated writer and verifies its identity.
