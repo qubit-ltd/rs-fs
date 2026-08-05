@@ -20,11 +20,10 @@
 qubit-fs = "0.2"
 ```
 
-`async` feature 默认启用。只使用同步 API 的下游可以关闭默认 feature，从而减少编译时间和
-依赖图规模：
+同步 API 默认启用。需要异步门面时必须显式开启 async feature：
 
 ```toml
-qubit-fs = { version = "0.2", default-features = false }
+qubit-fs = { version = "0.2", features = ["async"] }
 ```
 
 ## 门面明确表达的语义
