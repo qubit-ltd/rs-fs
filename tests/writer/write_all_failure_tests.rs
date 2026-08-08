@@ -8,6 +8,10 @@
 
 use std::error::Error;
 
+use qubit_fs::AchievedAtomicity;
+use qubit_fs::FsErrorKind;
+use qubit_fs::Path;
+use qubit_fs::WriteOptions;
 use qubit_io::Output;
 
 #[test]
@@ -16,12 +20,12 @@ fn test_write_all_success_publishes_writer() {
         crate::handle_support::filesystem(false, Vec::new());
     let outcome = filesystem
         .write_all(
-            &qubit_fs::Path::parse("/target").expect("path should parse"),
+            &Path::parse("/target").expect("path should parse"),
             b"bytes",
-            qubit_fs::WriteOptions::default(),
+            WriteOptions::default(),
         )
         .expect("write should commit");
-    assert_eq!(qubit_fs::AchievedAtomicity::Atomic, outcome.atomicity());
+    assert_eq!(AchievedAtomicity::Atomic, outcome.atomicity());
 }
 
 /// Verifies byte-stream diagnostics are retained as a source rather than
@@ -31,9 +35,9 @@ fn test_write_all_does_not_format_stream_error_message() {
     let filesystem = crate::handle_support::stream_failure_filesystem();
     let failure = filesystem
         .write_all(
-            &qubit_fs::Path::parse("/target").expect("path should parse"),
+            &Path::parse("/target").expect("path should parse"),
             b"bytes",
-            qubit_fs::WriteOptions::default(),
+            WriteOptions::default(),
         )
         .expect_err("the injected stream write should fail");
     let (error, _) = failure.into_parts();
@@ -47,13 +51,13 @@ fn test_write_all_rejects_bytes_over_finite_write_limit() {
     let filesystem = crate::handle_support::limited_write_filesystem(3);
     let failure = filesystem
         .write_all(
-            &qubit_fs::Path::parse("/target").expect("path should parse"),
+            &Path::parse("/target").expect("path should parse"),
             b"four",
-            qubit_fs::WriteOptions::default(),
+            WriteOptions::default(),
         )
         .expect_err("the finite write limit should reject all bytes");
     let (error, writer) = failure.into_parts();
-    assert_eq!(qubit_fs::FsErrorKind::ResourceLimitExceeded, error.kind());
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, error.kind());
     assert!(writer.is_none());
 }
 
@@ -63,8 +67,8 @@ fn test_open_writer_rejects_cumulative_bytes_over_finite_write_limit() {
     let filesystem = crate::handle_support::limited_write_filesystem(3);
     let mut writer = filesystem
         .open_writer(
-            &qubit_fs::Path::parse("/target").expect("path should parse"),
-            qubit_fs::WriteOptions::default(),
+            &Path::parse("/target").expect("path should parse"),
+            WriteOptions::default(),
         )
         .expect("writer should open");
     Output::write_fully(&mut writer, b"two")
@@ -82,18 +86,18 @@ fn test_write_all_failure_exposes_recovery_accessors_and_formatting() {
         crate::handle_support::filesystem(true, Vec::new());
     let mut failure = filesystem
         .write_all(
-            &qubit_fs::Path::parse("/target").expect("path should parse"),
+            &Path::parse("/target").expect("path should parse"),
             b"bytes",
-            qubit_fs::WriteOptions::default(),
+            WriteOptions::default(),
         )
         .expect_err("commit failure should retain a writer");
-    assert_eq!(qubit_fs::FsErrorKind::Io, failure.error().kind());
+    assert_eq!(FsErrorKind::Io, failure.error().kind());
     assert!(failure.writer().is_some());
     assert!(failure.writer_mut().is_some());
     assert!(failure.to_string().contains("commit failure"));
     assert!(format!("{failure:?}").contains("has_writer"));
     assert!(Error::source(&failure).is_some());
     let (error, writer) = failure.into_parts();
-    assert_eq!(qubit_fs::FsErrorKind::Io, error.kind());
+    assert_eq!(FsErrorKind::Io, error.kind());
     assert!(writer.is_some());
 }

@@ -13,10 +13,13 @@ use qubit_fs::AtomicityRequirement;
 use qubit_fs::CopyConflictPolicy;
 use qubit_fs::CopyFailureState;
 use qubit_fs::CopyOptions;
+use qubit_fs::DurabilityRequirement;
+use qubit_fs::FileSystemCapability;
 use qubit_fs::FsErrorKind;
 use qubit_fs::MetadataPreservePolicy;
 use qubit_fs::Path;
 use qubit_fs::ServerSidePreference;
+use qubit_fs::WriteFailureState;
 use qubit_fs::WriterState;
 
 use crate::async_recording_spi::AsyncCopyStage;
@@ -95,22 +98,22 @@ fn test_async_stream_fallback_failures_retain_recovery_writer() {
 fn test_async_stream_fallback_commit_failure_preserves_certainty() {
     for (writer_failure, expected, writer_state) in [
         (
-            qubit_fs::WriteFailureState::RetryableNotPublished,
+            WriteFailureState::RetryableNotPublished,
             CopyFailureState::Unchanged,
             WriterState::Open,
         ),
         (
-            qubit_fs::WriteFailureState::NotPublished,
+            WriteFailureState::NotPublished,
             CopyFailureState::Unchanged,
             WriterState::NotPublished,
         ),
         (
-            qubit_fs::WriteFailureState::Published,
+            WriteFailureState::Published,
             CopyFailureState::Published,
             WriterState::Published,
         ),
         (
-            qubit_fs::WriteFailureState::Indeterminate,
+            WriteFailureState::Indeterminate,
             CopyFailureState::Indeterminate,
             WriterState::Indeterminate,
         ),
@@ -204,7 +207,7 @@ fn test_async_stream_fallback_rejects_known_length_over_limits_before_opening_ha
 fn test_async_copy_fallback_does_not_require_copy_capability() {
     let (file_system, probe) =
         async_recording_file_system(AsyncRecordingConfig {
-            omitted_capability: Some(qubit_fs::FileSystemCapability::Copy),
+            omitted_capability: Some(FileSystemCapability::Copy),
             decline_copy: true,
             ..AsyncRecordingConfig::default()
         });
@@ -240,7 +243,7 @@ fn test_async_declined_copy_rejects_required_fallback_guarantees() {
                 ..AsyncRecordingConfig::default()
             },
             CopyOptions::default()
-                .with_durability(qubit_fs::DurabilityRequirement::Required),
+                .with_durability(DurabilityRequirement::Required),
         ),
         (
             AsyncRecordingConfig {

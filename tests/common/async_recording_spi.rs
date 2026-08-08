@@ -17,14 +17,20 @@ use std::task::Poll;
 
 use qubit_fs::AchievedAtomicity;
 use qubit_fs::AsyncFileSystem;
+use qubit_fs::CopyFailureState;
+use qubit_fs::CopyMethod;
+use qubit_fs::CopyOutcome;
+use qubit_fs::CopyStats;
 use qubit_fs::CreateDirectoryOutcome;
 use qubit_fs::DeleteOutcome;
+use qubit_fs::DirEntry;
 use qubit_fs::FileKind;
 use qubit_fs::FileMetadata;
 use qubit_fs::FileSystemCapabilities;
 use qubit_fs::FileSystemCapability;
 use qubit_fs::FileSystemId;
 use qubit_fs::FileSystemInfo;
+use qubit_fs::FileSystemLimit;
 use qubit_fs::FileSystemLimits;
 use qubit_fs::FileSystemProperties;
 use qubit_fs::FsError;
@@ -35,11 +41,13 @@ use qubit_fs::OpenedFileInfo;
 use qubit_fs::Path;
 use qubit_fs::PathConstraints;
 use qubit_fs::PathSemantics;
+use qubit_fs::PersistFailureState;
 use qubit_fs::PersistOutcome;
 use qubit_fs::PublicationMethod;
 use qubit_fs::RenameFailureState;
 use qubit_fs::RenameOutcome;
 use qubit_fs::SymlinkPolicy;
+use qubit_fs::WriteAbortOutcome;
 use qubit_fs::WriteFailure;
 use qubit_fs::WriteFailureState;
 use qubit_fs::WriteOutcome;
@@ -63,9 +71,11 @@ use qubit_fs::spi::OpenedAsyncReader;
 use qubit_fs::spi::OpenedAsyncTempDirectory;
 use qubit_fs::spi::OpenedAsyncTempFile;
 use qubit_fs::spi::OpenedAsyncWriter;
+use qubit_fs::spi::PersistRequest;
 use qubit_fs::spi::RenameRequest;
 use qubit_fs::spi::SpiCopyFailure;
 use qubit_fs::spi::SpiFuture;
+use qubit_fs::spi::SpiPersistFailure;
 use qubit_fs::spi::SpiRenameFailure;
 use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
@@ -107,7 +117,7 @@ pub(crate) struct AsyncRecordingConfig {
     pub(crate) rename_atomicity: Option<AchievedAtomicity>,
     pub(crate) rename_copy_then_delete: bool,
     pub(crate) temp_persist_indeterminate: bool,
-    pub(crate) temp_persist_failure: Option<qubit_fs::PersistFailureState>,
+    pub(crate) temp_persist_failure: Option<PersistFailureState>,
     pub(crate) temp_cleanup_failure: bool,
     pub(crate) temp_keep_failure: bool,
     pub(crate) temp_create_error: bool,
@@ -119,7 +129,7 @@ pub(crate) struct AsyncRecordingConfig {
     pub(crate) maximum_read_range_bytes: Option<u64>,
     pub(crate) maximum_write_bytes: Option<u64>,
     pub(crate) temp_persist_atomicity: Option<AchievedAtomicity>,
-    pub(crate) directory_entries: Vec<qubit_fs::DirEntry>,
+    pub(crate) directory_entries: Vec<DirEntry>,
     pub(crate) directory_error: bool,
     pub(crate) list_open_error: bool,
     pub(crate) create_directory_already_existed: bool,
@@ -253,14 +263,14 @@ impl AsyncRecordingSpi {
                 .with_max_read_range_bytes(
                     self.config
                         .maximum_read_range_bytes
-                        .map(qubit_fs::FileSystemLimit::Maximum)
-                        .unwrap_or(qubit_fs::FileSystemLimit::Unknown),
+                        .map(FileSystemLimit::Maximum)
+                        .unwrap_or(FileSystemLimit::Unknown),
                 )
                 .with_max_write_bytes(
                     self.config
                         .maximum_write_bytes
-                        .map(qubit_fs::FileSystemLimit::Maximum)
-                        .unwrap_or(qubit_fs::FileSystemLimit::Unknown),
+                        .map(FileSystemLimit::Maximum)
+                        .unwrap_or(FileSystemLimit::Unknown),
                 ),
             PathConstraints::absolute(),
             SymlinkPolicy::Reject,
@@ -473,8 +483,8 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
                         FsOperation::Copy,
                         "injected copy failure",
                     ),
-                    qubit_fs::CopyFailureState::Indeterminate,
-                    qubit_fs::CopyStats::default(),
+                    CopyFailureState::Indeterminate,
+                    CopyStats::default(),
                 ))
             });
         }
@@ -485,9 +495,9 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
         }
         if let Some(atomicity) = self.config.completed_copy {
             return Box::pin(async move {
-                Ok(CopyAttempt::Completed(qubit_fs::CopyOutcome::new(
-                    qubit_fs::CopyStats::default(),
-                    qubit_fs::CopyMethod::Native,
+                Ok(CopyAttempt::Completed(CopyOutcome::new(
+                    CopyStats::default(),
+                    CopyMethod::Native,
                     atomicity,
                 )))
             });
@@ -611,13 +621,13 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
 
 /// Enumerates configured entries or one configured provider failure.
 struct RecordingDirectorySession {
-    entries: Vec<qubit_fs::DirEntry>,
+    entries: Vec<DirEntry>,
     fail: bool,
 }
 impl AsyncDirectoryStreamSession for RecordingDirectorySession {
     fn next_entry_async(
         &mut self,
-    ) -> SpiFuture<'_, FsResult<Option<qubit_fs::DirEntry>>> {
+    ) -> SpiFuture<'_, FsResult<Option<DirEntry>>> {
         if self.fail {
             self.fail = false;
             return Box::pin(async { Err(unused()) });
@@ -732,7 +742,7 @@ impl AsyncFileWriteSession for RecordingWriter {
     }
     fn abort_async<'a>(
         self: Pin<&'a mut Self>,
-    ) -> SpiFuture<'a, FsResult<qubit_fs::WriteAbortOutcome>> {
+    ) -> SpiFuture<'a, FsResult<WriteAbortOutcome>> {
         let config = self.get_mut().config.clone();
         Box::pin(async move {
             match config.writer_abort_failure {
@@ -743,14 +753,14 @@ impl AsyncFileWriteSession for RecordingWriter {
                 )),
                 None => Ok(match config.writer_commit_failure {
                     Some(WriteFailureState::Published) => {
-                        qubit_fs::WriteAbortOutcome::Published
+                        WriteAbortOutcome::Published
                     }
                     Some(WriteFailureState::Indeterminate) => {
-                        qubit_fs::WriteAbortOutcome::Indeterminate
+                        WriteAbortOutcome::Indeterminate
                     }
                     Some(WriteFailureState::RetryableNotPublished)
                     | Some(WriteFailureState::NotPublished)
-                    | None => qubit_fs::WriteAbortOutcome::NotPublished,
+                    | None => WriteAbortOutcome::NotPublished,
                 }),
             }
         })
@@ -769,7 +779,7 @@ struct RecordingTempSession {
     calls: Arc<Mutex<Vec<&'static str>>>,
     temp_cancellations: Arc<Mutex<usize>>,
     indeterminate_persist: bool,
-    persist_failure: Option<qubit_fs::PersistFailureState>,
+    persist_failure: Option<PersistFailureState>,
     atomicity: Option<AchievedAtomicity>,
     cleanup_failure: bool,
     keep_failure: bool,
@@ -825,9 +835,8 @@ impl AsyncTempResourceSpi for RecordingTempSession {
     }
     fn persist<'a>(
         self: Pin<&'a mut Self>,
-        request: qubit_fs::spi::PersistRequest<'a>,
-    ) -> SpiFuture<'a, Result<PersistOutcome, qubit_fs::spi::SpiPersistFailure>>
-    {
+        request: PersistRequest<'a>,
+    ) -> SpiFuture<'a, Result<PersistOutcome, SpiPersistFailure>> {
         self.as_ref().get_ref().record("persist");
         let target = if request.target().as_str() == "/wrong-persist-target" {
             Path::parse("/reported-persist-target")
@@ -840,7 +849,7 @@ impl AsyncTempResourceSpi for RecordingTempSession {
         let failure = self.as_ref().get_ref().persist_failure;
         Box::pin(async move {
             if let Some(state) = failure {
-                return Err(qubit_fs::spi::SpiPersistFailure::new(
+                return Err(SpiPersistFailure::new(
                     FsError::new(
                         FsErrorKind::Io,
                         FsOperation::PersistTemp,
@@ -850,13 +859,13 @@ impl AsyncTempResourceSpi for RecordingTempSession {
                 ));
             }
             if indeterminate {
-                return Err(qubit_fs::spi::SpiPersistFailure::new(
+                return Err(SpiPersistFailure::new(
                     FsError::new(
                         FsErrorKind::Indeterminate,
                         FsOperation::PersistTemp,
                         "injected indeterminate persist",
                     ),
-                    qubit_fs::PersistFailureState::Indeterminate,
+                    PersistFailureState::Indeterminate,
                 ));
             }
             Ok(PersistOutcome::new(

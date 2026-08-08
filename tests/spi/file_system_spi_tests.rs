@@ -22,6 +22,7 @@ use qubit_fs::spi::SpiCopyFailure;
 use qubit_fs::spi::SpiPersistFailure;
 use qubit_fs::spi::SpiRenameFailure;
 use qubit_fs::spi::SpiWriteFailure;
+use qubit_fs::spi::StatResponse;
 
 /// Verifies provider copy failures retain typed recovery state and statistics.
 #[test]
@@ -64,10 +65,8 @@ fn test_spi_rename_failure_preserves_typed_state() {
 #[test]
 fn test_stat_response_exposes_path_and_metadata_snapshot() {
     let path = Path::parse("/file").expect("test path should parse");
-    let response = qubit_fs::spi::StatResponse::new(
-        path.clone(),
-        FileMetadata::new(FileKind::File),
-    );
+    let response =
+        StatResponse::new(path.clone(), FileMetadata::new(FileKind::File));
     assert_eq!(&path, response.path());
     assert_eq!(&FileKind::File, response.metadata().kind());
 }

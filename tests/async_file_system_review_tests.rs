@@ -25,7 +25,9 @@ use qubit_fs::CopyConflictPolicy;
 use qubit_fs::CopyFailureState;
 use qubit_fs::CopyOptions;
 use qubit_fs::CreateDirectoryOptions;
+use qubit_fs::CreateDirectoryOutcome;
 use qubit_fs::DeleteOptions;
+use qubit_fs::DeleteOutcome;
 use qubit_fs::DurabilityRequirement;
 use qubit_fs::FileKind;
 use qubit_fs::FileMetadata;
@@ -51,6 +53,9 @@ use qubit_fs::RenameFailureState;
 use qubit_fs::RenameOptions;
 use qubit_fs::RenameOutcome;
 use qubit_fs::SymlinkPolicy;
+use qubit_fs::TempDirectoryOptions;
+use qubit_fs::TempFileOptions;
+use qubit_fs::WriteAbortOutcome;
 use qubit_fs::WriteFailure;
 use qubit_fs::WriteFailureState;
 use qubit_fs::WriteOptions;
@@ -253,19 +258,19 @@ impl AsyncFileSystemSpi for StreamCopyFallbackSpi {
     fn create_directory<'a>(
         &'a self,
         _: CreateDirectoryRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<qubit_fs::CreateDirectoryOutcome>> {
+    ) -> SpiFuture<'a, FsResult<CreateDirectoryOutcome>> {
         Box::pin(async { Err(Self::unavailable(FsOperation::CreateDir)) })
     }
     fn delete_file<'a>(
         &'a self,
         _: DeleteFileRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<qubit_fs::DeleteOutcome>> {
+    ) -> SpiFuture<'a, FsResult<DeleteOutcome>> {
         Box::pin(async { Err(Self::unavailable(FsOperation::Delete)) })
     }
     fn delete_directory<'a>(
         &'a self,
         _: DeleteDirectoryRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<qubit_fs::DeleteOutcome>> {
+    ) -> SpiFuture<'a, FsResult<DeleteOutcome>> {
         Box::pin(async { Err(Self::unavailable(FsOperation::Delete)) })
     }
     fn try_copy<'a>(
@@ -377,9 +382,9 @@ impl AsyncFileWriteSession for CommitWriter {
 
     fn abort_async<'a>(
         self: Pin<&'a mut Self>,
-    ) -> SpiFuture<'a, FsResult<qubit_fs::WriteAbortOutcome>> {
+    ) -> SpiFuture<'a, FsResult<WriteAbortOutcome>> {
         let _ = self;
-        Box::pin(async { Ok(qubit_fs::WriteAbortOutcome::NotPublished) })
+        Box::pin(async { Ok(WriteAbortOutcome::NotPublished) })
     }
 }
 
@@ -592,7 +597,7 @@ fn test_async_facade_rejects_contract_and_fallback_boundary_failures() {
         let options = if file_system
             .properties()
             .capabilities()
-            .supports(qubit_fs::FileSystemCapability::AtomicRename)
+            .supports(FileSystemCapability::AtomicRename)
         {
             RenameOptions::default()
                 .with_atomicity(AtomicityRequirement::Required)
@@ -612,14 +617,13 @@ fn test_async_facade_rejects_contract_and_fallback_boundary_failures() {
         temp_cleanup_failure: true,
         ..AsyncRecordingConfig::default()
     });
-    let Err(file) = ready(
-        file_system.create_temp_file(qubit_fs::TempFileOptions::default()),
-    ) else {
+    let Err(file) =
+        ready(file_system.create_temp_file(TempFileOptions::default()))
+    else {
         panic!("invalid temporary file identity must be rejected");
     };
     let Err(directory) = ready(
-        file_system
-            .create_temp_directory(qubit_fs::TempDirectoryOptions::default()),
+        file_system.create_temp_directory(TempDirectoryOptions::default()),
     ) else {
         panic!("invalid temporary directory identity must be rejected");
     };
@@ -631,9 +635,9 @@ fn test_async_facade_rejects_contract_and_fallback_boundary_failures() {
         invalid_temp_path: true,
         ..AsyncRecordingConfig::default()
     });
-    let Err(invalid_path) = ready(
-        file_system.create_temp_file(qubit_fs::TempFileOptions::default()),
-    ) else {
+    let Err(invalid_path) =
+        ready(file_system.create_temp_file(TempFileOptions::default()))
+    else {
         panic!("relative temporary path must be rejected");
     };
     assert_eq!(FsErrorKind::ProviderContractViolation, invalid_path.kind());
@@ -647,7 +651,7 @@ fn test_async_facade_rejects_contract_and_fallback_boundary_failures() {
             source.clone(),
             target.clone(),
             CopyOptions::default()
-                .with_durability(qubit_fs::DurabilityRequirement::Required),
+                .with_durability(DurabilityRequirement::Required),
         )
         .expect("durable-copy capability should satisfy preflight");
     let durability = ready(operation.execute())
@@ -749,9 +753,9 @@ fn test_async_facade_rejects_unsupported_capabilities_and_path_semantics() {
         omitted_capability: Some(FileSystemCapability::TempFile),
         ..AsyncRecordingConfig::default()
     });
-    let Err(error) = ready(
-        file_system.create_temp_file(qubit_fs::TempFileOptions::default()),
-    ) else {
+    let Err(error) =
+        ready(file_system.create_temp_file(TempFileOptions::default()))
+    else {
         panic!("temporary-file capability must be required");
     };
     assert_eq!(FsErrorKind::UnsupportedCapability, error.kind());
@@ -761,8 +765,7 @@ fn test_async_facade_rejects_unsupported_capabilities_and_path_semantics() {
         ..AsyncRecordingConfig::default()
     });
     let Err(error) = ready(
-        file_system
-            .create_temp_directory(qubit_fs::TempDirectoryOptions::default()),
+        file_system.create_temp_directory(TempDirectoryOptions::default()),
     ) else {
         panic!("temporary-directory capability must be required");
     };
@@ -954,10 +957,9 @@ fn test_async_facade_preflight_rejects_invalid_paths_options_and_capabilities()
 
     let (file_system, _) =
         async_recording_file_system(AsyncRecordingConfig::default());
-    let mut temporary = ready(
-        file_system.create_temp_file(qubit_fs::TempFileOptions::default()),
-    )
-    .expect("temporary file should be created");
+    let mut temporary =
+        ready(file_system.create_temp_file(TempFileOptions::default()))
+            .expect("temporary file should be created");
     assert!(
         ready(temporary.persist(&relative, PersistOptions::default())).is_err()
     );

@@ -14,6 +14,7 @@ use std::sync::Mutex;
 
 use qubit_fs::AchievedAtomicity;
 use qubit_fs::AtomicityRequirement;
+use qubit_fs::CopyConflictPolicy;
 use qubit_fs::CopyFailureState;
 use qubit_fs::CopyMethod;
 use qubit_fs::CopyOptions;
@@ -21,6 +22,7 @@ use qubit_fs::CopyOutcome;
 use qubit_fs::CopyStats;
 use qubit_fs::CreateDirectoryOutcome;
 use qubit_fs::DeleteOutcome;
+use qubit_fs::DurabilityRequirement;
 use qubit_fs::FileKind;
 use qubit_fs::FileMetadata;
 use qubit_fs::FileSystem;
@@ -28,6 +30,7 @@ use qubit_fs::FileSystemCapabilities;
 use qubit_fs::FileSystemCapability;
 use qubit_fs::FileSystemId;
 use qubit_fs::FileSystemInfo;
+use qubit_fs::FileSystemLimit;
 use qubit_fs::FileSystemLimits;
 use qubit_fs::FileSystemProperties;
 use qubit_fs::FsError;
@@ -38,11 +41,18 @@ use qubit_fs::MetadataPreservePolicy;
 use qubit_fs::OpenedFileInfo;
 use qubit_fs::Path;
 use qubit_fs::PathConstraints;
+use qubit_fs::PathSemantics;
+use qubit_fs::PublicationMethod;
+use qubit_fs::ReadOptions;
 use qubit_fs::RenameFailureState;
 use qubit_fs::RenameOutcome;
 use qubit_fs::ServerSidePreference;
 use qubit_fs::SymlinkPolicy;
+use qubit_fs::WriteAbortOutcome;
+use qubit_fs::WriteFailureState;
+use qubit_fs::WriteOptions;
 use qubit_fs::WriteOutcome;
+use qubit_fs::WriterState;
 use qubit_fs::spi::CopyAttempt;
 use qubit_fs::spi::CopyDeclineReason;
 use qubit_fs::spi::CopyRequest;
@@ -64,6 +74,7 @@ use qubit_fs::spi::OpenedWriter;
 use qubit_fs::spi::RenameRequest;
 use qubit_fs::spi::SpiCopyFailure;
 use qubit_fs::spi::SpiRenameFailure;
+use qubit_fs::spi::SpiWriteFailure;
 use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
 use qubit_io::Input;
@@ -194,13 +205,12 @@ fn properties(
         FileSystemInfo::new(
             FileSystemId::new("recording").expect("id should be valid"),
             "recording",
-            qubit_fs::PathSemantics::Hierarchical,
+            PathSemantics::Hierarchical,
         ),
         capabilities,
         maximum_write_bytes.map_or_else(FileSystemLimits::unknown, |maximum| {
-            FileSystemLimits::unknown().with_max_write_bytes(
-                qubit_fs::FileSystemLimit::Maximum(maximum),
-            )
+            FileSystemLimits::unknown()
+                .with_max_write_bytes(FileSystemLimit::Maximum(maximum))
         }),
         PathConstraints::absolute(),
         SymlinkPolicy::Reject,
@@ -311,16 +321,16 @@ impl FileSystemSpi for RecordingSpi {
                 ),
                 commit_failure_state: match self.response {
                     CopyResponse::DeclinedCommitFailure => {
-                        Some(qubit_fs::WriteFailureState::NotPublished)
+                        Some(WriteFailureState::NotPublished)
                     }
                     CopyResponse::DeclinedCommitRetryable => {
-                        Some(qubit_fs::WriteFailureState::RetryableNotPublished)
+                        Some(WriteFailureState::RetryableNotPublished)
                     }
                     CopyResponse::DeclinedCommitPublished => {
-                        Some(qubit_fs::WriteFailureState::Published)
+                        Some(WriteFailureState::Published)
                     }
                     CopyResponse::DeclinedCommitIndeterminate => {
-                        Some(qubit_fs::WriteFailureState::Indeterminate)
+                        Some(WriteFailureState::Indeterminate)
                     }
                     _ => None,
                 },
@@ -496,7 +506,7 @@ struct RecordingWriter {
     bytes: Arc<Mutex<Vec<u8>>>,
     fail_flush: bool,
     fail_write: bool,
-    commit_failure_state: Option<qubit_fs::WriteFailureState>,
+    commit_failure_state: Option<WriteFailureState>,
 }
 
 /// Reports a deterministic failure from the fallback reader after its writer
@@ -543,11 +553,9 @@ impl Output for RecordingWriter {
 }
 /// Publishes recording-writer data without additional effects.
 impl FileWriterSpi for RecordingWriter {
-    fn commit(
-        &mut self,
-    ) -> Result<WriteOutcome, qubit_fs::spi::SpiWriteFailure> {
+    fn commit(&mut self) -> Result<WriteOutcome, SpiWriteFailure> {
         if let Some(state) = self.commit_failure_state {
-            return Err(qubit_fs::spi::SpiWriteFailure::new(
+            return Err(SpiWriteFailure::new(
                 FsError::new(
                     FsErrorKind::Io,
                     FsOperation::CommitWriter,
@@ -558,11 +566,11 @@ impl FileWriterSpi for RecordingWriter {
         }
         Ok(WriteOutcome::new(
             AchievedAtomicity::NonAtomic,
-            qubit_fs::PublicationMethod::StreamCopy,
+            PublicationMethod::StreamCopy,
         ))
     }
-    fn abort(&mut self) -> FsResult<qubit_fs::WriteAbortOutcome> {
-        Ok(qubit_fs::WriteAbortOutcome::NotPublished)
+    fn abort(&mut self) -> FsResult<WriteAbortOutcome> {
+        Ok(WriteAbortOutcome::NotPublished)
     }
 }
 
@@ -646,8 +654,7 @@ fn test_copy_declined_rejects_incompatible_fallback_options() {
         CopyOptions::default()
             .with_preserve_metadata(MetadataPreservePolicy::Portable),
         CopyOptions::default().with_create_parent(true),
-        CopyOptions::default()
-            .with_conflict(qubit_fs::CopyConflictPolicy::Overwrite),
+        CopyOptions::default().with_conflict(CopyConflictPolicy::Overwrite),
     ];
     for options in options {
         let (filesystem, calls, _) =
@@ -702,8 +709,7 @@ fn test_copy_declined_preserves_stream_and_writer_recovery_states() {
         .copy(
             &path("/source"),
             &path("/target"),
-            CopyOptions::default()
-                .with_conflict(qubit_fs::CopyConflictPolicy::Skip),
+            CopyOptions::default().with_conflict(CopyConflictPolicy::Skip),
         )
         .expect("an existing target should be skipped when explicitly allowed");
     assert_eq!(1, skipped.stats().skipped);
@@ -712,37 +718,37 @@ fn test_copy_declined_preserves_stream_and_writer_recovery_states() {
         (
             CopyResponse::DeclinedReadFailure,
             CopyFailureState::Unchanged,
-            qubit_fs::WriterState::Open,
+            WriterState::Open,
         ),
         (
             CopyResponse::DeclinedWriteFailure,
             CopyFailureState::Indeterminate,
-            qubit_fs::WriterState::Indeterminate,
+            WriterState::Indeterminate,
         ),
         (
             CopyResponse::DeclinedFlushFailure,
             CopyFailureState::Indeterminate,
-            qubit_fs::WriterState::Indeterminate,
+            WriterState::Indeterminate,
         ),
         (
             CopyResponse::DeclinedCommitFailure,
             CopyFailureState::Unchanged,
-            qubit_fs::WriterState::NotPublished,
+            WriterState::NotPublished,
         ),
         (
             CopyResponse::DeclinedCommitRetryable,
             CopyFailureState::Unchanged,
-            qubit_fs::WriterState::Open,
+            WriterState::Open,
         ),
         (
             CopyResponse::DeclinedCommitPublished,
             CopyFailureState::Published,
-            qubit_fs::WriterState::Published,
+            WriterState::Published,
         ),
         (
             CopyResponse::DeclinedCommitIndeterminate,
             CopyFailureState::Indeterminate,
-            qubit_fs::WriterState::Indeterminate,
+            WriterState::Indeterminate,
         ),
     ] {
         let (filesystem, _, _) = recording_filesystem(response);
@@ -780,7 +786,7 @@ fn test_read_all_contextualizes_reader_failure() {
         recording_filesystem(CopyResponse::DeclinedReadFailure);
     let source = path("/source");
     let error = filesystem
-        .read_all(&source, qubit_fs::ReadOptions::default(), 16)
+        .read_all(&source, ReadOptions::default(), 16)
         .expect_err("reader failure should be contextualized");
     assert_eq!(FsErrorKind::Io, error.kind());
     assert_eq!(FsOperation::Read, error.operation());
@@ -792,7 +798,7 @@ fn test_read_all_contextualizes_reader_failure() {
 fn test_read_all_limit_error_includes_provider_context() {
     let (filesystem, _, _) = recording_filesystem(CopyResponse::Declined);
     let error = filesystem
-        .read_all(&path("/source"), qubit_fs::ReadOptions::default(), 2)
+        .read_all(&path("/source"), ReadOptions::default(), 2)
         .expect_err("read-all limit should reject oversized content");
 
     assert_eq!(FsErrorKind::ResourceLimitExceeded, error.kind());
@@ -806,7 +812,7 @@ fn test_write_all_wraps_writer_open_failure() {
         recording_filesystem(CopyResponse::DeclinedWriterFailure);
     let target = path("/target");
     let failure = filesystem
-        .write_all(&target, b"bytes", qubit_fs::WriteOptions::default())
+        .write_all(&target, b"bytes", WriteOptions::default())
         .expect_err(
             "writer-open failure should use the write-all failure type",
         );
@@ -820,11 +826,7 @@ fn test_write_all_limit_error_includes_provider_context() {
     let (filesystem, _, _) =
         recording_filesystem_with_write_limit(CopyResponse::Declined, 1);
     let failure = filesystem
-        .write_all(
-            &path("/target"),
-            b"bytes",
-            qubit_fs::WriteOptions::default(),
-        )
+        .write_all(&path("/target"), b"bytes", WriteOptions::default())
         .expect_err("write-all limit should reject oversized content");
 
     assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
@@ -861,7 +863,7 @@ fn test_copy_required_atomicity_preflight_has_zero_spi_calls() {
         .expect_err("missing atomic guarantee must fail locally");
     assert_eq!(CopyFailureState::Unchanged, failure.state());
     assert_eq!(
-        Some(qubit_fs::FileSystemCapability::AtomicFileCopy),
+        Some(FileSystemCapability::AtomicFileCopy),
         failure.error().required_capability()
     );
     assert!(calls.lock().expect("calls lock should succeed").is_empty());
@@ -876,7 +878,7 @@ fn test_copy_required_durability_preflight_has_zero_spi_calls() {
             &path("/source"),
             &path("/target"),
             CopyOptions::default()
-                .with_durability(qubit_fs::DurabilityRequirement::Required),
+                .with_durability(DurabilityRequirement::Required),
         )
         .expect_err("missing durability guarantee must fail locally");
     assert_eq!(CopyFailureState::Unchanged, failure.state());
@@ -922,7 +924,7 @@ fn test_copy_completed_durability_downgrade_is_contract_failure() {
             &path("/source"),
             &path("/target"),
             CopyOptions::default()
-                .with_durability(qubit_fs::DurabilityRequirement::Required),
+                .with_durability(DurabilityRequirement::Required),
         )
         .expect_err("durability downgrade must fail");
     assert_eq!(CopyFailureState::Published, failure.state());
@@ -1088,7 +1090,7 @@ fn test_copy_declined_skip_required_atomicity_rejects_without_opening_handles()
             &path("/source"),
             &path("/target"),
             CopyOptions::default()
-                .with_conflict(qubit_fs::CopyConflictPolicy::Skip)
+                .with_conflict(CopyConflictPolicy::Skip)
                 .with_atomicity(AtomicityRequirement::Required),
         )
         .expect_err("skip cannot satisfy atomic publication");
@@ -1121,21 +1123,21 @@ fn test_copy_fallback_flush_failure_is_indeterminate_with_stats_and_writer() {
         )
     );
     assert_eq!(
-        qubit_fs::WriterState::Indeterminate,
+        WriterState::Indeterminate,
         failure
             .writer()
             .expect("post-open fallback failure retains its writer")
             .state()
     );
     assert_eq!(
-        qubit_fs::WriterState::Indeterminate,
+        WriterState::Indeterminate,
         failure
             .writer_mut()
             .expect("fallback writer should still be recoverable")
             .state()
     );
     assert_eq!(
-        qubit_fs::WriterState::Indeterminate,
+        WriterState::Indeterminate,
         failure
             .take_writer()
             .expect("take_writer should move the recovery writer")

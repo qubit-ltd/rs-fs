@@ -15,6 +15,7 @@ use std::task::Waker;
 
 use qubit_fs::AsyncCopyOperationState;
 use qubit_fs::AsyncFileSystem;
+use qubit_fs::CopyFailureState;
 use qubit_fs::CopyOptions;
 use qubit_fs::CreateDirectoryOutcome;
 use qubit_fs::DeleteOutcome;
@@ -36,6 +37,7 @@ use qubit_fs::RenameOutcome;
 use qubit_fs::SymlinkPolicy;
 use qubit_fs::spi::AsyncFileSystemSpi;
 use qubit_fs::spi::CopyAttempt;
+use qubit_fs::spi::CopyRequest;
 use qubit_fs::spi::CreateDirectoryRequest;
 use qubit_fs::spi::CreateTempDirectoryRequest;
 use qubit_fs::spi::CreateTempFileRequest;
@@ -44,10 +46,17 @@ use qubit_fs::spi::DeleteFileRequest;
 use qubit_fs::spi::ListRequest;
 use qubit_fs::spi::OpenReaderRequest;
 use qubit_fs::spi::OpenWriterRequest;
+use qubit_fs::spi::OpenedAsyncDirectoryStream;
+use qubit_fs::spi::OpenedAsyncReader;
+use qubit_fs::spi::OpenedAsyncTempDirectory;
+use qubit_fs::spi::OpenedAsyncTempFile;
+use qubit_fs::spi::OpenedAsyncWriter;
 use qubit_fs::spi::RenameRequest;
 use qubit_fs::spi::SpiCopyFailure;
 use qubit_fs::spi::SpiFuture;
+use qubit_fs::spi::SpiRenameFailure;
 use qubit_fs::spi::StatRequest;
+use qubit_fs::spi::StatResponse;
 
 struct CopySpi;
 
@@ -72,26 +81,25 @@ impl AsyncFileSystemSpi for CopySpi {
     fn stat<'a>(
         &'a self,
         _: StatRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<qubit_fs::spi::StatResponse>> {
+    ) -> SpiFuture<'a, FsResult<StatResponse>> {
         Box::pin(async { Err(unused()) })
     }
     fn list<'a>(
         &'a self,
         _: ListRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<qubit_fs::spi::OpenedAsyncDirectoryStream>>
-    {
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncDirectoryStream>> {
         Box::pin(async { Err(unused()) })
     }
     fn open_reader<'a>(
         &'a self,
         _: OpenReaderRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<qubit_fs::spi::OpenedAsyncReader>> {
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
         Box::pin(async { Err(unused()) })
     }
     fn open_writer<'a>(
         &'a self,
         _: OpenWriterRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<qubit_fs::spi::OpenedAsyncWriter>> {
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
         Box::pin(async { Err(unused()) })
     }
     fn create_directory<'a>(
@@ -115,10 +123,9 @@ impl AsyncFileSystemSpi for CopySpi {
     fn rename<'a>(
         &'a self,
         _: RenameRequest<'a>,
-    ) -> SpiFuture<'a, Result<RenameOutcome, qubit_fs::spi::SpiRenameFailure>>
-    {
+    ) -> SpiFuture<'a, Result<RenameOutcome, SpiRenameFailure>> {
         Box::pin(async {
-            Err(qubit_fs::spi::SpiRenameFailure::new(
+            Err(SpiRenameFailure::new(
                 unused(),
                 RenameFailureState::Unchanged,
             ))
@@ -127,19 +134,19 @@ impl AsyncFileSystemSpi for CopySpi {
     fn create_temp_file<'a>(
         &'a self,
         _: CreateTempFileRequest,
-    ) -> SpiFuture<'a, FsResult<qubit_fs::spi::OpenedAsyncTempFile>> {
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncTempFile>> {
         Box::pin(async { Err(unused()) })
     }
     fn create_temp_directory<'a>(
         &'a self,
         _: CreateTempDirectoryRequest,
-    ) -> SpiFuture<'a, FsResult<qubit_fs::spi::OpenedAsyncTempDirectory>> {
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncTempDirectory>> {
         Box::pin(async { Err(unused()) })
     }
 
     fn try_copy<'a>(
         &'a self,
-        _: qubit_fs::spi::CopyRequest<'a>,
+        _: CopyRequest<'a>,
     ) -> SpiFuture<'a, Result<CopyAttempt, SpiCopyFailure>> {
         Box::pin(pending())
     }
@@ -185,9 +192,7 @@ fn test_dropping_polled_execute_future_marks_operation_indeterminate() {
     drop(future);
     assert_eq!(
         operation.state(),
-        AsyncCopyOperationState::Failed(
-            qubit_fs::CopyFailureState::Indeterminate
-        )
+        AsyncCopyOperationState::Failed(CopyFailureState::Indeterminate)
     );
     assert!(!operation.has_recovery_writer());
 }
