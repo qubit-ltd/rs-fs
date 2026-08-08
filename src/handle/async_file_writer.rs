@@ -128,7 +128,9 @@ impl AsyncFileWriter {
     ///
     /// # Returns
     /// A future resolving to the actual publication outcome.
-    pub fn commit_async(&mut self) -> SpiFuture<'_, Result<WriteOutcome, WriteFailure>> {
+    pub fn commit_async(
+        &mut self,
+    ) -> SpiFuture<'_, Result<WriteOutcome, WriteFailure>> {
         if self.state != WriterState::Open {
             let error = self.invalid_state(
                 FsOperation::CommitWriter,
@@ -176,10 +178,16 @@ impl AsyncFileWriter {
                 }
                 Err(failure) => {
                     self.state = match failure.state() {
-                        WriteFailureState::RetryableNotPublished => WriterState::Open,
-                        WriteFailureState::NotPublished => WriterState::NotPublished,
+                        WriteFailureState::RetryableNotPublished => {
+                            WriterState::Open
+                        }
+                        WriteFailureState::NotPublished => {
+                            WriterState::NotPublished
+                        }
                         WriteFailureState::Published => WriterState::Published,
-                        WriteFailureState::Indeterminate => WriterState::Indeterminate,
+                        WriteFailureState::Indeterminate => {
+                            WriterState::Indeterminate
+                        }
                     };
                     let (error, state) = failure.into_parts();
                     Err(WriteFailure::new(
@@ -201,7 +209,9 @@ impl AsyncFileWriter {
     /// # Returns
     /// A future resolving to the provider-confirmed destination publication
     /// state after cleanup.
-    pub fn abort_async(&mut self) -> SpiFuture<'_, crate::FsResult<WriteAbortOutcome>> {
+    pub fn abort_async(
+        &mut self,
+    ) -> SpiFuture<'_, crate::FsResult<WriteAbortOutcome>> {
         if self.abort_completed
             || !matches!(
                 self.state,
@@ -226,7 +236,9 @@ impl AsyncFileWriter {
                     self.state = match outcome {
                         WriteAbortOutcome::NotPublished => WriterState::Aborted,
                         WriteAbortOutcome::Published => WriterState::Published,
-                        WriteAbortOutcome::Indeterminate => WriterState::Indeterminate,
+                        WriteAbortOutcome::Indeterminate => {
+                            WriterState::Indeterminate
+                        }
                     };
                     Ok(outcome)
                 }
@@ -250,7 +262,10 @@ impl AsyncFileWriter {
     fn closed_io_error(&self) -> IoError {
         IoError::new(
             IoErrorKind::BrokenPipe,
-            self.invalid_state(FsOperation::Write, "writer no longer accepts bytes"),
+            self.invalid_state(
+                FsOperation::Write,
+                "writer no longer accepts bytes",
+            ),
         )
     }
 
@@ -277,10 +292,16 @@ impl AsyncFileWriter {
     }
 
     /// Adds only missing facade context to a provider lifecycle error.
-    fn contextual_error(&self, error: FsError, operation: FsOperation) -> FsError {
-        error
-            .with_operation(operation)
-            .with_missing_context(self.info.path(), None, &self.provider)
+    fn contextual_error(
+        &self,
+        error: FsError,
+        operation: FsOperation,
+    ) -> FsError {
+        error.with_operation(operation).with_missing_context(
+            self.info.path(),
+            None,
+            &self.provider,
+        )
     }
 }
 
@@ -314,7 +335,8 @@ impl AsyncOutput for AsyncFileWriter {
                 .poll_write_unchecked(cx, input, index, count)
         } {
             Poll::Ready(Ok(written)) => {
-                this.written_bytes = this.written_bytes.saturating_add(written as u64);
+                this.written_bytes =
+                    this.written_bytes.saturating_add(written as u64);
                 Poll::Ready(Ok(written))
             }
             Poll::Ready(Err(error)) => {
@@ -325,7 +347,10 @@ impl AsyncOutput for AsyncFileWriter {
         }
     }
 
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<IoResult<()>> {
+    fn poll_flush(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<IoResult<()>> {
         let this = self.get_mut();
         if this.state != WriterState::Open {
             return Poll::Ready(Err(this.closed_io_error()));
@@ -357,7 +382,9 @@ impl Drop for AsyncFileWriter {
         if !self.abort_completed
             && matches!(
                 self.state,
-                WriterState::Open | WriterState::NotPublished | WriterState::Published
+                WriterState::Open
+                    | WriterState::NotPublished
+                    | WriterState::Published
             )
         {
             self.session.as_mut().cancel_on_drop();

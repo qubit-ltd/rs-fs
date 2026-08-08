@@ -55,11 +55,13 @@ impl AsyncFileSystemSpi for CopySpi {
     fn properties(&self) -> FileSystemProperties {
         FileSystemProperties::new(
             FileSystemInfo::new(
-                FileSystemId::new("copy-test").expect("test id should be valid"),
+                FileSystemId::new("copy-test")
+                    .expect("test id should be valid"),
                 "copy-test",
                 PathSemantics::Hierarchical,
             ),
-            FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::Copy),
+            FileSystemCapabilities::new()
+                .with_guaranteed(FileSystemCapability::Copy),
             FileSystemLimits::unknown(),
             PathConstraints::absolute(),
             SymlinkPolicy::Reject,
@@ -76,7 +78,8 @@ impl AsyncFileSystemSpi for CopySpi {
     fn list<'a>(
         &'a self,
         _: ListRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<qubit_fs::spi::OpenedAsyncDirectoryStream>> {
+    ) -> SpiFuture<'a, FsResult<qubit_fs::spi::OpenedAsyncDirectoryStream>>
+    {
         Box::pin(async { Err(unused()) })
     }
     fn open_reader<'a>(
@@ -112,7 +115,8 @@ impl AsyncFileSystemSpi for CopySpi {
     fn rename<'a>(
         &'a self,
         _: RenameRequest<'a>,
-    ) -> SpiFuture<'a, Result<RenameOutcome, qubit_fs::spi::SpiRenameFailure>> {
+    ) -> SpiFuture<'a, Result<RenameOutcome, qubit_fs::spi::SpiRenameFailure>>
+    {
         Box::pin(async {
             Err(qubit_fs::spi::SpiRenameFailure::new(
                 unused(),
@@ -151,7 +155,8 @@ fn unused() -> FsError {
 
 #[test]
 fn test_begin_copy_only_runs_synchronous_preflight() {
-    let file_system = AsyncFileSystem::from_spi(CopySpi).expect("facade should construct");
+    let file_system =
+        AsyncFileSystem::from_spi(CopySpi).expect("facade should construct");
     let operation = file_system
         .begin_copy(
             Path::parse("/source").expect("source path should parse"),
@@ -164,7 +169,8 @@ fn test_begin_copy_only_runs_synchronous_preflight() {
 
 #[test]
 fn test_dropping_polled_execute_future_marks_operation_indeterminate() {
-    let file_system = AsyncFileSystem::from_spi(CopySpi).expect("facade should construct");
+    let file_system =
+        AsyncFileSystem::from_spi(CopySpi).expect("facade should construct");
     let mut operation = file_system
         .begin_copy(
             Path::parse("/source").expect("source path should parse"),
@@ -179,7 +185,9 @@ fn test_dropping_polled_execute_future_marks_operation_indeterminate() {
     drop(future);
     assert_eq!(
         operation.state(),
-        AsyncCopyOperationState::Failed(qubit_fs::CopyFailureState::Indeterminate)
+        AsyncCopyOperationState::Failed(
+            qubit_fs::CopyFailureState::Indeterminate
+        )
     );
     assert!(!operation.has_recovery_writer());
 }

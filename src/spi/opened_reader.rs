@@ -32,7 +32,10 @@ impl OpenedReader {
     /// An opened-reader envelope for facade validation.
     #[inline]
     #[must_use]
-    pub fn new(info: OpenedFileInfo, reader: Box<dyn Input<Item = u8> + Send>) -> Self {
+    pub fn new(
+        info: OpenedFileInfo,
+        reader: Box<dyn Input<Item = u8> + Send>,
+    ) -> Self {
         Self { info, reader }
     }
 
@@ -42,7 +45,9 @@ impl OpenedReader {
     /// The claimed resource identity and provider reader session.
     #[inline(always)]
     #[must_use]
-    pub(crate) fn into_parts(self) -> (OpenedFileInfo, Box<dyn Input<Item = u8> + Send>) {
+    pub(crate) fn into_parts(
+        self,
+    ) -> (OpenedFileInfo, Box<dyn Input<Item = u8> + Send>) {
         (self.info, self.reader)
     }
 }

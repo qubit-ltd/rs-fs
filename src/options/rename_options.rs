@@ -71,7 +71,10 @@ impl RenameOptions {
     /// Replaces the required atomicity level.
     #[inline]
     #[must_use]
-    pub const fn with_atomicity(mut self, atomicity: AtomicityRequirement) -> Self {
+    pub const fn with_atomicity(
+        mut self,
+        atomicity: AtomicityRequirement,
+    ) -> Self {
         self.atomicity = atomicity;
         self
     }
@@ -79,7 +82,10 @@ impl RenameOptions {
     /// Replaces the required destination durability level.
     #[inline]
     #[must_use]
-    pub const fn with_durability(mut self, durability: DurabilityRequirement) -> Self {
+    pub const fn with_durability(
+        mut self,
+        durability: DurabilityRequirement,
+    ) -> Self {
         self.durability = durability;
         self
     }
@@ -97,7 +103,10 @@ impl RenameOptions {
     /// # Errors
     /// Returns [`FsErrorKind::RequirementNotMet`] when required atomic or
     /// durable rename publication is not supported.
-    pub fn validate_against(&self, capabilities: FileSystemCapabilities) -> Result<(), FsError> {
+    pub fn validate_against(
+        &self,
+        capabilities: FileSystemCapabilities,
+    ) -> Result<(), FsError> {
         if self.atomicity() == AtomicityRequirement::Required
             && !capabilities.supports(FileSystemCapability::AtomicRename)
         {

@@ -8,15 +8,17 @@
 
 #[test]
 fn test_temp_directory_child_components_are_lexically_safe() {
-    let (filesystem, cleanup_calls, _) = crate::handle_support::filesystem(false, Vec::new());
+    let (filesystem, cleanup_calls, _) =
+        crate::handle_support::filesystem(false, Vec::new());
     let mut directory = filesystem
         .create_temp_directory(qubit_fs::TempDirectoryOptions::default())
         .expect("temporary directory should open");
     assert_eq!("/temporary", directory.path().as_str());
-    let component = qubit_fs::PathComponent::parse("child").expect("component should parse");
+    let component = qubit_fs::PathComponent::parse("child")
+        .expect("component should parse");
     assert_eq!("/temporary/child", directory.child(&component).as_str());
-    let descendant =
-        qubit_fs::RelativePath::parse("nested/child").expect("relative path should parse");
+    let descendant = qubit_fs::RelativePath::parse("nested/child")
+        .expect("relative path should parse");
     assert_eq!(
         "/temporary/nested/child",
         directory.descendant(&descendant).as_str()
@@ -39,7 +41,8 @@ fn test_temp_directory_persist_marks_resource_persisted() {
     let mut directory = filesystem
         .create_temp_directory(qubit_fs::TempDirectoryOptions::default())
         .expect("temporary directory should open");
-    let target = qubit_fs::Path::parse("/published-directory").expect("target should parse");
+    let target = qubit_fs::Path::parse("/published-directory")
+        .expect("target should parse");
 
     let outcome = directory
         .persist(&target, qubit_fs::PersistOptions::default())
@@ -63,14 +66,16 @@ fn test_temp_directory_persist_marks_resource_persisted() {
 /// merely advertising the capability and returning a non-atomic outcome.
 #[test]
 fn test_temp_directory_rejects_non_atomic_required_persist_outcome() {
-    let filesystem = crate::handle_support::non_atomic_temp_directory_filesystem();
+    let filesystem =
+        crate::handle_support::non_atomic_temp_directory_filesystem();
     let mut directory = filesystem
         .create_temp_directory(qubit_fs::TempDirectoryOptions::default())
         .expect("temporary directory should open");
 
     let failure = directory
         .persist(
-            &qubit_fs::Path::parse("/published-directory").expect("target should parse"),
+            &qubit_fs::Path::parse("/published-directory")
+                .expect("target should parse"),
             qubit_fs::PersistOptions::default(),
         )
         .expect_err("non-atomic provider result must violate requirement");
@@ -87,14 +92,16 @@ fn test_temp_directory_rejects_non_atomic_required_persist_outcome() {
 /// Rejects a provider outcome that reports a different persistence target.
 #[test]
 fn test_temp_directory_rejects_mismatched_persist_target() {
-    let (filesystem, _, _) = crate::handle_support::filesystem(false, Vec::new());
+    let (filesystem, _, _) =
+        crate::handle_support::filesystem(false, Vec::new());
     let mut directory = filesystem
         .create_temp_directory(qubit_fs::TempDirectoryOptions::default())
         .expect("temporary directory should open");
 
     let failure = directory
         .persist(
-            &qubit_fs::Path::parse("/wrong-persist-target").expect("target should parse"),
+            &qubit_fs::Path::parse("/wrong-persist-target")
+                .expect("target should parse"),
             qubit_fs::PersistOptions::default(),
         )
         .expect_err("mismatched target should violate the provider contract");
@@ -117,7 +124,8 @@ fn test_temp_directory_rejects_mismatched_persist_target() {
 /// leaves the completed handle unusable for further persistence.
 #[test]
 fn test_temp_directory_keep_releases_cleanup_responsibility() {
-    let (filesystem, cleanup_calls, _) = crate::handle_support::filesystem(false, Vec::new());
+    let (filesystem, cleanup_calls, _) =
+        crate::handle_support::filesystem(false, Vec::new());
     let mut directory = filesystem
         .create_temp_directory(qubit_fs::TempDirectoryOptions::default())
         .expect("temporary directory should open");
@@ -127,7 +135,8 @@ fn test_temp_directory_keep_releases_cleanup_responsibility() {
     assert!(
         directory
             .persist(
-                &qubit_fs::Path::parse("/published-directory").expect("target should parse"),
+                &qubit_fs::Path::parse("/published-directory")
+                    .expect("target should parse"),
                 qubit_fs::PersistOptions::default(),
             )
             .is_err()
@@ -166,7 +175,8 @@ fn test_temp_directory_persist_failure_preserves_provider_progress() {
 
         let failure = directory
             .persist(
-                &qubit_fs::Path::parse("/published-directory").expect("target should parse"),
+                &qubit_fs::Path::parse("/published-directory")
+                    .expect("target should parse"),
                 qubit_fs::PersistOptions::default(),
             )
             .expect_err("injected provider persistence failure should surface");
@@ -180,7 +190,8 @@ fn test_temp_directory_persist_failure_preserves_provider_progress() {
         assert_eq!(
             usize::from(matches!(
                 expected_state,
-                qubit_fs::TempResourceState::Owned | qubit_fs::TempResourceState::CleanupRequired
+                qubit_fs::TempResourceState::Owned
+                    | qubit_fs::TempResourceState::CleanupRequired
             )),
             *cleanup_calls.lock().expect("cleanup lock should succeed")
         );
@@ -213,10 +224,11 @@ fn test_temp_directory_lifecycle_errors_preserve_recovery_state() {
             qubit_fs::TempResourceState::Indeterminate,
         ),
     ] {
-        let (filesystem, cleanup_calls) = crate::handle_support::temp_lifecycle_error_filesystem(
-            (operation == "keep").then_some(error_kind),
-            (operation == "cleanup").then_some(error_kind),
-        );
+        let (filesystem, cleanup_calls) =
+            crate::handle_support::temp_lifecycle_error_filesystem(
+                (operation == "keep").then_some(error_kind),
+                (operation == "cleanup").then_some(error_kind),
+            );
         let mut directory = filesystem
             .create_temp_directory(qubit_fs::TempDirectoryOptions::default())
             .expect("temporary directory should open");

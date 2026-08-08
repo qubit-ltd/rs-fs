@@ -12,7 +12,8 @@ use qubit_io::Output;
 
 #[test]
 fn test_write_all_success_publishes_writer() {
-    let (filesystem, _, _) = crate::handle_support::filesystem(false, Vec::new());
+    let (filesystem, _, _) =
+        crate::handle_support::filesystem(false, Vec::new());
     let outcome = filesystem
         .write_all(
             &qubit_fs::Path::parse("/target").expect("path should parse"),
@@ -66,7 +67,8 @@ fn test_open_writer_rejects_cumulative_bytes_over_finite_write_limit() {
             qubit_fs::WriteOptions::default(),
         )
         .expect("writer should open");
-    Output::write_fully(&mut writer, b"two").expect("the first write should fit the limit");
+    Output::write_fully(&mut writer, b"two")
+        .expect("the first write should fit the limit");
     let error = Output::write_fully(&mut writer, b"xx")
         .expect_err("the cumulative write should exceed the limit");
     assert!(error.to_string().contains("provider byte limit"));
@@ -76,7 +78,8 @@ fn test_open_writer_rejects_cumulative_bytes_over_finite_write_limit() {
 /// details through formatting or the causal error interface.
 #[test]
 fn test_write_all_failure_exposes_recovery_accessors_and_formatting() {
-    let (filesystem, _, _) = crate::handle_support::filesystem(true, Vec::new());
+    let (filesystem, _, _) =
+        crate::handle_support::filesystem(true, Vec::new());
     let mut failure = filesystem
         .write_all(
             &qubit_fs::Path::parse("/target").expect("path should parse"),

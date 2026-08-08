@@ -351,7 +351,10 @@ fn test_handle_support_dispatches_directory_and_delete_operations() {
 
     assert!(
         !file_system
-            .create_directory(&path, qubit_fs::CreateDirectoryOptions::default())
+            .create_directory(
+                &path,
+                qubit_fs::CreateDirectoryOptions::default()
+            )
             .expect("directory creation should succeed")
             .already_existed()
     );
@@ -395,13 +398,15 @@ fn test_handle_support_dispatches_successful_facade_operations() {
     let mut bytes = [0_u8; 5];
     assert_eq!(
         5,
-        qubit_io::Input::read(&mut reader, &mut bytes).expect("reader should transfer bytes")
+        qubit_io::Input::read(&mut reader, &mut bytes)
+            .expect("reader should transfer bytes")
     );
 
     let mut writer = file_system
         .open_writer(&target, qubit_fs::WriteOptions::default())
         .expect("writer should open");
-    qubit_io::Output::write_fully(&mut writer, b"bytes").expect("writer should accept bytes");
+    qubit_io::Output::write_fully(&mut writer, b"bytes")
+        .expect("writer should accept bytes");
     writer.commit().expect("writer should commit");
 
     let mut temporary_file = file_system
@@ -454,7 +459,9 @@ fn test_handle_support_enriches_open_and_temp_provider_failures() {
             .expect_err("temporary-file provider failure should propagate"),
         file_system
             .create_temp_directory(qubit_fs::TempDirectoryOptions::default())
-            .expect_err("temporary-directory provider failure should propagate"),
+            .expect_err(
+                "temporary-directory provider failure should propagate",
+            ),
     ] {
         assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
         assert_eq!(Some("handles-test"), error.provider());
@@ -472,7 +479,9 @@ fn test_handle_support_rejects_invalid_temp_identities_with_cleanup_failure() {
             .expect_err("foreign temporary file identity must be rejected"),
         file_system
             .create_temp_directory(qubit_fs::TempDirectoryOptions::default())
-            .expect_err("foreign temporary directory identity must be rejected"),
+            .expect_err(
+                "foreign temporary directory identity must be rejected",
+            ),
     ] {
         assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
         assert_eq!(FsOperation::CreateTemp, error.operation());
@@ -563,17 +572,25 @@ impl FileSystemSpi for BehaviorSpi {
             FileMetadata::new(qubit_fs::FileKind::File),
         ))
     }
-    fn list(&self, request: ListRequest<'_>) -> FsResult<OpenedDirectoryStream> {
+    fn list(
+        &self,
+        request: ListRequest<'_>,
+    ) -> FsResult<OpenedDirectoryStream> {
         let _ = request.path();
         let _ = request.options();
         if self.provider_open_error {
             return Err(Self::unsupported());
         }
         Ok(OpenedDirectoryStream::new(Box::new(Entries(
-            std::mem::take(&mut *self.entries.lock().expect("entries lock should succeed")),
+            std::mem::take(
+                &mut *self.entries.lock().expect("entries lock should succeed"),
+            ),
         ))))
     }
-    fn open_reader(&self, request: OpenReaderRequest<'_>) -> FsResult<OpenedReader> {
+    fn open_reader(
+        &self,
+        request: OpenReaderRequest<'_>,
+    ) -> FsResult<OpenedReader> {
         if self.provider_open_error {
             return Err(Self::unsupported());
         }
@@ -586,7 +603,10 @@ impl FileSystemSpi for BehaviorSpi {
             Box::new(Cursor::new(b"bytes".to_vec())),
         ))
     }
-    fn open_writer(&self, request: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
+    fn open_writer(
+        &self,
+        request: OpenWriterRequest<'_>,
+    ) -> FsResult<OpenedWriter> {
         let _ = request.options();
         if self.provider_open_error {
             return Err(Self::unsupported());
@@ -613,17 +633,26 @@ impl FileSystemSpi for BehaviorSpi {
         let _ = request.options();
         Ok(CreateDirectoryOutcome::new(false))
     }
-    fn delete_file(&self, request: DeleteFileRequest<'_>) -> FsResult<DeleteOutcome> {
+    fn delete_file(
+        &self,
+        request: DeleteFileRequest<'_>,
+    ) -> FsResult<DeleteOutcome> {
         let _ = request.path();
         let _ = request.options();
         Ok(DeleteOutcome::new(false))
     }
-    fn delete_directory(&self, request: DeleteDirectoryRequest<'_>) -> FsResult<DeleteOutcome> {
+    fn delete_directory(
+        &self,
+        request: DeleteDirectoryRequest<'_>,
+    ) -> FsResult<DeleteOutcome> {
         let _ = request.path();
         let _ = request.options();
         Ok(DeleteOutcome::new(false))
     }
-    fn rename(&self, request: RenameRequest<'_>) -> Result<RenameOutcome, SpiRenameFailure> {
+    fn rename(
+        &self,
+        request: RenameRequest<'_>,
+    ) -> Result<RenameOutcome, SpiRenameFailure> {
         let _ = request.source();
         let _ = request.target();
         let _ = request.options();
@@ -632,7 +661,10 @@ impl FileSystemSpi for BehaviorSpi {
             RenameFailureState::Unchanged,
         ))
     }
-    fn create_temp_file(&self, request: CreateTempFileRequest) -> FsResult<OpenedTempFile> {
+    fn create_temp_file(
+        &self,
+        request: CreateTempFileRequest,
+    ) -> FsResult<OpenedTempFile> {
         let _ = request.options();
         if self.provider_open_error {
             return Err(Self::unsupported());
@@ -683,7 +715,12 @@ struct Writer {
 }
 impl Output for Writer {
     type Item = u8;
-    unsafe fn write_unchecked(&mut self, _: &[u8], _: usize, count: usize) -> IoResult<usize> {
+    unsafe fn write_unchecked(
+        &mut self,
+        _: &[u8],
+        _: usize,
+        count: usize,
+    ) -> IoResult<usize> {
         if self.fail_write {
             Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -737,7 +774,9 @@ impl FileWriterSpi for Writer {
                 "injected abort failure",
             )),
             None => Ok(match self.commit_failure {
-                Some(WriteFailureState::Published) => qubit_fs::WriteAbortOutcome::Published,
+                Some(WriteFailureState::Published) => {
+                    qubit_fs::WriteAbortOutcome::Published
+                }
                 Some(WriteFailureState::Indeterminate) => {
                     qubit_fs::WriteAbortOutcome::Indeterminate
                 }
@@ -782,7 +821,8 @@ impl TempResourceSpi for Temp {
             ));
         }
         let target = if request.target().as_str() == "/wrong-persist-target" {
-            Path::parse("/reported-persist-target").expect("generated path should parse")
+            Path::parse("/reported-persist-target")
+                .expect("generated path should parse")
         } else {
             request.target().clone()
         };

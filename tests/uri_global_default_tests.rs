@@ -28,8 +28,10 @@ fn test_uri_credential_boundaries_ignore_global_allow_rules() {
 
     assert!(Uri::parse("s3://bucket/key?token=raw-token").is_err());
 
-    let connection = ConnectionUri::parse("s3://user:raw-password@bucket/key?token=raw-token")
-        .expect("connection URI should parse");
+    let connection = ConnectionUri::parse(
+        "s3://user:raw-password@bucket/key?token=raw-token",
+    )
+    .expect("connection URI should parse");
     let rendered = connection.to_string();
     assert!(!rendered.contains("raw-password"));
     assert!(!rendered.contains("raw-token"));
