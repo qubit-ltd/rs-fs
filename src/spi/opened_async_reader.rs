@@ -9,6 +9,8 @@
 // facade.
 //! Provider-opened asynchronous reader envelope.
 
+use qubit_io::AsyncInput;
+
 use crate::AsyncFileReader;
 use crate::OpenedFileInfo;
 
@@ -17,7 +19,7 @@ pub struct OpenedAsyncReader {
     /// Resource identity claimed by the provider.
     info: OpenedFileInfo,
     /// Provider asynchronous byte-input session.
-    reader: Box<dyn qubit_io::AsyncInput<Item = u8> + Send>,
+    reader: Box<dyn AsyncInput<Item = u8> + Send>,
 }
 
 impl OpenedAsyncReader {
@@ -33,7 +35,7 @@ impl OpenedAsyncReader {
     #[must_use]
     pub fn new(
         info: OpenedFileInfo,
-        reader: Box<dyn qubit_io::AsyncInput<Item = u8> + Send>,
+        reader: Box<dyn AsyncInput<Item = u8> + Send>,
     ) -> Self {
         Self { info, reader }
     }

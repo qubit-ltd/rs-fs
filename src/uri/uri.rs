@@ -13,6 +13,7 @@ use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
 
 use fluent_uri::Uri as FluentUri;
+use qubit_redact::UriRedactionStatus;
 use qubit_redact::UriRedactor;
 
 use super::invalid_uri;
@@ -107,7 +108,7 @@ pub(crate) fn reject_secrets(parsed: &FluentUri<String>) -> FsResult<()> {
         return Err(invalid_uri("URI fragments are not supported"));
     }
     let result = UriRedactor::default().inspect_uri_str(parsed.as_str());
-    if result.status() == qubit_redact::UriRedactionStatus::Invalid {
+    if result.status() == UriRedactionStatus::Invalid {
         return Err(invalid_uri("URI contains invalid encoded components"));
     }
     if result.has_sensitive_components() {
