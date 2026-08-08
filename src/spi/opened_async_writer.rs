@@ -10,11 +10,9 @@
 //! Provider-opened asynchronous writer envelope.
 
 use super::AsyncFileWriteSession;
-use crate::{
-    AsyncFileWriter,
-    AtomicityRequirement,
-    OpenedFileInfo,
-};
+use crate::AsyncFileWriter;
+use crate::AtomicityRequirement;
+use crate::OpenedFileInfo;
 
 /// An already-open asynchronous writer bound to provider identity.
 pub struct OpenedAsyncWriter {
@@ -35,10 +33,7 @@ impl OpenedAsyncWriter {
     /// An opened-writer envelope for facade validation.
     #[inline]
     #[must_use]
-    pub fn new(
-        info: OpenedFileInfo,
-        session: Box<dyn AsyncFileWriteSession>,
-    ) -> Self {
+    pub fn new(info: OpenedFileInfo, session: Box<dyn AsyncFileWriteSession>) -> Self {
         Self { info, session }
     }
 

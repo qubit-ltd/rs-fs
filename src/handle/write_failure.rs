@@ -9,16 +9,12 @@
 //! Typed synchronous write failure.
 
 use std::error::Error;
-use std::fmt::{
-    Display,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::Result as FmtResult;
 
-use crate::{
-    FsError,
-    WriteFailureState,
-};
+use crate::FsError;
+use crate::WriteFailureState;
 
 /// Write error paired with provider-confirmed publication progress.
 #[derive(Debug)]

@@ -8,18 +8,15 @@
 
 //! Secret-free resource URI values.
 
-use std::fmt::{
-    Display,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::Result as FmtResult;
 
 use fluent_uri::Uri as FluentUri;
 use qubit_redact::UriRedactor;
 
-use crate::FsResult;
-
 use super::invalid_uri;
+use crate::FsResult;
 
 /// A validated URI that cannot contain sensitive credentials or a fragment.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]

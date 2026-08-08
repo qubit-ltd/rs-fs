@@ -10,19 +10,17 @@
 
 //! Immutable filesystem property snapshots used by facades.
 
-use crate::{
-    FileSystemCapabilities,
-    FileSystemInfo,
-    FileSystemLimits,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    FsResult,
-    PathConstraints,
-    PathForm,
-    PathSemantics,
-    SymlinkPolicy,
-};
+use crate::FileSystemCapabilities;
+use crate::FileSystemInfo;
+use crate::FileSystemLimits;
+use crate::FsError;
+use crate::FsErrorKind;
+use crate::FsOperation;
+use crate::FsResult;
+use crate::PathConstraints;
+use crate::PathForm;
+use crate::PathSemantics;
+use crate::SymlinkPolicy;
 
 /// Immutable construction-time properties cached by a filesystem facade.
 #[derive(Clone, Debug)]
@@ -143,9 +141,7 @@ impl FileSystemProperties {
                 "provider id must be non-empty and contain no controls",
             ));
         }
-        if let Some((_capability, _dependency)) =
-            self.capabilities.missing_dependency()
-        {
+        if let Some((_capability, _dependency)) = self.capabilities.missing_dependency() {
             return Err(invalid_properties(
                 "advertised capability dependency is missing",
             ));

@@ -7,34 +7,28 @@
 // =============================================================================
 //! Provider-backed temporary directory lifecycle handle.
 
-use std::fmt::{
-    Debug,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::Debug;
+use std::fmt::Formatter;
+use std::fmt::Result as FmtResult;
 
-use crate::spi::{
-    PersistRequest,
-    SpiPersistFailure,
-    TempResourceSpi,
-};
-use crate::{
-    AchievedAtomicity,
-    AtomicityRequirement,
-    FileSystem,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    FsResult,
-    Path,
-    PathComponent,
-    PersistFailure,
-    PersistFailureState,
-    PersistOptions,
-    PersistOutcome,
-    RelativePath,
-    TempResourceState,
-};
+use crate::AchievedAtomicity;
+use crate::AtomicityRequirement;
+use crate::FileSystem;
+use crate::FsError;
+use crate::FsErrorKind;
+use crate::FsOperation;
+use crate::FsResult;
+use crate::Path;
+use crate::PathComponent;
+use crate::PersistFailure;
+use crate::PersistFailureState;
+use crate::PersistOptions;
+use crate::PersistOutcome;
+use crate::RelativePath;
+use crate::TempResourceState;
+use crate::spi::PersistRequest;
+use crate::spi::SpiPersistFailure;
+use crate::spi::TempResourceSpi;
 
 /// Temporary directory retaining the provider session until lifecycle
 /// completion.
@@ -175,19 +169,12 @@ impl TempDirectory {
             .map_err(|error| self.record_cleanup_error(error))
     }
     /// Records provider partial persistence facts.
-    fn record_persist_failure(
-        &mut self,
-        failure: SpiPersistFailure,
-    ) -> PersistFailure {
+    fn record_persist_failure(&mut self, failure: SpiPersistFailure) -> PersistFailure {
         let (error, state) = failure.into_parts();
         self.state = match state {
             PersistFailureState::NotPublished => TempResourceState::Owned,
-            PersistFailureState::PublishedSourceRetained => {
-                TempResourceState::CleanupRequired
-            }
-            PersistFailureState::Indeterminate => {
-                TempResourceState::Indeterminate
-            }
+            PersistFailureState::PublishedSourceRetained => TempResourceState::CleanupRequired,
+            PersistFailureState::Indeterminate => TempResourceState::Indeterminate,
         };
         PersistFailure::new(error, state)
     }

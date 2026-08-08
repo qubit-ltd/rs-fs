@@ -7,18 +7,16 @@
 // =============================================================================
 //! Shared helpers for stream-copy fallback validation.
 
-use crate::{
-    AtomicityRequirement,
-    CopyConflictPolicy,
-    CopyOptions,
-    DurabilityRequirement,
-    FileKind,
-    FileSystemLimits,
-    FsError,
-    MetadataPreservePolicy,
-    Path,
-    ServerSidePreference,
-};
+use crate::AtomicityRequirement;
+use crate::CopyConflictPolicy;
+use crate::CopyOptions;
+use crate::DurabilityRequirement;
+use crate::FileKind;
+use crate::FileSystemLimits;
+use crate::FsError;
+use crate::MetadataPreservePolicy;
+use crate::Path;
+use crate::ServerSidePreference;
 
 /// Returns true when copy options remain within the fallback policy allowlist.
 #[inline]

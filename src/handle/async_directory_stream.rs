@@ -8,27 +8,21 @@
 // qubit-style: allow all -- facade integration tests exercise this API group.
 //! Concrete asynchronous directory stream handle.
 
-use std::fmt::{
-    Debug,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::Debug;
+use std::fmt::Formatter;
+use std::fmt::Result as FmtResult;
 
+use crate::DirEntry;
+use crate::FileSystemLimits;
+use crate::FsError;
+use crate::FsErrorKind;
+use crate::FsOperation;
+use crate::FsResult;
+use crate::ListOptions;
+use crate::Path;
 use crate::handle::directory_entry_validation;
-use crate::spi::{
-    AsyncDirectoryStreamSession,
-    SpiFuture,
-};
-use crate::{
-    DirEntry,
-    FileSystemLimits,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    FsResult,
-    ListOptions,
-    Path,
-};
+use crate::spi::AsyncDirectoryStreamSession;
+use crate::spi::SpiFuture;
 
 /// Type-erased asynchronous directory enumeration handle.
 pub struct AsyncDirectoryStream {
@@ -81,9 +75,7 @@ impl AsyncDirectoryStream {
     ///
     /// # Returns
     /// A future resolving to one entry or `None` at end of enumeration.
-    pub fn next_entry_async(
-        &mut self,
-    ) -> SpiFuture<'_, FsResult<Option<DirEntry>>> {
+    pub fn next_entry_async(&mut self) -> SpiFuture<'_, FsResult<Option<DirEntry>>> {
         if self.terminal {
             return Box::pin(async {
                 Err(FsError::new(
@@ -96,29 +88,23 @@ impl AsyncDirectoryStream {
         Box::pin(async move {
             match self.session.next_entry_async().await {
                 Ok(Some(entry)) => {
-                    if let Err(error) =
-                        directory_entry_validation::validate_entry(
-                            &entry,
-                            &self.root,
-                            self.path_semantics,
-                            self.limits,
-                        )
-                    {
+                    if let Err(error) = directory_entry_validation::validate_entry(
+                        &entry,
+                        &self.root,
+                        self.path_semantics,
+                        self.limits,
+                    ) {
                         self.terminal = true;
                         return Err(self.contextual_error(error));
                     }
-                    if let Err(message) =
-                        directory_entry_validation::matches_options(
-                            &entry,
-                            &self.root,
-                            &self.options,
-                        )
-                    {
+                    if let Err(message) = directory_entry_validation::matches_options(
+                        &entry,
+                        &self.root,
+                        &self.options,
+                    ) {
                         self.terminal = true;
                         return Err(self.contextual_error(
-                            directory_entry_validation::option_error(
-                                &self.root, message,
-                            ),
+                            directory_entry_validation::option_error(&self.root, message),
                         ));
                     }
                     Ok(Some(entry))

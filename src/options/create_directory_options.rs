@@ -8,10 +8,8 @@
 // qubit-style: allow all -- facade integration tests exercise this API group.
 //! Directory creation options.
 
-use crate::{
-    NonSensitiveMetadata,
-    UserMetadata,
-};
+use crate::NonSensitiveMetadata;
+use crate::UserMetadata;
 
 /// Options controlling directory or collection creation.
 #[non_exhaustive]

@@ -8,24 +8,17 @@
 
 //! Provider-neutral logical paths.
 
-use std::fmt::{
-    Display,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::Result as FmtResult;
 
-use crate::{
-    FsError,
-    FsOperation,
-    FsResult,
-};
-
-use super::{
-    PathComponent,
-    PathComponents,
-    PathSemantics,
-    RelativePath,
-};
+use super::PathComponent;
+use super::PathComponents;
+use super::PathSemantics;
+use super::RelativePath;
+use crate::FsError;
+use crate::FsOperation;
+use crate::FsResult;
 
 /// A validated logical path independent of any provider-native representation.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -73,10 +66,7 @@ impl Path {
     ///
     /// Hierarchical values normalize empty and dot components and reject root
     /// escapes. Object-key and provider-specific values preserve their text.
-    pub fn parse_with_semantics(
-        text: &str,
-        semantics: PathSemantics,
-    ) -> FsResult<Self> {
+    pub fn parse_with_semantics(text: &str, semantics: PathSemantics) -> FsResult<Self> {
         if text.is_empty() || text.contains('\0') {
             return Err(invalid_path());
         }

@@ -8,16 +8,12 @@
 //! Failure returned by the convenience whole-file write operation.
 
 use std::error::Error;
-use std::fmt::{
-    Display,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::Result as FmtResult;
 
-use crate::{
-    FileWriter,
-    FsError,
-};
+use crate::FileWriter;
+use crate::FsError;
 
 /// A whole-file write failure retaining the recoverable writer when available.
 pub struct WriteAllFailure {

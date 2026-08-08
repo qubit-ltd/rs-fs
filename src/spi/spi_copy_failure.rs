@@ -9,11 +9,9 @@
 // facade.
 //! Provider copy failure facts.
 
-use crate::{
-    CopyFailureState,
-    CopyStats,
-    FsError,
-};
+use crate::CopyFailureState;
+use crate::CopyStats;
+use crate::FsError;
 
 /// Typed provider copy failure reserved for copy orchestration.
 pub struct SpiCopyFailure {
@@ -37,11 +35,7 @@ impl SpiCopyFailure {
     /// A failure containing all provider-confirmed facts.
     #[inline]
     #[must_use]
-    pub fn new(
-        error: FsError,
-        state: CopyFailureState,
-        partial_stats: CopyStats,
-    ) -> Self {
+    pub fn new(error: FsError, state: CopyFailureState, partial_stats: CopyStats) -> Self {
         Self {
             error: Box::new(error),
             state,

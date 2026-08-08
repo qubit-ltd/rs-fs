@@ -8,24 +8,20 @@
 // qubit-style: allow source-test-pair
 //! Concrete synchronous directory stream handle.
 
-use std::fmt::{
-    Debug,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::Debug;
+use std::fmt::Formatter;
+use std::fmt::Result as FmtResult;
 
+use crate::DirEntry;
+use crate::FileSystemLimits;
+use crate::FsError;
+use crate::FsErrorKind;
+use crate::FsOperation;
+use crate::FsResult;
+use crate::ListOptions;
+use crate::Path;
 use crate::handle::directory_entry_validation;
 use crate::spi::DirectoryStreamSpi;
-use crate::{
-    DirEntry,
-    FileSystemLimits,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    FsResult,
-    ListOptions,
-    Path,
-};
 
 /// Type-erased synchronous directory enumeration handle.
 pub struct DirectoryStream {
@@ -102,18 +98,14 @@ impl DirectoryStream {
                     return Err(self.contextual_error(error));
                 }
                 if let Err(message) =
-                    directory_entry_validation::matches_options(
-                        &entry,
-                        &self.root,
-                        &self.options,
-                    )
+                    directory_entry_validation::matches_options(&entry, &self.root, &self.options)
                 {
                     self.terminal = true;
-                    return Err(self.contextual_error(
-                        directory_entry_validation::option_error(
+                    return Err(
+                        self.contextual_error(directory_entry_validation::option_error(
                             &self.root, message,
-                        ),
-                    ));
+                        )),
+                    );
                 }
                 Ok(Some(entry))
             }

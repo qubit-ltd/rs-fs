@@ -9,10 +9,8 @@
 // facade.
 //! Provider metadata response.
 
-use crate::{
-    FileMetadata,
-    Path,
-};
+use crate::FileMetadata;
+use crate::Path;
 
 /// Provider metadata response bound to the path it describes.
 pub struct StatResponse {

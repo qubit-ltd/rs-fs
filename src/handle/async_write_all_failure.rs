@@ -9,16 +9,12 @@
 //! Failure returned by the asynchronous convenience whole-file write operation.
 
 use std::error::Error;
-use std::fmt::{
-    Display,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::Result as FmtResult;
 
-use crate::{
-    AsyncFileWriter,
-    FsError,
-};
+use crate::AsyncFileWriter;
+use crate::FsError;
 
 /// An asynchronous whole-file write failure retaining a recoverable writer.
 pub struct AsyncWriteAllFailure {

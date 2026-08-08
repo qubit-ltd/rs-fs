@@ -7,42 +7,34 @@
 // =============================================================================
 //! Public facade prefix-read benchmark with a deterministic provider stream.
 
-use std::{
-    io::Cursor,
-    sync::Arc,
-};
+use std::io::Cursor;
+use std::sync::Arc;
 
-use criterion::{
-    BenchmarkId,
-    Criterion,
-    Throughput,
-    black_box,
-    criterion_group,
-    criterion_main,
-};
-use qubit_fs::spi::{
-    FileSystemSpi,
-    OpenReaderRequest,
-    OpenedReader,
-    StatRequest,
-    StatResponse,
-};
-use qubit_fs::{
-    FileKind,
-    FileMetadata,
-    FileSystem,
-    FileSystemCapabilities,
-    FileSystemId,
-    FileSystemInfo,
-    FileSystemLimits,
-    FileSystemProperties,
-    FsResult,
-    OpenedFileInfo,
-    Path,
-    PathConstraints,
-    PathSemantics,
-    SymlinkPolicy,
-};
+use criterion::BenchmarkId;
+use criterion::Criterion;
+use criterion::Throughput;
+use criterion::black_box;
+use criterion::criterion_group;
+use criterion::criterion_main;
+use qubit_fs::FileKind;
+use qubit_fs::FileMetadata;
+use qubit_fs::FileSystem;
+use qubit_fs::FileSystemCapabilities;
+use qubit_fs::FileSystemId;
+use qubit_fs::FileSystemInfo;
+use qubit_fs::FileSystemLimits;
+use qubit_fs::FileSystemProperties;
+use qubit_fs::FsResult;
+use qubit_fs::OpenedFileInfo;
+use qubit_fs::Path;
+use qubit_fs::PathConstraints;
+use qubit_fs::PathSemantics;
+use qubit_fs::SymlinkPolicy;
+use qubit_fs::spi::FileSystemSpi;
+use qubit_fs::spi::OpenReaderRequest;
+use qubit_fs::spi::OpenedReader;
+use qubit_fs::spi::StatRequest;
+use qubit_fs::spi::StatResponse;
 
 struct BenchmarkSpi {
     payload: Arc<Vec<u8>>,
@@ -57,8 +49,7 @@ impl BenchmarkSpi {
                 "bench",
                 PathSemantics::Hierarchical,
             ),
-            FileSystemCapabilities::new()
-                .with_guaranteed(qubit_fs::FileSystemCapability::Read),
+            FileSystemCapabilities::new().with_guaranteed(qubit_fs::FileSystemCapability::Read),
             FileSystemLimits::unknown(),
             PathConstraints::absolute(),
             SymlinkPolicy::Reject,
@@ -79,20 +70,13 @@ impl FileSystemSpi for BenchmarkSpi {
     fn stat(&self, request: StatRequest<'_>) -> FsResult<StatResponse> {
         Ok(StatResponse::new(
             request.path().clone(),
-            FileMetadata::new(FileKind::File)
-                .with_len(Some(self.payload.len() as u64)),
+            FileMetadata::new(FileKind::File).with_len(Some(self.payload.len() as u64)),
         ))
     }
 
-    fn open_reader(
-        &self,
-        request: OpenReaderRequest<'_>,
-    ) -> FsResult<OpenedReader> {
+    fn open_reader(&self, request: OpenReaderRequest<'_>) -> FsResult<OpenedReader> {
         Ok(OpenedReader::new(
-            OpenedFileInfo::new(
-                self.properties.info().id().clone(),
-                request.path().clone(),
-            ),
+            OpenedFileInfo::new(self.properties.info().id().clone(), request.path().clone()),
             Box::new(Cursor::new(self.payload.as_ref().clone())),
         ))
     }
@@ -102,9 +86,8 @@ fn stream_copy_fallback(c: &mut Criterion) {
     let path = Path::parse("/payload").expect("benchmark path is valid");
     let mut group = c.benchmark_group("facade_read_prefix");
     for size in [1_usize << 10, 1_usize << 20, 1_usize << 26] {
-        let filesystem =
-            FileSystem::from_spi(BenchmarkSpi::new(vec![0xA5; size]))
-                .expect("benchmark facade should construct");
+        let filesystem = FileSystem::from_spi(BenchmarkSpi::new(vec![0xA5; size]))
+            .expect("benchmark facade should construct");
         group.throughput(Throughput::Bytes(size as u64));
         for max_bytes in [8 * 1024, 64 * 1024, 1024 * 1024] {
             group.bench_with_input(
@@ -113,11 +96,7 @@ fn stream_copy_fallback(c: &mut Criterion) {
                 |bench, filesystem| {
                     bench.iter(|| {
                         let bytes = filesystem
-                            .read_prefix(
-                                black_box(&path),
-                                Default::default(),
-                                max_bytes,
-                            )
+                            .read_prefix(black_box(&path), Default::default(), max_bytes)
                             .expect("benchmark prefix read should succeed");
                         black_box(bytes.len());
                     });

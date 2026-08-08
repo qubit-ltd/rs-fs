@@ -10,13 +10,11 @@
 //! Provider-opened asynchronous directory stream envelope.
 
 use super::AsyncDirectoryStreamSession;
-use crate::{
-    AsyncDirectoryStream,
-    FileSystemLimits,
-    ListOptions,
-    Path,
-    PathSemantics,
-};
+use crate::AsyncDirectoryStream;
+use crate::FileSystemLimits;
+use crate::ListOptions;
+use crate::Path;
+use crate::PathSemantics;
 
 /// An already-open asynchronous directory stream.
 pub struct OpenedAsyncDirectoryStream {

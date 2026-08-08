@@ -9,10 +9,8 @@
 // facade.
 //! Provider rename failure facts.
 
-use crate::{
-    FsError,
-    RenameFailureState,
-};
+use crate::FsError;
+use crate::RenameFailureState;
 
 /// Typed provider rename failure reserved for rename orchestration.
 pub struct SpiRenameFailure {

@@ -9,10 +9,8 @@
 // facade.
 //! Provider-opened asynchronous reader envelope.
 
-use crate::{
-    AsyncFileReader,
-    OpenedFileInfo,
-};
+use crate::AsyncFileReader;
+use crate::OpenedFileInfo;
 
 /// An already-open asynchronous reader bound to provider identity.
 pub struct OpenedAsyncReader {

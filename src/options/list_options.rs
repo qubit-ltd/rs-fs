@@ -7,14 +7,12 @@
 // =============================================================================
 //! Directory listing options.
 
-use crate::{
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    FsResult,
-    RelativePath,
-    SymlinkPolicy,
-};
+use crate::FsError;
+use crate::FsErrorKind;
+use crate::FsOperation;
+use crate::FsResult;
+use crate::RelativePath;
+use crate::SymlinkPolicy;
 
 /// Options controlling directory or prefix listing.
 #[non_exhaustive]
