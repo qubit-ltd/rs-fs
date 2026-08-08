@@ -9,6 +9,7 @@
 use qubit_fs::{
     AchievedAtomicity,
     Path,
+    PersistCleanupState,
     PersistOutcome,
     PublicationMethod,
     UserMetadata,
@@ -35,4 +36,12 @@ fn test_persist_outcome_preserves_publication_details_and_diagnostics() {
     assert_eq!(AchievedAtomicity::Atomic, outcome.atomicity());
     assert_eq!(PublicationMethod::AtomicRename, outcome.method());
     assert!(outcome.diagnostics().contains_key("storage_class"));
+    assert_eq!(PersistCleanupState::Complete, outcome.cleanup_state());
+
+    let residual = outcome
+        .with_cleanup_state(PersistCleanupState::ResidualTemporaryContainer);
+    assert_eq!(
+        PersistCleanupState::ResidualTemporaryContainer,
+        residual.cleanup_state()
+    );
 }

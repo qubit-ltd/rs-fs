@@ -16,6 +16,8 @@ use crate::{
     UserMetadata,
 };
 
+use super::PersistCleanupState;
+
 /// Confirmed result of publishing a temporary source to its final target.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PersistOutcome {
@@ -27,6 +29,8 @@ pub struct PersistOutcome {
     method: PublicationMethod,
     /// Provider-native non-sensitive diagnostics.
     diagnostics: NonSensitiveMetadata,
+    /// Cleanup state of the private temporary container.
+    cleanup_state: PersistCleanupState,
 }
 
 impl PersistOutcome {
@@ -51,6 +55,7 @@ impl PersistOutcome {
             atomicity,
             method,
             diagnostics: NonSensitiveMetadata::new(),
+            cleanup_state: PersistCleanupState::Complete,
         }
     }
 
@@ -80,6 +85,20 @@ impl PersistOutcome {
     #[must_use]
     pub const fn diagnostics(&self) -> &NonSensitiveMetadata {
         &self.diagnostics
+    }
+
+    /// Returns the state of the private temporary container after publication.
+    #[inline(always)]
+    pub const fn cleanup_state(&self) -> PersistCleanupState {
+        self.cleanup_state
+    }
+
+    /// Replaces the cleanup state reported by the provider.
+    #[inline]
+    #[must_use]
+    pub fn with_cleanup_state(mut self, cleanup_state: PersistCleanupState) -> Self {
+        self.cleanup_state = cleanup_state;
+        self
     }
 
     /// Replaces provider-native diagnostics that have already passed key
