@@ -7,12 +7,10 @@
 // =============================================================================
 //! Public rename outcome coverage for the shared facade validation path.
 
-use qubit_fs::{
-    AchievedAtomicity,
-    Path,
-    PublicationMethod,
-    RenameOutcome,
-};
+use qubit_fs::AchievedAtomicity;
+use qubit_fs::Path;
+use qubit_fs::PublicationMethod;
+use qubit_fs::RenameOutcome;
 
 /// Verifies the outcome facts consumed by the shared sync/async validator.
 #[test]

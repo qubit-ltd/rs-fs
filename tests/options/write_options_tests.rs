@@ -88,7 +88,7 @@ fn append_cannot_request_atomic_publication() {
     let error = options
         .validate()
         .expect_err("append plus required publication atomicity is invalid");
-    assert_eq!(qubit_fs::FsErrorKind::InvalidOptions, error.kind());
+    assert_eq!(FsErrorKind::InvalidOptions, error.kind());
 }
 
 #[test]

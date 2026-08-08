@@ -15,6 +15,7 @@ use qubit_fs::Path;
 use qubit_fs::PathComponent;
 use qubit_fs::PersistFailureState;
 use qubit_fs::PersistOptions;
+use qubit_fs::RelativePath;
 use qubit_fs::TempDirectoryOptions;
 use qubit_fs::TempFileOptions;
 use qubit_fs::TempResourceState;
@@ -111,8 +112,8 @@ fn test_async_temp_directory_builds_child_and_descendant_paths() {
     )
     .expect("temporary directory should open");
     let component = PathComponent::parse("child").expect("component parses");
-    let descendant = qubit_fs::RelativePath::parse("nested/item")
-        .expect("relative path parses");
+    let descendant =
+        RelativePath::parse("nested/item").expect("relative path parses");
     assert_eq!("/tmp/recording/child", directory.child(&component).as_str());
     assert_eq!(
         "/tmp/recording/nested/item",

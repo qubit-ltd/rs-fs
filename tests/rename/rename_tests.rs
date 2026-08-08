@@ -28,6 +28,7 @@ use qubit_fs::FsOperation;
 use qubit_fs::FsResult;
 use qubit_fs::Path;
 use qubit_fs::PathConstraints;
+use qubit_fs::PathSemantics;
 use qubit_fs::PublicationMethod;
 use qubit_fs::RenameFailureState;
 use qubit_fs::RenameOptions;
@@ -103,7 +104,7 @@ impl FileSystemSpi for RenameSpi {
             FileSystemInfo::new(
                 FileSystemId::new("rename-recording").expect("valid id"),
                 "rename-recording",
-                qubit_fs::PathSemantics::Hierarchical,
+                PathSemantics::Hierarchical,
             ),
             capabilities,
             FileSystemLimits::unknown(),

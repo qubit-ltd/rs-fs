@@ -8,6 +8,11 @@
 
 use std::error::Error;
 
+use qubit_fs::FsErrorKind;
+use qubit_fs::Path;
+use qubit_fs::WriteFailureState;
+use qubit_fs::WriteOptions;
+
 use crate::async_recording_spi::AsyncRecordingConfig;
 use crate::async_recording_spi::async_recording_file_system;
 use crate::poll_support::ready;
@@ -15,17 +20,17 @@ use crate::poll_support::ready;
 #[test]
 fn test_async_write_all_failure_exposes_recovery_and_formatting() {
     let (filesystem, _) = async_recording_file_system(AsyncRecordingConfig {
-        writer_commit_failure: Some(qubit_fs::WriteFailureState::NotPublished),
+        writer_commit_failure: Some(WriteFailureState::NotPublished),
         ..AsyncRecordingConfig::default()
     });
     let mut failure = ready(filesystem.write_all(
-        &qubit_fs::Path::parse("/target").expect("path should parse"),
+        &Path::parse("/target").expect("path should parse"),
         b"bytes",
-        qubit_fs::WriteOptions::default(),
+        WriteOptions::default(),
     ))
     .expect_err("commit failure should retain an async writer");
 
-    assert_eq!(qubit_fs::FsErrorKind::Io, failure.error().kind());
+    assert_eq!(FsErrorKind::Io, failure.error().kind());
     assert!(failure.writer().is_some());
     assert!(failure.writer_mut().is_some());
     assert!(failure.to_string().contains("commit failure"));
@@ -33,6 +38,6 @@ fn test_async_write_all_failure_exposes_recovery_and_formatting() {
     assert!(Error::source(&failure).is_some());
 
     let (error, writer) = failure.into_parts();
-    assert_eq!(qubit_fs::FsErrorKind::Io, error.kind());
+    assert_eq!(FsErrorKind::Io, error.kind());
     assert!(writer.is_some());
 }

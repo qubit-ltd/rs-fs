@@ -11,11 +11,17 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
+use qubit_fs::AchievedAtomicity;
+use qubit_fs::CopyOptions;
+use qubit_fs::CreateDirectoryOptions;
 use qubit_fs::CreateDirectoryOutcome;
+use qubit_fs::DeleteOptions;
 use qubit_fs::DeleteOutcome;
+use qubit_fs::FileKind;
 use qubit_fs::FileMetadata;
 use qubit_fs::FileSystem;
 use qubit_fs::FileSystemCapabilities;
+use qubit_fs::FileSystemCapability;
 use qubit_fs::FileSystemId;
 use qubit_fs::FileSystemInfo;
 use qubit_fs::FileSystemLimits;
@@ -26,8 +32,16 @@ use qubit_fs::FsOperation;
 use qubit_fs::FsResult;
 use qubit_fs::Path;
 use qubit_fs::PathConstraints;
+use qubit_fs::PathSemantics;
+use qubit_fs::PublicationMethod;
+use qubit_fs::ReadOptions;
+use qubit_fs::RenameFailureState;
+use qubit_fs::RenameOptions;
 use qubit_fs::RenameOutcome;
 use qubit_fs::SymlinkPolicy;
+use qubit_fs::TempDirectoryOptions;
+use qubit_fs::TempFileOptions;
+use qubit_fs::WriteOptions;
 use qubit_fs::spi::CreateDirectoryRequest;
 use qubit_fs::spi::CreateTempDirectoryRequest;
 use qubit_fs::spi::CreateTempFileRequest;
@@ -87,10 +101,7 @@ impl FileSystemSpi for CountingSpi {
         } else {
             request.path().clone()
         };
-        Ok(StatResponse::new(
-            path,
-            FileMetadata::new(qubit_fs::FileKind::File),
-        ))
+        Ok(StatResponse::new(path, FileMetadata::new(FileKind::File)))
     }
     fn list(&self, _: ListRequest<'_>) -> FsResult<OpenedDirectoryStream> {
         Err(Self::unsupported())
@@ -135,14 +146,14 @@ impl FileSystemSpi for CountingSpi {
         if self.direct_error {
             Err(SpiRenameFailure::new(
                 Self::unsupported(),
-                qubit_fs::RenameFailureState::Unchanged,
+                RenameFailureState::Unchanged,
             ))
         } else {
             Ok(RenameOutcome::new(
                 request.source().clone(),
                 request.target().clone(),
-                qubit_fs::AchievedAtomicity::Atomic,
-                qubit_fs::PublicationMethod::AtomicRename,
+                AchievedAtomicity::Atomic,
+                PublicationMethod::AtomicRename,
             ))
         }
     }
@@ -166,7 +177,7 @@ fn test_file_system_from_spi_caches_properties_snapshot() {
         FileSystemInfo::new(
             FileSystemId::new("test").expect("test id should be valid"),
             "test",
-            qubit_fs::PathSemantics::Hierarchical,
+            PathSemantics::Hierarchical,
         ),
         FileSystemCapabilities::new(),
         FileSystemLimits::unknown(),
@@ -207,7 +218,7 @@ fn test_stat_rejects_path_with_different_semantics_before_spi_call() {
         FileSystemInfo::new(
             FileSystemId::new("object-store").expect("test id should be valid"),
             "test",
-            qubit_fs::PathSemantics::ObjectKey,
+            PathSemantics::ObjectKey,
         ),
         FileSystemCapabilities::new(),
         FileSystemLimits::unknown(),
@@ -245,7 +256,7 @@ fn test_stat_rejects_provider_response_for_a_different_path() {
         FileSystemInfo::new(
             FileSystemId::new("test").expect("test id should be valid"),
             "test",
-            qubit_fs::PathSemantics::Hierarchical,
+            PathSemantics::Hierarchical,
         ),
         FileSystemCapabilities::new(),
         FileSystemLimits::unknown(),
@@ -278,7 +289,7 @@ fn test_exists_maps_not_found_only_and_contextualizes_other_errors() {
         FileSystemInfo::new(
             FileSystemId::new("test").expect("test id should be valid"),
             "test",
-            qubit_fs::PathSemantics::Hierarchical,
+            PathSemantics::Hierarchical,
         ),
         FileSystemCapabilities::new(),
         FileSystemLimits::unknown(),
@@ -327,13 +338,13 @@ fn test_direct_sync_provider_failures_are_enriched() {
         FileSystemInfo::new(
             FileSystemId::new("test").expect("test id should be valid"),
             "test",
-            qubit_fs::PathSemantics::Hierarchical,
+            PathSemantics::Hierarchical,
         ),
         FileSystemCapabilities::new()
-            .with_guaranteed(qubit_fs::FileSystemCapability::CreateDirectory)
-            .with_guaranteed(qubit_fs::FileSystemCapability::Delete)
-            .with_guaranteed(qubit_fs::FileSystemCapability::Rename)
-            .with_guaranteed(qubit_fs::FileSystemCapability::AtomicRename),
+            .with_guaranteed(FileSystemCapability::CreateDirectory)
+            .with_guaranteed(FileSystemCapability::Delete)
+            .with_guaranteed(FileSystemCapability::Rename)
+            .with_guaranteed(FileSystemCapability::AtomicRename),
         FileSystemLimits::unknown(),
         PathConstraints::absolute(),
         SymlinkPolicy::Reject,
@@ -354,16 +365,13 @@ fn test_direct_sync_provider_failures_are_enriched() {
 
     for error in [
         file_system
-            .create_directory(
-                &target,
-                qubit_fs::CreateDirectoryOptions::default(),
-            )
+            .create_directory(&target, CreateDirectoryOptions::default())
             .expect_err("provider create failure should propagate"),
         file_system
-            .delete_file(&target, qubit_fs::DeleteOptions::default())
+            .delete_file(&target, DeleteOptions::default())
             .expect_err("provider delete failure should propagate"),
         file_system
-            .delete_directory(&target, qubit_fs::DeleteOptions::default())
+            .delete_directory(&target, DeleteOptions::default())
             .expect_err("provider delete failure should propagate"),
     ] {
         assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
@@ -374,11 +382,11 @@ fn test_direct_sync_provider_failures_are_enriched() {
         .rename(
             &Path::parse("/source").expect("path should parse"),
             &target,
-            qubit_fs::RenameOptions::default(),
+            RenameOptions::default(),
         )
         .expect_err("provider rename failure should propagate");
     assert_eq!(FsErrorKind::UnsupportedOperation, rename.error().kind());
-    assert_eq!(qubit_fs::RenameFailureState::Unchanged, rename.state());
+    assert_eq!(RenameFailureState::Unchanged, rename.state());
 }
 
 /// Returns a provider-confirmed rename outcome with facade-bound identity.
@@ -388,11 +396,11 @@ fn test_sync_rename_returns_successful_provider_outcome() {
         FileSystemInfo::new(
             FileSystemId::new("test").expect("test id should be valid"),
             "test",
-            qubit_fs::PathSemantics::Hierarchical,
+            PathSemantics::Hierarchical,
         ),
         FileSystemCapabilities::new()
-            .with_guaranteed(qubit_fs::FileSystemCapability::Rename)
-            .with_guaranteed(qubit_fs::FileSystemCapability::AtomicRename),
+            .with_guaranteed(FileSystemCapability::Rename)
+            .with_guaranteed(FileSystemCapability::AtomicRename),
         FileSystemLimits::unknown(),
         PathConstraints::absolute(),
         SymlinkPolicy::Reject,
@@ -412,7 +420,7 @@ fn test_sync_rename_returns_successful_provider_outcome() {
     let source = Path::parse("/source").expect("path should parse");
     let target = Path::parse("/target").expect("path should parse");
     let outcome = file_system
-        .rename(&source, &target, qubit_fs::RenameOptions::default())
+        .rename(&source, &target, RenameOptions::default())
         .expect("provider rename should succeed");
     assert_eq!(&source, outcome.source());
     assert_eq!(&target, outcome.target());
@@ -426,14 +434,14 @@ fn test_sync_facade_rejects_unrequested_outcomes_and_same_path_mutations() {
         FileSystemInfo::new(
             FileSystemId::new("test").expect("test id should be valid"),
             "test",
-            qubit_fs::PathSemantics::Hierarchical,
+            PathSemantics::Hierarchical,
         ),
         FileSystemCapabilities::new()
-            .with_guaranteed(qubit_fs::FileSystemCapability::Copy)
-            .with_guaranteed(qubit_fs::FileSystemCapability::CreateDirectory)
-            .with_guaranteed(qubit_fs::FileSystemCapability::Delete)
-            .with_guaranteed(qubit_fs::FileSystemCapability::Rename)
-            .with_guaranteed(qubit_fs::FileSystemCapability::AtomicRename),
+            .with_guaranteed(FileSystemCapability::Copy)
+            .with_guaranteed(FileSystemCapability::CreateDirectory)
+            .with_guaranteed(FileSystemCapability::Delete)
+            .with_guaranteed(FileSystemCapability::Rename)
+            .with_guaranteed(FileSystemCapability::AtomicRename),
         FileSystemLimits::unknown(),
         PathConstraints::absolute(),
         SymlinkPolicy::Reject,
@@ -454,26 +462,23 @@ fn test_sync_facade_rejects_unrequested_outcomes_and_same_path_mutations() {
 
     for error in [
         file_system
-            .create_directory(
-                &path,
-                qubit_fs::CreateDirectoryOptions::default(),
-            )
+            .create_directory(&path, CreateDirectoryOptions::default())
             .expect_err("unexpected existing directory must be rejected"),
         file_system
-            .delete_file(&path, qubit_fs::DeleteOptions::default())
+            .delete_file(&path, DeleteOptions::default())
             .expect_err("unexpected missing file must be rejected"),
         file_system
-            .delete_directory(&path, qubit_fs::DeleteOptions::default())
+            .delete_directory(&path, DeleteOptions::default())
             .expect_err("unexpected missing directory must be rejected"),
     ] {
         assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
     }
     let copy = file_system
-        .copy(&path, &path, qubit_fs::CopyOptions::default())
+        .copy(&path, &path, CopyOptions::default())
         .expect_err("copy source and target must differ");
     assert_eq!(FsErrorKind::InvalidOptions, copy.error().kind());
     let rename = file_system
-        .rename(&path, &path, qubit_fs::RenameOptions::default())
+        .rename(&path, &path, RenameOptions::default())
         .expect_err("rename source and target must differ");
     assert_eq!(FsErrorKind::InvalidOptions, rename.error().kind());
     assert_eq!(Some("test"), rename.error().provider());
@@ -487,7 +492,7 @@ fn test_sync_facade_requires_operation_capabilities_before_dispatch() {
         FileSystemInfo::new(
             FileSystemId::new("test").expect("test id should be valid"),
             "test",
-            qubit_fs::PathSemantics::Hierarchical,
+            PathSemantics::Hierarchical,
         ),
         FileSystemCapabilities::new(),
         FileSystemLimits::unknown(),
@@ -510,28 +515,25 @@ fn test_sync_facade_requires_operation_capabilities_before_dispatch() {
 
     for error in [
         file_system
-            .open_reader(&path, qubit_fs::ReadOptions::default())
+            .open_reader(&path, ReadOptions::default())
             .expect_err("reader requires advertised capability"),
         file_system
-            .open_writer(&path, qubit_fs::WriteOptions::default())
+            .open_writer(&path, WriteOptions::default())
             .expect_err("writer requires advertised capability"),
         file_system
-            .create_temp_file(qubit_fs::TempFileOptions::default())
+            .create_temp_file(TempFileOptions::default())
             .expect_err("temporary file requires advertised capability"),
         file_system
-            .create_temp_directory(qubit_fs::TempDirectoryOptions::default())
+            .create_temp_directory(TempDirectoryOptions::default())
             .expect_err("temporary directory requires advertised capability"),
         file_system
-            .create_directory(
-                &path,
-                qubit_fs::CreateDirectoryOptions::default(),
-            )
+            .create_directory(&path, CreateDirectoryOptions::default())
             .expect_err("directory creation requires advertised capability"),
     ] {
         assert_eq!(FsErrorKind::UnsupportedCapability, error.kind());
     }
     let rename = file_system
-        .rename(&path, &Path::root(), qubit_fs::RenameOptions::default())
+        .rename(&path, &Path::root(), RenameOptions::default())
         .expect_err("rename requires advertised capability");
     assert_eq!(FsErrorKind::UnsupportedCapability, rename.error().kind());
 }

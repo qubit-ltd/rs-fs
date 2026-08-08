@@ -15,6 +15,7 @@ use qubit_fs::FileSystemInfo;
 use qubit_fs::FileSystemLimit;
 use qubit_fs::FileSystemLimits;
 use qubit_fs::FileSystemProperties;
+use qubit_fs::FsOperation;
 use qubit_fs::Path;
 use qubit_fs::PathConstraints;
 use qubit_fs::PathForm;
@@ -256,7 +257,7 @@ fn test_file_system_limits_validate_path_read_and_write_boundaries() {
             .validate_path(
                 &short_path,
                 PathSemantics::Hierarchical,
-                qubit_fs::FsOperation::Stat,
+                FsOperation::Stat,
             )
             .is_ok()
     );
@@ -265,7 +266,7 @@ fn test_file_system_limits_validate_path_read_and_write_boundaries() {
             .validate_path(
                 &long_component,
                 PathSemantics::Hierarchical,
-                qubit_fs::FsOperation::Stat,
+                FsOperation::Stat,
             )
             .is_err()
     );
@@ -274,7 +275,7 @@ fn test_file_system_limits_validate_path_read_and_write_boundaries() {
             .validate_path(
                 &long_component,
                 PathSemantics::ObjectKey,
-                qubit_fs::FsOperation::Stat,
+                FsOperation::Stat,
             )
             .is_ok()
     );
@@ -283,7 +284,7 @@ fn test_file_system_limits_validate_path_read_and_write_boundaries() {
             .validate_path(
                 &long_path,
                 PathSemantics::ObjectKey,
-                qubit_fs::FsOperation::Stat,
+                FsOperation::Stat,
             )
             .is_err()
     );

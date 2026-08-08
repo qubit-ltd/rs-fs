@@ -22,17 +22,30 @@ use std::task::Context;
 use std::task::Poll;
 
 use qubit_fs::AchievedAtomicity;
+use qubit_fs::AsyncCopyOperationState;
 use qubit_fs::AtomicityRequirement;
+use qubit_fs::CopyOptions;
+use qubit_fs::CreateDirectoryOptions;
+use qubit_fs::DeleteOptions;
 use qubit_fs::DirEntry;
 use qubit_fs::FileKind;
 use qubit_fs::FsErrorKind;
+use qubit_fs::FsResult;
 use qubit_fs::ListOptions;
 use qubit_fs::Path;
+use qubit_fs::PersistFailureState;
 use qubit_fs::PersistOptions;
+use qubit_fs::ReadOptions;
+use qubit_fs::RenameFailureState;
+use qubit_fs::RenameOptions;
 use qubit_fs::TempDirectoryOptions;
 use qubit_fs::TempFileOptions;
+use qubit_fs::TempResourceState;
+use qubit_fs::WriteAbortOutcome;
+use qubit_fs::WriteFailure;
 use qubit_fs::WriteFailureState;
 use qubit_fs::WriteOptions;
+use qubit_fs::WriteOutcome;
 use qubit_fs::WriterState;
 use qubit_fs::spi::AsyncFileWriteSession;
 use qubit_fs::spi::SpiFuture;
@@ -77,14 +90,13 @@ impl AsyncOutput for DefaultCancelSession {
 impl AsyncFileWriteSession for DefaultCancelSession {
     fn commit_async<'a>(
         self: Pin<&'a mut Self>,
-    ) -> SpiFuture<'a, Result<qubit_fs::WriteOutcome, qubit_fs::WriteFailure>>
-    {
+    ) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
         panic!("default cancellation test does not commit")
     }
 
     fn abort_async<'a>(
         self: Pin<&'a mut Self>,
-    ) -> SpiFuture<'a, qubit_fs::FsResult<qubit_fs::WriteAbortOutcome>> {
+    ) -> SpiFuture<'a, FsResult<WriteAbortOutcome>> {
         panic!("default cancellation test does not abort")
     }
 }
@@ -112,8 +124,7 @@ fn test_async_facade_rejects_invalid_stat_and_opened_identities() {
         ..AsyncRecordingConfig::default()
     });
     let reader = ready(
-        file_system
-            .open_reader(&path("/expected"), qubit_fs::ReadOptions::default()),
+        file_system.open_reader(&path("/expected"), ReadOptions::default()),
     )
     .expect_err("a reader from another provider must be rejected");
     assert_eq!(FsErrorKind::ProviderContractViolation, reader.kind());
@@ -140,21 +151,15 @@ fn test_async_facade_enriches_direct_provider_failures() {
     for error in [
         ready(file_system.list(&target, ListOptions::default()))
             .expect_err("list provider failure should propagate"),
-        ready(file_system.create_directory(
-            &target,
-            qubit_fs::CreateDirectoryOptions::default(),
-        ))
+        ready(
+            file_system
+                .create_directory(&target, CreateDirectoryOptions::default()),
+        )
         .expect_err("create provider failure should propagate"),
-        ready(
-            file_system
-                .delete_file(&target, qubit_fs::DeleteOptions::default()),
-        )
-        .expect_err("delete-file provider failure should propagate"),
-        ready(
-            file_system
-                .delete_directory(&target, qubit_fs::DeleteOptions::default()),
-        )
-        .expect_err("delete-directory provider failure should propagate"),
+        ready(file_system.delete_file(&target, DeleteOptions::default()))
+            .expect_err("delete-file provider failure should propagate"),
+        ready(file_system.delete_directory(&target, DeleteOptions::default()))
+            .expect_err("delete-directory provider failure should propagate"),
     ] {
         assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
         assert_eq!(Some(&target), error.path());
@@ -163,11 +168,11 @@ fn test_async_facade_enriches_direct_provider_failures() {
     let rename = ready(file_system.rename(
         &path("/source"),
         &target,
-        qubit_fs::RenameOptions::default(),
+        RenameOptions::default(),
     ))
     .expect_err("rename provider failure should propagate");
     assert_eq!(FsErrorKind::UnsupportedOperation, rename.error().kind());
-    assert_eq!(qubit_fs::RenameFailureState::Indeterminate, rename.state());
+    assert_eq!(RenameFailureState::Indeterminate, rename.state());
 }
 
 /// Propagates direct handle and temporary-resource open failures with the
@@ -182,11 +187,10 @@ fn test_async_facade_enriches_handle_and_temp_provider_failures() {
                 ..AsyncRecordingConfig::default()
             });
         let error = match stage {
-            AsyncCopyStage::OpenReader => ready(
-                file_system
-                    .open_reader(&target, qubit_fs::ReadOptions::default()),
-            )
-            .expect_err("reader provider failure should propagate"),
+            AsyncCopyStage::OpenReader => {
+                ready(file_system.open_reader(&target, ReadOptions::default()))
+                    .expect_err("reader provider failure should propagate")
+            }
             AsyncCopyStage::OpenWriter => {
                 ready(file_system.open_writer(&target, WriteOptions::default()))
                     .expect_err("writer provider failure should propagate")
@@ -278,10 +282,10 @@ fn test_async_temp_persist_rechecks_required_atomic_outcome() {
         failure.error().kind()
     );
     assert_eq!(
-        qubit_fs::PersistFailureState::PublishedSourceRetained,
+        PersistFailureState::PublishedSourceRetained,
         failure.state()
     );
-    assert_eq!(qubit_fs::TempResourceState::CleanupRequired, temp.state());
+    assert_eq!(TempResourceState::CleanupRequired, temp.state());
 }
 
 /// Rejects entries outside the list root and transitions the stream to a
@@ -470,10 +474,9 @@ fn test_async_facade_dispatches_successful_operations() {
             .is_none()
     );
 
-    let mut reader = ready(
-        file_system.open_reader(&source, qubit_fs::ReadOptions::default()),
-    )
-    .expect("reader should open");
+    let mut reader =
+        ready(file_system.open_reader(&source, ReadOptions::default()))
+            .expect("reader should open");
     assert_eq!(&source, reader.info().path());
     assert!(!reader.is_buffered());
     assert!(format!("{reader:?}").contains("AsyncFileReader"));
@@ -499,25 +502,21 @@ fn test_async_facade_dispatches_successful_operations() {
     assert_eq!(WriterState::Committed, writer.state());
 
     assert!(
-        !ready(file_system.create_directory(
-            &target,
-            qubit_fs::CreateDirectoryOptions::default(),
-        ))
+        !ready(
+            file_system
+                .create_directory(&target, CreateDirectoryOptions::default(),)
+        )
         .expect("directory creation should succeed")
         .already_existed()
     );
     assert!(
-        !ready(
-            file_system
-                .delete_file(&target, qubit_fs::DeleteOptions::default(),)
-        )
-        .expect("file deletion should succeed")
-        .already_missing()
+        !ready(file_system.delete_file(&target, DeleteOptions::default(),))
+            .expect("file deletion should succeed")
+            .already_missing()
     );
     assert!(
         !ready(
-            file_system
-                .delete_directory(&target, qubit_fs::DeleteOptions::default(),)
+            file_system.delete_directory(&target, DeleteOptions::default(),)
         )
         .expect("directory deletion should succeed")
         .already_missing()
@@ -526,7 +525,7 @@ fn test_async_facade_dispatches_successful_operations() {
         let outcome = ready(file_system.rename(
             &source,
             &target,
-            qubit_fs::RenameOptions::default(),
+            RenameOptions::default(),
         ))
         .expect("rename should succeed");
         (outcome.source().clone(), outcome.target().clone())
@@ -582,25 +581,25 @@ fn test_async_writer_commit_failures_preserve_recovery_state() {
         (
             WriteFailureState::RetryableNotPublished,
             WriterState::Open,
-            qubit_fs::WriteAbortOutcome::NotPublished,
+            WriteAbortOutcome::NotPublished,
             WriterState::Aborted,
         ),
         (
             WriteFailureState::NotPublished,
             WriterState::NotPublished,
-            qubit_fs::WriteAbortOutcome::NotPublished,
+            WriteAbortOutcome::NotPublished,
             WriterState::Aborted,
         ),
         (
             WriteFailureState::Published,
             WriterState::Published,
-            qubit_fs::WriteAbortOutcome::Published,
+            WriteAbortOutcome::Published,
             WriterState::Published,
         ),
         (
             WriteFailureState::Indeterminate,
             WriterState::Indeterminate,
-            qubit_fs::WriteAbortOutcome::Indeterminate,
+            WriteAbortOutcome::Indeterminate,
             WriterState::Indeterminate,
         ),
     ] {
@@ -698,22 +697,19 @@ fn test_async_facade_rejects_unrequested_idempotent_outcomes() {
     });
     let target = path("/target");
 
-    let create_error = ready(file_system.create_directory(
-        &target,
-        qubit_fs::CreateDirectoryOptions::default(),
-    ))
+    let create_error = ready(
+        file_system
+            .create_directory(&target, CreateDirectoryOptions::default()),
+    )
     .expect_err("existing directory without exists_ok must fail");
     assert_eq!(FsErrorKind::ProviderContractViolation, create_error.kind());
-    let delete_error = ready(
-        file_system.delete_file(&target, qubit_fs::DeleteOptions::default()),
-    )
-    .expect_err("missing file without missing_ok must fail");
+    let delete_error =
+        ready(file_system.delete_file(&target, DeleteOptions::default()))
+            .expect_err("missing file without missing_ok must fail");
     assert_eq!(FsErrorKind::ProviderContractViolation, delete_error.kind());
-    let directory_error = ready(
-        file_system
-            .delete_directory(&target, qubit_fs::DeleteOptions::default()),
-    )
-    .expect_err("missing directory without missing_ok must fail");
+    let directory_error =
+        ready(file_system.delete_directory(&target, DeleteOptions::default()))
+            .expect_err("missing directory without missing_ok must fail");
     assert_eq!(
         FsErrorKind::ProviderContractViolation,
         directory_error.kind()
@@ -727,11 +723,7 @@ fn test_async_copy_stream_fallback_reads_writes_and_commits() {
     let (file_system, probe) =
         async_recording_file_system(AsyncRecordingConfig::default());
     let mut operation = file_system
-        .begin_copy(
-            path("/source"),
-            path("/target"),
-            qubit_fs::CopyOptions::default(),
-        )
+        .begin_copy(path("/source"), path("/target"), CopyOptions::default())
         .expect("copy preflight should succeed");
 
     let outcome = ready(operation.execute())
@@ -740,10 +732,7 @@ fn test_async_copy_stream_fallback_reads_writes_and_commits() {
     assert_eq!(1, outcome.stats().files);
     assert_eq!(&path("/source"), operation.source());
     assert_eq!(&path("/target"), operation.target());
-    assert_eq!(
-        qubit_fs::AsyncCopyOperationState::Completed,
-        operation.state()
-    );
+    assert_eq!(AsyncCopyOperationState::Completed, operation.state());
     assert!(!operation.has_recovery_writer());
     assert!(operation.take_recovery_writer().is_none());
     let retry = ready(operation.execute())
@@ -764,11 +753,7 @@ fn test_async_copy_failure_exposes_recovery_writer_accessor() {
         ..AsyncRecordingConfig::default()
     });
     let mut operation = file_system
-        .begin_copy(
-            path("/source"),
-            path("/target"),
-            qubit_fs::CopyOptions::default(),
-        )
+        .begin_copy(path("/source"), path("/target"), CopyOptions::default())
         .expect("copy preflight should succeed");
     ready(operation.execute())
         .expect_err("configured transfer failure should propagate");

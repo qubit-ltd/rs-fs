@@ -12,9 +12,11 @@ use std::sync::Mutex;
 
 use qubit_fs::CreateDirectoryOutcome;
 use qubit_fs::DeleteOutcome;
+use qubit_fs::FileKind;
 use qubit_fs::FileMetadata;
 use qubit_fs::FileSystem;
 use qubit_fs::FileSystemCapabilities;
+use qubit_fs::FileSystemCapability;
 use qubit_fs::FileSystemId;
 use qubit_fs::FileSystemInfo;
 use qubit_fs::FileSystemLimits;
@@ -26,6 +28,7 @@ use qubit_fs::FsResult;
 use qubit_fs::OpenedFileInfo;
 use qubit_fs::Path;
 use qubit_fs::PathConstraints;
+use qubit_fs::PathSemantics;
 use qubit_fs::RenameFailureState;
 use qubit_fs::RenameOutcome;
 use qubit_fs::SymlinkPolicy;
@@ -60,10 +63,10 @@ impl FileSystemSpi for ReaderSpi {
             FileSystemInfo::new(
                 FileSystemId::new("reader-test").expect("valid id"),
                 "reader-test",
-                qubit_fs::PathSemantics::Hierarchical,
+                PathSemantics::Hierarchical,
             ),
             FileSystemCapabilities::new()
-                .with_guaranteed(qubit_fs::FileSystemCapability::Read),
+                .with_guaranteed(FileSystemCapability::Read),
             FileSystemLimits::unknown(),
             PathConstraints::absolute(),
             SymlinkPolicy::Reject,
@@ -73,7 +76,7 @@ impl FileSystemSpi for ReaderSpi {
     fn stat(&self, request: StatRequest<'_>) -> FsResult<StatResponse> {
         Ok(StatResponse::new(
             request.path().clone(),
-            FileMetadata::new(qubit_fs::FileKind::File),
+            FileMetadata::new(FileKind::File),
         ))
     }
     fn list(&self, _: ListRequest<'_>) -> FsResult<OpenedDirectoryStream> {

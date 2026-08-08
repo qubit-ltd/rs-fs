@@ -6,29 +6,30 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use qubit_fs::AtomicityRequirement;
+use qubit_fs::FsErrorKind;
+use qubit_fs::Path;
+use qubit_fs::PersistFailureState;
+use qubit_fs::PersistOptions;
+use qubit_fs::TempFileOptions;
+use qubit_fs::TempResourceState;
 #[test]
 fn test_required_non_atomic_temp_persist_retains_cleanup_responsibility() {
     let (filesystem, cleanup_calls, _) =
         crate::handle_support::filesystem(false, Vec::new());
     let mut temporary = filesystem
-        .create_temp_file(qubit_fs::TempFileOptions::default())
+        .create_temp_file(TempFileOptions::default())
         .expect("temporary file should open");
     assert_eq!("/temporary", temporary.path().as_str());
     assert!(format!("{temporary:?}").contains("TempFile"));
     let error = temporary
         .persist(
-            &qubit_fs::Path::parse("/target").expect("target should parse"),
-            qubit_fs::PersistOptions::default(),
+            &Path::parse("/target").expect("target should parse"),
+            PersistOptions::default(),
         )
         .expect_err("non-atomic result must violate required contract");
-    assert_eq!(
-        qubit_fs::FsErrorKind::ProviderContractViolation,
-        error.error().kind()
-    );
-    assert_eq!(
-        qubit_fs::TempResourceState::CleanupRequired,
-        temporary.state()
-    );
+    assert_eq!(FsErrorKind::ProviderContractViolation, error.error().kind());
+    assert_eq!(TempResourceState::CleanupRequired, temporary.state());
     temporary
         .cleanup()
         .expect("cleanup should remain available");
@@ -44,18 +45,17 @@ fn test_temp_file_illegal_target_fails_preflight_without_provider_persist_and_re
     let (filesystem, cleanup_calls, persist_calls) =
         crate::handle_support::filesystem(false, Vec::new());
     let mut temporary = filesystem
-        .create_temp_file(qubit_fs::TempFileOptions::default())
+        .create_temp_file(TempFileOptions::default())
         .expect("temporary file should open");
     let error = temporary
         .persist(
-            &qubit_fs::Path::parse("relative")
-                .expect("relative path should parse"),
-            qubit_fs::PersistOptions::default(),
+            &Path::parse("relative").expect("relative path should parse"),
+            PersistOptions::default(),
         )
         .expect_err("illegal target must fail before provider persist");
-    assert_eq!(qubit_fs::FsErrorKind::InvalidPath, error.error().kind());
-    assert_eq!(qubit_fs::PersistFailureState::NotPublished, error.state());
-    assert_eq!(qubit_fs::TempResourceState::Owned, temporary.state());
+    assert_eq!(FsErrorKind::InvalidPath, error.error().kind());
+    assert_eq!(PersistFailureState::NotPublished, error.state());
+    assert_eq!(TempResourceState::Owned, temporary.state());
     assert_eq!(
         0,
         *persist_calls.lock().expect("persist lock should succeed")
@@ -72,12 +72,9 @@ fn test_temp_file_illegal_target_fails_preflight_without_provider_persist_and_re
 #[test]
 fn test_temp_file_rejects_provider_path_outside_facade_constraints() {
     let error = crate::handle_support::invalid_temp_path_filesystem()
-        .create_temp_file(qubit_fs::TempFileOptions::default())
+        .create_temp_file(TempFileOptions::default())
         .expect_err("relative provider temporary path must be rejected");
-    assert_eq!(
-        qubit_fs::FsErrorKind::ProviderContractViolation,
-        error.kind()
-    );
+    assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
 }
 
 /// Verifies a preferred-atomicity persist accepts a non-atomic provider result
@@ -87,20 +84,19 @@ fn test_temp_file_persist_marks_resource_persisted() {
     let (filesystem, cleanup_calls, persist_calls) =
         crate::handle_support::filesystem(false, Vec::new());
     let mut temporary = filesystem
-        .create_temp_file(qubit_fs::TempFileOptions::default())
+        .create_temp_file(TempFileOptions::default())
         .expect("temporary file should open");
-    let target =
-        qubit_fs::Path::parse("/published-file").expect("target should parse");
+    let target = Path::parse("/published-file").expect("target should parse");
 
     let outcome = temporary
         .persist(
             &target,
-            qubit_fs::PersistOptions::default()
-                .with_atomicity(qubit_fs::AtomicityRequirement::Preferred),
+            PersistOptions::default()
+                .with_atomicity(AtomicityRequirement::Preferred),
         )
         .expect("preferred atomicity may accept non-atomic persistence");
     assert_eq!(&target, outcome.target());
-    assert_eq!(qubit_fs::TempResourceState::Persisted, temporary.state());
+    assert_eq!(TempResourceState::Persisted, temporary.state());
     assert_eq!(
         1,
         *persist_calls.lock().expect("persist lock should succeed")
@@ -121,30 +117,24 @@ fn test_temp_file_persist_rejects_wrong_provider_target() {
     let (filesystem, _, _) =
         crate::handle_support::filesystem(false, Vec::new());
     let mut temporary = filesystem
-        .create_temp_file(qubit_fs::TempFileOptions::default())
+        .create_temp_file(TempFileOptions::default())
         .expect("temporary file should open");
-    let requested = qubit_fs::Path::parse("/wrong-persist-target")
-        .expect("target should parse");
+    let requested =
+        Path::parse("/wrong-persist-target").expect("target should parse");
 
     let failure = temporary
         .persist(
             &requested,
-            qubit_fs::PersistOptions::default()
-                .with_atomicity(qubit_fs::AtomicityRequirement::Preferred),
+            PersistOptions::default()
+                .with_atomicity(AtomicityRequirement::Preferred),
         )
         .expect_err("wrong provider target must violate the contract");
     assert_eq!(
-        qubit_fs::FsErrorKind::ProviderContractViolation,
+        FsErrorKind::ProviderContractViolation,
         failure.error().kind()
     );
-    assert_eq!(
-        qubit_fs::PersistFailureState::Indeterminate,
-        failure.state()
-    );
-    assert_eq!(
-        qubit_fs::TempResourceState::Indeterminate,
-        temporary.state()
-    );
+    assert_eq!(PersistFailureState::Indeterminate, failure.state());
+    assert_eq!(TempResourceState::Indeterminate, temporary.state());
 }
 
 /// Verifies a cleaned temporary file cannot be persisted or kept and does not
@@ -154,18 +144,17 @@ fn test_temp_file_cleanup_marks_resource_cleaned() {
     let (filesystem, cleanup_calls, _) =
         crate::handle_support::filesystem(false, Vec::new());
     let mut temporary = filesystem
-        .create_temp_file(qubit_fs::TempFileOptions::default())
+        .create_temp_file(TempFileOptions::default())
         .expect("temporary file should open");
 
     temporary.cleanup().expect("cleanup should succeed");
-    assert_eq!(qubit_fs::TempResourceState::Cleaned, temporary.state());
+    assert_eq!(TempResourceState::Cleaned, temporary.state());
     assert!(temporary.keep().is_err());
     assert!(
         temporary
             .persist(
-                &qubit_fs::Path::parse("/published-file")
-                    .expect("target should parse"),
-                qubit_fs::PersistOptions::default(),
+                &Path::parse("/published-file").expect("target should parse"),
+                PersistOptions::default(),
             )
             .is_err()
     );
@@ -183,11 +172,11 @@ fn test_temp_file_keep_marks_resource_kept() {
     let (filesystem, cleanup_calls, _) =
         crate::handle_support::filesystem(false, Vec::new());
     let mut temporary = filesystem
-        .create_temp_file(qubit_fs::TempFileOptions::default())
+        .create_temp_file(TempFileOptions::default())
         .expect("temporary file should open");
 
     temporary.keep().expect("keep should succeed");
-    assert_eq!(qubit_fs::TempResourceState::Kept, temporary.state());
+    assert_eq!(TempResourceState::Kept, temporary.state());
     drop(temporary);
     assert_eq!(
         0,
@@ -200,30 +189,26 @@ fn test_temp_file_keep_marks_resource_kept() {
 #[test]
 fn test_temp_file_persist_failure_preserves_provider_progress() {
     for (failure_state, expected_state) in [
+        (PersistFailureState::NotPublished, TempResourceState::Owned),
         (
-            qubit_fs::PersistFailureState::NotPublished,
-            qubit_fs::TempResourceState::Owned,
+            PersistFailureState::PublishedSourceRetained,
+            TempResourceState::CleanupRequired,
         ),
         (
-            qubit_fs::PersistFailureState::PublishedSourceRetained,
-            qubit_fs::TempResourceState::CleanupRequired,
-        ),
-        (
-            qubit_fs::PersistFailureState::Indeterminate,
-            qubit_fs::TempResourceState::Indeterminate,
+            PersistFailureState::Indeterminate,
+            TempResourceState::Indeterminate,
         ),
     ] {
         let (filesystem, cleanup_calls, persist_calls) =
             crate::handle_support::temp_failure_filesystem(failure_state);
         let mut temporary = filesystem
-            .create_temp_file(qubit_fs::TempFileOptions::default())
+            .create_temp_file(TempFileOptions::default())
             .expect("temporary file should open");
 
         let failure = temporary
             .persist(
-                &qubit_fs::Path::parse("/published-file")
-                    .expect("target should parse"),
-                qubit_fs::PersistOptions::default(),
+                &Path::parse("/published-file").expect("target should parse"),
+                PersistOptions::default(),
             )
             .expect_err("injected provider persistence failure should surface");
         assert_eq!(failure_state, failure.state());
@@ -236,8 +221,7 @@ fn test_temp_file_persist_failure_preserves_provider_progress() {
         assert_eq!(
             usize::from(matches!(
                 expected_state,
-                qubit_fs::TempResourceState::Owned
-                    | qubit_fs::TempResourceState::CleanupRequired
+                TempResourceState::Owned | TempResourceState::CleanupRequired
             )),
             *cleanup_calls.lock().expect("cleanup lock should succeed")
         );
@@ -249,25 +233,21 @@ fn test_temp_file_persist_failure_preserves_provider_progress() {
 #[test]
 fn test_temp_file_lifecycle_errors_preserve_recovery_state() {
     for (operation, error_kind, expected_state) in [
+        ("keep", FsErrorKind::Io, TempResourceState::Owned),
         (
             "keep",
-            qubit_fs::FsErrorKind::Io,
-            qubit_fs::TempResourceState::Owned,
-        ),
-        (
-            "keep",
-            qubit_fs::FsErrorKind::Indeterminate,
-            qubit_fs::TempResourceState::Indeterminate,
+            FsErrorKind::Indeterminate,
+            TempResourceState::Indeterminate,
         ),
         (
             "cleanup",
-            qubit_fs::FsErrorKind::Io,
-            qubit_fs::TempResourceState::CleanupRequired,
+            FsErrorKind::Io,
+            TempResourceState::CleanupRequired,
         ),
         (
             "cleanup",
-            qubit_fs::FsErrorKind::Indeterminate,
-            qubit_fs::TempResourceState::Indeterminate,
+            FsErrorKind::Indeterminate,
+            TempResourceState::Indeterminate,
         ),
     ] {
         let (filesystem, cleanup_calls) =
@@ -276,7 +256,7 @@ fn test_temp_file_lifecycle_errors_preserve_recovery_state() {
                 (operation == "cleanup").then_some(error_kind),
             );
         let mut temporary = filesystem
-            .create_temp_file(qubit_fs::TempFileOptions::default())
+            .create_temp_file(TempFileOptions::default())
             .expect("temporary file should open");
 
         let result = if operation == "keep" {
@@ -291,8 +271,8 @@ fn test_temp_file_lifecycle_errors_preserve_recovery_state() {
             usize::from(operation == "cleanup")
                 + usize::from(matches!(
                     expected_state,
-                    qubit_fs::TempResourceState::Owned
-                        | qubit_fs::TempResourceState::CleanupRequired
+                    TempResourceState::Owned
+                        | TempResourceState::CleanupRequired
                 )),
             *cleanup_calls.lock().expect("cleanup lock should succeed")
         );

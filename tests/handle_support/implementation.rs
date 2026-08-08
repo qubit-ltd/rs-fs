@@ -9,12 +9,16 @@
 use std::error::Error;
 // qubit-style: allow test-file-name -- this module is included by
 // handle_support/mod.rs.
-use std::io::{Cursor, Result as IoResult};
+use std::io::Cursor;
+use std::io::Result as IoResult;
 use std::sync::Arc;
 use std::sync::Mutex;
 
 use qubit_fs::AchievedAtomicity;
+use qubit_fs::CopyOptions;
+use qubit_fs::CreateDirectoryOptions;
 use qubit_fs::CreateDirectoryOutcome;
+use qubit_fs::DeleteOptions;
 use qubit_fs::DeleteOutcome;
 use qubit_fs::DirEntry;
 use qubit_fs::FileKind;
@@ -24,22 +28,30 @@ use qubit_fs::FileSystemCapabilities;
 use qubit_fs::FileSystemCapability;
 use qubit_fs::FileSystemId;
 use qubit_fs::FileSystemInfo;
+use qubit_fs::FileSystemLimit;
 use qubit_fs::FileSystemLimits;
 use qubit_fs::FileSystemProperties;
 use qubit_fs::FsError;
 use qubit_fs::FsErrorKind;
 use qubit_fs::FsOperation;
 use qubit_fs::FsResult;
+use qubit_fs::ListOptions;
 use qubit_fs::OpenedFileInfo;
 use qubit_fs::Path;
 use qubit_fs::PathConstraints;
+use qubit_fs::PathSemantics;
 use qubit_fs::PersistFailureState;
 use qubit_fs::PersistOutcome;
 use qubit_fs::PublicationMethod;
+use qubit_fs::ReadOptions;
 use qubit_fs::RenameFailureState;
 use qubit_fs::RenameOutcome;
 use qubit_fs::SymlinkPolicy;
+use qubit_fs::TempDirectoryOptions;
+use qubit_fs::TempFileOptions;
+use qubit_fs::WriteAbortOutcome;
 use qubit_fs::WriteFailureState;
+use qubit_fs::WriteOptions;
 use qubit_fs::WriteOutcome;
 use qubit_fs::spi::CreateDirectoryRequest;
 use qubit_fs::spi::CreateTempDirectoryRequest;
@@ -65,6 +77,7 @@ use qubit_fs::spi::SpiWriteFailure;
 use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
 use qubit_fs::spi::TempResourceSpi;
+use qubit_io::Input;
 use qubit_io::Output;
 
 pub(crate) struct BehaviorSpi {
@@ -118,7 +131,7 @@ pub(crate) fn limited_write_filesystem(maximum: u64) -> FileSystem {
         commit_failure: None,
         abort_failure: None,
         limits: FileSystemLimits::unknown()
-            .with_max_write_bytes(qubit_fs::FileSystemLimit::Maximum(maximum)),
+            .with_max_write_bytes(FileSystemLimit::Maximum(maximum)),
         entries: Mutex::new(Vec::new()),
         cleanup_calls: Arc::new(Mutex::new(0)),
         persist_calls: Arc::new(Mutex::new(0)),
@@ -351,22 +364,19 @@ fn test_handle_support_dispatches_directory_and_delete_operations() {
 
     assert!(
         !file_system
-            .create_directory(
-                &path,
-                qubit_fs::CreateDirectoryOptions::default()
-            )
+            .create_directory(&path, CreateDirectoryOptions::default())
             .expect("directory creation should succeed")
             .already_existed()
     );
     assert!(
         !file_system
-            .delete_file(&path, qubit_fs::DeleteOptions::default())
+            .delete_file(&path, DeleteOptions::default())
             .expect("file deletion should succeed")
             .already_missing()
     );
     assert!(
         !file_system
-            .delete_directory(&path, qubit_fs::DeleteOptions::default())
+            .delete_directory(&path, DeleteOptions::default())
             .expect("directory deletion should succeed")
             .already_missing()
     );
@@ -383,7 +393,7 @@ fn test_handle_support_dispatches_successful_facade_operations() {
 
     assert!(file_system.exists(&source).expect("stat should succeed"));
     let mut directory = file_system
-        .list(&source, qubit_fs::ListOptions::default())
+        .list(&source, ListOptions::default())
         .expect("list should succeed");
     assert!(
         directory
@@ -393,30 +403,30 @@ fn test_handle_support_dispatches_successful_facade_operations() {
     );
 
     let mut reader = file_system
-        .open_reader(&source, qubit_fs::ReadOptions::default())
+        .open_reader(&source, ReadOptions::default())
         .expect("reader should open");
     let mut bytes = [0_u8; 5];
     assert_eq!(
         5,
-        qubit_io::Input::read(&mut reader, &mut bytes)
+        Input::read(&mut reader, &mut bytes)
             .expect("reader should transfer bytes")
     );
 
     let mut writer = file_system
-        .open_writer(&target, qubit_fs::WriteOptions::default())
+        .open_writer(&target, WriteOptions::default())
         .expect("writer should open");
-    qubit_io::Output::write_fully(&mut writer, b"bytes")
+    Output::write_fully(&mut writer, b"bytes")
         .expect("writer should accept bytes");
     writer.commit().expect("writer should commit");
 
     let mut temporary_file = file_system
-        .create_temp_file(qubit_fs::TempFileOptions::default())
+        .create_temp_file(TempFileOptions::default())
         .expect("temporary file should open");
     temporary_file
         .keep()
         .expect("temporary file should be kept");
     let mut temporary_directory = file_system
-        .create_temp_directory(qubit_fs::TempDirectoryOptions::default())
+        .create_temp_directory(TempDirectoryOptions::default())
         .expect("temporary directory should open");
     temporary_directory
         .keep()
@@ -432,7 +442,7 @@ fn test_handle_support_uses_default_spi_copy_decline() {
         .copy(
             &Path::parse("/source").expect("test path should parse"),
             &Path::parse("/target").expect("test path should parse"),
-            qubit_fs::CopyOptions::default(),
+            CopyOptions::default(),
         )
         .expect("fallback should use reader and writer capabilities");
     assert!(outcome.used_fallback());
@@ -446,19 +456,19 @@ fn test_handle_support_enriches_open_and_temp_provider_failures() {
     let path = Path::parse("/target").expect("test path should parse");
     for error in [
         file_system
-            .list(&path, qubit_fs::ListOptions::default())
+            .list(&path, ListOptions::default())
             .expect_err("list provider failure should propagate"),
         file_system
-            .open_writer(&path, qubit_fs::WriteOptions::default())
+            .open_writer(&path, WriteOptions::default())
             .expect_err("writer provider failure should propagate"),
         file_system
-            .open_reader(&path, qubit_fs::ReadOptions::default())
+            .open_reader(&path, ReadOptions::default())
             .expect_err("reader provider failure should propagate"),
         file_system
-            .create_temp_file(qubit_fs::TempFileOptions::default())
+            .create_temp_file(TempFileOptions::default())
             .expect_err("temporary-file provider failure should propagate"),
         file_system
-            .create_temp_directory(qubit_fs::TempDirectoryOptions::default())
+            .create_temp_directory(TempDirectoryOptions::default())
             .expect_err(
                 "temporary-directory provider failure should propagate",
             ),
@@ -475,10 +485,10 @@ fn test_handle_support_rejects_invalid_temp_identities_with_cleanup_failure() {
     let file_system = invalid_temp_cleanup_filesystem();
     for error in [
         file_system
-            .create_temp_file(qubit_fs::TempFileOptions::default())
+            .create_temp_file(TempFileOptions::default())
             .expect_err("foreign temporary file identity must be rejected"),
         file_system
-            .create_temp_directory(qubit_fs::TempDirectoryOptions::default())
+            .create_temp_directory(TempDirectoryOptions::default())
             .expect_err(
                 "foreign temporary directory identity must be rejected",
             ),
@@ -500,10 +510,10 @@ fn test_handle_support_rejects_invalid_temp_identities_with_cleanup_failure() {
 fn test_handle_support_rejects_invalid_temp_paths_after_cleanup() {
     for error in [
         invalid_temp_path_filesystem()
-            .create_temp_file(qubit_fs::TempFileOptions::default())
+            .create_temp_file(TempFileOptions::default())
             .expect_err("relative temporary file path must be rejected"),
         invalid_temp_path_filesystem()
-            .create_temp_directory(qubit_fs::TempDirectoryOptions::default())
+            .create_temp_directory(TempDirectoryOptions::default())
             .expect_err("relative temporary directory path must be rejected"),
     ] {
         assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
@@ -514,7 +524,7 @@ fn test_handle_support_rejects_invalid_temp_paths_after_cleanup() {
 #[test]
 fn test_handle_support_rejects_wrong_temp_kind() {
     let error = wrong_temp_kind_filesystem()
-        .create_temp_file(qubit_fs::TempFileOptions::default())
+        .create_temp_file(TempFileOptions::default())
         .expect_err("temporary-file kind must be validated");
     assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
 }
@@ -546,7 +556,7 @@ impl FileSystemSpi for BehaviorSpi {
             FileSystemInfo::new(
                 FileSystemId::new("handles-test").expect("valid test id"),
                 "handles-test",
-                qubit_fs::PathSemantics::Hierarchical,
+                PathSemantics::Hierarchical,
             ),
             FileSystemCapabilities::new()
                 .with_guaranteed(FileSystemCapability::List)
@@ -569,7 +579,7 @@ impl FileSystemSpi for BehaviorSpi {
         let _ = request.options();
         Ok(StatResponse::new(
             request.path().clone(),
-            FileMetadata::new(qubit_fs::FileKind::File),
+            FileMetadata::new(FileKind::File),
         ))
     }
     fn list(
@@ -766,7 +776,7 @@ impl FileWriterSpi for Writer {
             ))
         }
     }
-    fn abort(&mut self) -> FsResult<qubit_fs::WriteAbortOutcome> {
+    fn abort(&mut self) -> FsResult<WriteAbortOutcome> {
         match self.abort_failure {
             Some(kind) => Err(FsError::new(
                 kind,
@@ -775,14 +785,14 @@ impl FileWriterSpi for Writer {
             )),
             None => Ok(match self.commit_failure {
                 Some(WriteFailureState::Published) => {
-                    qubit_fs::WriteAbortOutcome::Published
+                    WriteAbortOutcome::Published
                 }
                 Some(WriteFailureState::Indeterminate) => {
-                    qubit_fs::WriteAbortOutcome::Indeterminate
+                    WriteAbortOutcome::Indeterminate
                 }
                 Some(WriteFailureState::RetryableNotPublished)
                 | Some(WriteFailureState::NotPublished)
-                | None => qubit_fs::WriteAbortOutcome::NotPublished,
+                | None => WriteAbortOutcome::NotPublished,
             }),
         }
     }
@@ -805,7 +815,7 @@ impl TempResourceSpi for Temp {
     fn persist(
         &mut self,
         request: PersistRequest<'_>,
-    ) -> Result<PersistOutcome, qubit_fs::spi::SpiPersistFailure> {
+    ) -> Result<PersistOutcome, SpiPersistFailure> {
         *self
             .persist_calls
             .lock()

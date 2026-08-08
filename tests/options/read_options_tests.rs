@@ -8,6 +8,7 @@
 use qubit_fs::ChecksumPolicy;
 use qubit_fs::FileSystemCapabilities;
 use qubit_fs::FileSystemCapability;
+use qubit_fs::FsErrorKind;
 use qubit_fs::ReadOptions;
 use qubit_fs::ResourceVersion;
 
@@ -36,7 +37,7 @@ fn read_requirements_are_checked_against_typed_capabilities() {
         .with_if_match(Some(ResourceVersion::from("v1")))
         .with_if_none_match(Some(ResourceVersion::from("v2")));
     assert_eq!(
-        qubit_fs::FsErrorKind::InvalidOptions,
+        FsErrorKind::InvalidOptions,
         conflicting
             .validate_against(FileSystemCapabilities::default())
             .unwrap_err()

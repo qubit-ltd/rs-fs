@@ -21,6 +21,7 @@ use qubit_fs::CopyOptions;
 use qubit_fs::CreateDirectoryOutcome;
 use qubit_fs::DeleteOutcome;
 use qubit_fs::FileSystemCapabilities;
+use qubit_fs::FileSystemCapability;
 use qubit_fs::FileSystemId;
 use qubit_fs::FileSystemInfo;
 use qubit_fs::FileSystemLimits;
@@ -44,9 +45,16 @@ use qubit_fs::spi::DeleteFileRequest;
 use qubit_fs::spi::ListRequest;
 use qubit_fs::spi::OpenReaderRequest;
 use qubit_fs::spi::OpenWriterRequest;
+use qubit_fs::spi::OpenedAsyncDirectoryStream;
+use qubit_fs::spi::OpenedAsyncReader;
+use qubit_fs::spi::OpenedAsyncTempDirectory;
+use qubit_fs::spi::OpenedAsyncTempFile;
+use qubit_fs::spi::OpenedAsyncWriter;
 use qubit_fs::spi::RenameRequest;
 use qubit_fs::spi::SpiFuture;
+use qubit_fs::spi::SpiRenameFailure;
 use qubit_fs::spi::StatRequest;
+use qubit_fs::spi::StatResponse;
 
 struct PropertiesOnlySpi;
 
@@ -60,7 +68,7 @@ impl AsyncFileSystemSpi for PropertiesOnlySpi {
                 PathSemantics::Hierarchical,
             ),
             FileSystemCapabilities::new()
-                .with_guaranteed(qubit_fs::FileSystemCapability::Copy),
+                .with_guaranteed(FileSystemCapability::Copy),
             FileSystemLimits::unknown(),
             PathConstraints::absolute(),
             SymlinkPolicy::Reject,
@@ -71,26 +79,25 @@ impl AsyncFileSystemSpi for PropertiesOnlySpi {
     fn stat<'a>(
         &'a self,
         _: StatRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<qubit_fs::spi::StatResponse>> {
+    ) -> SpiFuture<'a, FsResult<StatResponse>> {
         Box::pin(async { Err(unused()) })
     }
     fn list<'a>(
         &'a self,
         _: ListRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<qubit_fs::spi::OpenedAsyncDirectoryStream>>
-    {
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncDirectoryStream>> {
         Box::pin(async { Err(unused()) })
     }
     fn open_reader<'a>(
         &'a self,
         _: OpenReaderRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<qubit_fs::spi::OpenedAsyncReader>> {
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
         Box::pin(async { Err(unused()) })
     }
     fn open_writer<'a>(
         &'a self,
         _: OpenWriterRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<qubit_fs::spi::OpenedAsyncWriter>> {
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
         Box::pin(async { Err(unused()) })
     }
     fn create_directory<'a>(
@@ -114,10 +121,9 @@ impl AsyncFileSystemSpi for PropertiesOnlySpi {
     fn rename<'a>(
         &'a self,
         _: RenameRequest<'a>,
-    ) -> SpiFuture<'a, Result<RenameOutcome, qubit_fs::spi::SpiRenameFailure>>
-    {
+    ) -> SpiFuture<'a, Result<RenameOutcome, SpiRenameFailure>> {
         Box::pin(async {
-            Err(qubit_fs::spi::SpiRenameFailure::new(
+            Err(SpiRenameFailure::new(
                 unused(),
                 RenameFailureState::Unchanged,
             ))
@@ -126,13 +132,13 @@ impl AsyncFileSystemSpi for PropertiesOnlySpi {
     fn create_temp_file<'a>(
         &'a self,
         _: CreateTempFileRequest,
-    ) -> SpiFuture<'a, FsResult<qubit_fs::spi::OpenedAsyncTempFile>> {
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncTempFile>> {
         Box::pin(async { Err(unused()) })
     }
     fn create_temp_directory<'a>(
         &'a self,
         _: CreateTempDirectoryRequest,
-    ) -> SpiFuture<'a, FsResult<qubit_fs::spi::OpenedAsyncTempDirectory>> {
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncTempDirectory>> {
         Box::pin(async { Err(unused()) })
     }
 }
