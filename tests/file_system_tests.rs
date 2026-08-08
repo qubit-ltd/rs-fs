@@ -76,7 +76,11 @@ impl FileSystemSpi for CountingSpi {
     fn stat(&self, request: StatRequest<'_>) -> FsResult<StatResponse> {
         self.stat_calls.fetch_add(1, Ordering::SeqCst);
         if let Some(kind) = self.stat_error {
-            return Err(FsError::new(kind, FsOperation::Stat, "injected stat error"));
+            return Err(FsError::new(
+                kind,
+                FsOperation::Stat,
+                "injected stat error",
+            ));
         }
         let path = if self.wrong_stat_path {
             Path::parse("/wrong").expect("test path should parse")
@@ -97,7 +101,10 @@ impl FileSystemSpi for CountingSpi {
     fn open_writer(&self, _: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
         Err(Self::unsupported())
     }
-    fn create_directory(&self, _: CreateDirectoryRequest<'_>) -> FsResult<CreateDirectoryOutcome> {
+    fn create_directory(
+        &self,
+        _: CreateDirectoryRequest<'_>,
+    ) -> FsResult<CreateDirectoryOutcome> {
         if self.direct_error {
             Err(Self::unsupported())
         } else {
@@ -111,14 +118,20 @@ impl FileSystemSpi for CountingSpi {
             Ok(DeleteOutcome::new(self.unexpected_delete))
         }
     }
-    fn delete_directory(&self, _: DeleteDirectoryRequest<'_>) -> FsResult<DeleteOutcome> {
+    fn delete_directory(
+        &self,
+        _: DeleteDirectoryRequest<'_>,
+    ) -> FsResult<DeleteOutcome> {
         if self.direct_error {
             Err(Self::unsupported())
         } else {
             Ok(DeleteOutcome::new(self.unexpected_delete))
         }
     }
-    fn rename(&self, request: RenameRequest<'_>) -> Result<RenameOutcome, SpiRenameFailure> {
+    fn rename(
+        &self,
+        request: RenameRequest<'_>,
+    ) -> Result<RenameOutcome, SpiRenameFailure> {
         if self.direct_error {
             Err(SpiRenameFailure::new(
                 Self::unsupported(),
@@ -133,7 +146,10 @@ impl FileSystemSpi for CountingSpi {
             ))
         }
     }
-    fn create_temp_file(&self, _: CreateTempFileRequest) -> FsResult<OpenedTempFile> {
+    fn create_temp_file(
+        &self,
+        _: CreateTempFileRequest,
+    ) -> FsResult<OpenedTempFile> {
         Err(Self::unsupported())
     }
     fn create_temp_directory(
@@ -211,7 +227,8 @@ fn test_stat_rejects_path_with_different_semantics_before_spi_call() {
         unexpected_delete: false,
     })
     .expect("facade should construct");
-    let hierarchical = Path::parse("object").expect("hierarchical path should parse");
+    let hierarchical =
+        Path::parse("object").expect("hierarchical path should parse");
     let error = filesystem
         .stat(&hierarchical)
         .expect_err("different path semantics must fail before SPI");
@@ -337,7 +354,10 @@ fn test_direct_sync_provider_failures_are_enriched() {
 
     for error in [
         file_system
-            .create_directory(&target, qubit_fs::CreateDirectoryOptions::default())
+            .create_directory(
+                &target,
+                qubit_fs::CreateDirectoryOptions::default(),
+            )
             .expect_err("provider create failure should propagate"),
         file_system
             .delete_file(&target, qubit_fs::DeleteOptions::default())
@@ -434,7 +454,10 @@ fn test_sync_facade_rejects_unrequested_outcomes_and_same_path_mutations() {
 
     for error in [
         file_system
-            .create_directory(&path, qubit_fs::CreateDirectoryOptions::default())
+            .create_directory(
+                &path,
+                qubit_fs::CreateDirectoryOptions::default(),
+            )
             .expect_err("unexpected existing directory must be rejected"),
         file_system
             .delete_file(&path, qubit_fs::DeleteOptions::default())
@@ -499,7 +522,10 @@ fn test_sync_facade_requires_operation_capabilities_before_dispatch() {
             .create_temp_directory(qubit_fs::TempDirectoryOptions::default())
             .expect_err("temporary directory requires advertised capability"),
         file_system
-            .create_directory(&path, qubit_fs::CreateDirectoryOptions::default())
+            .create_directory(
+                &path,
+                qubit_fs::CreateDirectoryOptions::default(),
+            )
             .expect_err("directory creation requires advertised capability"),
     ] {
         assert_eq!(FsErrorKind::UnsupportedCapability, error.kind());

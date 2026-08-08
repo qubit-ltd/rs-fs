@@ -47,7 +47,8 @@ fn test_uri_rejects_percent_encoded_sensitive_query_key() {
 /// survive parsing.
 #[test]
 fn test_uri_preserves_raw_path_and_ordered_duplicate_query() {
-    let uri = Uri::parse("S3://bucket/a%2Fb?x=1&x=2").expect("URI should parse");
+    let uri =
+        Uri::parse("S3://bucket/a%2Fb?x=1&x=2").expect("URI should parse");
     assert_eq!(uri.scheme(), "s3");
     assert_eq!(uri.path(), "/a%2Fb");
     assert_eq!(uri.query(), Some("x=1&x=2"));
@@ -57,8 +58,10 @@ fn test_uri_preserves_raw_path_and_ordered_duplicate_query() {
 /// changing URI identity.
 #[test]
 fn test_uri_canonical_text_round_trips() {
-    let uri = Uri::parse("S3://bucket/a%2Fb?x=1&x=2").expect("URI should parse");
-    let reparsed = Uri::parse(uri.as_str()).expect("canonical URI should reparse");
+    let uri =
+        Uri::parse("S3://bucket/a%2Fb?x=1&x=2").expect("URI should parse");
+    let reparsed =
+        Uri::parse(uri.as_str()).expect("canonical URI should reparse");
     assert_eq!(uri, reparsed);
 }
 

@@ -52,7 +52,8 @@ fn read_requirements_are_checked_against_typed_capabilities() {
         error.required_capability()
     );
 
-    let conditional = ReadOptions::default().with_if_match(Some(ResourceVersion::from("v1")));
+    let conditional =
+        ReadOptions::default().with_if_match(Some(ResourceVersion::from("v1")));
     let error = conditional
         .validate_against(FileSystemCapabilities::default())
         .unwrap_err();
@@ -61,7 +62,8 @@ fn read_requirements_are_checked_against_typed_capabilities() {
         error.required_capability(),
     );
 
-    let checksummed = ReadOptions::default().with_checksum(ChecksumPolicy::Required);
+    let checksummed =
+        ReadOptions::default().with_checksum(ChecksumPolicy::Required);
     let error = checksummed
         .validate_against(FileSystemCapabilities::default())
         .unwrap_err();

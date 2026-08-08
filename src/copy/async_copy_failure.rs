@@ -30,7 +30,11 @@ pub struct AsyncCopyFailure {
 
 impl AsyncCopyFailure {
     /// Creates a failure from facade-confirmed facts.
-    pub(crate) fn new(error: FsError, state: CopyFailureState, partial_stats: CopyStats) -> Self {
+    pub(crate) fn new(
+        error: FsError,
+        state: CopyFailureState,
+        partial_stats: CopyStats,
+    ) -> Self {
         Self {
             error,
             state,

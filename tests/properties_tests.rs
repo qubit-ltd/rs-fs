@@ -47,7 +47,8 @@ fn test_file_system_properties_rejects_invalid_limit_value() {
         "test-provider",
         PathSemantics::Hierarchical,
     );
-    let limits = FileSystemLimits::unknown().with_max_path_text_bytes(FileSystemLimit::Maximum(0));
+    let limits = FileSystemLimits::unknown()
+        .with_max_path_text_bytes(FileSystemLimit::Maximum(0));
     assert!(
         FileSystemProperties::new(
             info,
@@ -118,8 +119,10 @@ fn test_file_system_properties_does_not_derive_copy_from_read_and_write() {
 /// after construction when no derived capability is applicable.
 #[test]
 fn test_file_system_properties_exposes_limits_and_capabilities() {
-    let limits = FileSystemLimits::unknown().with_max_write_bytes(FileSystemLimit::Maximum(128));
-    let capabilities = FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::Read);
+    let limits = FileSystemLimits::unknown()
+        .with_max_write_bytes(FileSystemLimit::Maximum(128));
+    let capabilities = FileSystemCapabilities::new()
+        .with_guaranteed(FileSystemCapability::Read);
     let properties = FileSystemProperties::new(
         FileSystemInfo::new(
             FileSystemId::new("stored-properties").expect("id should parse"),
@@ -150,7 +153,8 @@ fn test_file_system_properties_rejects_invalid_capabilities_and_constraints() {
     assert!(
         FileSystemProperties::new(
             info,
-            FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::AtomicRename),
+            FileSystemCapabilities::new()
+                .with_guaranteed(FileSystemCapability::AtomicRename),
             FileSystemLimits::unknown(),
             PathConstraints::either(),
             SymlinkPolicy::Reject,
@@ -159,14 +163,16 @@ fn test_file_system_properties_rejects_invalid_capabilities_and_constraints() {
     );
 
     let durable_copy_info = FileSystemInfo::new(
-        FileSystemId::new("durable-copy-without-copy").expect("id should parse"),
+        FileSystemId::new("durable-copy-without-copy")
+            .expect("id should parse"),
         "provider",
         PathSemantics::Hierarchical,
     );
     assert!(
         FileSystemProperties::new(
             durable_copy_info,
-            FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::DurableFileCopy),
+            FileSystemCapabilities::new()
+                .with_guaranteed(FileSystemCapability::DurableFileCopy),
             FileSystemLimits::unknown(),
             PathConstraints::either(),
             SymlinkPolicy::Reject,
@@ -215,8 +221,8 @@ fn test_file_system_limits_configure_all_dimensions() {
 /// missing and non-finite hints.
 #[test]
 fn test_file_system_limits_clamp_list_page_size() {
-    let limited =
-        FileSystemLimits::unknown().with_max_list_page_entries(FileSystemLimit::Maximum(10));
+    let limited = FileSystemLimits::unknown()
+        .with_max_list_page_entries(FileSystemLimit::Maximum(10));
     assert_eq!(None, limited.clamp_list_page_size(None));
     assert_eq!(Some(4), limited.clamp_list_page_size(Some(4)));
     assert_eq!(Some(10), limited.clamp_list_page_size(Some(20)));
@@ -226,7 +232,8 @@ fn test_file_system_limits_clamp_list_page_size() {
         FileSystemLimit::NotApplicable,
         FileSystemLimit::Unbounded,
     ] {
-        let limits = FileSystemLimits::unknown().with_max_list_page_entries(limit);
+        let limits =
+            FileSystemLimits::unknown().with_max_list_page_entries(limit);
         assert_eq!(Some(20), limits.clamp_list_page_size(Some(20)));
     }
 }
