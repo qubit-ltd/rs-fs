@@ -11,9 +11,9 @@
 mod async_temp_directory;
 #[cfg(feature = "async")]
 mod async_temp_file;
+mod persist_cleanup_state;
 mod persist_failure;
 mod persist_failure_state;
-mod persist_cleanup_state;
 mod persist_outcome;
 mod temp_dir_options;
 mod temp_directory;
@@ -25,9 +25,9 @@ mod temp_resource_state;
 pub use async_temp_directory::AsyncTempDirectory;
 #[cfg(feature = "async")]
 pub use async_temp_file::AsyncTempFile;
+pub use persist_cleanup_state::PersistCleanupState;
 pub use persist_failure::PersistFailure;
 pub use persist_failure_state::PersistFailureState;
-pub use persist_cleanup_state::PersistCleanupState;
 pub use persist_outcome::PersistOutcome;
 pub use temp_dir_options::TempDirOptions;
 pub use temp_directory::TempDirectory;

@@ -8,6 +8,7 @@
 
 #[cfg(feature = "async")]
 mod async_temp_facade_tests;
+mod persist_cleanup_state_tests;
 mod persist_failure_tests;
 mod persist_outcome_tests;
 mod temp_directory_tests;
