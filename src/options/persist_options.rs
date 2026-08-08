@@ -108,12 +108,12 @@ impl PersistOptions {
         capabilities: FileSystemCapabilities,
     ) -> Result<(), FsError> {
         if self.atomicity() == AtomicityRequirement::Required
-            && !capabilities.contains(FileSystemCapability::AtomicTempPersist)
+            && !capabilities.supports(FileSystemCapability::AtomicTempPersist)
         {
             return Err(FsError::new(
                 FsErrorKind::RequirementNotMet,
                 FsOperation::PersistTemp,
-                "atomic temporary persistence is required but not guaranteed",
+                "atomic temporary persistence is required but not supported",
             )
             .with_required_capability(
                 FileSystemCapability::AtomicTempPersist,

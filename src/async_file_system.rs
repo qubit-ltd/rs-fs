@@ -611,7 +611,7 @@ impl AsyncFileSystem {
         if !self
             .properties
             .capabilities()
-            .contains(FileSystemCapability::Copy)
+            .supports(FileSystemCapability::Copy)
         {
             return self
                 .stream_copy_fallback(source, target, options, writer)

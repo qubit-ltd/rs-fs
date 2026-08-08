@@ -46,8 +46,8 @@ fn delete_requirements_are_checked_against_typed_capabilities() {
     );
 
     let capabilities = FileSystemCapabilities::default()
-        .with(FileSystemCapability::RecursiveDelete)
-        .with(FileSystemCapability::ConditionalDelete);
+        .with_guaranteed(FileSystemCapability::RecursiveDelete)
+        .with_guaranteed(FileSystemCapability::ConditionalDelete);
     assert!(recursive.validate_against(capabilities).is_ok());
     assert!(conditional.validate_against(capabilities).is_ok());
 }

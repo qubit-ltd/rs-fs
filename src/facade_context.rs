@@ -73,7 +73,7 @@ pub(crate) fn require(
     operation: FsOperation,
     path: &Path,
 ) -> FsResult<()> {
-    if properties.capabilities().contains(capability) {
+    if properties.capabilities().supports(capability) {
         Ok(())
     } else {
         Err(FsError::new(

@@ -227,30 +227,31 @@ impl AsyncRecordingSpi {
                             | FileSystemCapability::Write
                     ));
             if !omitted {
-                capabilities = capabilities.with(capability);
+                capabilities = capabilities.with_guaranteed(capability);
             }
         }
         if self.config.completed_copy.is_some() {
             capabilities = capabilities
-                .with(FileSystemCapability::AtomicReplace)
-                .with(FileSystemCapability::AtomicFileCopy)
-                .with(FileSystemCapability::DurableFileCopy);
+                .with_guaranteed(FileSystemCapability::AtomicReplace)
+                .with_guaranteed(FileSystemCapability::AtomicFileCopy)
+                .with_guaranteed(FileSystemCapability::DurableFileCopy);
         }
         if self.config.server_side_copy {
-            capabilities =
-                capabilities.with(FileSystemCapability::ServerSideCopy);
+            capabilities = capabilities
+                .with_guaranteed(FileSystemCapability::ServerSideCopy);
         }
         if self.config.range_read {
-            capabilities = capabilities.with(FileSystemCapability::RangeRead);
+            capabilities =
+                capabilities.with_guaranteed(FileSystemCapability::RangeRead);
         }
         if self.config.rename_atomicity.is_some() || self.config.rename_error {
             capabilities = capabilities
-                .with(FileSystemCapability::Rename)
-                .with(FileSystemCapability::AtomicRename);
+                .with_guaranteed(FileSystemCapability::Rename)
+                .with_guaranteed(FileSystemCapability::AtomicRename);
         }
         if self.config.atomic_temp_persist {
-            capabilities =
-                capabilities.with(FileSystemCapability::AtomicTempPersist);
+            capabilities = capabilities
+                .with_guaranteed(FileSystemCapability::AtomicTempPersist);
         }
         FileSystemProperties::new(
             FileSystemInfo::new(

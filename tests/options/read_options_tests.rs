@@ -75,9 +75,9 @@ fn read_requirements_are_checked_against_typed_capabilities() {
     );
 
     let capabilities = FileSystemCapabilities::default()
-        .with(FileSystemCapability::RangeRead)
-        .with(FileSystemCapability::ConditionalRead)
-        .with(FileSystemCapability::ChecksumValidation);
+        .with_guaranteed(FileSystemCapability::RangeRead)
+        .with_guaranteed(FileSystemCapability::ConditionalRead)
+        .with_guaranteed(FileSystemCapability::ChecksumValidation);
     assert!(
         ReadOptions::default()
             .with_offset(Some(0))

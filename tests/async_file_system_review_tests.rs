@@ -191,9 +191,9 @@ impl StreamCopyFallbackSpi {
     }
     fn properties(&self) -> FileSystemProperties {
         let capabilities = FileSystemCapabilities::new()
-            .with(FileSystemCapability::Copy)
-            .with(FileSystemCapability::Read)
-            .with(FileSystemCapability::Write);
+            .with_guaranteed(FileSystemCapability::Copy)
+            .with_guaranteed(FileSystemCapability::Read)
+            .with_guaranteed(FileSystemCapability::Write);
         FileSystemProperties::new(
             FileSystemInfo::new(
                 FileSystemId::new("async-fallback-review")
@@ -602,7 +602,7 @@ fn test_async_facade_rejects_contract_and_fallback_boundary_failures() {
         let options = if file_system
             .properties()
             .capabilities()
-            .contains(qubit_fs::FileSystemCapability::AtomicRename)
+            .supports(qubit_fs::FileSystemCapability::AtomicRename)
         {
             RenameOptions::default()
                 .with_atomicity(AtomicityRequirement::Required)

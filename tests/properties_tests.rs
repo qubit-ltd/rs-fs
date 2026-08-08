@@ -103,8 +103,8 @@ fn test_file_system_properties_does_not_derive_copy_from_read_and_write() {
             PathSemantics::Hierarchical,
         ),
         FileSystemCapabilities::new()
-            .with(FileSystemCapability::Read)
-            .with(FileSystemCapability::Write),
+            .with_guaranteed(FileSystemCapability::Read)
+            .with_guaranteed(FileSystemCapability::Write),
         FileSystemLimits::unknown(),
         PathConstraints::absolute(),
         SymlinkPolicy::FollowWithinFileSystem,
@@ -113,7 +113,7 @@ fn test_file_system_properties_does_not_derive_copy_from_read_and_write() {
     assert!(
         !properties
             .capabilities()
-            .contains(FileSystemCapability::Copy)
+            .supports(FileSystemCapability::Copy)
     );
 }
 
@@ -123,8 +123,8 @@ fn test_file_system_properties_does_not_derive_copy_from_read_and_write() {
 fn test_file_system_properties_exposes_limits_and_capabilities() {
     let limits = FileSystemLimits::unknown()
         .with_max_write_bytes(FileSystemLimit::Maximum(128));
-    let capabilities =
-        FileSystemCapabilities::new().with(FileSystemCapability::Read);
+    let capabilities = FileSystemCapabilities::new()
+        .with_guaranteed(FileSystemCapability::Read);
     let properties = FileSystemProperties::new(
         FileSystemInfo::new(
             FileSystemId::new("stored-properties").expect("id should parse"),
@@ -156,7 +156,7 @@ fn test_file_system_properties_rejects_invalid_capabilities_and_constraints() {
         FileSystemProperties::new(
             info,
             FileSystemCapabilities::new()
-                .with(FileSystemCapability::AtomicRename),
+                .with_guaranteed(FileSystemCapability::AtomicRename),
             FileSystemLimits::unknown(),
             PathConstraints::either(),
             SymlinkPolicy::Reject,
@@ -174,7 +174,7 @@ fn test_file_system_properties_rejects_invalid_capabilities_and_constraints() {
         FileSystemProperties::new(
             durable_copy_info,
             FileSystemCapabilities::new()
-                .with(FileSystemCapability::DurableFileCopy),
+                .with_guaranteed(FileSystemCapability::DurableFileCopy),
             FileSystemLimits::unknown(),
             PathConstraints::either(),
             SymlinkPolicy::Reject,

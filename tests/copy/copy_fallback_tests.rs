@@ -168,33 +168,37 @@ fn properties(
     maximum_write_bytes: Option<u64>,
 ) -> FileSystemProperties {
     let mut capabilities = FileSystemCapabilities::new()
-        .with(FileSystemCapability::Rename)
-        .with(FileSystemCapability::AtomicRename);
+        .with_guaranteed(FileSystemCapability::Rename)
+        .with_guaranteed(FileSystemCapability::AtomicRename);
     if advertise_copy {
-        capabilities = capabilities.with(FileSystemCapability::Copy);
+        capabilities = capabilities.with_guaranteed(FileSystemCapability::Copy);
     }
     if !matches!(response, CopyResponse::DeclinedWithoutRead) {
-        capabilities = capabilities.with(FileSystemCapability::Read);
+        capabilities = capabilities.with_guaranteed(FileSystemCapability::Read);
     }
     if !matches!(response, CopyResponse::DeclinedWithoutWrite) {
-        capabilities = capabilities.with(FileSystemCapability::Write);
+        capabilities =
+            capabilities.with_guaranteed(FileSystemCapability::Write);
     }
     if matches!(
         response,
         CopyResponse::CompletedAtomicDowngrade
             | CopyResponse::DeclinedSkipAtomic
     ) {
-        capabilities = capabilities.with(FileSystemCapability::AtomicFileCopy);
+        capabilities =
+            capabilities.with_guaranteed(FileSystemCapability::AtomicFileCopy);
     }
     if matches!(response, CopyResponse::CompletedDurabilityDowngrade) {
-        capabilities = capabilities.with(FileSystemCapability::DurableFileCopy);
+        capabilities =
+            capabilities.with_guaranteed(FileSystemCapability::DurableFileCopy);
     }
     if matches!(
         response,
         CopyResponse::CompletedServerSideRequiredButNative
             | CopyResponse::CompletedServerSideWhenDisabled
     ) {
-        capabilities = capabilities.with(FileSystemCapability::ServerSideCopy);
+        capabilities =
+            capabilities.with_guaranteed(FileSystemCapability::ServerSideCopy);
     }
     FileSystemProperties::new(
         FileSystemInfo::new(

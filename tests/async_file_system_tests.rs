@@ -66,7 +66,7 @@ impl AsyncFileSystemSpi for PropertiesOnlySpi {
                 PathSemantics::Hierarchical,
             ),
             FileSystemCapabilities::new()
-                .with(qubit_fs::FileSystemCapability::Copy),
+                .with_guaranteed(qubit_fs::FileSystemCapability::Copy),
             FileSystemLimits::unknown(),
             PathConstraints::absolute(),
             SymlinkPolicy::Reject,

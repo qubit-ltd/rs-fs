@@ -68,7 +68,8 @@ impl AsyncFileSystemSpi for CopySpi {
                 "copy-test",
                 PathSemantics::Hierarchical,
             ),
-            FileSystemCapabilities::new().with(FileSystemCapability::Copy),
+            FileSystemCapabilities::new()
+                .with_guaranteed(FileSystemCapability::Copy),
             FileSystemLimits::unknown(),
             PathConstraints::absolute(),
             SymlinkPolicy::Reject,

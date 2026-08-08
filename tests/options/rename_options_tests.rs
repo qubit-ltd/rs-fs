@@ -52,7 +52,15 @@ fn required_rename_atomicity_fails_preflight_without_side_effects() {
         options
             .validate_against(
                 FileSystemCapabilities::default()
-                    .with(FileSystemCapability::AtomicRename),
+                    .with_guaranteed(FileSystemCapability::AtomicRename),
+            )
+            .is_ok()
+    );
+    assert!(
+        options
+            .validate_against(
+                FileSystemCapabilities::default()
+                    .with_conditional(FileSystemCapability::AtomicRename),
             )
             .is_ok()
     );
@@ -75,7 +83,7 @@ fn required_rename_durability_fails_without_provider_guarantee() {
         options
             .validate_against(
                 FileSystemCapabilities::default()
-                    .with(FileSystemCapability::DurableRename),
+                    .with_guaranteed(FileSystemCapability::DurableRename),
             )
             .is_ok()
     );

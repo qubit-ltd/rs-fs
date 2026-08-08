@@ -134,27 +134,27 @@ impl ReadOptions {
             ));
         }
         if (self.offset.is_some() || self.length.is_some())
-            && !capabilities.contains(FileSystemCapability::RangeRead)
+            && !capabilities.supports(FileSystemCapability::RangeRead)
         {
             return Err(missing_requirement(
                 FileSystemCapability::RangeRead,
-                "byte-range reads are required but not guaranteed",
+                "byte-range reads are required but not supported",
             ));
         }
         if (self.if_match.is_some() || self.if_none_match.is_some())
-            && !capabilities.contains(FileSystemCapability::ConditionalRead)
+            && !capabilities.supports(FileSystemCapability::ConditionalRead)
         {
             return Err(missing_requirement(
                 FileSystemCapability::ConditionalRead,
-                "conditional reads are required but not guaranteed",
+                "conditional reads are required but not supported",
             ));
         }
         if self.checksum == ChecksumPolicy::Required
-            && !capabilities.contains(FileSystemCapability::ChecksumValidation)
+            && !capabilities.supports(FileSystemCapability::ChecksumValidation)
         {
             return Err(missing_requirement(
                 FileSystemCapability::ChecksumValidation,
-                "checksum validation is required but not guaranteed",
+                "checksum validation is required but not supported",
             ));
         }
         Ok(())

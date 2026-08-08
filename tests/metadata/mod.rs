@@ -9,6 +9,7 @@ mod checksum_tests;
 mod file_kind_tests;
 mod file_metadata_tests;
 mod file_system_capabilities_tests;
+mod file_system_capability_support_tests;
 mod file_system_id_tests;
 mod file_system_info_tests;
 mod non_sensitive_metadata_tests;

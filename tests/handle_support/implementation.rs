@@ -559,16 +559,16 @@ impl FileSystemSpi for BehaviorSpi {
                 qubit_fs::PathSemantics::Hierarchical,
             ),
             FileSystemCapabilities::new()
-                .with(FileSystemCapability::List)
-                .with(FileSystemCapability::Copy)
-                .with(FileSystemCapability::Read)
-                .with(FileSystemCapability::Write)
-                .with(FileSystemCapability::CreateDirectory)
-                .with(FileSystemCapability::Delete)
-                .with(FileSystemCapability::AtomicReplace)
-                .with(FileSystemCapability::TempFile)
-                .with(FileSystemCapability::TempDirectory)
-                .with(FileSystemCapability::AtomicTempPersist),
+                .with_guaranteed(FileSystemCapability::List)
+                .with_guaranteed(FileSystemCapability::Copy)
+                .with_guaranteed(FileSystemCapability::Read)
+                .with_guaranteed(FileSystemCapability::Write)
+                .with_guaranteed(FileSystemCapability::CreateDirectory)
+                .with_guaranteed(FileSystemCapability::Delete)
+                .with_guaranteed(FileSystemCapability::AtomicReplace)
+                .with_guaranteed(FileSystemCapability::TempFile)
+                .with_guaranteed(FileSystemCapability::TempDirectory)
+                .with_guaranteed(FileSystemCapability::AtomicTempPersist),
             self.limits,
             PathConstraints::absolute(),
             SymlinkPolicy::Reject,
