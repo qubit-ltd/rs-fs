@@ -12,8 +12,7 @@ fn test_directory_entry_path_can_be_compared_with_requested_root() {
         qubit_fs::Path::parse("/outside").expect("entry should parse"),
         qubit_fs::FileKind::File,
     );
-    let (filesystem, _, _) =
-        crate::handle_support::filesystem(false, vec![entry]);
+    let (filesystem, _, _) = crate::handle_support::filesystem(false, vec![entry]);
     let mut stream = filesystem
         .list(
             &qubit_fs::Path::parse("/root").expect("root should parse"),
@@ -34,9 +33,7 @@ fn test_directory_stream_accepts_object_key_root_with_trailing_slash() {
     struct Entries(std::vec::IntoIter<qubit_fs::DirEntry>);
 
     impl qubit_fs::spi::DirectoryStreamSpi for Entries {
-        fn next_entry(
-            &mut self,
-        ) -> qubit_fs::FsResult<Option<qubit_fs::DirEntry>> {
+        fn next_entry(&mut self) -> qubit_fs::FsResult<Option<qubit_fs::DirEntry>> {
             Ok(self.0.next())
         }
     }
@@ -88,8 +85,8 @@ fn test_directory_stream_accepts_object_key_root_with_trailing_slash() {
 
     let filesystem = qubit_fs::FileSystem::from_spi(ObjectKeySpi)
         .expect("object-key filesystem should construct");
-    let root = qubit_fs::Path::parse_literal("bucket/prefix/")
-        .expect("object-key root should parse");
+    let root =
+        qubit_fs::Path::parse_literal("bucket/prefix/").expect("object-key root should parse");
     let mut stream = filesystem
         .list(&root, qubit_fs::ListOptions::default())
         .expect("object-key stream should open");
@@ -109,13 +106,11 @@ fn test_directory_stream_rejects_entry_outside_requested_prefix() {
         qubit_fs::Path::parse("/root/other").expect("entry should parse"),
         qubit_fs::FileKind::File,
     );
-    let (filesystem, _, _) =
-        crate::handle_support::filesystem(false, vec![entry]);
+    let (filesystem, _, _) = crate::handle_support::filesystem(false, vec![entry]);
     let mut stream = filesystem
         .list(
             &qubit_fs::Path::parse("/root").expect("root should parse"),
-            qubit_fs::ListOptions::default()
-                .with_prefix(Some("nested".to_owned())),
+            qubit_fs::ListOptions::default().with_prefix(Some("nested".to_owned())),
         )
         .expect("stream should open");
     let error = stream
@@ -135,13 +130,11 @@ fn test_directory_stream_accepts_nested_prefix_without_recursive_option() {
         qubit_fs::Path::parse("/root/nested/item").expect("entry should parse"),
         qubit_fs::FileKind::File,
     );
-    let (filesystem, _, _) =
-        crate::handle_support::filesystem(false, vec![entry]);
+    let (filesystem, _, _) = crate::handle_support::filesystem(false, vec![entry]);
     let mut stream = filesystem
         .list(
             &qubit_fs::Path::parse("/root").expect("root should parse"),
-            qubit_fs::ListOptions::default()
-                .with_prefix(Some("nested/item".to_owned())),
+            qubit_fs::ListOptions::default().with_prefix(Some("nested/item".to_owned())),
         )
         .expect("stream should open");
 
@@ -160,12 +153,10 @@ fn test_directory_stream_accepts_nested_prefix_without_recursive_option() {
 #[test]
 fn test_directory_stream_rejects_nested_entry_for_direct_listing() {
     let entry = qubit_fs::DirEntry::new(
-        qubit_fs::Path::parse("/root/nested/item")
-            .expect("entry path should parse"),
+        qubit_fs::Path::parse("/root/nested/item").expect("entry path should parse"),
         qubit_fs::FileKind::File,
     );
-    let (filesystem, _, _) =
-        crate::handle_support::filesystem(false, vec![entry]);
+    let (filesystem, _, _) = crate::handle_support::filesystem(false, vec![entry]);
     let mut stream = filesystem
         .list(
             &qubit_fs::Path::parse("/root").expect("root should parse"),
@@ -191,8 +182,7 @@ fn test_directory_stream_validates_metadata_and_prefix_descendants() {
         qubit_fs::Path::parse("/root/file").expect("entry path should parse"),
         qubit_fs::FileKind::File,
     );
-    let (filesystem, _, _) =
-        crate::handle_support::filesystem(false, vec![missing_metadata]);
+    let (filesystem, _, _) = crate::handle_support::filesystem(false, vec![missing_metadata]);
     let mut stream = filesystem
         .list(
             &qubit_fs::Path::parse("/root").expect("root should parse"),
@@ -209,17 +199,14 @@ fn test_directory_stream_validates_metadata_and_prefix_descendants() {
     assert!(format!("{error}").contains("without requested metadata"));
 
     let descendant = qubit_fs::DirEntry::new(
-        qubit_fs::Path::parse("/root/nested/item")
-            .expect("entry path should parse"),
+        qubit_fs::Path::parse("/root/nested/item").expect("entry path should parse"),
         qubit_fs::FileKind::File,
     );
-    let (filesystem, _, _) =
-        crate::handle_support::filesystem(false, vec![descendant]);
+    let (filesystem, _, _) = crate::handle_support::filesystem(false, vec![descendant]);
     let mut stream = filesystem
         .list(
             &qubit_fs::Path::parse("/root").expect("root should parse"),
-            qubit_fs::ListOptions::default()
-                .with_prefix(Some("nested".to_owned())),
+            qubit_fs::ListOptions::default().with_prefix(Some("nested".to_owned())),
         )
         .expect("stream should open");
     assert!(
@@ -237,8 +224,7 @@ fn test_directory_stream_accepts_root_relative_entry() {
         qubit_fs::Path::parse("/file").expect("entry path should parse"),
         qubit_fs::FileKind::File,
     );
-    let (filesystem, _, _) =
-        crate::handle_support::filesystem(false, vec![entry]);
+    let (filesystem, _, _) = crate::handle_support::filesystem(false, vec![entry]);
     let mut stream = filesystem
         .list(&qubit_fs::Path::root(), qubit_fs::ListOptions::default())
         .expect("root stream should open");
@@ -254,15 +240,11 @@ fn test_directory_stream_accepts_root_relative_entry() {
 #[test]
 fn test_directory_stream_rejects_foreign_path_semantics() {
     let entry = qubit_fs::DirEntry::new(
-        qubit_fs::Path::parse_with_semantics(
-            "/root/file",
-            qubit_fs::PathSemantics::ObjectKey,
-        )
-        .expect("entry path should parse"),
+        qubit_fs::Path::parse_with_semantics("/root/file", qubit_fs::PathSemantics::ObjectKey)
+            .expect("entry path should parse"),
         qubit_fs::FileKind::File,
     );
-    let (filesystem, _, _) =
-        crate::handle_support::filesystem(false, vec![entry]);
+    let (filesystem, _, _) = crate::handle_support::filesystem(false, vec![entry]);
     let mut stream = filesystem
         .list(
             &qubit_fs::Path::parse("/root").expect("root should parse"),
@@ -286,8 +268,7 @@ fn test_directory_stream_rejects_inconsistent_entry_identity() {
         qubit_fs::FileKind::File,
     );
     wrong_name.name = "other".to_owned();
-    let (filesystem, _, _) =
-        crate::handle_support::filesystem(false, vec![wrong_name]);
+    let (filesystem, _, _) = crate::handle_support::filesystem(false, vec![wrong_name]);
     let mut stream = filesystem
         .list(
             &qubit_fs::Path::parse("/root").expect("root should parse"),
@@ -306,10 +287,8 @@ fn test_directory_stream_rejects_inconsistent_entry_identity() {
         qubit_fs::Path::parse("/root/file").expect("entry path should parse"),
         qubit_fs::FileKind::File,
     );
-    wrong_metadata.metadata =
-        Some(qubit_fs::FileMetadata::new(qubit_fs::FileKind::Directory));
-    let (filesystem, _, _) =
-        crate::handle_support::filesystem(false, vec![wrong_metadata]);
+    wrong_metadata.metadata = Some(qubit_fs::FileMetadata::new(qubit_fs::FileKind::Directory));
+    let (filesystem, _, _) = crate::handle_support::filesystem(false, vec![wrong_metadata]);
     let mut stream = filesystem
         .list(
             &qubit_fs::Path::parse("/root").expect("root should parse"),
@@ -329,8 +308,7 @@ fn test_directory_stream_rejects_inconsistent_entry_identity() {
 /// provider explicitly reports it.
 #[test]
 fn test_directory_stream_handles_end_of_enumeration_and_root_entry() {
-    let (filesystem, _, _) =
-        crate::handle_support::filesystem(false, Vec::new());
+    let (filesystem, _, _) = crate::handle_support::filesystem(false, Vec::new());
     let mut empty = filesystem
         .list(
             &qubit_fs::Path::parse("/root").expect("root should parse"),
@@ -348,12 +326,8 @@ fn test_directory_stream_handles_end_of_enumeration_and_root_entry() {
         .expect_err("completed stream must be terminal");
     assert_eq!(qubit_fs::FsErrorKind::InvalidState, terminal.kind());
 
-    let root = qubit_fs::DirEntry::new(
-        qubit_fs::Path::root(),
-        qubit_fs::FileKind::Directory,
-    );
-    let (filesystem, _, _) =
-        crate::handle_support::filesystem(false, vec![root]);
+    let root = qubit_fs::DirEntry::new(qubit_fs::Path::root(), qubit_fs::FileKind::Directory);
+    let (filesystem, _, _) = crate::handle_support::filesystem(false, vec![root]);
     let mut root_stream = filesystem
         .list(&qubit_fs::Path::root(), qubit_fs::ListOptions::default())
         .expect("root stream should open");

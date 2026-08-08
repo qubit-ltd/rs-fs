@@ -7,54 +7,47 @@
 // =============================================================================
 
 use std::io::Cursor;
-use std::sync::{
-    Arc,
-    Mutex,
-};
+use std::sync::Arc;
+use std::sync::Mutex;
 
+use qubit_fs::CreateDirectoryOutcome;
+use qubit_fs::DeleteOutcome;
+use qubit_fs::FileMetadata;
+use qubit_fs::FileSystem;
+use qubit_fs::FileSystemCapabilities;
+use qubit_fs::FileSystemId;
+use qubit_fs::FileSystemInfo;
+use qubit_fs::FileSystemLimits;
+use qubit_fs::FileSystemProperties;
+use qubit_fs::FsError;
+use qubit_fs::FsErrorKind;
+use qubit_fs::FsOperation;
+use qubit_fs::FsResult;
+use qubit_fs::OpenedFileInfo;
+use qubit_fs::Path;
+use qubit_fs::PathConstraints;
+use qubit_fs::RenameFailureState;
+use qubit_fs::RenameOutcome;
+use qubit_fs::SymlinkPolicy;
+use qubit_fs::spi::CreateDirectoryRequest;
+use qubit_fs::spi::CreateTempDirectoryRequest;
+use qubit_fs::spi::CreateTempFileRequest;
+use qubit_fs::spi::DeleteDirectoryRequest;
+use qubit_fs::spi::DeleteFileRequest;
+use qubit_fs::spi::FileSystemSpi;
+use qubit_fs::spi::ListRequest;
+use qubit_fs::spi::OpenReaderRequest;
+use qubit_fs::spi::OpenWriterRequest;
+use qubit_fs::spi::OpenedDirectoryStream;
+use qubit_fs::spi::OpenedReader;
+use qubit_fs::spi::OpenedTempDirectory;
+use qubit_fs::spi::OpenedTempFile;
+use qubit_fs::spi::OpenedWriter;
+use qubit_fs::spi::RenameRequest;
+use qubit_fs::spi::SpiRenameFailure;
+use qubit_fs::spi::StatRequest;
+use qubit_fs::spi::StatResponse;
 use qubit_io::Input;
-
-use qubit_fs::spi::{
-    CreateDirectoryRequest,
-    CreateTempDirectoryRequest,
-    CreateTempFileRequest,
-    DeleteDirectoryRequest,
-    DeleteFileRequest,
-    FileSystemSpi,
-    ListRequest,
-    OpenReaderRequest,
-    OpenWriterRequest,
-    OpenedDirectoryStream,
-    OpenedReader,
-    OpenedTempDirectory,
-    OpenedTempFile,
-    OpenedWriter,
-    RenameRequest,
-    SpiRenameFailure,
-    StatRequest,
-    StatResponse,
-};
-use qubit_fs::{
-    CreateDirectoryOutcome,
-    DeleteOutcome,
-    FileMetadata,
-    FileSystem,
-    FileSystemCapabilities,
-    FileSystemId,
-    FileSystemInfo,
-    FileSystemLimits,
-    FileSystemProperties,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    FsResult,
-    OpenedFileInfo,
-    Path,
-    PathConstraints,
-    RenameFailureState,
-    RenameOutcome,
-    SymlinkPolicy,
-};
 
 struct ReaderSpi {
     wrong_opened_path: bool,
@@ -69,8 +62,7 @@ impl FileSystemSpi for ReaderSpi {
                 "reader-test",
                 qubit_fs::PathSemantics::Hierarchical,
             ),
-            FileSystemCapabilities::new()
-                .with_guaranteed(qubit_fs::FileSystemCapability::Read),
+            FileSystemCapabilities::new().with_guaranteed(qubit_fs::FileSystemCapability::Read),
             FileSystemLimits::unknown(),
             PathConstraints::absolute(),
             SymlinkPolicy::Reject,
@@ -86,20 +78,14 @@ impl FileSystemSpi for ReaderSpi {
     fn list(&self, _: ListRequest<'_>) -> FsResult<OpenedDirectoryStream> {
         Err(unsupported())
     }
-    fn open_reader(
-        &self,
-        request: OpenReaderRequest<'_>,
-    ) -> FsResult<OpenedReader> {
+    fn open_reader(&self, request: OpenReaderRequest<'_>) -> FsResult<OpenedReader> {
         let path = if self.wrong_opened_path {
             Path::parse("/different").expect("valid path")
         } else {
             request.path().clone()
         };
         Ok(OpenedReader::new(
-            OpenedFileInfo::new(
-                FileSystemId::new("reader-test").expect("valid id"),
-                path,
-            ),
+            OpenedFileInfo::new(FileSystemId::new("reader-test").expect("valid id"), path),
             Box::new(RecordingReader {
                 inner: Cursor::new(b"bytes".to_vec()),
                 read_requests: Arc::clone(&self.read_requests),
@@ -109,34 +95,22 @@ impl FileSystemSpi for ReaderSpi {
     fn open_writer(&self, _: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
         Err(unsupported())
     }
-    fn create_directory(
-        &self,
-        _: CreateDirectoryRequest<'_>,
-    ) -> FsResult<CreateDirectoryOutcome> {
+    fn create_directory(&self, _: CreateDirectoryRequest<'_>) -> FsResult<CreateDirectoryOutcome> {
         Err(unsupported())
     }
     fn delete_file(&self, _: DeleteFileRequest<'_>) -> FsResult<DeleteOutcome> {
         Err(unsupported())
     }
-    fn delete_directory(
-        &self,
-        _: DeleteDirectoryRequest<'_>,
-    ) -> FsResult<DeleteOutcome> {
+    fn delete_directory(&self, _: DeleteDirectoryRequest<'_>) -> FsResult<DeleteOutcome> {
         Err(unsupported())
     }
-    fn rename(
-        &self,
-        _: RenameRequest<'_>,
-    ) -> Result<RenameOutcome, SpiRenameFailure> {
+    fn rename(&self, _: RenameRequest<'_>) -> Result<RenameOutcome, SpiRenameFailure> {
         Err(SpiRenameFailure::new(
             unsupported(),
             RenameFailureState::Unchanged,
         ))
     }
-    fn create_temp_file(
-        &self,
-        _: CreateTempFileRequest,
-    ) -> FsResult<OpenedTempFile> {
+    fn create_temp_file(&self, _: CreateTempFileRequest) -> FsResult<OpenedTempFile> {
         Err(unsupported())
     }
     fn create_temp_directory(

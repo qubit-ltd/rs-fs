@@ -7,25 +7,21 @@
 // =============================================================================
 //! SPI failure state tests.
 
-use qubit_fs::spi::{
-    SpiCopyFailure,
-    SpiPersistFailure,
-    SpiRenameFailure,
-    SpiWriteFailure,
-};
-use qubit_fs::{
-    CopyFailureState,
-    CopyStats,
-    FileKind,
-    FileMetadata,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    Path,
-    PersistFailureState,
-    RenameFailureState,
-    WriteFailureState,
-};
+use qubit_fs::CopyFailureState;
+use qubit_fs::CopyStats;
+use qubit_fs::FileKind;
+use qubit_fs::FileMetadata;
+use qubit_fs::FsError;
+use qubit_fs::FsErrorKind;
+use qubit_fs::FsOperation;
+use qubit_fs::Path;
+use qubit_fs::PersistFailureState;
+use qubit_fs::RenameFailureState;
+use qubit_fs::WriteFailureState;
+use qubit_fs::spi::SpiCopyFailure;
+use qubit_fs::spi::SpiPersistFailure;
+use qubit_fs::spi::SpiRenameFailure;
+use qubit_fs::spi::SpiWriteFailure;
 
 /// Verifies provider copy failures retain typed recovery state and statistics.
 #[test]
@@ -68,10 +64,8 @@ fn test_spi_rename_failure_preserves_typed_state() {
 #[test]
 fn test_stat_response_exposes_path_and_metadata_snapshot() {
     let path = Path::parse("/file").expect("test path should parse");
-    let response = qubit_fs::spi::StatResponse::new(
-        path.clone(),
-        FileMetadata::new(FileKind::File),
-    );
+    let response =
+        qubit_fs::spi::StatResponse::new(path.clone(), FileMetadata::new(FileKind::File));
     assert_eq!(&path, response.path());
     assert_eq!(&FileKind::File, response.metadata().kind());
 }
@@ -80,11 +74,7 @@ fn test_stat_response_exposes_path_and_metadata_snapshot() {
 #[test]
 fn test_spi_write_failure_preserves_typed_state() {
     let failure = SpiWriteFailure::new(
-        FsError::new(
-            FsErrorKind::Io,
-            FsOperation::CommitWriter,
-            "test failure",
-        ),
+        FsError::new(FsErrorKind::Io, FsOperation::CommitWriter, "test failure"),
         WriteFailureState::RetryableNotPublished,
     );
     assert_eq!(FsErrorKind::Io, failure.error().kind());

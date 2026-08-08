@@ -6,11 +6,9 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::{
-    FileSystemCapabilities,
-    FileSystemCapability,
-    FileSystemCapabilitySupport,
-};
+use qubit_fs::FileSystemCapabilities;
+use qubit_fs::FileSystemCapability;
+use qubit_fs::FileSystemCapabilitySupport;
 
 #[test]
 fn test_support_statuses_are_distinct_and_overwrite_previous_state() {
@@ -91,8 +89,8 @@ fn capability_all_matches_stable_iteration_order() {
 
 #[test]
 fn capability_set_reports_the_first_missing_dependency() {
-    let capabilities = FileSystemCapabilities::new()
-        .with_guaranteed(FileSystemCapability::AtomicRename);
+    let capabilities =
+        FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::AtomicRename);
 
     assert_eq!(
         Some((

@@ -8,13 +8,11 @@
 
 use std::error::Error as _;
 
-use qubit_fs::{
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    PersistFailure,
-    PersistFailureState,
-};
+use qubit_fs::FsError;
+use qubit_fs::FsErrorKind;
+use qubit_fs::FsOperation;
+use qubit_fs::PersistFailure;
+use qubit_fs::PersistFailureState;
 
 const SECRET_SOURCE_TEXT: &str = "authorization=secret-token";
 

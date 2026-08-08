@@ -5,12 +5,10 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use qubit_fs::{
-    DeleteOptions,
-    FileSystemCapabilities,
-    FileSystemCapability,
-    ResourceVersion,
-};
+use qubit_fs::DeleteOptions;
+use qubit_fs::FileSystemCapabilities;
+use qubit_fs::FileSystemCapability;
+use qubit_fs::ResourceVersion;
 
 #[test]
 fn test_delete_options_full_configuration_is_usable() {
@@ -35,8 +33,7 @@ fn delete_requirements_are_checked_against_typed_capabilities() {
         error.required_capability(),
     );
 
-    let conditional = DeleteOptions::default()
-        .with_if_match(Some(ResourceVersion::from("v1")));
+    let conditional = DeleteOptions::default().with_if_match(Some(ResourceVersion::from("v1")));
     let error = conditional
         .validate_against(FileSystemCapabilities::default())
         .unwrap_err();

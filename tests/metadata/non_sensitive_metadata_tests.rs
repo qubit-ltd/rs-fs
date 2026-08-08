@@ -6,10 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::{
-    NonSensitiveMetadata,
-    UserMetadata,
-};
+use qubit_fs::NonSensitiveMetadata;
+use qubit_fs::UserMetadata;
 
 #[test]
 fn non_sensitive_metadata_preserves_safe_metadata_without_logging_values() {

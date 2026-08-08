@@ -5,13 +5,11 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use qubit_fs::{
-    ChecksumPolicy,
-    FileSystemCapabilities,
-    FileSystemCapability,
-    ReadOptions,
-    ResourceVersion,
-};
+use qubit_fs::ChecksumPolicy;
+use qubit_fs::FileSystemCapabilities;
+use qubit_fs::FileSystemCapability;
+use qubit_fs::ReadOptions;
+use qubit_fs::ResourceVersion;
 
 #[test]
 fn test_read_options_full_configuration_is_usable() {
@@ -54,8 +52,7 @@ fn read_requirements_are_checked_against_typed_capabilities() {
         error.required_capability()
     );
 
-    let conditional =
-        ReadOptions::default().with_if_match(Some(ResourceVersion::from("v1")));
+    let conditional = ReadOptions::default().with_if_match(Some(ResourceVersion::from("v1")));
     let error = conditional
         .validate_against(FileSystemCapabilities::default())
         .unwrap_err();
@@ -64,8 +61,7 @@ fn read_requirements_are_checked_against_typed_capabilities() {
         error.required_capability(),
     );
 
-    let checksummed =
-        ReadOptions::default().with_checksum(ChecksumPolicy::Required);
+    let checksummed = ReadOptions::default().with_checksum(ChecksumPolicy::Required);
     let error = checksummed
         .validate_against(FileSystemCapabilities::default())
         .unwrap_err();

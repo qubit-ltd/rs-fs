@@ -5,11 +5,9 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use qubit_fs::{
-    FileKind,
-    FileMetadata,
-    UserMetadata,
-};
+use qubit_fs::FileKind;
+use qubit_fs::FileMetadata;
+use qubit_fs::UserMetadata;
 
 #[test]
 fn test_is_directory_like_matches_directory_and_prefix() {

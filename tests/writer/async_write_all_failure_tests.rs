@@ -8,10 +8,8 @@
 
 use std::error::Error;
 
-use crate::async_recording_spi::{
-    AsyncRecordingConfig,
-    async_recording_file_system,
-};
+use crate::async_recording_spi::AsyncRecordingConfig;
+use crate::async_recording_spi::async_recording_file_system;
 use crate::poll_support::ready;
 
 #[test]
