@@ -17,6 +17,27 @@ use qubit_fs::{
     Path,
 };
 
+#[test]
+fn test_fs_error_keeps_request_and_failure_paths_separate() {
+    let request = Path::parse("/source").expect("request path should parse");
+    let request_target =
+        Path::parse("/target").expect("request target should parse");
+    let failed =
+        Path::parse("/source/nested/second").expect("failed path should parse");
+    let failed_target = Path::parse("/target/nested/second")
+        .expect("failed target should parse");
+    let error = FsError::new(FsErrorKind::Io, FsOperation::Copy, "copy failed")
+        .with_path(request.clone())
+        .with_target(request_target.clone())
+        .with_failure_path(failed.clone())
+        .with_failure_target(failed_target.clone());
+
+    assert_eq!(Some(&request), error.path());
+    assert_eq!(Some(&request_target), error.target());
+    assert_eq!(Some(&failed), error.failure_path());
+    assert_eq!(Some(&failed_target), error.failure_target());
+}
+
 /// Verifies structured context builders preserve every public error fact while
 /// normal formatting deliberately omits the source diagnostic text.
 #[test]
