@@ -7,10 +7,8 @@
 // =============================================================================
 //! Coverage for directory-creation option defaults and metadata replacement.
 
-use qubit_fs::{
-    CreateDirectoryOptions,
-    UserMetadata,
-};
+use qubit_fs::CreateDirectoryOptions;
+use qubit_fs::UserMetadata;
 
 /// Verifies default creation options reject existing directories without
 /// creating parents or retaining metadata.
@@ -30,8 +28,7 @@ fn test_create_directory_options_with_user_metadata_replaces_metadata() {
         .with("owner", "storage")
         .expect("safe metadata key must be accepted");
 
-    let options =
-        CreateDirectoryOptions::default().with_user_metadata(metadata);
+    let options = CreateDirectoryOptions::default().with_user_metadata(metadata);
 
     assert_eq!(options.user_metadata().get("owner"), Some("storage"));
 }

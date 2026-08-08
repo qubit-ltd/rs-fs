@@ -7,55 +7,50 @@
 // =============================================================================
 //! Recording-provider tests for the non-emulated rename primitive.
 
-use qubit_fs::spi::{
-    CreateDirectoryRequest,
-    CreateTempDirectoryRequest,
-    CreateTempFileRequest,
-    DeleteDirectoryRequest,
-    DeleteFileRequest,
-    FileSystemSpi,
-    ListRequest,
-    OpenReaderRequest,
-    OpenWriterRequest,
-    OpenedDirectoryStream,
-    OpenedReader,
-    OpenedTempDirectory,
-    OpenedTempFile,
-    OpenedWriter,
-    RenameRequest,
-    SpiRenameFailure,
-    StatRequest,
-    StatResponse,
-};
-use qubit_fs::{
-    AchievedAtomicity,
-    AtomicityRequirement,
-    CreateDirectoryOutcome,
-    DeleteOutcome,
-    DurabilityRequirement,
-    FileSystem,
-    FileSystemCapabilities,
-    FileSystemCapability,
-    FileSystemId,
-    FileSystemInfo,
-    FileSystemLimits,
-    FileSystemProperties,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    FsResult,
-    Path,
-    PathConstraints,
-    PublicationMethod,
-    RenameFailureState,
-    RenameOptions,
-    RenameOutcome,
-    SymlinkPolicy,
-};
-use std::sync::{
-    Arc,
-    Mutex,
-};
+use std::sync::Arc;
+use std::sync::Mutex;
+
+use qubit_fs::AchievedAtomicity;
+use qubit_fs::AtomicityRequirement;
+use qubit_fs::CreateDirectoryOutcome;
+use qubit_fs::DeleteOutcome;
+use qubit_fs::DurabilityRequirement;
+use qubit_fs::FileSystem;
+use qubit_fs::FileSystemCapabilities;
+use qubit_fs::FileSystemCapability;
+use qubit_fs::FileSystemId;
+use qubit_fs::FileSystemInfo;
+use qubit_fs::FileSystemLimits;
+use qubit_fs::FileSystemProperties;
+use qubit_fs::FsError;
+use qubit_fs::FsErrorKind;
+use qubit_fs::FsOperation;
+use qubit_fs::FsResult;
+use qubit_fs::Path;
+use qubit_fs::PathConstraints;
+use qubit_fs::PublicationMethod;
+use qubit_fs::RenameFailureState;
+use qubit_fs::RenameOptions;
+use qubit_fs::RenameOutcome;
+use qubit_fs::SymlinkPolicy;
+use qubit_fs::spi::CreateDirectoryRequest;
+use qubit_fs::spi::CreateTempDirectoryRequest;
+use qubit_fs::spi::CreateTempFileRequest;
+use qubit_fs::spi::DeleteDirectoryRequest;
+use qubit_fs::spi::DeleteFileRequest;
+use qubit_fs::spi::FileSystemSpi;
+use qubit_fs::spi::ListRequest;
+use qubit_fs::spi::OpenReaderRequest;
+use qubit_fs::spi::OpenWriterRequest;
+use qubit_fs::spi::OpenedDirectoryStream;
+use qubit_fs::spi::OpenedReader;
+use qubit_fs::spi::OpenedTempDirectory;
+use qubit_fs::spi::OpenedTempFile;
+use qubit_fs::spi::OpenedWriter;
+use qubit_fs::spi::RenameRequest;
+use qubit_fs::spi::SpiRenameFailure;
+use qubit_fs::spi::StatRequest;
+use qubit_fs::spi::StatResponse;
 
 /// Selects an atomic or downgraded provider rename result.
 struct RenameSpi {
@@ -67,9 +62,7 @@ struct RenameSpi {
     calls: Arc<Mutex<Vec<&'static str>>>,
 }
 /// Builds a rename-capable facade and call probe.
-fn filesystem(
-    atomicity: AchievedAtomicity,
-) -> (FileSystem, Arc<Mutex<Vec<&'static str>>>) {
+fn filesystem(atomicity: AchievedAtomicity) -> (FileSystem, Arc<Mutex<Vec<&'static str>>>) {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let filesystem = FileSystem::from_spi(RenameSpi {
         atomicity,
@@ -101,8 +94,7 @@ impl FileSystemSpi for RenameSpi {
             .with_guaranteed(FileSystemCapability::Rename)
             .with_guaranteed(FileSystemCapability::AtomicRename);
         if self.durable_capability {
-            capabilities = capabilities
-                .with_guaranteed(FileSystemCapability::DurableRename);
+            capabilities = capabilities.with_guaranteed(FileSystemCapability::DurableRename);
         }
         FileSystemProperties::new(
             FileSystemInfo::new(
@@ -141,10 +133,7 @@ impl FileSystemSpi for RenameSpi {
             .push("open_writer");
         Err(unused())
     }
-    fn create_directory(
-        &self,
-        _: CreateDirectoryRequest<'_>,
-    ) -> FsResult<CreateDirectoryOutcome> {
+    fn create_directory(&self, _: CreateDirectoryRequest<'_>) -> FsResult<CreateDirectoryOutcome> {
         Err(unused())
     }
     fn delete_file(&self, _: DeleteFileRequest<'_>) -> FsResult<DeleteOutcome> {
@@ -154,16 +143,10 @@ impl FileSystemSpi for RenameSpi {
             .push("delete");
         Err(unused())
     }
-    fn delete_directory(
-        &self,
-        _: DeleteDirectoryRequest<'_>,
-    ) -> FsResult<DeleteOutcome> {
+    fn delete_directory(&self, _: DeleteDirectoryRequest<'_>) -> FsResult<DeleteOutcome> {
         Err(unused())
     }
-    fn rename(
-        &self,
-        request: RenameRequest<'_>,
-    ) -> Result<RenameOutcome, SpiRenameFailure> {
+    fn rename(&self, request: RenameRequest<'_>) -> Result<RenameOutcome, SpiRenameFailure> {
         self.calls
             .lock()
             .expect("calls lock should succeed")
@@ -184,10 +167,7 @@ impl FileSystemSpi for RenameSpi {
         )
         .with_durable(self.durable_outcome))
     }
-    fn create_temp_file(
-        &self,
-        _: CreateTempFileRequest,
-    ) -> FsResult<OpenedTempFile> {
+    fn create_temp_file(&self, _: CreateTempFileRequest) -> FsResult<OpenedTempFile> {
         Err(unused())
     }
     fn create_temp_directory(
@@ -215,8 +195,7 @@ fn test_rename_durability_downgrade_is_typed_contract_failure() {
         .rename(
             &path("/source"),
             &path("/target"),
-            RenameOptions::default()
-                .with_durability(DurabilityRequirement::Required),
+            RenameOptions::default().with_durability(DurabilityRequirement::Required),
         )
         .expect_err("downgraded required durability must fail");
 
@@ -246,15 +225,13 @@ fn test_rename_uses_single_primitive_and_binds_identity() {
 /// Verifies a provider atomicity downgrade cannot be represented as an
 /// unchanged failure.
 #[test]
-fn test_rename_atomicity_downgrade_is_typed_contract_failure_without_emulation()
-{
+fn test_rename_atomicity_downgrade_is_typed_contract_failure_without_emulation() {
     let (filesystem, calls) = filesystem(AchievedAtomicity::NonAtomic);
     let failure = filesystem
         .rename(
             &path("/source"),
             &path("/target"),
-            RenameOptions::default()
-                .with_atomicity(AtomicityRequirement::Required),
+            RenameOptions::default().with_atomicity(AtomicityRequirement::Required),
         )
         .expect_err("downgraded required rename must fail");
     assert_eq!(
@@ -334,8 +311,7 @@ fn test_rename_failure_exposes_context_state_and_parts() {
         .rename(
             &path("/source"),
             &path("/target"),
-            RenameOptions::default()
-                .with_atomicity(AtomicityRequirement::Required),
+            RenameOptions::default().with_atomicity(AtomicityRequirement::Required),
         )
         .expect_err("non-atomic outcome must produce a typed failure");
     assert!(format!("{failure:?}").contains("RenameFailure"));

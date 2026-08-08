@@ -7,82 +7,70 @@
 // =============================================================================
 //! Controllable asynchronous SPI used only by facade-level behavior tests.
 
-use std::io::{
-    Error as IoError,
-    Result as IoResult,
-};
+use std::io::Error as IoError;
+use std::io::Result as IoResult;
 use std::pin::Pin;
-use std::sync::{
-    Arc,
-    Mutex,
-};
-use std::task::{
-    Context,
-    Poll,
-};
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::task::Context;
+use std::task::Poll;
 
-use qubit_fs::spi::{
-    AsyncDirectoryStreamSession,
-    AsyncFileSystemSpi,
-    AsyncFileWriteSession,
-    AsyncTempResourceSpi,
-    CopyAttempt,
-    CopyDeclineReason,
-    CopyRequest,
-    CreateDirectoryRequest,
-    CreateTempDirectoryRequest,
-    CreateTempFileRequest,
-    DeleteDirectoryRequest,
-    DeleteFileRequest,
-    ListRequest,
-    OpenReaderRequest,
-    OpenWriterRequest,
-    OpenedAsyncDirectoryStream,
-    OpenedAsyncReader,
-    OpenedAsyncTempDirectory,
-    OpenedAsyncTempFile,
-    OpenedAsyncWriter,
-    RenameRequest,
-    SpiCopyFailure,
-    SpiFuture,
-    SpiRenameFailure,
-    StatRequest,
-    StatResponse,
-};
-use qubit_fs::{
-    AchievedAtomicity,
-    AsyncFileSystem,
-    CreateDirectoryOutcome,
-    DeleteOutcome,
-    FileKind,
-    FileMetadata,
-    FileSystemCapabilities,
-    FileSystemCapability,
-    FileSystemId,
-    FileSystemInfo,
-    FileSystemLimits,
-    FileSystemProperties,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    FsResult,
-    OpenedFileInfo,
-    Path,
-    PathConstraints,
-    PathSemantics,
-    PersistOutcome,
-    PublicationMethod,
-    RenameFailureState,
-    RenameOutcome,
-    SymlinkPolicy,
-    WriteFailure,
-    WriteFailureState,
-    WriteOutcome,
-};
-use qubit_io::{
-    AsyncInput,
-    AsyncOutput,
-};
+use qubit_fs::AchievedAtomicity;
+use qubit_fs::AsyncFileSystem;
+use qubit_fs::CreateDirectoryOutcome;
+use qubit_fs::DeleteOutcome;
+use qubit_fs::FileKind;
+use qubit_fs::FileMetadata;
+use qubit_fs::FileSystemCapabilities;
+use qubit_fs::FileSystemCapability;
+use qubit_fs::FileSystemId;
+use qubit_fs::FileSystemInfo;
+use qubit_fs::FileSystemLimits;
+use qubit_fs::FileSystemProperties;
+use qubit_fs::FsError;
+use qubit_fs::FsErrorKind;
+use qubit_fs::FsOperation;
+use qubit_fs::FsResult;
+use qubit_fs::OpenedFileInfo;
+use qubit_fs::Path;
+use qubit_fs::PathConstraints;
+use qubit_fs::PathSemantics;
+use qubit_fs::PersistOutcome;
+use qubit_fs::PublicationMethod;
+use qubit_fs::RenameFailureState;
+use qubit_fs::RenameOutcome;
+use qubit_fs::SymlinkPolicy;
+use qubit_fs::WriteFailure;
+use qubit_fs::WriteFailureState;
+use qubit_fs::WriteOutcome;
+use qubit_fs::spi::AsyncDirectoryStreamSession;
+use qubit_fs::spi::AsyncFileSystemSpi;
+use qubit_fs::spi::AsyncFileWriteSession;
+use qubit_fs::spi::AsyncTempResourceSpi;
+use qubit_fs::spi::CopyAttempt;
+use qubit_fs::spi::CopyDeclineReason;
+use qubit_fs::spi::CopyRequest;
+use qubit_fs::spi::CreateDirectoryRequest;
+use qubit_fs::spi::CreateTempDirectoryRequest;
+use qubit_fs::spi::CreateTempFileRequest;
+use qubit_fs::spi::DeleteDirectoryRequest;
+use qubit_fs::spi::DeleteFileRequest;
+use qubit_fs::spi::ListRequest;
+use qubit_fs::spi::OpenReaderRequest;
+use qubit_fs::spi::OpenWriterRequest;
+use qubit_fs::spi::OpenedAsyncDirectoryStream;
+use qubit_fs::spi::OpenedAsyncReader;
+use qubit_fs::spi::OpenedAsyncTempDirectory;
+use qubit_fs::spi::OpenedAsyncTempFile;
+use qubit_fs::spi::OpenedAsyncWriter;
+use qubit_fs::spi::RenameRequest;
+use qubit_fs::spi::SpiCopyFailure;
+use qubit_fs::spi::SpiFuture;
+use qubit_fs::spi::SpiRenameFailure;
+use qubit_fs::spi::StatRequest;
+use qubit_fs::spi::StatResponse;
+use qubit_io::AsyncInput;
+use qubit_io::AsyncOutput;
 
 /// A fallback await point that can remain pending or return a deterministic
 /// failure.
@@ -223,8 +211,7 @@ impl AsyncRecordingSpi {
                 || (self.config.omit_read_and_write
                     && matches!(
                         capability,
-                        FileSystemCapability::Read
-                            | FileSystemCapability::Write
+                        FileSystemCapability::Read | FileSystemCapability::Write
                     ));
             if !omitted {
                 capabilities = capabilities.with_guaranteed(capability);
@@ -237,12 +224,10 @@ impl AsyncRecordingSpi {
                 .with_guaranteed(FileSystemCapability::DurableFileCopy);
         }
         if self.config.server_side_copy {
-            capabilities = capabilities
-                .with_guaranteed(FileSystemCapability::ServerSideCopy);
+            capabilities = capabilities.with_guaranteed(FileSystemCapability::ServerSideCopy);
         }
         if self.config.range_read {
-            capabilities =
-                capabilities.with_guaranteed(FileSystemCapability::RangeRead);
+            capabilities = capabilities.with_guaranteed(FileSystemCapability::RangeRead);
         }
         if self.config.rename_atomicity.is_some() || self.config.rename_error {
             capabilities = capabilities
@@ -250,13 +235,11 @@ impl AsyncRecordingSpi {
                 .with_guaranteed(FileSystemCapability::AtomicRename);
         }
         if self.config.atomic_temp_persist {
-            capabilities = capabilities
-                .with_guaranteed(FileSystemCapability::AtomicTempPersist);
+            capabilities = capabilities.with_guaranteed(FileSystemCapability::AtomicTempPersist);
         }
         FileSystemProperties::new(
             FileSystemInfo::new(
-                FileSystemId::new("async-recording")
-                    .expect("test id should be valid"),
+                FileSystemId::new("async-recording").expect("test id should be valid"),
                 "async-recording",
                 PathSemantics::Hierarchical,
             ),
@@ -282,22 +265,18 @@ impl AsyncRecordingSpi {
     /// Returns an opened identity for one requested path.
     fn info(&self, path: &Path) -> OpenedFileInfo {
         let id = if self.config.invalid_opened_identity {
-            FileSystemId::new("other-provider")
-                .expect("test id should be valid")
+            FileSystemId::new("other-provider").expect("test id should be valid")
         } else {
-            FileSystemId::new("async-recording")
-                .expect("test id should be valid")
+            FileSystemId::new("async-recording").expect("test id should be valid")
         };
         OpenedFileInfo::new(id, path.clone())
     }
     /// Returns a temporary identity, optionally invalid for boundary testing.
     fn temp_info(&self, kind: FileKind) -> OpenedFileInfo {
         let id = if self.config.invalid_temp_identity {
-            FileSystemId::new("other-provider")
-                .expect("test id should be valid")
+            FileSystemId::new("other-provider").expect("test id should be valid")
         } else {
-            FileSystemId::new("async-recording")
-                .expect("test id should be valid")
+            FileSystemId::new("async-recording").expect("test id should be valid")
         };
         let info = OpenedFileInfo::new(
             id,
@@ -315,10 +294,7 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
     fn properties(&self) -> FileSystemProperties {
         self.properties_for()
     }
-    fn stat<'a>(
-        &'a self,
-        request: StatRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<StatResponse>> {
+    fn stat<'a>(&'a self, request: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
         self.record("stat");
         let _ = request.options();
         if self.config.pending_stage == Some(AsyncCopyStage::Stat) {
@@ -336,9 +312,8 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
                 ))
             });
         }
-        let mut metadata = FileMetadata::new(
-            self.config.stat_kind.clone().unwrap_or(FileKind::File),
-        );
+        let mut metadata =
+            FileMetadata::new(self.config.stat_kind.clone().unwrap_or(FileKind::File));
         metadata = metadata.with_len(Some(5));
         let path = if self.config.invalid_stat_path {
             Path::parse("/different").expect("test path should parse")
@@ -436,9 +411,7 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
             return Box::pin(async { Err(unused()) });
         }
         let already_existed = self.config.create_directory_already_existed;
-        Box::pin(
-            async move { Ok(CreateDirectoryOutcome::new(already_existed)) },
-        )
+        Box::pin(async move { Ok(CreateDirectoryOutcome::new(already_existed)) })
     }
     fn delete_file<'a>(
         &'a self,
@@ -480,20 +453,14 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
         if self.config.copy_failure {
             return Box::pin(async {
                 Err(SpiCopyFailure::new(
-                    FsError::new(
-                        FsErrorKind::Io,
-                        FsOperation::Copy,
-                        "injected copy failure",
-                    ),
+                    FsError::new(FsErrorKind::Io, FsOperation::Copy, "injected copy failure"),
                     qubit_fs::CopyFailureState::Indeterminate,
                     qubit_fs::CopyStats::default(),
                 ))
             });
         }
         if self.config.decline_copy {
-            return Box::pin(async {
-                Ok(CopyAttempt::Declined(CopyDeclineReason::NotApplicable))
-            });
+            return Box::pin(async { Ok(CopyAttempt::Declined(CopyDeclineReason::NotApplicable)) });
         }
         if let Some(atomicity) = self.config.completed_copy {
             return Box::pin(async move {
@@ -504,9 +471,7 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
                 )))
             });
         }
-        Box::pin(async {
-            Ok(CopyAttempt::Declined(CopyDeclineReason::NotApplicable))
-        })
+        Box::pin(async { Ok(CopyAttempt::Declined(CopyDeclineReason::NotApplicable)) })
     }
     fn rename<'a>(
         &'a self,
@@ -524,10 +489,8 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
         }
         if let Some(atomicity) = self.config.rename_atomicity {
             let source = request.source().clone();
-            let target = if request.target().as_str() == "/wrong-rename-target"
-            {
-                Path::parse("/reported-rename-target")
-                    .expect("generated path should parse")
+            let target = if request.target().as_str() == "/wrong-rename-target" {
+                Path::parse("/reported-rename-target").expect("generated path should parse")
             } else {
                 request.target().clone()
             };
@@ -573,9 +536,7 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
                 Box::new(RecordingTempSession {
                     calls,
                     temp_cancellations,
-                    indeterminate_persist: self
-                        .config
-                        .temp_persist_indeterminate,
+                    indeterminate_persist: self.config.temp_persist_indeterminate,
                     persist_failure: self.config.temp_persist_failure,
                     cleanup_failure: self.config.temp_cleanup_failure,
                     keep_failure: self.config.temp_keep_failure,
@@ -604,10 +565,7 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
                 Box::new(RecordingTempSession {
                     calls,
                     temp_cancellations,
-                    indeterminate_persist: self
-                        .config
-                        .temp_persist_atomicity
-                        .is_none()
+                    indeterminate_persist: self.config.temp_persist_atomicity.is_none()
                         && self.config.temp_persist_indeterminate,
                     persist_failure: self.config.temp_persist_failure,
                     cleanup_failure: self.config.temp_cleanup_failure,
@@ -627,9 +585,7 @@ struct RecordingDirectorySession {
     fail: bool,
 }
 impl AsyncDirectoryStreamSession for RecordingDirectorySession {
-    fn next_entry_async(
-        &mut self,
-    ) -> SpiFuture<'_, FsResult<Option<qubit_fs::DirEntry>>> {
+    fn next_entry_async(&mut self) -> SpiFuture<'_, FsResult<Option<qubit_fs::DirEntry>>> {
         if self.fail {
             self.fail = false;
             return Box::pin(async { Err(unused()) });
@@ -661,8 +617,7 @@ impl AsyncInput for RecordingInput {
         }
         let bytes = b"bytes";
         let read = bytes[this.position..].len().min(count);
-        output[index..index + read]
-            .copy_from_slice(&bytes[this.position..this.position + read]);
+        output[index..index + read].copy_from_slice(&bytes[this.position..this.position + read]);
         this.position += read;
         Poll::Ready(Ok(read))
     }
@@ -691,10 +646,7 @@ impl AsyncOutput for RecordingWriter {
             Poll::Ready(Ok(count))
         }
     }
-    fn poll_flush(
-        self: Pin<&mut Self>,
-        _: &mut Context<'_>,
-    ) -> Poll<IoResult<()>> {
+    fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<IoResult<()>> {
         let config = self.get_mut().config.clone();
         if config.pending_stage == Some(AsyncCopyStage::WriterFlush) {
             Poll::Pending
@@ -754,9 +706,7 @@ impl AsyncFileWriteSession for RecordingWriter {
                     "injected abort failure",
                 )),
                 None => Ok(match config.writer_commit_failure {
-                    Some(WriteFailureState::Published) => {
-                        qubit_fs::WriteAbortOutcome::Published
-                    }
+                    Some(WriteFailureState::Published) => qubit_fs::WriteAbortOutcome::Published,
                     Some(WriteFailureState::Indeterminate) => {
                         qubit_fs::WriteAbortOutcome::Indeterminate
                     }
@@ -838,12 +788,10 @@ impl AsyncTempResourceSpi for RecordingTempSession {
     fn persist<'a>(
         self: Pin<&'a mut Self>,
         request: qubit_fs::spi::PersistRequest<'a>,
-    ) -> SpiFuture<'a, Result<PersistOutcome, qubit_fs::spi::SpiPersistFailure>>
-    {
+    ) -> SpiFuture<'a, Result<PersistOutcome, qubit_fs::spi::SpiPersistFailure>> {
         self.as_ref().get_ref().record("persist");
         let target = if request.target().as_str() == "/wrong-persist-target" {
-            Path::parse("/reported-persist-target")
-                .expect("generated path should parse")
+            Path::parse("/reported-persist-target").expect("generated path should parse")
         } else {
             request.target().clone()
         };

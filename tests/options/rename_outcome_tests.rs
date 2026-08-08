@@ -6,13 +6,11 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::{
-    AchievedAtomicity,
-    Path,
-    PublicationMethod,
-    RenameOutcome,
-    UserMetadata,
-};
+use qubit_fs::AchievedAtomicity;
+use qubit_fs::Path;
+use qubit_fs::PublicationMethod;
+use qubit_fs::RenameOutcome;
+use qubit_fs::UserMetadata;
 
 #[test]
 fn rename_outcome_reports_actual_method_and_atomicity() {

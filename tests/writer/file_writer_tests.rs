@@ -23,8 +23,7 @@ fn test_write_abort_outcome_exposes_all_publication_states() {
 
 #[test]
 fn test_write_all_commit_failure_retains_open_writer_for_recovery() {
-    let (filesystem, _, _) =
-        crate::handle_support::filesystem(true, Vec::new());
+    let (filesystem, _, _) = crate::handle_support::filesystem(true, Vec::new());
     let failure = filesystem
         .write_all(
             &qubit_fs::Path::parse("/target").expect("path should parse"),
@@ -43,8 +42,7 @@ fn test_write_all_commit_failure_retains_open_writer_for_recovery() {
 /// terminal-state behavior through the public filesystem facade.
 #[test]
 fn test_open_writer_transfers_bytes_and_rejects_closed_operations() {
-    let (filesystem, _, _) =
-        crate::handle_support::filesystem(false, Vec::new());
+    let (filesystem, _, _) = crate::handle_support::filesystem(false, Vec::new());
     let target = qubit_fs::Path::parse("/target").expect("path should parse");
     let mut writer = filesystem
         .open_writer(&target, qubit_fs::WriteOptions::default())
@@ -53,8 +51,7 @@ fn test_open_writer_transfers_bytes_and_rejects_closed_operations() {
     assert_eq!(qubit_fs::WriterState::Open, writer.state());
     assert!(!writer.is_buffered());
     assert!(format!("{writer:?}").contains("FileWriter"));
-    Output::write_fully(&mut writer, b"bytes")
-        .expect("writer should accept bytes");
+    Output::write_fully(&mut writer, b"bytes").expect("writer should accept bytes");
     writer.flush().expect("writer should flush");
     writer.commit().expect("writer should commit");
     assert_eq!(qubit_fs::WriterState::Committed, writer.state());
@@ -127,10 +124,8 @@ fn test_open_writer_preserves_provider_commit_and_abort_states() {
             qubit_fs::WriterState::Indeterminate,
         ),
     ] {
-        let filesystem = crate::handle_support::writer_lifecycle_filesystem(
-            Some(failure_state),
-            None,
-        );
+        let filesystem =
+            crate::handle_support::writer_lifecycle_filesystem(Some(failure_state), None);
         let mut writer = filesystem
             .open_writer(
                 &qubit_fs::Path::parse("/target").expect("path should parse"),
@@ -144,15 +139,9 @@ fn test_open_writer_preserves_provider_commit_and_abort_states() {
         assert_eq!(expected_state, writer.state());
         let outcome = writer.abort().expect("failed writer should allow abort");
         let expected_after_abort = match outcome {
-            qubit_fs::WriteAbortOutcome::NotPublished => {
-                qubit_fs::WriterState::Aborted
-            }
-            qubit_fs::WriteAbortOutcome::Published => {
-                qubit_fs::WriterState::Published
-            }
-            qubit_fs::WriteAbortOutcome::Indeterminate => {
-                qubit_fs::WriterState::Indeterminate
-            }
+            qubit_fs::WriteAbortOutcome::NotPublished => qubit_fs::WriterState::Aborted,
+            qubit_fs::WriteAbortOutcome::Published => qubit_fs::WriterState::Published,
+            qubit_fs::WriteAbortOutcome::Indeterminate => qubit_fs::WriterState::Indeterminate,
         };
         assert_eq!(expected_after_abort, writer.state());
         let repeated = writer
@@ -173,10 +162,7 @@ fn test_open_writer_abort_failure_tracks_certainty() {
             qubit_fs::WriterState::Indeterminate,
         ),
     ] {
-        let filesystem = crate::handle_support::writer_lifecycle_filesystem(
-            None,
-            Some(kind),
-        );
+        let filesystem = crate::handle_support::writer_lifecycle_filesystem(None, Some(kind));
         let mut writer = filesystem
             .open_writer(
                 &qubit_fs::Path::parse("/target").expect("path should parse"),
@@ -195,8 +181,7 @@ fn test_open_writer_abort_failure_tracks_certainty() {
 /// publication after the writer has reached the published state.
 #[test]
 fn test_open_writer_rejects_non_atomic_required_commit_outcome() {
-    let filesystem =
-        crate::handle_support::non_atomic_temp_directory_filesystem();
+    let filesystem = crate::handle_support::non_atomic_temp_directory_filesystem();
     let mut writer = filesystem
         .open_writer(
             &qubit_fs::Path::parse("/target").expect("path should parse"),

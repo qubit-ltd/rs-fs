@@ -12,47 +12,41 @@
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{
-    Context,
-    Poll,
-    Waker,
-};
+use std::task::Context;
+use std::task::Poll;
+use std::task::Waker;
 
-use qubit_fs::spi::{
-    AsyncFileSystemSpi,
-    CreateDirectoryRequest,
-    CreateTempDirectoryRequest,
-    CreateTempFileRequest,
-    DeleteDirectoryRequest,
-    DeleteFileRequest,
-    ListRequest,
-    OpenReaderRequest,
-    OpenWriterRequest,
-    RenameRequest,
-    SpiFuture,
-    StatRequest,
-};
-use qubit_fs::{
-    AsyncFileSystem,
-    CopyOptions,
-    CreateDirectoryOutcome,
-    DeleteOutcome,
-    FileSystemCapabilities,
-    FileSystemId,
-    FileSystemInfo,
-    FileSystemLimits,
-    FileSystemProperties,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    FsResult,
-    Path,
-    PathConstraints,
-    PathSemantics,
-    RenameFailureState,
-    RenameOutcome,
-    SymlinkPolicy,
-};
+use qubit_fs::AsyncFileSystem;
+use qubit_fs::CopyOptions;
+use qubit_fs::CreateDirectoryOutcome;
+use qubit_fs::DeleteOutcome;
+use qubit_fs::FileSystemCapabilities;
+use qubit_fs::FileSystemId;
+use qubit_fs::FileSystemInfo;
+use qubit_fs::FileSystemLimits;
+use qubit_fs::FileSystemProperties;
+use qubit_fs::FsError;
+use qubit_fs::FsErrorKind;
+use qubit_fs::FsOperation;
+use qubit_fs::FsResult;
+use qubit_fs::Path;
+use qubit_fs::PathConstraints;
+use qubit_fs::PathSemantics;
+use qubit_fs::RenameFailureState;
+use qubit_fs::RenameOutcome;
+use qubit_fs::SymlinkPolicy;
+use qubit_fs::spi::AsyncFileSystemSpi;
+use qubit_fs::spi::CreateDirectoryRequest;
+use qubit_fs::spi::CreateTempDirectoryRequest;
+use qubit_fs::spi::CreateTempFileRequest;
+use qubit_fs::spi::DeleteDirectoryRequest;
+use qubit_fs::spi::DeleteFileRequest;
+use qubit_fs::spi::ListRequest;
+use qubit_fs::spi::OpenReaderRequest;
+use qubit_fs::spi::OpenWriterRequest;
+use qubit_fs::spi::RenameRequest;
+use qubit_fs::spi::SpiFuture;
+use qubit_fs::spi::StatRequest;
 
 struct PropertiesOnlySpi;
 
@@ -60,13 +54,11 @@ impl AsyncFileSystemSpi for PropertiesOnlySpi {
     fn properties(&self) -> FileSystemProperties {
         FileSystemProperties::new(
             FileSystemInfo::new(
-                FileSystemId::new("async-test")
-                    .expect("test id should be valid"),
+                FileSystemId::new("async-test").expect("test id should be valid"),
                 "async-test",
                 PathSemantics::Hierarchical,
             ),
-            FileSystemCapabilities::new()
-                .with_guaranteed(qubit_fs::FileSystemCapability::Copy),
+            FileSystemCapabilities::new().with_guaranteed(qubit_fs::FileSystemCapability::Copy),
             FileSystemLimits::unknown(),
             PathConstraints::absolute(),
             SymlinkPolicy::Reject,
@@ -83,8 +75,7 @@ impl AsyncFileSystemSpi for PropertiesOnlySpi {
     fn list<'a>(
         &'a self,
         _: ListRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<qubit_fs::spi::OpenedAsyncDirectoryStream>>
-    {
+    ) -> SpiFuture<'a, FsResult<qubit_fs::spi::OpenedAsyncDirectoryStream>> {
         Box::pin(async { Err(unused()) })
     }
     fn open_reader<'a>(
@@ -120,8 +111,7 @@ impl AsyncFileSystemSpi for PropertiesOnlySpi {
     fn rename<'a>(
         &'a self,
         _: RenameRequest<'a>,
-    ) -> SpiFuture<'a, Result<RenameOutcome, qubit_fs::spi::SpiRenameFailure>>
-    {
+    ) -> SpiFuture<'a, Result<RenameOutcome, qubit_fs::spi::SpiRenameFailure>> {
         Box::pin(async {
             Err(qubit_fs::spi::SpiRenameFailure::new(
                 unused(),
@@ -169,8 +159,8 @@ where
 
 #[test]
 fn test_async_file_system_is_clone_but_not_a_trait_object() {
-    let file_system = AsyncFileSystem::from_spi(PropertiesOnlySpi)
-        .expect("facade construction should succeed");
+    let file_system =
+        AsyncFileSystem::from_spi(PropertiesOnlySpi).expect("facade construction should succeed");
     let clone = file_system.clone();
     assert_eq!(
         file_system.properties().info().provider_id(),
@@ -183,8 +173,8 @@ fn test_async_file_system_is_clone_but_not_a_trait_object() {
 /// native copy primitive before the facade reports missing fallback support.
 #[test]
 fn test_async_spi_default_copy_declines_without_provider_override() {
-    let file_system = AsyncFileSystem::from_spi(PropertiesOnlySpi)
-        .expect("facade construction should succeed");
+    let file_system =
+        AsyncFileSystem::from_spi(PropertiesOnlySpi).expect("facade construction should succeed");
     let mut operation = file_system
         .begin_copy(
             Path::parse("/source").expect("source path should parse"),

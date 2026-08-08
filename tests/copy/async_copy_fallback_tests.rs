@@ -7,29 +7,23 @@
 // =============================================================================
 //! External fallback failures and cancellation behavior for asynchronous copy.
 
-use qubit_fs::{
-    AchievedAtomicity,
-    AsyncCopyOperationState,
-    AtomicityRequirement,
-    CopyConflictPolicy,
-    CopyFailureState,
-    CopyOptions,
-    FsErrorKind,
-    MetadataPreservePolicy,
-    Path,
-    ServerSidePreference,
-    WriterState,
-};
+use qubit_fs::AchievedAtomicity;
+use qubit_fs::AsyncCopyOperationState;
+use qubit_fs::AtomicityRequirement;
+use qubit_fs::CopyConflictPolicy;
+use qubit_fs::CopyFailureState;
+use qubit_fs::CopyOptions;
+use qubit_fs::FsErrorKind;
+use qubit_fs::MetadataPreservePolicy;
+use qubit_fs::Path;
+use qubit_fs::ServerSidePreference;
+use qubit_fs::WriterState;
 
-use crate::async_recording_spi::{
-    AsyncCopyStage,
-    AsyncRecordingConfig,
-    async_recording_file_system,
-};
-use crate::poll_support::{
-    assert_pending,
-    ready,
-};
+use crate::async_recording_spi::AsyncCopyStage;
+use crate::async_recording_spi::AsyncRecordingConfig;
+use crate::async_recording_spi::async_recording_file_system;
+use crate::poll_support::assert_pending;
+use crate::poll_support::ready;
 
 /// Returns a stable absolute path for copy scenarios.
 fn path(value: &str) -> Path {
@@ -61,30 +55,21 @@ fn test_async_stream_fallback_failures_retain_recovery_writer() {
             WriterState::NotPublished,
         ),
     ] {
-        let (file_system, _) =
-            async_recording_file_system(AsyncRecordingConfig {
-                failing_stage: Some(stage),
-                ..AsyncRecordingConfig::default()
-            });
+        let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
+            failing_stage: Some(stage),
+            ..AsyncRecordingConfig::default()
+        });
         let mut operation = file_system
-            .begin_copy(
-                path("/source"),
-                path("/target"),
-                CopyOptions::default(),
-            )
+            .begin_copy(path("/source"), path("/target"), CopyOptions::default())
             .expect("preflight should succeed");
-        let failure =
-            ready(operation.execute()).expect_err("injected stage should fail");
+        let failure = ready(operation.execute()).expect_err("injected stage should fail");
         assert_eq!(expected, failure.state());
         assert_eq!(FsErrorKind::Io, failure.error().kind());
         assert!(
             operation.has_recovery_writer(),
             "{stage:?} should retain writer"
         );
-        assert_eq!(
-            AsyncCopyOperationState::Failed(expected),
-            operation.state()
-        );
+        assert_eq!(AsyncCopyOperationState::Failed(expected), operation.state());
         assert_eq!(
             writer_state,
             operation
@@ -121,20 +106,15 @@ fn test_async_stream_fallback_commit_failure_preserves_certainty() {
             WriterState::Indeterminate,
         ),
     ] {
-        let (file_system, _) =
-            async_recording_file_system(AsyncRecordingConfig {
-                writer_commit_failure: Some(writer_failure),
-                ..AsyncRecordingConfig::default()
-            });
+        let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
+            writer_commit_failure: Some(writer_failure),
+            ..AsyncRecordingConfig::default()
+        });
         let mut operation = file_system
-            .begin_copy(
-                path("/source"),
-                path("/target"),
-                CopyOptions::default(),
-            )
+            .begin_copy(path("/source"), path("/target"), CopyOptions::default())
             .expect("copy preflight should succeed");
-        let failure = ready(operation.execute())
-            .expect_err("writer commit failure should propagate");
+        let failure =
+            ready(operation.execute()).expect_err("writer commit failure should propagate");
         assert_eq!(expected, failure.state());
         assert_eq!(
             writer_state,
@@ -152,20 +132,17 @@ fn test_async_stream_fallback_commit_failure_preserves_certainty() {
 fn test_async_declined_copy_rejects_incompatible_fallback_options() {
     let options = [
         CopyOptions::default().with_continue_on_error(true),
-        CopyOptions::default()
-            .with_preserve_metadata(MetadataPreservePolicy::Portable),
+        CopyOptions::default().with_preserve_metadata(MetadataPreservePolicy::Portable),
         CopyOptions::default().with_create_parent(true),
         CopyOptions::default().with_conflict(CopyConflictPolicy::Overwrite),
     ];
     for options in options {
-        let (file_system, probe) =
-            async_recording_file_system(AsyncRecordingConfig::default());
+        let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig::default());
         let mut operation = file_system
             .begin_copy(path("/source"), path("/target"), options)
             .expect("these options pass copy preflight");
-        let failure = ready(operation.execute()).expect_err(
-            "declined native copy must reject this fallback option",
-        );
+        let failure = ready(operation.execute())
+            .expect_err("declined native copy must reject this fallback option");
         assert_eq!(CopyFailureState::Unchanged, failure.state());
         assert_eq!(FsErrorKind::RequirementNotMet, failure.error().kind());
         assert_eq!(vec!["try_copy"], probe.calls());
@@ -175,8 +152,7 @@ fn test_async_declined_copy_rejects_incompatible_fallback_options() {
 /// Rejects a known source length over either stream limit before opening
 /// fallback handles or exposing a recovery writer.
 #[test]
-fn test_async_stream_fallback_rejects_known_length_over_limits_before_opening_handles()
- {
+fn test_async_stream_fallback_rejects_known_length_over_limits_before_opening_handles() {
     let configs = [
         AsyncRecordingConfig {
             maximum_read_range_bytes: Some(4),
@@ -190,11 +166,7 @@ fn test_async_stream_fallback_rejects_known_length_over_limits_before_opening_ha
     for config in configs {
         let (file_system, probe) = async_recording_file_system(config);
         let mut operation = file_system
-            .begin_copy(
-                path("/source"),
-                path("/target"),
-                CopyOptions::default(),
-            )
+            .begin_copy(path("/source"), path("/target"), CopyOptions::default())
             .expect("copy preflight should succeed before source stat");
         let failure = ready(operation.execute())
             .expect_err("known source length over a stream limit must fail");
@@ -208,17 +180,15 @@ fn test_async_stream_fallback_rejects_known_length_over_limits_before_opening_ha
 /// Uses the asynchronous stream fallback when copy is not advertised.
 #[test]
 fn test_async_copy_fallback_does_not_require_copy_capability() {
-    let (file_system, probe) =
-        async_recording_file_system(AsyncRecordingConfig {
-            omitted_capability: Some(qubit_fs::FileSystemCapability::Copy),
-            decline_copy: true,
-            ..AsyncRecordingConfig::default()
-        });
+    let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig {
+        omitted_capability: Some(qubit_fs::FileSystemCapability::Copy),
+        decline_copy: true,
+        ..AsyncRecordingConfig::default()
+    });
     let mut operation = file_system
         .begin_copy(path("/source"), path("/target"), CopyOptions::default())
         .expect("read and write capabilities should enable fallback");
-    let outcome = ready(operation.execute())
-        .expect("asynchronous stream fallback should complete");
+    let outcome = ready(operation.execute()).expect("asynchronous stream fallback should complete");
 
     assert!(outcome.used_fallback());
     assert_eq!(vec!["stat", "open_reader", "open_writer"], probe.calls());
@@ -245,8 +215,7 @@ fn test_async_declined_copy_rejects_required_fallback_guarantees() {
                 decline_copy: true,
                 ..AsyncRecordingConfig::default()
             },
-            CopyOptions::default()
-                .with_durability(qubit_fs::DurabilityRequirement::Required),
+            CopyOptions::default().with_durability(qubit_fs::DurabilityRequirement::Required),
         ),
         (
             AsyncRecordingConfig {
@@ -254,8 +223,7 @@ fn test_async_declined_copy_rejects_required_fallback_guarantees() {
                 decline_copy: true,
                 ..AsyncRecordingConfig::default()
             },
-            CopyOptions::default()
-                .with_server_side(ServerSidePreference::Require),
+            CopyOptions::default().with_server_side(ServerSidePreference::Require),
         ),
     ];
     for (config, options) in cases {
@@ -263,9 +231,8 @@ fn test_async_declined_copy_rejects_required_fallback_guarantees() {
         let mut operation = file_system
             .begin_copy(path("/source"), path("/target"), options)
             .expect("capability should make preflight succeed");
-        let failure = ready(operation.execute()).expect_err(
-            "declined native copy must reject the required guarantee",
-        );
+        let failure = ready(operation.execute())
+            .expect_err("declined native copy must reject the required guarantee");
         assert_eq!(FsErrorKind::RequirementNotMet, failure.error().kind());
         assert_eq!(CopyFailureState::Unchanged, failure.state());
         assert_eq!(vec!["try_copy"], probe.calls());
@@ -281,17 +248,12 @@ fn test_async_stream_fallback_cancellation_is_indeterminate_with_recovery() {
         AsyncCopyStage::WriterFlush,
         AsyncCopyStage::WriterCommit,
     ] {
-        let (file_system, probe) =
-            async_recording_file_system(AsyncRecordingConfig {
-                pending_stage: Some(stage),
-                ..AsyncRecordingConfig::default()
-            });
+        let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig {
+            pending_stage: Some(stage),
+            ..AsyncRecordingConfig::default()
+        });
         let mut operation = file_system
-            .begin_copy(
-                path("/source"),
-                path("/target"),
-                CopyOptions::default(),
-            )
+            .begin_copy(path("/source"), path("/target"), CopyOptions::default())
             .expect("preflight should succeed");
         let mut future = Box::pin(operation.execute());
         assert_pending(future.as_mut());
@@ -324,13 +286,11 @@ fn test_async_stream_fallback_cancellation_is_indeterminate_with_recovery() {
 
 /// Covers cancellation before fallback has allocated a writer.
 #[test]
-fn test_async_native_copy_cancellation_is_indeterminate_without_recovery_writer()
- {
-    let (file_system, probe) =
-        async_recording_file_system(AsyncRecordingConfig {
-            pending_stage: Some(AsyncCopyStage::TryCopy),
-            ..AsyncRecordingConfig::default()
-        });
+fn test_async_native_copy_cancellation_is_indeterminate_without_recovery_writer() {
+    let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig {
+        pending_stage: Some(AsyncCopyStage::TryCopy),
+        ..AsyncRecordingConfig::default()
+    });
     let mut operation = file_system
         .begin_copy(path("/source"), path("/target"), CopyOptions::default())
         .expect("preflight should succeed");
@@ -350,8 +310,7 @@ fn test_async_native_copy_cancellation_is_indeterminate_without_recovery_writer(
 /// Verifies an unpolled execute future has no state or provider-I/O effect.
 #[test]
 fn test_dropping_unpolled_execute_future_keeps_operation_ready() {
-    let (file_system, probe) =
-        async_recording_file_system(AsyncRecordingConfig::default());
+    let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig::default());
     let mut operation = file_system
         .begin_copy(path("/source"), path("/target"), CopyOptions::default())
         .expect("preflight should succeed");
@@ -372,12 +331,10 @@ fn test_async_completed_copy_rechecks_required_atomicity() {
         .begin_copy(
             path("/source"),
             path("/target"),
-            CopyOptions::default()
-                .with_atomicity(AtomicityRequirement::Required),
+            CopyOptions::default().with_atomicity(AtomicityRequirement::Required),
         )
         .expect("preflight should succeed");
-    let failure = ready(operation.execute())
-        .expect_err("downgraded completed copy must fail");
+    let failure = ready(operation.execute()).expect_err("downgraded completed copy must fail");
     assert_eq!(
         FsErrorKind::ProviderContractViolation,
         failure.error().kind()
@@ -398,8 +355,7 @@ fn test_async_completed_native_copy_violates_required_server_side() {
         .begin_copy(
             path("/source"),
             path("/target"),
-            CopyOptions::default()
-                .with_server_side(ServerSidePreference::Require),
+            CopyOptions::default().with_server_side(ServerSidePreference::Require),
         )
         .expect("server-side capability should pass preflight");
     let failure = ready(operation.execute())
@@ -423,12 +379,11 @@ fn test_async_completed_copy_missing_metadata_is_contract_failure() {
         .begin_copy(
             path("/source"),
             path("/target"),
-            CopyOptions::default()
-                .with_preserve_metadata(MetadataPreservePolicy::Portable),
+            CopyOptions::default().with_preserve_metadata(MetadataPreservePolicy::Portable),
         )
         .expect("metadata policy needs no capability preflight");
-    let failure = ready(operation.execute())
-        .expect_err("missing metadata preservation must be rejected");
+    let failure =
+        ready(operation.execute()).expect_err("missing metadata preservation must be rejected");
     assert_eq!(CopyFailureState::Published, failure.state());
     assert_eq!(
         FsErrorKind::ProviderContractViolation,
@@ -449,8 +404,7 @@ fn test_async_native_copy_failure_has_source_and_target_context() {
     let mut operation = file_system
         .begin_copy(source.clone(), target.clone(), CopyOptions::default())
         .expect("preflight should succeed");
-    let failure = ready(operation.execute())
-        .expect_err("provider failure should propagate");
+    let failure = ready(operation.execute()).expect_err("provider failure should propagate");
     assert_eq!(Some(&source), failure.error().path());
     assert_eq!(Some(&target), failure.error().target());
     assert_eq!(Some("async-recording"), failure.error().provider());
@@ -467,8 +421,7 @@ fn test_async_copy_failure_exposes_owned_error_state_and_stats() {
     let mut operation = file_system
         .begin_copy(path("/source"), path("/target"), CopyOptions::default())
         .expect("preflight should succeed");
-    let failure = ready(operation.execute())
-        .expect_err("provider failure should propagate");
+    let failure = ready(operation.execute()).expect_err("provider failure should propagate");
     assert!(format!("{failure}").contains("injected"));
     assert!(format!("{failure:?}").contains("AsyncCopyFailure"));
     assert_eq!(0, failure.partial_stats().bytes);
@@ -491,11 +444,10 @@ fn test_async_copy_failure_exposes_owned_error_state_and_stats() {
 /// unconfirmed provider cancellation.
 #[test]
 fn test_async_indeterminate_recovery_writer_drop_skips_cancellation() {
-    let (file_system, probe) =
-        async_recording_file_system(AsyncRecordingConfig {
-            failing_stage: Some(AsyncCopyStage::WriterFlush),
-            ..AsyncRecordingConfig::default()
-        });
+    let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig {
+        failing_stage: Some(AsyncCopyStage::WriterFlush),
+        ..AsyncRecordingConfig::default()
+    });
     let mut operation = file_system
         .begin_copy(path("/source"), path("/target"), CopyOptions::default())
         .expect("preflight should succeed");

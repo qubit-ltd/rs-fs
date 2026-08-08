@@ -7,55 +7,47 @@
 // =============================================================================
 //! External lifecycle coverage for owning asynchronous copy operations.
 
-use std::future::{
-    Future,
-    pending,
-};
-use std::task::{
-    Context,
-    Poll,
-    Waker,
-};
+use std::future::Future;
+use std::future::pending;
+use std::task::Context;
+use std::task::Poll;
+use std::task::Waker;
 
-use qubit_fs::spi::{
-    AsyncFileSystemSpi,
-    CopyAttempt,
-    CreateDirectoryRequest,
-    CreateTempDirectoryRequest,
-    CreateTempFileRequest,
-    DeleteDirectoryRequest,
-    DeleteFileRequest,
-    ListRequest,
-    OpenReaderRequest,
-    OpenWriterRequest,
-    RenameRequest,
-    SpiCopyFailure,
-    SpiFuture,
-    StatRequest,
-};
-use qubit_fs::{
-    AsyncCopyOperationState,
-    AsyncFileSystem,
-    CopyOptions,
-    CreateDirectoryOutcome,
-    DeleteOutcome,
-    FileSystemCapabilities,
-    FileSystemCapability,
-    FileSystemId,
-    FileSystemInfo,
-    FileSystemLimits,
-    FileSystemProperties,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    FsResult,
-    Path,
-    PathConstraints,
-    PathSemantics,
-    RenameFailureState,
-    RenameOutcome,
-    SymlinkPolicy,
-};
+use qubit_fs::AsyncCopyOperationState;
+use qubit_fs::AsyncFileSystem;
+use qubit_fs::CopyOptions;
+use qubit_fs::CreateDirectoryOutcome;
+use qubit_fs::DeleteOutcome;
+use qubit_fs::FileSystemCapabilities;
+use qubit_fs::FileSystemCapability;
+use qubit_fs::FileSystemId;
+use qubit_fs::FileSystemInfo;
+use qubit_fs::FileSystemLimits;
+use qubit_fs::FileSystemProperties;
+use qubit_fs::FsError;
+use qubit_fs::FsErrorKind;
+use qubit_fs::FsOperation;
+use qubit_fs::FsResult;
+use qubit_fs::Path;
+use qubit_fs::PathConstraints;
+use qubit_fs::PathSemantics;
+use qubit_fs::RenameFailureState;
+use qubit_fs::RenameOutcome;
+use qubit_fs::SymlinkPolicy;
+use qubit_fs::spi::AsyncFileSystemSpi;
+use qubit_fs::spi::CopyAttempt;
+use qubit_fs::spi::CreateDirectoryRequest;
+use qubit_fs::spi::CreateTempDirectoryRequest;
+use qubit_fs::spi::CreateTempFileRequest;
+use qubit_fs::spi::DeleteDirectoryRequest;
+use qubit_fs::spi::DeleteFileRequest;
+use qubit_fs::spi::ListRequest;
+use qubit_fs::spi::OpenReaderRequest;
+use qubit_fs::spi::OpenWriterRequest;
+use qubit_fs::spi::RenameRequest;
+use qubit_fs::spi::SpiCopyFailure;
+use qubit_fs::spi::SpiFuture;
+use qubit_fs::spi::StatRequest;
 
 struct CopySpi;
 
@@ -63,13 +55,11 @@ impl AsyncFileSystemSpi for CopySpi {
     fn properties(&self) -> FileSystemProperties {
         FileSystemProperties::new(
             FileSystemInfo::new(
-                FileSystemId::new("copy-test")
-                    .expect("test id should be valid"),
+                FileSystemId::new("copy-test").expect("test id should be valid"),
                 "copy-test",
                 PathSemantics::Hierarchical,
             ),
-            FileSystemCapabilities::new()
-                .with_guaranteed(FileSystemCapability::Copy),
+            FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::Copy),
             FileSystemLimits::unknown(),
             PathConstraints::absolute(),
             SymlinkPolicy::Reject,
@@ -86,8 +76,7 @@ impl AsyncFileSystemSpi for CopySpi {
     fn list<'a>(
         &'a self,
         _: ListRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<qubit_fs::spi::OpenedAsyncDirectoryStream>>
-    {
+    ) -> SpiFuture<'a, FsResult<qubit_fs::spi::OpenedAsyncDirectoryStream>> {
         Box::pin(async { Err(unused()) })
     }
     fn open_reader<'a>(
@@ -123,8 +112,7 @@ impl AsyncFileSystemSpi for CopySpi {
     fn rename<'a>(
         &'a self,
         _: RenameRequest<'a>,
-    ) -> SpiFuture<'a, Result<RenameOutcome, qubit_fs::spi::SpiRenameFailure>>
-    {
+    ) -> SpiFuture<'a, Result<RenameOutcome, qubit_fs::spi::SpiRenameFailure>> {
         Box::pin(async {
             Err(qubit_fs::spi::SpiRenameFailure::new(
                 unused(),
@@ -163,8 +151,7 @@ fn unused() -> FsError {
 
 #[test]
 fn test_begin_copy_only_runs_synchronous_preflight() {
-    let file_system =
-        AsyncFileSystem::from_spi(CopySpi).expect("facade should construct");
+    let file_system = AsyncFileSystem::from_spi(CopySpi).expect("facade should construct");
     let operation = file_system
         .begin_copy(
             Path::parse("/source").expect("source path should parse"),
@@ -177,8 +164,7 @@ fn test_begin_copy_only_runs_synchronous_preflight() {
 
 #[test]
 fn test_dropping_polled_execute_future_marks_operation_indeterminate() {
-    let file_system =
-        AsyncFileSystem::from_spi(CopySpi).expect("facade should construct");
+    let file_system = AsyncFileSystem::from_spi(CopySpi).expect("facade should construct");
     let mut operation = file_system
         .begin_copy(
             Path::parse("/source").expect("source path should parse"),
@@ -193,9 +179,7 @@ fn test_dropping_polled_execute_future_marks_operation_indeterminate() {
     drop(future);
     assert_eq!(
         operation.state(),
-        AsyncCopyOperationState::Failed(
-            qubit_fs::CopyFailureState::Indeterminate
-        )
+        AsyncCopyOperationState::Failed(qubit_fs::CopyFailureState::Indeterminate)
     );
     assert!(!operation.has_recovery_writer());
 }

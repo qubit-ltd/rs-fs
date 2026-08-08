@@ -5,18 +5,16 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use qubit_fs::{
-    AtomicityRequirement,
-    CopyConflictPolicy,
-    CopyMode,
-    CopyOptions,
-    DurabilityRequirement,
-    FileSystemCapabilities,
-    FileSystemCapability,
-    MetadataPreservePolicy,
-    ServerSidePreference,
-    SymlinkPolicy,
-};
+use qubit_fs::AtomicityRequirement;
+use qubit_fs::CopyConflictPolicy;
+use qubit_fs::CopyMode;
+use qubit_fs::CopyOptions;
+use qubit_fs::DurabilityRequirement;
+use qubit_fs::FileSystemCapabilities;
+use qubit_fs::FileSystemCapability;
+use qubit_fs::MetadataPreservePolicy;
+use qubit_fs::ServerSidePreference;
+use qubit_fs::SymlinkPolicy;
 
 #[test]
 fn test_copy_options_default_and_constructors_set_modes() {
@@ -27,8 +25,7 @@ fn test_copy_options_default_and_constructors_set_modes() {
 
 #[test]
 fn required_server_side_copy_is_checked_before_side_effects() {
-    let options =
-        CopyOptions::default().with_server_side(ServerSidePreference::Require);
+    let options = CopyOptions::default().with_server_side(ServerSidePreference::Require);
     let error = options
         .validate_against(FileSystemCapabilities::default())
         .unwrap_err();

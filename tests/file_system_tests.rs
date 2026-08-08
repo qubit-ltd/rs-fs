@@ -7,53 +7,45 @@
 // =============================================================================
 //! Tests for the synchronous filesystem facade.
 
-use std::sync::{
-    Arc,
-    atomic::{
-        AtomicUsize,
-        Ordering,
-    },
-};
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
-use qubit_fs::spi::{
-    CreateDirectoryRequest,
-    CreateTempDirectoryRequest,
-    CreateTempFileRequest,
-    DeleteDirectoryRequest,
-    DeleteFileRequest,
-    FileSystemSpi,
-    ListRequest,
-    OpenReaderRequest,
-    OpenWriterRequest,
-    OpenedDirectoryStream,
-    OpenedReader,
-    OpenedTempDirectory,
-    OpenedTempFile,
-    OpenedWriter,
-    RenameRequest,
-    SpiRenameFailure,
-    StatRequest,
-    StatResponse,
-};
-use qubit_fs::{
-    CreateDirectoryOutcome,
-    DeleteOutcome,
-    FileMetadata,
-    FileSystem,
-    FileSystemCapabilities,
-    FileSystemId,
-    FileSystemInfo,
-    FileSystemLimits,
-    FileSystemProperties,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    FsResult,
-    Path,
-    PathConstraints,
-    RenameOutcome,
-    SymlinkPolicy,
-};
+use qubit_fs::CreateDirectoryOutcome;
+use qubit_fs::DeleteOutcome;
+use qubit_fs::FileMetadata;
+use qubit_fs::FileSystem;
+use qubit_fs::FileSystemCapabilities;
+use qubit_fs::FileSystemId;
+use qubit_fs::FileSystemInfo;
+use qubit_fs::FileSystemLimits;
+use qubit_fs::FileSystemProperties;
+use qubit_fs::FsError;
+use qubit_fs::FsErrorKind;
+use qubit_fs::FsOperation;
+use qubit_fs::FsResult;
+use qubit_fs::Path;
+use qubit_fs::PathConstraints;
+use qubit_fs::RenameOutcome;
+use qubit_fs::SymlinkPolicy;
+use qubit_fs::spi::CreateDirectoryRequest;
+use qubit_fs::spi::CreateTempDirectoryRequest;
+use qubit_fs::spi::CreateTempFileRequest;
+use qubit_fs::spi::DeleteDirectoryRequest;
+use qubit_fs::spi::DeleteFileRequest;
+use qubit_fs::spi::FileSystemSpi;
+use qubit_fs::spi::ListRequest;
+use qubit_fs::spi::OpenReaderRequest;
+use qubit_fs::spi::OpenWriterRequest;
+use qubit_fs::spi::OpenedDirectoryStream;
+use qubit_fs::spi::OpenedReader;
+use qubit_fs::spi::OpenedTempDirectory;
+use qubit_fs::spi::OpenedTempFile;
+use qubit_fs::spi::OpenedWriter;
+use qubit_fs::spi::RenameRequest;
+use qubit_fs::spi::SpiRenameFailure;
+use qubit_fs::spi::StatRequest;
+use qubit_fs::spi::StatResponse;
 
 struct CountingSpi {
     properties: FileSystemProperties,
@@ -84,11 +76,7 @@ impl FileSystemSpi for CountingSpi {
     fn stat(&self, request: StatRequest<'_>) -> FsResult<StatResponse> {
         self.stat_calls.fetch_add(1, Ordering::SeqCst);
         if let Some(kind) = self.stat_error {
-            return Err(FsError::new(
-                kind,
-                FsOperation::Stat,
-                "injected stat error",
-            ));
+            return Err(FsError::new(kind, FsOperation::Stat, "injected stat error"));
         }
         let path = if self.wrong_stat_path {
             Path::parse("/wrong").expect("test path should parse")
@@ -109,10 +97,7 @@ impl FileSystemSpi for CountingSpi {
     fn open_writer(&self, _: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
         Err(Self::unsupported())
     }
-    fn create_directory(
-        &self,
-        _: CreateDirectoryRequest<'_>,
-    ) -> FsResult<CreateDirectoryOutcome> {
+    fn create_directory(&self, _: CreateDirectoryRequest<'_>) -> FsResult<CreateDirectoryOutcome> {
         if self.direct_error {
             Err(Self::unsupported())
         } else {
@@ -126,20 +111,14 @@ impl FileSystemSpi for CountingSpi {
             Ok(DeleteOutcome::new(self.unexpected_delete))
         }
     }
-    fn delete_directory(
-        &self,
-        _: DeleteDirectoryRequest<'_>,
-    ) -> FsResult<DeleteOutcome> {
+    fn delete_directory(&self, _: DeleteDirectoryRequest<'_>) -> FsResult<DeleteOutcome> {
         if self.direct_error {
             Err(Self::unsupported())
         } else {
             Ok(DeleteOutcome::new(self.unexpected_delete))
         }
     }
-    fn rename(
-        &self,
-        request: RenameRequest<'_>,
-    ) -> Result<RenameOutcome, SpiRenameFailure> {
+    fn rename(&self, request: RenameRequest<'_>) -> Result<RenameOutcome, SpiRenameFailure> {
         if self.direct_error {
             Err(SpiRenameFailure::new(
                 Self::unsupported(),
@@ -154,10 +133,7 @@ impl FileSystemSpi for CountingSpi {
             ))
         }
     }
-    fn create_temp_file(
-        &self,
-        _: CreateTempFileRequest,
-    ) -> FsResult<OpenedTempFile> {
+    fn create_temp_file(&self, _: CreateTempFileRequest) -> FsResult<OpenedTempFile> {
         Err(Self::unsupported())
     }
     fn create_temp_directory(
@@ -235,8 +211,7 @@ fn test_stat_rejects_path_with_different_semantics_before_spi_call() {
         unexpected_delete: false,
     })
     .expect("facade should construct");
-    let hierarchical =
-        Path::parse("object").expect("hierarchical path should parse");
+    let hierarchical = Path::parse("object").expect("hierarchical path should parse");
     let error = filesystem
         .stat(&hierarchical)
         .expect_err("different path semantics must fail before SPI");
@@ -362,10 +337,7 @@ fn test_direct_sync_provider_failures_are_enriched() {
 
     for error in [
         file_system
-            .create_directory(
-                &target,
-                qubit_fs::CreateDirectoryOptions::default(),
-            )
+            .create_directory(&target, qubit_fs::CreateDirectoryOptions::default())
             .expect_err("provider create failure should propagate"),
         file_system
             .delete_file(&target, qubit_fs::DeleteOptions::default())
@@ -462,10 +434,7 @@ fn test_sync_facade_rejects_unrequested_outcomes_and_same_path_mutations() {
 
     for error in [
         file_system
-            .create_directory(
-                &path,
-                qubit_fs::CreateDirectoryOptions::default(),
-            )
+            .create_directory(&path, qubit_fs::CreateDirectoryOptions::default())
             .expect_err("unexpected existing directory must be rejected"),
         file_system
             .delete_file(&path, qubit_fs::DeleteOptions::default())
@@ -530,10 +499,7 @@ fn test_sync_facade_requires_operation_capabilities_before_dispatch() {
             .create_temp_directory(qubit_fs::TempDirectoryOptions::default())
             .expect_err("temporary directory requires advertised capability"),
         file_system
-            .create_directory(
-                &path,
-                qubit_fs::CreateDirectoryOptions::default(),
-            )
+            .create_directory(&path, qubit_fs::CreateDirectoryOptions::default())
             .expect_err("directory creation requires advertised capability"),
     ] {
         assert_eq!(FsErrorKind::UnsupportedCapability, error.kind());

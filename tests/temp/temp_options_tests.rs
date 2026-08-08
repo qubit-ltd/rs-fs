@@ -7,12 +7,10 @@
 // =============================================================================
 //! Coverage for evolution-safe temporary-resource option builders.
 
-use qubit_fs::{
-    Path,
-    PersistOptions,
-    TempDirectoryOptions,
-    TempFileOptions,
-};
+use qubit_fs::Path;
+use qubit_fs::PersistOptions;
+use qubit_fs::TempDirectoryOptions;
+use qubit_fs::TempFileOptions;
 
 #[test]
 fn temp_file_options_expose_builder_and_getter_api() {

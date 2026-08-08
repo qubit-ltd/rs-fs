@@ -5,15 +5,13 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use qubit_fs::{
-    AchievedAtomicity,
-    CopyMethod,
-    CopyOutcome,
-    CopyStats,
-    MetadataPreservePolicy,
-    ResourceVersion,
-    UserMetadata,
-};
+use qubit_fs::AchievedAtomicity;
+use qubit_fs::CopyMethod;
+use qubit_fs::CopyOutcome;
+use qubit_fs::CopyStats;
+use qubit_fs::MetadataPreservePolicy;
+use qubit_fs::ResourceVersion;
+use qubit_fs::UserMetadata;
 
 #[test]
 fn test_copy_outcome_new_stores_stats_and_method() {
@@ -22,11 +20,7 @@ fn test_copy_outcome_new_stores_stats_and_method() {
         bytes: 4,
         ..Default::default()
     };
-    let outcome = CopyOutcome::new(
-        stats,
-        CopyMethod::Mixed,
-        AchievedAtomicity::NonAtomic,
-    );
+    let outcome = CopyOutcome::new(stats, CopyMethod::Mixed, AchievedAtomicity::NonAtomic);
 
     assert_eq!(1, outcome.stats().files);
     assert_eq!(4, outcome.stats().bytes);

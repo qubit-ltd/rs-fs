@@ -14,89 +14,79 @@ mod async_recording_spi;
 #[path = "common/poll_support.rs"]
 mod poll_support;
 
-use crate::async_recording_spi::{
-    AsyncCopyStage,
-    AsyncRecordingConfig,
-    async_recording_file_system,
-};
-use crate::poll_support::{
-    assert_pending,
-    ready,
-};
-use qubit_fs::spi::{
-    AsyncFileSystemSpi,
-    AsyncFileWriteSession,
-    CopyAttempt,
-    CopyDeclineReason,
-    CopyRequest,
-    CreateDirectoryRequest,
-    CreateTempDirectoryRequest,
-    CreateTempFileRequest,
-    DeleteDirectoryRequest,
-    DeleteFileRequest,
-    ListRequest,
-    OpenReaderRequest,
-    OpenWriterRequest,
-    OpenedAsyncDirectoryStream,
-    OpenedAsyncReader,
-    OpenedAsyncTempDirectory,
-    OpenedAsyncTempFile,
-    OpenedAsyncWriter,
-    RenameRequest,
-    SpiCopyFailure,
-    SpiFuture,
-    SpiRenameFailure,
-    StatRequest,
-    StatResponse,
-};
-use qubit_fs::{
-    AchievedAtomicity,
-    AsyncFileSystem,
-    AtomicityRequirement,
-    CopyConflictPolicy,
-    CopyFailureState,
-    CopyOptions,
-    CreateDirectoryOptions,
-    DeleteOptions,
-    DurabilityRequirement,
-    FileKind,
-    FileMetadata,
-    FileSystemCapabilities,
-    FileSystemCapability,
-    FileSystemId,
-    FileSystemInfo,
-    FileSystemLimits,
-    FileSystemProperties,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    FsResult,
-    ListOptions,
-    OpenedFileInfo,
-    Path,
-    PathConstraints,
-    PathSemantics,
-    PersistOptions,
-    PublicationMethod,
-    ReadOptions,
-    RenameFailureState,
-    RenameOptions,
-    RenameOutcome,
-    SymlinkPolicy,
-    WriteFailure,
-    WriteFailureState,
-    WriteOptions,
-    WriteOutcome,
-};
-use qubit_io::{
-    AsyncInput,
-    AsyncOutput,
-};
-use std::{
-    io::Result as IoResult,
-    pin::Pin,
-    task::Poll,
-};
+use std::io::Result as IoResult;
+use std::pin::Pin;
+use std::task::Poll;
+
+use qubit_fs::AchievedAtomicity;
+use qubit_fs::AsyncFileSystem;
+use qubit_fs::AtomicityRequirement;
+use qubit_fs::CopyConflictPolicy;
+use qubit_fs::CopyFailureState;
+use qubit_fs::CopyOptions;
+use qubit_fs::CreateDirectoryOptions;
+use qubit_fs::DeleteOptions;
+use qubit_fs::DurabilityRequirement;
+use qubit_fs::FileKind;
+use qubit_fs::FileMetadata;
+use qubit_fs::FileSystemCapabilities;
+use qubit_fs::FileSystemCapability;
+use qubit_fs::FileSystemId;
+use qubit_fs::FileSystemInfo;
+use qubit_fs::FileSystemLimits;
+use qubit_fs::FileSystemProperties;
+use qubit_fs::FsError;
+use qubit_fs::FsErrorKind;
+use qubit_fs::FsOperation;
+use qubit_fs::FsResult;
+use qubit_fs::ListOptions;
+use qubit_fs::OpenedFileInfo;
+use qubit_fs::Path;
+use qubit_fs::PathConstraints;
+use qubit_fs::PathSemantics;
+use qubit_fs::PersistOptions;
+use qubit_fs::PublicationMethod;
+use qubit_fs::ReadOptions;
+use qubit_fs::RenameFailureState;
+use qubit_fs::RenameOptions;
+use qubit_fs::RenameOutcome;
+use qubit_fs::SymlinkPolicy;
+use qubit_fs::WriteFailure;
+use qubit_fs::WriteFailureState;
+use qubit_fs::WriteOptions;
+use qubit_fs::WriteOutcome;
+use qubit_fs::spi::AsyncFileSystemSpi;
+use qubit_fs::spi::AsyncFileWriteSession;
+use qubit_fs::spi::CopyAttempt;
+use qubit_fs::spi::CopyDeclineReason;
+use qubit_fs::spi::CopyRequest;
+use qubit_fs::spi::CreateDirectoryRequest;
+use qubit_fs::spi::CreateTempDirectoryRequest;
+use qubit_fs::spi::CreateTempFileRequest;
+use qubit_fs::spi::DeleteDirectoryRequest;
+use qubit_fs::spi::DeleteFileRequest;
+use qubit_fs::spi::ListRequest;
+use qubit_fs::spi::OpenReaderRequest;
+use qubit_fs::spi::OpenWriterRequest;
+use qubit_fs::spi::OpenedAsyncDirectoryStream;
+use qubit_fs::spi::OpenedAsyncReader;
+use qubit_fs::spi::OpenedAsyncTempDirectory;
+use qubit_fs::spi::OpenedAsyncTempFile;
+use qubit_fs::spi::OpenedAsyncWriter;
+use qubit_fs::spi::RenameRequest;
+use qubit_fs::spi::SpiCopyFailure;
+use qubit_fs::spi::SpiFuture;
+use qubit_fs::spi::SpiRenameFailure;
+use qubit_fs::spi::StatRequest;
+use qubit_fs::spi::StatResponse;
+use qubit_io::AsyncInput;
+use qubit_io::AsyncOutput;
+
+use crate::async_recording_spi::AsyncCopyStage;
+use crate::async_recording_spi::AsyncRecordingConfig;
+use crate::async_recording_spi::async_recording_file_system;
+use crate::poll_support::assert_pending;
+use crate::poll_support::ready;
 
 /// Parses one stable test path.
 fn path(value: &str) -> Path {
@@ -112,12 +102,9 @@ fn test_async_write_all_publishes_complete_bytes() {
         ..AsyncRecordingConfig::default()
     };
     let (filesystem, probe) = async_recording_file_system(config);
-    let outcome = ready(filesystem.write_all(
-        &path("/async-write-all"),
-        b"bytes",
-        WriteOptions::default(),
-    ))
-    .expect("async write-all should commit");
+    let outcome =
+        ready(filesystem.write_all(&path("/async-write-all"), b"bytes", WriteOptions::default()))
+            .expect("async write-all should commit");
     assert_eq!(AchievedAtomicity::Atomic, outcome.atomicity());
     assert_eq!(vec!["open_writer"], probe.calls(),);
 }
@@ -173,10 +160,7 @@ impl StreamCopyFallbackSpi {
             "async test SPI does not implement this operation",
         )
     }
-    fn new(
-        commit_already_exists: bool,
-        stat_error: Option<FsErrorKind>,
-    ) -> Self {
+    fn new(commit_already_exists: bool, stat_error: Option<FsErrorKind>) -> Self {
         Self {
             commit_already_exists,
             stat_error,
@@ -184,8 +168,7 @@ impl StreamCopyFallbackSpi {
     }
     fn file_info(&self, path: &Path) -> OpenedFileInfo {
         OpenedFileInfo::new(
-            FileSystemId::new("async-fallback-review")
-                .expect("test provider id should be valid"),
+            FileSystemId::new("async-fallback-review").expect("test provider id should be valid"),
             path.clone(),
         )
     }
@@ -214,10 +197,7 @@ impl AsyncFileSystemSpi for StreamCopyFallbackSpi {
     fn properties(&self) -> FileSystemProperties {
         self.properties()
     }
-    fn stat<'a>(
-        &'a self,
-        request: StatRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<StatResponse>> {
+    fn stat<'a>(&'a self, request: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
         if let Some(kind) = self.stat_error {
             return Box::pin(async move {
                 Err(FsError::new(
@@ -245,9 +225,7 @@ impl AsyncFileSystemSpi for StreamCopyFallbackSpi {
     ) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
         let _ = request.options();
         let info = self.file_info(request.path());
-        Box::pin(async move {
-            Ok(OpenedAsyncReader::new(info, Box::new(ZeroReader)))
-        })
+        Box::pin(async move { Ok(OpenedAsyncReader::new(info, Box::new(ZeroReader))) })
     }
     fn open_writer<'a>(
         &'a self,
@@ -256,9 +234,7 @@ impl AsyncFileSystemSpi for StreamCopyFallbackSpi {
         let _ = request.options();
         let info = self.file_info(request.path());
         let session = CommitWriter::new(self.commit_already_exists);
-        Box::pin(
-            async move { Ok(OpenedAsyncWriter::new(info, Box::new(session))) },
-        )
+        Box::pin(async move { Ok(OpenedAsyncWriter::new(info, Box::new(session))) })
     }
     fn create_directory<'a>(
         &'a self,
@@ -282,9 +258,7 @@ impl AsyncFileSystemSpi for StreamCopyFallbackSpi {
         &'a self,
         _: CopyRequest<'a>,
     ) -> SpiFuture<'a, Result<CopyAttempt, SpiCopyFailure>> {
-        Box::pin(async {
-            Ok(CopyAttempt::Declined(CopyDeclineReason::NotApplicable))
-        })
+        Box::pin(async { Ok(CopyAttempt::Declined(CopyDeclineReason::NotApplicable)) })
     }
     fn rename<'a>(
         &'a self,
@@ -353,10 +327,7 @@ impl AsyncOutput for CommitWriter {
         Poll::Ready(Ok(count))
     }
 
-    fn poll_flush(
-        self: Pin<&mut Self>,
-        _: &mut std::task::Context<'_>,
-    ) -> Poll<IoResult<()>> {
+    fn poll_flush(self: Pin<&mut Self>, _: &mut std::task::Context<'_>) -> Poll<IoResult<()>> {
         let _ = self;
         Poll::Ready(Ok(()))
     }
@@ -396,11 +367,9 @@ impl AsyncFileWriteSession for CommitWriter {
 /// Covers `exists` mapping for non-`NotFound` provider failures.
 #[test]
 fn test_async_facade_exists_contextualizes_other_errors() {
-    let file_system = AsyncFileSystem::from_spi(StreamCopyFallbackSpi::new(
-        false,
-        Some(FsErrorKind::Io),
-    ))
-    .expect("test SPI should construct");
+    let file_system =
+        AsyncFileSystem::from_spi(StreamCopyFallbackSpi::new(false, Some(FsErrorKind::Io)))
+            .expect("test SPI should construct");
     let error = ready(file_system.exists(&path("/io-error")))
         .expect_err("exists should contextualize non-`NotFound` failures");
     assert_eq!(FsErrorKind::Io, error.kind());
@@ -410,11 +379,9 @@ fn test_async_facade_exists_contextualizes_other_errors() {
 /// Covers the stream-copy commit `AlreadyExists` + `Skip` fallback-to-skip
 /// path.
 #[test]
-fn test_async_facade_stream_copy_commit_already_exists_with_skip_marks_skipped()
-{
-    let file_system =
-        AsyncFileSystem::from_spi(StreamCopyFallbackSpi::new(true, None))
-            .expect("test SPI should construct");
+fn test_async_facade_stream_copy_commit_already_exists_with_skip_marks_skipped() {
+    let file_system = AsyncFileSystem::from_spi(StreamCopyFallbackSpi::new(true, None))
+        .expect("test SPI should construct");
     let mut operation = file_system
         .begin_copy(
             path("/source"),
@@ -422,8 +389,8 @@ fn test_async_facade_stream_copy_commit_already_exists_with_skip_marks_skipped()
             CopyOptions::default().with_conflict(CopyConflictPolicy::Skip),
         )
         .expect("copy preflight should succeed");
-    let outcome = ready(operation.execute())
-        .expect("commit refusal after stream write should skip");
+    let outcome =
+        ready(operation.execute()).expect("commit refusal after stream write should skip");
     assert_eq!(1, outcome.stats().skipped);
 }
 
@@ -440,20 +407,12 @@ fn test_async_facade_stat_and_open_pending_and_error() {
             ..AsyncRecordingConfig::default()
         });
         match stage {
-            AsyncCopyStage::Stat => {
-                assert_pending(Box::pin(fs.stat(&path("/file"))).as_mut())
-            }
+            AsyncCopyStage::Stat => assert_pending(Box::pin(fs.stat(&path("/file"))).as_mut()),
             AsyncCopyStage::OpenReader => assert_pending(
-                Box::pin(
-                    fs.open_reader(&path("/file"), ReadOptions::default()),
-                )
-                .as_mut(),
+                Box::pin(fs.open_reader(&path("/file"), ReadOptions::default())).as_mut(),
             ),
             AsyncCopyStage::OpenWriter => assert_pending(
-                Box::pin(
-                    fs.open_writer(&path("/file"), WriteOptions::default()),
-                )
-                .as_mut(),
+                Box::pin(fs.open_writer(&path("/file"), WriteOptions::default())).as_mut(),
             ),
             _ => unreachable!(),
         }
@@ -462,20 +421,19 @@ fn test_async_facade_stat_and_open_pending_and_error() {
             ..AsyncRecordingConfig::default()
         });
         let error = match stage {
-            AsyncCopyStage::Stat => ready(fs.stat(&path("/file")))
-                .expect_err("provider failure expected"),
+            AsyncCopyStage::Stat => {
+                ready(fs.stat(&path("/file"))).expect_err("provider failure expected")
+            }
             AsyncCopyStage::OpenReader => {
-                let Err(error) = ready(
-                    fs.open_reader(&path("/file"), ReadOptions::default()),
-                ) else {
+                let Err(error) = ready(fs.open_reader(&path("/file"), ReadOptions::default()))
+                else {
                     panic!("provider failure expected");
                 };
                 error
             }
             AsyncCopyStage::OpenWriter => {
-                let Err(error) = ready(
-                    fs.open_writer(&path("/file"), WriteOptions::default()),
-                ) else {
+                let Err(error) = ready(fs.open_writer(&path("/file"), WriteOptions::default()))
+                else {
                     panic!("provider failure expected");
                 };
                 error
@@ -510,12 +468,8 @@ fn test_async_rename_preflight_and_result_identity() {
 /// Covers convenience reads, existence mapping, and response identity checks.
 #[test]
 fn test_async_facade_convenience_operations_enforce_contracts() {
-    let (file_system, _) =
-        async_recording_file_system(AsyncRecordingConfig::default());
-    assert!(
-        ready(file_system.exists(&path("/file")))
-            .expect("existing path should be reported")
-    );
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig::default());
+    assert!(ready(file_system.exists(&path("/file"))).expect("existing path should be reported"));
     assert!(
         !ready(file_system.exists(&path("/missing")))
             .expect("missing path should be mapped to false")
@@ -528,40 +482,27 @@ fn test_async_facade_convenience_operations_enforce_contracts() {
     );
     assert_eq!(
         b"byt",
-        ready(file_system.read_prefix(
-            &path("/file"),
-            ReadOptions::default(),
-            3,
-        ))
-        .expect("reader prefix should be collected")
-        .as_slice()
+        ready(file_system.read_prefix(&path("/file"), ReadOptions::default(), 3,))
+            .expect("reader prefix should be collected")
+            .as_slice()
     );
     assert!(
-        ready(file_system.read_prefix(
-            &path("/file"),
-            ReadOptions::default(),
-            0,
-        ))
-        .expect("zero prefix should open")
-        .is_empty()
+        ready(file_system.read_prefix(&path("/file"), ReadOptions::default(), 0,))
+            .expect("zero prefix should open")
+            .is_empty()
     );
-    let limit_error =
-        ready(file_system.read_all(&path("/file"), ReadOptions::default(), 4))
-            .expect_err("the byte cap should be enforced");
+    let limit_error = ready(file_system.read_all(&path("/file"), ReadOptions::default(), 4))
+        .expect_err("the byte cap should be enforced");
     assert_eq!(FsErrorKind::ResourceLimitExceeded, limit_error.kind());
 
-    let read_error_file_system =
-        async_recording_file_system(AsyncRecordingConfig {
-            failing_stage: Some(AsyncCopyStage::ReaderRead),
-            ..AsyncRecordingConfig::default()
-        })
-        .0;
-    let read_error = ready(read_error_file_system.read_all(
-        &path("/file"),
-        ReadOptions::default(),
-        5,
-    ))
-    .expect_err("reader failures should be contextualized");
+    let read_error_file_system = async_recording_file_system(AsyncRecordingConfig {
+        failing_stage: Some(AsyncCopyStage::ReaderRead),
+        ..AsyncRecordingConfig::default()
+    })
+    .0;
+    let read_error =
+        ready(read_error_file_system.read_all(&path("/file"), ReadOptions::default(), 5))
+            .expect_err("reader failures should be contextualized");
     assert_eq!(FsErrorKind::Io, read_error.kind());
 
     let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
@@ -604,17 +545,13 @@ fn test_async_facade_rejects_contract_and_fallback_boundary_failures() {
             .capabilities()
             .supports(qubit_fs::FileSystemCapability::AtomicRename)
         {
-            RenameOptions::default()
-                .with_atomicity(AtomicityRequirement::Required)
+            RenameOptions::default().with_atomicity(AtomicityRequirement::Required)
         } else {
             RenameOptions::default()
         };
         let error = ready(file_system.rename(&source, &target, options))
             .expect_err("invalid provider rename outcome must be rejected");
-        assert_eq!(
-            FsErrorKind::ProviderContractViolation,
-            error.error().kind()
-        );
+        assert_eq!(FsErrorKind::ProviderContractViolation, error.error().kind());
     }
 
     let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
@@ -622,15 +559,13 @@ fn test_async_facade_rejects_contract_and_fallback_boundary_failures() {
         temp_cleanup_failure: true,
         ..AsyncRecordingConfig::default()
     });
-    let Err(file) = ready(
-        file_system.create_temp_file(qubit_fs::TempFileOptions::default()),
-    ) else {
+    let Err(file) = ready(file_system.create_temp_file(qubit_fs::TempFileOptions::default()))
+    else {
         panic!("invalid temporary file identity must be rejected");
     };
-    let Err(directory) = ready(
-        file_system
-            .create_temp_directory(qubit_fs::TempDirectoryOptions::default()),
-    ) else {
+    let Err(directory) =
+        ready(file_system.create_temp_directory(qubit_fs::TempDirectoryOptions::default()))
+    else {
         panic!("invalid temporary directory identity must be rejected");
     };
     for error in [file, directory] {
@@ -641,9 +576,9 @@ fn test_async_facade_rejects_contract_and_fallback_boundary_failures() {
         invalid_temp_path: true,
         ..AsyncRecordingConfig::default()
     });
-    let Err(invalid_path) = ready(
-        file_system.create_temp_file(qubit_fs::TempFileOptions::default()),
-    ) else {
+    let Err(invalid_path) =
+        ready(file_system.create_temp_file(qubit_fs::TempFileOptions::default()))
+    else {
         panic!("relative temporary path must be rejected");
     };
     assert_eq!(FsErrorKind::ProviderContractViolation, invalid_path.kind());
@@ -656,24 +591,19 @@ fn test_async_facade_rejects_contract_and_fallback_boundary_failures() {
         .begin_copy(
             source.clone(),
             target.clone(),
-            CopyOptions::default()
-                .with_durability(qubit_fs::DurabilityRequirement::Required),
+            CopyOptions::default().with_durability(qubit_fs::DurabilityRequirement::Required),
         )
         .expect("durable-copy capability should satisfy preflight");
-    let durability = ready(operation.execute())
-        .expect_err("non-durable provider outcome must be rejected");
+    let durability =
+        ready(operation.execute()).expect_err("non-durable provider outcome must be rejected");
     assert_eq!(
         FsErrorKind::ProviderContractViolation,
         durability.error().kind()
     );
 
-    let (file_system, _) =
-        async_recording_file_system(AsyncRecordingConfig::default());
-    let Err(same) = file_system.begin_copy(
-        source.clone(),
-        source.clone(),
-        CopyOptions::default(),
-    ) else {
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig::default());
+    let Err(same) = file_system.begin_copy(source.clone(), source.clone(), CopyOptions::default())
+    else {
         panic!("copy source and target must differ");
     };
     assert_eq!(FsErrorKind::InvalidOptions, same.error().kind());
@@ -716,8 +646,7 @@ fn test_async_facade_rejects_contract_and_fallback_boundary_failures() {
             CopyOptions::default().with_conflict(CopyConflictPolicy::Skip),
         )
         .expect("skip fallback preflight should succeed");
-    let outcome =
-        ready(operation.execute()).expect("existing target should be skipped");
+    let outcome = ready(operation.execute()).expect("existing target should be skipped");
     assert_eq!(1, outcome.stats().skipped);
 }
 
@@ -739,29 +668,24 @@ fn test_async_facade_rejects_unsupported_capabilities_and_path_semantics() {
         omitted_capability: Some(FileSystemCapability::Write),
         ..AsyncRecordingConfig::default()
     });
-    let error =
-        ready(file_system.open_writer(&target, WriteOptions::default()))
-            .expect_err("write capability must be required");
+    let error = ready(file_system.open_writer(&target, WriteOptions::default()))
+        .expect_err("write capability must be required");
     assert_eq!(FsErrorKind::UnsupportedCapability, error.kind());
 
     let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
         omitted_capability: Some(FileSystemCapability::CreateDirectory),
         ..AsyncRecordingConfig::default()
     });
-    let error = ready(
-        file_system
-            .create_directory(&target, CreateDirectoryOptions::default()),
-    )
-    .expect_err("directory-creation capability must be required");
+    let error = ready(file_system.create_directory(&target, CreateDirectoryOptions::default()))
+        .expect_err("directory-creation capability must be required");
     assert_eq!(FsErrorKind::UnsupportedCapability, error.kind());
 
     let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
         omitted_capability: Some(FileSystemCapability::TempFile),
         ..AsyncRecordingConfig::default()
     });
-    let Err(error) = ready(
-        file_system.create_temp_file(qubit_fs::TempFileOptions::default()),
-    ) else {
+    let Err(error) = ready(file_system.create_temp_file(qubit_fs::TempFileOptions::default()))
+    else {
         panic!("temporary-file capability must be required");
     };
     assert_eq!(FsErrorKind::UnsupportedCapability, error.kind());
@@ -770,28 +694,22 @@ fn test_async_facade_rejects_unsupported_capabilities_and_path_semantics() {
         omitted_capability: Some(FileSystemCapability::TempDirectory),
         ..AsyncRecordingConfig::default()
     });
-    let Err(error) = ready(
-        file_system
-            .create_temp_directory(qubit_fs::TempDirectoryOptions::default()),
-    ) else {
+    let Err(error) =
+        ready(file_system.create_temp_directory(qubit_fs::TempDirectoryOptions::default()))
+    else {
         panic!("temporary-directory capability must be required");
     };
     assert_eq!(FsErrorKind::UnsupportedCapability, error.kind());
 
-    let (file_system, _) =
-        async_recording_file_system(AsyncRecordingConfig::default());
-    let error =
-        ready(file_system.rename(&source, &target, RenameOptions::default()))
-            .expect_err("rename capability must be required");
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig::default());
+    let error = ready(file_system.rename(&source, &target, RenameOptions::default()))
+        .expect_err("rename capability must be required");
     assert_eq!(FsErrorKind::UnsupportedCapability, error.error().kind());
 
-    let object_key = Path::parse_with_semantics(
-        "/provider-literal",
-        PathSemantics::ObjectKey,
-    )
-    .expect("object key should parse");
-    let error = ready(file_system.stat(&object_key))
-        .expect_err("foreign path semantics must be rejected");
+    let object_key = Path::parse_with_semantics("/provider-literal", PathSemantics::ObjectKey)
+        .expect("object key should parse");
+    let error =
+        ready(file_system.stat(&object_key)).expect_err("foreign path semantics must be rejected");
     assert_eq!(FsErrorKind::InvalidPath, error.kind());
     assert_eq!(FsOperation::Stat, error.operation());
     assert_eq!(Some(&object_key), error.path());
@@ -801,48 +719,35 @@ fn test_async_facade_rejects_unsupported_capabilities_and_path_semantics() {
 /// Covers successful stream fallback completion after all provider boundaries.
 #[test]
 fn test_async_facade_stream_fallback_returns_completed_outcome() {
-    let (file_system, _) =
-        async_recording_file_system(AsyncRecordingConfig::default());
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig::default());
     let mut operation = file_system
         .begin_copy(path("/source"), path("/target"), CopyOptions::default())
         .expect("copy preflight should succeed");
-    let outcome = ready(operation.execute())
-        .expect("stream fallback should return its completed outcome");
+    let outcome =
+        ready(operation.execute()).expect("stream fallback should return its completed outcome");
     assert_eq!(1, outcome.stats().files);
 }
 
 /// Covers facade preflight error exits that must remain free of provider I/O.
 #[test]
-fn test_async_facade_preflight_rejects_invalid_paths_options_and_capabilities()
-{
+fn test_async_facade_preflight_rejects_invalid_paths_options_and_capabilities() {
     let source = path("/source");
     let target = path("/target");
     let relative = path("relative");
-    let (file_system, _) =
-        async_recording_file_system(AsyncRecordingConfig::default());
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig::default());
 
     ready(file_system.list(&source, ListOptions::default()))
         .expect("listing should dispatch with the advertised capability");
-    assert!(
-        ready(file_system.list(&relative, ListOptions::default())).is_err()
-    );
+    assert!(ready(file_system.list(&relative, ListOptions::default())).is_err());
     let (without_list, _) = async_recording_file_system(AsyncRecordingConfig {
         omitted_capability: Some(FileSystemCapability::List),
         ..AsyncRecordingConfig::default()
     });
     assert!(ready(without_list.list(&source, ListOptions::default())).is_err());
+    assert!(ready(file_system.open_reader(&relative, ReadOptions::default())).is_err());
     assert!(
-        ready(file_system.open_reader(&relative, ReadOptions::default()))
+        ready(file_system.open_reader(&source, ReadOptions::default().with_length(Some(1)),),)
             .is_err()
-    );
-    assert!(
-        ready(
-            file_system.open_reader(
-                &source,
-                ReadOptions::default().with_length(Some(1)),
-            ),
-        )
-        .is_err()
     );
     let (read_limited, _) = async_recording_file_system(AsyncRecordingConfig {
         range_read: true,
@@ -850,52 +755,29 @@ fn test_async_facade_preflight_rejects_invalid_paths_options_and_capabilities()
         ..AsyncRecordingConfig::default()
     });
     assert!(
-        ready(
-            read_limited.open_reader(
-                &source,
-                ReadOptions::default().with_length(Some(2)),
-            ),
-        )
-        .is_err()
-    );
-    assert!(
-        ready(file_system.open_writer(&relative, WriteOptions::default()))
+        ready(read_limited.open_reader(&source, ReadOptions::default().with_length(Some(2)),),)
             .is_err()
     );
+    assert!(ready(file_system.open_writer(&relative, WriteOptions::default())).is_err());
     assert!(
-        ready(
-            file_system.open_writer(
-                &target,
-                WriteOptions::default()
-                    .with_atomicity(AtomicityRequirement::Required),
-            ),
-        )
+        ready(file_system.open_writer(
+            &target,
+            WriteOptions::default().with_atomicity(AtomicityRequirement::Required),
+        ),)
         .is_err()
     );
     assert!(
-        ready(
-            file_system
-                .create_directory(&relative, CreateDirectoryOptions::default()),
-        )
-        .is_err()
+        ready(file_system.create_directory(&relative, CreateDirectoryOptions::default()),).is_err()
     );
 
     assert!(
         file_system
-            .begin_copy(
-                relative.clone(),
-                target.clone(),
-                CopyOptions::default()
-            )
+            .begin_copy(relative.clone(), target.clone(), CopyOptions::default())
             .is_err()
     );
     assert!(
         file_system
-            .begin_copy(
-                source.clone(),
-                relative.clone(),
-                CopyOptions::default()
-            )
+            .begin_copy(source.clone(), relative.clone(), CopyOptions::default())
             .is_err()
     );
     assert!(
@@ -903,8 +785,7 @@ fn test_async_facade_preflight_rejects_invalid_paths_options_and_capabilities()
             .begin_copy(
                 source.clone(),
                 target.clone(),
-                CopyOptions::default()
-                    .with_durability(DurabilityRequirement::Required),
+                CopyOptions::default().with_durability(DurabilityRequirement::Required),
             )
             .is_err()
     );
@@ -916,61 +797,36 @@ fn test_async_facade_preflight_rejects_invalid_paths_options_and_capabilities()
     let mut operation = without_copy
         .begin_copy(source.clone(), target.clone(), CopyOptions::default())
         .expect("copy preflight should allow fallback selection");
-    let failure = ready(operation.execute())
-        .expect_err("fallback should require read and write");
+    let failure = ready(operation.execute()).expect_err("fallback should require read and write");
     assert_eq!(FsErrorKind::UnsupportedCapability, failure.error().kind());
     assert_eq!(CopyFailureState::Unchanged, failure.state());
 
+    assert!(ready(file_system.rename(&relative, &target, RenameOptions::default())).is_err());
+    assert!(ready(file_system.rename(&source, &relative, RenameOptions::default())).is_err());
     assert!(
-        ready(file_system.rename(&relative, &target, RenameOptions::default()))
-            .is_err()
-    );
-    assert!(
-        ready(file_system.rename(&source, &relative, RenameOptions::default()))
-            .is_err()
-    );
-    assert!(
-        ready(
-            file_system.rename(
-                &source,
-                &target,
-                RenameOptions::default()
-                    .with_atomicity(AtomicityRequirement::Required),
-            ),
-        )
-        .is_err()
-    );
-
-    assert!(
-        ready(file_system.delete_file(&relative, DeleteOptions::default()))
-            .is_err()
-    );
-    assert!(
-        ready(file_system.delete_file(
+        ready(file_system.rename(
+            &source,
             &target,
-            DeleteOptions::default().with_recursive(true),
+            RenameOptions::default().with_atomicity(AtomicityRequirement::Required),
         ),)
         .is_err()
     );
-    let (without_delete, _) =
-        async_recording_file_system(AsyncRecordingConfig {
-            omitted_capability: Some(FileSystemCapability::Delete),
-            ..AsyncRecordingConfig::default()
-        });
+
+    assert!(ready(file_system.delete_file(&relative, DeleteOptions::default())).is_err());
     assert!(
-        ready(without_delete.delete_file(&target, DeleteOptions::default()),)
+        ready(file_system.delete_file(&target, DeleteOptions::default().with_recursive(true),),)
             .is_err()
     );
+    let (without_delete, _) = async_recording_file_system(AsyncRecordingConfig {
+        omitted_capability: Some(FileSystemCapability::Delete),
+        ..AsyncRecordingConfig::default()
+    });
+    assert!(ready(without_delete.delete_file(&target, DeleteOptions::default()),).is_err());
 
-    let (file_system, _) =
-        async_recording_file_system(AsyncRecordingConfig::default());
-    let mut temporary = ready(
-        file_system.create_temp_file(qubit_fs::TempFileOptions::default()),
-    )
-    .expect("temporary file should be created");
-    assert!(
-        ready(temporary.persist(&relative, PersistOptions::default())).is_err()
-    );
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig::default());
+    let mut temporary = ready(file_system.create_temp_file(qubit_fs::TempFileOptions::default()))
+        .expect("temporary file should be created");
+    assert!(ready(temporary.persist(&relative, PersistOptions::default())).is_err());
 }
 
 /// Covers a completed native-copy outcome that satisfies the requested policy.
@@ -983,7 +839,6 @@ fn test_async_facade_returns_valid_completed_copy_outcome() {
     let mut operation = file_system
         .begin_copy(path("/source"), path("/target"), CopyOptions::default())
         .expect("copy preflight should succeed");
-    let outcome = ready(operation.execute())
-        .expect("valid completed copy should succeed");
+    let outcome = ready(operation.execute()).expect("valid completed copy should succeed");
     assert_eq!(AchievedAtomicity::Atomic, outcome.atomicity());
 }
