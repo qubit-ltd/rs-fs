@@ -40,6 +40,10 @@ pub struct FsError {
     path: Option<Box<Path>>,
     /// Secondary path involved in the operation.
     target: Option<Box<Path>>,
+    /// Concrete source entry where a structured operation failed.
+    failure_path: Option<Box<Path>>,
+    /// Concrete destination entry where a structured operation failed.
+    failure_target: Option<Box<Path>>,
     /// Provider id or alias involved in the operation.
     provider: Option<Box<str>>,
     /// Capability needed to satisfy the request, when applicable.
@@ -73,6 +77,8 @@ impl FsError {
             operation,
             path: None,
             target: None,
+            failure_path: None,
+            failure_target: None,
             provider: None,
             required_capability: None,
             message: message.into(),
@@ -154,6 +160,22 @@ impl FsError {
     #[must_use]
     pub fn with_target(mut self, target: impl Into<Path>) -> Self {
         self.target = Some(Box::new(target.into()));
+        self
+    }
+
+    /// Adds the concrete source entry where a structured operation failed.
+    #[inline]
+    #[must_use]
+    pub fn with_failure_path(mut self, path: impl Into<Path>) -> Self {
+        self.failure_path = Some(Box::new(path.into()));
+        self
+    }
+
+    /// Adds the concrete destination entry where a structured operation failed.
+    #[inline]
+    #[must_use]
+    pub fn with_failure_target(mut self, target: impl Into<Path>) -> Self {
+        self.failure_target = Some(Box::new(target.into()));
         self
     }
 
@@ -349,6 +371,20 @@ impl FsError {
         self.target.as_deref()
     }
 
+    /// Gets the concrete source entry where the operation failed.
+    #[inline(always)]
+    #[must_use]
+    pub fn failure_path(&self) -> Option<&Path> {
+        self.failure_path.as_deref()
+    }
+
+    /// Gets the concrete destination entry where the operation failed.
+    #[inline(always)]
+    #[must_use]
+    pub fn failure_target(&self) -> Option<&Path> {
+        self.failure_target.as_deref()
+    }
+
     /// Gets the provider associated with this error.
     ///
     /// # Returns
@@ -417,6 +453,8 @@ impl Debug for FsError {
             .field("operation", &self.operation)
             .field("path", &self.path.as_deref())
             .field("target", &self.target.as_deref())
+            .field("failure_path", &self.failure_path.as_deref())
+            .field("failure_target", &self.failure_target.as_deref())
             .field("provider", &self.provider)
             .field("required_capability", &self.required_capability)
             .field("message", &self.message)
