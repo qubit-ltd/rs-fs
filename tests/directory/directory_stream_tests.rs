@@ -53,7 +53,7 @@ fn test_directory_stream_accepts_object_key_root_with_trailing_slash() {
                     qubit_fs::PathSemantics::ObjectKey,
                 ),
                 qubit_fs::FileSystemCapabilities::new()
-                    .with(qubit_fs::FileSystemCapability::List),
+                    .with_guaranteed(qubit_fs::FileSystemCapability::List),
                 qubit_fs::FileSystemLimits::unknown(),
                 qubit_fs::PathConstraints::either(),
                 qubit_fs::SymlinkPolicy::Reject,

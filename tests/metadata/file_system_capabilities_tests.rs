@@ -9,17 +9,43 @@
 use qubit_fs::{
     FileSystemCapabilities,
     FileSystemCapability,
+    FileSystemCapabilitySupport,
 };
+
+#[test]
+fn test_support_statuses_are_distinct_and_overwrite_previous_state() {
+    let capabilities = FileSystemCapabilities::new()
+        .with_conditional(FileSystemCapability::AtomicRename)
+        .with_guaranteed(FileSystemCapability::AtomicRename);
+
+    assert_eq!(
+        FileSystemCapabilitySupport::Guaranteed,
+        capabilities.support(FileSystemCapability::AtomicRename),
+    );
+    assert!(capabilities.supports(FileSystemCapability::AtomicRename));
+    assert!(capabilities.guarantees(FileSystemCapability::AtomicRename));
+
+    let capabilities = capabilities.set_support(
+        FileSystemCapability::AtomicRename,
+        FileSystemCapabilitySupport::Conditional,
+    );
+    assert_eq!(
+        FileSystemCapabilitySupport::Conditional,
+        capabilities.support(FileSystemCapability::AtomicRename),
+    );
+    assert!(capabilities.supports(FileSystemCapability::AtomicRename));
+    assert!(!capabilities.guarantees(FileSystemCapability::AtomicRename));
+}
 
 #[test]
 fn capability_set_reports_typed_guarantees() {
     let capabilities = FileSystemCapabilities::new()
-        .with(FileSystemCapability::Read)
-        .with(FileSystemCapability::AtomicRename);
+        .with_guaranteed(FileSystemCapability::Read)
+        .with_guaranteed(FileSystemCapability::AtomicRename);
 
-    assert!(capabilities.contains(FileSystemCapability::Read));
-    assert!(capabilities.contains(FileSystemCapability::AtomicRename));
-    assert!(!capabilities.contains(FileSystemCapability::AtomicReplace));
+    assert!(capabilities.supports(FileSystemCapability::Read));
+    assert!(capabilities.supports(FileSystemCapability::AtomicRename));
+    assert!(!capabilities.supports(FileSystemCapability::AtomicReplace));
 }
 
 #[test]
@@ -27,25 +53,28 @@ fn capability_set_supports_mutation_and_an_empty_default() {
     let mut capabilities = FileSystemCapabilities::default();
     assert!(capabilities.is_empty());
     assert_eq!(0, capabilities.len());
-    assert!(!capabilities.contains(FileSystemCapability::Write));
+    assert!(!capabilities.supports(FileSystemCapability::Write));
 
-    capabilities.insert(FileSystemCapability::Write);
+    capabilities = capabilities.with_guaranteed(FileSystemCapability::Write);
     assert!(!capabilities.is_empty());
     assert_eq!(1, capabilities.len());
-    assert!(capabilities.contains(FileSystemCapability::Write));
+    assert!(capabilities.supports(FileSystemCapability::Write));
 }
 
 #[test]
 fn capability_set_iterates_and_formats_semantic_values() {
     let capabilities = FileSystemCapabilities::new()
-        .with(FileSystemCapability::Read)
-        .with(FileSystemCapability::Write);
+        .with_guaranteed(FileSystemCapability::Read)
+        .with_guaranteed(FileSystemCapability::Write);
 
     assert_eq!(
         vec![FileSystemCapability::Read, FileSystemCapability::Write],
         capabilities.iter().collect::<Vec<_>>(),
     );
-    assert_eq!("{Read, Write}", format!("{capabilities:?}"));
+    assert_eq!(
+        "{Read: Guaranteed, Write: Guaranteed}",
+        format!("{capabilities:?}"),
+    );
 }
 
 #[test]
@@ -55,15 +84,15 @@ fn capability_all_matches_stable_iteration_order() {
         .iter()
         .copied()
         .fold(FileSystemCapabilities::new(), |capabilities, capability| {
-            capabilities.with(capability)
+            capabilities.with_guaranteed(capability)
         });
     assert_eq!(all, capabilities.iter().collect::<Vec<_>>(),);
 }
 
 #[test]
 fn capability_set_reports_the_first_missing_dependency() {
-    let capabilities =
-        FileSystemCapabilities::new().with(FileSystemCapability::AtomicRename);
+    let capabilities = FileSystemCapabilities::new()
+        .with_guaranteed(FileSystemCapability::AtomicRename);
 
     assert_eq!(
         Some((
@@ -77,16 +106,16 @@ fn capability_set_reports_the_first_missing_dependency() {
 #[test]
 fn capability_set_accepts_complete_dependency_sets() {
     let capabilities = FileSystemCapabilities::new()
-        .with(FileSystemCapability::Read)
-        .with(FileSystemCapability::RangeRead)
-        .with(FileSystemCapability::Write)
-        .with(FileSystemCapability::Append)
-        .with(FileSystemCapability::Delete)
-        .with(FileSystemCapability::RecursiveDelete)
-        .with(FileSystemCapability::Rename)
-        .with(FileSystemCapability::AtomicRename)
-        .with(FileSystemCapability::Copy)
-        .with(FileSystemCapability::ServerSideCopy);
+        .with_guaranteed(FileSystemCapability::Read)
+        .with_guaranteed(FileSystemCapability::RangeRead)
+        .with_guaranteed(FileSystemCapability::Write)
+        .with_guaranteed(FileSystemCapability::Append)
+        .with_guaranteed(FileSystemCapability::Delete)
+        .with_guaranteed(FileSystemCapability::RecursiveDelete)
+        .with_guaranteed(FileSystemCapability::Rename)
+        .with_guaranteed(FileSystemCapability::AtomicRename)
+        .with_guaranteed(FileSystemCapability::Copy)
+        .with_guaranteed(FileSystemCapability::ServerSideCopy);
 
     assert_eq!(None, capabilities.missing_dependency());
 }

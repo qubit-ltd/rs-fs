@@ -218,27 +218,27 @@ impl WriteOptions {
     ) -> Result<(), FsError> {
         self.validate()?;
         if self.disposition == WriteDisposition::Append
-            && !capabilities.contains(FileSystemCapability::Append)
+            && !capabilities.supports(FileSystemCapability::Append)
         {
             return Err(missing_requirement(
                 FileSystemCapability::Append,
-                "append writes are required but not guaranteed",
+                "append writes are required but not supported",
             ));
         }
         if self.precondition != WritePrecondition::None
-            && !capabilities.contains(FileSystemCapability::ConditionalWrite)
+            && !capabilities.supports(FileSystemCapability::ConditionalWrite)
         {
             return Err(missing_requirement(
                 FileSystemCapability::ConditionalWrite,
-                "conditional writes are required but not guaranteed",
+                "conditional writes are required but not supported",
             ));
         }
         if self.atomicity == AtomicityRequirement::Required
-            && !capabilities.contains(FileSystemCapability::AtomicReplace)
+            && !capabilities.supports(FileSystemCapability::AtomicReplace)
         {
             return Err(missing_requirement(
                 FileSystemCapability::AtomicReplace,
-                "atomic write publication is required but not guaranteed",
+                "atomic write publication is required but not supported",
             ));
         }
         Ok(())

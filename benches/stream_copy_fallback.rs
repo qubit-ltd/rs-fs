@@ -58,7 +58,7 @@ impl BenchmarkSpi {
                 PathSemantics::Hierarchical,
             ),
             FileSystemCapabilities::new()
-                .with(qubit_fs::FileSystemCapability::Read),
+                .with_guaranteed(qubit_fs::FileSystemCapability::Read),
             FileSystemLimits::unknown(),
             PathConstraints::absolute(),
             SymlinkPolicy::Reject,

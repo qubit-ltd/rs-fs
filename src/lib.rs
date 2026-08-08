@@ -109,6 +109,7 @@ pub use metadata::{
     FileMetadata,
     FileSystemCapabilities,
     FileSystemCapability,
+    FileSystemCapabilitySupport,
     FileSystemId,
     FileSystemInfo,
     FileSystemLimit,

@@ -98,11 +98,11 @@ fn unused() -> FsError {
 impl FileSystemSpi for RenameSpi {
     fn properties(&self) -> FileSystemProperties {
         let mut capabilities = FileSystemCapabilities::new()
-            .with(FileSystemCapability::Rename)
-            .with(FileSystemCapability::AtomicRename);
+            .with_guaranteed(FileSystemCapability::Rename)
+            .with_guaranteed(FileSystemCapability::AtomicRename);
         if self.durable_capability {
-            capabilities =
-                capabilities.with(FileSystemCapability::DurableRename);
+            capabilities = capabilities
+                .with_guaranteed(FileSystemCapability::DurableRename);
         }
         FileSystemProperties::new(
             FileSystemInfo::new(

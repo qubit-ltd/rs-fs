@@ -40,7 +40,7 @@ fn required_server_side_copy_is_checked_before_side_effects() {
         options
             .validate_against(
                 FileSystemCapabilities::default()
-                    .with(FileSystemCapability::ServerSideCopy),
+                    .with_guaranteed(FileSystemCapability::ServerSideCopy),
             )
             .is_ok()
     );
@@ -77,8 +77,8 @@ fn test_copy_options_validate_guarantees_for_explicit_source_mode() {
         .with_atomicity(AtomicityRequirement::Required)
         .with_durability(DurabilityRequirement::Required);
     let file_capabilities = FileSystemCapabilities::new()
-        .with(FileSystemCapability::AtomicFileCopy)
-        .with(FileSystemCapability::DurableFileCopy);
+        .with_guaranteed(FileSystemCapability::AtomicFileCopy)
+        .with_guaranteed(FileSystemCapability::DurableFileCopy);
     assert!(file.validate_against(file_capabilities).is_ok());
     let tree_error = CopyOptions::tree()
         .with_atomicity(AtomicityRequirement::Required)
@@ -96,8 +96,8 @@ fn test_copy_options_auto_defers_when_one_source_kind_is_supported() {
         .with_atomicity(AtomicityRequirement::Required)
         .with_durability(DurabilityRequirement::Required);
     let file_capabilities = FileSystemCapabilities::new()
-        .with(FileSystemCapability::AtomicFileCopy)
-        .with(FileSystemCapability::DurableFileCopy);
+        .with_guaranteed(FileSystemCapability::AtomicFileCopy)
+        .with_guaranteed(FileSystemCapability::DurableFileCopy);
     assert!(options.validate_against(file_capabilities).is_ok());
 
     let error = options

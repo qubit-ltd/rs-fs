@@ -338,10 +338,10 @@ fn test_direct_sync_provider_failures_are_enriched() {
             qubit_fs::PathSemantics::Hierarchical,
         ),
         FileSystemCapabilities::new()
-            .with(qubit_fs::FileSystemCapability::CreateDirectory)
-            .with(qubit_fs::FileSystemCapability::Delete)
-            .with(qubit_fs::FileSystemCapability::Rename)
-            .with(qubit_fs::FileSystemCapability::AtomicRename),
+            .with_guaranteed(qubit_fs::FileSystemCapability::CreateDirectory)
+            .with_guaranteed(qubit_fs::FileSystemCapability::Delete)
+            .with_guaranteed(qubit_fs::FileSystemCapability::Rename)
+            .with_guaranteed(qubit_fs::FileSystemCapability::AtomicRename),
         FileSystemLimits::unknown(),
         PathConstraints::absolute(),
         SymlinkPolicy::Reject,
@@ -399,8 +399,8 @@ fn test_sync_rename_returns_successful_provider_outcome() {
             qubit_fs::PathSemantics::Hierarchical,
         ),
         FileSystemCapabilities::new()
-            .with(qubit_fs::FileSystemCapability::Rename)
-            .with(qubit_fs::FileSystemCapability::AtomicRename),
+            .with_guaranteed(qubit_fs::FileSystemCapability::Rename)
+            .with_guaranteed(qubit_fs::FileSystemCapability::AtomicRename),
         FileSystemLimits::unknown(),
         PathConstraints::absolute(),
         SymlinkPolicy::Reject,
@@ -437,11 +437,11 @@ fn test_sync_facade_rejects_unrequested_outcomes_and_same_path_mutations() {
             qubit_fs::PathSemantics::Hierarchical,
         ),
         FileSystemCapabilities::new()
-            .with(qubit_fs::FileSystemCapability::Copy)
-            .with(qubit_fs::FileSystemCapability::CreateDirectory)
-            .with(qubit_fs::FileSystemCapability::Delete)
-            .with(qubit_fs::FileSystemCapability::Rename)
-            .with(qubit_fs::FileSystemCapability::AtomicRename),
+            .with_guaranteed(qubit_fs::FileSystemCapability::Copy)
+            .with_guaranteed(qubit_fs::FileSystemCapability::CreateDirectory)
+            .with_guaranteed(qubit_fs::FileSystemCapability::Delete)
+            .with_guaranteed(qubit_fs::FileSystemCapability::Rename)
+            .with_guaranteed(qubit_fs::FileSystemCapability::AtomicRename),
         FileSystemLimits::unknown(),
         PathConstraints::absolute(),
         SymlinkPolicy::Reject,

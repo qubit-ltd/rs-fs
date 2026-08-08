@@ -104,28 +104,28 @@ impl RenameOptions {
     ///
     /// # Errors
     /// Returns [`FsErrorKind::RequirementNotMet`] when required atomic or
-    /// durable rename publication is not guaranteed.
+    /// durable rename publication is not supported.
     pub fn validate_against(
         &self,
         capabilities: FileSystemCapabilities,
     ) -> Result<(), FsError> {
         if self.atomicity() == AtomicityRequirement::Required
-            && !capabilities.contains(FileSystemCapability::AtomicRename)
+            && !capabilities.supports(FileSystemCapability::AtomicRename)
         {
             return Err(FsError::new(
                 FsErrorKind::RequirementNotMet,
                 FsOperation::Rename,
-                "atomic rename is required but not guaranteed",
+                "atomic rename is required but not supported",
             )
             .with_required_capability(FileSystemCapability::AtomicRename));
         }
         if self.durability() == DurabilityRequirement::Required
-            && !capabilities.contains(FileSystemCapability::DurableRename)
+            && !capabilities.supports(FileSystemCapability::DurableRename)
         {
             return Err(FsError::new(
                 FsErrorKind::RequirementNotMet,
                 FsOperation::Rename,
-                "durable rename is required but not guaranteed",
+                "durable rename is required but not supported",
             )
             .with_required_capability(FileSystemCapability::DurableRename));
         }

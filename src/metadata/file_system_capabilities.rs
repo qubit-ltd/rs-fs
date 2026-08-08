@@ -5,7 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Filesystem capability guarantees.
+//! Filesystem capability support.
 
 use std::fmt::{
     Debug,
@@ -14,6 +14,7 @@ use std::fmt::{
 };
 
 use crate::FileSystemCapability;
+use crate::FileSystemCapabilitySupport;
 
 const CAPABILITY_DEPENDENCIES: &[(
     FileSystemCapability,
@@ -75,11 +76,13 @@ const CAPABILITY_DEPENDENCIES: &[(
     ),
 ];
 
-/// Stable typed capability guarantees for one configured filesystem.
+/// Stable typed capability support for one configured filesystem.
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub struct FileSystemCapabilities {
-    /// Bit set indexed by stable [`FileSystemCapability`] discriminants.
-    flags: u128,
+    /// Capabilities that can be attempted conditionally.
+    conditional: u128,
+    /// Capabilities guaranteed for every valid request in this scope.
+    guaranteed: u128,
 }
 
 impl FileSystemCapabilities {
@@ -87,28 +90,89 @@ impl FileSystemCapabilities {
     #[inline]
     #[must_use]
     pub const fn new() -> Self {
-        Self { flags: 0 }
+        Self {
+            conditional: 0,
+            guaranteed: 0,
+        }
+    }
+
+    /// Returns a copy with one additional conditional capability.
+    #[inline]
+    #[must_use]
+    pub const fn with_conditional(
+        self,
+        capability: FileSystemCapability,
+    ) -> Self {
+        self.set_support(capability, FileSystemCapabilitySupport::Conditional)
     }
 
     /// Returns a copy with one additional guaranteed capability.
+    #[inline(always)]
+    #[must_use]
+    pub const fn with_guaranteed(
+        self,
+        capability: FileSystemCapability,
+    ) -> Self {
+        self.set_support(capability, FileSystemCapabilitySupport::Guaranteed)
+    }
+
+    /// Replaces the support status of one capability.
     #[inline]
     #[must_use]
-    pub const fn with(mut self, capability: FileSystemCapability) -> Self {
-        self.flags |= capability.bit();
+    pub const fn set_support(
+        mut self,
+        capability: FileSystemCapability,
+        support: FileSystemCapabilitySupport,
+    ) -> Self {
+        let bit = capability.bit();
+        self.conditional &= !bit;
+        self.guaranteed &= !bit;
+        match support {
+            FileSystemCapabilitySupport::Unsupported => {}
+            FileSystemCapabilitySupport::Conditional => {
+                self.conditional |= bit;
+            }
+            FileSystemCapabilitySupport::Guaranteed => {
+                self.guaranteed |= bit;
+            }
+        }
         self
     }
 
-    /// Inserts one guaranteed capability.
+    /// Returns the support status of `capability`.
     #[inline(always)]
-    pub fn insert(&mut self, capability: FileSystemCapability) {
-        self.flags |= capability.bit();
+    pub const fn support(
+        &self,
+        capability: FileSystemCapability,
+    ) -> FileSystemCapabilitySupport {
+        let bit = capability.bit();
+        if self.guaranteed & bit != 0 {
+            FileSystemCapabilitySupport::Guaranteed
+        } else if self.conditional & bit != 0 {
+            FileSystemCapabilitySupport::Conditional
+        } else {
+            FileSystemCapabilitySupport::Unsupported
+        }
     }
 
-    /// Returns whether the filesystem guarantees `capability`.
+    /// Returns whether the provider can attempt `capability`.
     #[inline(always)]
     #[must_use]
-    pub const fn contains(&self, capability: FileSystemCapability) -> bool {
-        self.flags & capability.bit() != 0
+    pub const fn supports(&self, capability: FileSystemCapability) -> bool {
+        !matches!(
+            self.support(capability),
+            FileSystemCapabilitySupport::Unsupported
+        )
+    }
+
+    /// Returns whether `capability` is guaranteed in this filesystem scope.
+    #[inline(always)]
+    #[must_use]
+    pub const fn guarantees(&self, capability: FileSystemCapability) -> bool {
+        matches!(
+            self.support(capability),
+            FileSystemCapabilitySupport::Guaranteed
+        )
     }
 
     /// Returns the number of advertised capabilities.
@@ -118,7 +182,7 @@ impl FileSystemCapabilities {
     #[inline(always)]
     #[must_use]
     pub const fn len(&self) -> usize {
-        self.flags.count_ones() as usize
+        (self.conditional | self.guaranteed).count_ones() as usize
     }
 
     /// Returns whether no capability is advertised.
@@ -128,7 +192,7 @@ impl FileSystemCapabilities {
     #[inline(always)]
     #[must_use]
     pub const fn is_empty(&self) -> bool {
-        self.flags == 0
+        self.conditional == 0 && self.guaranteed == 0
     }
 
     /// Iterates advertised capabilities in stable discriminant order.
@@ -140,7 +204,17 @@ impl FileSystemCapabilities {
         FileSystemCapability::ALL
             .iter()
             .copied()
-            .filter(|capability| self.contains(*capability))
+            .filter(|capability| self.supports(*capability))
+    }
+
+    /// Iterates advertised capabilities with their support status.
+    #[inline]
+    pub fn iter_with_support(
+        &self,
+    ) -> impl Iterator<Item = (FileSystemCapability, FileSystemCapabilitySupport)> + '_
+    {
+        self.iter()
+            .map(|capability| (capability, self.support(capability)))
     }
 
     /// Returns the first advertised capability whose required base capability
@@ -156,7 +230,7 @@ impl FileSystemCapabilities {
     ) -> Option<(FileSystemCapability, FileSystemCapability)> {
         CAPABILITY_DEPENDENCIES.iter().copied().find(
             |(capability, dependency)| {
-                self.contains(*capability) && !self.contains(*dependency)
+                self.supports(*capability) && !self.supports(*dependency)
             },
         )
     }
@@ -173,6 +247,9 @@ impl Default for FileSystemCapabilities {
 impl Debug for FileSystemCapabilities {
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
-        formatter.debug_set().entries(self.iter()).finish()
+        formatter
+            .debug_map()
+            .entries(self.iter_with_support())
+            .finish()
     }
 }

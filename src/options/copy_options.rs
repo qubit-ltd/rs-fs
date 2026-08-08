@@ -239,12 +239,12 @@ impl CopyOptions {
         capabilities: FileSystemCapabilities,
     ) -> Result<(), FsError> {
         if self.server_side == ServerSidePreference::Require
-            && !capabilities.contains(FileSystemCapability::ServerSideCopy)
+            && !capabilities.supports(FileSystemCapability::ServerSideCopy)
         {
             return Err(FsError::new(
                 FsErrorKind::RequirementNotMet,
                 FsOperation::Copy,
-                "server-side copy is required but not guaranteed",
+                "server-side copy is required but not supported",
             )
             .with_required_capability(FileSystemCapability::ServerSideCopy));
         }
@@ -255,12 +255,12 @@ impl CopyOptions {
         };
         let atomic_supported = match self.mode {
             CopyMode::Auto => {
-                capabilities.contains(FileSystemCapability::AtomicFileCopy)
+                capabilities.supports(FileSystemCapability::AtomicFileCopy)
                     || capabilities
-                        .contains(FileSystemCapability::AtomicTreeCopy)
+                        .supports(FileSystemCapability::AtomicTreeCopy)
             }
             CopyMode::File | CopyMode::Tree => {
-                capabilities.contains(atomic_capability)
+                capabilities.supports(atomic_capability)
             }
         };
         if self.atomicity == AtomicityRequirement::Required && !atomic_supported
@@ -268,7 +268,7 @@ impl CopyOptions {
             return Err(FsError::new(
                 FsErrorKind::RequirementNotMet,
                 FsOperation::Copy,
-                "atomic copy publication is required but not guaranteed",
+                "atomic copy publication is required but not supported",
             )
             .with_required_capability(atomic_capability));
         }
@@ -279,12 +279,12 @@ impl CopyOptions {
         };
         let durable_supported = match self.mode {
             CopyMode::Auto => {
-                capabilities.contains(FileSystemCapability::DurableFileCopy)
+                capabilities.supports(FileSystemCapability::DurableFileCopy)
                     || capabilities
-                        .contains(FileSystemCapability::DurableTreeCopy)
+                        .supports(FileSystemCapability::DurableTreeCopy)
             }
             CopyMode::File | CopyMode::Tree => {
-                capabilities.contains(durable_capability)
+                capabilities.supports(durable_capability)
             }
         };
         if self.durability == DurabilityRequirement::Required
@@ -293,7 +293,7 @@ impl CopyOptions {
             return Err(FsError::new(
                 FsErrorKind::RequirementNotMet,
                 FsOperation::Copy,
-                "durable copy publication is required but not guaranteed",
+                "durable copy publication is required but not supported",
             )
             .with_required_capability(durable_capability));
         }

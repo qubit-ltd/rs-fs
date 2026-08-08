@@ -73,9 +73,9 @@ fn write_requirements_are_checked_against_typed_capabilities() {
     );
 
     let capabilities = FileSystemCapabilities::default()
-        .with(FileSystemCapability::AtomicReplace)
-        .with(FileSystemCapability::Append)
-        .with(FileSystemCapability::ConditionalWrite);
+        .with_guaranteed(FileSystemCapability::AtomicReplace)
+        .with_guaranteed(FileSystemCapability::Append)
+        .with_guaranteed(FileSystemCapability::ConditionalWrite);
     assert!(atomic.validate_against(capabilities).is_ok());
     assert!(append.validate_against(capabilities).is_ok());
     assert!(conditional.validate_against(capabilities).is_ok());
