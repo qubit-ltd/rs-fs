@@ -9,10 +9,8 @@
 // facade.
 //! Provider write failure facts.
 
-use crate::{
-    FsError,
-    WriteFailureState,
-};
+use crate::FsError;
+use crate::WriteFailureState;
 
 /// Typed provider write failure preserving recovery state.
 pub struct SpiWriteFailure {

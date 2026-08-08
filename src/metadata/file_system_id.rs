@@ -8,18 +8,14 @@
 // qubit-style: allow source-test-pair
 //! Stable configured filesystem identity.
 
-use std::fmt::{
-    Display,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::Result as FmtResult;
 
-use crate::{
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    FsResult,
-};
+use crate::FsError;
+use crate::FsErrorKind;
+use crate::FsOperation;
+use crate::FsResult;
 
 /// Stable identity of one configured filesystem object.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]

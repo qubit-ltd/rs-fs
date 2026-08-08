@@ -82,20 +82,18 @@ pub use opened_reader::OpenedReader;
 pub use opened_temp_directory::OpenedTempDirectory;
 pub use opened_temp_file::OpenedTempFile;
 pub use opened_writer::OpenedWriter;
-pub use request::{
-    CopyRequest,
-    CreateDirectoryRequest,
-    CreateTempDirectoryRequest,
-    CreateTempFileRequest,
-    DeleteDirectoryRequest,
-    DeleteFileRequest,
-    ListRequest,
-    OpenReaderRequest,
-    OpenWriterRequest,
-    PersistRequest,
-    RenameRequest,
-    StatRequest,
-};
+pub use request::CopyRequest;
+pub use request::CreateDirectoryRequest;
+pub use request::CreateTempDirectoryRequest;
+pub use request::CreateTempFileRequest;
+pub use request::DeleteDirectoryRequest;
+pub use request::DeleteFileRequest;
+pub use request::ListRequest;
+pub use request::OpenReaderRequest;
+pub use request::OpenWriterRequest;
+pub use request::PersistRequest;
+pub use request::RenameRequest;
+pub use request::StatRequest;
 pub use resolved_copy_options::ResolvedCopyOptions;
 pub use resolved_create_directory_options::ResolvedCreateDirectoryOptions;
 pub use resolved_delete_options::ResolvedDeleteOptions;

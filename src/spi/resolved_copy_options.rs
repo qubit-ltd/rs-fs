@@ -9,10 +9,8 @@
 // facade.
 //! Facade-resolved copy options.
 
-use crate::{
-    CopyOptions,
-    SymlinkPolicy,
-};
+use crate::CopyOptions;
+use crate::SymlinkPolicy;
 
 /// Immutable options resolved by the facade before provider dispatch.
 #[derive(Clone)]
@@ -30,10 +28,7 @@ impl ResolvedCopyOptions {
     /// - `options`: Validated caller options after normalization.
     /// - `symlink_policy`: Effective provider policy for this request.
     #[inline]
-    pub(crate) const fn new(
-        options: CopyOptions,
-        symlink_policy: SymlinkPolicy,
-    ) -> Self {
+    pub(crate) const fn new(options: CopyOptions, symlink_policy: SymlinkPolicy) -> Self {
         Self {
             options,
             symlink_policy,

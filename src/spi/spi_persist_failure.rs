@@ -9,10 +9,8 @@
 // facade.
 //! Provider persistence failure facts.
 
-use crate::{
-    FsError,
-    PersistFailureState,
-};
+use crate::FsError;
+use crate::PersistFailureState;
 
 /// Typed provider persist failure preserving partial publication state.
 pub struct SpiPersistFailure {

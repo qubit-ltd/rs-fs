@@ -9,13 +9,11 @@
 // facade.
 //! Immutable path constraints used by filesystem property snapshots.
 
-use crate::{
-    FsError,
-    FsOperation,
-    FsResult,
-    Path,
-    PathForm,
-};
+use crate::FsError;
+use crate::FsOperation;
+use crate::FsResult;
+use crate::Path;
+use crate::PathForm;
 
 /// Immutable path form constraints attached to one filesystem snapshot.
 #[derive(Clone, Debug, Eq, PartialEq)]

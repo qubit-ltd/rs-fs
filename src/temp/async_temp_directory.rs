@@ -9,22 +9,18 @@
 // facade.
 //! Runtime-neutral asynchronous temporary-directory facade handle.
 
-use crate::spi::{
-    AsyncTempResourceSpi,
-    SpiFuture,
-};
-use crate::{
-    AsyncFileSystem,
-    AsyncTempFile,
-    FsResult,
-    Path,
-    PathComponent,
-    PersistFailure,
-    PersistOptions,
-    PersistOutcome,
-    RelativePath,
-    TempResourceState,
-};
+use crate::AsyncFileSystem;
+use crate::AsyncTempFile;
+use crate::FsResult;
+use crate::Path;
+use crate::PathComponent;
+use crate::PersistFailure;
+use crate::PersistOptions;
+use crate::PersistOutcome;
+use crate::RelativePath;
+use crate::TempResourceState;
+use crate::spi::AsyncTempResourceSpi;
+use crate::spi::SpiFuture;
 
 /// A facade-owned asynchronous temporary directory.
 pub struct AsyncTempDirectory(

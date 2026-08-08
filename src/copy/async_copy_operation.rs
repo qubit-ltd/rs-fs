@@ -7,24 +7,21 @@
 // =============================================================================
 //! Owning asynchronous copy operation with cancellation-safe state tracking.
 
-use crate::spi::ResolvedCopyOptions;
-use crate::{
-    AsyncCopyFailure,
-    AsyncCopyOperationState,
-    AsyncFileSystem,
-    AsyncFileWriter,
-    CopyFailureState,
-    CopyOptions,
-    CopyOutcome,
-    CopyStats,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    Path,
-    SymlinkPolicy,
-};
-
 use super::internal::CopyCancellationGuard;
+use crate::AsyncCopyFailure;
+use crate::AsyncCopyOperationState;
+use crate::AsyncFileSystem;
+use crate::AsyncFileWriter;
+use crate::CopyFailureState;
+use crate::CopyOptions;
+use crate::CopyOutcome;
+use crate::CopyStats;
+use crate::FsError;
+use crate::FsErrorKind;
+use crate::FsOperation;
+use crate::Path;
+use crate::SymlinkPolicy;
+use crate::spi::ResolvedCopyOptions;
 
 /// An owning copy request whose recovery writer remains accessible after
 /// failure.

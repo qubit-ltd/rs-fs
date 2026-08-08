@@ -9,18 +9,14 @@
 //! Recoverable failure returned by an asynchronous copy operation.
 
 use std::error::Error;
-use std::fmt::{
-    Debug,
-    Display,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::Debug;
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::Result as FmtResult;
 
-use crate::{
-    CopyFailureState,
-    CopyStats,
-    FsError,
-};
+use crate::CopyFailureState;
+use crate::CopyStats;
+use crate::FsError;
 
 /// Copy failure facts retained after an asynchronous copy operation.
 pub struct AsyncCopyFailure {
@@ -34,11 +30,7 @@ pub struct AsyncCopyFailure {
 
 impl AsyncCopyFailure {
     /// Creates a failure from facade-confirmed facts.
-    pub(crate) fn new(
-        error: FsError,
-        state: CopyFailureState,
-        partial_stats: CopyStats,
-    ) -> Self {
+    pub(crate) fn new(error: FsError, state: CopyFailureState, partial_stats: CopyStats) -> Self {
         Self {
             error,
             state,

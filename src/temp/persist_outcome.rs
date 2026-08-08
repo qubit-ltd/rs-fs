@@ -8,15 +8,12 @@
 // qubit-style: allow all -- facade integration tests exercise this API group.
 //! Successful temporary resource persistence outcome.
 
-use crate::{
-    AchievedAtomicity,
-    NonSensitiveMetadata,
-    Path,
-    PublicationMethod,
-    UserMetadata,
-};
-
 use super::PersistCleanupState;
+use crate::AchievedAtomicity;
+use crate::NonSensitiveMetadata;
+use crate::Path;
+use crate::PublicationMethod;
+use crate::UserMetadata;
 
 /// Confirmed result of publishing a temporary source to its final target.
 #[derive(Clone, Debug, PartialEq)]
@@ -45,11 +42,7 @@ impl PersistOutcome {
     /// An outcome without provider diagnostics.
     #[inline]
     #[must_use]
-    pub fn new(
-        target: Path,
-        atomicity: AchievedAtomicity,
-        method: PublicationMethod,
-    ) -> Self {
+    pub fn new(target: Path, atomicity: AchievedAtomicity, method: PublicationMethod) -> Self {
         Self {
             target,
             atomicity,
@@ -96,10 +89,7 @@ impl PersistOutcome {
     /// Replaces the cleanup state reported by the provider.
     #[inline]
     #[must_use]
-    pub fn with_cleanup_state(
-        mut self,
-        cleanup_state: PersistCleanupState,
-    ) -> Self {
+    pub fn with_cleanup_state(mut self, cleanup_state: PersistCleanupState) -> Self {
         self.cleanup_state = cleanup_state;
         self
     }

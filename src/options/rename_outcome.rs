@@ -7,13 +7,11 @@
 // =============================================================================
 //! Rename operation outcome.
 
-use crate::{
-    AchievedAtomicity,
-    NonSensitiveMetadata,
-    Path,
-    PublicationMethod,
-    UserMetadata,
-};
+use crate::AchievedAtomicity;
+use crate::NonSensitiveMetadata;
+use crate::Path;
+use crate::PublicationMethod;
+use crate::UserMetadata;
 
 /// Outcome of a rename, move, or provider-equivalent publication.
 #[derive(Clone, Debug, PartialEq)]

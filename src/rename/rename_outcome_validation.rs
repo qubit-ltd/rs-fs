@@ -8,15 +8,13 @@
 //! Shared validation for provider-reported rename outcomes.
 
 use super::rename_outcome_validation_error::RenameOutcomeValidationError;
-use crate::{
-    AchievedAtomicity,
-    DurabilityRequirement,
-    Path,
-    PublicationMethod,
-    RenameFailureState,
-    RenameOptions,
-    RenameOutcome,
-};
+use crate::AchievedAtomicity;
+use crate::DurabilityRequirement;
+use crate::Path;
+use crate::PublicationMethod;
+use crate::RenameFailureState;
+use crate::RenameOptions;
+use crate::RenameOutcome;
 
 /// Validates provider outcome guarantees shared by sync and async facades.
 pub(crate) fn validate_rename_outcome(
@@ -39,9 +37,7 @@ pub(crate) fn validate_rename_outcome(
             state: RenameFailureState::Renamed,
         });
     }
-    if options.durability() == DurabilityRequirement::Required
-        && !outcome.durable()
-    {
+    if options.durability() == DurabilityRequirement::Required && !outcome.durable() {
         return Some(RenameOutcomeValidationError {
             message: "provider reported non-durable success for a durability-required rename",
             state: RenameFailureState::Renamed,

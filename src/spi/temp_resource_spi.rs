@@ -9,14 +9,10 @@
 // facade.
 //! Provider-side synchronous temporary-resource sessions.
 
-use super::{
-    PersistRequest,
-    SpiPersistFailure,
-};
-use crate::{
-    FsResult,
-    PersistOutcome,
-};
+use super::PersistRequest;
+use super::SpiPersistFailure;
+use crate::FsResult;
+use crate::PersistOutcome;
 
 /// Provider temporary-resource lifecycle session.
 pub trait TempResourceSpi: Send {
@@ -31,10 +27,8 @@ pub trait TempResourceSpi: Send {
     /// # Errors
     /// Returns provider-confirmed failure and recovery state when persistence
     /// does not complete successfully.
-    fn persist(
-        &mut self,
-        request: PersistRequest<'_>,
-    ) -> Result<PersistOutcome, SpiPersistFailure>;
+    fn persist(&mut self, request: PersistRequest<'_>)
+    -> Result<PersistOutcome, SpiPersistFailure>;
 
     /// Transfers source ownership to the caller.
     ///

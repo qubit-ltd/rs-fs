@@ -12,11 +12,9 @@
 use qubit_io::Output;
 
 use super::SpiWriteFailure;
-use crate::{
-    FsResult,
-    WriteAbortOutcome,
-    WriteOutcome,
-};
+use crate::FsResult;
+use crate::WriteAbortOutcome;
+use crate::WriteOutcome;
 
 /// Provider writer session.
 pub trait FileWriterSpi: Output<Item = u8> + Send {

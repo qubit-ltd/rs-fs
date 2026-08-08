@@ -8,17 +8,14 @@
 // qubit-style: allow all -- facade integration tests exercise this API group.
 //! Typed facade rename failure.
 
-use crate::{
-    FsError,
-    RenameFailureState,
-};
 use std::error::Error;
-use std::fmt::{
-    Debug,
-    Display,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::Debug;
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::Result as FmtResult;
+
+use crate::FsError;
+use crate::RenameFailureState;
 
 /// A rename failure that preserves the provider's publication-state fact.
 pub struct RenameFailure {

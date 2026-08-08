@@ -7,11 +7,9 @@
 // =============================================================================
 //! Opaque provider resource versions.
 
-use std::fmt::{
-    Display,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::Result as FmtResult;
 
 /// Opaque version, generation, or ETag reported by a provider.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]

@@ -7,13 +7,11 @@
 // =============================================================================
 //! Write operation outcome.
 
-use crate::{
-    AchievedAtomicity,
-    NonSensitiveMetadata,
-    PublicationMethod,
-    ResourceVersion,
-    UserMetadata,
-};
+use crate::AchievedAtomicity;
+use crate::NonSensitiveMetadata;
+use crate::PublicationMethod;
+use crate::ResourceVersion;
+use crate::UserMetadata;
 
 /// Outcome returned when a writer is committed.
 #[derive(Clone, Debug, PartialEq)]
@@ -41,10 +39,7 @@ impl WriteOutcome {
     /// A write outcome with no byte count, version, or diagnostics.
     #[inline]
     #[must_use]
-    pub fn new(
-        atomicity: AchievedAtomicity,
-        method: PublicationMethod,
-    ) -> Self {
+    pub fn new(atomicity: AchievedAtomicity, method: PublicationMethod) -> Self {
         Self {
             bytes_written: None,
             version: None,

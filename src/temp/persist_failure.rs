@@ -8,16 +8,12 @@
 //! Typed temporary persistence failure.
 
 use std::error::Error;
-use std::fmt::{
-    Display,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::Result as FmtResult;
 
-use crate::{
-    FsError,
-    PersistFailureState,
-};
+use crate::FsError;
+use crate::PersistFailureState;
 
 /// Persistence error paired with provider-confirmed partial progress.
 #[derive(Debug)]

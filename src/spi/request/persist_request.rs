@@ -9,10 +9,8 @@
 // facade.
 //! Validated temporary-resource persistence request.
 
-use crate::{
-    Path,
-    PersistOptions,
-};
+use crate::Path;
+use crate::PersistOptions;
 
 /// A facade-created request to persist a temporary resource.
 pub struct PersistRequest<'a> {

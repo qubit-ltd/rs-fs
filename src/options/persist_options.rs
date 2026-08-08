@@ -7,15 +7,13 @@
 // =============================================================================
 //! Temporary resource persistence options.
 
-use crate::{
-    AtomicityRequirement,
-    FileSystemCapabilities,
-    FileSystemCapability,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    MetadataPreservePolicy,
-};
+use crate::AtomicityRequirement;
+use crate::FileSystemCapabilities;
+use crate::FileSystemCapability;
+use crate::FsError;
+use crate::FsErrorKind;
+use crate::FsOperation;
+use crate::MetadataPreservePolicy;
 
 /// Options controlling temporary resource persistence.
 #[non_exhaustive]
@@ -79,10 +77,7 @@ impl PersistOptions {
     /// Replaces the required atomicity level.
     #[inline]
     #[must_use]
-    pub const fn with_atomicity(
-        mut self,
-        atomicity: AtomicityRequirement,
-    ) -> Self {
+    pub const fn with_atomicity(mut self, atomicity: AtomicityRequirement) -> Self {
         self.atomicity = atomicity;
         self
     }
@@ -103,10 +98,7 @@ impl PersistOptions {
     /// # Errors
     /// Returns [`FsErrorKind::RequirementNotMet`] when atomic persistence is
     /// required but the configured filesystem does not guarantee it.
-    pub fn validate_against(
-        &self,
-        capabilities: FileSystemCapabilities,
-    ) -> Result<(), FsError> {
+    pub fn validate_against(&self, capabilities: FileSystemCapabilities) -> Result<(), FsError> {
         if self.atomicity() == AtomicityRequirement::Required
             && !capabilities.supports(FileSystemCapability::AtomicTempPersist)
         {
@@ -115,9 +107,7 @@ impl PersistOptions {
                 FsOperation::PersistTemp,
                 "atomic temporary persistence is required but not supported",
             )
-            .with_required_capability(
-                FileSystemCapability::AtomicTempPersist,
-            ));
+            .with_required_capability(FileSystemCapability::AtomicTempPersist));
         }
         Ok(())
     }

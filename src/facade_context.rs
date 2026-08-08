@@ -9,15 +9,13 @@
 // facade tests.
 //! Shared validation and error-context helpers for filesystem facades.
 
-use crate::{
-    FileSystemCapability,
-    FileSystemProperties,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    FsResult,
-    Path,
-};
+use crate::FileSystemCapability;
+use crate::FileSystemProperties;
+use crate::FsError;
+use crate::FsErrorKind;
+use crate::FsOperation;
+use crate::FsResult;
+use crate::Path;
 
 /// Validates one logical path against an immutable provider snapshot.
 ///

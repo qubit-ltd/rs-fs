@@ -9,10 +9,8 @@
 // facade.
 //! Facade-resolved listing options.
 
-use crate::{
-    ListOptions,
-    SymlinkPolicy,
-};
+use crate::ListOptions;
+use crate::SymlinkPolicy;
 
 /// Immutable options resolved by the facade before provider dispatch.
 #[derive(Clone)]
@@ -30,10 +28,7 @@ impl ResolvedListOptions {
     /// - `options`: Validated caller options after normalization.
     /// - `symlink_policy`: Effective provider policy for this request.
     #[inline]
-    pub(crate) const fn new(
-        options: ListOptions,
-        symlink_policy: SymlinkPolicy,
-    ) -> Self {
+    pub(crate) const fn new(options: ListOptions, symlink_policy: SymlinkPolicy) -> Self {
         Self {
             options,
             symlink_policy,

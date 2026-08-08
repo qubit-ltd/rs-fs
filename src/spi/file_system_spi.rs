@@ -7,40 +7,36 @@
 // =============================================================================
 //! Synchronous provider implementation contract.
 
-use super::{
-    CopyAttempt,
-    CopyDeclineReason,
-    CopyRequest,
-    CreateDirectoryRequest,
-    CreateTempDirectoryRequest,
-    CreateTempFileRequest,
-    DeleteDirectoryRequest,
-    DeleteFileRequest,
-    ListRequest,
-    OpenReaderRequest,
-    OpenWriterRequest,
-    OpenedDirectoryStream,
-    OpenedReader,
-    OpenedTempDirectory,
-    OpenedTempFile,
-    OpenedWriter,
-    RenameRequest,
-    SpiCopyFailure,
-    SpiRenameFailure,
-    StatRequest,
-    StatResponse,
-};
-use crate::{
-    CreateDirectoryOutcome,
-    DeleteOutcome,
-    FileSystemProperties,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    FsResult,
-    RenameFailureState,
-    RenameOutcome,
-};
+use super::CopyAttempt;
+use super::CopyDeclineReason;
+use super::CopyRequest;
+use super::CreateDirectoryRequest;
+use super::CreateTempDirectoryRequest;
+use super::CreateTempFileRequest;
+use super::DeleteDirectoryRequest;
+use super::DeleteFileRequest;
+use super::ListRequest;
+use super::OpenReaderRequest;
+use super::OpenWriterRequest;
+use super::OpenedDirectoryStream;
+use super::OpenedReader;
+use super::OpenedTempDirectory;
+use super::OpenedTempFile;
+use super::OpenedWriter;
+use super::RenameRequest;
+use super::SpiCopyFailure;
+use super::SpiRenameFailure;
+use super::StatRequest;
+use super::StatResponse;
+use crate::CreateDirectoryOutcome;
+use crate::DeleteOutcome;
+use crate::FileSystemProperties;
+use crate::FsError;
+use crate::FsErrorKind;
+use crate::FsOperation;
+use crate::FsResult;
+use crate::RenameFailureState;
+use crate::RenameOutcome;
 
 /// Synchronous provider implementation contract.
 pub trait FileSystemSpi: Send + Sync {
@@ -70,10 +66,7 @@ pub trait FileSystemSpi: Send + Sync {
     ///
     /// # Errors
     /// Returns the provider open failure with filesystem context.
-    fn list(
-        &self,
-        request: ListRequest<'_>,
-    ) -> FsResult<OpenedDirectoryStream> {
+    fn list(&self, request: ListRequest<'_>) -> FsResult<OpenedDirectoryStream> {
         Err(unsupported(FsOperation::List, request.path()))
     }
     /// Opens a reader.
@@ -86,10 +79,7 @@ pub trait FileSystemSpi: Send + Sync {
     ///
     /// # Errors
     /// Returns the provider open failure with filesystem context.
-    fn open_reader(
-        &self,
-        request: OpenReaderRequest<'_>,
-    ) -> FsResult<OpenedReader> {
+    fn open_reader(&self, request: OpenReaderRequest<'_>) -> FsResult<OpenedReader> {
         Err(unsupported(FsOperation::OpenReader, request.path()))
     }
     /// Opens a writer.
@@ -102,10 +92,7 @@ pub trait FileSystemSpi: Send + Sync {
     ///
     /// # Errors
     /// Returns the provider open failure with filesystem context.
-    fn open_writer(
-        &self,
-        request: OpenWriterRequest<'_>,
-    ) -> FsResult<OpenedWriter> {
+    fn open_writer(&self, request: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
         Err(unsupported(FsOperation::OpenWriter, request.path()))
     }
     /// Creates a directory.
@@ -134,10 +121,7 @@ pub trait FileSystemSpi: Send + Sync {
     ///
     /// # Errors
     /// Returns the provider deletion failure with filesystem context.
-    fn delete_file(
-        &self,
-        request: DeleteFileRequest<'_>,
-    ) -> FsResult<DeleteOutcome> {
+    fn delete_file(&self, request: DeleteFileRequest<'_>) -> FsResult<DeleteOutcome> {
         Err(unsupported(FsOperation::Delete, request.path()))
     }
     /// Deletes a directory.
@@ -150,10 +134,7 @@ pub trait FileSystemSpi: Send + Sync {
     ///
     /// # Errors
     /// Returns the provider deletion failure with filesystem context.
-    fn delete_directory(
-        &self,
-        request: DeleteDirectoryRequest<'_>,
-    ) -> FsResult<DeleteOutcome> {
+    fn delete_directory(&self, request: DeleteDirectoryRequest<'_>) -> FsResult<DeleteOutcome> {
         Err(unsupported(FsOperation::Delete, request.path()))
     }
     /// Attempts an optional provider copy primitive.
@@ -167,10 +148,7 @@ pub trait FileSystemSpi: Send + Sync {
     /// # Errors
     /// Returns a typed failure preserving confirmed publication progress.
     #[inline(always)]
-    fn try_copy(
-        &self,
-        _request: CopyRequest<'_>,
-    ) -> Result<CopyAttempt, SpiCopyFailure> {
+    fn try_copy(&self, _request: CopyRequest<'_>) -> Result<CopyAttempt, SpiCopyFailure> {
         Ok(CopyAttempt::Declined(CopyDeclineReason::NotImplemented))
     }
     /// Renames a resource.
@@ -183,10 +161,7 @@ pub trait FileSystemSpi: Send + Sync {
     ///
     /// # Errors
     /// Returns a typed failure preserving confirmed rename progress.
-    fn rename(
-        &self,
-        request: RenameRequest<'_>,
-    ) -> Result<RenameOutcome, SpiRenameFailure> {
+    fn rename(&self, request: RenameRequest<'_>) -> Result<RenameOutcome, SpiRenameFailure> {
         Err(SpiRenameFailure::new(
             unsupported(FsOperation::Rename, request.source())
                 .with_target(request.target().clone()),
@@ -203,10 +178,7 @@ pub trait FileSystemSpi: Send + Sync {
     ///
     /// # Errors
     /// Returns the provider creation failure with filesystem context.
-    fn create_temp_file(
-        &self,
-        _request: CreateTempFileRequest,
-    ) -> FsResult<OpenedTempFile> {
+    fn create_temp_file(&self, _request: CreateTempFileRequest) -> FsResult<OpenedTempFile> {
         Err(FsError::new(
             FsErrorKind::UnsupportedOperation,
             FsOperation::CreateTemp,

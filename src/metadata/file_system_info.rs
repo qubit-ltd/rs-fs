@@ -7,15 +7,14 @@
 // =============================================================================
 //! Immutable configured filesystem information.
 
-use crate::{
-    FileSystemId,
-    FsResult,
-    NonSensitiveMetadata,
-    PathSemantics,
-    Uri,
-    UserMetadata,
-};
 use std::fmt::Display;
+
+use crate::FileSystemId;
+use crate::FsResult;
+use crate::NonSensitiveMetadata;
+use crate::PathSemantics;
+use crate::Uri;
+use crate::UserMetadata;
 
 /// Construction-time local snapshot describing one filesystem object.
 #[derive(Clone, Debug, PartialEq)]
@@ -36,11 +35,7 @@ impl FileSystemInfo {
     /// Creates a filesystem information snapshot without scheme aliases.
     #[inline]
     #[must_use]
-    pub fn new(
-        id: FileSystemId,
-        provider_id: impl Display,
-        path_semantics: PathSemantics,
-    ) -> Self {
+    pub fn new(id: FileSystemId, provider_id: impl Display, path_semantics: PathSemantics) -> Self {
         Self {
             id,
             provider_id: provider_id.to_string().into(),

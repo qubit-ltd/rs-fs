@@ -14,13 +14,9 @@ mod stream_copy_policy;
 
 #[cfg(feature = "async")]
 pub(super) use copy_cancellation_guard::CopyCancellationGuard;
-pub(crate) use fallback_failure_state::{
-    fallback_failure_stats,
-    from_write_failure_state,
-    from_writer_state,
-};
-pub(crate) use stream_copy_policy::{
-    fallback_options_supported,
-    is_file_kind_supported,
-    validate_stream_copy_length_limits,
-};
+pub(crate) use fallback_failure_state::fallback_failure_stats;
+pub(crate) use fallback_failure_state::from_write_failure_state;
+pub(crate) use fallback_failure_state::from_writer_state;
+pub(crate) use stream_copy_policy::fallback_options_supported;
+pub(crate) use stream_copy_policy::is_file_kind_supported;
+pub(crate) use stream_copy_policy::validate_stream_copy_length_limits;

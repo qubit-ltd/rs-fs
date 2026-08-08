@@ -10,12 +10,10 @@
 // The facade-level mappings are covered by copy_fallback_tests.rs and
 // async_copy_fallback_tests.rs.
 
-use crate::{
-    CopyFailureState,
-    CopyStats,
-    WriteFailureState,
-    WriterState,
-};
+use crate::CopyFailureState;
+use crate::CopyStats;
+use crate::WriteFailureState;
+use crate::WriterState;
 
 /// Maps an opened writer lifecycle state to a copy recovery state.
 ///
@@ -33,12 +31,10 @@ use crate::{
 #[inline(always)]
 pub(crate) const fn from_writer_state(state: WriterState) -> CopyFailureState {
     match state {
-        WriterState::Open
-        | WriterState::NotPublished
-        | WriterState::Aborted => CopyFailureState::Unchanged,
-        WriterState::Committed | WriterState::Published => {
-            CopyFailureState::Published
+        WriterState::Open | WriterState::NotPublished | WriterState::Aborted => {
+            CopyFailureState::Unchanged
         }
+        WriterState::Committed | WriterState::Published => CopyFailureState::Published,
         WriterState::Indeterminate => CopyFailureState::Indeterminate,
     }
 }
@@ -53,12 +49,11 @@ pub(crate) const fn from_writer_state(state: WriterState) -> CopyFailureState {
 ///
 /// The equivalent recovery state for the enclosing copy operation.
 #[inline(always)]
-pub(crate) const fn from_write_failure_state(
-    state: WriteFailureState,
-) -> CopyFailureState {
+pub(crate) const fn from_write_failure_state(state: WriteFailureState) -> CopyFailureState {
     match state {
-        WriteFailureState::RetryableNotPublished
-        | WriteFailureState::NotPublished => CopyFailureState::Unchanged,
+        WriteFailureState::RetryableNotPublished | WriteFailureState::NotPublished => {
+            CopyFailureState::Unchanged
+        }
         WriteFailureState::Published => CopyFailureState::Published,
         WriteFailureState::Indeterminate => CopyFailureState::Indeterminate,
     }

@@ -8,19 +8,16 @@
 // qubit-style: allow all -- facade integration tests exercise this API group.
 //! Recoverable facade copy failure.
 
-use crate::{
-    CopyFailureState,
-    CopyStats,
-    FileWriter,
-    FsError,
-};
 use std::error::Error;
-use std::fmt::{
-    Debug,
-    Display,
-    Formatter,
-    Result as FmtResult,
-};
+use std::fmt::Debug;
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::Result as FmtResult;
+
+use crate::CopyFailureState;
+use crate::CopyStats;
+use crate::FileWriter;
+use crate::FsError;
 
 /// A copy error with publication state, partial statistics, and optional writer
 /// recovery.
@@ -109,9 +106,7 @@ impl CopyFailure {
     /// Splits the failure into error, state, statistics, and writer recovery.
     #[inline(always)]
     #[must_use]
-    pub fn into_parts(
-        self,
-    ) -> (FsError, CopyFailureState, CopyStats, Option<FileWriter>) {
+    pub fn into_parts(self) -> (FsError, CopyFailureState, CopyStats, Option<FileWriter>) {
         let mut parts = self.parts;
         (
             parts.error,

@@ -8,17 +8,15 @@
 // qubit-style: allow source-test-pair
 //! Shared validation for provider directory entries.
 
-use crate::{
-    DirEntry,
-    FileSystemLimits,
-    FsError,
-    FsErrorKind,
-    FsOperation,
-    FsResult,
-    ListOptions,
-    Path,
-    PathSemantics,
-};
+use crate::DirEntry;
+use crate::FileSystemLimits;
+use crate::FsError;
+use crate::FsErrorKind;
+use crate::FsOperation;
+use crate::FsResult;
+use crate::ListOptions;
+use crate::Path;
+use crate::PathSemantics;
 
 /// Validates provider-controlled identity fields before applying list policy.
 pub(crate) fn validate_entry(
@@ -34,11 +32,7 @@ pub(crate) fn validate_entry(
         ));
     }
     if limits
-        .validate_path(
-            &entry.path,
-            semantics,
-            FsOperation::ValidateProviderOutcome,
-        )
+        .validate_path(&entry.path, semantics, FsOperation::ValidateProviderOutcome)
         .is_err()
     {
         return Err(contract_error(
@@ -81,18 +75,11 @@ pub(crate) fn matches_options(
     let Some(relative) = relative_path(root, &entry.path) else {
         return Err("provider returned directory entry outside requested root");
     };
-    if !options.recursive()
-        && options.prefix().is_none()
-        && relative.contains('/')
-    {
-        return Err(
-            "provider returned nested directory entry for non-recursive listing",
-        );
+    if !options.recursive() && options.prefix().is_none() && relative.contains('/') {
+        return Err("provider returned nested directory entry for non-recursive listing");
     }
     if options.include_metadata() && entry.metadata.is_none() {
-        return Err(
-            "provider returned directory entry without requested metadata",
-        );
+        return Err("provider returned directory entry without requested metadata");
     }
     if options.prefix().is_none_or(|prefix| {
         relative == prefix
