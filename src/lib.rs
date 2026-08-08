@@ -167,6 +167,7 @@ pub use temp::{
     AsyncTempFile,
 };
 pub use temp::{
+    PersistCleanupState,
     PersistFailure,
     PersistFailureState,
     PersistOutcome,
