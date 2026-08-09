@@ -42,11 +42,7 @@ impl PersistOutcome {
     /// An outcome without provider diagnostics.
     #[inline]
     #[must_use]
-    pub fn new(
-        target: Path,
-        atomicity: AchievedAtomicity,
-        method: PublicationMethod,
-    ) -> Self {
+    pub fn new(target: Path, atomicity: AchievedAtomicity, method: PublicationMethod) -> Self {
         Self {
             target,
             atomicity,
@@ -93,10 +89,7 @@ impl PersistOutcome {
     /// Replaces the cleanup state reported by the provider.
     #[inline]
     #[must_use]
-    pub fn with_cleanup_state(
-        mut self,
-        cleanup_state: PersistCleanupState,
-    ) -> Self {
+    pub fn with_cleanup_state(mut self, cleanup_state: PersistCleanupState) -> Self {
         self.cleanup_state = cleanup_state;
         self
     }

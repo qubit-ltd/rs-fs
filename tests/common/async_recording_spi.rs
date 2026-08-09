@@ -221,8 +221,7 @@ impl AsyncRecordingSpi {
                 || (self.config.omit_read_and_write
                     && matches!(
                         capability,
-                        FileSystemCapability::Read
-                            | FileSystemCapability::Write
+                        FileSystemCapability::Read | FileSystemCapability::Write
                     ));
             if !omitted {
                 capabilities = capabilities.with_guaranteed(capability);
@@ -235,12 +234,10 @@ impl AsyncRecordingSpi {
                 .with_guaranteed(FileSystemCapability::DurableFileCopy);
         }
         if self.config.server_side_copy {
-            capabilities = capabilities
-                .with_guaranteed(FileSystemCapability::ServerSideCopy);
+            capabilities = capabilities.with_guaranteed(FileSystemCapability::ServerSideCopy);
         }
         if self.config.range_read {
-            capabilities =
-                capabilities.with_guaranteed(FileSystemCapability::RangeRead);
+            capabilities = capabilities.with_guaranteed(FileSystemCapability::RangeRead);
         }
         if self.config.rename_atomicity.is_some() || self.config.rename_error {
             capabilities = capabilities
@@ -248,13 +245,11 @@ impl AsyncRecordingSpi {
                 .with_guaranteed(FileSystemCapability::AtomicRename);
         }
         if self.config.atomic_temp_persist {
-            capabilities = capabilities
-                .with_guaranteed(FileSystemCapability::AtomicTempPersist);
+            capabilities = capabilities.with_guaranteed(FileSystemCapability::AtomicTempPersist);
         }
         FileSystemProperties::new(
             FileSystemInfo::new(
-                FileSystemId::new("async-recording")
-                    .expect("test id should be valid"),
+                FileSystemId::new("async-recording").expect("test id should be valid"),
                 "async-recording",
                 PathSemantics::Hierarchical,
             ),
@@ -280,22 +275,18 @@ impl AsyncRecordingSpi {
     /// Returns an opened identity for one requested path.
     fn info(&self, path: &Path) -> OpenedFileInfo {
         let id = if self.config.invalid_opened_identity {
-            FileSystemId::new("other-provider")
-                .expect("test id should be valid")
+            FileSystemId::new("other-provider").expect("test id should be valid")
         } else {
-            FileSystemId::new("async-recording")
-                .expect("test id should be valid")
+            FileSystemId::new("async-recording").expect("test id should be valid")
         };
         OpenedFileInfo::new(id, path.clone())
     }
     /// Returns a temporary identity, optionally invalid for boundary testing.
     fn temp_info(&self, kind: FileKind) -> OpenedFileInfo {
         let id = if self.config.invalid_temp_identity {
-            FileSystemId::new("other-provider")
-                .expect("test id should be valid")
+            FileSystemId::new("other-provider").expect("test id should be valid")
         } else {
-            FileSystemId::new("async-recording")
-                .expect("test id should be valid")
+            FileSystemId::new("async-recording").expect("test id should be valid")
         };
         let info = OpenedFileInfo::new(
             id,
@@ -313,10 +304,7 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
     fn properties(&self) -> FileSystemProperties {
         self.properties_for()
     }
-    fn stat<'a>(
-        &'a self,
-        request: StatRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<StatResponse>> {
+    fn stat<'a>(&'a self, request: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
         self.record("stat");
         let _ = request.options();
         if self.config.pending_stage == Some(AsyncCopyStage::Stat) {
@@ -334,9 +322,8 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
                 ))
             });
         }
-        let mut metadata = FileMetadata::new(
-            self.config.stat_kind.clone().unwrap_or(FileKind::File),
-        );
+        let mut metadata =
+            FileMetadata::new(self.config.stat_kind.clone().unwrap_or(FileKind::File));
         metadata = metadata.with_len(Some(5));
         let path = if self.config.invalid_stat_path {
             Path::parse("/different").expect("test path should parse")
@@ -434,9 +421,7 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
             return Box::pin(async { Err(unused()) });
         }
         let already_existed = self.config.create_directory_already_existed;
-        Box::pin(
-            async move { Ok(CreateDirectoryOutcome::new(already_existed)) },
-        )
+        Box::pin(async move { Ok(CreateDirectoryOutcome::new(already_existed)) })
     }
     fn delete_file<'a>(
         &'a self,
@@ -478,20 +463,14 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
         if self.config.copy_failure {
             return Box::pin(async {
                 Err(SpiCopyFailure::new(
-                    FsError::new(
-                        FsErrorKind::Io,
-                        FsOperation::Copy,
-                        "injected copy failure",
-                    ),
+                    FsError::new(FsErrorKind::Io, FsOperation::Copy, "injected copy failure"),
                     CopyFailureState::Indeterminate,
                     CopyStats::default(),
                 ))
             });
         }
         if self.config.decline_copy {
-            return Box::pin(async {
-                Ok(CopyAttempt::Declined(CopyDeclineReason::NotApplicable))
-            });
+            return Box::pin(async { Ok(CopyAttempt::Declined(CopyDeclineReason::NotApplicable)) });
         }
         if let Some(atomicity) = self.config.completed_copy {
             return Box::pin(async move {
@@ -502,9 +481,7 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
                 )))
             });
         }
-        Box::pin(async {
-            Ok(CopyAttempt::Declined(CopyDeclineReason::NotApplicable))
-        })
+        Box::pin(async { Ok(CopyAttempt::Declined(CopyDeclineReason::NotApplicable)) })
     }
     fn rename<'a>(
         &'a self,
@@ -522,10 +499,8 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
         }
         if let Some(atomicity) = self.config.rename_atomicity {
             let source = request.source().clone();
-            let target = if request.target().as_str() == "/wrong-rename-target"
-            {
-                Path::parse("/reported-rename-target")
-                    .expect("generated path should parse")
+            let target = if request.target().as_str() == "/wrong-rename-target" {
+                Path::parse("/reported-rename-target").expect("generated path should parse")
             } else {
                 request.target().clone()
             };
@@ -571,9 +546,7 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
                 Box::new(RecordingTempSession {
                     calls,
                     temp_cancellations,
-                    indeterminate_persist: self
-                        .config
-                        .temp_persist_indeterminate,
+                    indeterminate_persist: self.config.temp_persist_indeterminate,
                     persist_failure: self.config.temp_persist_failure,
                     cleanup_failure: self.config.temp_cleanup_failure,
                     keep_failure: self.config.temp_keep_failure,
@@ -602,10 +575,7 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
                 Box::new(RecordingTempSession {
                     calls,
                     temp_cancellations,
-                    indeterminate_persist: self
-                        .config
-                        .temp_persist_atomicity
-                        .is_none()
+                    indeterminate_persist: self.config.temp_persist_atomicity.is_none()
                         && self.config.temp_persist_indeterminate,
                     persist_failure: self.config.temp_persist_failure,
                     cleanup_failure: self.config.temp_cleanup_failure,
@@ -625,9 +595,7 @@ struct RecordingDirectorySession {
     fail: bool,
 }
 impl AsyncDirectoryStreamSession for RecordingDirectorySession {
-    fn next_entry_async(
-        &mut self,
-    ) -> SpiFuture<'_, FsResult<Option<DirEntry>>> {
+    fn next_entry_async(&mut self) -> SpiFuture<'_, FsResult<Option<DirEntry>>> {
         if self.fail {
             self.fail = false;
             return Box::pin(async { Err(unused()) });
@@ -659,8 +627,7 @@ impl AsyncInput for RecordingInput {
         }
         let bytes = b"bytes";
         let read = bytes[this.position..].len().min(count);
-        output[index..index + read]
-            .copy_from_slice(&bytes[this.position..this.position + read]);
+        output[index..index + read].copy_from_slice(&bytes[this.position..this.position + read]);
         this.position += read;
         Poll::Ready(Ok(read))
     }
@@ -689,10 +656,7 @@ impl AsyncOutput for RecordingWriter {
             Poll::Ready(Ok(count))
         }
     }
-    fn poll_flush(
-        self: Pin<&mut Self>,
-        _: &mut Context<'_>,
-    ) -> Poll<IoResult<()>> {
+    fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<IoResult<()>> {
         let config = self.get_mut().config.clone();
         if config.pending_stage == Some(AsyncCopyStage::WriterFlush) {
             Poll::Pending
@@ -740,9 +704,7 @@ impl AsyncFileWriteSession for RecordingWriter {
             ))
         })
     }
-    fn abort_async<'a>(
-        self: Pin<&'a mut Self>,
-    ) -> SpiFuture<'a, FsResult<WriteAbortOutcome>> {
+    fn abort_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<WriteAbortOutcome>> {
         let config = self.get_mut().config.clone();
         Box::pin(async move {
             match config.writer_abort_failure {
@@ -752,12 +714,8 @@ impl AsyncFileWriteSession for RecordingWriter {
                     "injected abort failure",
                 )),
                 None => Ok(match config.writer_commit_failure {
-                    Some(WriteFailureState::Published) => {
-                        WriteAbortOutcome::Published
-                    }
-                    Some(WriteFailureState::Indeterminate) => {
-                        WriteAbortOutcome::Indeterminate
-                    }
+                    Some(WriteFailureState::Published) => WriteAbortOutcome::Published,
+                    Some(WriteFailureState::Indeterminate) => WriteAbortOutcome::Indeterminate,
                     Some(WriteFailureState::RetryableNotPublished)
                     | Some(WriteFailureState::NotPublished)
                     | None => WriteAbortOutcome::NotPublished,
@@ -839,8 +797,7 @@ impl AsyncTempResourceSpi for RecordingTempSession {
     ) -> SpiFuture<'a, Result<PersistOutcome, SpiPersistFailure>> {
         self.as_ref().get_ref().record("persist");
         let target = if request.target().as_str() == "/wrong-persist-target" {
-            Path::parse("/reported-persist-target")
-                .expect("generated path should parse")
+            Path::parse("/reported-persist-target").expect("generated path should parse")
         } else {
             request.target().clone()
         };

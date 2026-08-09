@@ -165,16 +165,10 @@ impl FileWriter {
             }
             Err(failure) => {
                 self.state = match failure.state() {
-                    WriteFailureState::RetryableNotPublished => {
-                        WriterState::Open
-                    }
-                    WriteFailureState::NotPublished => {
-                        WriterState::NotPublished
-                    }
+                    WriteFailureState::RetryableNotPublished => WriterState::Open,
+                    WriteFailureState::NotPublished => WriterState::NotPublished,
                     WriteFailureState::Published => WriterState::Published,
-                    WriteFailureState::Indeterminate => {
-                        WriterState::Indeterminate
-                    }
+                    WriteFailureState::Indeterminate => WriterState::Indeterminate,
                 };
                 let (error, state) = failure.into_parts();
                 Err(WriteFailure::new(
@@ -219,9 +213,7 @@ impl FileWriter {
                 self.state = match outcome {
                     WriteAbortOutcome::NotPublished => WriterState::Aborted,
                     WriteAbortOutcome::Published => WriterState::Published,
-                    WriteAbortOutcome::Indeterminate => {
-                        WriterState::Indeterminate
-                    }
+                    WriteAbortOutcome::Indeterminate => WriterState::Indeterminate,
                 };
                 Ok(outcome)
             }
@@ -244,10 +236,7 @@ impl FileWriter {
     fn closed_io_error(&self) -> IoError {
         IoError::new(
             IoErrorKind::BrokenPipe,
-            self.invalid_state(
-                FsOperation::Write,
-                "writer no longer accepts bytes",
-            ),
+            self.invalid_state(FsOperation::Write, "writer no longer accepts bytes"),
         )
     }
 
@@ -271,16 +260,10 @@ impl FileWriter {
     }
 
     /// Adds only missing facade context to a provider lifecycle error.
-    fn contextual_error(
-        &self,
-        error: FsError,
-        operation: FsOperation,
-    ) -> FsError {
-        error.with_operation(operation).with_missing_context(
-            self.info.path(),
-            None,
-            &self.provider,
-        )
+    fn contextual_error(&self, error: FsError, operation: FsOperation) -> FsError {
+        error
+            .with_operation(operation)
+            .with_missing_context(self.info.path(), None, &self.provider)
     }
 }
 
@@ -308,8 +291,7 @@ impl Output for FileWriter {
         // the wrapped output session.
         match unsafe { self.session.write_unchecked(input, index, count) } {
             Ok(value) => {
-                self.written_bytes =
-                    self.written_bytes.saturating_add(value as u64);
+                self.written_bytes = self.written_bytes.saturating_add(value as u64);
                 Ok(value)
             }
             Err(error) => {
@@ -349,9 +331,7 @@ impl Drop for FileWriter {
         if !self.abort_completed
             && matches!(
                 self.state,
-                WriterState::Open
-                    | WriterState::NotPublished
-                    | WriterState::Published
+                WriterState::Open | WriterState::NotPublished | WriterState::Published
             )
         {
             let _ = self.session.abort();

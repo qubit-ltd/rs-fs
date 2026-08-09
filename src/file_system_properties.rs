@@ -141,9 +141,7 @@ impl FileSystemProperties {
                 "provider id must be non-empty and contain no controls",
             ));
         }
-        if let Some((_capability, _dependency)) =
-            self.capabilities.missing_dependency()
-        {
+        if let Some((_capability, _dependency)) = self.capabilities.missing_dependency() {
             return Err(invalid_properties(
                 "advertised capability dependency is missing",
             ));

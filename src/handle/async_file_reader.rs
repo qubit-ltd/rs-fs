@@ -40,10 +40,7 @@ impl AsyncFileReader {
     /// A pinned, type-erased asynchronous file reader.
     #[inline]
     #[must_use]
-    pub(crate) fn new(
-        info: OpenedFileInfo,
-        inner: Box<dyn AsyncInput<Item = u8> + Send>,
-    ) -> Self {
+    pub(crate) fn new(info: OpenedFileInfo, inner: Box<dyn AsyncInput<Item = u8> + Send>) -> Self {
         Self {
             inner: BoxAsyncInput::new(inner),
             info,

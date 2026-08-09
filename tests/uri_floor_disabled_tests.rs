@@ -22,7 +22,6 @@ fn test_uri_query_policy_respects_explicitly_disabled_floor() {
     RedactionPolicy::install_global(policy)
         .expect("this test process installs its default only once");
 
-    Uri::parse("s3://bucket/key?token=raw-token").expect(
-        "an explicitly disabled floor permits an otherwise unknown query key",
-    );
+    Uri::parse("s3://bucket/key?token=raw-token")
+        .expect("an explicitly disabled floor permits an otherwise unknown query key");
 }

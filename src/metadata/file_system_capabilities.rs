@@ -14,10 +14,7 @@ use std::fmt::Result as FmtResult;
 use crate::FileSystemCapability;
 use crate::FileSystemCapabilitySupport;
 
-const CAPABILITY_DEPENDENCIES: &[(
-    FileSystemCapability,
-    FileSystemCapability,
-)] = &[
+const CAPABILITY_DEPENDENCIES: &[(FileSystemCapability, FileSystemCapability)] = &[
     (FileSystemCapability::RangeRead, FileSystemCapability::Read),
     (
         FileSystemCapability::ConditionalRead,
@@ -97,20 +94,14 @@ impl FileSystemCapabilities {
     /// Returns a copy with one additional conditional capability.
     #[inline]
     #[must_use]
-    pub const fn with_conditional(
-        self,
-        capability: FileSystemCapability,
-    ) -> Self {
+    pub const fn with_conditional(self, capability: FileSystemCapability) -> Self {
         self.set_support(capability, FileSystemCapabilitySupport::Conditional)
     }
 
     /// Returns a copy with one additional guaranteed capability.
     #[inline(always)]
     #[must_use]
-    pub const fn with_guaranteed(
-        self,
-        capability: FileSystemCapability,
-    ) -> Self {
+    pub const fn with_guaranteed(self, capability: FileSystemCapability) -> Self {
         self.set_support(capability, FileSystemCapabilitySupport::Guaranteed)
     }
 
@@ -139,10 +130,7 @@ impl FileSystemCapabilities {
 
     /// Returns the support status of `capability`.
     #[inline(always)]
-    pub const fn support(
-        &self,
-        capability: FileSystemCapability,
-    ) -> FileSystemCapabilitySupport {
+    pub const fn support(&self, capability: FileSystemCapability) -> FileSystemCapabilitySupport {
         let bit = capability.bit();
         if self.guaranteed & bit != 0 {
             FileSystemCapabilitySupport::Guaranteed
@@ -209,8 +197,7 @@ impl FileSystemCapabilities {
     #[inline]
     pub fn iter_with_support(
         &self,
-    ) -> impl Iterator<Item = (FileSystemCapability, FileSystemCapabilitySupport)> + '_
-    {
+    ) -> impl Iterator<Item = (FileSystemCapability, FileSystemCapabilitySupport)> + '_ {
         self.iter()
             .map(|capability| (capability, self.support(capability)))
     }
@@ -223,14 +210,13 @@ impl FileSystemCapabilities {
     /// followed by the missing base capability.
     #[inline]
     #[must_use]
-    pub fn missing_dependency(
-        &self,
-    ) -> Option<(FileSystemCapability, FileSystemCapability)> {
-        CAPABILITY_DEPENDENCIES.iter().copied().find(
-            |(capability, dependency)| {
+    pub fn missing_dependency(&self) -> Option<(FileSystemCapability, FileSystemCapability)> {
+        CAPABILITY_DEPENDENCIES
+            .iter()
+            .copied()
+            .find(|(capability, dependency)| {
                 self.supports(*capability) && !self.supports(*dependency)
-            },
-        )
+            })
     }
 }
 

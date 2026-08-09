@@ -63,11 +63,7 @@ impl FsError {
     /// New filesystem error.
     #[inline]
     #[must_use]
-    pub fn new(
-        kind: FsErrorKind,
-        operation: FsOperation,
-        message: &str,
-    ) -> Self {
+    pub fn new(kind: FsErrorKind, operation: FsOperation, message: &str) -> Self {
         Self {
             kind,
             operation,
@@ -198,10 +194,7 @@ impl FsError {
     /// Updated filesystem error.
     #[inline]
     #[must_use]
-    pub fn with_required_capability(
-        mut self,
-        capability: FileSystemCapability,
-    ) -> Self {
+    pub fn with_required_capability(mut self, capability: FileSystemCapability) -> Self {
         self.required_capability = Some(capability);
         self
     }
@@ -303,27 +296,17 @@ impl FsError {
     /// A typed filesystem error with the public operation and path rebound.
     #[allow(dead_code)]
     #[inline]
-    pub(crate) fn from_stream_io(
-        error: io::Error,
-        operation: FsOperation,
-        path: &Path,
-    ) -> Self {
+    pub(crate) fn from_stream_io(error: io::Error, operation: FsOperation, path: &Path) -> Self {
         match error.downcast::<Self>() {
-            Ok(error) => {
-                error.with_operation(operation).with_path(path.clone())
-            }
-            Err(error) if error.kind() == io::ErrorKind::InvalidData => {
-                Self::with_source(
-                    FsErrorKind::Io,
-                    operation,
-                    "stream I/O contract failed",
-                    error,
-                )
-                .with_path(path.clone())
-            }
-            Err(error) => {
-                Self::from_io(error, operation).with_path(path.clone())
-            }
+            Ok(error) => error.with_operation(operation).with_path(path.clone()),
+            Err(error) if error.kind() == io::ErrorKind::InvalidData => Self::with_source(
+                FsErrorKind::Io,
+                operation,
+                "stream I/O contract failed",
+                error,
+            )
+            .with_path(path.clone()),
+            Err(error) => Self::from_io(error, operation).with_path(path.clone()),
         }
     }
 
@@ -418,20 +401,18 @@ impl FsError {
             FsErrorKind::AlreadyExists => io::ErrorKind::AlreadyExists,
             FsErrorKind::NotDirectory => io::ErrorKind::NotADirectory,
             FsErrorKind::IsDirectory => io::ErrorKind::IsADirectory,
-            FsErrorKind::PermissionDenied
-            | FsErrorKind::AuthenticationFailed => {
+            FsErrorKind::PermissionDenied | FsErrorKind::AuthenticationFailed => {
                 io::ErrorKind::PermissionDenied
             }
             FsErrorKind::InvalidPath
             | FsErrorKind::InvalidUri
             | FsErrorKind::InvalidOptions
             | FsErrorKind::InvalidState => io::ErrorKind::InvalidInput,
-            FsErrorKind::UnsupportedOperation
-            | FsErrorKind::UnsupportedCapability => io::ErrorKind::Unsupported,
-            FsErrorKind::Timeout => io::ErrorKind::TimedOut,
-            FsErrorKind::Interrupted | FsErrorKind::Cancelled => {
-                io::ErrorKind::Interrupted
+            FsErrorKind::UnsupportedOperation | FsErrorKind::UnsupportedCapability => {
+                io::ErrorKind::Unsupported
             }
+            FsErrorKind::Timeout => io::ErrorKind::TimedOut,
+            FsErrorKind::Interrupted | FsErrorKind::Cancelled => io::ErrorKind::Interrupted,
             FsErrorKind::QuotaExceeded => io::ErrorKind::StorageFull,
             FsErrorKind::DataCorruption => io::ErrorKind::InvalidData,
             _ => io::ErrorKind::Other,

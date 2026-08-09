@@ -25,8 +25,7 @@ fn test_copy_options_default_and_constructors_set_modes() {
 
 #[test]
 fn required_server_side_copy_is_checked_before_side_effects() {
-    let options =
-        CopyOptions::default().with_server_side(ServerSidePreference::Require);
+    let options = CopyOptions::default().with_server_side(ServerSidePreference::Require);
     let error = options
         .validate_against(FileSystemCapabilities::default())
         .unwrap_err();
