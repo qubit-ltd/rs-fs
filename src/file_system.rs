@@ -1003,14 +1003,16 @@ impl FileSystem {
     ) -> FsResult<Vec<u8>> {
         let mut reader = self.open_reader(path, options)?;
         let mut result = Vec::new();
-        let mut read_budget = ResourceBudget::new(ResourceLimit::bounded(
+        let mut read_budget = ResourceBudget::new(
             FileSystemResource::ReadBytes,
-            max_bytes,
-        ));
+            ResourceLimit::new(u64::try_from(max_bytes).expect("read limit fits u64")),
+        );
         let mut buffer = [0_u8; 8192];
         loop {
-            let remaining = read_budget.remaining().unwrap_or(0);
-            let read_len = remaining.saturating_add(1).min(buffer.len());
+            let remaining = read_budget.remaining();
+            let read_len = usize::try_from(remaining.saturating_add(1))
+                .unwrap_or(usize::MAX)
+                .min(buffer.len());
             let read = Input::read(&mut reader, &mut buffer[..read_len])
                 .map_err(|error| {
                     self.io_error(path, FsOperation::Read, error)
@@ -1018,7 +1020,10 @@ impl FileSystem {
             if read == 0 {
                 return Ok(result);
             }
-            if read_budget.try_charge(read).is_err() {
+            if read_budget
+                .try_consume(u64::try_from(read).expect("read count fits u64"))
+                .is_err()
+            {
                 return Err(FsError::new(
                     FsErrorKind::ResourceLimitExceeded,
                     FsOperation::Read,
