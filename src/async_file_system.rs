@@ -10,7 +10,6 @@
 use std::sync::Arc;
 
 use qubit_budget::ResourceBudget;
-use qubit_budget::ResourceLimit;
 use qubit_io::AsyncInput;
 use qubit_io::AsyncOutput;
 
@@ -222,16 +221,12 @@ impl AsyncFileSystem {
     ) -> FsResult<Vec<u8>> {
         let mut reader = self.open_reader(path, options).await?;
         let mut bytes = Vec::new();
-        let mut read_budget = ResourceBudget::new(
-            FileSystemResource::ReadBytes,
-            ResourceLimit::new(u64::try_from(max_bytes).expect("read limit fits u64")),
-        );
+        let mut read_budget =
+            ResourceBudget::<_, usize>::new(FileSystemResource::ReadBytes, max_bytes);
         let mut buffer = [0_u8; 8192];
         loop {
             let remaining = read_budget.remaining();
-            let read_len = usize::try_from(remaining.saturating_add(1))
-                .unwrap_or(usize::MAX)
-                .min(buffer.len());
+            let read_len = remaining.saturating_add(1).min(buffer.len());
             let read = reader
                 .read_async(&mut buffer[..read_len])
                 .await
@@ -245,10 +240,7 @@ impl AsyncFileSystem {
             if read == 0 {
                 return Ok(bytes);
             }
-            if read_budget
-                .try_consume(u64::try_from(read).expect("read count fits u64"))
-                .is_err()
-            {
+            if read_budget.try_consume(read).is_err() {
                 return Err(FsError::new(
                     FsErrorKind::ResourceLimitExceeded,
                     FsOperation::Read,
