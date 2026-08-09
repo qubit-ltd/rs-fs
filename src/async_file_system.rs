@@ -9,6 +9,8 @@
 
 use std::sync::Arc;
 
+use qubit_budget::ResourceBudget;
+use qubit_budget::ResourceLimit;
 use qubit_io::AsyncInput;
 use qubit_io::AsyncOutput;
 
@@ -48,6 +50,11 @@ use crate::TempDirectoryOptions;
 use crate::TempFileOptions;
 use crate::WriteDisposition;
 use crate::WriteOptions;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FileSystemResource {
+    ReadBytes,
+}
 use crate::copy::fallback_failure_stats;
 use crate::copy::fallback_options_supported;
 use crate::copy::from_writer_state;
@@ -230,9 +237,13 @@ impl AsyncFileSystem {
     ) -> FsResult<Vec<u8>> {
         let mut reader = self.open_reader(path, options).await?;
         let mut bytes = Vec::new();
+        let mut read_budget = ResourceBudget::new(ResourceLimit::bounded(
+            FileSystemResource::ReadBytes,
+            max_bytes,
+        ));
         let mut buffer = [0_u8; 8192];
         loop {
-            let remaining = max_bytes.saturating_sub(bytes.len());
+            let remaining = read_budget.remaining().unwrap_or(0);
             let read_len = remaining.saturating_add(1).min(buffer.len());
             let read = reader
                 .read_async(&mut buffer[..read_len])
@@ -247,7 +258,7 @@ impl AsyncFileSystem {
             if read == 0 {
                 return Ok(bytes);
             }
-            if read > remaining {
+            if read_budget.try_charge(read).is_err() {
                 return Err(FsError::new(
                     FsErrorKind::ResourceLimitExceeded,
                     FsOperation::Read,

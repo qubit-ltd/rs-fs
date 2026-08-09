@@ -96,10 +96,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "qubit-budget"
+version = "0.4.0"
+
+[[package]]
 name = "qubit-fs"
 version = "0.2.0"
 dependencies = [
  "fluent-uri",
+ "qubit-budget",
  "qubit-io",
  "qubit-redact",
 ]
@@ -222,3 +227,11 @@ name = "unicode-ident"
 version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
+
+[[patch.unused]]
+name = "qubit-clock"
+version = "0.12.1"
+
+[[patch.unused]]
+name = "qubit-retry"
+version = "0.18.0"

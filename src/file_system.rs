@@ -10,6 +10,8 @@
 use std::io::Error as IoError;
 use std::sync::Arc;
 
+use qubit_budget::ResourceBudget;
+use qubit_budget::ResourceLimit;
 use qubit_io::Input;
 use qubit_io::Output;
 
@@ -47,6 +49,11 @@ use crate::TempFileOptions;
 use crate::WriteAllFailure;
 use crate::WriteDisposition;
 use crate::WriteOptions;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FileSystemResource {
+    ReadBytes,
+}
 use crate::copy::fallback_failure_stats;
 use crate::copy::fallback_options_supported;
 use crate::copy::from_write_failure_state;
@@ -996,9 +1003,13 @@ impl FileSystem {
     ) -> FsResult<Vec<u8>> {
         let mut reader = self.open_reader(path, options)?;
         let mut result = Vec::new();
+        let mut read_budget = ResourceBudget::new(ResourceLimit::bounded(
+            FileSystemResource::ReadBytes,
+            max_bytes,
+        ));
         let mut buffer = [0_u8; 8192];
         loop {
-            let remaining = max_bytes.saturating_sub(result.len());
+            let remaining = read_budget.remaining().unwrap_or(0);
             let read_len = remaining.saturating_add(1).min(buffer.len());
             let read = Input::read(&mut reader, &mut buffer[..read_len])
                 .map_err(|error| {
@@ -1007,7 +1018,7 @@ impl FileSystem {
             if read == 0 {
                 return Ok(result);
             }
-            if result.len().saturating_add(read) > max_bytes {
+            if read_budget.try_charge(read).is_err() {
                 return Err(FsError::new(
                     FsErrorKind::ResourceLimitExceeded,
                     FsOperation::Read,
