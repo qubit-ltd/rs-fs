@@ -169,19 +169,12 @@ impl TempDirectory {
             .map_err(|error| self.record_cleanup_error(error))
     }
     /// Records provider partial persistence facts.
-    fn record_persist_failure(
-        &mut self,
-        failure: SpiPersistFailure,
-    ) -> PersistFailure {
+    fn record_persist_failure(&mut self, failure: SpiPersistFailure) -> PersistFailure {
         let (error, state) = failure.into_parts();
         self.state = match state {
             PersistFailureState::NotPublished => TempResourceState::Owned,
-            PersistFailureState::PublishedSourceRetained => {
-                TempResourceState::CleanupRequired
-            }
-            PersistFailureState::Indeterminate => {
-                TempResourceState::Indeterminate
-            }
+            PersistFailureState::PublishedSourceRetained => TempResourceState::CleanupRequired,
+            PersistFailureState::Indeterminate => TempResourceState::Indeterminate,
         };
         PersistFailure::new(error, state)
     }

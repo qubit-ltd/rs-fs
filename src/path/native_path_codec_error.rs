@@ -48,10 +48,7 @@ impl Display for NativePathCodecError {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         match self {
             Self::InvalidUtf8 { offset } => {
-                write!(
-                    formatter,
-                    "invalid UTF-8 at native byte offset {offset}"
-                )
+                write!(formatter, "invalid UTF-8 at native byte offset {offset}")
             }
             Self::InvalidEscape { offset } => {
                 write!(
@@ -66,8 +63,9 @@ impl Display for NativePathCodecError {
             Self::InvalidWtf8 { offset } => {
                 write!(formatter, "invalid WTF-8 at WTF-8 byte offset {offset}")
             }
-            Self::UnsupportedNativeEncoding => formatter
-                .write_str("native path encoding is not losslessly supported"),
+            Self::UnsupportedNativeEncoding => {
+                formatter.write_str("native path encoding is not losslessly supported")
+            }
         }
     }
 }

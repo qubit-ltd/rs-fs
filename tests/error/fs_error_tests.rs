@@ -18,12 +18,9 @@ use qubit_fs::Path;
 #[test]
 fn test_fs_error_keeps_request_and_failure_paths_separate() {
     let request = Path::parse("/source").expect("request path should parse");
-    let request_target =
-        Path::parse("/target").expect("request target should parse");
-    let failed =
-        Path::parse("/source/nested/second").expect("failed path should parse");
-    let failed_target = Path::parse("/target/nested/second")
-        .expect("failed target should parse");
+    let request_target = Path::parse("/target").expect("request target should parse");
+    let failed = Path::parse("/source/nested/second").expect("failed path should parse");
+    let failed_target = Path::parse("/target/nested/second").expect("failed target should parse");
     let error = FsError::new(FsErrorKind::Io, FsOperation::Copy, "copy failed")
         .with_path(request.clone())
         .with_target(request_target.clone())
@@ -94,8 +91,7 @@ fn test_fs_error_from_io_maps_standard_categories() {
         (io::ErrorKind::InvalidData, FsErrorKind::DataCorruption),
         (io::ErrorKind::Other, FsErrorKind::Io),
     ] {
-        let error =
-            FsError::from_io(io::Error::from(io_kind), FsOperation::Read);
+        let error = FsError::from_io(io::Error::from(io_kind), FsOperation::Read);
         assert_eq!(expected, error.kind(), "{io_kind:?} should map");
         assert_eq!(FsOperation::Read, error.operation());
         assert!(error.source().is_some());
@@ -139,8 +135,7 @@ fn test_fs_error_into_io_error_maps_categories() {
         (FsErrorKind::Conflict, io::ErrorKind::Other),
         (FsErrorKind::ProviderContractViolation, io::ErrorKind::Other),
     ] {
-        let error = FsError::new(kind, FsOperation::Write, "safe message")
-            .into_io_error();
+        let error = FsError::new(kind, FsOperation::Write, "safe message").into_io_error();
         assert_eq!(expected_io_kind, error.kind(), "{kind:?} should map");
         let source = error
             .get_ref()

@@ -13,11 +13,8 @@ use qubit_fs::WriteOutcome;
 
 #[test]
 fn write_outcome_reports_actual_publication_semantics() {
-    let outcome = WriteOutcome::new(
-        AchievedAtomicity::Atomic,
-        PublicationMethod::AtomicRename,
-    )
-    .with_version(ResourceVersion::new("v7"));
+    let outcome = WriteOutcome::new(AchievedAtomicity::Atomic, PublicationMethod::AtomicRename)
+        .with_version(ResourceVersion::new("v7"));
 
     assert_eq!(None, outcome.bytes_written());
     assert_eq!(AchievedAtomicity::Atomic, outcome.atomicity());
@@ -27,13 +24,12 @@ fn write_outcome_reports_actual_publication_semantics() {
 
 #[test]
 fn write_outcome_validates_and_safely_formats_diagnostics() {
-    let outcome =
-        WriteOutcome::new(AchievedAtomicity::Atomic, PublicationMethod::Direct)
-            .with_diagnostics(
-                UserMetadata::new()
-                    .with("request_id", "private-request-id")
-                    .expect("ordinary diagnostic key must be accepted"),
-            );
+    let outcome = WriteOutcome::new(AchievedAtomicity::Atomic, PublicationMethod::Direct)
+        .with_diagnostics(
+            UserMetadata::new()
+                .with("request_id", "private-request-id")
+                .expect("ordinary diagnostic key must be accepted"),
+        );
     assert!(outcome.diagnostics().contains_key("request_id"));
     assert!(!format!("{outcome:?}").contains("private-request-id"));
 }

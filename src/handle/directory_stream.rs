@@ -98,18 +98,14 @@ impl DirectoryStream {
                     return Err(self.contextual_error(error));
                 }
                 if let Err(message) =
-                    directory_entry_validation::matches_options(
-                        &entry,
-                        &self.root,
-                        &self.options,
-                    )
+                    directory_entry_validation::matches_options(&entry, &self.root, &self.options)
                 {
                     self.terminal = true;
-                    return Err(self.contextual_error(
-                        directory_entry_validation::option_error(
+                    return Err(
+                        self.contextual_error(directory_entry_validation::option_error(
                             &self.root, message,
-                        ),
-                    ));
+                        )),
+                    );
                 }
                 Ok(Some(entry))
             }

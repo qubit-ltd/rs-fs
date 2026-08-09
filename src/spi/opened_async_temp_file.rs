@@ -31,10 +31,7 @@ impl OpenedAsyncTempFile {
     /// An asynchronous temporary-file envelope for facade validation.
     #[inline]
     #[must_use]
-    pub fn new(
-        info: OpenedFileInfo,
-        session: Box<dyn AsyncTempResourceSpi>,
-    ) -> Self {
+    pub fn new(info: OpenedFileInfo, session: Box<dyn AsyncTempResourceSpi>) -> Self {
         Self { info, session }
     }
 
@@ -54,9 +51,7 @@ impl OpenedAsyncTempFile {
     /// The claimed identity and provider lifecycle session.
     #[inline(always)]
     #[must_use]
-    pub(crate) fn into_parts(
-        self,
-    ) -> (OpenedFileInfo, Box<dyn AsyncTempResourceSpi>) {
+    pub(crate) fn into_parts(self) -> (OpenedFileInfo, Box<dyn AsyncTempResourceSpi>) {
         (self.info, self.session)
     }
 }
