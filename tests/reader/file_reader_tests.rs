@@ -65,7 +65,8 @@ impl FileSystemSpi for ReaderSpi {
                 "reader-test",
                 PathSemantics::Hierarchical,
             ),
-            FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::Read),
+            FileSystemCapabilities::new()
+                .with_guaranteed(FileSystemCapability::Read),
             FileSystemLimits::unknown(),
             PathConstraints::absolute(),
             SymlinkPolicy::Reject,
@@ -81,14 +82,20 @@ impl FileSystemSpi for ReaderSpi {
     fn list(&self, _: ListRequest<'_>) -> FsResult<OpenedDirectoryStream> {
         Err(unsupported())
     }
-    fn open_reader(&self, request: OpenReaderRequest<'_>) -> FsResult<OpenedReader> {
+    fn open_reader(
+        &self,
+        request: OpenReaderRequest<'_>,
+    ) -> FsResult<OpenedReader> {
         let path = if self.wrong_opened_path {
             Path::parse("/different").expect("valid path")
         } else {
             request.path().clone()
         };
         Ok(OpenedReader::new(
-            OpenedFileInfo::new(FileSystemId::new("reader-test").expect("valid id"), path),
+            OpenedFileInfo::new(
+                FileSystemId::new("reader-test").expect("valid id"),
+                path,
+            ),
             Box::new(RecordingReader {
                 inner: Cursor::new(b"bytes".to_vec()),
                 read_requests: Arc::clone(&self.read_requests),
@@ -98,22 +105,34 @@ impl FileSystemSpi for ReaderSpi {
     fn open_writer(&self, _: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
         Err(unsupported())
     }
-    fn create_directory(&self, _: CreateDirectoryRequest<'_>) -> FsResult<CreateDirectoryOutcome> {
+    fn create_directory(
+        &self,
+        _: CreateDirectoryRequest<'_>,
+    ) -> FsResult<CreateDirectoryOutcome> {
         Err(unsupported())
     }
     fn delete_file(&self, _: DeleteFileRequest<'_>) -> FsResult<DeleteOutcome> {
         Err(unsupported())
     }
-    fn delete_directory(&self, _: DeleteDirectoryRequest<'_>) -> FsResult<DeleteOutcome> {
+    fn delete_directory(
+        &self,
+        _: DeleteDirectoryRequest<'_>,
+    ) -> FsResult<DeleteOutcome> {
         Err(unsupported())
     }
-    fn rename(&self, _: RenameRequest<'_>) -> Result<RenameOutcome, SpiRenameFailure> {
+    fn rename(
+        &self,
+        _: RenameRequest<'_>,
+    ) -> Result<RenameOutcome, SpiRenameFailure> {
         Err(SpiRenameFailure::new(
             unsupported(),
             RenameFailureState::Unchanged,
         ))
     }
-    fn create_temp_file(&self, _: CreateTempFileRequest) -> FsResult<OpenedTempFile> {
+    fn create_temp_file(
+        &self,
+        _: CreateTempFileRequest,
+    ) -> FsResult<OpenedTempFile> {
         Err(unsupported())
     }
     fn create_temp_directory(

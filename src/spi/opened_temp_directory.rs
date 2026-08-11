@@ -31,7 +31,10 @@ impl OpenedTempDirectory {
     /// A temporary-directory envelope for facade validation.
     #[inline]
     #[must_use]
-    pub fn new(info: OpenedFileInfo, session: Box<dyn TempResourceSpi>) -> Self {
+    pub fn new(
+        info: OpenedFileInfo,
+        session: Box<dyn TempResourceSpi>,
+    ) -> Self {
         Self { info, session }
     }
 
@@ -41,7 +44,9 @@ impl OpenedTempDirectory {
     /// The claimed identity and provider lifecycle session.
     #[inline(always)]
     #[must_use]
-    pub(crate) fn into_parts(self) -> (OpenedFileInfo, Box<dyn TempResourceSpi>) {
+    pub(crate) fn into_parts(
+        self,
+    ) -> (OpenedFileInfo, Box<dyn TempResourceSpi>) {
         (self.info, self.session)
     }
 }
