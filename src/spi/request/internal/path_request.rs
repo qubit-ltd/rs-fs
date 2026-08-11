@@ -30,7 +30,10 @@ macro_rules! path_request {
             /// # Returns
             /// A provider request borrowing `path` for the dispatch lifetime.
             #[inline]
-            pub(crate) const fn new(path: &'a crate::Path, options: $options) -> Self {
+            pub(crate) const fn new(
+                path: &'a crate::Path,
+                options: $options,
+            ) -> Self {
                 Self { path, options }
             }
 

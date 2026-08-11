@@ -64,11 +64,13 @@ impl AsyncFileSystemSpi for CopySpi {
     fn properties(&self) -> FileSystemProperties {
         FileSystemProperties::new(
             FileSystemInfo::new(
-                FileSystemId::new("copy-test").expect("test id should be valid"),
+                FileSystemId::new("copy-test")
+                    .expect("test id should be valid"),
                 "copy-test",
                 PathSemantics::Hierarchical,
             ),
-            FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::Copy),
+            FileSystemCapabilities::new()
+                .with_guaranteed(FileSystemCapability::Copy),
             FileSystemLimits::unknown(),
             PathConstraints::absolute(),
             SymlinkPolicy::Reject,
@@ -76,7 +78,10 @@ impl AsyncFileSystemSpi for CopySpi {
         .expect("test properties should be valid")
     }
 
-    fn stat<'a>(&'a self, _: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
+    fn stat<'a>(
+        &'a self,
+        _: StatRequest<'a>,
+    ) -> SpiFuture<'a, FsResult<StatResponse>> {
         Box::pin(async { Err(unused()) })
     }
     fn list<'a>(
@@ -157,7 +162,8 @@ fn unused() -> FsError {
 
 #[test]
 fn test_begin_copy_only_runs_synchronous_preflight() {
-    let file_system = AsyncFileSystem::from_spi(CopySpi).expect("facade should construct");
+    let file_system =
+        AsyncFileSystem::from_spi(CopySpi).expect("facade should construct");
     let operation = file_system
         .begin_copy(
             Path::parse("/source").expect("source path should parse"),
@@ -170,7 +176,8 @@ fn test_begin_copy_only_runs_synchronous_preflight() {
 
 #[test]
 fn test_dropping_polled_execute_future_marks_operation_indeterminate() {
-    let file_system = AsyncFileSystem::from_spi(CopySpi).expect("facade should construct");
+    let file_system =
+        AsyncFileSystem::from_spi(CopySpi).expect("facade should construct");
     let mut operation = file_system
         .begin_copy(
             Path::parse("/source").expect("source path should parse"),

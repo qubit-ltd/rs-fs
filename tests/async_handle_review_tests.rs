@@ -79,7 +79,10 @@ impl AsyncOutput for DefaultCancelSession {
         Poll::Ready(Ok(count))
     }
 
-    fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<IoResult<()>> {
+    fn poll_flush(
+        self: Pin<&mut Self>,
+        _: &mut Context<'_>,
+    ) -> Poll<IoResult<()>> {
         Poll::Ready(Ok(()))
     }
 }
@@ -91,7 +94,9 @@ impl AsyncFileWriteSession for DefaultCancelSession {
         panic!("default cancellation test does not commit")
     }
 
-    fn abort_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<WriteAbortOutcome>> {
+    fn abort_async<'a>(
+        self: Pin<&'a mut Self>,
+    ) -> SpiFuture<'a, FsResult<WriteAbortOutcome>> {
         panic!("default cancellation test does not abort")
     }
 }
@@ -118,11 +123,15 @@ fn test_async_facade_rejects_invalid_stat_and_opened_identities() {
         invalid_opened_identity: true,
         ..AsyncRecordingConfig::default()
     });
-    let reader = ready(file_system.open_reader(&path("/expected"), ReadOptions::default()))
-        .expect_err("a reader from another provider must be rejected");
+    let reader = ready(
+        file_system.open_reader(&path("/expected"), ReadOptions::default()),
+    )
+    .expect_err("a reader from another provider must be rejected");
     assert_eq!(FsErrorKind::ProviderContractViolation, reader.kind());
-    let writer = ready(file_system.open_writer(&path("/expected"), WriteOptions::default()))
-        .expect_err("a writer from another provider must be rejected");
+    let writer = ready(
+        file_system.open_writer(&path("/expected"), WriteOptions::default()),
+    )
+    .expect_err("a writer from another provider must be rejected");
     assert_eq!(FsErrorKind::ProviderContractViolation, writer.kind());
 }
 
@@ -142,8 +151,11 @@ fn test_async_facade_enriches_direct_provider_failures() {
     for error in [
         ready(file_system.list(&target, ListOptions::default()))
             .expect_err("list provider failure should propagate"),
-        ready(file_system.create_directory(&target, CreateDirectoryOptions::default()))
-            .expect_err("create provider failure should propagate"),
+        ready(
+            file_system
+                .create_directory(&target, CreateDirectoryOptions::default()),
+        )
+        .expect_err("create provider failure should propagate"),
         ready(file_system.delete_file(&target, DeleteOptions::default()))
             .expect_err("delete-file provider failure should propagate"),
         ready(file_system.delete_directory(&target, DeleteOptions::default()))
@@ -153,8 +165,12 @@ fn test_async_facade_enriches_direct_provider_failures() {
         assert_eq!(Some(&target), error.path());
         assert_eq!(Some("async-recording"), error.provider());
     }
-    let rename = ready(file_system.rename(&path("/source"), &target, RenameOptions::default()))
-        .expect_err("rename provider failure should propagate");
+    let rename = ready(file_system.rename(
+        &path("/source"),
+        &target,
+        RenameOptions::default(),
+    ))
+    .expect_err("rename provider failure should propagate");
     assert_eq!(FsErrorKind::UnsupportedOperation, rename.error().kind());
     assert_eq!(RenameFailureState::Indeterminate, rename.state());
 }
@@ -165,10 +181,11 @@ fn test_async_facade_enriches_direct_provider_failures() {
 fn test_async_facade_enriches_handle_and_temp_provider_failures() {
     let target = path("/target");
     for stage in [AsyncCopyStage::OpenReader, AsyncCopyStage::OpenWriter] {
-        let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
-            failing_stage: Some(stage),
-            ..AsyncRecordingConfig::default()
-        });
+        let (file_system, _) =
+            async_recording_file_system(AsyncRecordingConfig {
+                failing_stage: Some(stage),
+                ..AsyncRecordingConfig::default()
+            });
         let error = match stage {
             AsyncCopyStage::OpenReader => {
                 ready(file_system.open_reader(&target, ReadOptions::default()))
@@ -187,12 +204,15 @@ fn test_async_facade_enriches_handle_and_temp_provider_failures() {
         temp_create_error: true,
         ..AsyncRecordingConfig::default()
     });
-    let Err(file) = ready(file_system.create_temp_file(TempFileOptions::default())) else {
+    let Err(file) =
+        ready(file_system.create_temp_file(TempFileOptions::default()))
+    else {
         panic!("temporary-file provider failure should propagate");
     };
     assert_eq!(FsErrorKind::UnsupportedOperation, file.kind());
-    let Err(directory) = ready(file_system.create_temp_directory(TempDirectoryOptions::default()))
-    else {
+    let Err(directory) = ready(
+        file_system.create_temp_directory(TempDirectoryOptions::default()),
+    ) else {
         panic!("temporary-directory provider failure should propagate");
     };
     assert_eq!(FsErrorKind::UnsupportedOperation, directory.kind());
@@ -212,8 +232,9 @@ fn test_async_writer_rechecks_required_atomic_commit_outcome() {
         WriteOptions::default().with_atomicity(AtomicityRequirement::Required),
     ))
     .expect("provider advertises atomic write support");
-    let error = ready(writer.commit_async())
-        .expect_err("a non-atomic success must not satisfy a required atomic write");
+    let error = ready(writer.commit_async()).expect_err(
+        "a non-atomic success must not satisfy a required atomic write",
+    );
     assert_eq!(FsErrorKind::ProviderContractViolation, error.error().kind());
     assert_eq!(WriterState::Published, writer.state());
 }
@@ -226,9 +247,12 @@ fn test_async_writer_abort_preserves_published_state() {
         writer_commit_failure: Some(WriteFailureState::Published),
         ..AsyncRecordingConfig::default()
     });
-    let mut writer = ready(file_system.open_writer(&path("/final"), WriteOptions::default()))
-        .expect("writer should open");
-    ready(writer.commit_async()).expect_err("provider should report published failure");
+    let mut writer = ready(
+        file_system.open_writer(&path("/final"), WriteOptions::default()),
+    )
+    .expect("writer should open");
+    ready(writer.commit_async())
+        .expect_err("provider should report published failure");
     let _ = ready(writer.abort_async()).expect("cleanup should succeed");
     assert_eq!(WriterState::Published, writer.state());
 }
@@ -242,12 +266,16 @@ fn test_async_temp_persist_rechecks_required_atomic_outcome() {
         temp_persist_atomicity: Some(AchievedAtomicity::NonAtomic),
         ..AsyncRecordingConfig::default()
     });
-    let mut temp = ready(file_system.create_temp_file(TempFileOptions::default()))
-        .expect("temporary file should open");
-    let failure = ready(temp.persist(
-        &path("/final"),
-        PersistOptions::default().with_atomicity(AtomicityRequirement::Required),
-    ))
+    let mut temp =
+        ready(file_system.create_temp_file(TempFileOptions::default()))
+            .expect("temporary file should open");
+    let failure = ready(
+        temp.persist(
+            &path("/final"),
+            PersistOptions::default()
+                .with_atomicity(AtomicityRequirement::Required),
+        ),
+    )
     .expect_err("a non-atomic persist must fail the required atomic contract");
     assert_eq!(
         FsErrorKind::ProviderContractViolation,
@@ -265,22 +293,32 @@ fn test_async_temp_persist_rechecks_required_atomic_outcome() {
 #[test]
 fn test_async_directory_stream_rejects_outside_root_and_becomes_terminal() {
     let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
-        directory_entries: vec![DirEntry::new(path("/outside"), FileKind::File)],
+        directory_entries: vec![DirEntry::new(
+            path("/outside"),
+            FileKind::File,
+        )],
         ..AsyncRecordingConfig::default()
     });
-    let mut stream = ready(file_system.list(&path("/root"), ListOptions::default()))
-        .expect("directory stream should open");
-    let error = ready(stream.next_entry_async()).expect_err("outside entry must be rejected");
+    let mut stream =
+        ready(file_system.list(&path("/root"), ListOptions::default()))
+            .expect("directory stream should open");
+    let error = ready(stream.next_entry_async())
+        .expect_err("outside entry must be rejected");
     assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
-    let terminal = ready(stream.next_entry_async()).expect_err("invalid stream must be terminal");
+    let terminal = ready(stream.next_entry_async())
+        .expect_err("invalid stream must be terminal");
     assert_eq!(FsErrorKind::InvalidState, terminal.kind());
 }
 
 /// Verifies a nested prefix is accepted without enabling recursive listing.
 #[test]
-fn test_async_directory_stream_accepts_nested_prefix_without_recursive_option() {
+fn test_async_directory_stream_accepts_nested_prefix_without_recursive_option()
+{
     let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
-        directory_entries: vec![DirEntry::new(path("/root/nested/item"), FileKind::File)],
+        directory_entries: vec![DirEntry::new(
+            path("/root/nested/item"),
+            FileKind::File,
+        )],
         ..AsyncRecordingConfig::default()
     });
     let mut stream = ready(file_system.list(
@@ -302,11 +340,14 @@ fn test_async_directory_stream_error_becomes_terminal() {
         directory_error: true,
         ..AsyncRecordingConfig::default()
     });
-    let mut stream = ready(file_system.list(&path("/root"), ListOptions::default()))
-        .expect("directory stream should open");
-    let error = ready(stream.next_entry_async()).expect_err("provider failure should propagate");
+    let mut stream =
+        ready(file_system.list(&path("/root"), ListOptions::default()))
+            .expect("directory stream should open");
+    let error = ready(stream.next_entry_async())
+        .expect_err("provider failure should propagate");
     assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
-    let terminal = ready(stream.next_entry_async()).expect_err("failed stream must be terminal");
+    let terminal = ready(stream.next_entry_async())
+        .expect_err("failed stream must be terminal");
     assert_eq!(FsErrorKind::InvalidState, terminal.kind());
 }
 
@@ -315,14 +356,19 @@ fn test_async_directory_stream_error_becomes_terminal() {
 #[test]
 fn test_async_directory_stream_rejects_nested_entry_for_direct_listing() {
     let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
-        directory_entries: vec![DirEntry::new(path("/root/nested/item"), FileKind::File)],
+        directory_entries: vec![DirEntry::new(
+            path("/root/nested/item"),
+            FileKind::File,
+        )],
         ..AsyncRecordingConfig::default()
     });
-    let mut stream = ready(file_system.list(&path("/root"), ListOptions::default()))
-        .expect("directory stream should open");
+    let mut stream =
+        ready(file_system.list(&path("/root"), ListOptions::default()))
+            .expect("directory stream should open");
 
-    let error = ready(stream.next_entry_async())
-        .expect_err("non-recursive listing must reject nested provider entries");
+    let error = ready(stream.next_entry_async()).expect_err(
+        "non-recursive listing must reject nested provider entries",
+    );
     assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
     assert!(format!("{stream:?}").contains("AsyncDirectoryStream"));
 }
@@ -331,7 +377,10 @@ fn test_async_directory_stream_rejects_nested_entry_for_direct_listing() {
 #[test]
 fn test_async_directory_stream_rejects_missing_requested_metadata() {
     let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
-        directory_entries: vec![DirEntry::new(path("/root/file"), FileKind::File)],
+        directory_entries: vec![DirEntry::new(
+            path("/root/file"),
+            FileKind::File,
+        )],
         ..AsyncRecordingConfig::default()
     });
     let mut stream = ready(file_system.list(
@@ -340,8 +389,9 @@ fn test_async_directory_stream_rejects_missing_requested_metadata() {
     ))
     .expect("directory stream should open");
 
-    let error = ready(stream.next_entry_async())
-        .expect_err("metadata request must be enforced against provider entries");
+    let error = ready(stream.next_entry_async()).expect_err(
+        "metadata request must be enforced against provider entries",
+    );
     assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
 }
 
@@ -354,9 +404,11 @@ fn test_async_directory_stream_rejects_inconsistent_entry_identity() {
         directory_entries: vec![entry],
         ..AsyncRecordingConfig::default()
     });
-    let mut stream = ready(file_system.list(&path("/root"), ListOptions::default()))
-        .expect("directory stream should open");
-    let error = ready(stream.next_entry_async()).expect_err("inconsistent entry name must fail");
+    let mut stream =
+        ready(file_system.list(&path("/root"), ListOptions::default()))
+            .expect("directory stream should open");
+    let error = ready(stream.next_entry_async())
+        .expect_err("inconsistent entry name must fail");
     assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
 }
 
@@ -365,7 +417,10 @@ fn test_async_directory_stream_rejects_inconsistent_entry_identity() {
 #[test]
 fn test_async_directory_stream_accepts_prefix_descendant_and_root_entry() {
     let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
-        directory_entries: vec![DirEntry::new(path("/root/nested/item"), FileKind::File)],
+        directory_entries: vec![DirEntry::new(
+            path("/root/nested/item"),
+            FileKind::File,
+        )],
         ..AsyncRecordingConfig::default()
     });
     let mut stream = ready(file_system.list(
@@ -383,8 +438,9 @@ fn test_async_directory_stream_accepts_prefix_descendant_and_root_entry() {
         directory_entries: vec![DirEntry::new(path("/file"), FileKind::File)],
         ..AsyncRecordingConfig::default()
     });
-    let mut root = ready(file_system.list(&Path::root(), ListOptions::default()))
-        .expect("root stream should open");
+    let mut root =
+        ready(file_system.list(&Path::root(), ListOptions::default()))
+            .expect("root stream should open");
     assert!(
         ready(root.next_entry_async())
             .expect("root-relative entry should be accepted")
@@ -396,10 +452,11 @@ fn test_async_directory_stream_accepts_prefix_descendant_and_root_entry() {
 /// records each dispatched primitive.
 #[test]
 fn test_async_facade_dispatches_successful_operations() {
-    let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig {
-        rename_atomicity: Some(AchievedAtomicity::Atomic),
-        ..AsyncRecordingConfig::default()
-    });
+    let (file_system, probe) =
+        async_recording_file_system(AsyncRecordingConfig {
+            rename_atomicity: Some(AchievedAtomicity::Atomic),
+            ..AsyncRecordingConfig::default()
+        });
     let source = path("/source");
     let target = path("/target");
 
@@ -409,41 +466,48 @@ fn test_async_facade_dispatches_successful_operations() {
             .expect("stat should succeed")
             .len()
     );
-    let mut stream =
-        ready(file_system.list(&source, ListOptions::default())).expect("list should succeed");
+    let mut stream = ready(file_system.list(&source, ListOptions::default()))
+        .expect("list should succeed");
     assert!(
         ready(stream.next_entry_async())
             .expect("empty stream should succeed")
             .is_none()
     );
 
-    let mut reader = ready(file_system.open_reader(&source, ReadOptions::default()))
-        .expect("reader should open");
+    let mut reader =
+        ready(file_system.open_reader(&source, ReadOptions::default()))
+            .expect("reader should open");
     assert_eq!(&source, reader.info().path());
     assert!(!reader.is_buffered());
     assert!(format!("{reader:?}").contains("AsyncFileReader"));
     let mut bytes = [0; 5];
     assert_eq!(
         5,
-        ready(reader.read_fully_async(&mut bytes)).expect("reader should return bytes")
+        ready(reader.read_fully_async(&mut bytes))
+            .expect("reader should return bytes")
     );
     assert_eq!(b"bytes", &bytes);
 
-    let mut writer = ready(file_system.open_writer(&target, WriteOptions::default()))
-        .expect("writer should open");
+    let mut writer =
+        ready(file_system.open_writer(&target, WriteOptions::default()))
+            .expect("writer should open");
     assert_eq!(&target, writer.info().path());
     assert_eq!(WriterState::Open, writer.state());
     assert!(!writer.is_buffered());
     assert!(format!("{writer:?}").contains("AsyncFileWriter"));
-    ready(writer.write_fully_async(b"bytes")).expect("writer should accept all bytes");
+    ready(writer.write_fully_async(b"bytes"))
+        .expect("writer should accept all bytes");
     ready(writer.flush_async()).expect("writer should flush");
     ready(writer.commit_async()).expect("writer should commit");
     assert_eq!(WriterState::Committed, writer.state());
 
     assert!(
-        !ready(file_system.create_directory(&target, CreateDirectoryOptions::default(),))
-            .expect("directory creation should succeed")
-            .already_existed()
+        !ready(
+            file_system
+                .create_directory(&target, CreateDirectoryOptions::default(),)
+        )
+        .expect("directory creation should succeed")
+        .already_existed()
     );
     assert!(
         !ready(file_system.delete_file(&target, DeleteOptions::default(),))
@@ -451,13 +515,19 @@ fn test_async_facade_dispatches_successful_operations() {
             .already_missing()
     );
     assert!(
-        !ready(file_system.delete_directory(&target, DeleteOptions::default(),))
-            .expect("directory deletion should succeed")
-            .already_missing()
+        !ready(
+            file_system.delete_directory(&target, DeleteOptions::default(),)
+        )
+        .expect("directory deletion should succeed")
+        .already_missing()
     );
     assert_eq!((source.clone(), target.clone()), {
-        let outcome = ready(file_system.rename(&source, &target, RenameOptions::default()))
-            .expect("rename should succeed");
+        let outcome = ready(file_system.rename(
+            &source,
+            &target,
+            RenameOptions::default(),
+        ))
+        .expect("rename should succeed");
         (outcome.source().clone(), outcome.target().clone())
     });
     assert_eq!(
@@ -479,22 +549,26 @@ fn test_async_facade_dispatches_successful_operations() {
 #[test]
 fn test_async_writer_stream_failures_mark_writer_indeterminate() {
     for stage in [AsyncCopyStage::WriterWrite, AsyncCopyStage::WriterFlush] {
-        let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
-            failing_stage: Some(stage),
-            ..AsyncRecordingConfig::default()
-        });
-        let mut writer = ready(file_system.open_writer(&path("/target"), WriteOptions::default()))
-            .expect("writer should open");
+        let (file_system, _) =
+            async_recording_file_system(AsyncRecordingConfig {
+                failing_stage: Some(stage),
+                ..AsyncRecordingConfig::default()
+            });
+        let mut writer = ready(
+            file_system.open_writer(&path("/target"), WriteOptions::default()),
+        )
+        .expect("writer should open");
         let error = if stage == AsyncCopyStage::WriterWrite {
             ready(writer.write_fully_async(b"bytes"))
                 .expect_err("injected write failure should propagate")
         } else {
-            ready(writer.flush_async()).expect_err("injected flush failure should propagate")
+            ready(writer.flush_async())
+                .expect_err("injected flush failure should propagate")
         };
         assert!(error.to_string().contains("injected"));
         assert_eq!(WriterState::Indeterminate, writer.state());
-        let commit =
-            ready(writer.commit_async()).expect_err("indeterminate writer must not commit again");
+        let commit = ready(writer.commit_async())
+            .expect_err("indeterminate writer must not commit again");
         assert_eq!(FsErrorKind::InvalidState, commit.error().kind());
     }
 }
@@ -529,14 +603,17 @@ fn test_async_writer_commit_failures_preserve_recovery_state() {
             WriterState::Indeterminate,
         ),
     ] {
-        let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
-            writer_commit_failure: Some(failure_state),
-            ..AsyncRecordingConfig::default()
-        });
-        let mut writer = ready(file_system.open_writer(&path("/target"), WriteOptions::default()))
-            .expect("writer should open");
-        let error =
-            ready(writer.commit_async()).expect_err("configured commit failure should propagate");
+        let (file_system, _) =
+            async_recording_file_system(AsyncRecordingConfig {
+                writer_commit_failure: Some(failure_state),
+                ..AsyncRecordingConfig::default()
+            });
+        let mut writer = ready(
+            file_system.open_writer(&path("/target"), WriteOptions::default()),
+        )
+        .expect("writer should open");
+        let error = ready(writer.commit_async())
+            .expect_err("configured commit failure should propagate");
         assert_eq!(FsErrorKind::Io, error.error().kind());
         assert_eq!(expected_state, writer.state());
         assert_eq!(
@@ -544,8 +621,8 @@ fn test_async_writer_commit_failures_preserve_recovery_state() {
             ready(writer.abort_async()).expect("failed writer should abort"),
         );
         assert_eq!(aborted_state, writer.state());
-        let abort =
-            ready(writer.abort_async()).expect_err("completed abort must reject a second abort");
+        let abort = ready(writer.abort_async())
+            .expect_err("completed abort must reject a second abort");
         assert_eq!(FsErrorKind::InvalidState, abort.kind());
     }
 }
@@ -558,14 +635,17 @@ fn test_async_writer_abort_failure_tracks_certainty() {
         (FsErrorKind::Io, WriterState::Open),
         (FsErrorKind::Indeterminate, WriterState::Indeterminate),
     ] {
-        let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
-            writer_abort_failure: Some(kind),
-            ..AsyncRecordingConfig::default()
-        });
-        let mut writer = ready(file_system.open_writer(&path("/target"), WriteOptions::default()))
-            .expect("writer should open");
-        let error =
-            ready(writer.abort_async()).expect_err("configured abort failure should propagate");
+        let (file_system, _) =
+            async_recording_file_system(AsyncRecordingConfig {
+                writer_abort_failure: Some(kind),
+                ..AsyncRecordingConfig::default()
+            });
+        let mut writer = ready(
+            file_system.open_writer(&path("/target"), WriteOptions::default()),
+        )
+        .expect("writer should open");
+        let error = ready(writer.abort_async())
+            .expect_err("configured abort failure should propagate");
         assert_eq!(kind, error.kind());
         assert_eq!(expected_state, writer.state());
     }
@@ -579,15 +659,20 @@ fn test_async_writer_enforces_limit_and_closed_state() {
         maximum_write_bytes: Some(3),
         ..AsyncRecordingConfig::default()
     });
-    let mut writer = ready(file_system.open_writer(&path("/target"), WriteOptions::default()))
-        .expect("writer should open");
+    let mut writer = ready(
+        file_system.open_writer(&path("/target"), WriteOptions::default()),
+    )
+    .expect("writer should open");
     let limit = ready(writer.write_fully_async(b"four"))
         .expect_err("finite write limit should reject oversized transfer");
     assert!(limit.to_string().contains("provider byte limit"));
 
-    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig::default());
-    let mut writer = ready(file_system.open_writer(&path("/target"), WriteOptions::default()))
-        .expect("writer should open");
+    let (file_system, _) =
+        async_recording_file_system(AsyncRecordingConfig::default());
+    let mut writer = ready(
+        file_system.open_writer(&path("/target"), WriteOptions::default()),
+    )
+    .expect("writer should open");
     ready(writer.commit_async()).expect("writer should commit");
     let closed = ready(writer.write_fully_async(b"bytes"))
         .expect_err("committed writer must reject byte transfer");
@@ -596,7 +681,8 @@ fn test_async_writer_enforces_limit_and_closed_state() {
             .to_string()
             .contains("writer no longer accepts bytes")
     );
-    let flush = ready(writer.flush_async()).expect_err("committed writer must reject flushing");
+    let flush = ready(writer.flush_async())
+        .expect_err("committed writer must reject flushing");
     assert!(flush.to_string().contains("writer no longer accepts bytes"));
 }
 
@@ -611,15 +697,19 @@ fn test_async_facade_rejects_unrequested_idempotent_outcomes() {
     });
     let target = path("/target");
 
-    let create_error =
-        ready(file_system.create_directory(&target, CreateDirectoryOptions::default()))
-            .expect_err("existing directory without exists_ok must fail");
+    let create_error = ready(
+        file_system
+            .create_directory(&target, CreateDirectoryOptions::default()),
+    )
+    .expect_err("existing directory without exists_ok must fail");
     assert_eq!(FsErrorKind::ProviderContractViolation, create_error.kind());
-    let delete_error = ready(file_system.delete_file(&target, DeleteOptions::default()))
-        .expect_err("missing file without missing_ok must fail");
+    let delete_error =
+        ready(file_system.delete_file(&target, DeleteOptions::default()))
+            .expect_err("missing file without missing_ok must fail");
     assert_eq!(FsErrorKind::ProviderContractViolation, delete_error.kind());
-    let directory_error = ready(file_system.delete_directory(&target, DeleteOptions::default()))
-        .expect_err("missing directory without missing_ok must fail");
+    let directory_error =
+        ready(file_system.delete_directory(&target, DeleteOptions::default()))
+            .expect_err("missing directory without missing_ok must fail");
     assert_eq!(
         FsErrorKind::ProviderContractViolation,
         directory_error.kind()
@@ -630,7 +720,8 @@ fn test_async_facade_rejects_unrequested_idempotent_outcomes() {
 /// fallback when the provider explicitly declines its native primitive.
 #[test]
 fn test_async_copy_stream_fallback_reads_writes_and_commits() {
-    let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig::default());
+    let (file_system, probe) =
+        async_recording_file_system(AsyncRecordingConfig::default());
     let mut operation = file_system
         .begin_copy(path("/source"), path("/target"), CopyOptions::default())
         .expect("copy preflight should succeed");
@@ -664,7 +755,8 @@ fn test_async_copy_failure_exposes_recovery_writer_accessor() {
     let mut operation = file_system
         .begin_copy(path("/source"), path("/target"), CopyOptions::default())
         .expect("copy preflight should succeed");
-    ready(operation.execute()).expect_err("configured transfer failure should propagate");
+    ready(operation.execute())
+        .expect_err("configured transfer failure should propagate");
     assert!(operation.recovery_writer().is_some());
     assert!(operation.take_recovery_writer().is_some());
     assert!(!operation.has_recovery_writer());
