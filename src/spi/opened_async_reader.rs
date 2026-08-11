@@ -33,7 +33,10 @@ impl OpenedAsyncReader {
     /// An opened-reader envelope for facade validation.
     #[inline]
     #[must_use]
-    pub fn new(info: OpenedFileInfo, reader: Box<dyn AsyncInput<Item = u8> + Send>) -> Self {
+    pub fn new(
+        info: OpenedFileInfo,
+        reader: Box<dyn AsyncInput<Item = u8> + Send>,
+    ) -> Self {
         Self { info, reader }
     }
 
