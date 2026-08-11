@@ -73,7 +73,10 @@ impl WriteOptions {
     /// Returns a copy with the destination disposition replaced.
     #[inline]
     #[must_use]
-    pub const fn with_disposition(mut self, disposition: WriteDisposition) -> Self {
+    pub const fn with_disposition(
+        mut self,
+        disposition: WriteDisposition,
+    ) -> Self {
         self.disposition = disposition;
         self
     }
@@ -88,7 +91,10 @@ impl WriteOptions {
     /// Returns a copy with the atomicity requirement replaced.
     #[inline]
     #[must_use]
-    pub const fn with_atomicity(mut self, atomicity: AtomicityRequirement) -> Self {
+    pub const fn with_atomicity(
+        mut self,
+        atomicity: AtomicityRequirement,
+    ) -> Self {
         self.atomicity = atomicity;
         self
     }
@@ -103,7 +109,10 @@ impl WriteOptions {
     /// Returns a copy with the version precondition replaced.
     #[inline]
     #[must_use]
-    pub fn with_precondition(mut self, precondition: WritePrecondition) -> Self {
+    pub fn with_precondition(
+        mut self,
+        precondition: WritePrecondition,
+    ) -> Self {
         self.precondition = precondition;
         self
     }
@@ -201,7 +210,10 @@ impl WriteOptions {
     /// Returns invalid-option errors from [`Self::validate`], or a typed
     /// [`FsErrorKind::RequirementNotMet`] for unsupported append, conditional,
     /// or required-atomic writes.
-    pub fn validate_against(&self, capabilities: FileSystemCapabilities) -> Result<(), FsError> {
+    pub fn validate_against(
+        &self,
+        capabilities: FileSystemCapabilities,
+    ) -> Result<(), FsError> {
         self.validate()?;
         if self.disposition == WriteDisposition::Append
             && !capabilities.supports(FileSystemCapability::Append)
@@ -232,7 +244,10 @@ impl WriteOptions {
 }
 
 /// Builds a typed unmet write requirement.
-fn missing_requirement(capability: FileSystemCapability, message: &str) -> FsError {
+fn missing_requirement(
+    capability: FileSystemCapability,
+    message: &str,
+) -> FsError {
     FsError::new(
         FsErrorKind::RequirementNotMet,
         FsOperation::OpenWriter,
