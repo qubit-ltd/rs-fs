@@ -38,7 +38,10 @@ impl FileReader {
     /// A concrete file reader handle.
     #[inline]
     #[must_use]
-    pub(crate) fn new(info: OpenedFileInfo, inner: Box<dyn Input<Item = u8> + Send>) -> Self {
+    pub(crate) fn new(
+        info: OpenedFileInfo,
+        inner: Box<dyn Input<Item = u8> + Send>,
+    ) -> Self {
         Self { inner, info }
     }
 

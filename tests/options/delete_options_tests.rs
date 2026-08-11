@@ -33,7 +33,8 @@ fn delete_requirements_are_checked_against_typed_capabilities() {
         error.required_capability(),
     );
 
-    let conditional = DeleteOptions::default().with_if_match(Some(ResourceVersion::from("v1")));
+    let conditional = DeleteOptions::default()
+        .with_if_match(Some(ResourceVersion::from("v1")));
     let error = conditional
         .validate_against(FileSystemCapabilities::default())
         .unwrap_err();

@@ -18,5 +18,6 @@ pub trait AsyncDirectoryStreamSession: Send {
     ///
     /// # Returns
     /// A future resolving to one entry or `None` at end of enumeration.
-    fn next_entry_async(&mut self) -> SpiFuture<'_, FsResult<Option<DirEntry>>>;
+    fn next_entry_async(&mut self)
+    -> SpiFuture<'_, FsResult<Option<DirEntry>>>;
 }
