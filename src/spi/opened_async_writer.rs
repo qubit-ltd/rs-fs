@@ -33,7 +33,10 @@ impl OpenedAsyncWriter {
     /// An opened-writer envelope for facade validation.
     #[inline]
     #[must_use]
-    pub fn new(info: OpenedFileInfo, session: Box<dyn AsyncFileWriteSession>) -> Self {
+    pub fn new(
+        info: OpenedFileInfo,
+        session: Box<dyn AsyncFileWriteSession>,
+    ) -> Self {
         Self { info, session }
     }
 
