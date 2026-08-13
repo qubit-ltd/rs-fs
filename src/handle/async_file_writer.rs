@@ -31,6 +31,11 @@ use crate::WriteFailure;
 use crate::WriteFailureState;
 use crate::WriteOutcome;
 use crate::WriterState;
+use crate::internal::facade::file_system_resource::budget_error;
+use crate::internal::facade::file_system_resource::byte_budget;
+use crate::internal::facade::file_system_resource::quantity_from_usize;
+use crate::internal::facade::file_system_resource::ByteBudget;
+use crate::internal::facade::file_system_resource::FileSystemResource;
 use crate::spi::AsyncFileWriteSession;
 use crate::spi::SpiFuture;
 
@@ -49,7 +54,7 @@ pub struct AsyncFileWriter {
     /// Provider identifier attached to facade-generated errors.
     provider: Box<str>,
     /// Optional inclusive byte limit for this write session.
-    max_write_bytes: Option<u64>,
+    write_budget: Option<ByteBudget>,
     /// Bytes accepted by the provider session so far.
     written_bytes: u64,
 }
@@ -79,7 +84,7 @@ impl AsyncFileWriter {
             abort_completed: false,
             atomicity,
             provider: provider.into(),
-            max_write_bytes,
+            write_budget: max_write_bytes.map(|maximum| byte_budget(FileSystemResource::WriteBytes, maximum)),
             written_bytes: 0,
         }
     }
@@ -156,7 +161,7 @@ impl AsyncFileWriter {
                                 FsOperation::CommitWriter,
                                 "provider reported non-atomic success for an atomic-required write",
                             )
-                            .with_path(self.info.path().clone()),
+                            .with_path(self.info.path().clone()).with_provider(&self.provider),
                             WriteFailureState::Published,
                         ));
                     }
@@ -170,7 +175,7 @@ impl AsyncFileWriter {
                                 FsOperation::CommitWriter,
                                 "provider reported a byte count different from the bytes accepted by the writer",
                             )
-                            .with_path(self.info.path().clone()),
+                            .with_path(self.info.path().clone()).with_provider(&self.provider),
                             WriteFailureState::Published,
                         ));
                     }
@@ -256,6 +261,7 @@ impl AsyncFileWriter {
     fn invalid_state(&self, operation: FsOperation, message: &str) -> FsError {
         FsError::new(FsErrorKind::InvalidState, operation, message)
             .with_path(self.info.path().clone())
+            .with_provider(&self.provider)
     }
 
     /// Builds a byte-transfer error after lifecycle completion.
@@ -269,29 +275,13 @@ impl AsyncFileWriter {
         )
     }
 
-    /// Builds a typed I/O error when a write would exceed the session limit.
-    fn write_limit_error(&self) -> IoError {
-        FsError::new(
-            FsErrorKind::ResourceLimitExceeded,
-            FsOperation::Write,
-            "write session exceeds the provider byte limit",
-        )
-        .with_path(self.info.path().clone())
-        .into_io_error()
-    }
-
-    /// Returns whether accepting `count` more bytes exceeds the finite limit.
-    fn exceeds_write_limit(&self, count: usize) -> bool {
-        let Some(maximum) = self.max_write_bytes else {
-            return false;
-        };
-        match u64::try_from(count) {
-            Ok(count) => self
-                .written_bytes
-                .checked_add(count)
-                .is_none_or(|total| total > maximum),
-            Err(_) => true,
+    /// Checks whether a provider write can fit in the session budget.
+    fn check_write_limit(&self, count: usize) -> IoResult<u64> {
+        let count = quantity_from_usize(count, FsOperation::Write, self.info.path(), &self.provider).map_err(FsError::into_io_error)?;
+        if let Some(budget) = &self.write_budget && let Err(error) = budget.check_available(count) {
+            return Err(budget_error(error, FsOperation::Write, self.info.path(), &self.provider, "write session exceeds the provider byte limit").into_io_error());
         }
+        Ok(count)
     }
 
     /// Records bytes accepted by the provider in the public `u64` accounting
@@ -300,8 +290,10 @@ impl AsyncFileWriter {
     /// Returns an I/O error when the native byte count or accumulated total
     /// cannot be represented by the filesystem API's `u64` byte counters.
     fn record_written_bytes(&mut self, count: usize) -> IoResult<()> {
-        let count =
-            u64::try_from(count).map_err(|_| self.byte_count_error())?;
+        let count = quantity_from_usize(count, FsOperation::Write, self.info.path(), &self.provider).map_err(FsError::into_io_error)?;
+        if let Some(error) = self.write_budget.as_mut().and_then(|budget| budget.try_consume(count).err()) {
+            return Err(budget_error(error, FsOperation::Write, self.info.path(), &self.provider, "write session exceeds the provider byte limit").into_io_error());
+        }
         self.written_bytes = self
             .written_bytes
             .checked_add(count)
@@ -318,6 +310,7 @@ impl AsyncFileWriter {
             "write byte count exceeds the filesystem API reporting range",
         )
         .with_path(self.info.path().clone())
+        .with_provider(&self.provider)
         .into_io_error()
     }
 
@@ -354,8 +347,8 @@ impl AsyncOutput for AsyncFileWriter {
         if this.state != WriterState::Open {
             return Poll::Ready(Err(this.closed_io_error()));
         }
-        if this.exceeds_write_limit(count) {
-            return Poll::Ready(Err(this.write_limit_error()));
+        if let Err(error) = this.check_write_limit(count) {
+            return Poll::Ready(Err(error));
         }
         // SAFETY: The caller guarantees the same range contract required by
         // the wrapped asynchronous output session.

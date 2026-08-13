@@ -9,7 +9,6 @@
 
 use std::sync::Arc;
 
-use qubit_budget::ResourceBudget;
 use qubit_io::AsyncInput;
 use qubit_io::AsyncOutput;
 
@@ -50,10 +49,10 @@ use crate::TempFileOptions;
 use crate::WriteDisposition;
 use crate::WriteOptions;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum FileSystemResource {
-    ReadBytes,
-}
+use crate::internal::facade::file_system_resource::budget_error;
+use crate::internal::facade::file_system_resource::byte_budget;
+use crate::internal::facade::file_system_resource::quantity_from_usize;
+use crate::internal::facade::file_system_resource::FileSystemResource;
 use crate::copy::fallback_failure_stats;
 use crate::copy::fallback_options_supported;
 use crate::copy::from_writer_state;
@@ -236,14 +235,20 @@ impl AsyncFileSystem {
     ) -> FsResult<Vec<u8>> {
         let mut reader = self.open_reader(path, options).await?;
         let mut bytes = Vec::new();
-        let mut read_budget = ResourceBudget::<_, usize>::new(
-            FileSystemResource::ReadBytes,
-            max_bytes,
-        );
+        let maximum = quantity_from_usize(max_bytes, FsOperation::Read, path, self.properties.info().provider_id())?;
+        let mut read_budget = byte_budget(FileSystemResource::ReadBytes, maximum);
+        if let Some(metadata) = reader.info().metadata()
+            && let Some(length) = metadata.len()
+        {
+            read_budget.check_available(length).map_err(|error| budget_error(error, FsOperation::Read, path, self.properties.info().provider_id(), "read exceeds maximum byte count"))?;
+            if let Ok(capacity) = usize::try_from(length) {
+                bytes.try_reserve(capacity).map_err(|error| FsError::with_source(FsErrorKind::ResourceLimitExceeded, FsOperation::Read, "read buffer allocation exceeds available capacity", error).with_path(path.clone()).with_provider(self.properties.info().provider_id()))?;
+            }
+        }
         let mut buffer = [0_u8; 8192];
         loop {
             let remaining = read_budget.remaining();
-            let read_len = remaining.saturating_add(1).min(buffer.len());
+            let read_len = usize::try_from(remaining.saturating_add(1)).map_or(buffer.len(), |value| value.min(buffer.len()));
             let read = reader
                 .read_async(&mut buffer[..read_len])
                 .await
@@ -257,16 +262,11 @@ impl AsyncFileSystem {
             if read == 0 {
                 return Ok(bytes);
             }
-            if read_budget.try_consume(read).is_err() {
-                return Err(FsError::new(
-                    FsErrorKind::ResourceLimitExceeded,
-                    FsOperation::Read,
-                    "file exceeds the configured read limit",
-                )
-                .with_path(path.clone())
-                .with_provider(self.properties.info().provider_id()));
+            let read = quantity_from_usize(read, FsOperation::Read, path, self.properties.info().provider_id())?;
+            if let Err(error) = read_budget.try_consume(read) {
+                return Err(budget_error(error, FsOperation::Read, path, self.properties.info().provider_id(), "read exceeds maximum byte count"));
             }
-            bytes.extend_from_slice(&buffer[..read]);
+            bytes.extend_from_slice(&buffer[..usize::try_from(read).expect("read count originated as usize")]);
         }
     }
 

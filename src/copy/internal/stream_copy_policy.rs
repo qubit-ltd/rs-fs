@@ -41,7 +41,6 @@ pub(crate) fn validate_stream_copy_length_limits(
     target: &Path,
     length: u64,
 ) -> Result<(), FsError> {
-    limits.validate_read_range(source, Some(length))?;
     let length = usize::try_from(length).map_err(|_| {
         FsError::new(
             crate::FsErrorKind::ResourceLimitExceeded,
