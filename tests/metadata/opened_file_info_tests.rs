@@ -16,7 +16,8 @@ use qubit_fs::Path;
 /// already observed by the provider during open.
 #[test]
 fn test_opened_file_info_preserves_identity_and_optional_metadata() {
-    let filesystem_id = FileSystemId::new("opened-info").expect("filesystem id should parse");
+    let filesystem_id =
+        FileSystemId::new("opened-info").expect("filesystem id should parse");
     let path = Path::parse("reports/today.txt").expect("path should parse");
     let info = OpenedFileInfo::new(filesystem_id.clone(), path.clone());
 
