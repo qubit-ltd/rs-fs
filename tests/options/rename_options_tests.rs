@@ -35,7 +35,8 @@ fn test_rename_options_full_configuration_and_default_are_usable() {
 
 #[test]
 fn required_rename_atomicity_fails_preflight_without_side_effects() {
-    let options = RenameOptions::default().with_atomicity(AtomicityRequirement::Required);
+    let options =
+        RenameOptions::default().with_atomicity(AtomicityRequirement::Required);
 
     let error = options
         .validate_against(FileSystemCapabilities::default())
@@ -65,7 +66,8 @@ fn required_rename_atomicity_fails_preflight_without_side_effects() {
 
 #[test]
 fn required_rename_durability_fails_without_provider_guarantee() {
-    let options = RenameOptions::default().with_durability(DurabilityRequirement::Required);
+    let options = RenameOptions::default()
+        .with_durability(DurabilityRequirement::Required);
 
     let error = options
         .validate_against(FileSystemCapabilities::default())

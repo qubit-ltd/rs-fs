@@ -62,11 +62,13 @@ impl AsyncFileSystemSpi for PropertiesOnlySpi {
     fn properties(&self) -> FileSystemProperties {
         FileSystemProperties::new(
             FileSystemInfo::new(
-                FileSystemId::new("async-test").expect("test id should be valid"),
+                FileSystemId::new("async-test")
+                    .expect("test id should be valid"),
                 "async-test",
                 PathSemantics::Hierarchical,
             ),
-            FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::Copy),
+            FileSystemCapabilities::new()
+                .with_guaranteed(FileSystemCapability::Copy),
             FileSystemLimits::unknown(),
             PathConstraints::absolute(),
             SymlinkPolicy::Reject,
@@ -74,7 +76,10 @@ impl AsyncFileSystemSpi for PropertiesOnlySpi {
         .expect("test properties should be valid")
     }
 
-    fn stat<'a>(&'a self, _: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
+    fn stat<'a>(
+        &'a self,
+        _: StatRequest<'a>,
+    ) -> SpiFuture<'a, FsResult<StatResponse>> {
         Box::pin(async { Err(unused()) })
     }
     fn list<'a>(
@@ -164,8 +169,8 @@ where
 
 #[test]
 fn test_async_file_system_is_clone_but_not_a_trait_object() {
-    let file_system =
-        AsyncFileSystem::from_spi(PropertiesOnlySpi).expect("facade construction should succeed");
+    let file_system = AsyncFileSystem::from_spi(PropertiesOnlySpi)
+        .expect("facade construction should succeed");
     let clone = file_system.clone();
     assert_eq!(
         file_system.properties().info().provider_id(),
@@ -178,8 +183,8 @@ fn test_async_file_system_is_clone_but_not_a_trait_object() {
 /// native copy primitive before the facade reports missing fallback support.
 #[test]
 fn test_async_spi_default_copy_declines_without_provider_override() {
-    let file_system =
-        AsyncFileSystem::from_spi(PropertiesOnlySpi).expect("facade construction should succeed");
+    let file_system = AsyncFileSystem::from_spi(PropertiesOnlySpi)
+        .expect("facade construction should succeed");
     let mut operation = file_system
         .begin_copy(
             Path::parse("/source").expect("source path should parse"),
