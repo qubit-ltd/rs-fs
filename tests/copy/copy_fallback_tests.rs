@@ -115,6 +115,7 @@ enum CopyResponse {
 struct RecordingSpi {
     response: CopyResponse,
     advertise_copy: bool,
+    maximum_read_range_bytes: Option<u64>,
     maximum_write_bytes: Option<u64>,
     calls: Arc<Mutex<Vec<&'static str>>>,
     bytes: Arc<Mutex<Vec<u8>>>,
@@ -143,6 +144,12 @@ fn recording_filesystem_with_write_limit(
 ) -> RecordingHandles {
     recording_filesystem_with_options(response, true, Some(maximum_write_bytes))
 }
+fn recording_filesystem_with_range_limit(response: CopyResponse, maximum_read_range_bytes: u64) -> RecordingHandles {
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let bytes = Arc::new(Mutex::new(Vec::new()));
+    let filesystem = FileSystem::from_spi(RecordingSpi { response, advertise_copy: true, maximum_read_range_bytes: Some(maximum_read_range_bytes), maximum_write_bytes: None, calls: Arc::clone(&calls), bytes: Arc::clone(&bytes) }).expect("recording facade should construct");
+    (filesystem, calls, bytes)
+}
 /// Constructs a recording filesystem with explicit capability and limit flags.
 fn recording_filesystem_with_options(
     response: CopyResponse,
@@ -154,6 +161,7 @@ fn recording_filesystem_with_options(
     let filesystem = FileSystem::from_spi(RecordingSpi {
         response,
         advertise_copy,
+        maximum_read_range_bytes: None,
         maximum_write_bytes,
         calls: Arc::clone(&calls),
         bytes: Arc::clone(&bytes),
@@ -166,6 +174,7 @@ fn recording_filesystem_with_options(
 fn properties(
     response: &CopyResponse,
     advertise_copy: bool,
+    maximum_read_range_bytes: Option<u64>,
     maximum_write_bytes: Option<u64>,
 ) -> FileSystemProperties {
     let mut capabilities = FileSystemCapabilities::new()
@@ -208,10 +217,7 @@ fn properties(
             PathSemantics::Hierarchical,
         ),
         capabilities,
-        maximum_write_bytes.map_or_else(FileSystemLimits::unknown, |maximum| {
-            FileSystemLimits::unknown()
-                .with_max_write_bytes(FileSystemLimit::Maximum(maximum))
-        }),
+        FileSystemLimits::unknown().with_max_read_range_bytes(maximum_read_range_bytes.map_or(FileSystemLimit::Unknown, FileSystemLimit::Maximum)).with_max_write_bytes(maximum_write_bytes.map_or(FileSystemLimit::Unknown, FileSystemLimit::Maximum)),
         PathConstraints::absolute(),
         SymlinkPolicy::Reject,
     )
@@ -228,6 +234,7 @@ impl FileSystemSpi for RecordingSpi {
         properties(
             &self.response,
             self.advertise_copy,
+            self.maximum_read_range_bytes,
             self.maximum_write_bytes,
         )
     }
@@ -491,7 +498,7 @@ fn info(path: &Path) -> OpenedFileInfo {
     OpenedFileInfo::new(
         FileSystemId::new("recording").expect("id should be valid"),
         path.clone(),
-    )
+    ).with_metadata(FileMetadata::new(FileKind::File).with_len(Some(5)))
 }
 /// Returns an unused-operation provider error.
 fn unused() -> FsError {
@@ -606,6 +613,15 @@ fn test_copy_declined_uses_allowlisted_stream_fallback() {
         ["try_copy", "stat", "open_reader", "open_writer"],
         calls.lock().expect("calls lock should succeed").as_slice()
     );
+}
+#[test]
+fn test_copy_stream_fallback_ignores_range_read_limit() {
+    let (filesystem, calls, bytes) = recording_filesystem_with_range_limit(CopyResponse::Declined, 4);
+    let outcome = filesystem.copy(&path("/source"), &path("/target"), CopyOptions::default()).expect("sequential fallback should not use the range-read limit");
+    assert_eq!(CopyMethod::Streamed, outcome.method());
+    assert_eq!(5, outcome.stats().bytes);
+    assert_eq!(b"bytes", bytes.lock().expect("bytes lock should succeed").as_slice());
+    assert_eq!(["try_copy", "stat", "open_reader", "open_writer"], calls.lock().expect("calls lock should succeed").as_slice());
 }
 
 /// Uses the facade stream fallback when the provider does not advertise copy.
@@ -803,6 +819,7 @@ fn test_read_all_limit_error_includes_provider_context() {
 
     assert_eq!(FsErrorKind::ResourceLimitExceeded, error.kind());
     assert_eq!(Some("recording"), error.provider());
+    assert!(std::error::Error::source(&error).is_some());
 }
 
 /// Retains the public write-all failure type when the writer cannot be opened.

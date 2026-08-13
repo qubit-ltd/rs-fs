@@ -28,6 +28,7 @@ use qubit_fs::CopyOptions;
 use qubit_fs::CreateDirectoryOptions;
 use qubit_fs::DeleteOptions;
 use qubit_fs::DirEntry;
+use qubit_fs::DirectoryStreamState;
 use qubit_fs::FileKind;
 use qubit_fs::FsErrorKind;
 use qubit_fs::FsResult;
@@ -302,9 +303,11 @@ fn test_async_directory_stream_rejects_outside_root_and_becomes_terminal() {
     let mut stream =
         ready(file_system.list(&path("/root"), ListOptions::default()))
             .expect("directory stream should open");
+    assert_eq!(DirectoryStreamState::Open, stream.state());
     let error = ready(stream.next_entry_async())
         .expect_err("outside entry must be rejected");
     assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
+    assert_eq!(DirectoryStreamState::Failed, stream.state());
     let terminal = ready(stream.next_entry_async())
         .expect_err("invalid stream must be terminal");
     assert_eq!(FsErrorKind::InvalidState, terminal.kind());
@@ -473,6 +476,7 @@ fn test_async_facade_dispatches_successful_operations() {
             .expect("empty stream should succeed")
             .is_none()
     );
+    assert_eq!(DirectoryStreamState::Exhausted, stream.state());
 
     let mut reader =
         ready(file_system.open_reader(&source, ReadOptions::default()))

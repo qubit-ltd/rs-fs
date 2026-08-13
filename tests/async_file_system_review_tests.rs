@@ -544,6 +544,7 @@ fn test_async_facade_convenience_operations_enforce_contracts() {
         ready(file_system.read_all(&path("/file"), ReadOptions::default(), 4))
             .expect_err("the byte cap should be enforced");
     assert_eq!(FsErrorKind::ResourceLimitExceeded, limit_error.kind());
+    assert!(std::error::Error::source(&limit_error).is_some());
 
     let read_error_file_system =
         async_recording_file_system(AsyncRecordingConfig {

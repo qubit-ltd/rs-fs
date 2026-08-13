@@ -7,6 +7,7 @@
 // =============================================================================
 
 use qubit_fs::DirEntry;
+use qubit_fs::DirectoryStreamState;
 use qubit_fs::FileKind;
 use qubit_fs::FileMetadata;
 use qubit_fs::FileSystem;
@@ -43,8 +44,10 @@ fn test_directory_entry_path_can_be_compared_with_requested_root() {
             ListOptions::default(),
         )
         .expect("stream should open");
+    assert_eq!(DirectoryStreamState::Open, stream.state());
     let error = stream.next_entry().expect_err("outside entry must fail");
     assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
+    assert_eq!(DirectoryStreamState::Failed, stream.state());
     assert!(format!("{error}").contains("outside requested root"));
 }
 
@@ -337,6 +340,7 @@ fn test_directory_stream_handles_end_of_enumeration_and_root_entry() {
             .expect("end of enumeration should succeed")
             .is_none()
     );
+    assert_eq!(DirectoryStreamState::Exhausted, empty.state());
     let terminal = empty
         .next_entry()
         .expect_err("completed stream must be terminal");

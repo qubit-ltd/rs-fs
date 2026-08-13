@@ -18,6 +18,7 @@ use crate::FsError;
 use crate::FsErrorKind;
 use crate::FsOperation;
 use crate::FsResult;
+use crate::DirectoryStreamState;
 use crate::ListOptions;
 use crate::Path;
 use crate::handle::directory_entry_validation;
@@ -39,7 +40,7 @@ pub struct AsyncDirectoryStream {
     /// Provider path limits used to validate every returned entry.
     limits: FileSystemLimits,
     /// Whether enumeration has completed or encountered a terminal failure.
-    terminal: bool,
+    state: DirectoryStreamState,
 }
 
 impl AsyncDirectoryStream {
@@ -67,8 +68,15 @@ impl AsyncDirectoryStream {
             provider: provider.into(),
             path_semantics,
             limits,
-            terminal: false,
+            state: DirectoryStreamState::Open,
         }
+    }
+
+    /// Returns the current lifecycle state of this stream.
+    #[inline]
+    #[must_use = "inspect the stream lifecycle state"]
+    pub const fn state(&self) -> DirectoryStreamState {
+        self.state
     }
 
     /// Asynchronously reads the next directory entry.
@@ -78,7 +86,7 @@ impl AsyncDirectoryStream {
     pub fn next_entry_async(
         &mut self,
     ) -> SpiFuture<'_, FsResult<Option<DirEntry>>> {
-        if self.terminal {
+        if self.state != DirectoryStreamState::Open {
             return Box::pin(async {
                 Err(FsError::new(
                     FsErrorKind::InvalidState,
@@ -98,7 +106,7 @@ impl AsyncDirectoryStream {
                             self.limits,
                         )
                     {
-                        self.terminal = true;
+                        self.state = DirectoryStreamState::Failed;
                         return Err(self.contextual_error(error));
                     }
                     if let Err(message) =
@@ -108,7 +116,7 @@ impl AsyncDirectoryStream {
                             &self.options,
                         )
                     {
-                        self.terminal = true;
+                        self.state = DirectoryStreamState::Failed;
                         return Err(self.contextual_error(
                             directory_entry_validation::option_error(
                                 &self.root, message,
@@ -118,11 +126,11 @@ impl AsyncDirectoryStream {
                     Ok(Some(entry))
                 }
                 Ok(None) => {
-                    self.terminal = true;
+                    self.state = DirectoryStreamState::Exhausted;
                     Ok(None)
                 }
                 Err(error) => {
-                    self.terminal = true;
+                    self.state = DirectoryStreamState::Failed;
                     Err(self.contextual_error(error))
                 }
             }
