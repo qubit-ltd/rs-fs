@@ -43,6 +43,9 @@ root、region 或 credential profile 不同，同一 provider 也可以产生多
 `ConnectionUri` 让 registry/provider 在受控边界消费凭据，再生成安全的 canonical `Uri`。
 它并不允许把 secret 放进 metadata、日志、普通 URI 或错误消息。
 
+默认解析使用固定的标准脱敏策略。应用如果还有额外的敏感 query 名称，必须通过
+`Uri::parse_with_policy` 或 `ConnectionUri::parse_with_policy` 显式传入策略快照。
+
 ## 安装与取得门面
 
 ```toml

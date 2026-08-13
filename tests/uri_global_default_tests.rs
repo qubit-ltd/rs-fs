@@ -11,26 +11,29 @@
 use qubit_fs::ConnectionUri;
 use qubit_fs::Uri;
 use qubit_redact::RedactionPolicy;
+use qubit_redact::Sensitivity;
 
-/// Verifies URI credential boundaries cannot be disabled by an application
-/// allow rule in the process-wide redaction default.
+/// Verifies URI parsing uses an explicit policy instead of process-global
+/// redaction state.
 #[test]
 fn test_uri_credential_boundaries_ignore_global_allow_rules() {
     let policy = RedactionPolicy::builder()
-        .allow_canonical_exact("password")
-        .expect("password is a valid field name")
-        .allow_canonical_exact("token")
-        .expect("token is a valid field name")
+        .raise("tenant_payload", Sensitivity::Secret)
+        .expect("tenant_payload is a valid field name")
         .build()
         .expect("the policy is valid");
-    RedactionPolicy::install_global(policy)
+    RedactionPolicy::install_global(policy.clone())
         .expect("this test process installs its default only once");
 
-    assert!(Uri::parse("s3://bucket/key?token=raw-token").is_err());
+    assert!(Uri::parse("s3://bucket/key?tenant_payload=raw-secret").is_ok());
+    assert!(Uri::parse_with_policy("s3://bucket/key?tenant_payload=raw-secret", &policy).is_err());
 
-    let connection = ConnectionUri::parse("s3://user:raw-password@bucket/key?token=raw-token")
-        .expect("connection URI should parse");
+    let connection = ConnectionUri::parse_with_policy(
+        "s3://user:raw-password@bucket/key?tenant_payload=raw-secret",
+        &policy,
+    )
+    .expect("connection URI should parse");
     let rendered = connection.to_string();
     assert!(!rendered.contains("raw-password"));
-    assert!(!rendered.contains("raw-token"));
+    assert!(!rendered.contains("raw-secret"));
 }

@@ -149,8 +149,8 @@ URI 输入和长期保存的 canonical URI 使用不同类型：
   中的 password，以及 password、token、access key、secret key、signed-URL
   signature 等敏感 query；
 - `ConnectionUri` 的 `Display` 和 `Debug` 必须通过 `qubit-redact` 输出脱敏结果；
-- 内置 credential 分类始终参与判断；进程级脱敏默认策略中的 allow 规则不能放宽 URI
-  凭据边界或使普通格式化输出明文；
+- 默认解析使用固定的 `RedactionPolicy::standard()`；需要应用自定义字段规则时，调用方必须
+  通过 `Uri::parse_with_policy` 或 `ConnectionUri::parse_with_policy` 显式传入策略快照；
 - 脱敏直接基于 RFC URI component，不得先转换为可能改写原始表示的
   `url::Url`；
 - 原始值只能通过名称醒目的显式暴露方法读取，不能依赖 `Display::to_string`；

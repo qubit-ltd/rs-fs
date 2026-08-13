@@ -15,6 +15,7 @@ use std::fmt::Result as FmtResult;
 
 use fluent_uri::Uri as FluentUri;
 use qubit_redact::LogSafeText;
+use qubit_redact::RedactionPolicy;
 use qubit_redact::UriRedactor;
 
 use super::invalid_uri;
@@ -27,6 +28,8 @@ use crate::FsResult;
 pub struct ConnectionUri {
     /// RFC 3986 parser-owned raw connection URI representation.
     parsed: FluentUri<String>,
+    /// Immutable policy snapshot used for secret classification and display.
+    redaction_policy: RedactionPolicy,
 }
 
 impl ConnectionUri {
@@ -34,11 +37,25 @@ impl ConnectionUri {
     ///
     /// Returns an invalid-URI error for malformed syntax or a fragment.
     pub fn parse(text: &str) -> FsResult<Self> {
+        Self::parse_with_policy(text, &RedactionPolicy::standard())
+    }
+
+    /// Parses a connection URI using an explicit redaction policy snapshot.
+    ///
+    /// # Parameters
+    ///
+    /// * `text` - URI text to parse and canonicalize.
+    /// * `policy` - Policy captured for later secret classification and
+    ///   formatting.
+    pub fn parse_with_policy(text: &str, policy: &RedactionPolicy) -> FsResult<Self> {
         let parsed = parse_canonical(text)?;
         if parsed.fragment().is_some() {
             return Err(invalid_uri("URI fragments are not supported"));
         }
-        Ok(Self { parsed })
+        Ok(Self {
+            parsed,
+            redaction_policy: policy.clone(),
+        })
     }
 
     /// Returns the normalized URI scheme without exposing credential-bearing
@@ -50,14 +67,14 @@ impl ConnectionUri {
     }
 
     /// Returns whether the URI contains any component classified as sensitive
-    /// by the process URI policy.
+    /// by the policy snapshot captured during parsing.
     ///
     /// Username-only userinfo is not considered a secret because it can be
     /// paired with an external credential reference.
     #[inline]
     #[must_use]
     pub fn has_embedded_secret(&self) -> bool {
-        UriRedactor::default()
+        UriRedactor::new(self.redaction_policy.clone())
             .redact_uri_str(self.parsed.as_str())
             .has_sensitive_components()
     }
@@ -70,7 +87,7 @@ impl ConnectionUri {
     /// components that cannot appear in [`Uri`].
     #[inline(always)]
     pub fn try_to_uri(&self) -> FsResult<Uri> {
-        Uri::parse(self.parsed.as_str())
+        Uri::parse_with_policy(self.parsed.as_str(), &self.redaction_policy)
     }
 
     /// Gives `inspect` ephemeral access to the unredacted URI text.
@@ -85,7 +102,7 @@ impl ConnectionUri {
     /// Renders a URI while preserving component order and masking sensitive
     /// values through the shared URI redactor.
     fn redacted_text(&self) -> LogSafeText<'static> {
-        UriRedactor::default()
+        UriRedactor::new(self.redaction_policy.clone())
             .redact_uri_str(self.parsed.as_str())
             .into_log_safe_text()
     }

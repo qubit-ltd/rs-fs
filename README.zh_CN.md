@@ -31,6 +31,8 @@ qubit-fs = { version = "0.2", features = ["async"] }
 - `Path` 是一个已配置 filesystem 内的逻辑名称。`Uri` 是不含 secret 的 canonical
   地址；`ConnectionUri` 是配置入口，可以接受凭据，但在 `Display` 和 `Debug` 中会
   脱敏。
+- 默认 URI 解析使用固定的标准脱敏策略；如果应用还有自定义敏感 query 名称，应向
+  `Uri::parse_with_policy` 或 `ConnectionUri::parse_with_policy` 显式传入策略。
 - copy、rename、写入和临时资源发布会保留带类型的恢复事实。重试、清理或核对已经
   可见的目标前，应先检查对应的 failure state。
 - `exists` 只有在 `stat` 明确返回 `NotFound` 时才返回 `false`；权限、认证、超时和
