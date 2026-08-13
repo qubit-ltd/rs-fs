@@ -17,6 +17,7 @@ mod async_file_writer;
 mod async_write_all_failure;
 mod directory_entry_validation;
 mod directory_stream;
+mod directory_stream_state;
 mod file_reader;
 mod file_writer;
 mod write_abort_outcome;
@@ -34,6 +35,7 @@ pub use async_file_writer::AsyncFileWriter;
 #[cfg(feature = "async")]
 pub use async_write_all_failure::AsyncWriteAllFailure;
 pub use directory_stream::DirectoryStream;
+pub use directory_stream_state::DirectoryStreamState;
 pub use file_reader::FileReader;
 pub use file_writer::FileWriter;
 pub use write_abort_outcome::WriteAbortOutcome;

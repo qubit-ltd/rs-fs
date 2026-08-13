@@ -88,6 +88,7 @@ pub use handle::AsyncFileWriter;
 #[cfg(feature = "async")]
 pub use handle::AsyncWriteAllFailure;
 pub use handle::DirectoryStream;
+pub use handle::DirectoryStreamState;
 pub use handle::FileReader;
 pub use handle::FileWriter;
 pub use handle::WriteAbortOutcome;

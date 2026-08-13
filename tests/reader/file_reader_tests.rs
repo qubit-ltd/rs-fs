@@ -95,7 +95,7 @@ impl FileSystemSpi for ReaderSpi {
             OpenedFileInfo::new(
                 FileSystemId::new("reader-test").expect("valid id"),
                 path,
-            ),
+            ).with_metadata(FileMetadata::new(FileKind::File).with_len(Some(5))),
             Box::new(RecordingReader {
                 inner: Cursor::new(b"bytes".to_vec()),
                 read_requests: Arc::clone(&self.read_requests),
@@ -211,7 +211,7 @@ fn test_read_all_returns_bytes_and_enforces_maximum() {
         .read_all(&requested, Default::default(), 4)
         .expect_err("a too-small maximum must reject the complete chunk");
     assert_eq!(FsErrorKind::ResourceLimitExceeded, error.kind());
-    assert_eq!(vec![5], *read_requests.lock().expect("requests lock"));
+    assert!(read_requests.lock().expect("requests lock").is_empty());
 }
 
 /// Reads at most the requested prefix while allowing a larger source file.
