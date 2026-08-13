@@ -49,6 +49,10 @@ namespace or root boundary.
 boundary and create a safe canonical `Uri`. It does not permit secrets in
 metadata, logs, normal URI values, or error messages.
 
+Default parsing uses the fixed standard redaction policy. Applications with
+additional sensitive query names must pass an explicit policy snapshot through
+`Uri::parse_with_policy` or `ConnectionUri::parse_with_policy`.
+
 ## Install and obtain a facade
 
 ```toml

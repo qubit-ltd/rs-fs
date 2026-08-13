@@ -34,6 +34,9 @@ qubit-fs = { version = "0.2", features = ["async"] }
 - `Path` is a logical name inside one configured filesystem. `Uri` is the
   secret-free canonical addressing form, while `ConnectionUri` is configuration
   ingress: it may accept credentials but redacts them in `Display` and `Debug`.
+- Default URI parsing uses the fixed standard redaction policy; pass an explicit
+  policy to `Uri::parse_with_policy` or `ConnectionUri::parse_with_policy` when
+  application-specific query names must be protected.
 - Copy, rename, writes, and temporary-resource publication preserve typed
   recovery facts. Inspect the relevant failure state before retrying, cleaning
   up, or reconciling a visible target.

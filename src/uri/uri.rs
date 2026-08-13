@@ -13,6 +13,7 @@ use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
 
 use fluent_uri::Uri as FluentUri;
+use qubit_redact::RedactionPolicy;
 use qubit_redact::UriRedactionStatus;
 use qubit_redact::UriRedactor;
 
@@ -30,11 +31,22 @@ impl Uri {
     /// Parses a secret-free RFC 3986 URI.
     ///
     /// Returns an invalid-URI error for malformed syntax, fragments, or URI
-    /// components classified as sensitive by the process URI policy.
+    /// components classified as sensitive by the fixed standard policy.
     #[inline]
     pub fn parse(text: &str) -> FsResult<Self> {
+        Self::parse_with_policy(text, &RedactionPolicy::standard())
+    }
+
+    /// Parses a secret-free URI using an explicit redaction policy snapshot.
+    ///
+    /// # Parameters
+    ///
+    /// * `text` - URI text to parse and canonicalize.
+    /// * `policy` - Policy used to classify sensitive URI components.
+    #[inline]
+    pub fn parse_with_policy(text: &str, policy: &RedactionPolicy) -> FsResult<Self> {
         let parsed = parse_canonical(text)?;
-        reject_secrets(&parsed)?;
+        reject_secrets(&parsed, policy)?;
         Ok(Self { parsed })
     }
 
@@ -103,11 +115,11 @@ pub(crate) fn parse_canonical(text: &str) -> FsResult<FluentUri<String>> {
 }
 
 /// Rejects fragments and URI components classified as sensitive.
-pub(crate) fn reject_secrets(parsed: &FluentUri<String>) -> FsResult<()> {
+pub(crate) fn reject_secrets(parsed: &FluentUri<String>, policy: &RedactionPolicy) -> FsResult<()> {
     if parsed.fragment().is_some() {
         return Err(invalid_uri("URI fragments are not supported"));
     }
-    let result = UriRedactor::default().inspect_uri_str(parsed.as_str());
+    let result = UriRedactor::new(policy.clone()).inspect_uri_str(parsed.as_str());
     if result.status() == UriRedactionStatus::Invalid {
         return Err(invalid_uri("URI contains invalid encoded components"));
     }
