@@ -11,6 +11,7 @@ use std::error::Error;
 
 use qubit_fs::AtomicityRequirement;
 use qubit_fs::FsErrorKind;
+use qubit_fs::FsOperation;
 use qubit_fs::Path;
 use qubit_fs::PathComponent;
 use qubit_fs::PersistFailureState;
@@ -45,6 +46,46 @@ fn test_async_temp_creation_rejects_mismatched_provider_identity() {
     };
     assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
     assert_eq!(vec!["create_temp_file", "cleanup"], probe.calls());
+}
+
+/// Verifies async temporary options are validated before provider creation.
+#[test]
+fn test_async_temp_creation_validates_parent_before_provider_call() {
+    let (file_system, probe) =
+        async_recording_file_system(AsyncRecordingConfig::default());
+    let parent = path("relative");
+    let error = match ready(file_system.create_temp_file(
+        TempFileOptions::default().with_parent(Some(parent.clone())),
+    )) {
+        Ok(_) => panic!("invalid temporary parent must fail in the facade"),
+        Err(error) => error,
+    };
+    assert_eq!(FsErrorKind::InvalidPath, error.kind());
+    assert_eq!(FsOperation::CreateTemp, error.operation());
+    assert_eq!(Some(&parent), error.path());
+    assert!(
+        probe.calls().is_empty(),
+        "provider creation must not be called"
+    );
+}
+
+/// Verifies async pathless provider failures omit fabricated root context.
+#[test]
+fn test_async_temp_creation_keeps_provider_error_pathless() {
+    let (file_system, probe) =
+        async_recording_file_system(AsyncRecordingConfig {
+            temp_create_error: true,
+            ..AsyncRecordingConfig::default()
+        });
+    let error =
+        match ready(file_system.create_temp_file(TempFileOptions::default())) {
+            Ok(_) => panic!("provider creation failure should propagate"),
+            Err(error) => error,
+        };
+    assert_eq!(FsOperation::CreateTemp, error.operation());
+    assert_eq!(None, error.path());
+    assert_eq!(Some("async-recording"), error.provider());
+    assert_eq!(vec!["create_temp_file"], probe.calls());
 }
 
 /// Applies the same identity and compensating-cleanup contract to temporary
@@ -246,6 +287,9 @@ fn test_async_temp_lifecycle_failures_preserve_expected_states() {
     let keep = ready(file.keep())
         .expect_err("configured keep failure should propagate");
     assert_eq!(FsErrorKind::Io, keep.kind());
+    assert_eq!(FsOperation::KeepTemp, keep.operation());
+    assert_eq!(Some(&path("/tmp/recording")), keep.path());
+    assert_eq!(Some("async-recording"), keep.provider());
     assert_eq!(TempResourceState::Owned, file.state());
 
     let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
@@ -259,6 +303,9 @@ fn test_async_temp_lifecycle_failures_preserve_expected_states() {
     let cleanup = ready(directory.cleanup())
         .expect_err("configured cleanup failure should propagate");
     assert_eq!(FsErrorKind::Io, cleanup.kind());
+    assert_eq!(FsOperation::CleanupTemp, cleanup.operation());
+    assert_eq!(Some(&path("/tmp/recording")), cleanup.path());
+    assert_eq!(Some("async-recording"), cleanup.provider());
     assert_eq!(TempResourceState::CleanupRequired, directory.state());
 }
 

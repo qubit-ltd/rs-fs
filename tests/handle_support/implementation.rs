@@ -478,6 +478,51 @@ fn test_handle_support_enriches_open_and_temp_provider_failures() {
     }
 }
 
+/// Verifies pathless temporary provider failures do not receive a fabricated
+/// hierarchical root path.
+#[test]
+fn test_handle_support_keeps_pathless_temp_errors_pathless() {
+    let file_system = provider_open_failure_filesystem();
+    let file_error = file_system
+        .create_temp_file(TempFileOptions::default())
+        .expect_err("temporary-file provider failure should propagate");
+    let directory_error = file_system
+        .create_temp_directory(TempDirectoryOptions::default())
+        .expect_err("temporary-directory provider failure should propagate");
+    for error in [file_error, directory_error] {
+        assert_eq!(FsOperation::CreateTemp, error.operation());
+        assert_eq!(None, error.path());
+        assert_eq!(Some("handles-test"), error.provider());
+    }
+}
+
+/// Verifies temporary creation rejects an invalid parent before provider I/O.
+#[test]
+fn test_handle_support_validates_temp_parent_before_provider_call() {
+    let file_system = provider_open_failure_filesystem();
+    let parent =
+        Path::parse("relative").expect("relative test path should parse");
+    let file_error = file_system
+        .create_temp_file(
+            TempFileOptions::default().with_parent(Some(parent.clone())),
+        )
+        .expect_err("invalid temporary-file parent must fail in the facade");
+    assert_eq!(FsErrorKind::InvalidPath, file_error.kind());
+    assert_eq!(FsOperation::CreateTemp, file_error.operation());
+    assert_eq!(Some(&parent), file_error.path());
+
+    let directory_error = file_system
+        .create_temp_directory(
+            TempDirectoryOptions::default().with_parent(Some(parent.clone())),
+        )
+        .expect_err(
+            "invalid temporary-directory parent must fail in the facade",
+        );
+    assert_eq!(FsErrorKind::InvalidPath, directory_error.kind());
+    assert_eq!(FsOperation::CreateTemp, directory_error.operation());
+    assert_eq!(Some(&parent), directory_error.path());
+}
+
 /// Rejects invalid temporary identities even when the provider also fails to
 /// clean up the invalid resource.
 #[test]

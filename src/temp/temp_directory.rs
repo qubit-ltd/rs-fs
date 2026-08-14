@@ -137,7 +137,7 @@ impl TempDirectory {
                 self.state = TempResourceState::Persisted;
                 Ok(outcome)
             }
-            Err(failure) => Err(self.record_persist_failure(failure)),
+            Err(failure) => Err(self.record_persist_failure(failure, target)),
         }
     }
     /// Releases cleanup responsibility.
@@ -147,6 +147,9 @@ impl TempDirectory {
         self.session
             .keep()
             .map(|()| self.state = TempResourceState::Kept)
+            .map_err(|error| {
+                self.record_lifecycle_error(error, FsOperation::KeepTemp)
+            })
             .inspect_err(|error| {
                 if error.kind() == FsErrorKind::Indeterminate {
                     self.state = TempResourceState::Indeterminate;
@@ -166,12 +169,15 @@ impl TempDirectory {
         self.session
             .cleanup()
             .map(|()| self.state = TempResourceState::Cleaned)
-            .map_err(|error| self.record_cleanup_error(error))
+            .map_err(|error| {
+                self.record_lifecycle_error(error, FsOperation::CleanupTemp)
+            })
     }
     /// Records provider partial persistence facts.
     fn record_persist_failure(
         &mut self,
         failure: SpiPersistFailure,
+        target: &Path,
     ) -> PersistFailure {
         let (error, state) = failure.into_parts();
         self.state = match state {
@@ -183,7 +189,16 @@ impl TempDirectory {
                 TempResourceState::Indeterminate
             }
         };
-        PersistFailure::new(error, state)
+        PersistFailure::new(
+            error
+                .with_operation(FsOperation::PersistTemp)
+                .with_missing_context(
+                    &self.path,
+                    Some(target),
+                    self.filesystem.properties().info().provider_id(),
+                ),
+            state,
+        )
     }
     /// Requires ownership of an unpublished source.
     fn ensure_owned(&self, operation: FsOperation) -> FsResult<()> {
@@ -193,14 +208,22 @@ impl TempDirectory {
             Err(self.invalid_state(operation))
         }
     }
-    /// Records lifecycle error state.
-    fn record_cleanup_error(&mut self, error: FsError) -> FsError {
+    /// Records lifecycle error state with resource context.
+    fn record_lifecycle_error(
+        &mut self,
+        error: FsError,
+        operation: FsOperation,
+    ) -> FsError {
         self.state = if error.kind() == FsErrorKind::Indeterminate {
             TempResourceState::Indeterminate
         } else {
             TempResourceState::CleanupRequired
         };
-        error
+        error.with_operation(operation).with_missing_context(
+            &self.path,
+            None,
+            self.filesystem.properties().info().provider_id(),
+        )
     }
     /// Builds a contextual invalid-state error.
     fn invalid_state(&self, operation: FsOperation) -> FsError {

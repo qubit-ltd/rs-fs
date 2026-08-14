@@ -47,17 +47,16 @@ use crate::TempFileOptions;
 use crate::WriteAllFailure;
 use crate::WriteDisposition;
 use crate::WriteOptions;
-
-use crate::internal::facade::file_system_resource::budget_error;
-use crate::internal::facade::file_system_resource::byte_budget;
-use crate::internal::facade::file_system_resource::quantity_from_usize;
-use crate::internal::facade::file_system_resource::FileSystemResource;
 use crate::copy::fallback_failure_stats;
 use crate::copy::fallback_options_supported;
 use crate::copy::from_write_failure_state;
 use crate::copy::from_writer_state;
 use crate::copy::is_file_kind_supported;
 use crate::copy::validate_stream_copy_length_limits;
+use crate::internal::facade::file_system_resource::FileSystemResource;
+use crate::internal::facade::file_system_resource::budget_error;
+use crate::internal::facade::file_system_resource::byte_budget;
+use crate::internal::facade::file_system_resource::quantity_from_usize;
 use crate::internal::facade::read_policy::PREFIX_BUFFER_SIZE;
 use crate::internal::facade::read_policy::next_read_len;
 use crate::rename::validate_rename_outcome;
@@ -411,10 +410,16 @@ impl FileSystem {
         &self,
         options: TempFileOptions,
     ) -> FsResult<TempFile> {
-        self.require(
+        let parent = options.parent().cloned();
+        crate::facade_context::validate_temp_parent(
+            &self.properties,
+            parent.as_ref(),
+        )?;
+        crate::facade_context::require_optional(
+            &self.properties,
             FileSystemCapability::TempFile,
             FsOperation::CreateTemp,
-            &Path::root(),
+            parent.as_ref(),
         )?;
         self.spi
             .create_temp_file(CreateTempFileRequest::new(options))
@@ -436,7 +441,14 @@ impl FileSystem {
                 }
                 Ok(TempFile::new(self.clone(), info.path().clone(), session))
             })
-            .map_err(|error| self.enrich(error, &Path::root(), FsOperation::CreateTemp))
+            .map_err(|error| {
+                crate::facade_context::enrich_optional(
+                    &self.properties,
+                    error,
+                    parent.as_ref(),
+                    FsOperation::CreateTemp,
+                )
+            })
     }
 
     /// Creates a temporary directory and binds its provider session to this
@@ -445,10 +457,16 @@ impl FileSystem {
         &self,
         options: TempDirectoryOptions,
     ) -> FsResult<TempDirectory> {
-        self.require(
+        let parent = options.parent().cloned();
+        crate::facade_context::validate_temp_parent(
+            &self.properties,
+            parent.as_ref(),
+        )?;
+        crate::facade_context::require_optional(
+            &self.properties,
             FileSystemCapability::TempDirectory,
             FsOperation::CreateTemp,
-            &Path::root(),
+            parent.as_ref(),
         )?;
         self.spi
             .create_temp_directory(CreateTempDirectoryRequest::new(options))
@@ -474,7 +492,14 @@ impl FileSystem {
                     session,
                 ))
             })
-            .map_err(|error| self.enrich(error, &Path::root(), FsOperation::CreateTemp))
+            .map_err(|error| {
+                crate::facade_context::enrich_optional(
+                    &self.properties,
+                    error,
+                    parent.as_ref(),
+                    FsOperation::CreateTemp,
+                )
+            })
     }
 
     /// Creates a directory after local path validation.
@@ -1011,20 +1036,44 @@ impl FileSystem {
     ) -> FsResult<Vec<u8>> {
         let mut reader = self.open_reader(path, options)?;
         let mut result = Vec::new();
-        let maximum = quantity_from_usize(max_bytes, FsOperation::Read, path, self.properties.info().provider_id())?;
-        let mut read_budget = byte_budget(FileSystemResource::ReadBytes, maximum);
+        let maximum = quantity_from_usize(
+            max_bytes,
+            FsOperation::Read,
+            path,
+            self.properties.info().provider_id(),
+        )?;
+        let mut read_budget =
+            byte_budget(FileSystemResource::ReadBytes, maximum);
         if let Some(metadata) = reader.info().metadata()
             && let Some(length) = metadata.len()
         {
-            read_budget.check_available(length).map_err(|error| budget_error(error, FsOperation::Read, path, self.properties.info().provider_id(), "read exceeds maximum byte count"))?;
+            read_budget.check_available(length).map_err(|error| {
+                budget_error(
+                    error,
+                    FsOperation::Read,
+                    path,
+                    self.properties.info().provider_id(),
+                    "read exceeds maximum byte count",
+                )
+            })?;
             if let Ok(capacity) = usize::try_from(length) {
-                result.try_reserve(capacity).map_err(|error| FsError::with_source(FsErrorKind::ResourceLimitExceeded, FsOperation::Read, "read buffer allocation exceeds available capacity", error).with_path(path.clone()).with_provider(self.properties.info().provider_id()))?;
+                result.try_reserve(capacity).map_err(|error| {
+                    FsError::with_source(
+                        FsErrorKind::ResourceLimitExceeded,
+                        FsOperation::Read,
+                        "read buffer allocation exceeds available capacity",
+                        error,
+                    )
+                    .with_path(path.clone())
+                    .with_provider(self.properties.info().provider_id())
+                })?;
             }
         }
         let mut buffer = [0_u8; 8192];
         loop {
             let remaining = read_budget.remaining();
-            let read_len = usize::try_from(remaining.saturating_add(1)).map_or(buffer.len(), |value| value.min(buffer.len()));
+            let read_len = usize::try_from(remaining.saturating_add(1))
+                .map_or(buffer.len(), |value| value.min(buffer.len()));
             let read = Input::read(&mut reader, &mut buffer[..read_len])
                 .map_err(|error| {
                     self.io_error(path, FsOperation::Read, error)
@@ -1032,11 +1081,25 @@ impl FileSystem {
             if read == 0 {
                 return Ok(result);
             }
-            let read = quantity_from_usize(read, FsOperation::Read, path, self.properties.info().provider_id())?;
+            let read = quantity_from_usize(
+                read,
+                FsOperation::Read,
+                path,
+                self.properties.info().provider_id(),
+            )?;
             if let Err(error) = read_budget.try_consume(read) {
-                return Err(budget_error(error, FsOperation::Read, path, self.properties.info().provider_id(), "read exceeds maximum byte count"));
+                return Err(budget_error(
+                    error,
+                    FsOperation::Read,
+                    path,
+                    self.properties.info().provider_id(),
+                    "read exceeds maximum byte count",
+                ));
             }
-            result.extend_from_slice(&buffer[..usize::try_from(read).expect("read count originated as usize")]);
+            result.extend_from_slice(
+                &buffer[..usize::try_from(read)
+                    .expect("read count originated as usize")],
+            );
         }
     }
 
