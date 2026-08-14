@@ -5,7 +5,8 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow all -- facade integration tests exercise this API group.
+// qubit-style: allow source-test-pair -- behavior is covered through public
+// facade tests.
 //! Concrete filesystem error type.
 
 use std::error::Error;
@@ -234,6 +235,20 @@ impl FsError {
         if self.target.is_none() {
             self.target = target.cloned().map(Box::new);
         }
+        if self.provider.is_none() {
+            self.provider = Some(provider.into());
+        }
+        self
+    }
+
+    /// Adds provider context only when an error does not already carry it.
+    ///
+    /// This is used by operations that have no meaningful logical path, such
+    /// as provider capability checks performed before temporary resource
+    /// creation.
+    #[inline]
+    #[must_use]
+    pub(crate) fn with_missing_provider(mut self, provider: &str) -> Self {
         if self.provider.is_none() {
             self.provider = Some(provider.into());
         }

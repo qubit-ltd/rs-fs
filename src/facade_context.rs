@@ -52,6 +52,26 @@ pub(crate) fn validate_path(
         .map_err(|error| enrich(properties, error, path, operation))
 }
 
+/// Validates the optional parent supplied for temporary resource creation.
+///
+/// # Parameters
+///
+/// - `properties`: Cached filesystem identity, path, and limit rules.
+/// - `parent`: Optional logical parent path from the creation options.
+///
+/// # Errors
+///
+/// Returns an enriched `InvalidPath` or resource-limit error when `parent`
+/// does not match the filesystem semantics, form, constraints, or limits.
+pub(crate) fn validate_temp_parent(
+    properties: &FileSystemProperties,
+    parent: Option<&Path>,
+) -> FsResult<()> {
+    parent.map_or(Ok(()), |path| {
+        validate_path(properties, path, FsOperation::CreateTemp)
+    })
+}
+
 /// Requires one capability before an operation can create provider I/O.
 ///
 /// # Parameters
@@ -71,17 +91,43 @@ pub(crate) fn require(
     operation: FsOperation,
     path: &Path,
 ) -> FsResult<()> {
+    require_optional(properties, capability, operation, Some(path))
+}
+
+/// Requires a capability while allowing pathless operations to omit fabricated
+/// path context.
+///
+/// # Parameters
+///
+/// - `properties`: Cached filesystem capability snapshot.
+/// - `capability`: Capability required by the operation.
+/// - `operation`: Operation being preflighted.
+/// - `path`: Optional path associated with the requirement.
+///
+/// # Errors
+///
+/// Returns an enriched unsupported-capability error when the snapshot does not
+/// advertise `capability`.
+pub(crate) fn require_optional(
+    properties: &FileSystemProperties,
+    capability: FileSystemCapability,
+    operation: FsOperation,
+    path: Option<&Path>,
+) -> FsResult<()> {
     if properties.capabilities().supports(capability) {
         Ok(())
     } else {
-        Err(FsError::new(
+        let error = FsError::new(
             FsErrorKind::UnsupportedCapability,
             operation,
             "filesystem capability is not supported",
         )
-        .with_path(path.clone())
-        .with_provider(properties.info().provider_id())
-        .with_required_capability(capability))
+        .with_required_capability(capability)
+        .with_missing_provider(properties.info().provider_id());
+        Err(match path {
+            Some(path) => error.with_path(path.clone()),
+            None => error,
+        })
     }
 }
 
@@ -95,11 +141,38 @@ pub(crate) fn enrich(
     path: &Path,
     operation: FsOperation,
 ) -> FsError {
-    error.with_operation(operation).with_missing_context(
-        path,
-        None,
-        properties.info().provider_id(),
-    )
+    enrich_optional(properties, error, Some(path), operation)
+}
+
+/// Adds operation and provider context without inventing a path.
+///
+/// # Parameters
+///
+/// - `properties`: Cached filesystem identity and provider identifier.
+/// - `error`: Provider error crossing the facade boundary.
+/// - `path`: Optional logical path associated with the operation.
+/// - `operation`: Public operation being returned.
+///
+/// # Returns
+/// Error retaining provider-supplied context and filling only absent facade
+/// facts.
+pub(crate) fn enrich_optional(
+    properties: &FileSystemProperties,
+    error: FsError,
+    path: Option<&Path>,
+    operation: FsOperation,
+) -> FsError {
+    let error = error
+        .with_operation(operation)
+        .with_missing_provider(properties.info().provider_id());
+    match path {
+        Some(path) => error.with_missing_context(
+            path,
+            None,
+            properties.info().provider_id(),
+        ),
+        None => error,
+    }
 }
 
 /// Builds a provider-contract error bound to a requested path.

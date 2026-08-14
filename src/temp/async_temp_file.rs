@@ -297,7 +297,13 @@ impl AsyncTempFile {
                 (FsOperation::KeepTemp, Err(_)) => previous_state,
                 _ => TempResourceState::CleanupRequired,
             };
-            result
+            result.map_err(|error| {
+                error.with_operation(operation).with_missing_context(
+                    &self.path,
+                    None,
+                    self.file_system.properties().info().provider_id(),
+                )
+            })
         })
     }
 

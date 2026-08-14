@@ -7,6 +7,7 @@
 // =============================================================================
 
 use qubit_fs::FsErrorKind;
+use qubit_fs::FsOperation;
 use qubit_fs::Path;
 use qubit_fs::PathComponent;
 use qubit_fs::PersistFailureState;
@@ -174,6 +175,19 @@ fn test_temp_directory_persist_failure_preserves_provider_progress() {
                 PersistOptions::default(),
             )
             .expect_err("injected provider persistence failure should surface");
+        assert_eq!(FsOperation::PersistTemp, failure.error().operation());
+        assert_eq!(
+            Some(&Path::parse("/temporary").expect("path should parse")),
+            failure.error().path()
+        );
+        assert_eq!(
+            Some(
+                &Path::parse("/published-directory")
+                    .expect("target should parse")
+            ),
+            failure.error().target()
+        );
+        assert_eq!(Some("handles-test"), failure.error().provider());
         assert_eq!(failure_state, failure.state());
         assert_eq!(expected_state, directory.state());
         assert_eq!(
@@ -227,7 +241,21 @@ fn test_temp_directory_lifecycle_errors_preserve_recovery_state() {
         } else {
             directory.cleanup()
         };
-        assert!(result.is_err(), "{operation} should surface provider error");
+        let error = result
+            .expect_err("lifecycle operation should surface provider error");
+        assert_eq!(
+            if operation == "keep" {
+                FsOperation::KeepTemp
+            } else {
+                FsOperation::CleanupTemp
+            },
+            error.operation()
+        );
+        assert_eq!(
+            Some(&Path::parse("/temporary").expect("path should parse")),
+            error.path()
+        );
+        assert_eq!(Some("handles-test"), error.provider());
         assert_eq!(expected_state, directory.state());
         drop(directory);
         assert_eq!(
