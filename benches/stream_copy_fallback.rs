@@ -37,7 +37,7 @@ use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
 
 struct BenchmarkSpi {
-    payload: Arc<Vec<u8>>,
+    payload: Arc<[u8]>,
     properties: FileSystemProperties,
 }
 
@@ -57,7 +57,7 @@ impl BenchmarkSpi {
         )
         .expect("benchmark properties are valid");
         Self {
-            payload: Arc::new(payload),
+            payload: Arc::from(payload.into_boxed_slice()),
             properties,
         }
     }
@@ -85,20 +85,20 @@ impl FileSystemSpi for BenchmarkSpi {
                 self.properties.info().id().clone(),
                 request.path().clone(),
             ),
-            Box::new(Cursor::new(self.payload.as_ref().clone())),
+            Box::new(Cursor::new(Arc::clone(&self.payload))),
         ))
     }
 }
 
-fn stream_copy_fallback(c: &mut Criterion) {
+fn read_prefix(c: &mut Criterion) {
     let path = Path::parse("/payload").expect("benchmark path is valid");
-    let mut group = c.benchmark_group("facade_read_prefix");
+    let mut group = c.benchmark_group("read_prefix");
     for size in [1_usize << 10, 1_usize << 20, 1_usize << 26] {
         let filesystem =
             FileSystem::from_spi(BenchmarkSpi::new(vec![0xA5; size]))
                 .expect("benchmark facade should construct");
-        group.throughput(Throughput::Bytes(size as u64));
         for max_bytes in [8 * 1024, 64 * 1024, 1024 * 1024] {
+            group.throughput(Throughput::Bytes(size.min(max_bytes) as u64));
             group.bench_with_input(
                 BenchmarkId::new("prefix", max_bytes),
                 &filesystem,
@@ -120,5 +120,5 @@ fn stream_copy_fallback(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, stream_copy_fallback);
+criterion_group!(benches, read_prefix);
 criterion_main!(benches);
