@@ -81,6 +81,19 @@ fn test_uri_accessors_preserve_authority_presence_and_full_text() {
     assert_eq!(Some(""), empty_authority.authority());
 }
 
+#[test]
+fn test_uri_query_and_authority_accessors_are_directly_callable() {
+    let uri = Uri::parse("HTTPS://host/path?mode=fast")
+        .expect("ordinary URI should parse");
+    let has_authority: fn(&Uri) -> bool = Uri::has_authority;
+    let query: fn(&Uri) -> Option<&str> = Uri::query;
+    let as_str: fn(&Uri) -> &str = Uri::as_str;
+
+    assert!(has_authority(&uri));
+    assert_eq!(Some("mode=fast"), query(&uri));
+    assert_eq!("https://host/path?mode=fast", as_str(&uri));
+}
+
 /// Verifies URI parser failures report missing, empty, and malformed schemes
 /// before a value reaches the secret-free URI boundary.
 #[test]

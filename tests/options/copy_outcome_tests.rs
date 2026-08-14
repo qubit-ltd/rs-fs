@@ -31,6 +31,7 @@ fn test_copy_outcome_new_stores_stats_and_method() {
     assert_eq!(CopyMethod::Mixed, outcome.method());
     assert_eq!(AchievedAtomicity::NonAtomic, outcome.atomicity());
     assert!(!outcome.durable());
+    assert!(outcome.diagnostics().is_empty());
 }
 
 #[test]

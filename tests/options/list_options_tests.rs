@@ -25,6 +25,8 @@ fn test_list_options_full_configuration_is_usable() {
         Some(SymlinkPolicy::FollowWithinFileSystem),
         options.symlink_policy_override(),
     );
+    assert!(!SymlinkPolicy::Reject.follows());
+    assert!(SymlinkPolicy::FollowWithinFileSystem.follows());
     assert!(options.include_metadata());
     assert_eq!(Some(10), options.page_size());
     assert_eq!(Some("a"), options.prefix());

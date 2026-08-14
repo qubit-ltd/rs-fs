@@ -34,6 +34,12 @@ fn test_write_options_full_configuration_is_usable() {
     assert_eq!(Some("text/plain"), options.content_type());
     assert!(options.checksum().is_some());
     assert_eq!(AtomicityRequirement::Required, options.atomicity());
+    assert_eq!(WriteDisposition::CreateOrReplace, options.disposition());
+    assert!(matches!(
+        options.precondition(),
+        WritePrecondition::IfMatch(_)
+    ));
+    assert!(options.user_metadata().is_empty());
     assert!(options.validate().is_ok());
 }
 

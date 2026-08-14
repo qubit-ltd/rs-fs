@@ -32,6 +32,17 @@ fn test_read_options_full_configuration_is_usable() {
 }
 
 #[test]
+fn test_read_options_empty_optional_values_are_exposed() {
+    let options = ReadOptions::default();
+
+    assert_eq!(None, options.offset());
+    assert_eq!(None, options.length());
+    assert_eq!(None, options.if_match());
+    assert_eq!(None, options.if_none_match());
+    assert_eq!(ChecksumPolicy::None, options.checksum());
+}
+
+#[test]
 fn read_requirements_are_checked_against_typed_capabilities() {
     let conflicting = ReadOptions::default()
         .with_if_match(Some(ResourceVersion::from("v1")))
