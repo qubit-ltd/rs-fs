@@ -31,6 +31,7 @@ use qubit_fs::DirEntry;
 use qubit_fs::DirectoryStreamState;
 use qubit_fs::FileKind;
 use qubit_fs::FsErrorKind;
+use qubit_fs::FsOperation;
 use qubit_fs::FsResult;
 use qubit_fs::ListOptions;
 use qubit_fs::Path;
@@ -742,6 +743,10 @@ fn test_async_copy_stream_fallback_reads_writes_and_commits() {
     let retry = ready(operation.execute())
         .expect_err("completed copy operation must reject a second execute");
     assert_eq!(FsErrorKind::InvalidState, retry.error().kind());
+    assert_eq!(FsOperation::Copy, retry.error().operation());
+    assert_eq!(Some(&path("/source")), retry.error().path());
+    assert_eq!(Some(&path("/target")), retry.error().target());
+    assert_eq!(Some("async-recording"), retry.error().provider());
     assert_eq!(
         vec!["try_copy", "stat", "open_reader", "open_writer"],
         probe.calls()

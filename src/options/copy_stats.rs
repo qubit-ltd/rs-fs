@@ -7,6 +7,11 @@
 // =============================================================================
 //! Copy operation statistics.
 
+use crate::FsError;
+use crate::FsErrorKind;
+use crate::FsOperation;
+use crate::FsResult;
+
 /// Statistics collected during copy operations.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct CopyStats {
@@ -35,16 +40,41 @@ impl CopyStats {
     ///
     /// # Parameters
     /// - `other`: Statistics to add.
+    ///
+    /// # Errors
+    /// Returns [`FsErrorKind::ResourceLimitExceeded`] when any counter would
+    /// overflow `u64`. The receiver remains unchanged on overflow.
     #[inline]
-    pub fn add_assign(&mut self, other: &Self) {
-        self.files += other.files;
-        self.directories += other.directories;
-        self.symlinks += other.symlinks;
-        self.objects += other.objects;
-        self.prefixes += other.prefixes;
-        self.bytes += other.bytes;
-        self.overwritten += other.overwritten;
-        self.skipped += other.skipped;
-        self.failed += other.failed;
+    pub fn add_assign(&mut self, other: &Self) -> FsResult<()> {
+        let add = |left: u64, right: u64| {
+            left.checked_add(right).ok_or_else(|| {
+                FsError::new(
+                    FsErrorKind::ResourceLimitExceeded,
+                    FsOperation::Copy,
+                    "copy statistics counter overflow",
+                )
+            })
+        };
+        let files = add(self.files, other.files)?;
+        let directories = add(self.directories, other.directories)?;
+        let symlinks = add(self.symlinks, other.symlinks)?;
+        let objects = add(self.objects, other.objects)?;
+        let prefixes = add(self.prefixes, other.prefixes)?;
+        let bytes = add(self.bytes, other.bytes)?;
+        let overwritten = add(self.overwritten, other.overwritten)?;
+        let skipped = add(self.skipped, other.skipped)?;
+        let failed = add(self.failed, other.failed)?;
+        *self = Self {
+            files,
+            directories,
+            symlinks,
+            objects,
+            prefixes,
+            bytes,
+            overwritten,
+            skipped,
+            failed,
+        };
+        Ok(())
     }
 }

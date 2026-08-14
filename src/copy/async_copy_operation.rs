@@ -109,7 +109,11 @@ impl AsyncCopyOperation {
     /// not invoke provider cleanup or start any additional I/O.
     pub async fn execute(&mut self) -> Result<CopyOutcome, AsyncCopyFailure> {
         if self.state != AsyncCopyOperationState::Ready {
-            return Err(invalid_state_failure(&self.source));
+            return Err(invalid_state_failure(
+                &self.source,
+                &self.target,
+                self.file_system.properties().info().provider_id(),
+            ));
         }
         let Self {
             file_system,
@@ -129,14 +133,20 @@ impl AsyncCopyOperation {
 }
 
 /// Builds the stable failure used for an invalid execute retry.
-fn invalid_state_failure(path: &Path) -> AsyncCopyFailure {
+fn invalid_state_failure(
+    source: &Path,
+    target: &Path,
+    provider: &str,
+) -> AsyncCopyFailure {
     AsyncCopyFailure::new(
         FsError::new(
             FsErrorKind::InvalidState,
             FsOperation::Copy,
             "copy operation cannot execute in its current state",
         )
-        .with_path(path.clone()),
+        .with_path(source.clone())
+        .with_target(target.clone())
+        .with_provider(provider),
         CopyFailureState::Unchanged,
         CopyStats::default(),
     )
