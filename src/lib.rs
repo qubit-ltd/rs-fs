@@ -139,8 +139,6 @@ pub use options::SymlinkPolicy;
 pub use options::WriteDisposition;
 pub use options::WriteOptions;
 pub use options::WritePrecondition;
-pub use path::NativePathCodec;
-pub use path::NativePathCodecError;
 pub use path::Path;
 pub use path::PathComponent;
 pub use path::PathComponents;

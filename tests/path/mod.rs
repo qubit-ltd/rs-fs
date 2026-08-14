@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-mod native_path_codec_error_tests;
 mod path_component_tests;
 mod path_semantics_tests;
 mod path_tests;
