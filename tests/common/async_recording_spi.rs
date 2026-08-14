@@ -286,7 +286,8 @@ impl AsyncRecordingSpi {
             FileSystemId::new("async-recording")
                 .expect("test id should be valid")
         };
-        OpenedFileInfo::new(id, path.clone()).with_metadata(FileMetadata::new(FileKind::File).with_len(Some(5)))
+        OpenedFileInfo::new(id, path.clone())
+            .with_metadata(FileMetadata::new(FileKind::File).with_len(Some(5)))
     }
     /// Returns a temporary identity, optionally invalid for boundary testing.
     fn temp_info(&self, kind: FileKind) -> OpenedFileInfo {

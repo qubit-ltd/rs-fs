@@ -174,12 +174,10 @@ fn test_async_declined_copy_rejects_incompatible_fallback_options() {
 #[test]
 fn test_async_stream_fallback_rejects_known_length_over_limits_before_opening_handles()
  {
-    let configs = [
-        AsyncRecordingConfig {
-            maximum_write_bytes: Some(4),
-            ..AsyncRecordingConfig::default()
-        },
-    ];
+    let configs = [AsyncRecordingConfig {
+        maximum_write_bytes: Some(4),
+        ..AsyncRecordingConfig::default()
+    }];
     for config in configs {
         let (file_system, probe) = async_recording_file_system(config);
         let mut operation = file_system
@@ -199,11 +197,21 @@ fn test_async_stream_fallback_rejects_known_length_over_limits_before_opening_ha
 }
 #[test]
 fn test_async_stream_fallback_ignores_range_read_limit() {
-    let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig { maximum_read_range_bytes: Some(4), ..AsyncRecordingConfig::default() });
-    let mut operation = file_system.begin_copy(path("/source"), path("/target"), CopyOptions::default()).expect("copy preflight should succeed before source stat");
-    let outcome = ready(operation.execute()).expect("sequential fallback should not use the range-read limit");
+    let (file_system, probe) =
+        async_recording_file_system(AsyncRecordingConfig {
+            maximum_read_range_bytes: Some(4),
+            ..AsyncRecordingConfig::default()
+        });
+    let mut operation = file_system
+        .begin_copy(path("/source"), path("/target"), CopyOptions::default())
+        .expect("copy preflight should succeed before source stat");
+    let outcome = ready(operation.execute())
+        .expect("sequential fallback should not use the range-read limit");
     assert_eq!(5, outcome.stats().bytes);
-    assert_eq!(vec!["try_copy", "stat", "open_reader", "open_writer"], probe.calls());
+    assert_eq!(
+        vec!["try_copy", "stat", "open_reader", "open_writer"],
+        probe.calls()
+    );
 }
 
 /// Uses the asynchronous stream fallback when copy is not advertised.

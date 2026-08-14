@@ -5,7 +5,8 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow all -- facade integration tests exercise this API group.
+// qubit-style: allow source-test-pair -- behavior is covered through public
+// facade tests.
 //! Durability requirements for completed filesystem operations.
 
 /// Required storage synchronization strength for an operation outcome.

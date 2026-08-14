@@ -44,7 +44,10 @@ impl Uri {
     /// * `text` - URI text to parse and canonicalize.
     /// * `policy` - Policy used to classify sensitive URI components.
     #[inline]
-    pub fn parse_with_policy(text: &str, policy: &RedactionPolicy) -> FsResult<Self> {
+    pub fn parse_with_policy(
+        text: &str,
+        policy: &RedactionPolicy,
+    ) -> FsResult<Self> {
         let parsed = parse_canonical(text)?;
         reject_secrets(&parsed, policy)?;
         Ok(Self { parsed })
@@ -115,11 +118,15 @@ pub(crate) fn parse_canonical(text: &str) -> FsResult<FluentUri<String>> {
 }
 
 /// Rejects fragments and URI components classified as sensitive.
-pub(crate) fn reject_secrets(parsed: &FluentUri<String>, policy: &RedactionPolicy) -> FsResult<()> {
+pub(crate) fn reject_secrets(
+    parsed: &FluentUri<String>,
+    policy: &RedactionPolicy,
+) -> FsResult<()> {
     if parsed.fragment().is_some() {
         return Err(invalid_uri("URI fragments are not supported"));
     }
-    let result = UriRedactor::new(policy.clone()).inspect_uri_str(parsed.as_str());
+    let result =
+        UriRedactor::new(policy.clone()).inspect_uri_str(parsed.as_str());
     if result.status() == UriRedactionStatus::Invalid {
         return Err(invalid_uri("URI contains invalid encoded components"));
     }

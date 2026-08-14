@@ -19,6 +19,7 @@ fn test_uri_query_policy_respects_explicitly_disabled_floor() {
         .disable_floor()
         .build()
         .expect("the policy without a floor is valid");
-    Uri::parse_with_policy("s3://bucket/key?token=raw-token", &policy)
-        .expect("an explicitly disabled floor permits an otherwise unknown query key");
+    Uri::parse_with_policy("s3://bucket/key?token=raw-token", &policy).expect(
+        "an explicitly disabled floor permits an otherwise unknown query key",
+    );
 }
