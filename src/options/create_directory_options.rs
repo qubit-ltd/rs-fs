@@ -5,7 +5,8 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow all -- facade integration tests exercise this API group.
+// qubit-style: allow source-test-pair -- behavior is covered through public
+// facade tests.
 //! Directory creation options.
 
 use crate::NonSensitiveMetadata;

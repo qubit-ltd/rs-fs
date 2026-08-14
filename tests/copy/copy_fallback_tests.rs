@@ -144,10 +144,21 @@ fn recording_filesystem_with_write_limit(
 ) -> RecordingHandles {
     recording_filesystem_with_options(response, true, Some(maximum_write_bytes))
 }
-fn recording_filesystem_with_range_limit(response: CopyResponse, maximum_read_range_bytes: u64) -> RecordingHandles {
+fn recording_filesystem_with_range_limit(
+    response: CopyResponse,
+    maximum_read_range_bytes: u64,
+) -> RecordingHandles {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let bytes = Arc::new(Mutex::new(Vec::new()));
-    let filesystem = FileSystem::from_spi(RecordingSpi { response, advertise_copy: true, maximum_read_range_bytes: Some(maximum_read_range_bytes), maximum_write_bytes: None, calls: Arc::clone(&calls), bytes: Arc::clone(&bytes) }).expect("recording facade should construct");
+    let filesystem = FileSystem::from_spi(RecordingSpi {
+        response,
+        advertise_copy: true,
+        maximum_read_range_bytes: Some(maximum_read_range_bytes),
+        maximum_write_bytes: None,
+        calls: Arc::clone(&calls),
+        bytes: Arc::clone(&bytes),
+    })
+    .expect("recording facade should construct");
     (filesystem, calls, bytes)
 }
 /// Constructs a recording filesystem with explicit capability and limit flags.
@@ -217,7 +228,15 @@ fn properties(
             PathSemantics::Hierarchical,
         ),
         capabilities,
-        FileSystemLimits::unknown().with_max_read_range_bytes(maximum_read_range_bytes.map_or(FileSystemLimit::Unknown, FileSystemLimit::Maximum)).with_max_write_bytes(maximum_write_bytes.map_or(FileSystemLimit::Unknown, FileSystemLimit::Maximum)),
+        FileSystemLimits::unknown()
+            .with_max_read_range_bytes(
+                maximum_read_range_bytes
+                    .map_or(FileSystemLimit::Unknown, FileSystemLimit::Maximum),
+            )
+            .with_max_write_bytes(
+                maximum_write_bytes
+                    .map_or(FileSystemLimit::Unknown, FileSystemLimit::Maximum),
+            ),
         PathConstraints::absolute(),
         SymlinkPolicy::Reject,
     )
@@ -498,7 +517,8 @@ fn info(path: &Path) -> OpenedFileInfo {
     OpenedFileInfo::new(
         FileSystemId::new("recording").expect("id should be valid"),
         path.clone(),
-    ).with_metadata(FileMetadata::new(FileKind::File).with_len(Some(5)))
+    )
+    .with_metadata(FileMetadata::new(FileKind::File).with_len(Some(5)))
 }
 /// Returns an unused-operation provider error.
 fn unused() -> FsError {
@@ -616,12 +636,21 @@ fn test_copy_declined_uses_allowlisted_stream_fallback() {
 }
 #[test]
 fn test_copy_stream_fallback_ignores_range_read_limit() {
-    let (filesystem, calls, bytes) = recording_filesystem_with_range_limit(CopyResponse::Declined, 4);
-    let outcome = filesystem.copy(&path("/source"), &path("/target"), CopyOptions::default()).expect("sequential fallback should not use the range-read limit");
+    let (filesystem, calls, bytes) =
+        recording_filesystem_with_range_limit(CopyResponse::Declined, 4);
+    let outcome = filesystem
+        .copy(&path("/source"), &path("/target"), CopyOptions::default())
+        .expect("sequential fallback should not use the range-read limit");
     assert_eq!(CopyMethod::Streamed, outcome.method());
     assert_eq!(5, outcome.stats().bytes);
-    assert_eq!(b"bytes", bytes.lock().expect("bytes lock should succeed").as_slice());
-    assert_eq!(["try_copy", "stat", "open_reader", "open_writer"], calls.lock().expect("calls lock should succeed").as_slice());
+    assert_eq!(
+        b"bytes",
+        bytes.lock().expect("bytes lock should succeed").as_slice()
+    );
+    assert_eq!(
+        ["try_copy", "stat", "open_reader", "open_writer"],
+        calls.lock().expect("calls lock should succeed").as_slice()
+    );
 }
 
 /// Uses the facade stream fallback when the provider does not advertise copy.

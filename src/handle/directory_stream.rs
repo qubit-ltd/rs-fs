@@ -13,12 +13,12 @@ use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
 
 use crate::DirEntry;
+use crate::DirectoryStreamState;
 use crate::FileSystemLimits;
 use crate::FsError;
 use crate::FsErrorKind;
 use crate::FsOperation;
 use crate::FsResult;
-use crate::DirectoryStreamState;
 use crate::ListOptions;
 use crate::Path;
 use crate::handle::directory_entry_validation;

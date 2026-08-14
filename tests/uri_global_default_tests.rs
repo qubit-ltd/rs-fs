@@ -26,7 +26,13 @@ fn test_uri_credential_boundaries_ignore_global_allow_rules() {
         .expect("this test process installs its default only once");
 
     assert!(Uri::parse("s3://bucket/key?tenant_payload=raw-secret").is_ok());
-    assert!(Uri::parse_with_policy("s3://bucket/key?tenant_payload=raw-secret", &policy).is_err());
+    assert!(
+        Uri::parse_with_policy(
+            "s3://bucket/key?tenant_payload=raw-secret",
+            &policy
+        )
+        .is_err()
+    );
 
     let connection = ConnectionUri::parse_with_policy(
         "s3://user:raw-password@bucket/key?tenant_payload=raw-secret",

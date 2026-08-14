@@ -30,7 +30,10 @@ pub(crate) type ByteBudget = ResourceBudget<FileSystemResource, u64>;
 
 /// Creates a byte budget with the supplied inclusive limit.
 #[inline]
-pub(crate) fn byte_budget(resource: FileSystemResource, maximum: u64) -> ByteBudget {
+pub(crate) fn byte_budget(
+    resource: FileSystemResource,
+    maximum: u64,
+) -> ByteBudget {
     ResourceBudget::new(resource, maximum)
 }
 

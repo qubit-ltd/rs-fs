@@ -95,7 +95,8 @@ impl FileSystemSpi for ReaderSpi {
             OpenedFileInfo::new(
                 FileSystemId::new("reader-test").expect("valid id"),
                 path,
-            ).with_metadata(FileMetadata::new(FileKind::File).with_len(Some(5))),
+            )
+            .with_metadata(FileMetadata::new(FileKind::File).with_len(Some(5))),
             Box::new(RecordingReader {
                 inner: Cursor::new(b"bytes".to_vec()),
                 read_requests: Arc::clone(&self.read_requests),

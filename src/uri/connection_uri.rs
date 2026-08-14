@@ -47,7 +47,10 @@ impl ConnectionUri {
     /// * `text` - URI text to parse and canonicalize.
     /// * `policy` - Policy captured for later secret classification and
     ///   formatting.
-    pub fn parse_with_policy(text: &str, policy: &RedactionPolicy) -> FsResult<Self> {
+    pub fn parse_with_policy(
+        text: &str,
+        policy: &RedactionPolicy,
+    ) -> FsResult<Self> {
         let parsed = parse_canonical(text)?;
         if parsed.fragment().is_some() {
             return Err(invalid_uri("URI fragments are not supported"));

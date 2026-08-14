@@ -6,7 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-// qubit-style: allow all -- facade integration tests exercise this API group.
+// qubit-style: allow source-test-pair -- behavior is covered through public
+// facade tests.
 //! Iteration over lexical logical path components.
 
 /// Iterator over the path's lexical component boundaries.

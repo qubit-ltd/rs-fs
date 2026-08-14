@@ -5,7 +5,8 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow all -- facade integration tests exercise this API group.
+// qubit-style: allow source-test-pair -- behavior is covered through public
+// facade tests.
 //! Concrete asynchronous file writer handle.
 
 use std::fmt::Debug;
@@ -31,11 +32,11 @@ use crate::WriteFailure;
 use crate::WriteFailureState;
 use crate::WriteOutcome;
 use crate::WriterState;
+use crate::internal::facade::file_system_resource::ByteBudget;
+use crate::internal::facade::file_system_resource::FileSystemResource;
 use crate::internal::facade::file_system_resource::budget_error;
 use crate::internal::facade::file_system_resource::byte_budget;
 use crate::internal::facade::file_system_resource::quantity_from_usize;
-use crate::internal::facade::file_system_resource::ByteBudget;
-use crate::internal::facade::file_system_resource::FileSystemResource;
 use crate::spi::AsyncFileWriteSession;
 use crate::spi::SpiFuture;
 
@@ -84,7 +85,9 @@ impl AsyncFileWriter {
             abort_completed: false,
             atomicity,
             provider: provider.into(),
-            write_budget: max_write_bytes.map(|maximum| byte_budget(FileSystemResource::WriteBytes, maximum)),
+            write_budget: max_write_bytes.map(|maximum| {
+                byte_budget(FileSystemResource::WriteBytes, maximum)
+            }),
             written_bytes: 0,
         }
     }
@@ -277,9 +280,24 @@ impl AsyncFileWriter {
 
     /// Checks whether a provider write can fit in the session budget.
     fn check_write_limit(&self, count: usize) -> IoResult<u64> {
-        let count = quantity_from_usize(count, FsOperation::Write, self.info.path(), &self.provider).map_err(FsError::into_io_error)?;
-        if let Some(budget) = &self.write_budget && let Err(error) = budget.check_available(count) {
-            return Err(budget_error(error, FsOperation::Write, self.info.path(), &self.provider, "write session exceeds the provider byte limit").into_io_error());
+        let count = quantity_from_usize(
+            count,
+            FsOperation::Write,
+            self.info.path(),
+            &self.provider,
+        )
+        .map_err(FsError::into_io_error)?;
+        if let Some(budget) = &self.write_budget
+            && let Err(error) = budget.check_available(count)
+        {
+            return Err(budget_error(
+                error,
+                FsOperation::Write,
+                self.info.path(),
+                &self.provider,
+                "write session exceeds the provider byte limit",
+            )
+            .into_io_error());
         }
         Ok(count)
     }
@@ -290,9 +308,26 @@ impl AsyncFileWriter {
     /// Returns an I/O error when the native byte count or accumulated total
     /// cannot be represented by the filesystem API's `u64` byte counters.
     fn record_written_bytes(&mut self, count: usize) -> IoResult<()> {
-        let count = quantity_from_usize(count, FsOperation::Write, self.info.path(), &self.provider).map_err(FsError::into_io_error)?;
-        if let Some(error) = self.write_budget.as_mut().and_then(|budget| budget.try_consume(count).err()) {
-            return Err(budget_error(error, FsOperation::Write, self.info.path(), &self.provider, "write session exceeds the provider byte limit").into_io_error());
+        let count = quantity_from_usize(
+            count,
+            FsOperation::Write,
+            self.info.path(),
+            &self.provider,
+        )
+        .map_err(FsError::into_io_error)?;
+        if let Some(error) = self
+            .write_budget
+            .as_mut()
+            .and_then(|budget| budget.try_consume(count).err())
+        {
+            return Err(budget_error(
+                error,
+                FsOperation::Write,
+                self.info.path(),
+                &self.provider,
+                "write session exceeds the provider byte limit",
+            )
+            .into_io_error());
         }
         self.written_bytes = self
             .written_bytes
