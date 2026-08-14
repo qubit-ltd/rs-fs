@@ -13,12 +13,12 @@ mod copy;
 mod directory;
 mod error;
 mod handle_support;
+mod internal;
 mod metadata;
 mod options;
 mod path;
 #[path = "common/poll_support.rs"]
 mod poll_support;
-mod properties_tests;
 mod reader;
 mod rename;
 mod spi;
