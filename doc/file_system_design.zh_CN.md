@@ -194,9 +194,10 @@ SPI request 和 outcome 只携带逻辑 `Path`，provider-native path 不越过 
 统一的是转换时机、失败归责和副作用约束，不是所有 provider 的 native path Rust
 类型或编码。
 
-`NativePathCodec` 保留在 `qubit_fs::path`，但只作为 adapter 内部使用的泛型辅助
-契约，通过 associated type 表达 provider-native path；它不出现在 object-safe
-`FileSystemSpi` / `AsyncFileSystemSpi` 方法签名中。对本地文件系统：
+平台 native path codec 不属于 `qubit_fs` 核心 facade。它由具体 provider 的 native
+文件层拥有；`qubit-fs-local` 通过 `qubit-local-files::LocalPaths` 使用
+`LocalPathCodec`，不在 adapter 中复制平台算法，也不把 native path 类型带入
+`FileSystemSpi` / `AsyncFileSystemSpi`。对本地文件系统：
 
 - 平台 separator、root、prefix、`OsStr` 和原始字节等转换逻辑位于
   `qubit-local-files`；
