@@ -19,6 +19,10 @@ fn test_create_directory_options_default_is_non_recursive_and_strict() {
     assert!(!options.recursive());
     assert!(!options.exists_ok());
     assert!(options.user_metadata().is_empty());
+
+    let configured = options.clone().with_recursive(true).with_exists_ok(true);
+    assert!(configured.recursive());
+    assert!(configured.exists_ok());
 }
 
 /// Verifies validated user metadata replaces the default empty metadata.

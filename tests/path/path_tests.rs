@@ -127,3 +127,17 @@ fn test_path_file_name_handles_root_and_trailing_separator() {
             .file_name()
     );
 }
+
+#[test]
+fn test_path_public_operations_are_callable_without_reparsing() {
+    let root = Path::root();
+    let component = PathComponent::parse("child").expect("component");
+    let relative = RelativePath::parse("nested").expect("relative path");
+    let child: fn(&Path, &PathComponent) -> Path = Path::child;
+    let join: fn(&Path, &RelativePath) -> Path = Path::join;
+    let as_ref: for<'a> fn(&'a Path) -> &'a str = Path::as_ref;
+
+    assert_eq!("/child", child(&root, &component).as_str());
+    assert_eq!("/nested", join(&root, &relative).as_str());
+    assert_eq!("/", as_ref(&root));
+}

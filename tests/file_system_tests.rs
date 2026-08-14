@@ -30,6 +30,7 @@ use qubit_fs::FsError;
 use qubit_fs::FsErrorKind;
 use qubit_fs::FsOperation;
 use qubit_fs::FsResult;
+use qubit_fs::ListOptions;
 use qubit_fs::Path;
 use qubit_fs::PathConstraints;
 use qubit_fs::PathSemantics;
@@ -169,6 +170,52 @@ impl FileSystemSpi for CountingSpi {
     ) -> FsResult<OpenedTempDirectory> {
         Err(Self::unsupported())
     }
+}
+
+/// Provider that relies on every optional synchronous SPI default method.
+struct DefaultSyncSpi {
+    properties: FileSystemProperties,
+}
+
+impl FileSystemSpi for DefaultSyncSpi {
+    /// Returns the properties used to enable each default operation path.
+    fn properties(&self) -> FileSystemProperties {
+        self.properties.clone()
+    }
+
+    /// Supplies the required metadata implementation for the test provider.
+    fn stat(&self, request: StatRequest<'_>) -> FsResult<StatResponse> {
+        Ok(StatResponse::new(
+            request.path().clone(),
+            FileMetadata::new(FileKind::File),
+        ))
+    }
+}
+
+/// Builds valid properties that advertise all synchronous default operations.
+fn default_sync_properties() -> FileSystemProperties {
+    FileSystemProperties::new(
+        FileSystemInfo::new(
+            FileSystemId::new("default-sync")
+                .expect("test provider id should be valid"),
+            "default-sync",
+            PathSemantics::Hierarchical,
+        ),
+        FileSystemCapabilities::new()
+            .with_guaranteed(FileSystemCapability::List)
+            .with_guaranteed(FileSystemCapability::Read)
+            .with_guaranteed(FileSystemCapability::Write)
+            .with_guaranteed(FileSystemCapability::CreateDirectory)
+            .with_guaranteed(FileSystemCapability::Delete)
+            .with_guaranteed(FileSystemCapability::Rename)
+            .with_guaranteed(FileSystemCapability::Copy)
+            .with_guaranteed(FileSystemCapability::TempFile)
+            .with_guaranteed(FileSystemCapability::TempDirectory),
+        FileSystemLimits::unknown(),
+        PathConstraints::absolute(),
+        SymlinkPolicy::Reject,
+    )
+    .expect("default provider properties should be valid")
 }
 
 #[test]
@@ -536,4 +583,104 @@ fn test_sync_facade_requires_operation_capabilities_before_dispatch() {
         .rename(&path, &Path::root(), RenameOptions::default())
         .expect_err("rename requires advertised capability");
     assert_eq!(FsErrorKind::UnsupportedCapability, rename.error().kind());
+}
+
+/// Exercises every optional synchronous SPI default implementation through
+/// the public facade and verifies that each reports unsupported operation.
+#[test]
+fn test_sync_spi_default_operations_report_unsupported() {
+    let filesystem = FileSystem::from_spi(DefaultSyncSpi {
+        properties: default_sync_properties(),
+    })
+    .expect("default provider facade should construct");
+    let path = Path::parse("/resource").expect("test path should parse");
+    let target = Path::parse("/target").expect("test target should parse");
+
+    let error = match filesystem.list(&path, ListOptions::default()) {
+        Ok(_) => panic!("default list implementation must reject the request"),
+        Err(error) => error,
+    };
+    assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
+    assert_eq!(FsOperation::List, error.operation());
+
+    let error = match filesystem.open_reader(&path, ReadOptions::default()) {
+        Ok(_) => {
+            panic!("default reader implementation must reject the request")
+        }
+        Err(error) => error,
+    };
+    assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
+    assert_eq!(FsOperation::OpenReader, error.operation());
+
+    let error = match filesystem.open_writer(&path, WriteOptions::default()) {
+        Ok(_) => {
+            panic!("default writer implementation must reject the request")
+        }
+        Err(error) => error,
+    };
+    assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
+    assert_eq!(FsOperation::OpenWriter, error.operation());
+
+    let error = match filesystem
+        .create_directory(&path, CreateDirectoryOptions::default())
+    {
+        Ok(_) => {
+            panic!("default directory implementation must reject the request")
+        }
+        Err(error) => error,
+    };
+    assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
+    assert_eq!(FsOperation::CreateDir, error.operation());
+
+    let error = match filesystem.delete_file(&path, DeleteOptions::default()) {
+        Ok(_) => panic!("default file deletion must reject the request"),
+        Err(error) => error,
+    };
+    assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
+    assert_eq!(FsOperation::Delete, error.operation());
+
+    let error = match filesystem
+        .delete_directory(&path, DeleteOptions::default())
+    {
+        Ok(_) => panic!("default directory deletion must reject the request"),
+        Err(error) => error,
+    };
+    assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
+    assert_eq!(FsOperation::Delete, error.operation());
+
+    let error =
+        match filesystem.rename(&path, &target, RenameOptions::default()) {
+            Ok(_) => {
+                panic!("default rename implementation must reject the request")
+            }
+            Err(error) => error,
+        };
+    assert_eq!(FsErrorKind::UnsupportedOperation, error.error().kind());
+    assert_eq!(FsOperation::Rename, error.error().operation());
+
+    let error = match filesystem.copy(&path, &target, CopyOptions::default()) {
+        Ok(_) => panic!("default copy implementation must not complete"),
+        Err(error) => error,
+    };
+    assert_eq!(FsOperation::Copy, error.error().operation());
+
+    let error = match filesystem.create_temp_file(TempFileOptions::default()) {
+        Ok(_) => panic!(
+            "default temporary-file implementation must reject the request"
+        ),
+        Err(error) => error,
+    };
+    assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
+    assert_eq!(FsOperation::CreateTemp, error.operation());
+
+    let error = match filesystem
+        .create_temp_directory(TempDirectoryOptions::default())
+    {
+        Ok(_) => panic!(
+            "default temporary-directory implementation must reject the request"
+        ),
+        Err(error) => error,
+    };
+    assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
+    assert_eq!(FsOperation::CreateTemp, error.operation());
 }

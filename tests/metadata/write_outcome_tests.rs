@@ -17,9 +17,10 @@ fn write_outcome_reports_actual_publication_semantics() {
         AchievedAtomicity::Atomic,
         PublicationMethod::AtomicRename,
     )
+    .with_bytes_written(7)
     .with_version(ResourceVersion::new("v7"));
 
-    assert_eq!(None, outcome.bytes_written());
+    assert_eq!(Some(7), outcome.bytes_written());
     assert_eq!(AchievedAtomicity::Atomic, outcome.atomicity());
     assert_eq!(PublicationMethod::AtomicRename, outcome.method());
     assert_eq!(Some("v7"), outcome.version().map(ResourceVersion::as_str));

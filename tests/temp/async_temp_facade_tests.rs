@@ -8,18 +8,25 @@
 //! External SPI-bound temporary resource behavior tests.
 
 use std::error::Error;
+use std::pin::Pin;
 
 use qubit_fs::AtomicityRequirement;
 use qubit_fs::FsErrorKind;
 use qubit_fs::FsOperation;
+use qubit_fs::FsResult;
 use qubit_fs::Path;
 use qubit_fs::PathComponent;
 use qubit_fs::PersistFailureState;
 use qubit_fs::PersistOptions;
+use qubit_fs::PersistOutcome;
 use qubit_fs::RelativePath;
 use qubit_fs::TempDirectoryOptions;
 use qubit_fs::TempFileOptions;
 use qubit_fs::TempResourceState;
+use qubit_fs::spi::AsyncTempResourceSpi;
+use qubit_fs::spi::PersistRequest;
+use qubit_fs::spi::SpiFuture;
+use qubit_fs::spi::SpiPersistFailure;
 
 use crate::async_recording_spi::AsyncRecordingConfig;
 use crate::async_recording_spi::async_recording_file_system;
@@ -28,6 +35,30 @@ use crate::poll_support::ready;
 /// Returns a stable absolute destination used by persistence tests.
 fn path(value: &str) -> Path {
     Path::parse(value).expect("test path should parse")
+}
+
+/// Minimal resource session used to invoke the default drop-cancellation hook.
+struct DefaultTempResource;
+
+impl AsyncTempResourceSpi for DefaultTempResource {
+    /// This test session never performs provider cleanup.
+    fn cleanup<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<()>> {
+        unimplemented!("cleanup is outside this default-hook test")
+    }
+
+    /// This test session never transfers cleanup responsibility.
+    fn keep<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<()>> {
+        unimplemented!("keep is outside this default-hook test")
+    }
+
+    /// This test session never persists a temporary resource.
+    fn persist<'a>(
+        self: Pin<&'a mut Self>,
+        request: PersistRequest<'a>,
+    ) -> SpiFuture<'a, Result<PersistOutcome, SpiPersistFailure>> {
+        let _ = request;
+        unimplemented!("persist is outside this default-hook test")
+    }
 }
 
 /// Rejects a provider-created temporary identity before a handle escapes the
@@ -46,6 +77,13 @@ fn test_async_temp_creation_rejects_mismatched_provider_identity() {
     };
     assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
     assert_eq!(vec!["create_temp_file", "cleanup"], probe.calls());
+}
+
+/// Verifies the default temporary-resource drop hook is a nonblocking no-op.
+#[test]
+fn test_async_temp_resource_default_cancel_on_drop_is_noop() {
+    let mut resource = DefaultTempResource;
+    Pin::new(&mut resource).cancel_on_drop();
 }
 
 /// Verifies async temporary options are validated before provider creation.

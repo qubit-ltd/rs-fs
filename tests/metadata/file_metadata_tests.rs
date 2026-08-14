@@ -5,8 +5,13 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+use std::time::SystemTime;
+
+use qubit_fs::Checksum;
+use qubit_fs::ChecksumAlgorithm;
 use qubit_fs::FileKind;
 use qubit_fs::FileMetadata;
+use qubit_fs::ResourceVersion;
 use qubit_fs::UserMetadata;
 
 #[test]
@@ -46,4 +51,30 @@ fn file_metadata_preserves_validated_provider_and_user_metadata() {
             .with("access_token", "plaintext")
             .is_err()
     );
+}
+
+/// Verifies optional metadata builders and accessors preserve every value.
+#[test]
+fn test_file_metadata_preserves_optional_fields() {
+    let timestamp = SystemTime::UNIX_EPOCH;
+    let checksum = Checksum::new(ChecksumAlgorithm::Sha256, "abc");
+    let etag = ResourceVersion::from("etag-42");
+    let metadata = FileMetadata::new(FileKind::File)
+        .with_len(Some(0))
+        .with_modified_at(Some(timestamp))
+        .with_created_at(Some(timestamp))
+        .with_accessed_at(Some(timestamp))
+        .with_etag(Some(etag.clone()))
+        .with_content_type(Some("text/plain".to_owned()))
+        .with_checksum(Some(checksum.clone()));
+
+    assert_eq!(Some(0), metadata.len());
+    assert!(metadata.is_empty());
+    assert_eq!(Some(timestamp), metadata.modified_at());
+    assert_eq!(Some(timestamp), metadata.created_at());
+    assert_eq!(Some(timestamp), metadata.accessed_at());
+    assert_eq!(Some(&etag), metadata.etag());
+    assert_eq!(Some("text/plain"), metadata.content_type());
+    assert_eq!(Some(&checksum), metadata.checksum());
+    assert_eq!(&FileKind::File, metadata.kind());
 }
