@@ -1,0 +1,35 @@
+{
+  "threshold_exempt_files": {
+    "qubit-fs": [
+      "src/async_file_system.rs",
+      "src/copy/async_copy_failure.rs",
+      "src/copy/async_copy_operation.rs",
+      "src/copy/copy_failure.rs",
+      "src/handle/async_file_writer.rs",
+      "src/handle/async_write_all_failure.rs",
+      "src/handle/file_writer.rs",
+      "src/handle/write_all_failure.rs",
+      "src/metadata/non_sensitive_metadata.rs",
+      "src/metadata/resource_version.rs",
+      "src/metadata/user_metadata.rs",
+      "src/metadata/write_outcome.rs",
+      "src/options/copy_outcome.rs",
+      "src/options/create_directory_options.rs",
+      "src/options/create_directory_outcome.rs",
+      "src/options/delete_outcome.rs",
+      "src/options/read_options.rs",
+      "src/options/write_options.rs",
+      "src/path/path.rs",
+      "src/spi/internal/resolved_options.rs",
+      "src/spi/resolved_copy_options.rs",
+      "src/spi/resolved_list_options.rs",
+      "src/temp/async_temp_directory.rs",
+      "src/temp/persist_outcome.rs",
+      "src/temp/temp_directory.rs",
+      "src/temp/temp_dir_options.rs",
+      "src/temp/temp_file.rs",
+      "src/uri/connection_uri.rs",
+      "src/uri/uri.rs"
+    ]
+  }
+}
