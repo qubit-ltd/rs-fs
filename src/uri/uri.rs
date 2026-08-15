@@ -14,8 +14,8 @@ use std::fmt::Result as FmtResult;
 
 use fluent_uri::Uri as FluentUri;
 use qubit_redact::RedactionPolicy;
-use qubit_redact::UriRedactionStatus;
-use qubit_redact::UriRedactor;
+use qubit_redact::uri::UriRedactionStatus;
+use qubit_redact::uri::UriRedactor;
 
 use super::invalid_uri;
 use crate::FsResult;
