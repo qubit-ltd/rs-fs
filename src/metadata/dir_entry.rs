@@ -9,9 +9,9 @@
 // facade tests.
 //! Directory entry model.
 
-use crate::FileKind;
-use crate::FileMetadata;
-use crate::Path;
+use crate::metadata::FileKind;
+use crate::metadata::FileMetadata;
+use crate::path::Path;
 
 /// One entry returned by directory listing.
 #[derive(Clone, Debug, PartialEq)]

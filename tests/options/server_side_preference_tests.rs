@@ -6,7 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::ServerSidePreference;
+use qubit_fs::copy::ServerSidePreference;
 
 #[test]
 fn test_server_side_preference_default_is_disable() {

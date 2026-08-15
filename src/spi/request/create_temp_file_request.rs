@@ -9,12 +9,12 @@
 // facade.
 //! Validated temporary-file creation request.
 
-use crate::TempFileOptions;
+use crate::temp::TempOptions;
 
 /// A facade-created temporary-file request.
 pub struct CreateTempFileRequest {
     /// Validated temporary-file creation options.
-    options: TempFileOptions,
+    options: TempOptions,
 }
 
 impl CreateTempFileRequest {
@@ -27,7 +27,7 @@ impl CreateTempFileRequest {
     /// A provider temporary-file request.
     #[allow(dead_code)]
     #[inline]
-    pub(crate) const fn new(options: TempFileOptions) -> Self {
+    pub(crate) const fn new(options: TempOptions) -> Self {
         Self { options }
     }
 
@@ -37,7 +37,7 @@ impl CreateTempFileRequest {
     /// The immutable temporary-file creation options.
     #[inline(always)]
     #[must_use]
-    pub const fn options(&self) -> &TempFileOptions {
+    pub const fn options(&self) -> &TempOptions {
         &self.options
     }
 }

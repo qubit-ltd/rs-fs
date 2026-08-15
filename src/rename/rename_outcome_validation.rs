@@ -8,13 +8,13 @@
 //! Shared validation for provider-reported rename outcomes.
 
 use super::rename_outcome_validation_error::RenameOutcomeValidationError;
-use crate::AchievedAtomicity;
-use crate::DurabilityRequirement;
-use crate::Path;
-use crate::PublicationMethod;
-use crate::RenameFailureState;
-use crate::RenameOptions;
-use crate::RenameOutcome;
+use crate::metadata::AchievedAtomicity;
+use crate::metadata::DurabilityRequirement;
+use crate::metadata::PublicationMethod;
+use crate::path::Path;
+use crate::rename::RenameFailureState;
+use crate::rename::RenameOptions;
+use crate::rename::RenameOutcome;
 
 /// Validates provider outcome guarantees shared by sync and async facades.
 pub(crate) fn validate_rename_outcome(
@@ -23,7 +23,7 @@ pub(crate) fn validate_rename_outcome(
     source: &Path,
     target: &Path,
 ) -> Option<RenameOutcomeValidationError> {
-    if options.atomicity() == crate::AtomicityRequirement::Required
+    if options.atomicity() == crate::metadata::AtomicityRequirement::Required
         && outcome.atomicity() != AchievedAtomicity::Atomic
     {
         return Some(RenameOutcomeValidationError {

@@ -7,8 +7,8 @@
 // =============================================================================
 //! Coverage for directory-creation option defaults and metadata replacement.
 
-use qubit_fs::CreateDirectoryOptions;
-use qubit_fs::UserMetadata;
+use qubit_fs::directory::CreateDirectoryOptions;
+use qubit_fs::metadata::UserMetadata;
 
 /// Verifies default creation options reject existing directories without
 /// creating parents or retaining metadata.

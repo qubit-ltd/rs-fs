@@ -14,10 +14,10 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use qubit_fs::ConnectionUri;
 use qubit_fs::Path;
-use qubit_fs::RelativePath;
-use qubit_fs::Uri;
+use qubit_fs::path::ConnectionUri;
+use qubit_fs::path::RelativePath;
+use qubit_fs::path::Uri;
 
 /// Bounds parser and codec allocations for direct target invocation.
 const MAX_FUZZ_INPUT_LEN: usize = 4096;

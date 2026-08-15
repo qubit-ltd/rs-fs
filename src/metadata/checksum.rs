@@ -7,7 +7,7 @@
 // =============================================================================
 //! Content checksum metadata.
 
-use crate::ChecksumAlgorithm;
+use crate::metadata::ChecksumAlgorithm;
 
 /// Content checksum.
 #[derive(Clone, Debug, Eq, PartialEq)]

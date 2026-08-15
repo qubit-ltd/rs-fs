@@ -20,32 +20,32 @@
 
 use std::hint::black_box;
 
-use qubit_fs::AchievedAtomicity;
 #[cfg(feature = "async")]
 use qubit_fs::AsyncFileSystem;
-use qubit_fs::ChecksumPolicy;
-use qubit_fs::CopyMethod;
-use qubit_fs::CopyMode;
-use qubit_fs::CopyOptions;
-use qubit_fs::CopyOutcome;
-use qubit_fs::CopyStats;
-use qubit_fs::CreateDirectoryOptions;
-use qubit_fs::CreateDirectoryOutcome;
-use qubit_fs::DeleteOutcome;
 use qubit_fs::FileSystem;
-use qubit_fs::FileSystemId;
-use qubit_fs::FileSystemInfo;
-use qubit_fs::MetadataPreservePolicy;
-use qubit_fs::NonSensitiveMetadata;
 use qubit_fs::Path;
-use qubit_fs::PathSemantics;
-use qubit_fs::PersistCleanupState;
-use qubit_fs::PersistOutcome;
-use qubit_fs::PublicationMethod;
-use qubit_fs::ReadOptions;
-use qubit_fs::ResourceVersion;
-use qubit_fs::UserMetadata;
-use qubit_fs::WriteOptions;
+use qubit_fs::copy::CopyMethod;
+use qubit_fs::copy::CopyMode;
+use qubit_fs::copy::CopyOptions;
+use qubit_fs::copy::CopyOutcome;
+use qubit_fs::copy::CopyStats;
+use qubit_fs::copy::MetadataPreservePolicy;
+use qubit_fs::directory::CreateDirectoryOptions;
+use qubit_fs::directory::CreateDirectoryOutcome;
+use qubit_fs::directory::DeleteOutcome;
+use qubit_fs::metadata::AchievedAtomicity;
+use qubit_fs::metadata::FileSystemId;
+use qubit_fs::metadata::FileSystemInfo;
+use qubit_fs::metadata::NonSensitiveMetadata;
+use qubit_fs::metadata::PublicationMethod;
+use qubit_fs::metadata::ResourceVersion;
+use qubit_fs::metadata::UserMetadata;
+use qubit_fs::path::PathSemantics;
+use qubit_fs::read::ChecksumPolicy;
+use qubit_fs::read::ReadOptions;
+use qubit_fs::temp::PersistCleanupState;
+use qubit_fs::temp::PersistOutcome;
+use qubit_fs::write::WriteOptions;
 
 /// Asserts that a facade can be cloned without requiring it to be copyable.
 fn assert_clone<T: Clone>() {}

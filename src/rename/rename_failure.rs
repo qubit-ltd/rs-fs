@@ -15,8 +15,8 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
 
-use crate::FsError;
-use crate::RenameFailureState;
+use crate::error::FsError;
+use crate::rename::RenameFailureState;
 
 /// A rename failure that preserves the provider's publication-state fact.
 pub struct RenameFailure {

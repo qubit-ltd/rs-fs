@@ -6,21 +6,21 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::FsErrorKind;
-use qubit_fs::FsOperation;
 use qubit_fs::Path;
-use qubit_fs::PathComponent;
-use qubit_fs::PersistFailureState;
-use qubit_fs::PersistOptions;
-use qubit_fs::RelativePath;
-use qubit_fs::TempDirectoryOptions;
-use qubit_fs::TempResourceState;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
+use qubit_fs::path::PathComponent;
+use qubit_fs::path::RelativePath;
+use qubit_fs::temp::PersistFailureState;
+use qubit_fs::temp::PersistOptions;
+use qubit_fs::temp::TempOptions;
+use qubit_fs::temp::TempResourceState;
 #[test]
 fn test_temp_directory_child_components_are_lexically_safe() {
     let (filesystem, cleanup_calls, _) =
         crate::handle_support::filesystem(false, Vec::new());
     let mut directory = filesystem
-        .create_temp_directory(TempDirectoryOptions::default())
+        .create_temp_directory(TempOptions::default())
         .expect("temporary directory should open");
     assert_eq!("/temporary", directory.path().as_str());
     let component =
@@ -48,7 +48,7 @@ fn test_temp_directory_persist_marks_resource_persisted() {
     let (filesystem, cleanup_calls, persist_calls) =
         crate::handle_support::filesystem(false, Vec::new());
     let mut directory = filesystem
-        .create_temp_directory(TempDirectoryOptions::default())
+        .create_temp_directory(TempOptions::default())
         .expect("temporary directory should open");
     let target =
         Path::parse("/published-directory").expect("target should parse");
@@ -78,7 +78,7 @@ fn test_temp_directory_rejects_non_atomic_required_persist_outcome() {
     let filesystem =
         crate::handle_support::non_atomic_temp_directory_filesystem();
     let mut directory = filesystem
-        .create_temp_directory(TempDirectoryOptions::default())
+        .create_temp_directory(TempOptions::default())
         .expect("temporary directory should open");
 
     let failure = directory
@@ -100,7 +100,7 @@ fn test_temp_directory_rejects_mismatched_persist_target() {
     let (filesystem, _, _) =
         crate::handle_support::filesystem(false, Vec::new());
     let mut directory = filesystem
-        .create_temp_directory(TempDirectoryOptions::default())
+        .create_temp_directory(TempOptions::default())
         .expect("temporary directory should open");
 
     let failure = directory
@@ -125,7 +125,7 @@ fn test_temp_directory_keep_releases_cleanup_responsibility() {
     let (filesystem, cleanup_calls, _) =
         crate::handle_support::filesystem(false, Vec::new());
     let mut directory = filesystem
-        .create_temp_directory(TempDirectoryOptions::default())
+        .create_temp_directory(TempOptions::default())
         .expect("temporary directory should open");
 
     directory.keep().expect("keep should succeed");
@@ -165,7 +165,7 @@ fn test_temp_directory_persist_failure_preserves_provider_progress() {
         let (filesystem, cleanup_calls, persist_calls) =
             crate::handle_support::temp_failure_filesystem(failure_state);
         let mut directory = filesystem
-            .create_temp_directory(TempDirectoryOptions::default())
+            .create_temp_directory(TempOptions::default())
             .expect("temporary directory should open");
 
         let failure = directory
@@ -233,7 +233,7 @@ fn test_temp_directory_lifecycle_errors_preserve_recovery_state() {
                 (operation == "cleanup").then_some(error_kind),
             );
         let mut directory = filesystem
-            .create_temp_directory(TempDirectoryOptions::default())
+            .create_temp_directory(TempOptions::default())
             .expect("temporary directory should open");
 
         let result = if operation == "keep" {

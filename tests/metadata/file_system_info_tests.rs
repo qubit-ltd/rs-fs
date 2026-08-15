@@ -6,10 +6,10 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::FileSystemId;
-use qubit_fs::FileSystemInfo;
-use qubit_fs::PathSemantics;
-use qubit_fs::UserMetadata;
+use qubit_fs::metadata::FileSystemId;
+use qubit_fs::metadata::FileSystemInfo;
+use qubit_fs::metadata::UserMetadata;
+use qubit_fs::path::PathSemantics;
 
 #[test]
 fn file_system_info_is_a_validated_local_snapshot() {

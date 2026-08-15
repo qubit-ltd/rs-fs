@@ -11,8 +11,8 @@
 
 use super::PersistRequest;
 use super::SpiPersistFailure;
-use crate::FsResult;
-use crate::PersistOutcome;
+use crate::error::FsResult;
+use crate::temp::PersistOutcome;
 
 /// Provider temporary-resource lifecycle session.
 pub trait TempResourceSpi: Send {

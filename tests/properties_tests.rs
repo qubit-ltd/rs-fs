@@ -8,19 +8,19 @@
 
 //! Tests for immutable filesystem property snapshots.
 
-use qubit_fs::FileSystemCapabilities;
-use qubit_fs::FileSystemCapability;
-use qubit_fs::FileSystemId;
-use qubit_fs::FileSystemInfo;
-use qubit_fs::FileSystemLimit;
-use qubit_fs::FileSystemLimits;
-use qubit_fs::FileSystemProperties;
-use qubit_fs::FsOperation;
 use qubit_fs::Path;
-use qubit_fs::PathConstraints;
-use qubit_fs::PathForm;
-use qubit_fs::PathSemantics;
-use qubit_fs::SymlinkPolicy;
+use qubit_fs::error::FsOperation;
+use qubit_fs::metadata::FileSystemCapabilities;
+use qubit_fs::metadata::FileSystemCapability;
+use qubit_fs::metadata::FileSystemId;
+use qubit_fs::metadata::FileSystemInfo;
+use qubit_fs::metadata::FileSystemLimit;
+use qubit_fs::metadata::FileSystemLimits;
+use qubit_fs::metadata::FileSystemProperties;
+use qubit_fs::metadata::SymlinkPolicy;
+use qubit_fs::path::PathConstraints;
+use qubit_fs::path::PathForm;
+use qubit_fs::path::PathSemantics;
 
 /// Builds the smallest valid properties snapshot for validation tests.
 fn test_properties(path_semantics: PathSemantics) -> FileSystemProperties {

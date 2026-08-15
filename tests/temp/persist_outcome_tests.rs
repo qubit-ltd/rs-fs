@@ -6,12 +6,12 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::AchievedAtomicity;
 use qubit_fs::Path;
-use qubit_fs::PersistCleanupState;
-use qubit_fs::PersistOutcome;
-use qubit_fs::PublicationMethod;
-use qubit_fs::UserMetadata;
+use qubit_fs::metadata::AchievedAtomicity;
+use qubit_fs::metadata::PublicationMethod;
+use qubit_fs::metadata::UserMetadata;
+use qubit_fs::temp::PersistCleanupState;
+use qubit_fs::temp::PersistOutcome;
 
 /// Verifies a successful temporary publication exposes its target, achieved
 /// guarantees, and non-sensitive provider diagnostics.

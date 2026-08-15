@@ -6,7 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::ChecksumPolicy;
+use qubit_fs::read::ChecksumPolicy;
 
 #[test]
 fn test_checksum_policy_default_is_none() {

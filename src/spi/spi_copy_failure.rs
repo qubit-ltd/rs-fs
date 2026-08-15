@@ -9,9 +9,9 @@
 // facade.
 //! Provider copy failure facts.
 
-use crate::CopyFailureState;
-use crate::CopyStats;
-use crate::FsError;
+use crate::copy::CopyFailureState;
+use crate::copy::CopyStats;
+use crate::error::FsError;
 
 /// Typed provider copy failure reserved for copy orchestration.
 pub struct SpiCopyFailure {

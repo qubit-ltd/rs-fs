@@ -9,11 +9,11 @@
 
 use std::time::SystemTime;
 
-use crate::Checksum;
-use crate::FileKind;
-use crate::NonSensitiveMetadata;
-use crate::ResourceVersion;
-use crate::UserMetadata;
+use crate::metadata::Checksum;
+use crate::metadata::FileKind;
+use crate::metadata::NonSensitiveMetadata;
+use crate::metadata::ResourceVersion;
+use crate::metadata::UserMetadata;
 
 /// Stable and extensible metadata for one filesystem resource.
 #[non_exhaustive]

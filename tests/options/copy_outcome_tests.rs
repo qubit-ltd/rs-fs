@@ -5,13 +5,13 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use qubit_fs::AchievedAtomicity;
-use qubit_fs::CopyMethod;
-use qubit_fs::CopyOutcome;
-use qubit_fs::CopyStats;
-use qubit_fs::MetadataPreservePolicy;
-use qubit_fs::ResourceVersion;
-use qubit_fs::UserMetadata;
+use qubit_fs::copy::CopyMethod;
+use qubit_fs::copy::CopyOutcome;
+use qubit_fs::copy::CopyStats;
+use qubit_fs::copy::MetadataPreservePolicy;
+use qubit_fs::metadata::AchievedAtomicity;
+use qubit_fs::metadata::ResourceVersion;
+use qubit_fs::metadata::UserMetadata;
 
 #[test]
 fn test_copy_outcome_new_stores_stats_and_method() {

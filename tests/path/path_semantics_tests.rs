@@ -5,7 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use qubit_fs::PathSemantics;
+use qubit_fs::path::PathSemantics;
 
 #[test]
 fn test_path_semantics_hierarchical_variant_is_comparable() {

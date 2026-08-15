@@ -5,12 +5,12 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use qubit_fs::ChecksumPolicy;
-use qubit_fs::FileSystemCapabilities;
-use qubit_fs::FileSystemCapability;
-use qubit_fs::FsErrorKind;
-use qubit_fs::ReadOptions;
-use qubit_fs::ResourceVersion;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::metadata::FileSystemCapabilities;
+use qubit_fs::metadata::FileSystemCapability;
+use qubit_fs::metadata::ResourceVersion;
+use qubit_fs::read::ChecksumPolicy;
+use qubit_fs::read::ReadOptions;
 
 #[test]
 fn test_read_options_full_configuration_is_usable() {

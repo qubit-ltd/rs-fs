@@ -21,36 +21,35 @@ use std::pin::Pin;
 use std::task::Context;
 use std::task::Poll;
 
-use qubit_fs::AchievedAtomicity;
-use qubit_fs::AsyncCopyOperationState;
-use qubit_fs::AtomicityRequirement;
-use qubit_fs::CopyOptions;
-use qubit_fs::CreateDirectoryOptions;
-use qubit_fs::DeleteOptions;
-use qubit_fs::DirEntry;
-use qubit_fs::DirectoryStreamState;
-use qubit_fs::FileKind;
-use qubit_fs::FsErrorKind;
-use qubit_fs::FsOperation;
 use qubit_fs::FsResult;
-use qubit_fs::ListOptions;
 use qubit_fs::Path;
-use qubit_fs::PersistFailureState;
-use qubit_fs::PersistOptions;
-use qubit_fs::ReadOptions;
-use qubit_fs::RenameFailureState;
-use qubit_fs::RenameOptions;
-use qubit_fs::TempDirectoryOptions;
-use qubit_fs::TempFileOptions;
-use qubit_fs::TempResourceState;
-use qubit_fs::WriteAbortOutcome;
-use qubit_fs::WriteFailure;
-use qubit_fs::WriteFailureState;
-use qubit_fs::WriteOptions;
-use qubit_fs::WriteOutcome;
-use qubit_fs::WriterState;
+use qubit_fs::copy::AsyncCopyOperationState;
+use qubit_fs::copy::CopyOptions;
+use qubit_fs::directory::CreateDirectoryOptions;
+use qubit_fs::directory::DeleteOptions;
+use qubit_fs::directory::DirectoryStreamState;
+use qubit_fs::directory::ListOptions;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
+use qubit_fs::metadata::AchievedAtomicity;
+use qubit_fs::metadata::AtomicityRequirement;
+use qubit_fs::metadata::DirEntry;
+use qubit_fs::metadata::FileKind;
+use qubit_fs::metadata::WriteOutcome;
+use qubit_fs::read::ReadOptions;
+use qubit_fs::rename::RenameFailureState;
+use qubit_fs::rename::RenameOptions;
 use qubit_fs::spi::AsyncFileWriteSession;
 use qubit_fs::spi::SpiFuture;
+use qubit_fs::temp::PersistFailureState;
+use qubit_fs::temp::PersistOptions;
+use qubit_fs::temp::TempOptions;
+use qubit_fs::temp::TempResourceState;
+use qubit_fs::write::WriteAbortOutcome;
+use qubit_fs::write::WriteFailure;
+use qubit_fs::write::WriteFailureState;
+use qubit_fs::write::WriteOptions;
+use qubit_fs::write::WriterState;
 use qubit_io::AsyncInput;
 use qubit_io::AsyncOutput;
 
@@ -206,15 +205,14 @@ fn test_async_facade_enriches_handle_and_temp_provider_failures() {
         temp_create_error: true,
         ..AsyncRecordingConfig::default()
     });
-    let Err(file) =
-        ready(file_system.create_temp_file(TempFileOptions::default()))
+    let Err(file) = ready(file_system.create_temp_file(TempOptions::default()))
     else {
         panic!("temporary-file provider failure should propagate");
     };
     assert_eq!(FsErrorKind::UnsupportedOperation, file.kind());
-    let Err(directory) = ready(
-        file_system.create_temp_directory(TempDirectoryOptions::default()),
-    ) else {
+    let Err(directory) =
+        ready(file_system.create_temp_directory(TempOptions::default()))
+    else {
         panic!("temporary-directory provider failure should propagate");
     };
     assert_eq!(FsErrorKind::UnsupportedOperation, directory.kind());
@@ -268,9 +266,8 @@ fn test_async_temp_persist_rechecks_required_atomic_outcome() {
         temp_persist_atomicity: Some(AchievedAtomicity::NonAtomic),
         ..AsyncRecordingConfig::default()
     });
-    let mut temp =
-        ready(file_system.create_temp_file(TempFileOptions::default()))
-            .expect("temporary file should open");
+    let mut temp = ready(file_system.create_temp_file(TempOptions::default()))
+        .expect("temporary file should open");
     let failure = ready(
         temp.persist(
             &path("/final"),

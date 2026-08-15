@@ -9,12 +9,12 @@
 // facade.
 //! Validated temporary-directory creation request.
 
-use crate::TempDirectoryOptions;
+use crate::temp::TempOptions;
 
 /// A facade-created temporary-directory request.
 pub struct CreateTempDirectoryRequest {
     /// Validated temporary-directory creation options.
-    options: TempDirectoryOptions,
+    options: TempOptions,
 }
 
 impl CreateTempDirectoryRequest {
@@ -27,7 +27,7 @@ impl CreateTempDirectoryRequest {
     /// A provider temporary-directory request.
     #[allow(dead_code)]
     #[inline]
-    pub(crate) const fn new(options: TempDirectoryOptions) -> Self {
+    pub(crate) const fn new(options: TempOptions) -> Self {
         Self { options }
     }
 
@@ -37,7 +37,7 @@ impl CreateTempDirectoryRequest {
     /// The immutable temporary-directory creation options.
     #[inline(always)]
     #[must_use]
-    pub const fn options(&self) -> &TempDirectoryOptions {
+    pub const fn options(&self) -> &TempOptions {
         &self.options
     }
 }

@@ -9,12 +9,12 @@
 
 use std::fmt::Display;
 
-use crate::FileSystemId;
-use crate::FsResult;
-use crate::NonSensitiveMetadata;
-use crate::PathSemantics;
-use crate::Uri;
-use crate::UserMetadata;
+use crate::error::FsResult;
+use crate::metadata::FileSystemId;
+use crate::metadata::NonSensitiveMetadata;
+use crate::metadata::UserMetadata;
+use crate::path::PathSemantics;
+use crate::path::Uri;
 
 /// Construction-time local snapshot describing one filesystem object.
 #[derive(Clone, Debug, PartialEq)]

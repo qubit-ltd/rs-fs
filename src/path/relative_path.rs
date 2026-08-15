@@ -12,9 +12,9 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
 
-use crate::FsError;
-use crate::FsOperation;
-use crate::FsResult;
+use crate::error::FsError;
+use crate::error::FsOperation;
+use crate::error::FsResult;
 
 /// A non-empty normalized relative path that cannot escape its base.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]

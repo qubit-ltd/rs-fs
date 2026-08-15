@@ -8,7 +8,7 @@
 
 //! Tests for secret-free resource URIs.
 
-use qubit_fs::Uri;
+use qubit_fs::path::Uri;
 use qubit_redact::RedactionCompletion;
 use qubit_redact::uri::UriRedactionStatus;
 use qubit_redact::uri::UriRedactor;

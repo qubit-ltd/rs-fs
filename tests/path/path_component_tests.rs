@@ -8,7 +8,7 @@
 
 //! Tests for individual logical path components.
 
-use qubit_fs::PathComponent;
+use qubit_fs::path::PathComponent;
 
 /// Verifies components reject hierarchy and traversal syntax.
 #[test]

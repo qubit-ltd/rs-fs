@@ -6,7 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::CopyMethod;
+use qubit_fs::copy::CopyMethod;
 
 #[test]
 fn test_copy_method_variants_are_comparable() {

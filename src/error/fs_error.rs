@@ -16,10 +16,10 @@ use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
 use std::io;
 
-use crate::FileSystemCapability;
-use crate::FsErrorKind;
-use crate::FsOperation;
-use crate::Path;
+use crate::error::FsErrorKind;
+use crate::error::FsOperation;
+use crate::metadata::FileSystemCapability;
+use crate::path::Path;
 
 /// Provider-neutral filesystem error with operation and path context.
 ///

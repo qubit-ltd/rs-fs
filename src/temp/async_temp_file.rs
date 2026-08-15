@@ -11,23 +11,23 @@
 
 use std::pin::Pin;
 
-use crate::AchievedAtomicity;
 use crate::AsyncFileSystem;
-use crate::AtomicityRequirement;
-use crate::FsError;
-use crate::FsErrorKind;
-use crate::FsOperation;
-use crate::FsResult;
-use crate::Path;
-use crate::PathComponent;
-use crate::PersistFailure;
-use crate::PersistFailureState;
-use crate::PersistOptions;
-use crate::PersistOutcome;
-use crate::TempResourceState;
+use crate::error::FsError;
+use crate::error::FsErrorKind;
+use crate::error::FsOperation;
+use crate::error::FsResult;
+use crate::metadata::AchievedAtomicity;
+use crate::metadata::AtomicityRequirement;
+use crate::path::Path;
+use crate::path::PathComponent;
 use crate::spi::AsyncTempResourceSpi;
 use crate::spi::PersistRequest;
 use crate::spi::SpiFuture;
+use crate::temp::PersistFailure;
+use crate::temp::PersistFailureState;
+use crate::temp::PersistOptions;
+use crate::temp::PersistOutcome;
+use crate::temp::TempResourceState;
 
 /// A facade-owned asynchronous temporary file.
 pub struct AsyncTempFile {
@@ -98,7 +98,7 @@ impl AsyncTempFile {
     /// Returns one lexically safe descendant path.
     #[inline(always)]
     #[must_use]
-    pub fn descendant(&self, relative: &crate::RelativePath) -> Path {
+    pub fn descendant(&self, relative: &crate::path::RelativePath) -> Path {
         self.path.join(relative)
     }
 

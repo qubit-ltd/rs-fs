@@ -15,7 +15,7 @@ macro_rules! path_request {
         /// A facade-created request with a validated logical path.
         pub struct $name<'a> {
             /// Validated logical path borrowed for provider dispatch.
-            path: &'a crate::Path,
+            path: &'a crate::path::Path,
             /// Facade-resolved operation options.
             options: $options,
         }
@@ -31,7 +31,7 @@ macro_rules! path_request {
             /// A provider request borrowing `path` for the dispatch lifetime.
             #[inline]
             pub(crate) const fn new(
-                path: &'a crate::Path,
+                path: &'a crate::path::Path,
                 options: $options,
             ) -> Self {
                 Self { path, options }
@@ -43,7 +43,7 @@ macro_rules! path_request {
             /// The request path validated by the facade.
             #[inline(always)]
             #[must_use]
-            pub const fn path(&self) -> &'a crate::Path {
+            pub const fn path(&self) -> &'a crate::path::Path {
                 self.path
             }
 

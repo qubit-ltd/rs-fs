@@ -5,12 +5,12 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use qubit_fs::AtomicityRequirement;
-use qubit_fs::FileSystemCapabilities;
-use qubit_fs::FileSystemCapability;
-use qubit_fs::FsErrorKind;
-use qubit_fs::MetadataPreservePolicy;
-use qubit_fs::PersistOptions;
+use qubit_fs::copy::MetadataPreservePolicy;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::metadata::AtomicityRequirement;
+use qubit_fs::metadata::FileSystemCapabilities;
+use qubit_fs::metadata::FileSystemCapability;
+use qubit_fs::temp::PersistOptions;
 
 #[test]
 fn test_persist_options_full_configuration_is_usable() {

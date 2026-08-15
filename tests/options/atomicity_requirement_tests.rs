@@ -5,7 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use qubit_fs::AtomicityRequirement;
+use qubit_fs::metadata::AtomicityRequirement;
 
 #[test]
 fn atomicity_requirement_defaults_to_preferred() {

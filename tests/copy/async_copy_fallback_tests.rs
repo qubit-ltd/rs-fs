@@ -7,20 +7,20 @@
 // =============================================================================
 //! External fallback failures and cancellation behavior for asynchronous copy.
 
-use qubit_fs::AchievedAtomicity;
-use qubit_fs::AsyncCopyOperationState;
-use qubit_fs::AtomicityRequirement;
-use qubit_fs::CopyConflictPolicy;
-use qubit_fs::CopyFailureState;
-use qubit_fs::CopyOptions;
-use qubit_fs::DurabilityRequirement;
-use qubit_fs::FileSystemCapability;
-use qubit_fs::FsErrorKind;
-use qubit_fs::MetadataPreservePolicy;
 use qubit_fs::Path;
-use qubit_fs::ServerSidePreference;
-use qubit_fs::WriteFailureState;
-use qubit_fs::WriterState;
+use qubit_fs::copy::AsyncCopyOperationState;
+use qubit_fs::copy::CopyConflictPolicy;
+use qubit_fs::copy::CopyFailureState;
+use qubit_fs::copy::CopyOptions;
+use qubit_fs::copy::MetadataPreservePolicy;
+use qubit_fs::copy::ServerSidePreference;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::metadata::AchievedAtomicity;
+use qubit_fs::metadata::AtomicityRequirement;
+use qubit_fs::metadata::DurabilityRequirement;
+use qubit_fs::metadata::FileSystemCapability;
+use qubit_fs::write::WriteFailureState;
+use qubit_fs::write::WriterState;
 
 use crate::async_recording_spi::AsyncCopyStage;
 use crate::async_recording_spi::AsyncRecordingConfig;
