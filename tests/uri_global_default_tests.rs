@@ -10,18 +10,22 @@
 
 use qubit_fs::ConnectionUri;
 use qubit_fs::Uri;
+use qubit_redact::RedactionCompletion;
 use qubit_redact::RedactionPolicy;
 use qubit_redact::Sensitivity;
+use qubit_redact::uri::UriRedactionStatus;
+use qubit_redact::uri::UriRedactor;
 
 /// Verifies URI parsing uses an explicit policy instead of process-global
 /// redaction state.
 #[test]
 fn test_uri_credential_boundaries_ignore_global_allow_rules() {
-    let policy = RedactionPolicy::builder()
+    let mut builder = RedactionPolicy::builder();
+    builder
+        .fields()
         .raise("tenant_payload", Sensitivity::Secret)
-        .expect("tenant_payload is a valid field name")
-        .build()
-        .expect("the policy is valid");
+        .expect("tenant_payload is a valid field name");
+    let policy = builder.build().expect("the policy is valid");
     RedactionPolicy::install_global(policy.clone())
         .expect("this test process installs its default only once");
 
@@ -42,4 +46,9 @@ fn test_uri_credential_boundaries_ignore_global_allow_rules() {
     let rendered = connection.to_string();
     assert!(!rendered.contains("raw-password"));
     assert!(!rendered.contains("raw-secret"));
+
+    let redaction = UriRedactor::new(policy)
+        .redact_uri_str("s3://bucket/key?tenant_payload=raw-secret");
+    assert_eq!(UriRedactionStatus::Redacted, redaction.status());
+    assert_eq!(RedactionCompletion::Complete, redaction.completion());
 }
