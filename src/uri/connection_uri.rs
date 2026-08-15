@@ -14,9 +14,10 @@ use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
 
 use fluent_uri::Uri as FluentUri;
-use qubit_redact::LogSafeText;
+use qubit_redact::RedactionCompletion;
 use qubit_redact::RedactionPolicy;
-use qubit_redact::UriRedactor;
+use qubit_redact::uri::UriRedactionStatus;
+use qubit_redact::uri::UriRedactor;
 
 use super::invalid_uri;
 use super::uri::Uri;
@@ -73,13 +74,26 @@ impl ConnectionUri {
     /// by the policy snapshot captured during parsing.
     ///
     /// Username-only userinfo is not considered a secret because it can be
-    /// paired with an external credential reference.
+    /// paired with an external credential reference. Classification uses
+    /// metadata-only inspection, so the diagnostic output budget cannot hide
+    /// a late sensitive component. Invalid inspection, including an exceeded
+    /// input budget or invalid encoded component, is treated conservatively as
+    /// secret-bearing.
+    ///
+    /// # Returns
+    ///
+    /// `false` only after inspection passes through without a sensitive
+    /// component; `true` after redaction or any invalid inspection result.
     #[inline]
     #[must_use]
     pub fn has_embedded_secret(&self) -> bool {
-        UriRedactor::new(self.redaction_policy.clone())
-            .redact_uri_str(self.parsed.as_str())
-            .has_sensitive_components()
+        let inspection = UriRedactor::new(self.redaction_policy.clone())
+            .inspect_uri_str(self.parsed.as_str());
+        match inspection.status() {
+            UriRedactionStatus::PassedThrough => false,
+            UriRedactionStatus::Redacted | UriRedactionStatus::Invalid => true,
+            _ => true,
+        }
     }
 
     /// Converts this connection URI to a secret-free resource URI.
@@ -102,12 +116,32 @@ impl ConnectionUri {
         inspect(self.parsed.as_str())
     }
 
-    /// Renders a URI while preserving component order and masking sensitive
-    /// values through the shared URI redactor.
-    fn redacted_text(&self) -> LogSafeText<'static> {
-        UriRedactor::new(self.redaction_policy.clone())
-            .redact_uri_str(self.parsed.as_str())
-            .into_log_safe_text()
+    /// Renders the connection URI under the structured completion contract.
+    ///
+    /// A complete result preserves the full log-safe rendering. A truncated
+    /// result contains only a substitute for omitted output, while an
+    /// exhausted result means that no safe substitute fit and processing must
+    /// stop without reading further input. Both incomplete states are mapped
+    /// to one outer marker so normal formatting never exposes or mistakes a
+    /// partial connection URI for a complete resource location.
+    ///
+    /// # Returns
+    ///
+    /// The complete redacted URI, or `<truncated>` when redaction did not
+    /// complete.
+    #[inline]
+    #[must_use]
+    fn redacted_text(&self) -> String {
+        let redaction = UriRedactor::new(self.redaction_policy.clone())
+            .redact_uri_str(self.parsed.as_str());
+        match redaction.completion() {
+            RedactionCompletion::Complete => {
+                redaction.into_log_safe_text().into_owned()
+            }
+            RedactionCompletion::Truncated | RedactionCompletion::Exhausted => {
+                "<truncated>".to_owned()
+            }
+        }
     }
 }
 
@@ -115,7 +149,7 @@ impl Display for ConnectionUri {
     /// Formats only the redacted connection URI.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
-        formatter.write_str(self.redacted_text().as_str())
+        formatter.write_str(&self.redacted_text())
     }
 }
 
@@ -126,7 +160,7 @@ impl Debug for ConnectionUri {
         let redacted = self.redacted_text();
         formatter
             .debug_tuple("ConnectionUri")
-            .field(&redacted.as_str())
+            .field(&redacted)
             .finish()
     }
 }
