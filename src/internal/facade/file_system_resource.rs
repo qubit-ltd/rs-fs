@@ -8,7 +8,7 @@
 // qubit-style: allow source-test-pair
 //! Shared byte-budget adapters for filesystem facades.
 
-use qubit_budget::BudgetError;
+use qubit_budget::InsufficientBudgetError;
 use qubit_budget::ResourceBudget;
 
 use crate::FsError;
@@ -60,7 +60,7 @@ pub(crate) fn quantity_from_usize(
 /// Converts a budget failure into a contextual filesystem error.
 #[inline]
 pub(crate) fn budget_error(
-    error: BudgetError<FileSystemResource, u64>,
+    error: InsufficientBudgetError<FileSystemResource, u64>,
     operation: FsOperation,
     path: &Path,
     provider: &str,
