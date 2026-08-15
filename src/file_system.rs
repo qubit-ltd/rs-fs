@@ -7,87 +7,66 @@
 // =============================================================================
 //! Validating synchronous filesystem facade.
 
-use std::io::Error as IoError;
 use std::sync::Arc;
 
-use qubit_io::Input;
-use qubit_io::Output;
-
-use crate::CopyConflictPolicy;
-use crate::CopyFailure;
-use crate::CopyFailureState;
-use crate::CopyOptions;
-use crate::CopyOutcome;
-use crate::CopyStats;
-use crate::CreateDirectoryOptions;
-use crate::CreateDirectoryOutcome;
-use crate::DeleteOptions;
-use crate::DeleteOutcome;
-use crate::DirectoryStream;
-use crate::FileMetadata;
-use crate::FileReader;
-use crate::FileSystemCapability;
-use crate::FileSystemProperties;
-use crate::FileWriter;
-use crate::FsError;
-use crate::FsErrorKind;
-use crate::FsOperation;
-use crate::FsResult;
-use crate::ListOptions;
-use crate::Path;
-use crate::ReadOptions;
-use crate::RenameFailure;
-use crate::RenameFailureState;
-use crate::RenameOptions;
-use crate::RenameOutcome;
-use crate::TempDirectory;
-use crate::TempDirectoryOptions;
-use crate::TempFile;
-use crate::TempFileOptions;
-use crate::WriteAllFailure;
-use crate::WriteDisposition;
-use crate::WriteOptions;
-use crate::copy::fallback_failure_stats;
-use crate::copy::fallback_options_supported;
-use crate::copy::from_write_failure_state;
-use crate::copy::from_writer_state;
-use crate::copy::is_file_kind_supported;
-use crate::copy::validate_stream_copy_length_limits;
-use crate::internal::facade::file_system_resource::FileSystemResource;
-use crate::internal::facade::file_system_resource::budget_error;
-use crate::internal::facade::file_system_resource::byte_budget;
-use crate::internal::facade::file_system_resource::quantity_from_usize;
-use crate::internal::facade::read_policy::PREFIX_BUFFER_SIZE;
-use crate::internal::facade::read_policy::next_read_len;
+use crate::copy::CopyFailure;
+use crate::copy::CopyOperation;
+use crate::copy::CopyOptions;
+use crate::copy::CopyOutcome;
+use crate::directory::CreateDirectoryOptions;
+use crate::directory::CreateDirectoryOutcome;
+use crate::directory::DeleteOptions;
+use crate::directory::DeleteOutcome;
+use crate::directory::DirectoryOperation;
+use crate::directory::DirectoryStream;
+use crate::directory::ListOptions;
+use crate::error::FsError;
+use crate::error::FsErrorKind;
+use crate::error::FsOperation;
+use crate::error::FsResult;
+use crate::facade::facade_core::FacadeCore;
+use crate::metadata::FileMetadata;
+use crate::metadata::FileSystemCapability;
+use crate::metadata::FileSystemProperties;
+use crate::path::Path;
+use crate::read::FileReader;
+use crate::read::ReadOperation;
+use crate::read::ReadOptions;
+use crate::rename::RenameFailure;
+use crate::rename::RenameFailureState;
+use crate::rename::RenameOptions;
+use crate::rename::RenameOutcome;
 use crate::rename::validate_rename_outcome;
-use crate::spi::CopyAttempt;
-use crate::spi::CopyRequest;
 use crate::spi::CreateDirectoryRequest;
 use crate::spi::CreateTempDirectoryRequest;
 use crate::spi::CreateTempFileRequest;
 use crate::spi::DeleteDirectoryRequest;
 use crate::spi::DeleteFileRequest;
 use crate::spi::FileSystemSpi;
-use crate::spi::ListRequest;
 use crate::spi::OpenReaderRequest;
 use crate::spi::OpenWriterRequest;
 use crate::spi::RenameRequest;
-use crate::spi::ResolvedCopyOptions;
 use crate::spi::ResolvedCreateDirectoryOptions;
 use crate::spi::ResolvedDeleteOptions;
-use crate::spi::ResolvedListOptions;
 use crate::spi::ResolvedReadOptions;
 use crate::spi::ResolvedRenameOptions;
 use crate::spi::ResolvedWriteOptions;
 use crate::spi::StatRequest;
+use crate::temp::TempDirectory;
+use crate::temp::TempFile;
+use crate::temp::TempOptions;
+use crate::write::FileWriter;
+use crate::write::WriteAllFailure;
+use crate::write::WriteOperation;
+use crate::write::WriteOptions;
 
 /// Application-facing synchronous filesystem facade.
 #[derive(Clone)]
 pub struct FileSystem {
     /// Provider implementation receiving validated synchronous requests.
     spi: Arc<dyn FileSystemSpi>,
-    /// Immutable provider properties captured when the facade was created.
-    properties: Arc<FileSystemProperties>,
+    /// Shared immutable state and deterministic preflight policy.
+    core: Arc<FacadeCore>,
 }
 
 impl FileSystem {
@@ -104,11 +83,10 @@ impl FileSystem {
     /// Constructs a facade from a shared provider implementation.
     #[inline]
     pub fn from_shared_spi(spi: Arc<dyn FileSystemSpi>) -> FsResult<Self> {
-        let properties = spi.properties();
-        properties.validate()?;
+        let core = FacadeCore::new(spi.properties())?;
         Ok(Self {
             spi,
-            properties: Arc::new(properties),
+            core: Arc::new(core),
         })
     }
 
@@ -116,7 +94,19 @@ impl FileSystem {
     #[inline(always)]
     #[must_use]
     pub fn properties(&self) -> &FileSystemProperties {
-        &self.properties
+        self.core.properties()
+    }
+
+    /// Returns shared deterministic facade policy to operation objects.
+    #[inline(always)]
+    pub(crate) fn core(&self) -> &FacadeCore {
+        &self.core
+    }
+
+    /// Returns the synchronous provider implementation to operation objects.
+    #[inline(always)]
+    pub(crate) fn spi(&self) -> &dyn FileSystemSpi {
+        self.spi.as_ref()
     }
 
     /// Reads metadata after all local validation succeeds.
@@ -159,85 +149,7 @@ impl FileSystem {
         target: &Path,
         options: CopyOptions,
     ) -> Result<CopyOutcome, CopyFailure> {
-        if let Err(error) = self.copy_preflight(source, target, &options) {
-            return Err(self.contextualize_copy_failure(
-                self.copy_failure(
-                    error,
-                    CopyFailureState::Unchanged,
-                    CopyStats::default(),
-                    None,
-                ),
-                source,
-                target,
-            ));
-        }
-        if !self
-            .properties
-            .capabilities()
-            .supports(FileSystemCapability::Copy)
-        {
-            return self
-                .stream_copy_fallback(source, target, &options)
-                .map_err(|failure| {
-                    self.contextualize_copy_failure(failure, source, target)
-                });
-        }
-        match self.spi.try_copy(CopyRequest::new(
-            source,
-            target,
-            ResolvedCopyOptions::new(
-                options.clone(),
-                options
-                    .symlink_policy_override()
-                    .unwrap_or(self.properties.symlink_policy()),
-            ),
-        )) {
-            Ok(CopyAttempt::Completed(outcome)) => {
-                self.verify_completed_copy(outcome, &options, source, target)
-            }
-            Err(failure) => {
-                let (error, state, stats) = failure.into_parts();
-                Err(self.contextualize_copy_failure(
-                    self.copy_failure(error, state, stats, None),
-                    source,
-                    target,
-                ))
-            }
-            Ok(CopyAttempt::Declined(_)) => self
-                .stream_copy_fallback(source, target, &options)
-                .map_err(|failure| {
-                    self.contextualize_copy_failure(failure, source, target)
-                }),
-        }
-    }
-
-    /// Verifies that a provider-completed fast path honors required outcome
-    /// guarantees.
-    #[allow(clippy::result_large_err)]
-    fn verify_completed_copy(
-        &self,
-        outcome: CopyOutcome,
-        options: &CopyOptions,
-        source: &Path,
-        target: &Path,
-    ) -> Result<CopyOutcome, CopyFailure> {
-        if let Some(message) = outcome.contract_violation(options) {
-            return Err(self.contextualize_copy_failure(
-                self.copy_failure(
-                    FsError::new(
-                        FsErrorKind::ProviderContractViolation,
-                        FsOperation::Copy,
-                        message,
-                    ),
-                    CopyFailureState::Published,
-                    *outcome.stats(),
-                    None,
-                ),
-                source,
-                target,
-            ));
-        }
-        Ok(outcome)
+        CopyOperation::new(self, source, target, options).execute()
     }
 
     /// Renames one resource through exactly one provider rename primitive.
@@ -285,7 +197,7 @@ impl FileSystem {
                         .with_missing_context(
                             source,
                             Some(target),
-                            self.properties.info().provider_id(),
+                            self.properties().info().provider_id(),
                         ),
                     state,
                 ))
@@ -299,37 +211,7 @@ impl FileSystem {
         path: &Path,
         options: ListOptions,
     ) -> FsResult<DirectoryStream> {
-        self.validate_path(path, FsOperation::List)?;
-        options
-            .validate()
-            .map_err(|error| self.enrich(error, path, FsOperation::List))?;
-        self.require(FileSystemCapability::List, FsOperation::List, path)?;
-        let page_size = self
-            .properties
-            .limits()
-            .clamp_list_page_size(options.page_size());
-        let options = options.with_page_size(page_size);
-        self.spi
-            .list(ListRequest::new(
-                path,
-                ResolvedListOptions::new(
-                    options.clone(),
-                    options
-                        .symlink_policy_override()
-                        .unwrap_or(self.properties.symlink_policy()),
-                ),
-            ))
-            .map(|opened| {
-                DirectoryStream::new(
-                    path.clone(),
-                    opened.into_stream(),
-                    options,
-                    self.properties.info().provider_id(),
-                    self.properties.info().path_semantics(),
-                    *self.properties.limits(),
-                )
-            })
-            .map_err(|error| self.enrich(error, path, FsOperation::List))
+        DirectoryOperation::new(self).list(path, options)
     }
 
     /// Opens a provider reader after local option validation.
@@ -340,11 +222,11 @@ impl FileSystem {
     ) -> FsResult<FileReader> {
         self.validate_path(path, FsOperation::OpenReader)?;
         options
-            .validate_against(self.properties.capabilities())
+            .validate_against(self.properties().capabilities())
             .map_err(|error| {
                 self.enrich(error, path, FsOperation::OpenReader)
             })?;
-        self.properties
+        self.properties()
             .limits()
             .validate_read_range(path, options.length())
             .map_err(|error| {
@@ -376,7 +258,7 @@ impl FileSystem {
     ) -> FsResult<FileWriter> {
         self.validate_path(path, FsOperation::OpenWriter)?;
         options
-            .validate_against(self.properties.capabilities())
+            .validate_against(self.properties().capabilities())
             .map_err(|error| {
                 self.enrich(error, path, FsOperation::OpenWriter)
             })?;
@@ -398,25 +280,18 @@ impl FileSystem {
                     info,
                     writer,
                     atomicity,
-                    self.properties.info().provider_id(),
-                    self.properties.limits().max_write_bytes().maximum(),
+                    self.properties().info().provider_id(),
+                    self.properties().limits().max_write_bytes().maximum(),
                 ))
             })
             .map_err(|error| self.enrich(error, path, FsOperation::OpenWriter))
     }
 
     /// Creates a temporary file and binds its provider session to this facade.
-    pub fn create_temp_file(
-        &self,
-        options: TempFileOptions,
-    ) -> FsResult<TempFile> {
+    pub fn create_temp_file(&self, options: TempOptions) -> FsResult<TempFile> {
         let parent = options.parent().cloned();
-        crate::facade_context::validate_temp_parent(
-            &self.properties,
-            parent.as_ref(),
-        )?;
-        crate::facade_context::require_optional(
-            &self.properties,
+        self.core.validate_temp_parent(parent.as_ref())?;
+        self.core.require(
             FileSystemCapability::TempFile,
             FsOperation::CreateTemp,
             parent.as_ref(),
@@ -425,7 +300,7 @@ impl FileSystem {
             .create_temp_file(CreateTempFileRequest::new(options))
             .and_then(|opened| {
                 let (info, mut session) = opened.into_parts();
-                if let Err(error) = self.validate_temp_info(&info, crate::FileKind::File) {
+                if let Err(error) = self.validate_temp_info(&info, crate::metadata::FileKind::File) {
                     let path = error.path().cloned().unwrap_or_else(Path::root);
                     return Err(match session.cleanup() {
                         Ok(()) => error,
@@ -436,14 +311,13 @@ impl FileSystem {
                             cleanup,
                         )
                         .with_path(path.clone())
-                        .with_provider(self.properties.info().provider_id()),
+                        .with_provider(self.properties().info().provider_id()),
                     });
                 }
                 Ok(TempFile::new(self.clone(), info.path().clone(), session))
             })
             .map_err(|error| {
-                crate::facade_context::enrich_optional(
-                    &self.properties,
+                self.core.enrich(
                     error,
                     parent.as_ref(),
                     FsOperation::CreateTemp,
@@ -455,15 +329,11 @@ impl FileSystem {
     /// facade.
     pub fn create_temp_directory(
         &self,
-        options: TempDirectoryOptions,
+        options: TempOptions,
     ) -> FsResult<TempDirectory> {
         let parent = options.parent().cloned();
-        crate::facade_context::validate_temp_parent(
-            &self.properties,
-            parent.as_ref(),
-        )?;
-        crate::facade_context::require_optional(
-            &self.properties,
+        self.core.validate_temp_parent(parent.as_ref())?;
+        self.core.require(
             FileSystemCapability::TempDirectory,
             FsOperation::CreateTemp,
             parent.as_ref(),
@@ -472,7 +342,7 @@ impl FileSystem {
             .create_temp_directory(CreateTempDirectoryRequest::new(options))
             .and_then(|opened| {
                 let (info, mut session) = opened.into_parts();
-                if let Err(error) = self.validate_temp_info(&info, crate::FileKind::Directory) {
+                if let Err(error) = self.validate_temp_info(&info, crate::metadata::FileKind::Directory) {
                     let path = error.path().cloned().unwrap_or_else(Path::root);
                     return Err(match session.cleanup() {
                         Ok(()) => error,
@@ -483,7 +353,7 @@ impl FileSystem {
                             cleanup,
                         )
                         .with_path(path.clone())
-                        .with_provider(self.properties.info().provider_id()),
+                        .with_provider(self.properties().info().provider_id()),
                     });
                 }
                 Ok(TempDirectory::new(
@@ -493,8 +363,7 @@ impl FileSystem {
                 ))
             })
             .map_err(|error| {
-                crate::facade_context::enrich_optional(
-                    &self.properties,
+                self.core.enrich(
                     error,
                     parent.as_ref(),
                     FsOperation::CreateTemp,
@@ -563,7 +432,7 @@ impl FileSystem {
     ) -> FsResult<DeleteOutcome> {
         self.validate_path(path, FsOperation::Delete)?;
         options
-            .validate_against(self.properties.capabilities())
+            .validate_against(self.properties().capabilities())
             .map_err(|error| self.enrich(error, path, FsOperation::Delete))?;
         self.require(FileSystemCapability::Delete, FsOperation::Delete, path)?;
         let missing_ok = options.missing_ok();
@@ -589,235 +458,6 @@ impl FileSystem {
         Ok(outcome)
     }
 
-    /// Performs validation common to provider copy dispatch and fallback
-    /// selection.
-    fn copy_preflight(
-        &self,
-        source: &Path,
-        target: &Path,
-        options: &CopyOptions,
-    ) -> FsResult<()> {
-        self.validate_path(source, FsOperation::Copy)?;
-        self.validate_path(target, FsOperation::Copy)?;
-        options
-            .validate_against(self.properties.capabilities())
-            .map_err(|error| {
-                self.enrich(error, source, FsOperation::Copy)
-                    .with_target(target.clone())
-            })?;
-        if source == target {
-            return Err(FsError::new(
-                FsErrorKind::InvalidOptions,
-                FsOperation::Copy,
-                "copy source and target must differ",
-            )
-            .with_path(source.clone())
-            .with_target(target.clone()));
-        }
-        Ok(())
-    }
-
-    /// Applies the deliberately narrow fallback allowlist before opening either
-    /// stream handle.
-    #[allow(clippy::result_large_err)]
-    fn stream_copy_fallback(
-        &self,
-        source: &Path,
-        target: &Path,
-        options: &CopyOptions,
-    ) -> Result<CopyOutcome, CopyFailure> {
-        if !fallback_options_supported(options) {
-            return Err(self.copy_failure(
-                FsError::new(
-                    FsErrorKind::RequirementNotMet,
-                    FsOperation::Copy,
-                    "declined copy cannot use the stream fallback for these options",
-                ),
-                CopyFailureState::Unchanged,
-                CopyStats::default(),
-                None,
-            ));
-        }
-        self.require(FileSystemCapability::Read, FsOperation::Copy, source)
-            .and_then(|_| {
-                self.require(
-                    FileSystemCapability::Write,
-                    FsOperation::Copy,
-                    target,
-                )
-            })
-            .map_err(|error| {
-                self.copy_failure(
-                    error,
-                    CopyFailureState::Unchanged,
-                    CopyStats::default(),
-                    None,
-                )
-            })?;
-        let metadata = self.stat(source).map_err(|error| {
-            self.copy_failure(
-                error,
-                CopyFailureState::Unchanged,
-                CopyStats::default(),
-                None,
-            )
-        })?;
-        if !is_file_kind_supported(metadata.kind().clone()) {
-            return Err(self.copy_failure(
-                FsError::new(
-                    FsErrorKind::InvalidOptions,
-                    FsOperation::Copy,
-                    "stream fallback only supports regular files and objects",
-                )
-                .with_path(source.clone()),
-                CopyFailureState::Unchanged,
-                CopyStats::default(),
-                None,
-            ));
-        }
-        if let Some(length) = metadata.len()
-            && let Err(error) = validate_stream_copy_length_limits(
-                self.properties.limits(),
-                source,
-                target,
-                length,
-            )
-        {
-            return Err(self.copy_failure(
-                error,
-                CopyFailureState::Unchanged,
-                CopyStats::default(),
-                None,
-            ));
-        }
-        let mut reader = match self.open_reader(source, ReadOptions::default())
-        {
-            Ok(reader) => reader,
-            Err(error) => {
-                return Err(self.copy_failure(
-                    error,
-                    CopyFailureState::Unchanged,
-                    CopyStats::default(),
-                    None,
-                ));
-            }
-        };
-        let writer_options = WriteOptions::default()
-            .with_disposition(WriteDisposition::CreateNew)
-            .with_atomicity(options.atomicity());
-        let mut writer = match self.open_writer(target, writer_options) {
-            Ok(writer) => writer,
-            Err(error)
-                if error.kind() == FsErrorKind::AlreadyExists
-                    && options.conflict() == CopyConflictPolicy::Skip =>
-            {
-                return Ok(CopyOutcome::streamed_fallback(
-                    CopyStats {
-                        skipped: 1,
-                        ..CopyStats::default()
-                    },
-                    crate::AchievedAtomicity::NonAtomic,
-                ));
-            }
-            Err(error) => {
-                return Err(self.copy_failure(
-                    error,
-                    CopyFailureState::Unchanged,
-                    CopyStats::default(),
-                    None,
-                ));
-            }
-        };
-        let mut bytes = 0_u64;
-        let mut buffer = [0_u8; 8192];
-        loop {
-            let read = match Input::read(&mut reader, &mut buffer) {
-                Ok(read) => read,
-                Err(error) => {
-                    return Err(self.copy_failure(
-                        self.io_error(source, FsOperation::Read, error),
-                        from_writer_state(writer.state()),
-                        fallback_failure_stats(writer.written_bytes()),
-                        Some(writer),
-                    ));
-                }
-            };
-            if read == 0 {
-                break;
-            }
-            if let Err(error) =
-                Output::write_fully(&mut writer, &buffer[..read])
-            {
-                return Err(self.copy_failure(
-                    self.io_error(target, FsOperation::Write, error),
-                    from_writer_state(writer.state()),
-                    fallback_failure_stats(writer.written_bytes()),
-                    Some(writer),
-                ));
-            }
-            bytes = match self.add_copied_bytes(bytes, read, source) {
-                Ok(bytes) => bytes,
-                Err(error) => {
-                    return Err(self.copy_failure(
-                        error,
-                        from_writer_state(writer.state()),
-                        fallback_failure_stats(writer.written_bytes()),
-                        Some(writer),
-                    ));
-                }
-            };
-        }
-        if let Err(error) = Output::flush(&mut writer) {
-            return Err(self.copy_failure(
-                self.io_error(target, FsOperation::Write, error),
-                from_writer_state(writer.state()),
-                fallback_failure_stats(writer.written_bytes()),
-                Some(writer),
-            ));
-        }
-        let write_outcome = match writer.commit() {
-            Ok(outcome) => outcome,
-            Err(failure) => {
-                let (error, state) = failure.into_parts();
-                let state = from_write_failure_state(state);
-                if error.kind() == FsErrorKind::AlreadyExists
-                    && options.conflict() == CopyConflictPolicy::Skip
-                    && state == CopyFailureState::Unchanged
-                {
-                    if let Err(cleanup_error) = writer.abort() {
-                        return Err(self.copy_failure(
-                            cleanup_error,
-                            from_writer_state(writer.state()),
-                            fallback_failure_stats(writer.written_bytes()),
-                            Some(writer),
-                        ));
-                    }
-                    return Ok(CopyOutcome::streamed_fallback(
-                        CopyStats {
-                            skipped: 1,
-                            ..CopyStats::default()
-                        },
-                        crate::AchievedAtomicity::NonAtomic,
-                    ));
-                }
-                return Err(self.copy_failure(
-                    error,
-                    state,
-                    fallback_failure_stats(writer.written_bytes()),
-                    Some(writer),
-                ));
-            }
-        };
-        Ok(CopyOutcome::streamed_fallback(
-            CopyStats {
-                files: 1,
-                bytes,
-                ..CopyStats::default()
-            },
-            write_outcome.atomicity(),
-        ))
-    }
-
     /// Performs validation before the single rename provider call.
     fn rename_preflight(
         &self,
@@ -828,7 +468,7 @@ impl FileSystem {
         self.validate_path(source, FsOperation::Rename)?;
         self.validate_path(target, FsOperation::Rename)?;
         options
-            .validate_against(self.properties.capabilities())
+            .validate_against(self.properties().capabilities())
             .map_err(|error| {
                 self.enrich(error, source, FsOperation::Rename)
                     .with_target(target.clone())
@@ -850,43 +490,6 @@ impl FileSystem {
         Ok(())
     }
 
-    /// Builds a contextual typed copy failure.
-    fn copy_failure(
-        &self,
-        error: FsError,
-        state: CopyFailureState,
-        stats: CopyStats,
-        writer: Option<FileWriter>,
-    ) -> CopyFailure {
-        CopyFailure::new(
-            error.with_operation(FsOperation::Copy),
-            state,
-            stats,
-            writer,
-        )
-    }
-
-    /// Adds source, target, and provider facts required by public copy
-    /// failures.
-    fn contextualize_copy_failure(
-        &self,
-        failure: CopyFailure,
-        source: &Path,
-        target: &Path,
-    ) -> CopyFailure {
-        let (error, state, stats, writer) = failure.into_parts();
-        CopyFailure::new(
-            error.with_missing_context(
-                source,
-                Some(target),
-                self.properties.info().provider_id(),
-            ),
-            state,
-            stats,
-            writer,
-        )
-    }
-
     /// Adds source, target, and provider facts required by public rename
     /// failures.
     fn contextualize_rename_failure(
@@ -900,7 +503,7 @@ impl FileSystem {
             error.with_missing_context(
                 source,
                 Some(target),
-                self.properties.info().provider_id(),
+                self.properties().info().provider_id(),
             ),
             state,
         )
@@ -912,7 +515,7 @@ impl FileSystem {
         path: &Path,
         operation: FsOperation,
     ) -> FsResult<()> {
-        crate::facade_context::validate_path(&self.properties, path, operation)
+        self.core.validate_path(path, operation)
     }
 
     /// Requires an advertised capability before I/O.
@@ -922,12 +525,7 @@ impl FileSystem {
         operation: FsOperation,
         path: &Path,
     ) -> FsResult<()> {
-        crate::facade_context::require(
-            &self.properties,
-            capability,
-            operation,
-            path,
-        )
+        self.core.require(capability, operation, Some(path))
     }
 
     /// Adds missing public error context to a provider error.
@@ -937,7 +535,7 @@ impl FileSystem {
         path: &Path,
         operation: FsOperation,
     ) -> FsError {
-        crate::facade_context::enrich(&self.properties, error, path, operation)
+        self.core.enrich(error, Some(path), operation)
     }
 
     /// Builds a provider-contract error for an invalid outcome.
@@ -947,21 +545,16 @@ impl FileSystem {
         operation: FsOperation,
         message: &str,
     ) -> FsError {
-        crate::facade_context::contract_error(
-            &self.properties,
-            path,
-            operation,
-            message,
-        )
+        self.core.contract_error(path, operation, message)
     }
 
     /// Validates the identity the provider attached to an opened file handle.
     fn validate_opened_info(
         &self,
-        info: &crate::OpenedFileInfo,
+        info: &crate::metadata::OpenedFileInfo,
         path: &Path,
     ) -> FsResult<()> {
-        if info.filesystem_id() != self.properties.info().id()
+        if info.filesystem_id() != self.properties().info().id()
             || info.path() != path
         {
             return Err(self.contract_error(
@@ -977,10 +570,10 @@ impl FileSystem {
     /// resource.
     fn validate_temp_info(
         &self,
-        info: &crate::OpenedFileInfo,
-        expected_kind: crate::FileKind,
+        info: &crate::metadata::OpenedFileInfo,
+        expected_kind: crate::metadata::FileKind,
     ) -> FsResult<()> {
-        if info.filesystem_id() != self.properties.info().id() {
+        if info.filesystem_id() != self.properties().info().id() {
             return Err(self.contract_error(
                 info.path(),
                 FsOperation::ValidateProviderOutcome,
@@ -1014,12 +607,12 @@ impl FileSystem {
         &self,
         source: &Path,
         target: &Path,
-        options: &crate::PersistOptions,
+        options: &crate::temp::PersistOptions,
     ) -> FsResult<()> {
         self.validate_path(source, FsOperation::PersistTemp)?;
         self.validate_path(target, FsOperation::PersistTemp)?;
         options
-            .validate_against(self.properties.capabilities())
+            .validate_against(self.properties().capabilities())
             .map_err(|error| {
                 self.enrich(error, source, FsOperation::PersistTemp)
                     .with_target(target.clone())
@@ -1034,73 +627,7 @@ impl FileSystem {
         options: ReadOptions,
         max_bytes: usize,
     ) -> FsResult<Vec<u8>> {
-        let mut reader = self.open_reader(path, options)?;
-        let mut result = Vec::new();
-        let maximum = quantity_from_usize(
-            max_bytes,
-            FsOperation::Read,
-            path,
-            self.properties.info().provider_id(),
-        )?;
-        let mut read_budget =
-            byte_budget(FileSystemResource::ReadBytes, maximum);
-        if let Some(metadata) = reader.info().metadata()
-            && let Some(length) = metadata.len()
-        {
-            read_budget.check_available(length).map_err(|error| {
-                budget_error(
-                    error,
-                    FsOperation::Read,
-                    path,
-                    self.properties.info().provider_id(),
-                    "read exceeds maximum byte count",
-                )
-            })?;
-            if let Ok(capacity) = usize::try_from(length) {
-                result.try_reserve(capacity).map_err(|error| {
-                    FsError::with_source(
-                        FsErrorKind::ResourceLimitExceeded,
-                        FsOperation::Read,
-                        "read buffer allocation exceeds available capacity",
-                        error,
-                    )
-                    .with_path(path.clone())
-                    .with_provider(self.properties.info().provider_id())
-                })?;
-            }
-        }
-        let mut buffer = [0_u8; 8192];
-        loop {
-            let remaining = read_budget.remaining();
-            let read_len = usize::try_from(remaining.saturating_add(1))
-                .map_or(buffer.len(), |value| value.min(buffer.len()));
-            let read = Input::read(&mut reader, &mut buffer[..read_len])
-                .map_err(|error| {
-                    self.io_error(path, FsOperation::Read, error)
-                })?;
-            if read == 0 {
-                return Ok(result);
-            }
-            let read = quantity_from_usize(
-                read,
-                FsOperation::Read,
-                path,
-                self.properties.info().provider_id(),
-            )?;
-            if let Err(error) = read_budget.try_consume(read) {
-                return Err(budget_error(
-                    error,
-                    FsOperation::Read,
-                    path,
-                    self.properties.info().provider_id(),
-                    "read exceeds maximum byte count",
-                ));
-            }
-            result.extend_from_slice(
-                &buffer[..usize::try_from(read)
-                    .expect("read count originated as usize")],
-            );
-        }
+        ReadOperation::new(self).read_all(path, options, max_bytes)
     }
 
     /// Reads at most max_bytes from a file without requiring a complete read.
@@ -1110,24 +637,7 @@ impl FileSystem {
         options: ReadOptions,
         max_bytes: usize,
     ) -> FsResult<Vec<u8>> {
-        let mut reader = self.open_reader(path, options)?;
-        if max_bytes == 0 {
-            return Ok(Vec::new());
-        }
-        let mut result = Vec::with_capacity(max_bytes.min(PREFIX_BUFFER_SIZE));
-        let mut buffer = [0_u8; PREFIX_BUFFER_SIZE];
-        while result.len() < max_bytes {
-            let read_len = next_read_len(result.len(), max_bytes);
-            let read = Input::read(&mut reader, &mut buffer[..read_len])
-                .map_err(|error| {
-                    self.io_error(path, FsOperation::Read, error)
-                })?;
-            if read == 0 {
-                break;
-            }
-            result.extend_from_slice(&buffer[..read]);
-        }
-        Ok(result)
+        ReadOperation::new(self).read_prefix(path, options, max_bytes)
     }
 
     /// Writes all bytes and retains the writer if transfer or commit fails.
@@ -1136,72 +646,7 @@ impl FileSystem {
         path: &Path,
         bytes: &[u8],
         options: WriteOptions,
-    ) -> Result<crate::WriteOutcome, WriteAllFailure> {
-        if let Err(error) = self
-            .properties
-            .limits()
-            .validate_write_size(path, bytes.len())
-        {
-            return Err(WriteAllFailure::new(
-                self.enrich(error, path, FsOperation::Write),
-                None,
-            ));
-        }
-        let mut writer = self
-            .open_writer(path, options)
-            .map_err(|error| WriteAllFailure::new(error, None))?;
-        if let Err(error) = Output::write_fully(&mut writer, bytes)
-            .and_then(|_| Output::flush(&mut writer))
-        {
-            return Err(WriteAllFailure::new(
-                self.io_error(path, FsOperation::Write, error),
-                Some(writer),
-            ));
-        }
-        writer.commit().map_err(|failure| {
-            let (error, _) = failure.into_parts();
-            WriteAllFailure::new(error, Some(writer))
-        })
-    }
-
-    /// Creates a contextual filesystem error from an I/O stream failure.
-    fn io_error(
-        &self,
-        path: &Path,
-        operation: FsOperation,
-        error: IoError,
-    ) -> FsError {
-        FsError::from_stream_io(error, operation, path)
-            .with_provider(self.properties.info().provider_id())
-    }
-
-    /// Adds a native read count to the public `u64` copy-statistics total.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`FsErrorKind::ResourceLimitExceeded`] when the native count or
-    /// accumulated total cannot be represented by [`CopyStats`].
-    fn add_copied_bytes(
-        &self,
-        total: u64,
-        count: usize,
-        source: &Path,
-    ) -> FsResult<u64> {
-        let count = u64::try_from(count)
-            .map_err(|_| self.copy_byte_count_error(source))?;
-        total
-            .checked_add(count)
-            .ok_or_else(|| self.copy_byte_count_error(source))
-    }
-
-    /// Builds the copy-statistics error for an unrepresentable byte count.
-    fn copy_byte_count_error(&self, source: &Path) -> FsError {
-        FsError::new(
-            FsErrorKind::ResourceLimitExceeded,
-            FsOperation::Copy,
-            "copy byte count exceeds the filesystem API reporting range",
-        )
-        .with_path(source.clone())
-        .with_provider(self.properties.info().provider_id())
+    ) -> Result<crate::metadata::WriteOutcome, WriteAllFailure> {
+        WriteOperation::new(self).write_all(path, bytes, options)
     }
 }

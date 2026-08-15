@@ -7,7 +7,7 @@
 // =============================================================================
 //! Validated metadata that is safe for automatic structural formatting.
 
-use crate::UserMetadata;
+use crate::metadata::UserMetadata;
 
 /// Flat metadata whose keys have passed credential-sensitivity checks.
 ///

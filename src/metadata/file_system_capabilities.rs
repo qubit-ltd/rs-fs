@@ -11,8 +11,8 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
 
-use crate::FileSystemCapability;
-use crate::FileSystemCapabilitySupport;
+use crate::metadata::FileSystemCapability;
+use crate::metadata::FileSystemCapabilitySupport;
 
 const CAPABILITY_DEPENDENCIES: &[(
     FileSystemCapability,

@@ -396,7 +396,7 @@ Provider 不重复这些通用检查。
 
 公开的 `CopyOptions`、`ReadOptions`、`WriteOptions`、`ListOptions`、
 `CreateDirectoryOptions`、`DeleteOptions`、`PersistOptions`、`RenameOptions`、
-`TempFileOptions`、`TempDirectoryOptions` 和 `FileMetadata` 都是
+`TempOptions` 和 `FileMetadata` 都是
 `#[non_exhaustive]` 值类型。字段不作为跨 crate 的构造或变更接口；调用者使用
 `Default`、具名构造方法、`with_*` builder 和只读 getter。这样新增语义只扩展统一的
 值类型 API，不要求 provider 或下游重新维护结构体字面量。

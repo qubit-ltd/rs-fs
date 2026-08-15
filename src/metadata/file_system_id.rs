@@ -12,10 +12,10 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
 
-use crate::FsError;
-use crate::FsErrorKind;
-use crate::FsOperation;
-use crate::FsResult;
+use crate::error::FsError;
+use crate::error::FsErrorKind;
+use crate::error::FsOperation;
+use crate::error::FsResult;
 
 /// Stable identity of one configured filesystem object.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
