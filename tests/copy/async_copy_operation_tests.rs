@@ -13,28 +13,27 @@ use std::task::Context;
 use std::task::Poll;
 use std::task::Waker;
 
-use qubit_fs::AsyncCopyOperationState;
 use qubit_fs::AsyncFileSystem;
-use qubit_fs::CopyFailureState;
-use qubit_fs::CopyOptions;
-use qubit_fs::CreateDirectoryOutcome;
-use qubit_fs::DeleteOutcome;
-use qubit_fs::FileSystemCapabilities;
-use qubit_fs::FileSystemCapability;
-use qubit_fs::FileSystemId;
-use qubit_fs::FileSystemInfo;
-use qubit_fs::FileSystemLimits;
-use qubit_fs::FileSystemProperties;
 use qubit_fs::FsError;
-use qubit_fs::FsErrorKind;
-use qubit_fs::FsOperation;
 use qubit_fs::FsResult;
 use qubit_fs::Path;
-use qubit_fs::PathConstraints;
-use qubit_fs::PathSemantics;
-use qubit_fs::RenameFailureState;
-use qubit_fs::RenameOutcome;
-use qubit_fs::SymlinkPolicy;
+use qubit_fs::copy::AsyncCopyOperationState;
+use qubit_fs::copy::CopyFailureState;
+use qubit_fs::copy::CopyOptions;
+use qubit_fs::directory::CreateDirectoryOutcome;
+use qubit_fs::directory::DeleteOutcome;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
+use qubit_fs::metadata::FileSystemCapabilities;
+use qubit_fs::metadata::FileSystemCapability;
+use qubit_fs::metadata::FileSystemId;
+use qubit_fs::metadata::FileSystemInfo;
+use qubit_fs::metadata::FileSystemLimits;
+use qubit_fs::metadata::SymlinkPolicy;
+use qubit_fs::path::PathConstraints;
+use qubit_fs::path::PathSemantics;
+use qubit_fs::rename::RenameFailureState;
+use qubit_fs::rename::RenameOutcome;
 use qubit_fs::spi::AsyncFileSystemSpi;
 use qubit_fs::spi::CopyAttempt;
 use qubit_fs::spi::CopyRequest;
@@ -51,6 +50,9 @@ use qubit_fs::spi::OpenedAsyncReader;
 use qubit_fs::spi::OpenedAsyncTempDirectory;
 use qubit_fs::spi::OpenedAsyncTempFile;
 use qubit_fs::spi::OpenedAsyncWriter;
+use qubit_fs::spi::ProviderOperation;
+use qubit_fs::spi::ProviderOperations;
+use qubit_fs::spi::ProviderProperties;
 use qubit_fs::spi::RenameRequest;
 use qubit_fs::spi::SpiCopyFailure;
 use qubit_fs::spi::SpiFuture;
@@ -61,14 +63,19 @@ use qubit_fs::spi::StatResponse;
 struct CopySpi;
 
 impl AsyncFileSystemSpi for CopySpi {
-    fn properties(&self) -> FileSystemProperties {
-        FileSystemProperties::new(
+    fn properties(&self) -> ProviderProperties {
+        ProviderProperties::new(
             FileSystemInfo::new(
                 FileSystemId::new("copy-test")
                     .expect("test id should be valid"),
                 "copy-test",
                 PathSemantics::Hierarchical,
             ),
+            ProviderOperations::new()
+                .with(ProviderOperation::Stat)
+                .with(ProviderOperation::OpenReader)
+                .with(ProviderOperation::OpenWriter)
+                .with(ProviderOperation::TryCopy),
             FileSystemCapabilities::new()
                 .with_guaranteed(FileSystemCapability::Copy),
             FileSystemLimits::unknown(),

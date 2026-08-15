@@ -9,7 +9,7 @@
 // facade.
 //! Validated rename request.
 
-use crate::Path;
+use crate::path::Path;
 use crate::spi::ResolvedRenameOptions;
 
 /// A facade-created rename request.

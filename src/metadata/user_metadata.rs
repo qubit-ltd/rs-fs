@@ -12,9 +12,9 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
 
-use crate::FsError;
-use crate::FsErrorKind;
-use crate::FsOperation;
+use crate::error::FsError;
+use crate::error::FsErrorKind;
+use crate::error::FsOperation;
 
 /// An ordered string-to-string metadata map with safe structural formatting.
 #[derive(Clone, Default, Eq, PartialEq)]

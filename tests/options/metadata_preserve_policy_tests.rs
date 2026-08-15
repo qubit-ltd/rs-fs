@@ -6,7 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::MetadataPreservePolicy;
+use qubit_fs::copy::MetadataPreservePolicy;
 
 #[test]
 fn test_metadata_preserve_policy_default_is_portable() {

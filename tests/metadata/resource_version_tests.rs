@@ -6,7 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::ResourceVersion;
+use qubit_fs::metadata::ResourceVersion;
 
 #[test]
 fn resource_version_preserves_and_displays_opaque_text() {

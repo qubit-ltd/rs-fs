@@ -10,6 +10,6 @@
 //! Facade-resolved write options.
 
 use super::internal::resolved_options;
-use crate::WriteOptions;
+use crate::write::WriteOptions;
 
 resolved_options!(ResolvedWriteOptions, WriteOptions);

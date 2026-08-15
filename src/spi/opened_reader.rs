@@ -11,7 +11,7 @@
 
 use qubit_io::Input;
 
-use crate::OpenedFileInfo;
+use crate::metadata::OpenedFileInfo;
 
 /// An already-open provider reader.
 pub struct OpenedReader {

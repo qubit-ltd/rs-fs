@@ -8,10 +8,10 @@
 
 use std::error::Error;
 
-use qubit_fs::FsErrorKind;
 use qubit_fs::Path;
-use qubit_fs::WriteFailureState;
-use qubit_fs::WriteOptions;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::write::WriteFailureState;
+use qubit_fs::write::WriteOptions;
 
 use crate::async_recording_spi::AsyncRecordingConfig;
 use crate::async_recording_spi::async_recording_file_system;

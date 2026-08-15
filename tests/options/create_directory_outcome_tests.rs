@@ -7,7 +7,7 @@
 // =============================================================================
 //! Coverage for directory-creation outcomes.
 
-use qubit_fs::CreateDirectoryOutcome;
+use qubit_fs::directory::CreateDirectoryOutcome;
 
 /// Verifies outcomes preserve whether the target already existed.
 #[test]

@@ -9,10 +9,11 @@
 //! Provider-side asynchronous directory enumeration sessions.
 
 use super::SpiFuture;
-use crate::DirEntry;
-use crate::FsResult;
+use crate::error::FsResult;
+use crate::metadata::DirEntry;
 
-/// Provider session underlying a concrete [`crate::AsyncDirectoryStream`].
+/// Provider session underlying a concrete
+/// [`crate::directory::AsyncDirectoryStream`].
 pub trait AsyncDirectoryStreamSession: Send {
     /// Asynchronously reads the next directory entry or provider page.
     ///

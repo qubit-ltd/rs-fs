@@ -7,7 +7,7 @@
 // =============================================================================
 //! Coverage for deletion outcomes.
 
-use qubit_fs::DeleteOutcome;
+use qubit_fs::directory::DeleteOutcome;
 
 /// Verifies outcomes preserve whether an accepted target was already missing.
 #[test]

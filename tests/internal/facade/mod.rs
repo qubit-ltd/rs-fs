@@ -6,4 +6,6 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+#[cfg(feature = "async")]
+mod facade_core_tests;
 mod read_policy_tests;

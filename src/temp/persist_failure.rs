@@ -12,8 +12,8 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
 
-use crate::FsError;
-use crate::PersistFailureState;
+use crate::error::FsError;
+use crate::temp::PersistFailureState;
 
 /// Persistence error paired with provider-confirmed partial progress.
 #[derive(Debug)]

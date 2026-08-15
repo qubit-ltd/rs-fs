@@ -10,7 +10,7 @@
 //! Provider-created asynchronous temporary-directory envelope.
 
 use super::AsyncTempResourceSpi;
-use crate::OpenedFileInfo;
+use crate::metadata::OpenedFileInfo;
 
 /// An already-created asynchronous temporary-directory handle.
 pub struct OpenedAsyncTempDirectory {

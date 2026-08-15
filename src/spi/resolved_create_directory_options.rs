@@ -10,6 +10,6 @@
 //! Facade-resolved directory-creation options.
 
 use super::internal::resolved_options;
-use crate::CreateDirectoryOptions;
+use crate::directory::CreateDirectoryOptions;
 
 resolved_options!(ResolvedCreateDirectoryOptions, CreateDirectoryOptions);

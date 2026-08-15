@@ -16,9 +16,9 @@ use super::PathComponent;
 use super::PathComponents;
 use super::PathSemantics;
 use super::RelativePath;
-use crate::FsError;
-use crate::FsOperation;
-use crate::FsResult;
+use crate::error::FsError;
+use crate::error::FsOperation;
+use crate::error::FsResult;
 
 /// A validated logical path independent of any provider-native representation.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -44,6 +44,47 @@ impl Path {
             literal: false,
             semantics: PathSemantics::Hierarchical,
         }
+    }
+
+    /// Constructs a hierarchical path from independently validated components.
+    ///
+    /// Each item is validated as one component without reparsing a joined path
+    /// string. An empty absolute sequence produces the root; an empty relative
+    /// sequence returns an invalid-path error.
+    pub fn from_components<I, S>(
+        absolute: bool,
+        components: I,
+    ) -> FsResult<Self>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        let components = components
+            .into_iter()
+            .map(|value| PathComponent::parse(value.as_ref()))
+            .collect::<FsResult<Vec<_>>>()?;
+        if !absolute && components.is_empty() {
+            return Err(invalid_path());
+        }
+        let joined = components
+            .iter()
+            .map(PathComponent::as_str)
+            .collect::<Vec<_>>()
+            .join("/");
+        Ok(Self {
+            absolute,
+            text: if absolute {
+                if joined.is_empty() {
+                    "/".to_owned()
+                } else {
+                    format!("/{joined}")
+                }
+            } else {
+                joined
+            },
+            literal: false,
+            semantics: PathSemantics::Hierarchical,
+        })
     }
 
     /// Parses a hierarchical logical path using normalized semantics.

@@ -10,7 +10,7 @@
 //! Optional provider copy results.
 
 use super::CopyDeclineReason;
-use crate::CopyOutcome;
+use crate::copy::CopyOutcome;
 
 /// Optional provider copy result.
 #[non_exhaustive]

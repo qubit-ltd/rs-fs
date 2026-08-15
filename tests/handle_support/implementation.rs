@@ -14,45 +14,38 @@ use std::io::Result as IoResult;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use qubit_fs::AchievedAtomicity;
-use qubit_fs::CopyOptions;
-use qubit_fs::CreateDirectoryOptions;
-use qubit_fs::CreateDirectoryOutcome;
-use qubit_fs::DeleteOptions;
-use qubit_fs::DeleteOutcome;
-use qubit_fs::DirEntry;
-use qubit_fs::FileKind;
-use qubit_fs::FileMetadata;
 use qubit_fs::FileSystem;
-use qubit_fs::FileSystemCapabilities;
-use qubit_fs::FileSystemCapability;
-use qubit_fs::FileSystemId;
-use qubit_fs::FileSystemInfo;
-use qubit_fs::FileSystemLimit;
-use qubit_fs::FileSystemLimits;
-use qubit_fs::FileSystemProperties;
 use qubit_fs::FsError;
-use qubit_fs::FsErrorKind;
-use qubit_fs::FsOperation;
 use qubit_fs::FsResult;
-use qubit_fs::ListOptions;
-use qubit_fs::OpenedFileInfo;
 use qubit_fs::Path;
-use qubit_fs::PathConstraints;
-use qubit_fs::PathSemantics;
-use qubit_fs::PersistFailureState;
-use qubit_fs::PersistOutcome;
-use qubit_fs::PublicationMethod;
-use qubit_fs::ReadOptions;
-use qubit_fs::RenameFailureState;
-use qubit_fs::RenameOutcome;
-use qubit_fs::SymlinkPolicy;
-use qubit_fs::TempDirectoryOptions;
-use qubit_fs::TempFileOptions;
-use qubit_fs::WriteAbortOutcome;
-use qubit_fs::WriteFailureState;
-use qubit_fs::WriteOptions;
-use qubit_fs::WriteOutcome;
+use qubit_fs::copy::CopyOptions;
+use qubit_fs::directory::CreateDirectoryOptions;
+use qubit_fs::directory::CreateDirectoryOutcome;
+use qubit_fs::directory::DeleteOptions;
+use qubit_fs::directory::DeleteOutcome;
+use qubit_fs::directory::ListOptions;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
+use qubit_fs::metadata::AchievedAtomicity;
+use qubit_fs::metadata::DirEntry;
+use qubit_fs::metadata::FileKind;
+use qubit_fs::metadata::FileMetadata;
+use qubit_fs::metadata::FileSystemCapabilities;
+use qubit_fs::metadata::FileSystemCapability;
+use qubit_fs::metadata::FileSystemCapabilitySupport;
+use qubit_fs::metadata::FileSystemId;
+use qubit_fs::metadata::FileSystemInfo;
+use qubit_fs::metadata::FileSystemLimit;
+use qubit_fs::metadata::FileSystemLimits;
+use qubit_fs::metadata::OpenedFileInfo;
+use qubit_fs::metadata::PublicationMethod;
+use qubit_fs::metadata::SymlinkPolicy;
+use qubit_fs::metadata::WriteOutcome;
+use qubit_fs::path::PathConstraints;
+use qubit_fs::path::PathSemantics;
+use qubit_fs::read::ReadOptions;
+use qubit_fs::rename::RenameFailureState;
+use qubit_fs::rename::RenameOutcome;
 use qubit_fs::spi::CreateDirectoryRequest;
 use qubit_fs::spi::CreateTempDirectoryRequest;
 use qubit_fs::spi::CreateTempFileRequest;
@@ -70,6 +63,9 @@ use qubit_fs::spi::OpenedTempDirectory;
 use qubit_fs::spi::OpenedTempFile;
 use qubit_fs::spi::OpenedWriter;
 use qubit_fs::spi::PersistRequest;
+use qubit_fs::spi::ProviderOperation;
+use qubit_fs::spi::ProviderOperations;
+use qubit_fs::spi::ProviderProperties;
 use qubit_fs::spi::RenameRequest;
 use qubit_fs::spi::SpiPersistFailure;
 use qubit_fs::spi::SpiRenameFailure;
@@ -77,6 +73,12 @@ use qubit_fs::spi::SpiWriteFailure;
 use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
 use qubit_fs::spi::TempResourceSpi;
+use qubit_fs::temp::PersistFailureState;
+use qubit_fs::temp::PersistOutcome;
+use qubit_fs::temp::TempOptions;
+use qubit_fs::write::WriteAbortOutcome;
+use qubit_fs::write::WriteFailureState;
+use qubit_fs::write::WriteOptions;
 use qubit_io::Input;
 use qubit_io::Output;
 
@@ -420,13 +422,13 @@ fn test_handle_support_dispatches_successful_facade_operations() {
     writer.commit().expect("writer should commit");
 
     let mut temporary_file = file_system
-        .create_temp_file(TempFileOptions::default())
+        .create_temp_file(TempOptions::default())
         .expect("temporary file should open");
     temporary_file
         .keep()
         .expect("temporary file should be kept");
     let mut temporary_directory = file_system
-        .create_temp_directory(TempDirectoryOptions::default())
+        .create_temp_directory(TempOptions::default())
         .expect("temporary directory should open");
     temporary_directory
         .keep()
@@ -438,6 +440,14 @@ fn test_handle_support_dispatches_successful_facade_operations() {
 #[test]
 fn test_handle_support_uses_default_spi_copy_decline() {
     let (file_system, _, _) = filesystem(false, Vec::new());
+    assert_eq!(
+        FileSystemCapabilitySupport::Guaranteed,
+        file_system
+            .properties()
+            .capabilities()
+            .support(FileSystemCapability::Copy),
+        "the fixture must reach the default TryCopy implementation",
+    );
     let outcome = file_system
         .copy(
             &Path::parse("/source").expect("test path should parse"),
@@ -465,10 +475,10 @@ fn test_handle_support_enriches_open_and_temp_provider_failures() {
             .open_reader(&path, ReadOptions::default())
             .expect_err("reader provider failure should propagate"),
         file_system
-            .create_temp_file(TempFileOptions::default())
+            .create_temp_file(TempOptions::default())
             .expect_err("temporary-file provider failure should propagate"),
         file_system
-            .create_temp_directory(TempDirectoryOptions::default())
+            .create_temp_directory(TempOptions::default())
             .expect_err(
                 "temporary-directory provider failure should propagate",
             ),
@@ -484,10 +494,10 @@ fn test_handle_support_enriches_open_and_temp_provider_failures() {
 fn test_handle_support_keeps_pathless_temp_errors_pathless() {
     let file_system = provider_open_failure_filesystem();
     let file_error = file_system
-        .create_temp_file(TempFileOptions::default())
+        .create_temp_file(TempOptions::default())
         .expect_err("temporary-file provider failure should propagate");
     let directory_error = file_system
-        .create_temp_directory(TempDirectoryOptions::default())
+        .create_temp_directory(TempOptions::default())
         .expect_err("temporary-directory provider failure should propagate");
     for error in [file_error, directory_error] {
         assert_eq!(FsOperation::CreateTemp, error.operation());
@@ -504,7 +514,7 @@ fn test_handle_support_validates_temp_parent_before_provider_call() {
         Path::parse("relative").expect("relative test path should parse");
     let file_error = file_system
         .create_temp_file(
-            TempFileOptions::default().with_parent(Some(parent.clone())),
+            TempOptions::default().with_parent(Some(parent.clone())),
         )
         .expect_err("invalid temporary-file parent must fail in the facade");
     assert_eq!(FsErrorKind::InvalidPath, file_error.kind());
@@ -513,7 +523,7 @@ fn test_handle_support_validates_temp_parent_before_provider_call() {
 
     let directory_error = file_system
         .create_temp_directory(
-            TempDirectoryOptions::default().with_parent(Some(parent.clone())),
+            TempOptions::default().with_parent(Some(parent.clone())),
         )
         .expect_err(
             "invalid temporary-directory parent must fail in the facade",
@@ -530,10 +540,10 @@ fn test_handle_support_rejects_invalid_temp_identities_with_cleanup_failure() {
     let file_system = invalid_temp_cleanup_filesystem();
     for error in [
         file_system
-            .create_temp_file(TempFileOptions::default())
+            .create_temp_file(TempOptions::default())
             .expect_err("foreign temporary file identity must be rejected"),
         file_system
-            .create_temp_directory(TempDirectoryOptions::default())
+            .create_temp_directory(TempOptions::default())
             .expect_err(
                 "foreign temporary directory identity must be rejected",
             ),
@@ -555,10 +565,10 @@ fn test_handle_support_rejects_invalid_temp_identities_with_cleanup_failure() {
 fn test_handle_support_rejects_invalid_temp_paths_after_cleanup() {
     for error in [
         invalid_temp_path_filesystem()
-            .create_temp_file(TempFileOptions::default())
+            .create_temp_file(TempOptions::default())
             .expect_err("relative temporary file path must be rejected"),
         invalid_temp_path_filesystem()
-            .create_temp_directory(TempDirectoryOptions::default())
+            .create_temp_directory(TempOptions::default())
             .expect_err("relative temporary directory path must be rejected"),
     ] {
         assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
@@ -569,7 +579,7 @@ fn test_handle_support_rejects_invalid_temp_paths_after_cleanup() {
 #[test]
 fn test_handle_support_rejects_wrong_temp_kind() {
     let error = wrong_temp_kind_filesystem()
-        .create_temp_file(TempFileOptions::default())
+        .create_temp_file(TempOptions::default())
         .expect_err("temporary-file kind must be validated");
     assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
 }
@@ -596,13 +606,25 @@ impl BehaviorSpi {
     }
 }
 impl FileSystemSpi for BehaviorSpi {
-    fn properties(&self) -> FileSystemProperties {
-        FileSystemProperties::new(
+    fn properties(&self) -> ProviderProperties {
+        ProviderProperties::new(
             FileSystemInfo::new(
                 FileSystemId::new("handles-test").expect("valid test id"),
                 "handles-test",
                 PathSemantics::Hierarchical,
             ),
+            ProviderOperations::new()
+                .with(ProviderOperation::Stat)
+                .with(ProviderOperation::List)
+                .with(ProviderOperation::OpenReader)
+                .with(ProviderOperation::OpenWriter)
+                .with(ProviderOperation::CreateDirectory)
+                .with(ProviderOperation::DeleteFile)
+                .with(ProviderOperation::DeleteDirectory)
+                .with(ProviderOperation::TryCopy)
+                .with(ProviderOperation::Rename)
+                .with(ProviderOperation::CreateTempFile)
+                .with(ProviderOperation::CreateTempDirectory),
             FileSystemCapabilities::new()
                 .with_guaranteed(FileSystemCapability::List)
                 .with_guaranteed(FileSystemCapability::Copy)

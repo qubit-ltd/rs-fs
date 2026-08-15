@@ -13,12 +13,13 @@ use std::pin::Pin;
 use qubit_io::AsyncOutput;
 
 use super::SpiFuture;
-use crate::FsResult;
-use crate::WriteAbortOutcome;
-use crate::WriteFailure;
-use crate::WriteOutcome;
+use crate::error::FsResult;
+use crate::metadata::WriteOutcome;
+use crate::write::WriteAbortOutcome;
+use crate::write::WriteFailure;
 
-/// Provider session underlying a concrete [`crate::AsyncFileWriter`] handle.
+/// Provider session underlying a concrete [`crate::write::AsyncFileWriter`]
+/// handle.
 pub trait AsyncFileWriteSession: AsyncOutput<Item = u8> + Send {
     /// Asynchronously publishes bytes accepted by the session.
     ///

@@ -15,10 +15,10 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
 
-use crate::CopyFailureState;
-use crate::CopyStats;
-use crate::FileWriter;
-use crate::FsError;
+use crate::copy::CopyFailureState;
+use crate::copy::CopyStats;
+use crate::error::FsError;
+use crate::write::FileWriter;
 
 /// A copy error with publication state, partial statistics, and optional writer
 /// recovery.

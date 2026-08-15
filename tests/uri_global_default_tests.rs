@@ -8,8 +8,8 @@
 
 //! Tests URI credential boundaries against application default policy changes.
 
-use qubit_fs::ConnectionUri;
-use qubit_fs::Uri;
+use qubit_fs::path::ConnectionUri;
+use qubit_fs::path::Uri;
 use qubit_redact::RedactionCompletion;
 use qubit_redact::RedactionPolicy;
 use qubit_redact::Sensitivity;

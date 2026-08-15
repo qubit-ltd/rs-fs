@@ -8,13 +8,13 @@
 // qubit-style: allow source-test-pair
 //! Stable configured filesystem limits.
 
-use crate::FileSystemLimit;
-use crate::FsError;
-use crate::FsErrorKind;
-use crate::FsOperation;
-use crate::FsResult;
-use crate::Path;
-use crate::PathSemantics;
+use crate::error::FsError;
+use crate::error::FsErrorKind;
+use crate::error::FsOperation;
+use crate::error::FsResult;
+use crate::metadata::FileSystemLimit;
+use crate::path::Path;
+use crate::path::PathSemantics;
 
 /// Stable limits declared by a configured filesystem provider.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -101,7 +101,7 @@ impl FileSystemLimits {
         self
     }
 
-    /// Returns the maximum canonical [`crate::Path`] text length in UTF-8
+    /// Returns the maximum canonical [`crate::path::Path`] text length in UTF-8
     /// bytes.
     #[inline(always)]
     #[must_use]

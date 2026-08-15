@@ -9,9 +9,9 @@
 // facade tests.
 //! Observable lifecycle state for an owning asynchronous copy operation.
 
-use crate::CopyFailureState;
+use crate::copy::CopyFailureState;
 
-/// Stable lifecycle state for [`crate::AsyncCopyOperation`].
+/// Stable lifecycle state for [`crate::copy::AsyncCopyOperation`].
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AsyncCopyOperationState {
     /// The operation passed synchronous preflight and has not been polled.

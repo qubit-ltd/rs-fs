@@ -11,8 +11,8 @@
 
 use qubit_io::AsyncInput;
 
-use crate::AsyncFileReader;
-use crate::OpenedFileInfo;
+use crate::metadata::OpenedFileInfo;
+use crate::read::AsyncFileReader;
 
 /// An already-open asynchronous reader bound to provider identity.
 pub struct OpenedAsyncReader {

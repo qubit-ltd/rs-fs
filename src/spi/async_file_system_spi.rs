@@ -25,21 +25,21 @@ use super::OpenedAsyncReader;
 use super::OpenedAsyncTempDirectory;
 use super::OpenedAsyncTempFile;
 use super::OpenedAsyncWriter;
+use super::ProviderProperties;
 use super::RenameRequest;
 use super::SpiCopyFailure;
 use super::SpiFuture;
 use super::SpiRenameFailure;
 use super::StatRequest;
 use super::StatResponse;
-use crate::CreateDirectoryOutcome;
-use crate::DeleteOutcome;
-use crate::FileSystemProperties;
-use crate::FsError;
-use crate::FsErrorKind;
-use crate::FsOperation;
-use crate::FsResult;
-use crate::RenameFailureState;
-use crate::RenameOutcome;
+use crate::directory::CreateDirectoryOutcome;
+use crate::directory::DeleteOutcome;
+use crate::error::FsError;
+use crate::error::FsErrorKind;
+use crate::error::FsOperation;
+use crate::error::FsResult;
+use crate::rename::RenameFailureState;
+use crate::rename::RenameOutcome;
 
 /// Object-safe asynchronous provider implementation contract.
 ///
@@ -53,7 +53,7 @@ pub trait AsyncFileSystemSpi: Send + Sync {
     ///
     /// # Returns
     /// The provider's immutable property snapshot.
-    fn properties(&self) -> FileSystemProperties;
+    fn properties(&self) -> ProviderProperties;
 
     /// Asynchronously reads metadata for a validated request.
     ///
@@ -275,7 +275,7 @@ pub trait AsyncFileSystemSpi: Send + Sync {
 }
 
 /// Builds a standard unsupported-operation error for a validated path request.
-fn unsupported(operation: FsOperation, path: &crate::Path) -> FsError {
+fn unsupported(operation: FsOperation, path: &crate::path::Path) -> FsError {
     FsError::new(
         FsErrorKind::UnsupportedOperation,
         operation,

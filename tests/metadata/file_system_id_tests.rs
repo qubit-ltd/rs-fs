@@ -6,7 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::FileSystemId;
+use qubit_fs::metadata::FileSystemId;
 
 #[test]
 fn file_system_id_preserves_validated_identity_text() {

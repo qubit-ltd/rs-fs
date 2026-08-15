@@ -8,10 +8,10 @@
 
 use std::error::Error;
 
-use qubit_fs::AchievedAtomicity;
-use qubit_fs::FsErrorKind;
 use qubit_fs::Path;
-use qubit_fs::WriteOptions;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::metadata::AchievedAtomicity;
+use qubit_fs::write::WriteOptions;
 use qubit_io::Output;
 
 #[test]

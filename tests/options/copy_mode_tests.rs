@@ -6,7 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::CopyMode;
+use qubit_fs::copy::CopyMode;
 
 #[test]
 fn test_copy_mode_default_is_auto() {

@@ -10,6 +10,6 @@
 //! Facade-resolved deletion options.
 
 use super::internal::resolved_options;
-use crate::DeleteOptions;
+use crate::directory::DeleteOptions;
 
 resolved_options!(ResolvedDeleteOptions, DeleteOptions);

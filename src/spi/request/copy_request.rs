@@ -9,7 +9,7 @@
 // facade.
 //! Validated copy request.
 
-use crate::Path;
+use crate::path::Path;
 use crate::spi::ResolvedCopyOptions;
 
 /// A facade-created copy request.

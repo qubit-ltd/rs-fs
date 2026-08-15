@@ -12,40 +12,39 @@
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::task::Context;
 use std::task::Poll;
 use std::task::Waker;
 
 use qubit_fs::AsyncFileSystem;
-use qubit_fs::CopyOptions;
-use qubit_fs::CreateDirectoryOptions;
-use qubit_fs::CreateDirectoryOutcome;
-use qubit_fs::DeleteOptions;
-use qubit_fs::DeleteOutcome;
-use qubit_fs::FileKind;
-use qubit_fs::FileMetadata;
-use qubit_fs::FileSystemCapabilities;
-use qubit_fs::FileSystemCapability;
-use qubit_fs::FileSystemId;
-use qubit_fs::FileSystemInfo;
-use qubit_fs::FileSystemLimits;
-use qubit_fs::FileSystemProperties;
 use qubit_fs::FsError;
-use qubit_fs::FsErrorKind;
-use qubit_fs::FsOperation;
 use qubit_fs::FsResult;
-use qubit_fs::ListOptions;
 use qubit_fs::Path;
-use qubit_fs::PathConstraints;
-use qubit_fs::PathSemantics;
-use qubit_fs::ReadOptions;
-use qubit_fs::RenameFailureState;
-use qubit_fs::RenameOptions;
-use qubit_fs::RenameOutcome;
-use qubit_fs::SymlinkPolicy;
-use qubit_fs::TempDirectoryOptions;
-use qubit_fs::TempFileOptions;
-use qubit_fs::WriteOptions;
+use qubit_fs::copy::CopyOptions;
+use qubit_fs::directory::CreateDirectoryOptions;
+use qubit_fs::directory::CreateDirectoryOutcome;
+use qubit_fs::directory::DeleteOptions;
+use qubit_fs::directory::DeleteOutcome;
+use qubit_fs::directory::ListOptions;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
+use qubit_fs::metadata::FileKind;
+use qubit_fs::metadata::FileMetadata;
+use qubit_fs::metadata::FileSystemCapabilities;
+use qubit_fs::metadata::FileSystemCapability;
+use qubit_fs::metadata::FileSystemCapabilitySupport;
+use qubit_fs::metadata::FileSystemId;
+use qubit_fs::metadata::FileSystemInfo;
+use qubit_fs::metadata::FileSystemLimits;
+use qubit_fs::metadata::SymlinkPolicy;
+use qubit_fs::path::PathConstraints;
+use qubit_fs::path::PathSemantics;
+use qubit_fs::read::ReadOptions;
+use qubit_fs::rename::RenameFailureState;
+use qubit_fs::rename::RenameOptions;
+use qubit_fs::rename::RenameOutcome;
 use qubit_fs::spi::AsyncFileSystemSpi;
 use qubit_fs::spi::CreateDirectoryRequest;
 use qubit_fs::spi::CreateTempDirectoryRequest;
@@ -60,23 +59,70 @@ use qubit_fs::spi::OpenedAsyncReader;
 use qubit_fs::spi::OpenedAsyncTempDirectory;
 use qubit_fs::spi::OpenedAsyncTempFile;
 use qubit_fs::spi::OpenedAsyncWriter;
+use qubit_fs::spi::ProviderOperation;
+use qubit_fs::spi::ProviderOperations;
+use qubit_fs::spi::ProviderProperties;
 use qubit_fs::spi::RenameRequest;
 use qubit_fs::spi::SpiFuture;
 use qubit_fs::spi::SpiRenameFailure;
 use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
+use qubit_fs::temp::TempOptions;
+use qubit_fs::write::WriteOptions;
 
 struct PropertiesOnlySpi;
 
+/// Provider that records construction-time property snapshot requests.
+struct CountingPropertiesSpi {
+    property_calls: Arc<AtomicUsize>,
+}
+
+impl AsyncFileSystemSpi for CountingPropertiesSpi {
+    /// Returns a fallback-capable provider snapshot and records the request.
+    fn properties(&self) -> ProviderProperties {
+        self.property_calls.fetch_add(1, Ordering::SeqCst);
+        ProviderProperties::new(
+            FileSystemInfo::new(
+                FileSystemId::new("async-properties-test")
+                    .expect("test id should be valid"),
+                "async-properties-test",
+                PathSemantics::Hierarchical,
+            ),
+            ProviderOperations::new()
+                .with(ProviderOperation::Stat)
+                .with(ProviderOperation::OpenReader)
+                .with(ProviderOperation::OpenWriter),
+            FileSystemCapabilities::new()
+                .with_guaranteed(FileSystemCapability::Read)
+                .with_guaranteed(FileSystemCapability::Write),
+            FileSystemLimits::unknown(),
+            PathConstraints::absolute(),
+            SymlinkPolicy::Reject,
+        )
+        .expect("test properties should be valid")
+    }
+
+    /// Rejects metadata requests because this test performs no provider I/O.
+    fn stat<'a>(
+        &'a self,
+        _: StatRequest<'a>,
+    ) -> SpiFuture<'a, FsResult<StatResponse>> {
+        Box::pin(async { Err(unused()) })
+    }
+}
+
 impl AsyncFileSystemSpi for PropertiesOnlySpi {
-    fn properties(&self) -> FileSystemProperties {
-        FileSystemProperties::new(
+    fn properties(&self) -> ProviderProperties {
+        ProviderProperties::new(
             FileSystemInfo::new(
                 FileSystemId::new("async-test")
                     .expect("test id should be valid"),
                 "async-test",
                 PathSemantics::Hierarchical,
             ),
+            ProviderOperations::new()
+                .with(ProviderOperation::Stat)
+                .with(ProviderOperation::TryCopy),
             FileSystemCapabilities::new()
                 .with_guaranteed(FileSystemCapability::Copy),
             FileSystemLimits::unknown(),
@@ -155,12 +201,12 @@ impl AsyncFileSystemSpi for PropertiesOnlySpi {
 
 /// Provider that relies on every optional asynchronous SPI default method.
 struct DefaultAsyncSpi {
-    properties: FileSystemProperties,
+    properties: ProviderProperties,
 }
 
 impl AsyncFileSystemSpi for DefaultAsyncSpi {
     /// Returns the properties used to enable each default operation path.
-    fn properties(&self) -> FileSystemProperties {
+    fn properties(&self) -> ProviderProperties {
         self.properties.clone()
     }
 
@@ -179,14 +225,26 @@ impl AsyncFileSystemSpi for DefaultAsyncSpi {
 }
 
 /// Builds valid properties that advertise all asynchronous default operations.
-fn default_async_properties() -> FileSystemProperties {
-    FileSystemProperties::new(
+fn default_async_properties() -> ProviderProperties {
+    ProviderProperties::new(
         FileSystemInfo::new(
             FileSystemId::new("default-async")
                 .expect("test provider id should be valid"),
             "default-async",
             PathSemantics::Hierarchical,
         ),
+        ProviderOperations::new()
+            .with(ProviderOperation::Stat)
+            .with(ProviderOperation::List)
+            .with(ProviderOperation::OpenReader)
+            .with(ProviderOperation::OpenWriter)
+            .with(ProviderOperation::CreateDirectory)
+            .with(ProviderOperation::DeleteFile)
+            .with(ProviderOperation::DeleteDirectory)
+            .with(ProviderOperation::TryCopy)
+            .with(ProviderOperation::Rename)
+            .with(ProviderOperation::CreateTempFile)
+            .with(ProviderOperation::CreateTempDirectory),
         FileSystemCapabilities::new()
             .with_guaranteed(FileSystemCapability::List)
             .with_guaranteed(FileSystemCapability::Read)
@@ -238,6 +296,31 @@ fn test_async_file_system_is_clone_but_not_a_trait_object() {
         clone.properties().info().provider_id()
     );
     assert_async_spi_object_safe(Arc::new(PropertiesOnlySpi));
+}
+
+/// Verifies asynchronous facade construction derives and caches one effective
+/// property snapshot from a single provider query.
+#[test]
+fn test_async_properties_derive_conditional_copy_and_cache_snapshot() {
+    let property_calls = Arc::new(AtomicUsize::new(0));
+    let file_system = AsyncFileSystem::from_spi(CountingPropertiesSpi {
+        property_calls: Arc::clone(&property_calls),
+    })
+    .expect("facade construction should succeed");
+
+    assert_eq!(
+        FileSystemCapabilitySupport::Conditional,
+        file_system
+            .properties()
+            .capabilities()
+            .support(FileSystemCapability::Copy),
+    );
+    let clone = file_system.clone();
+    assert_eq!(
+        file_system.properties().info().id(),
+        clone.properties().info().id(),
+    );
+    assert_eq!(1, property_calls.load(Ordering::SeqCst));
 }
 
 /// Exercises the optional trait default which explicitly declines a provider
@@ -318,7 +401,7 @@ fn test_async_spi_default_operations_report_unsupported() {
     assert_eq!(FsOperation::Copy, error.error().operation());
 
     let error =
-        match ready(file_system.create_temp_file(TempFileOptions::default())) {
+        match ready(file_system.create_temp_file(TempOptions::default())) {
             Ok(_) => panic!(
                 "default temporary-file implementation must reject the request"
             ),
@@ -328,7 +411,7 @@ fn test_async_spi_default_operations_report_unsupported() {
     assert_eq!(FsOperation::CreateTemp, error.operation());
 
     let error = match ready(
-        file_system.create_temp_directory(TempDirectoryOptions::default()),
+        file_system.create_temp_directory(TempOptions::default()),
     ) {
         Ok(_) => panic!(
             "default temporary-directory implementation must reject the request"
