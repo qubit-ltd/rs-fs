@@ -7,11 +7,11 @@
 // =============================================================================
 //! Write operation outcome.
 
-use crate::AchievedAtomicity;
-use crate::NonSensitiveMetadata;
-use crate::PublicationMethod;
-use crate::ResourceVersion;
-use crate::UserMetadata;
+use crate::metadata::AchievedAtomicity;
+use crate::metadata::NonSensitiveMetadata;
+use crate::metadata::PublicationMethod;
+use crate::metadata::ResourceVersion;
+use crate::metadata::UserMetadata;
 
 /// Outcome returned when a writer is committed.
 #[derive(Clone, Debug, PartialEq)]

@@ -8,9 +8,11 @@
 //! Metadata types exposed by filesystem implementations.
 
 mod achieved_atomicity;
+mod atomicity_requirement;
 mod checksum;
 mod checksum_algorithm;
 mod dir_entry;
+mod durability_requirement;
 mod file_kind;
 mod file_metadata;
 mod file_system_capabilities;
@@ -24,13 +26,16 @@ mod non_sensitive_metadata;
 mod opened_file_info;
 mod publication_method;
 mod resource_version;
+mod symlink_policy;
 mod user_metadata;
 mod write_outcome;
 
 pub use achieved_atomicity::AchievedAtomicity;
+pub use atomicity_requirement::AtomicityRequirement;
 pub use checksum::Checksum;
 pub use checksum_algorithm::ChecksumAlgorithm;
 pub use dir_entry::DirEntry;
+pub use durability_requirement::DurabilityRequirement;
 pub use file_kind::FileKind;
 pub use file_metadata::FileMetadata;
 pub use file_system_capabilities::FileSystemCapabilities;
@@ -44,5 +49,8 @@ pub use non_sensitive_metadata::NonSensitiveMetadata;
 pub use opened_file_info::OpenedFileInfo;
 pub use publication_method::PublicationMethod;
 pub use resource_version::ResourceVersion;
+pub use symlink_policy::SymlinkPolicy;
 pub use user_metadata::UserMetadata;
 pub use write_outcome::WriteOutcome;
+
+pub use crate::file_system_properties::FileSystemProperties;

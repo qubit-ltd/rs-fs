@@ -19,3 +19,8 @@ pub use path_component::PathComponent;
 pub use path_components::PathComponents;
 pub use path_semantics::PathSemantics;
 pub use relative_path::RelativePath;
+
+pub use crate::path_constraints::PathConstraints;
+pub use crate::path_form::PathForm;
+pub use crate::uri::ConnectionUri;
+pub use crate::uri::Uri;

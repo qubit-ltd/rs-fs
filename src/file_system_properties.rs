@@ -10,17 +10,20 @@
 
 //! Immutable filesystem property snapshots used by facades.
 
-use crate::FileSystemCapabilities;
-use crate::FileSystemInfo;
-use crate::FileSystemLimits;
-use crate::FsError;
-use crate::FsErrorKind;
-use crate::FsOperation;
-use crate::FsResult;
-use crate::PathConstraints;
-use crate::PathForm;
-use crate::PathSemantics;
-use crate::SymlinkPolicy;
+use crate::error::FsError;
+use crate::error::FsErrorKind;
+use crate::error::FsOperation;
+use crate::error::FsResult;
+use crate::metadata::FileSystemCapabilities;
+use crate::metadata::FileSystemCapability;
+use crate::metadata::FileSystemInfo;
+use crate::metadata::FileSystemLimits;
+use crate::metadata::SymlinkPolicy;
+use crate::path::PathConstraints;
+use crate::path::PathForm;
+use crate::path::PathSemantics;
+use crate::spi::ProviderOperation;
+use crate::spi::ProviderProperties;
 
 /// Immutable construction-time properties cached by a filesystem facade.
 #[derive(Clone, Debug)]
@@ -38,6 +41,45 @@ pub struct FileSystemProperties {
 }
 
 impl FileSystemProperties {
+    /// Derives the application-visible property snapshot from one validated
+    /// provider snapshot.
+    ///
+    /// The facade adds conditional copy support only when the provider exposes
+    /// metadata, reader, and writer entry points together with corresponding
+    /// read and write capabilities. This method performs no I/O.
+    ///
+    /// # Parameters
+    /// - `provider`: Validated provider operations, guarantees, and limits.
+    ///
+    /// # Returns
+    /// A validated application-visible property snapshot.
+    ///
+    /// # Errors
+    /// Returns an invalid-options error when the derived snapshot violates a
+    /// shared property invariant.
+    pub(crate) fn from_provider(
+        provider: &ProviderProperties,
+    ) -> FsResult<Self> {
+        let mut capabilities = provider.declared_capabilities();
+        let operations = provider.operations();
+        let streamed_copy = operations.supports(ProviderOperation::Stat)
+            && operations.supports(ProviderOperation::OpenReader)
+            && operations.supports(ProviderOperation::OpenWriter)
+            && capabilities.supports(FileSystemCapability::Read)
+            && capabilities.supports(FileSystemCapability::Write);
+        if streamed_copy && !capabilities.supports(FileSystemCapability::Copy) {
+            capabilities =
+                capabilities.with_conditional(FileSystemCapability::Copy);
+        }
+        Self::new(
+            provider.info().clone(),
+            capabilities,
+            *provider.limits(),
+            provider.path_constraints().clone(),
+            provider.symlink_policy(),
+        )
+    }
+
     /// Builds and validates an immutable filesystem property snapshot.
     ///
     /// This method performs no I/O.
@@ -156,8 +198,9 @@ impl FileSystemProperties {
             self.limits.max_list_page_entries(),
         ]
         .into_iter()
-        .any(|limit| matches!(limit, crate::FileSystemLimit::Maximum(0)))
-        {
+        .any(|limit| {
+            matches!(limit, crate::metadata::FileSystemLimit::Maximum(0))
+        }) {
             return Err(invalid_properties(
                 "finite filesystem limits must have a positive value",
             ));
