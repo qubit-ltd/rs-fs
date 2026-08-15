@@ -12,47 +12,42 @@ use std::io::Result as IoResult;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use qubit_fs::AchievedAtomicity;
-use qubit_fs::AtomicityRequirement;
-use qubit_fs::CopyConflictPolicy;
-use qubit_fs::CopyFailureState;
-use qubit_fs::CopyMethod;
-use qubit_fs::CopyOptions;
-use qubit_fs::CopyOutcome;
-use qubit_fs::CopyStats;
-use qubit_fs::CreateDirectoryOutcome;
-use qubit_fs::DeleteOutcome;
-use qubit_fs::DurabilityRequirement;
-use qubit_fs::FileKind;
-use qubit_fs::FileMetadata;
 use qubit_fs::FileSystem;
-use qubit_fs::FileSystemCapabilities;
-use qubit_fs::FileSystemCapability;
-use qubit_fs::FileSystemId;
-use qubit_fs::FileSystemInfo;
-use qubit_fs::FileSystemLimit;
-use qubit_fs::FileSystemLimits;
-use qubit_fs::FileSystemProperties;
 use qubit_fs::FsError;
-use qubit_fs::FsErrorKind;
-use qubit_fs::FsOperation;
 use qubit_fs::FsResult;
-use qubit_fs::MetadataPreservePolicy;
-use qubit_fs::OpenedFileInfo;
 use qubit_fs::Path;
-use qubit_fs::PathConstraints;
-use qubit_fs::PathSemantics;
-use qubit_fs::PublicationMethod;
-use qubit_fs::ReadOptions;
-use qubit_fs::RenameFailureState;
-use qubit_fs::RenameOutcome;
-use qubit_fs::ServerSidePreference;
-use qubit_fs::SymlinkPolicy;
-use qubit_fs::WriteAbortOutcome;
-use qubit_fs::WriteFailureState;
-use qubit_fs::WriteOptions;
-use qubit_fs::WriteOutcome;
-use qubit_fs::WriterState;
+use qubit_fs::copy::CopyConflictPolicy;
+use qubit_fs::copy::CopyFailureState;
+use qubit_fs::copy::CopyMethod;
+use qubit_fs::copy::CopyOptions;
+use qubit_fs::copy::CopyOutcome;
+use qubit_fs::copy::CopyStats;
+use qubit_fs::copy::MetadataPreservePolicy;
+use qubit_fs::copy::ServerSidePreference;
+use qubit_fs::directory::CreateDirectoryOutcome;
+use qubit_fs::directory::DeleteOutcome;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
+use qubit_fs::metadata::AchievedAtomicity;
+use qubit_fs::metadata::AtomicityRequirement;
+use qubit_fs::metadata::DurabilityRequirement;
+use qubit_fs::metadata::FileKind;
+use qubit_fs::metadata::FileMetadata;
+use qubit_fs::metadata::FileSystemCapabilities;
+use qubit_fs::metadata::FileSystemCapability;
+use qubit_fs::metadata::FileSystemId;
+use qubit_fs::metadata::FileSystemInfo;
+use qubit_fs::metadata::FileSystemLimit;
+use qubit_fs::metadata::FileSystemLimits;
+use qubit_fs::metadata::OpenedFileInfo;
+use qubit_fs::metadata::PublicationMethod;
+use qubit_fs::metadata::SymlinkPolicy;
+use qubit_fs::metadata::WriteOutcome;
+use qubit_fs::path::PathConstraints;
+use qubit_fs::path::PathSemantics;
+use qubit_fs::read::ReadOptions;
+use qubit_fs::rename::RenameFailureState;
+use qubit_fs::rename::RenameOutcome;
 use qubit_fs::spi::CopyAttempt;
 use qubit_fs::spi::CopyDeclineReason;
 use qubit_fs::spi::CopyRequest;
@@ -71,12 +66,19 @@ use qubit_fs::spi::OpenedReader;
 use qubit_fs::spi::OpenedTempDirectory;
 use qubit_fs::spi::OpenedTempFile;
 use qubit_fs::spi::OpenedWriter;
+use qubit_fs::spi::ProviderOperation;
+use qubit_fs::spi::ProviderOperations;
+use qubit_fs::spi::ProviderProperties;
 use qubit_fs::spi::RenameRequest;
 use qubit_fs::spi::SpiCopyFailure;
 use qubit_fs::spi::SpiRenameFailure;
 use qubit_fs::spi::SpiWriteFailure;
 use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
+use qubit_fs::write::WriteAbortOutcome;
+use qubit_fs::write::WriteFailureState;
+use qubit_fs::write::WriteOptions;
+use qubit_fs::write::WriterState;
 use qubit_io::Input;
 use qubit_io::Output;
 
@@ -187,7 +189,7 @@ fn properties(
     advertise_copy: bool,
     maximum_read_range_bytes: Option<u64>,
     maximum_write_bytes: Option<u64>,
-) -> FileSystemProperties {
+) -> ProviderProperties {
     let mut capabilities = FileSystemCapabilities::new()
         .with_guaranteed(FileSystemCapability::Rename)
         .with_guaranteed(FileSystemCapability::AtomicRename);
@@ -221,12 +223,21 @@ fn properties(
         capabilities =
             capabilities.with_guaranteed(FileSystemCapability::ServerSideCopy);
     }
-    FileSystemProperties::new(
+    let mut operations = ProviderOperations::new()
+        .with(ProviderOperation::Stat)
+        .with(ProviderOperation::OpenReader)
+        .with(ProviderOperation::OpenWriter)
+        .with(ProviderOperation::Rename);
+    if advertise_copy {
+        operations = operations.with(ProviderOperation::TryCopy);
+    }
+    ProviderProperties::new(
         FileSystemInfo::new(
             FileSystemId::new("recording").expect("id should be valid"),
             "recording",
             PathSemantics::Hierarchical,
         ),
+        operations,
         capabilities,
         FileSystemLimits::unknown()
             .with_max_read_range_bytes(
@@ -249,7 +260,7 @@ fn path(value: &str) -> Path {
 /// Implements the provider contract while recording every potentially relevant
 /// call.
 impl FileSystemSpi for RecordingSpi {
-    fn properties(&self) -> FileSystemProperties {
+    fn properties(&self) -> ProviderProperties {
         properties(
             &self.response,
             self.advertise_copy,

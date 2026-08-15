@@ -9,9 +9,9 @@
 //! Tests for logical filesystem paths.
 
 use qubit_fs::Path;
-use qubit_fs::PathComponent;
-use qubit_fs::PathSemantics;
-use qubit_fs::RelativePath;
+use qubit_fs::path::PathComponent;
+use qubit_fs::path::PathSemantics;
+use qubit_fs::path::RelativePath;
 
 /// Verifies normalized parsing and joins use only validated logical values.
 #[test]
@@ -39,6 +39,41 @@ fn test_path_components_do_not_emit_a_root_placeholder() {
     let root = Path::root();
     assert!(root.is_absolute());
     assert_eq!(root.components().collect::<Vec<_>>(), Vec::<&str>::new());
+}
+
+/// Verifies validated components can construct the hierarchical root without
+/// reparsing a joined path string.
+#[test]
+fn test_path_from_components_constructs_absolute_root() {
+    let path = Path::from_components(true, Vec::<&str>::new())
+        .expect("an empty absolute component sequence should form the root");
+    assert_eq!(Path::root(), path);
+}
+
+/// Verifies an empty relative component sequence cannot represent a path.
+#[test]
+fn test_path_from_components_rejects_empty_relative_path() {
+    assert!(Path::from_components(false, Vec::<&str>::new()).is_err());
+}
+
+/// Verifies encoded separators remain one validated component.
+#[test]
+fn test_path_from_components_preserves_encoded_separator_component() {
+    let path = Path::from_components(true, ["bucket", "%2F"])
+        .expect("encoded separator text should be a valid component");
+    assert_eq!("/bucket/%2F", path.as_str());
+    assert_eq!(vec!["bucket", "%2F"], path.components().collect::<Vec<_>>());
+}
+
+/// Verifies component construction rejects dot navigation and NUL bytes.
+#[test]
+fn test_path_from_components_rejects_invalid_components() {
+    for invalid in [".", "..", "nul\0byte"] {
+        assert!(
+            Path::from_components(false, [invalid]).is_err(),
+            "{invalid:?} must fail"
+        );
+    }
 }
 
 /// Verifies literal paths retain a leading separator as a lexical boundary.

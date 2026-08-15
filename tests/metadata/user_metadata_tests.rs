@@ -6,7 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::UserMetadata;
+use qubit_fs::metadata::UserMetadata;
 
 /// Verifies metadata formatting exposes keys without values.
 #[test]

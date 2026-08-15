@@ -6,7 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::PersistCleanupState;
+use qubit_fs::temp::PersistCleanupState;
 
 #[test]
 fn persist_cleanup_states_are_debuggable_and_distinct() {

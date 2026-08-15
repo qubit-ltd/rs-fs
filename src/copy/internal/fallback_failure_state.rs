@@ -10,10 +10,10 @@
 // The facade-level mappings are covered by copy_fallback_tests.rs and
 // async_copy_fallback_tests.rs.
 
-use crate::CopyFailureState;
-use crate::CopyStats;
-use crate::WriteFailureState;
-use crate::WriterState;
+use crate::copy::CopyFailureState;
+use crate::copy::CopyStats;
+use crate::write::WriteFailureState;
+use crate::write::WriterState;
 
 /// Maps an opened writer lifecycle state to a copy recovery state.
 ///

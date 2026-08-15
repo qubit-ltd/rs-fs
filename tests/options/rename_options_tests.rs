@@ -5,12 +5,12 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use qubit_fs::AtomicityRequirement;
-use qubit_fs::DurabilityRequirement;
-use qubit_fs::FileSystemCapabilities;
-use qubit_fs::FileSystemCapability;
-use qubit_fs::FsErrorKind;
-use qubit_fs::RenameOptions;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::metadata::AtomicityRequirement;
+use qubit_fs::metadata::DurabilityRequirement;
+use qubit_fs::metadata::FileSystemCapabilities;
+use qubit_fs::metadata::FileSystemCapability;
+use qubit_fs::rename::RenameOptions;
 
 #[test]
 fn test_rename_options_full_configuration_and_default_are_usable() {

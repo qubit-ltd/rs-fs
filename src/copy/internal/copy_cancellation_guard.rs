@@ -9,11 +9,11 @@
 // facade.
 //! Cancellation guard for an owning asynchronous copy operation.
 
-use crate::AsyncCopyFailure;
-use crate::AsyncCopyOperationState;
-use crate::AsyncFileWriter;
-use crate::CopyFailureState;
-use crate::CopyOutcome;
+use crate::copy::AsyncCopyFailure;
+use crate::copy::AsyncCopyOperationState;
+use crate::copy::CopyFailureState;
+use crate::copy::CopyOutcome;
+use crate::write::AsyncFileWriter;
 
 /// Marks a polled operation indeterminate if cancellation interrupts provider
 /// I/O.

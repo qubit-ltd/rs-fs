@@ -10,6 +10,6 @@
 //! Facade-resolved read options.
 
 use super::internal::resolved_options;
-use crate::ReadOptions;
+use crate::read::ReadOptions;
 
 resolved_options!(ResolvedReadOptions, ReadOptions);

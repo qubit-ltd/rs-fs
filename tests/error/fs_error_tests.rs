@@ -9,11 +9,11 @@
 use std::error::Error as _;
 use std::io;
 
-use qubit_fs::FileSystemCapability;
 use qubit_fs::FsError;
-use qubit_fs::FsErrorKind;
-use qubit_fs::FsOperation;
 use qubit_fs::Path;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
+use qubit_fs::metadata::FileSystemCapability;
 
 #[test]
 fn test_fs_error_keeps_request_and_failure_paths_separate() {

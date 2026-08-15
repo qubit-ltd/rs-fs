@@ -6,11 +6,11 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::FileKind;
-use qubit_fs::FileMetadata;
-use qubit_fs::FileSystemId;
-use qubit_fs::OpenedFileInfo;
 use qubit_fs::Path;
+use qubit_fs::metadata::FileKind;
+use qubit_fs::metadata::FileMetadata;
+use qubit_fs::metadata::FileSystemId;
+use qubit_fs::metadata::OpenedFileInfo;
 
 /// Verifies an opened-file snapshot preserves identity and can carry metadata
 /// already observed by the provider during open.

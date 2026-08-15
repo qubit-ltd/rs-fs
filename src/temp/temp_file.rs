@@ -11,22 +11,22 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
 
-use crate::AchievedAtomicity;
-use crate::AtomicityRequirement;
 use crate::FileSystem;
-use crate::FsError;
-use crate::FsErrorKind;
-use crate::FsOperation;
-use crate::FsResult;
-use crate::Path;
-use crate::PersistFailure;
-use crate::PersistFailureState;
-use crate::PersistOptions;
-use crate::PersistOutcome;
-use crate::TempResourceState;
+use crate::error::FsError;
+use crate::error::FsErrorKind;
+use crate::error::FsOperation;
+use crate::error::FsResult;
+use crate::metadata::AchievedAtomicity;
+use crate::metadata::AtomicityRequirement;
+use crate::path::Path;
 use crate::spi::PersistRequest;
 use crate::spi::SpiPersistFailure;
 use crate::spi::TempResourceSpi;
+use crate::temp::PersistFailure;
+use crate::temp::PersistFailureState;
+use crate::temp::PersistOptions;
+use crate::temp::PersistOutcome;
+use crate::temp::TempResourceState;
 
 /// Temporary file retaining the provider session until its lifecycle completes.
 pub struct TempFile {

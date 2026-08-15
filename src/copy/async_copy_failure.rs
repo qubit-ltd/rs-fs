@@ -15,9 +15,9 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
 
-use crate::CopyFailureState;
-use crate::CopyStats;
-use crate::FsError;
+use crate::copy::CopyFailureState;
+use crate::copy::CopyStats;
+use crate::error::FsError;
 
 /// Copy failure facts retained after an asynchronous copy operation.
 pub struct AsyncCopyFailure {

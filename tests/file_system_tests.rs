@@ -11,38 +11,34 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
-use qubit_fs::AchievedAtomicity;
-use qubit_fs::CopyOptions;
-use qubit_fs::CreateDirectoryOptions;
-use qubit_fs::CreateDirectoryOutcome;
-use qubit_fs::DeleteOptions;
-use qubit_fs::DeleteOutcome;
-use qubit_fs::FileKind;
-use qubit_fs::FileMetadata;
 use qubit_fs::FileSystem;
-use qubit_fs::FileSystemCapabilities;
-use qubit_fs::FileSystemCapability;
-use qubit_fs::FileSystemId;
-use qubit_fs::FileSystemInfo;
-use qubit_fs::FileSystemLimits;
-use qubit_fs::FileSystemProperties;
 use qubit_fs::FsError;
-use qubit_fs::FsErrorKind;
-use qubit_fs::FsOperation;
 use qubit_fs::FsResult;
-use qubit_fs::ListOptions;
 use qubit_fs::Path;
-use qubit_fs::PathConstraints;
-use qubit_fs::PathSemantics;
-use qubit_fs::PublicationMethod;
-use qubit_fs::ReadOptions;
-use qubit_fs::RenameFailureState;
-use qubit_fs::RenameOptions;
-use qubit_fs::RenameOutcome;
-use qubit_fs::SymlinkPolicy;
-use qubit_fs::TempDirectoryOptions;
-use qubit_fs::TempFileOptions;
-use qubit_fs::WriteOptions;
+use qubit_fs::copy::CopyOptions;
+use qubit_fs::directory::CreateDirectoryOptions;
+use qubit_fs::directory::CreateDirectoryOutcome;
+use qubit_fs::directory::DeleteOptions;
+use qubit_fs::directory::DeleteOutcome;
+use qubit_fs::directory::ListOptions;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
+use qubit_fs::metadata::AchievedAtomicity;
+use qubit_fs::metadata::FileKind;
+use qubit_fs::metadata::FileMetadata;
+use qubit_fs::metadata::FileSystemCapabilities;
+use qubit_fs::metadata::FileSystemCapability;
+use qubit_fs::metadata::FileSystemId;
+use qubit_fs::metadata::FileSystemInfo;
+use qubit_fs::metadata::FileSystemLimits;
+use qubit_fs::metadata::PublicationMethod;
+use qubit_fs::metadata::SymlinkPolicy;
+use qubit_fs::path::PathConstraints;
+use qubit_fs::path::PathSemantics;
+use qubit_fs::read::ReadOptions;
+use qubit_fs::rename::RenameFailureState;
+use qubit_fs::rename::RenameOptions;
+use qubit_fs::rename::RenameOutcome;
 use qubit_fs::spi::CreateDirectoryRequest;
 use qubit_fs::spi::CreateTempDirectoryRequest;
 use qubit_fs::spi::CreateTempFileRequest;
@@ -57,13 +53,18 @@ use qubit_fs::spi::OpenedReader;
 use qubit_fs::spi::OpenedTempDirectory;
 use qubit_fs::spi::OpenedTempFile;
 use qubit_fs::spi::OpenedWriter;
+use qubit_fs::spi::ProviderOperation;
+use qubit_fs::spi::ProviderOperations;
+use qubit_fs::spi::ProviderProperties;
 use qubit_fs::spi::RenameRequest;
 use qubit_fs::spi::SpiRenameFailure;
 use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
+use qubit_fs::temp::TempOptions;
+use qubit_fs::write::WriteOptions;
 
 struct CountingSpi {
-    properties: FileSystemProperties,
+    properties: ProviderProperties,
     property_calls: Arc<AtomicUsize>,
     stat_calls: Arc<AtomicUsize>,
     wrong_stat_path: bool,
@@ -84,7 +85,7 @@ impl CountingSpi {
 }
 
 impl FileSystemSpi for CountingSpi {
-    fn properties(&self) -> FileSystemProperties {
+    fn properties(&self) -> ProviderProperties {
         self.property_calls.fetch_add(1, Ordering::SeqCst);
         self.properties.clone()
     }
@@ -174,12 +175,12 @@ impl FileSystemSpi for CountingSpi {
 
 /// Provider that relies on every optional synchronous SPI default method.
 struct DefaultSyncSpi {
-    properties: FileSystemProperties,
+    properties: ProviderProperties,
 }
 
 impl FileSystemSpi for DefaultSyncSpi {
     /// Returns the properties used to enable each default operation path.
-    fn properties(&self) -> FileSystemProperties {
+    fn properties(&self) -> ProviderProperties {
         self.properties.clone()
     }
 
@@ -193,14 +194,15 @@ impl FileSystemSpi for DefaultSyncSpi {
 }
 
 /// Builds valid properties that advertise all synchronous default operations.
-fn default_sync_properties() -> FileSystemProperties {
-    FileSystemProperties::new(
+fn default_sync_properties() -> ProviderProperties {
+    ProviderProperties::new(
         FileSystemInfo::new(
             FileSystemId::new("default-sync")
                 .expect("test provider id should be valid"),
             "default-sync",
             PathSemantics::Hierarchical,
         ),
+        provider_operations(),
         FileSystemCapabilities::new()
             .with_guaranteed(FileSystemCapability::List)
             .with_guaranteed(FileSystemCapability::Read)
@@ -218,14 +220,32 @@ fn default_sync_properties() -> FileSystemProperties {
     .expect("default provider properties should be valid")
 }
 
+/// Returns every provider entry point exercised by the synchronous facade
+/// fixtures in this file.
+fn provider_operations() -> ProviderOperations {
+    ProviderOperations::new()
+        .with(ProviderOperation::Stat)
+        .with(ProviderOperation::List)
+        .with(ProviderOperation::OpenReader)
+        .with(ProviderOperation::OpenWriter)
+        .with(ProviderOperation::CreateDirectory)
+        .with(ProviderOperation::DeleteFile)
+        .with(ProviderOperation::DeleteDirectory)
+        .with(ProviderOperation::TryCopy)
+        .with(ProviderOperation::Rename)
+        .with(ProviderOperation::CreateTempFile)
+        .with(ProviderOperation::CreateTempDirectory)
+}
+
 #[test]
 fn test_file_system_from_spi_caches_properties_snapshot() {
-    let properties = FileSystemProperties::new(
+    let properties = ProviderProperties::new(
         FileSystemInfo::new(
             FileSystemId::new("test").expect("test id should be valid"),
             "test",
             PathSemantics::Hierarchical,
         ),
+        provider_operations(),
         FileSystemCapabilities::new(),
         FileSystemLimits::unknown(),
         PathConstraints::absolute(),
@@ -261,12 +281,13 @@ fn test_file_system_from_spi_caches_properties_snapshot() {
 
 #[test]
 fn test_stat_rejects_path_with_different_semantics_before_spi_call() {
-    let properties = FileSystemProperties::new(
+    let properties = ProviderProperties::new(
         FileSystemInfo::new(
             FileSystemId::new("object-store").expect("test id should be valid"),
             "test",
             PathSemantics::ObjectKey,
         ),
+        provider_operations(),
         FileSystemCapabilities::new(),
         FileSystemLimits::unknown(),
         PathConstraints::either(),
@@ -299,12 +320,13 @@ fn test_stat_rejects_path_with_different_semantics_before_spi_call() {
 
 #[test]
 fn test_stat_rejects_provider_response_for_a_different_path() {
-    let properties = FileSystemProperties::new(
+    let properties = ProviderProperties::new(
         FileSystemInfo::new(
             FileSystemId::new("test").expect("test id should be valid"),
             "test",
             PathSemantics::Hierarchical,
         ),
+        provider_operations(),
         FileSystemCapabilities::new(),
         FileSystemLimits::unknown(),
         PathConstraints::absolute(),
@@ -332,12 +354,13 @@ fn test_stat_rejects_provider_response_for_a_different_path() {
 /// Distinguishes a confirmed missing path from operational stat failures.
 #[test]
 fn test_exists_maps_not_found_only_and_contextualizes_other_errors() {
-    let properties = FileSystemProperties::new(
+    let properties = ProviderProperties::new(
         FileSystemInfo::new(
             FileSystemId::new("test").expect("test id should be valid"),
             "test",
             PathSemantics::Hierarchical,
         ),
+        provider_operations(),
         FileSystemCapabilities::new(),
         FileSystemLimits::unknown(),
         PathConstraints::absolute(),
@@ -381,12 +404,13 @@ fn test_exists_maps_not_found_only_and_contextualizes_other_errors() {
 /// while adding the public operation and provider context.
 #[test]
 fn test_direct_sync_provider_failures_are_enriched() {
-    let properties = FileSystemProperties::new(
+    let properties = ProviderProperties::new(
         FileSystemInfo::new(
             FileSystemId::new("test").expect("test id should be valid"),
             "test",
             PathSemantics::Hierarchical,
         ),
+        provider_operations(),
         FileSystemCapabilities::new()
             .with_guaranteed(FileSystemCapability::CreateDirectory)
             .with_guaranteed(FileSystemCapability::Delete)
@@ -439,12 +463,13 @@ fn test_direct_sync_provider_failures_are_enriched() {
 /// Returns a provider-confirmed rename outcome with facade-bound identity.
 #[test]
 fn test_sync_rename_returns_successful_provider_outcome() {
-    let properties = FileSystemProperties::new(
+    let properties = ProviderProperties::new(
         FileSystemInfo::new(
             FileSystemId::new("test").expect("test id should be valid"),
             "test",
             PathSemantics::Hierarchical,
         ),
+        provider_operations(),
         FileSystemCapabilities::new()
             .with_guaranteed(FileSystemCapability::Rename)
             .with_guaranteed(FileSystemCapability::AtomicRename),
@@ -477,12 +502,13 @@ fn test_sync_rename_returns_successful_provider_outcome() {
 /// unintended public result can be exposed.
 #[test]
 fn test_sync_facade_rejects_unrequested_outcomes_and_same_path_mutations() {
-    let properties = FileSystemProperties::new(
+    let properties = ProviderProperties::new(
         FileSystemInfo::new(
             FileSystemId::new("test").expect("test id should be valid"),
             "test",
             PathSemantics::Hierarchical,
         ),
+        provider_operations(),
         FileSystemCapabilities::new()
             .with_guaranteed(FileSystemCapability::Copy)
             .with_guaranteed(FileSystemCapability::CreateDirectory)
@@ -535,12 +561,13 @@ fn test_sync_facade_rejects_unrequested_outcomes_and_same_path_mutations() {
 /// absent before dispatching any provider I/O.
 #[test]
 fn test_sync_facade_requires_operation_capabilities_before_dispatch() {
-    let properties = FileSystemProperties::new(
+    let properties = ProviderProperties::new(
         FileSystemInfo::new(
             FileSystemId::new("test").expect("test id should be valid"),
             "test",
             PathSemantics::Hierarchical,
         ),
+        provider_operations(),
         FileSystemCapabilities::new(),
         FileSystemLimits::unknown(),
         PathConstraints::absolute(),
@@ -568,10 +595,10 @@ fn test_sync_facade_requires_operation_capabilities_before_dispatch() {
             .open_writer(&path, WriteOptions::default())
             .expect_err("writer requires advertised capability"),
         file_system
-            .create_temp_file(TempFileOptions::default())
+            .create_temp_file(TempOptions::default())
             .expect_err("temporary file requires advertised capability"),
         file_system
-            .create_temp_directory(TempDirectoryOptions::default())
+            .create_temp_directory(TempOptions::default())
             .expect_err("temporary directory requires advertised capability"),
         file_system
             .create_directory(&path, CreateDirectoryOptions::default())
@@ -664,7 +691,7 @@ fn test_sync_spi_default_operations_report_unsupported() {
     };
     assert_eq!(FsOperation::Copy, error.error().operation());
 
-    let error = match filesystem.create_temp_file(TempFileOptions::default()) {
+    let error = match filesystem.create_temp_file(TempOptions::default()) {
         Ok(_) => panic!(
             "default temporary-file implementation must reject the request"
         ),
@@ -673,9 +700,7 @@ fn test_sync_spi_default_operations_report_unsupported() {
     assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
     assert_eq!(FsOperation::CreateTemp, error.operation());
 
-    let error = match filesystem
-        .create_temp_directory(TempDirectoryOptions::default())
-    {
+    let error = match filesystem.create_temp_directory(TempOptions::default()) {
         Ok(_) => panic!(
             "default temporary-directory implementation must reject the request"
         ),

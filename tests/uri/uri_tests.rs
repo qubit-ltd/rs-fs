@@ -8,7 +8,7 @@
 
 //! Tests for secret-free resource URIs.
 
-use qubit_fs::Uri;
+use qubit_fs::path::Uri;
 
 /// Verifies URI parsing preserves RFC 3986 authority lexical distinctions.
 #[test]

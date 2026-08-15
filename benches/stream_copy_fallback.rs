@@ -16,41 +16,47 @@ use criterion::Throughput;
 use criterion::black_box;
 use criterion::criterion_group;
 use criterion::criterion_main;
-use qubit_fs::FileKind;
-use qubit_fs::FileMetadata;
 use qubit_fs::FileSystem;
-use qubit_fs::FileSystemCapabilities;
-use qubit_fs::FileSystemId;
-use qubit_fs::FileSystemInfo;
-use qubit_fs::FileSystemLimits;
-use qubit_fs::FileSystemProperties;
 use qubit_fs::FsResult;
-use qubit_fs::OpenedFileInfo;
 use qubit_fs::Path;
-use qubit_fs::PathConstraints;
-use qubit_fs::PathSemantics;
-use qubit_fs::SymlinkPolicy;
+use qubit_fs::metadata::FileKind;
+use qubit_fs::metadata::FileMetadata;
+use qubit_fs::metadata::FileSystemCapabilities;
+use qubit_fs::metadata::FileSystemId;
+use qubit_fs::metadata::FileSystemInfo;
+use qubit_fs::metadata::FileSystemLimits;
+use qubit_fs::metadata::OpenedFileInfo;
+use qubit_fs::metadata::SymlinkPolicy;
+use qubit_fs::path::PathConstraints;
+use qubit_fs::path::PathSemantics;
 use qubit_fs::spi::FileSystemSpi;
 use qubit_fs::spi::OpenReaderRequest;
 use qubit_fs::spi::OpenedReader;
+use qubit_fs::spi::ProviderOperation;
+use qubit_fs::spi::ProviderOperations;
+use qubit_fs::spi::ProviderProperties;
 use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
 
 struct BenchmarkSpi {
     payload: Arc<[u8]>,
-    properties: FileSystemProperties,
+    properties: ProviderProperties,
 }
 
 impl BenchmarkSpi {
     fn new(payload: Vec<u8>) -> Self {
-        let properties = FileSystemProperties::new(
+        let properties = ProviderProperties::new(
             FileSystemInfo::new(
                 FileSystemId::new("bench").expect("benchmark id is valid"),
                 "bench",
                 PathSemantics::Hierarchical,
             ),
-            FileSystemCapabilities::new()
-                .with_guaranteed(qubit_fs::FileSystemCapability::Read),
+            ProviderOperations::new()
+                .with(ProviderOperation::Stat)
+                .with(ProviderOperation::OpenReader),
+            FileSystemCapabilities::new().with_guaranteed(
+                qubit_fs::metadata::FileSystemCapability::Read,
+            ),
             FileSystemLimits::unknown(),
             PathConstraints::absolute(),
             SymlinkPolicy::Reject,
@@ -64,7 +70,7 @@ impl BenchmarkSpi {
 }
 
 impl FileSystemSpi for BenchmarkSpi {
-    fn properties(&self) -> FileSystemProperties {
+    fn properties(&self) -> ProviderProperties {
         self.properties.clone()
     }
 

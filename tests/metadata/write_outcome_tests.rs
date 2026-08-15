@@ -5,11 +5,11 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use qubit_fs::AchievedAtomicity;
-use qubit_fs::PublicationMethod;
-use qubit_fs::ResourceVersion;
-use qubit_fs::UserMetadata;
-use qubit_fs::WriteOutcome;
+use qubit_fs::metadata::AchievedAtomicity;
+use qubit_fs::metadata::PublicationMethod;
+use qubit_fs::metadata::ResourceVersion;
+use qubit_fs::metadata::UserMetadata;
+use qubit_fs::metadata::WriteOutcome;
 
 #[test]
 fn write_outcome_reports_actual_publication_semantics() {

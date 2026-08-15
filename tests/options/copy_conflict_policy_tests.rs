@@ -6,7 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::CopyConflictPolicy;
+use qubit_fs::copy::CopyConflictPolicy;
 
 #[test]
 fn test_copy_conflict_policy_default_is_fail() {

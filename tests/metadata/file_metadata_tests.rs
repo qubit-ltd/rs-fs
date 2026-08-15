@@ -7,12 +7,12 @@
 // =============================================================================
 use std::time::SystemTime;
 
-use qubit_fs::Checksum;
-use qubit_fs::ChecksumAlgorithm;
-use qubit_fs::FileKind;
-use qubit_fs::FileMetadata;
-use qubit_fs::ResourceVersion;
-use qubit_fs::UserMetadata;
+use qubit_fs::metadata::Checksum;
+use qubit_fs::metadata::ChecksumAlgorithm;
+use qubit_fs::metadata::FileKind;
+use qubit_fs::metadata::FileMetadata;
+use qubit_fs::metadata::ResourceVersion;
+use qubit_fs::metadata::UserMetadata;
 
 #[test]
 fn test_is_directory_like_matches_directory_and_prefix() {

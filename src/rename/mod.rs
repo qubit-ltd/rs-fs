@@ -9,9 +9,13 @@
 
 mod rename_failure;
 mod rename_failure_state;
+mod rename_options;
+mod rename_outcome;
 mod rename_outcome_validation;
 mod rename_outcome_validation_error;
 
 pub use rename_failure::RenameFailure;
 pub use rename_failure_state::RenameFailureState;
+pub use rename_options::RenameOptions;
+pub use rename_outcome::RenameOutcome;
 pub(crate) use rename_outcome_validation::validate_rename_outcome;
