@@ -21,7 +21,7 @@ use qubit_redact::UriRedactor;
 use super::invalid_uri;
 use super::uri::Uri;
 use super::uri::parse_canonical;
-use crate::FsResult;
+use crate::error::FsResult;
 
 /// A connection URI whose normal formatting always redacts credentials.
 #[derive(Clone, Eq, PartialEq)]

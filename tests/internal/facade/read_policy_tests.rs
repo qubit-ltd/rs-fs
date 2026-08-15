@@ -7,7 +7,7 @@
 // =============================================================================
 
 use qubit_fs::Path;
-use qubit_fs::ReadOptions;
+use qubit_fs::read::ReadOptions;
 
 /// Verifies the public prefix-read facade stops at the requested bound.
 #[test]

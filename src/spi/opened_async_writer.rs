@@ -10,9 +10,9 @@
 //! Provider-opened asynchronous writer envelope.
 
 use super::AsyncFileWriteSession;
-use crate::AsyncFileWriter;
-use crate::AtomicityRequirement;
-use crate::OpenedFileInfo;
+use crate::metadata::AtomicityRequirement;
+use crate::metadata::OpenedFileInfo;
+use crate::write::AsyncFileWriter;
 
 /// An already-open asynchronous writer bound to provider identity.
 pub struct OpenedAsyncWriter {

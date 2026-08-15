@@ -14,8 +14,8 @@ use std::pin::Pin;
 use super::PersistRequest;
 use super::SpiFuture;
 use super::SpiPersistFailure;
-use crate::FsResult;
-use crate::PersistOutcome;
+use crate::error::FsResult;
+use crate::temp::PersistOutcome;
 
 /// Provider-side asynchronous temporary-resource lifecycle session.
 pub trait AsyncTempResourceSpi: Send {

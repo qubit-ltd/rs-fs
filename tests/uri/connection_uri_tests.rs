@@ -8,8 +8,8 @@
 
 //! Tests for redacted connection URIs.
 
-use qubit_fs::ConnectionUri;
-use qubit_fs::Uri;
+use qubit_fs::path::ConnectionUri;
+use qubit_fs::path::Uri;
 
 /// Verifies connection URI formatting redacts all sensitive duplicate query
 /// values.

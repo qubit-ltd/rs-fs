@@ -7,9 +7,9 @@
 // =============================================================================
 
 use qubit_fs::FsError;
-use qubit_fs::FsErrorKind;
-use qubit_fs::FsOperation;
 use qubit_fs::FsResult;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
 
 fn succeed() -> FsResult<()> {
     Ok(())

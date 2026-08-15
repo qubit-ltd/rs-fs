@@ -6,7 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::FileSystemCapabilitySupport;
+use qubit_fs::metadata::FileSystemCapabilitySupport;
 
 #[test]
 fn capability_support_statuses_are_debuggable_and_distinct() {

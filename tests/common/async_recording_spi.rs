@@ -15,42 +15,36 @@ use std::sync::Mutex;
 use std::task::Context;
 use std::task::Poll;
 
-use qubit_fs::AchievedAtomicity;
 use qubit_fs::AsyncFileSystem;
-use qubit_fs::CopyFailureState;
-use qubit_fs::CopyMethod;
-use qubit_fs::CopyOutcome;
-use qubit_fs::CopyStats;
-use qubit_fs::CreateDirectoryOutcome;
-use qubit_fs::DeleteOutcome;
-use qubit_fs::DirEntry;
-use qubit_fs::FileKind;
-use qubit_fs::FileMetadata;
-use qubit_fs::FileSystemCapabilities;
-use qubit_fs::FileSystemCapability;
-use qubit_fs::FileSystemId;
-use qubit_fs::FileSystemInfo;
-use qubit_fs::FileSystemLimit;
-use qubit_fs::FileSystemLimits;
-use qubit_fs::FileSystemProperties;
 use qubit_fs::FsError;
-use qubit_fs::FsErrorKind;
-use qubit_fs::FsOperation;
 use qubit_fs::FsResult;
-use qubit_fs::OpenedFileInfo;
 use qubit_fs::Path;
-use qubit_fs::PathConstraints;
-use qubit_fs::PathSemantics;
-use qubit_fs::PersistFailureState;
-use qubit_fs::PersistOutcome;
-use qubit_fs::PublicationMethod;
-use qubit_fs::RenameFailureState;
-use qubit_fs::RenameOutcome;
-use qubit_fs::SymlinkPolicy;
-use qubit_fs::WriteAbortOutcome;
-use qubit_fs::WriteFailure;
-use qubit_fs::WriteFailureState;
-use qubit_fs::WriteOutcome;
+use qubit_fs::copy::CopyFailureState;
+use qubit_fs::copy::CopyMethod;
+use qubit_fs::copy::CopyOutcome;
+use qubit_fs::copy::CopyStats;
+use qubit_fs::directory::CreateDirectoryOutcome;
+use qubit_fs::directory::DeleteOutcome;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
+use qubit_fs::metadata::AchievedAtomicity;
+use qubit_fs::metadata::DirEntry;
+use qubit_fs::metadata::FileKind;
+use qubit_fs::metadata::FileMetadata;
+use qubit_fs::metadata::FileSystemCapabilities;
+use qubit_fs::metadata::FileSystemCapability;
+use qubit_fs::metadata::FileSystemId;
+use qubit_fs::metadata::FileSystemInfo;
+use qubit_fs::metadata::FileSystemLimit;
+use qubit_fs::metadata::FileSystemLimits;
+use qubit_fs::metadata::OpenedFileInfo;
+use qubit_fs::metadata::PublicationMethod;
+use qubit_fs::metadata::SymlinkPolicy;
+use qubit_fs::metadata::WriteOutcome;
+use qubit_fs::path::PathConstraints;
+use qubit_fs::path::PathSemantics;
+use qubit_fs::rename::RenameFailureState;
+use qubit_fs::rename::RenameOutcome;
 use qubit_fs::spi::AsyncDirectoryStreamSession;
 use qubit_fs::spi::AsyncFileSystemSpi;
 use qubit_fs::spi::AsyncFileWriteSession;
@@ -72,6 +66,9 @@ use qubit_fs::spi::OpenedAsyncTempDirectory;
 use qubit_fs::spi::OpenedAsyncTempFile;
 use qubit_fs::spi::OpenedAsyncWriter;
 use qubit_fs::spi::PersistRequest;
+use qubit_fs::spi::ProviderOperation;
+use qubit_fs::spi::ProviderOperations;
+use qubit_fs::spi::ProviderProperties;
 use qubit_fs::spi::RenameRequest;
 use qubit_fs::spi::SpiCopyFailure;
 use qubit_fs::spi::SpiFuture;
@@ -79,6 +76,11 @@ use qubit_fs::spi::SpiPersistFailure;
 use qubit_fs::spi::SpiRenameFailure;
 use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
+use qubit_fs::temp::PersistFailureState;
+use qubit_fs::temp::PersistOutcome;
+use qubit_fs::write::WriteAbortOutcome;
+use qubit_fs::write::WriteFailure;
+use qubit_fs::write::WriteFailureState;
 use qubit_io::AsyncInput;
 use qubit_io::AsyncOutput;
 
@@ -205,7 +207,7 @@ impl AsyncRecordingSpi {
             .push(call);
     }
     /// Builds the property snapshot used by tests.
-    fn properties_for(&self) -> FileSystemProperties {
+    fn properties_for(&self) -> ProviderProperties {
         let mut capabilities = FileSystemCapabilities::new();
         for capability in [
             FileSystemCapability::Copy,
@@ -251,13 +253,28 @@ impl AsyncRecordingSpi {
             capabilities = capabilities
                 .with_guaranteed(FileSystemCapability::AtomicTempPersist);
         }
-        FileSystemProperties::new(
+        let mut operations = ProviderOperations::new()
+            .with(ProviderOperation::Stat)
+            .with(ProviderOperation::List)
+            .with(ProviderOperation::OpenReader)
+            .with(ProviderOperation::OpenWriter)
+            .with(ProviderOperation::CreateDirectory)
+            .with(ProviderOperation::DeleteFile)
+            .with(ProviderOperation::DeleteDirectory)
+            .with(ProviderOperation::Rename)
+            .with(ProviderOperation::CreateTempFile)
+            .with(ProviderOperation::CreateTempDirectory);
+        if self.config.omitted_capability != Some(FileSystemCapability::Copy) {
+            operations = operations.with(ProviderOperation::TryCopy);
+        }
+        ProviderProperties::new(
             FileSystemInfo::new(
                 FileSystemId::new("async-recording")
                     .expect("test id should be valid"),
                 "async-recording",
                 PathSemantics::Hierarchical,
             ),
+            operations,
             capabilities,
             FileSystemLimits::unknown()
                 .with_max_read_range_bytes(
@@ -311,7 +328,7 @@ impl AsyncRecordingSpi {
     }
 }
 impl AsyncFileSystemSpi for AsyncRecordingSpi {
-    fn properties(&self) -> FileSystemProperties {
+    fn properties(&self) -> ProviderProperties {
         self.properties_for()
     }
     fn stat<'a>(

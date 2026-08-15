@@ -10,7 +10,7 @@
 //! Provider-opened synchronous writer envelope.
 
 use super::FileWriterSpi;
-use crate::OpenedFileInfo;
+use crate::metadata::OpenedFileInfo;
 
 /// An already-open provider writer.
 pub struct OpenedWriter {

@@ -5,17 +5,17 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use qubit_fs::AtomicityRequirement;
-use qubit_fs::Checksum;
-use qubit_fs::ChecksumAlgorithm;
-use qubit_fs::FileSystemCapabilities;
-use qubit_fs::FileSystemCapability;
-use qubit_fs::FsErrorKind;
-use qubit_fs::ResourceVersion;
-use qubit_fs::UserMetadata;
-use qubit_fs::WriteDisposition;
-use qubit_fs::WriteOptions;
-use qubit_fs::WritePrecondition;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::metadata::AtomicityRequirement;
+use qubit_fs::metadata::Checksum;
+use qubit_fs::metadata::ChecksumAlgorithm;
+use qubit_fs::metadata::FileSystemCapabilities;
+use qubit_fs::metadata::FileSystemCapability;
+use qubit_fs::metadata::ResourceVersion;
+use qubit_fs::metadata::UserMetadata;
+use qubit_fs::write::WriteDisposition;
+use qubit_fs::write::WriteOptions;
+use qubit_fs::write::WritePrecondition;
 
 #[test]
 fn test_write_options_full_configuration_is_usable() {

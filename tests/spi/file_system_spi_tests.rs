@@ -7,22 +7,22 @@
 // =============================================================================
 //! SPI failure state tests.
 
-use qubit_fs::CopyFailureState;
-use qubit_fs::CopyStats;
-use qubit_fs::FileKind;
-use qubit_fs::FileMetadata;
 use qubit_fs::FsError;
-use qubit_fs::FsErrorKind;
-use qubit_fs::FsOperation;
 use qubit_fs::Path;
-use qubit_fs::PersistFailureState;
-use qubit_fs::RenameFailureState;
-use qubit_fs::WriteFailureState;
+use qubit_fs::copy::CopyFailureState;
+use qubit_fs::copy::CopyStats;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
+use qubit_fs::metadata::FileKind;
+use qubit_fs::metadata::FileMetadata;
+use qubit_fs::rename::RenameFailureState;
 use qubit_fs::spi::SpiCopyFailure;
 use qubit_fs::spi::SpiPersistFailure;
 use qubit_fs::spi::SpiRenameFailure;
 use qubit_fs::spi::SpiWriteFailure;
 use qubit_fs::spi::StatResponse;
+use qubit_fs::temp::PersistFailureState;
+use qubit_fs::write::WriteFailureState;
 
 /// Verifies provider copy failures retain typed recovery state and statistics.
 #[test]

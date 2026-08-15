@@ -6,28 +6,30 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::DirEntry;
-use qubit_fs::DirectoryStreamState;
-use qubit_fs::FileKind;
-use qubit_fs::FileMetadata;
 use qubit_fs::FileSystem;
-use qubit_fs::FileSystemCapabilities;
-use qubit_fs::FileSystemCapability;
-use qubit_fs::FileSystemId;
-use qubit_fs::FileSystemInfo;
-use qubit_fs::FileSystemLimits;
-use qubit_fs::FileSystemProperties;
-use qubit_fs::FsErrorKind;
 use qubit_fs::FsResult;
-use qubit_fs::ListOptions;
 use qubit_fs::Path;
-use qubit_fs::PathConstraints;
-use qubit_fs::PathSemantics;
-use qubit_fs::SymlinkPolicy;
+use qubit_fs::directory::DirectoryStreamState;
+use qubit_fs::directory::ListOptions;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::metadata::DirEntry;
+use qubit_fs::metadata::FileKind;
+use qubit_fs::metadata::FileMetadata;
+use qubit_fs::metadata::FileSystemCapabilities;
+use qubit_fs::metadata::FileSystemCapability;
+use qubit_fs::metadata::FileSystemId;
+use qubit_fs::metadata::FileSystemInfo;
+use qubit_fs::metadata::FileSystemLimits;
+use qubit_fs::metadata::SymlinkPolicy;
+use qubit_fs::path::PathConstraints;
+use qubit_fs::path::PathSemantics;
 use qubit_fs::spi::DirectoryStreamSpi;
 use qubit_fs::spi::FileSystemSpi;
 use qubit_fs::spi::ListRequest;
 use qubit_fs::spi::OpenedDirectoryStream;
+use qubit_fs::spi::ProviderOperation;
+use qubit_fs::spi::ProviderOperations;
+use qubit_fs::spi::ProviderProperties;
 use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
 #[test]
@@ -65,14 +67,17 @@ fn test_directory_stream_accepts_object_key_root_with_trailing_slash() {
     struct ObjectKeySpi;
 
     impl FileSystemSpi for ObjectKeySpi {
-        fn properties(&self) -> FileSystemProperties {
-            FileSystemProperties::new(
+        fn properties(&self) -> ProviderProperties {
+            ProviderProperties::new(
                 FileSystemInfo::new(
                     FileSystemId::new("object-key-test")
                         .expect("test filesystem id should be valid"),
                     "object-key-test",
                     PathSemantics::ObjectKey,
                 ),
+                ProviderOperations::new()
+                    .with(ProviderOperation::Stat)
+                    .with(ProviderOperation::List),
                 FileSystemCapabilities::new()
                     .with_guaranteed(FileSystemCapability::List),
                 FileSystemLimits::unknown(),

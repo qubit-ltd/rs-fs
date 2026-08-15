@@ -18,7 +18,7 @@ use qubit_redact::UriRedactionStatus;
 use qubit_redact::UriRedactor;
 
 use super::invalid_uri;
-use crate::FsResult;
+use crate::error::FsResult;
 
 /// A validated URI that cannot contain sensitive credentials or a fragment.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]

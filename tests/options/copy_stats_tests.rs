@@ -6,9 +6,9 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::CopyStats;
-use qubit_fs::FsErrorKind;
-use qubit_fs::FsOperation;
+use qubit_fs::copy::CopyStats;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
 
 #[test]
 fn test_copy_stats_add_assign_adds_all_counters() {

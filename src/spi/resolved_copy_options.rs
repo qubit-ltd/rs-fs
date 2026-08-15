@@ -9,8 +9,8 @@
 // facade.
 //! Facade-resolved copy options.
 
-use crate::CopyOptions;
-use crate::SymlinkPolicy;
+use crate::copy::CopyOptions;
+use crate::metadata::SymlinkPolicy;
 
 /// Immutable options resolved by the facade before provider dispatch.
 #[derive(Clone)]

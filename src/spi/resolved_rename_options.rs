@@ -10,6 +10,6 @@
 //! Facade-resolved rename options.
 
 use super::internal::resolved_options;
-use crate::RenameOptions;
+use crate::rename::RenameOptions;
 
 resolved_options!(ResolvedRenameOptions, RenameOptions);

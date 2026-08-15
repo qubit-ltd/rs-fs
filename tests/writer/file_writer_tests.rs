@@ -6,16 +6,16 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::AtomicityRequirement;
 use qubit_fs::FsError;
-use qubit_fs::FsErrorKind;
-use qubit_fs::FsOperation;
 use qubit_fs::Path;
-use qubit_fs::WriteAbortOutcome;
-use qubit_fs::WriteFailure;
-use qubit_fs::WriteFailureState;
-use qubit_fs::WriteOptions;
-use qubit_fs::WriterState;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
+use qubit_fs::metadata::AtomicityRequirement;
+use qubit_fs::write::WriteAbortOutcome;
+use qubit_fs::write::WriteFailure;
+use qubit_fs::write::WriteFailureState;
+use qubit_fs::write::WriteOptions;
+use qubit_fs::write::WriterState;
 use qubit_io::Output;
 
 /// Keeps abort publication certainty as a first-class provider result.

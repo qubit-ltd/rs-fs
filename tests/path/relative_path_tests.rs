@@ -8,7 +8,7 @@
 
 //! Tests for safe relative paths.
 
-use qubit_fs::RelativePath;
+use qubit_fs::path::RelativePath;
 
 /// Verifies relative paths cannot escape their logical base.
 #[test]

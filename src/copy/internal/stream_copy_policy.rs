@@ -7,16 +7,16 @@
 // =============================================================================
 //! Shared helpers for stream-copy fallback validation.
 
-use crate::AtomicityRequirement;
-use crate::CopyConflictPolicy;
-use crate::CopyOptions;
-use crate::DurabilityRequirement;
-use crate::FileKind;
-use crate::FileSystemLimits;
-use crate::FsError;
-use crate::MetadataPreservePolicy;
-use crate::Path;
-use crate::ServerSidePreference;
+use crate::copy::CopyConflictPolicy;
+use crate::copy::CopyOptions;
+use crate::copy::MetadataPreservePolicy;
+use crate::copy::ServerSidePreference;
+use crate::error::FsError;
+use crate::metadata::AtomicityRequirement;
+use crate::metadata::DurabilityRequirement;
+use crate::metadata::FileKind;
+use crate::metadata::FileSystemLimits;
+use crate::path::Path;
 
 /// Returns true when copy options remain within the fallback policy allowlist.
 #[inline]
@@ -43,8 +43,8 @@ pub(crate) fn validate_stream_copy_length_limits(
 ) -> Result<(), FsError> {
     let length = usize::try_from(length).map_err(|_| {
         FsError::new(
-            crate::FsErrorKind::ResourceLimitExceeded,
-            crate::FsOperation::Copy,
+            crate::error::FsErrorKind::ResourceLimitExceeded,
+            crate::error::FsOperation::Copy,
             "source length cannot fit in a native write session",
         )
         .with_path(source.clone())

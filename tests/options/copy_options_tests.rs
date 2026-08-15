@@ -5,16 +5,16 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use qubit_fs::AtomicityRequirement;
-use qubit_fs::CopyConflictPolicy;
-use qubit_fs::CopyMode;
-use qubit_fs::CopyOptions;
-use qubit_fs::DurabilityRequirement;
-use qubit_fs::FileSystemCapabilities;
-use qubit_fs::FileSystemCapability;
-use qubit_fs::MetadataPreservePolicy;
-use qubit_fs::ServerSidePreference;
-use qubit_fs::SymlinkPolicy;
+use qubit_fs::copy::CopyConflictPolicy;
+use qubit_fs::copy::CopyMode;
+use qubit_fs::copy::CopyOptions;
+use qubit_fs::copy::MetadataPreservePolicy;
+use qubit_fs::copy::ServerSidePreference;
+use qubit_fs::metadata::AtomicityRequirement;
+use qubit_fs::metadata::DurabilityRequirement;
+use qubit_fs::metadata::FileSystemCapabilities;
+use qubit_fs::metadata::FileSystemCapability;
+use qubit_fs::metadata::SymlinkPolicy;
 
 #[test]
 fn test_copy_options_default_and_constructors_set_modes() {

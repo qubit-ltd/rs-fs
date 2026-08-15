@@ -6,8 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::Checksum;
-use qubit_fs::ChecksumAlgorithm;
+use qubit_fs::metadata::Checksum;
+use qubit_fs::metadata::ChecksumAlgorithm;
 
 #[test]
 fn test_checksum_new_stores_algorithm_and_value() {

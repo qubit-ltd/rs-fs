@@ -18,48 +18,40 @@ use std::io::Result as IoResult;
 use std::pin::Pin;
 use std::task::Poll;
 
-use qubit_fs::AchievedAtomicity;
 use qubit_fs::AsyncFileSystem;
-use qubit_fs::AtomicityRequirement;
-use qubit_fs::CopyConflictPolicy;
-use qubit_fs::CopyFailureState;
-use qubit_fs::CopyOptions;
-use qubit_fs::CreateDirectoryOptions;
-use qubit_fs::CreateDirectoryOutcome;
-use qubit_fs::DeleteOptions;
-use qubit_fs::DeleteOutcome;
-use qubit_fs::DurabilityRequirement;
-use qubit_fs::FileKind;
-use qubit_fs::FileMetadata;
-use qubit_fs::FileSystemCapabilities;
-use qubit_fs::FileSystemCapability;
-use qubit_fs::FileSystemId;
-use qubit_fs::FileSystemInfo;
-use qubit_fs::FileSystemLimits;
-use qubit_fs::FileSystemProperties;
 use qubit_fs::FsError;
-use qubit_fs::FsErrorKind;
-use qubit_fs::FsOperation;
 use qubit_fs::FsResult;
-use qubit_fs::ListOptions;
-use qubit_fs::OpenedFileInfo;
 use qubit_fs::Path;
-use qubit_fs::PathConstraints;
-use qubit_fs::PathSemantics;
-use qubit_fs::PersistOptions;
-use qubit_fs::PublicationMethod;
-use qubit_fs::ReadOptions;
-use qubit_fs::RenameFailureState;
-use qubit_fs::RenameOptions;
-use qubit_fs::RenameOutcome;
-use qubit_fs::SymlinkPolicy;
-use qubit_fs::TempDirectoryOptions;
-use qubit_fs::TempFileOptions;
-use qubit_fs::WriteAbortOutcome;
-use qubit_fs::WriteFailure;
-use qubit_fs::WriteFailureState;
-use qubit_fs::WriteOptions;
-use qubit_fs::WriteOutcome;
+use qubit_fs::copy::CopyConflictPolicy;
+use qubit_fs::copy::CopyFailureState;
+use qubit_fs::copy::CopyOptions;
+use qubit_fs::directory::CreateDirectoryOptions;
+use qubit_fs::directory::CreateDirectoryOutcome;
+use qubit_fs::directory::DeleteOptions;
+use qubit_fs::directory::DeleteOutcome;
+use qubit_fs::directory::ListOptions;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
+use qubit_fs::metadata::AchievedAtomicity;
+use qubit_fs::metadata::AtomicityRequirement;
+use qubit_fs::metadata::DurabilityRequirement;
+use qubit_fs::metadata::FileKind;
+use qubit_fs::metadata::FileMetadata;
+use qubit_fs::metadata::FileSystemCapabilities;
+use qubit_fs::metadata::FileSystemCapability;
+use qubit_fs::metadata::FileSystemId;
+use qubit_fs::metadata::FileSystemInfo;
+use qubit_fs::metadata::FileSystemLimits;
+use qubit_fs::metadata::OpenedFileInfo;
+use qubit_fs::metadata::PublicationMethod;
+use qubit_fs::metadata::SymlinkPolicy;
+use qubit_fs::metadata::WriteOutcome;
+use qubit_fs::path::PathConstraints;
+use qubit_fs::path::PathSemantics;
+use qubit_fs::read::ReadOptions;
+use qubit_fs::rename::RenameFailureState;
+use qubit_fs::rename::RenameOptions;
+use qubit_fs::rename::RenameOutcome;
 use qubit_fs::spi::AsyncFileSystemSpi;
 use qubit_fs::spi::AsyncFileWriteSession;
 use qubit_fs::spi::CopyAttempt;
@@ -78,12 +70,21 @@ use qubit_fs::spi::OpenedAsyncReader;
 use qubit_fs::spi::OpenedAsyncTempDirectory;
 use qubit_fs::spi::OpenedAsyncTempFile;
 use qubit_fs::spi::OpenedAsyncWriter;
+use qubit_fs::spi::ProviderOperation;
+use qubit_fs::spi::ProviderOperations;
+use qubit_fs::spi::ProviderProperties;
 use qubit_fs::spi::RenameRequest;
 use qubit_fs::spi::SpiCopyFailure;
 use qubit_fs::spi::SpiFuture;
 use qubit_fs::spi::SpiRenameFailure;
 use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
+use qubit_fs::temp::PersistOptions;
+use qubit_fs::temp::TempOptions;
+use qubit_fs::write::WriteAbortOutcome;
+use qubit_fs::write::WriteFailure;
+use qubit_fs::write::WriteFailureState;
+use qubit_fs::write::WriteOptions;
 use qubit_io::AsyncInput;
 use qubit_io::AsyncOutput;
 
@@ -184,18 +185,23 @@ impl StreamCopyFallbackSpi {
             path.clone(),
         )
     }
-    fn properties(&self) -> FileSystemProperties {
+    fn properties(&self) -> ProviderProperties {
         let capabilities = FileSystemCapabilities::new()
             .with_guaranteed(FileSystemCapability::Copy)
             .with_guaranteed(FileSystemCapability::Read)
             .with_guaranteed(FileSystemCapability::Write);
-        FileSystemProperties::new(
+        ProviderProperties::new(
             FileSystemInfo::new(
                 FileSystemId::new("async-fallback-review")
                     .expect("test provider id should be valid"),
                 "async-fallback-review",
                 PathSemantics::Hierarchical,
             ),
+            ProviderOperations::new()
+                .with(ProviderOperation::Stat)
+                .with(ProviderOperation::OpenReader)
+                .with(ProviderOperation::OpenWriter)
+                .with(ProviderOperation::TryCopy),
             capabilities,
             FileSystemLimits::unknown(),
             PathConstraints::absolute(),
@@ -206,7 +212,7 @@ impl StreamCopyFallbackSpi {
 }
 
 impl AsyncFileSystemSpi for StreamCopyFallbackSpi {
-    fn properties(&self) -> FileSystemProperties {
+    fn properties(&self) -> ProviderProperties {
         self.properties()
     }
     fn stat<'a>(
@@ -618,14 +624,13 @@ fn test_async_facade_rejects_contract_and_fallback_boundary_failures() {
         temp_cleanup_failure: true,
         ..AsyncRecordingConfig::default()
     });
-    let Err(file) =
-        ready(file_system.create_temp_file(TempFileOptions::default()))
+    let Err(file) = ready(file_system.create_temp_file(TempOptions::default()))
     else {
         panic!("invalid temporary file identity must be rejected");
     };
-    let Err(directory) = ready(
-        file_system.create_temp_directory(TempDirectoryOptions::default()),
-    ) else {
+    let Err(directory) =
+        ready(file_system.create_temp_directory(TempOptions::default()))
+    else {
         panic!("invalid temporary directory identity must be rejected");
     };
     for error in [file, directory] {
@@ -637,7 +642,7 @@ fn test_async_facade_rejects_contract_and_fallback_boundary_failures() {
         ..AsyncRecordingConfig::default()
     });
     let Err(invalid_path) =
-        ready(file_system.create_temp_file(TempFileOptions::default()))
+        ready(file_system.create_temp_file(TempOptions::default()))
     else {
         panic!("relative temporary path must be rejected");
     };
@@ -755,7 +760,7 @@ fn test_async_facade_rejects_unsupported_capabilities_and_path_semantics() {
         ..AsyncRecordingConfig::default()
     });
     let Err(error) =
-        ready(file_system.create_temp_file(TempFileOptions::default()))
+        ready(file_system.create_temp_file(TempOptions::default()))
     else {
         panic!("temporary-file capability must be required");
     };
@@ -765,9 +770,9 @@ fn test_async_facade_rejects_unsupported_capabilities_and_path_semantics() {
         omitted_capability: Some(FileSystemCapability::TempDirectory),
         ..AsyncRecordingConfig::default()
     });
-    let Err(error) = ready(
-        file_system.create_temp_directory(TempDirectoryOptions::default()),
-    ) else {
+    let Err(error) =
+        ready(file_system.create_temp_directory(TempOptions::default()))
+    else {
         panic!("temporary-directory capability must be required");
     };
     assert_eq!(FsErrorKind::UnsupportedCapability, error.kind());
@@ -959,7 +964,7 @@ fn test_async_facade_preflight_rejects_invalid_paths_options_and_capabilities()
     let (file_system, _) =
         async_recording_file_system(AsyncRecordingConfig::default());
     let mut temporary =
-        ready(file_system.create_temp_file(TempFileOptions::default()))
+        ready(file_system.create_temp_file(TempOptions::default()))
             .expect("temporary file should be created");
     assert!(
         ready(temporary.persist(&relative, PersistOptions::default())).is_err()

@@ -10,23 +10,22 @@
 use std::error::Error;
 use std::pin::Pin;
 
-use qubit_fs::AtomicityRequirement;
-use qubit_fs::FsErrorKind;
-use qubit_fs::FsOperation;
 use qubit_fs::FsResult;
 use qubit_fs::Path;
-use qubit_fs::PathComponent;
-use qubit_fs::PersistFailureState;
-use qubit_fs::PersistOptions;
-use qubit_fs::PersistOutcome;
-use qubit_fs::RelativePath;
-use qubit_fs::TempDirectoryOptions;
-use qubit_fs::TempFileOptions;
-use qubit_fs::TempResourceState;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
+use qubit_fs::metadata::AtomicityRequirement;
+use qubit_fs::path::PathComponent;
+use qubit_fs::path::RelativePath;
 use qubit_fs::spi::AsyncTempResourceSpi;
 use qubit_fs::spi::PersistRequest;
 use qubit_fs::spi::SpiFuture;
 use qubit_fs::spi::SpiPersistFailure;
+use qubit_fs::temp::PersistFailureState;
+use qubit_fs::temp::PersistOptions;
+use qubit_fs::temp::PersistOutcome;
+use qubit_fs::temp::TempOptions;
+use qubit_fs::temp::TempResourceState;
 
 use crate::async_recording_spi::AsyncRecordingConfig;
 use crate::async_recording_spi::async_recording_file_system;
@@ -71,7 +70,7 @@ fn test_async_temp_creation_rejects_mismatched_provider_identity() {
             ..AsyncRecordingConfig::default()
         });
     let Err(error) =
-        ready(file_system.create_temp_file(TempFileOptions::default()))
+        ready(file_system.create_temp_file(TempOptions::default()))
     else {
         panic!("mismatched temporary identity must be rejected");
     };
@@ -93,7 +92,7 @@ fn test_async_temp_creation_validates_parent_before_provider_call() {
         async_recording_file_system(AsyncRecordingConfig::default());
     let parent = path("relative");
     let error = match ready(file_system.create_temp_file(
-        TempFileOptions::default().with_parent(Some(parent.clone())),
+        TempOptions::default().with_parent(Some(parent.clone())),
     )) {
         Ok(_) => panic!("invalid temporary parent must fail in the facade"),
         Err(error) => error,
@@ -116,7 +115,7 @@ fn test_async_temp_creation_keeps_provider_error_pathless() {
             ..AsyncRecordingConfig::default()
         });
     let error =
-        match ready(file_system.create_temp_file(TempFileOptions::default())) {
+        match ready(file_system.create_temp_file(TempOptions::default())) {
             Ok(_) => panic!("provider creation failure should propagate"),
             Err(error) => error,
         };
@@ -135,9 +134,9 @@ fn test_async_temp_directory_rejects_mismatched_provider_identity() {
             invalid_temp_identity: true,
             ..AsyncRecordingConfig::default()
         });
-    let Err(error) = ready(
-        file_system.create_temp_directory(TempDirectoryOptions::default()),
-    ) else {
+    let Err(error) =
+        ready(file_system.create_temp_directory(TempOptions::default()))
+    else {
         panic!("mismatched temporary directory identity must be rejected");
     };
     assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
@@ -154,7 +153,7 @@ fn test_async_invalid_temp_identity_preserves_cleanup_error_source() {
         ..AsyncRecordingConfig::default()
     });
     let Err(error) =
-        ready(file_system.create_temp_file(TempFileOptions::default()))
+        ready(file_system.create_temp_file(TempOptions::default()))
     else {
         panic!("invalid temporary identity must fail");
     };
@@ -173,7 +172,7 @@ fn test_async_temp_creation_rejects_wrong_kind() {
             ..AsyncRecordingConfig::default()
         });
     let error =
-        match ready(file_system.create_temp_file(TempFileOptions::default())) {
+        match ready(file_system.create_temp_file(TempOptions::default())) {
             Ok(_) => panic!("temporary-file kind must be validated"),
             Err(error) => error,
         };
@@ -186,10 +185,9 @@ fn test_async_temp_creation_rejects_wrong_kind() {
 fn test_async_temp_directory_builds_child_and_descendant_paths() {
     let (file_system, _) =
         async_recording_file_system(AsyncRecordingConfig::default());
-    let directory = ready(
-        file_system.create_temp_directory(TempDirectoryOptions::default()),
-    )
-    .expect("temporary directory should open");
+    let directory =
+        ready(file_system.create_temp_directory(TempOptions::default()))
+            .expect("temporary directory should open");
     let component = PathComponent::parse("child").expect("component parses");
     let descendant =
         RelativePath::parse("nested/item").expect("relative path parses");
@@ -205,9 +203,8 @@ fn test_async_temp_directory_builds_child_and_descendant_paths() {
 fn test_async_temp_persist_preflight_has_no_session_call() {
     let (file_system, probe) =
         async_recording_file_system(AsyncRecordingConfig::default());
-    let mut temp =
-        ready(file_system.create_temp_file(TempFileOptions::default()))
-            .expect("temporary file should open");
+    let mut temp = ready(file_system.create_temp_file(TempOptions::default()))
+        .expect("temporary file should open");
     let failure = ready(
         temp.persist(
             &path("/final"),
@@ -229,9 +226,8 @@ fn test_async_temp_file_persist_delegates_after_preflight() {
             atomic_temp_persist: true,
             ..AsyncRecordingConfig::default()
         });
-    let mut temp =
-        ready(file_system.create_temp_file(TempFileOptions::default()))
-            .expect("temporary file should open");
+    let mut temp = ready(file_system.create_temp_file(TempOptions::default()))
+        .expect("temporary file should open");
     let outcome =
         ready(temp.persist(&path("/final"), PersistOptions::default()))
             .expect("persistence should succeed");
@@ -247,9 +243,8 @@ fn test_async_temp_file_rejects_mismatched_persist_target() {
         atomic_temp_persist: true,
         ..AsyncRecordingConfig::default()
     });
-    let mut temp =
-        ready(file_system.create_temp_file(TempFileOptions::default()))
-            .expect("temporary file should open");
+    let mut temp = ready(file_system.create_temp_file(TempOptions::default()))
+        .expect("temporary file should open");
 
     let failure = ready(
         temp.persist(&path("/wrong-persist-target"), PersistOptions::default()),
@@ -269,15 +264,13 @@ fn test_async_temp_file_rejects_mismatched_persist_target() {
 fn test_async_temp_cleanup_and_keep_delegate_to_spi_sessions() {
     let (file_system, probe) =
         async_recording_file_system(AsyncRecordingConfig::default());
-    let mut file =
-        ready(file_system.create_temp_file(TempFileOptions::default()))
-            .expect("temporary file should open");
+    let mut file = ready(file_system.create_temp_file(TempOptions::default()))
+        .expect("temporary file should open");
     ready(file.cleanup()).expect("cleanup should succeed");
     assert_eq!(TempResourceState::Cleaned, file.state());
-    let mut directory = ready(
-        file_system.create_temp_directory(TempDirectoryOptions::default()),
-    )
-    .expect("temporary directory should open");
+    let mut directory =
+        ready(file_system.create_temp_directory(TempOptions::default()))
+            .expect("temporary directory should open");
     ready(directory.keep()).expect("keep should succeed");
     assert_eq!(TempResourceState::Kept, directory.state());
     assert_eq!(
@@ -299,9 +292,8 @@ fn test_async_temp_persist_indeterminate_is_preserved() {
         temp_persist_indeterminate: true,
         ..AsyncRecordingConfig::default()
     });
-    let mut temp =
-        ready(file_system.create_temp_file(TempFileOptions::default()))
-            .expect("temporary file should open");
+    let mut temp = ready(file_system.create_temp_file(TempOptions::default()))
+        .expect("temporary file should open");
     let error = ready(temp.persist(&path("/final"), PersistOptions::default()))
         .expect_err("persistence should be indeterminate");
     assert_eq!(FsErrorKind::Indeterminate, error.error().kind());
@@ -319,9 +311,8 @@ fn test_async_temp_lifecycle_failures_preserve_expected_states() {
         temp_keep_failure: true,
         ..AsyncRecordingConfig::default()
     });
-    let mut file =
-        ready(file_system.create_temp_file(TempFileOptions::default()))
-            .expect("temporary file should open");
+    let mut file = ready(file_system.create_temp_file(TempOptions::default()))
+        .expect("temporary file should open");
     let keep = ready(file.keep())
         .expect_err("configured keep failure should propagate");
     assert_eq!(FsErrorKind::Io, keep.kind());
@@ -334,10 +325,9 @@ fn test_async_temp_lifecycle_failures_preserve_expected_states() {
         temp_cleanup_failure: true,
         ..AsyncRecordingConfig::default()
     });
-    let mut directory = ready(
-        file_system.create_temp_directory(TempDirectoryOptions::default()),
-    )
-    .expect("temporary directory should open");
+    let mut directory =
+        ready(file_system.create_temp_directory(TempOptions::default()))
+            .expect("temporary directory should open");
     let cleanup = ready(directory.cleanup())
         .expect_err("configured cleanup failure should propagate");
     assert_eq!(FsErrorKind::Io, cleanup.kind());
@@ -355,10 +345,9 @@ fn test_async_temp_directory_persists_and_rejects_later_lifecycle_calls() {
         atomic_temp_persist: true,
         ..AsyncRecordingConfig::default()
     });
-    let mut directory = ready(
-        file_system.create_temp_directory(TempDirectoryOptions::default()),
-    )
-    .expect("temporary directory should open");
+    let mut directory =
+        ready(file_system.create_temp_directory(TempOptions::default()))
+            .expect("temporary directory should open");
     assert_eq!(&path("/tmp/recording"), directory.path());
     let outcome =
         ready(directory.persist(&path("/final"), PersistOptions::default()))
@@ -383,9 +372,8 @@ fn test_async_temp_drop_notifies_provider_for_cleanup_owned_states() {
     let (file_system, probe) =
         async_recording_file_system(AsyncRecordingConfig::default());
     {
-        let _file =
-            ready(file_system.create_temp_file(TempFileOptions::default()))
-                .expect("temporary file should open");
+        let _file = ready(file_system.create_temp_file(TempOptions::default()))
+            .expect("temporary file should open");
     }
     assert_eq!(1, probe.temp_cancellations());
 
@@ -398,10 +386,9 @@ fn test_async_temp_drop_notifies_provider_for_cleanup_owned_states() {
             ..AsyncRecordingConfig::default()
         });
     {
-        let mut directory = ready(
-            file_system.create_temp_directory(TempDirectoryOptions::default()),
-        )
-        .expect("temporary directory should open");
+        let mut directory =
+            ready(file_system.create_temp_directory(TempOptions::default()))
+                .expect("temporary directory should open");
         let failure = ready(
             directory.persist(&path("/final"), PersistOptions::default()),
         )
@@ -433,7 +420,7 @@ fn test_async_temp_persist_failure_states_drive_lifecycle() {
                 ..AsyncRecordingConfig::default()
             });
         let mut file =
-            ready(file_system.create_temp_file(TempFileOptions::default()))
+            ready(file_system.create_temp_file(TempOptions::default()))
                 .expect("temporary file should open");
         let failure =
             ready(file.persist(&path("/final"), PersistOptions::default()))

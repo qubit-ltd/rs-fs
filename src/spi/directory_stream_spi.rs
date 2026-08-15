@@ -9,8 +9,8 @@
 // facade.
 //! Provider-side synchronous directory enumeration sessions.
 
-use crate::DirEntry;
-use crate::FsResult;
+use crate::error::FsResult;
+use crate::metadata::DirEntry;
 
 /// Provider directory enumeration session.
 pub trait DirectoryStreamSpi: Send {

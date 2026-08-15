@@ -6,10 +6,10 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use qubit_fs::FsErrorKind;
-use qubit_fs::FsOperation;
-use qubit_fs::ListOptions;
-use qubit_fs::SymlinkPolicy;
+use qubit_fs::directory::ListOptions;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
+use qubit_fs::metadata::SymlinkPolicy;
 
 #[test]
 fn test_list_options_full_configuration_is_usable() {

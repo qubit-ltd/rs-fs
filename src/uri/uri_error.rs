@@ -10,9 +10,9 @@
 // facade tests.
 //! URI error construction shared by URI values.
 
-use crate::FsError;
-use crate::FsErrorKind;
-use crate::FsOperation;
+use crate::error::FsError;
+use crate::error::FsErrorKind;
+use crate::error::FsOperation;
 
 /// Builds a sanitized invalid-URI error without retaining input text.
 pub(crate) fn invalid_uri(message: &'static str) -> FsError {

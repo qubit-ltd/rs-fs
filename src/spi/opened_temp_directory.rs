@@ -10,7 +10,7 @@
 //! Provider-created synchronous temporary-directory envelope.
 
 use super::TempResourceSpi;
-use crate::OpenedFileInfo;
+use crate::metadata::OpenedFileInfo;
 
 /// An already-created provider temporary-directory session.
 pub struct OpenedTempDirectory {

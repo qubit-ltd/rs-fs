@@ -8,7 +8,7 @@
 
 //! Tests URI credential boundaries with an explicitly disabled redaction floor.
 
-use qubit_fs::Uri;
+use qubit_fs::path::Uri;
 use qubit_redact::RedactionPolicy;
 
 /// Verifies an explicitly supplied policy controls URI query-key

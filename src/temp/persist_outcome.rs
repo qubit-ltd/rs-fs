@@ -10,11 +10,11 @@
 //! Successful temporary resource persistence outcome.
 
 use super::PersistCleanupState;
-use crate::AchievedAtomicity;
-use crate::NonSensitiveMetadata;
-use crate::Path;
-use crate::PublicationMethod;
-use crate::UserMetadata;
+use crate::metadata::AchievedAtomicity;
+use crate::metadata::NonSensitiveMetadata;
+use crate::metadata::PublicationMethod;
+use crate::metadata::UserMetadata;
+use crate::path::Path;
 
 /// Confirmed result of publishing a temporary source to its final target.
 #[derive(Clone, Debug, PartialEq)]
