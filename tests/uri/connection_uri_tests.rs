@@ -20,7 +20,10 @@ use qubit_redact::uri::UriRedactor;
 /// formatting boundary.
 #[test]
 fn test_connection_uri_maps_truncated_redaction_to_outer_marker() {
-    let limit = InputOutputLimit::new(4096, 37)
+    let limit = InputOutputLimit::builder()
+        .max_input_bytes(4096)
+        .max_output_bytes(37)
+        .build()
         .expect("the diagnostic output limit should be valid");
     let mut builder = RedactionPolicy::builder();
     builder.limits().diagnostic_event(limit);
@@ -40,7 +43,10 @@ fn test_connection_uri_maps_truncated_redaction_to_outer_marker() {
 /// Verifies secret classification is independent of URI rendering limits.
 #[test]
 fn test_connection_uri_detects_late_secret_with_small_output_budget() {
-    let limit = InputOutputLimit::new(4096, 40)
+    let limit = InputOutputLimit::builder()
+        .max_input_bytes(4096)
+        .max_output_bytes(40)
+        .build()
         .expect("the diagnostic output limit should be valid");
     let mut builder = RedactionPolicy::builder();
     builder.limits().diagnostic_event(limit);
@@ -58,7 +64,10 @@ fn test_connection_uri_detects_late_secret_with_small_output_budget() {
 /// Verifies failed URI inspection is classified conservatively as secret.
 #[test]
 fn test_connection_uri_secret_inspection_fails_closed() {
-    let limit = InputOutputLimit::new(8, 128)
+    let limit = InputOutputLimit::builder()
+        .max_input_bytes(8)
+        .max_output_bytes(128)
+        .build()
         .expect("the diagnostic input limit should be valid");
     let mut builder = RedactionPolicy::builder();
     builder.limits().diagnostic_event(limit);
