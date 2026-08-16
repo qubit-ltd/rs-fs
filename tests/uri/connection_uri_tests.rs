@@ -13,8 +13,8 @@ use qubit_fs::path::Uri;
 use qubit_redact::InputOutputLimit;
 use qubit_redact::RedactionCompletion;
 use qubit_redact::RedactionPolicy;
-use qubit_redact::uri::UriRedactionStatus;
-use qubit_redact::uri::UriRedactor;
+use qubit_redact::formats::uri::UriRedactionStatus;
+use qubit_redact::formats::uri::UriRedactor;
 
 /// Verifies incomplete structured redaction is replaced at the connection URI
 /// formatting boundary.

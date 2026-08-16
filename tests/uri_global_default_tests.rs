@@ -13,8 +13,8 @@ use qubit_fs::path::Uri;
 use qubit_redact::RedactionCompletion;
 use qubit_redact::RedactionPolicy;
 use qubit_redact::Sensitivity;
-use qubit_redact::uri::UriRedactionStatus;
-use qubit_redact::uri::UriRedactor;
+use qubit_redact::formats::uri::UriRedactionStatus;
+use qubit_redact::formats::uri::UriRedactor;
 
 /// Verifies URI parsing uses an explicit policy instead of process-global
 /// redaction state.
