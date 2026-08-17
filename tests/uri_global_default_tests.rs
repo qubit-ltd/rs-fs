@@ -12,6 +12,7 @@ use qubit_fs::path::ConnectionUri;
 use qubit_fs::path::Uri;
 use qubit_redact::RedactionCompletion;
 use qubit_redact::RedactionPolicy;
+use qubit_redact::Redactor;
 use qubit_redact::Sensitivity;
 use qubit_redact::formats::uri::UriRedactionStatus;
 use qubit_redact::formats::uri::UriRedactor;
@@ -22,12 +23,11 @@ use qubit_redact::formats::uri::UriRedactor;
 fn test_uri_credential_boundaries_ignore_global_allow_rules() {
     let mut builder = RedactionPolicy::builder();
     builder
-        .legacy_fields()
+        .edit_fields()
         .raise("tenant_payload", Sensitivity::Secret)
         .expect("tenant_payload is a valid field name");
     let policy = builder.build().expect("the policy is valid");
-    RedactionPolicy::install_global(policy.clone())
-        .expect("this test process installs its default only once");
+    let previous = Redactor::set_default(Redactor::new(policy.clone()));
 
     assert!(Uri::parse("s3://bucket/key?tenant_payload=raw-secret").is_ok());
     assert!(
@@ -51,4 +51,5 @@ fn test_uri_credential_boundaries_ignore_global_allow_rules() {
         .redact_uri_str("s3://bucket/key?tenant_payload=raw-secret");
     assert_eq!(UriRedactionStatus::Redacted, redaction.status());
     assert_eq!(RedactionCompletion::Complete, redaction.completion());
+    let _ = Redactor::set_default(previous);
 }
