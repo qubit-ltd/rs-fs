@@ -22,7 +22,7 @@ use qubit_redact::formats::uri::UriRedactor;
 fn test_uri_credential_boundaries_ignore_global_allow_rules() {
     let mut builder = RedactionPolicy::builder();
     builder
-        .fields()
+        .legacy_fields()
         .raise("tenant_payload", Sensitivity::Secret)
         .expect("tenant_payload is a valid field name");
     let policy = builder.build().expect("the policy is valid");
