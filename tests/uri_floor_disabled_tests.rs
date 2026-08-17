@@ -19,7 +19,7 @@ use qubit_redact::formats::uri::UriRedactor;
 #[test]
 fn test_uri_query_policy_respects_explicitly_disabled_floor() {
     let mut builder = RedactionPolicy::builder();
-    builder.legacy_fields().disable_floor();
+    builder.edit_fields().disable_floor();
     let policy = builder
         .build()
         .expect("the policy without a floor is valid");
