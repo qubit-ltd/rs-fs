@@ -138,7 +138,7 @@ impl ConnectionUri {
             RedactionCompletion::Complete => {
                 redaction.into_log_safe_text().into_owned()
             }
-            RedactionCompletion::Truncated | RedactionCompletion::Exhausted => {
+            RedactionCompletion::Truncated => {
                 "<truncated>".to_owned()
             }
         }
