@@ -135,9 +135,7 @@ impl ConnectionUri {
         let redaction = UriRedactor::new(self.redaction_policy.clone())
             .redact_uri_str(self.parsed.as_str());
         match redaction.completion() {
-            RedactionCompletion::Complete => {
-                redaction.into_text().into_owned()
-            }
+            RedactionCompletion::Complete => redaction.into_text().into_owned(),
             RedactionCompletion::Truncated => "<truncated>".to_owned(),
         }
     }
