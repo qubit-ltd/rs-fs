@@ -136,7 +136,7 @@ impl ConnectionUri {
             .redact_uri_str(self.parsed.as_str());
         match redaction.completion() {
             RedactionCompletion::Complete => {
-                redaction.into_log_safe_text().into_owned()
+                redaction.into_text().into_owned()
             }
             RedactionCompletion::Truncated => "<truncated>".to_owned(),
         }
