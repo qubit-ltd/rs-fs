@@ -33,7 +33,7 @@ default = []
 async = []
 
 [dependencies]
-qubit-budget = { version = "0.3", path = "../rs-budget" }
+qubit-budget = "0.3"
 fluent-uri = "0.4.1"
 qubit-io = "0.15"
 qubit-redact = { version = "0.5", path = "../rs-redact", features = ["uri"] }
