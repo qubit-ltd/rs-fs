@@ -86,10 +86,9 @@ impl ConnectionUri {
     #[inline]
     #[must_use]
     pub fn has_embedded_secret(&self) -> bool {
-        let output = Redactor::new(self.redaction_policy.clone())
-            .redact_uri(self.parsed.as_str());
-        output.summary().completion() != RedactionCompletion::Complete
-            || output.text().as_str() != self.parsed.as_str()
+        Redactor::new(self.redaction_policy.clone())
+            .inspect_uri(self.parsed.as_str())
+            .map_or(true, |inspection| inspection.contains_sensitive())
     }
 
     /// Converts this connection URI to a secret-free resource URI.

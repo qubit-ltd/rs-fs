@@ -10,6 +10,9 @@
 
 use qubit_fs::path::ConnectionUri;
 use qubit_fs::path::Uri;
+use qubit_redact::MaskPolicy;
+use qubit_redact::RedactionPolicy;
+use qubit_redact::Sensitivity;
 
 /// Verifies connection URI formatting redacts all sensitive duplicate query
 /// values.
@@ -27,6 +30,35 @@ fn test_connection_uri_redacts_password_and_duplicate_sensitive_query() {
         assert!(!rendered.contains("two"));
         assert!(rendered.contains("x=1"));
     }
+}
+
+/// Sensitivity classification must not depend on whether the configured mask
+/// happens to render the same bytes as the original value.
+#[test]
+fn test_connection_uri_inspection_detects_identity_mask_and_empty_secret() {
+    let policy = RedactionPolicy::builder()
+        .fields(|fields| {
+            fields.secret_sensitive("tenant_payload");
+            fields.mask(Sensitivity::Secret, MaskPolicy::fixed("raw-secret"));
+        })
+        .expect("policy should be valid")
+        .build()
+        .expect("policy should build");
+    let identity = ConnectionUri::parse_with_policy(
+        "s3://bucket/key?tenant_payload=raw-secret",
+        &policy,
+    )
+    .expect("connection URI may retain credentials internally");
+    let empty = ConnectionUri::parse_with_policy(
+        "s3://bucket/key?tenant_payload=",
+        &policy,
+    )
+    .expect("connection URI may retain credentials internally");
+
+    assert!(identity.has_embedded_secret());
+    assert!(empty.has_embedded_secret());
+    assert!(identity.try_to_uri().is_err());
+    assert!(empty.try_to_uri().is_err());
 }
 
 /// Verifies generated credential text never crosses a normal display or debug
