@@ -11,24 +11,28 @@
 use qubit_fs::path::Uri;
 use qubit_redact::RedactionCompletion;
 use qubit_redact::RedactionPolicy;
-use qubit_redact::formats::uri::UriRedactionStatus;
-use qubit_redact::formats::uri::UriRedactor;
+use qubit_redact::Redactor;
 
 /// Verifies an explicitly supplied policy controls URI query-key
 /// classification without a hidden standard-policy fallback.
 #[test]
 fn test_uri_query_policy_respects_explicitly_disabled_floor() {
-    let mut builder = RedactionPolicy::builder();
-    builder.edit_fields().disable_floor();
-    let policy = builder
+    let policy = RedactionPolicy::builder()
+        .fields(|fields| {
+            fields.disable_floor();
+        })
+        .expect("disabling the floor should be valid")
         .build()
         .expect("the policy without a floor is valid");
     Uri::parse_with_policy("s3://bucket/key?token=raw-token", &policy).expect(
         "an explicitly disabled floor permits an otherwise unknown query key",
     );
 
-    let redaction = UriRedactor::new(policy)
-        .redact_uri_str("s3://bucket/key?token=raw-token");
-    assert_eq!(UriRedactionStatus::PassedThrough, redaction.status());
-    assert_eq!(RedactionCompletion::Complete, redaction.completion());
+    let redaction =
+        Redactor::new(policy).redact_uri("s3://bucket/key?token=raw-token");
+    assert_eq!("s3://bucket/key?token=raw-token", redaction.text().as_str());
+    assert_eq!(
+        RedactionCompletion::Complete,
+        redaction.summary().completion()
+    );
 }

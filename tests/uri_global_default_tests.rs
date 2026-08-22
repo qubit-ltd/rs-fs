@@ -14,20 +14,20 @@ use qubit_redact::RedactionCompletion;
 use qubit_redact::RedactionPolicy;
 use qubit_redact::Redactor;
 use qubit_redact::Sensitivity;
-use qubit_redact::formats::uri::UriRedactionStatus;
-use qubit_redact::formats::uri::UriRedactor;
 
 /// Verifies URI parsing uses an explicit policy instead of process-global
 /// redaction state.
 #[test]
 fn test_uri_credential_boundaries_ignore_global_allow_rules() {
-    let mut builder = RedactionPolicy::builder();
-    builder
-        .edit_fields()
-        .raise("tenant_payload", Sensitivity::Secret)
-        .expect("tenant_payload is a valid field name");
-    let policy = builder.build().expect("the policy is valid");
-    let previous = Redactor::set_default(Redactor::new(policy.clone()));
+    let policy = RedactionPolicy::builder()
+        .fields(|fields| {
+            fields.raise("tenant_payload", Sensitivity::Secret);
+        })
+        .expect("tenant_payload is a valid field name")
+        .build()
+        .expect("the policy is valid");
+    let previous =
+        Redactor::replace_application_default(Redactor::new(policy.clone()));
 
     assert!(Uri::parse("s3://bucket/key?tenant_payload=raw-secret").is_ok());
     assert!(
@@ -47,9 +47,16 @@ fn test_uri_credential_boundaries_ignore_global_allow_rules() {
     assert!(!rendered.contains("raw-password"));
     assert!(!rendered.contains("raw-secret"));
 
-    let redaction = UriRedactor::new(policy)
-        .redact_uri_str("s3://bucket/key?tenant_payload=raw-secret");
-    assert_eq!(UriRedactionStatus::Redacted, redaction.status());
-    assert_eq!(RedactionCompletion::Complete, redaction.completion());
-    let _ = Redactor::set_default(previous);
+    let redaction = Redactor::new(policy)
+        .redact_uri("s3://bucket/key?tenant_payload=raw-secret");
+    assert_ne!(
+        "s3://bucket/key?tenant_payload=raw-secret",
+        redaction.text().as_str(),
+    );
+    assert!(!redaction.text().as_str().contains("raw-secret"));
+    assert_eq!(
+        RedactionCompletion::Complete,
+        redaction.summary().completion()
+    );
+    let _ = Redactor::replace_application_default(previous);
 }

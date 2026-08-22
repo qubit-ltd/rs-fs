@@ -10,16 +10,15 @@
 
 use qubit_fs::path::Uri;
 use qubit_redact::RedactionCompletion;
-use qubit_redact::formats::uri::UriRedactionStatus;
-use qubit_redact::formats::uri::UriRedactor;
+use qubit_redact::Redactor;
 
 /// Verifies the URI redactor's module path and structured completion contract.
 #[test]
 fn test_uri_redactor_reports_complete_pass_through_structurally() {
-    let result = UriRedactor::default().redact_uri_str("s3://bucket/key");
+    let result = Redactor::standard().redact_uri("s3://bucket/key");
 
-    assert_eq!(UriRedactionStatus::PassedThrough, result.status());
-    assert_eq!(RedactionCompletion::Complete, result.completion());
+    assert_eq!("s3://bucket/key", result.text().as_str());
+    assert_eq!(RedactionCompletion::Complete, result.summary().completion());
 }
 
 /// Verifies URI parsing preserves RFC 3986 authority lexical distinctions.
