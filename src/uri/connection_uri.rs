@@ -16,8 +16,7 @@ use std::fmt::Result as FmtResult;
 use fluent_uri::Uri as FluentUri;
 use qubit_redact::RedactionCompletion;
 use qubit_redact::RedactionPolicy;
-use qubit_redact::formats::uri::UriRedactionStatus;
-use qubit_redact::formats::uri::UriRedactor;
+use qubit_redact::Redactor;
 
 use super::invalid_uri;
 use super::uri::Uri;
@@ -87,13 +86,10 @@ impl ConnectionUri {
     #[inline]
     #[must_use]
     pub fn has_embedded_secret(&self) -> bool {
-        let inspection = UriRedactor::new(self.redaction_policy.clone())
-            .inspect_uri_str(self.parsed.as_str());
-        match inspection.status() {
-            UriRedactionStatus::PassedThrough => false,
-            UriRedactionStatus::Redacted | UriRedactionStatus::Invalid => true,
-            _ => true,
-        }
+        let output = Redactor::new(self.redaction_policy.clone())
+            .redact_uri(self.parsed.as_str());
+        output.summary().completion() != RedactionCompletion::Complete
+            || output.text().as_str() != self.parsed.as_str()
     }
 
     /// Converts this connection URI to a secret-free resource URI.
@@ -132,11 +128,15 @@ impl ConnectionUri {
     #[inline]
     #[must_use]
     fn redacted_text(&self) -> String {
-        let redaction = UriRedactor::new(self.redaction_policy.clone())
-            .redact_uri_str(self.parsed.as_str());
-        match redaction.completion() {
-            RedactionCompletion::Complete => redaction.into_text().into_owned(),
-            RedactionCompletion::Truncated => "<truncated>".to_owned(),
+        let redaction = Redactor::new(self.redaction_policy.clone())
+            .redact_uri(self.parsed.as_str());
+        match redaction.summary().completion() {
+            RedactionCompletion::Complete => {
+                redaction.into_text().into_string()
+            }
+            RedactionCompletion::Truncated | RedactionCompletion::Exhausted => {
+                "<truncated>".to_owned()
+            }
         }
     }
 }
