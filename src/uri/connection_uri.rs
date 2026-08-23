@@ -131,7 +131,7 @@ impl ConnectionUri {
             .redact_uri(self.parsed.as_str());
         match redaction.summary().completion() {
             RedactionCompletion::Complete => {
-                redaction.into_text().into_string()
+                redaction.into_complete_text().expect("complete redaction must retain text").into_string()
             }
             RedactionCompletion::Truncated | RedactionCompletion::Exhausted => {
                 "<truncated>".to_owned()
