@@ -130,9 +130,10 @@ impl ConnectionUri {
         let redaction = Redactor::new(self.redaction_policy.clone())
             .redact_uri(self.parsed.as_str());
         match redaction.summary().completion() {
-            RedactionCompletion::Complete => {
-                redaction.into_complete_text().expect("complete redaction must retain text").into_string()
-            }
+            RedactionCompletion::Complete => redaction
+                .into_complete_text()
+                .expect("complete redaction must retain text")
+                .into_string(),
             RedactionCompletion::Truncated | RedactionCompletion::Exhausted => {
                 "<truncated>".to_owned()
             }
