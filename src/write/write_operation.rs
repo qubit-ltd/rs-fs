@@ -46,11 +46,7 @@ impl<'a> WriteOperation<'a> {
             .validate_write_size(path, bytes.len())
         {
             return Err(WriteAllFailure::new(
-                self.filesystem.core().enrich(
-                    error,
-                    Some(path),
-                    FsOperation::Write,
-                ),
+                self.filesystem.core().enrich(error, Some(path), FsOperation::Write),
                 None,
             ));
         }
@@ -58,14 +54,10 @@ impl<'a> WriteOperation<'a> {
             .filesystem
             .open_writer(path, options)
             .map_err(|error| WriteAllFailure::new(error, None))?;
-        if let Err(error) = Output::write_fully(&mut writer, bytes)
-            .and_then(|_| Output::flush(&mut writer))
-        {
+        if let Err(error) = Output::write_fully(&mut writer, bytes).and_then(|_| Output::flush(&mut writer)) {
             return Err(WriteAllFailure::new(
                 FsError::from_stream_io(error, FsOperation::Write, path)
-                    .with_provider(
-                        self.filesystem.properties().info().provider_id(),
-                    ),
+                    .with_provider(self.filesystem.properties().info().provider_id()),
                 Some(writer),
             ));
         }

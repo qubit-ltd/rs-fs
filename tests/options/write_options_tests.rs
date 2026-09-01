@@ -24,9 +24,7 @@ fn test_write_options_full_configuration_is_usable() {
         .with_create_parent(true)
         .with_disposition(WriteDisposition::CreateOrReplace)
         .with_atomicity(AtomicityRequirement::Required)
-        .with_precondition(WritePrecondition::IfMatch(ResourceVersion::new(
-            "v1",
-        )))
+        .with_precondition(WritePrecondition::IfMatch(ResourceVersion::new("v1")))
         .with_content_type(Some("text/plain".to_owned()))
         .with_checksum(Some(checksum));
 
@@ -35,39 +33,24 @@ fn test_write_options_full_configuration_is_usable() {
     assert!(options.checksum().is_some());
     assert_eq!(AtomicityRequirement::Required, options.atomicity());
     assert_eq!(WriteDisposition::CreateOrReplace, options.disposition());
-    assert!(matches!(
-        options.precondition(),
-        WritePrecondition::IfMatch(_)
-    ));
+    assert!(matches!(options.precondition(), WritePrecondition::IfMatch(_)));
     assert!(options.user_metadata().is_empty());
     assert!(options.validate().is_ok());
 }
 
 #[test]
 fn write_requirements_are_checked_against_typed_capabilities() {
-    let atomic =
-        WriteOptions::default().with_atomicity(AtomicityRequirement::Required);
-    let error = atomic
-        .validate_against(FileSystemCapabilities::default())
-        .unwrap_err();
-    assert_eq!(
-        Some(FileSystemCapability::AtomicReplace),
-        error.required_capability()
-    );
+    let atomic = WriteOptions::default().with_atomicity(AtomicityRequirement::Required);
+    let error = atomic.validate_against(FileSystemCapabilities::default()).unwrap_err();
+    assert_eq!(Some(FileSystemCapability::AtomicReplace), error.required_capability());
 
     let append = WriteOptions::default()
         .with_disposition(WriteDisposition::Append)
         .with_atomicity(AtomicityRequirement::NotRequired);
-    let error = append
-        .validate_against(FileSystemCapabilities::default())
-        .unwrap_err();
-    assert_eq!(
-        Some(FileSystemCapability::Append),
-        error.required_capability()
-    );
+    let error = append.validate_against(FileSystemCapabilities::default()).unwrap_err();
+    assert_eq!(Some(FileSystemCapability::Append), error.required_capability());
 
-    let conditional =
-        WriteOptions::default().with_precondition(WritePrecondition::IfAbsent);
+    let conditional = WriteOptions::default().with_precondition(WritePrecondition::IfAbsent);
     let error = conditional
         .validate_against(FileSystemCapabilities::default())
         .unwrap_err();
@@ -101,9 +84,7 @@ fn append_cannot_request_atomic_publication() {
 fn append_rejects_version_preconditions_but_allows_plain_append() {
     let invalid = WriteOptions::default()
         .with_disposition(WriteDisposition::Append)
-        .with_precondition(WritePrecondition::IfMatch(ResourceVersion::new(
-            "v1",
-        )));
+        .with_precondition(WritePrecondition::IfMatch(ResourceVersion::new("v1")));
     assert!(invalid.validate().is_err());
 
     let valid = WriteOptions::default()
@@ -116,9 +97,7 @@ fn append_rejects_version_preconditions_but_allows_plain_append() {
 fn create_new_rejects_if_match_precondition() {
     let options = WriteOptions::default()
         .with_disposition(WriteDisposition::CreateNew)
-        .with_precondition(WritePrecondition::IfMatch(ResourceVersion::new(
-            "v1",
-        )));
+        .with_precondition(WritePrecondition::IfMatch(ResourceVersion::new("v1")));
 
     let error = options
         .validate()

@@ -35,11 +35,7 @@ impl FileSystemInfo {
     /// Creates a filesystem information snapshot without scheme aliases.
     #[inline]
     #[must_use]
-    pub fn new(
-        id: FileSystemId,
-        provider_id: impl Display,
-        path_semantics: PathSemantics,
-    ) -> Self {
+    pub fn new(id: FileSystemId, provider_id: impl Display, path_semantics: PathSemantics) -> Self {
         Self {
             id,
             provider_id: provider_id.to_string().into(),

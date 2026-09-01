@@ -65,9 +65,7 @@ struct RenameSpi {
     calls: Arc<Mutex<Vec<&'static str>>>,
 }
 /// Builds a rename-capable facade and call probe.
-fn filesystem(
-    atomicity: AchievedAtomicity,
-) -> (FileSystem, Arc<Mutex<Vec<&'static str>>>) {
+fn filesystem(atomicity: AchievedAtomicity) -> (FileSystem, Arc<Mutex<Vec<&'static str>>>) {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let filesystem = FileSystem::from_spi(RenameSpi {
         atomicity,
@@ -86,11 +84,7 @@ fn path(value: &str) -> Path {
 }
 /// Returns the shared unused-operation error.
 fn unused() -> FsError {
-    FsError::new(
-        FsErrorKind::UnsupportedOperation,
-        FsOperation::Other,
-        "unused",
-    )
+    FsError::new(FsErrorKind::UnsupportedOperation, FsOperation::Other, "unused")
 }
 /// Implements a provider that can only rename.
 impl FileSystemSpi for RenameSpi {
@@ -99,8 +93,7 @@ impl FileSystemSpi for RenameSpi {
             .with_guaranteed(FileSystemCapability::Rename)
             .with_guaranteed(FileSystemCapability::AtomicRename);
         if self.durable_capability {
-            capabilities = capabilities
-                .with_guaranteed(FileSystemCapability::DurableRename);
+            capabilities = capabilities.with_guaranteed(FileSystemCapability::DurableRename);
         }
         ProviderProperties::new(
             FileSystemInfo::new(
@@ -119,10 +112,7 @@ impl FileSystemSpi for RenameSpi {
         .expect("valid properties")
     }
     fn stat(&self, _: StatRequest<'_>) -> FsResult<StatResponse> {
-        self.calls
-            .lock()
-            .expect("calls lock should succeed")
-            .push("stat");
+        self.calls.lock().expect("calls lock should succeed").push("stat");
         Err(unused())
     }
     fn list(&self, _: ListRequest<'_>) -> FsResult<OpenedDirectoryStream> {
@@ -142,33 +132,18 @@ impl FileSystemSpi for RenameSpi {
             .push("open_writer");
         Err(unused())
     }
-    fn create_directory(
-        &self,
-        _: CreateDirectoryRequest<'_>,
-    ) -> FsResult<CreateDirectoryOutcome> {
+    fn create_directory(&self, _: CreateDirectoryRequest<'_>) -> FsResult<CreateDirectoryOutcome> {
         Err(unused())
     }
     fn delete_file(&self, _: DeleteFileRequest<'_>) -> FsResult<DeleteOutcome> {
-        self.calls
-            .lock()
-            .expect("calls lock should succeed")
-            .push("delete");
+        self.calls.lock().expect("calls lock should succeed").push("delete");
         Err(unused())
     }
-    fn delete_directory(
-        &self,
-        _: DeleteDirectoryRequest<'_>,
-    ) -> FsResult<DeleteOutcome> {
+    fn delete_directory(&self, _: DeleteDirectoryRequest<'_>) -> FsResult<DeleteOutcome> {
         Err(unused())
     }
-    fn rename(
-        &self,
-        request: RenameRequest<'_>,
-    ) -> Result<RenameOutcome, SpiRenameFailure> {
-        self.calls
-            .lock()
-            .expect("calls lock should succeed")
-            .push("rename");
+    fn rename(&self, request: RenameRequest<'_>) -> Result<RenameOutcome, SpiRenameFailure> {
+        self.calls.lock().expect("calls lock should succeed").push("rename");
         Ok(RenameOutcome::new(
             if self.wrong_identity {
                 path("/reported-source")
@@ -185,16 +160,10 @@ impl FileSystemSpi for RenameSpi {
         )
         .with_durable(self.durable_outcome))
     }
-    fn create_temp_file(
-        &self,
-        _: CreateTempFileRequest,
-    ) -> FsResult<OpenedTempFile> {
+    fn create_temp_file(&self, _: CreateTempFileRequest) -> FsResult<OpenedTempFile> {
         Err(unused())
     }
-    fn create_temp_directory(
-        &self,
-        _: CreateTempDirectoryRequest,
-    ) -> FsResult<OpenedTempDirectory> {
+    fn create_temp_directory(&self, _: CreateTempDirectoryRequest) -> FsResult<OpenedTempDirectory> {
         Err(unused())
     }
 }
@@ -216,15 +185,11 @@ fn test_rename_durability_downgrade_is_typed_contract_failure() {
         .rename(
             &path("/source"),
             &path("/target"),
-            RenameOptions::default()
-                .with_durability(DurabilityRequirement::Required),
+            RenameOptions::default().with_durability(DurabilityRequirement::Required),
         )
         .expect_err("downgraded required durability must fail");
 
-    assert_eq!(
-        FsErrorKind::ProviderContractViolation,
-        failure.error().kind(),
-    );
+    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind(),);
     assert_eq!(RenameFailureState::Renamed, failure.state());
 }
 /// Verifies the facade attaches validated source and target identities to a
@@ -239,34 +204,23 @@ fn test_rename_uses_single_primitive_and_binds_identity() {
         .expect("rename should succeed");
     assert_eq!(&source, outcome.source());
     assert_eq!(&target, outcome.target());
-    assert_eq!(
-        ["rename"],
-        calls.lock().expect("calls lock should succeed").as_slice()
-    );
+    assert_eq!(["rename"], calls.lock().expect("calls lock should succeed").as_slice());
 }
 /// Verifies a provider atomicity downgrade cannot be represented as an
 /// unchanged failure.
 #[test]
-fn test_rename_atomicity_downgrade_is_typed_contract_failure_without_emulation()
-{
+fn test_rename_atomicity_downgrade_is_typed_contract_failure_without_emulation() {
     let (filesystem, calls) = filesystem(AchievedAtomicity::NonAtomic);
     let failure = filesystem
         .rename(
             &path("/source"),
             &path("/target"),
-            RenameOptions::default()
-                .with_atomicity(AtomicityRequirement::Required),
+            RenameOptions::default().with_atomicity(AtomicityRequirement::Required),
         )
         .expect_err("downgraded required rename must fail");
-    assert_eq!(
-        FsErrorKind::ProviderContractViolation,
-        failure.error().kind()
-    );
+    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
     assert_eq!(RenameFailureState::Renamed, failure.state());
-    assert_eq!(
-        ["rename"],
-        calls.lock().expect("calls lock should succeed").as_slice()
-    );
+    assert_eq!(["rename"], calls.lock().expect("calls lock should succeed").as_slice());
 }
 
 /// Verifies copy-and-delete provider output is rejected as a non-rename
@@ -286,15 +240,9 @@ fn test_rename_rejects_copy_then_delete_provider_outcome() {
     let failure = filesystem
         .rename(&path("/source"), &path("/target"), RenameOptions::default())
         .expect_err("copy and delete is not rename");
-    assert_eq!(
-        FsErrorKind::ProviderContractViolation,
-        failure.error().kind()
-    );
+    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
     assert_eq!(RenameFailureState::Renamed, failure.state());
-    assert_eq!(
-        ["rename"],
-        calls.lock().expect("calls lock should succeed").as_slice()
-    );
+    assert_eq!(["rename"], calls.lock().expect("calls lock should succeed").as_slice());
 }
 
 /// Verifies provider-reported rename identities cannot be rewritten by the
@@ -315,15 +263,9 @@ fn test_rename_rejects_provider_outcome_with_wrong_identity() {
     let failure = filesystem
         .rename(&path("/source"), &path("/target"), RenameOptions::default())
         .expect_err("wrong provider identity must violate the contract");
-    assert_eq!(
-        FsErrorKind::ProviderContractViolation,
-        failure.error().kind()
-    );
+    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
     assert_eq!(RenameFailureState::Indeterminate, failure.state());
-    assert_eq!(
-        ["rename"],
-        calls.lock().expect("calls lock should succeed").as_slice()
-    );
+    assert_eq!(["rename"], calls.lock().expect("calls lock should succeed").as_slice());
 }
 
 /// Verifies a typed facade rename failure can be safely formatted and consumed
@@ -335,21 +277,15 @@ fn test_rename_failure_exposes_context_state_and_parts() {
         .rename(
             &path("/source"),
             &path("/target"),
-            RenameOptions::default()
-                .with_atomicity(AtomicityRequirement::Required),
+            RenameOptions::default().with_atomicity(AtomicityRequirement::Required),
         )
         .expect_err("non-atomic outcome must produce a typed failure");
     assert!(format!("{failure:?}").contains("RenameFailure"));
     assert!(!format!("{failure}").is_empty());
     assert_eq!(FsOperation::Rename, failure.error().operation());
     let as_error: &dyn std::error::Error = &failure;
-    let source = as_error
-        .source()
-        .expect("Display/Error source should be available");
-    assert!(
-        !source.to_string().is_empty(),
-        "error source should be exposed"
-    );
+    let source = as_error.source().expect("Display/Error source should be available");
+    assert!(!source.to_string().is_empty(), "error source should be exposed");
     let (error, state) = failure.into_parts();
     assert_eq!(RenameFailureState::Renamed, state);
     assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());

@@ -107,9 +107,7 @@ impl CopyFailure {
     /// Splits the failure into error, state, statistics, and writer recovery.
     #[inline(always)]
     #[must_use]
-    pub fn into_parts(
-        self,
-    ) -> (FsError, CopyFailureState, CopyStats, Option<FileWriter>) {
+    pub fn into_parts(self) -> (FsError, CopyFailureState, CopyStats, Option<FileWriter>) {
         let mut parts = self.parts;
         (
             parts.error,

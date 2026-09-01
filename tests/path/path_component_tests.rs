@@ -14,10 +14,7 @@ use qubit_fs::path::PathComponent;
 #[test]
 fn test_path_component_rejects_hierarchy_and_traversal() {
     for invalid in ["", "/", ".", "..", "a/b", "nul\0byte"] {
-        assert!(
-            PathComponent::parse(invalid).is_err(),
-            "{invalid:?} must fail"
-        );
+        assert!(PathComponent::parse(invalid).is_err(), "{invalid:?} must fail");
     }
 }
 
@@ -25,8 +22,7 @@ fn test_path_component_rejects_hierarchy_and_traversal() {
 /// generic string consumers.
 #[test]
 fn test_path_component_preserves_valid_text() {
-    let component =
-        PathComponent::parse("report.csv").expect("component should parse");
+    let component = PathComponent::parse("report.csv").expect("component should parse");
     assert_eq!("report.csv", component.as_str());
     assert_eq!("report.csv", component.to_string());
 }

@@ -69,10 +69,7 @@ fn capability_set_iterates_and_formats_semantic_values() {
         vec![FileSystemCapability::Read, FileSystemCapability::Write],
         capabilities.iter().collect::<Vec<_>>(),
     );
-    assert_eq!(
-        "{Read: Guaranteed, Write: Guaranteed}",
-        format!("{capabilities:?}"),
-    );
+    assert_eq!("{Read: Guaranteed, Write: Guaranteed}", format!("{capabilities:?}"),);
 }
 
 #[test]
@@ -89,14 +86,10 @@ fn capability_all_matches_stable_iteration_order() {
 
 #[test]
 fn capability_set_reports_the_first_missing_dependency() {
-    let capabilities = FileSystemCapabilities::new()
-        .with_guaranteed(FileSystemCapability::AtomicRename);
+    let capabilities = FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::AtomicRename);
 
     assert_eq!(
-        Some((
-            FileSystemCapability::AtomicRename,
-            FileSystemCapability::Rename,
-        )),
+        Some((FileSystemCapability::AtomicRename, FileSystemCapability::Rename,)),
         capabilities.missing_dependency()
     );
 }

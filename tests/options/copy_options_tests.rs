@@ -25,21 +25,12 @@ fn test_copy_options_default_and_constructors_set_modes() {
 
 #[test]
 fn required_server_side_copy_is_checked_before_side_effects() {
-    let options =
-        CopyOptions::default().with_server_side(ServerSidePreference::Require);
-    let error = options
-        .validate_against(FileSystemCapabilities::default())
-        .unwrap_err();
-    assert_eq!(
-        Some(FileSystemCapability::ServerSideCopy),
-        error.required_capability(),
-    );
+    let options = CopyOptions::default().with_server_side(ServerSidePreference::Require);
+    let error = options.validate_against(FileSystemCapabilities::default()).unwrap_err();
+    assert_eq!(Some(FileSystemCapability::ServerSideCopy), error.required_capability(),);
     assert!(
         options
-            .validate_against(
-                FileSystemCapabilities::default()
-                    .with_guaranteed(FileSystemCapability::ServerSideCopy),
-            )
+            .validate_against(FileSystemCapabilities::default().with_guaranteed(FileSystemCapability::ServerSideCopy),)
             .is_ok()
     );
 }
@@ -101,8 +92,5 @@ fn test_copy_options_auto_defers_when_one_source_kind_is_supported() {
     let error = options
         .validate_against(FileSystemCapabilities::new())
         .expect_err("Auto must fail when no source kind has atomic support");
-    assert_eq!(
-        Some(FileSystemCapability::AtomicFileCopy),
-        error.required_capability(),
-    );
+    assert_eq!(Some(FileSystemCapability::AtomicFileCopy), error.required_capability(),);
 }

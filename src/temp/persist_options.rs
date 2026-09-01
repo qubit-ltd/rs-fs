@@ -77,10 +77,7 @@ impl PersistOptions {
     /// Replaces the required atomicity level.
     #[inline]
     #[must_use]
-    pub const fn with_atomicity(
-        mut self,
-        atomicity: AtomicityRequirement,
-    ) -> Self {
+    pub const fn with_atomicity(mut self, atomicity: AtomicityRequirement) -> Self {
         self.atomicity = atomicity;
         self
     }
@@ -88,10 +85,7 @@ impl PersistOptions {
     /// Replaces the metadata preservation policy.
     #[inline]
     #[must_use]
-    pub const fn with_preserve_metadata(
-        mut self,
-        preserve_metadata: MetadataPreservePolicy,
-    ) -> Self {
+    pub const fn with_preserve_metadata(mut self, preserve_metadata: MetadataPreservePolicy) -> Self {
         self.preserve_metadata = preserve_metadata;
         self
     }
@@ -101,10 +95,7 @@ impl PersistOptions {
     /// # Errors
     /// Returns [`FsErrorKind::RequirementNotMet`] when atomic persistence is
     /// required but the configured filesystem does not guarantee it.
-    pub fn validate_against(
-        &self,
-        capabilities: FileSystemCapabilities,
-    ) -> Result<(), FsError> {
+    pub fn validate_against(&self, capabilities: FileSystemCapabilities) -> Result<(), FsError> {
         if self.atomicity() == AtomicityRequirement::Required
             && !capabilities.supports(FileSystemCapability::AtomicTempPersist)
         {
@@ -113,9 +104,7 @@ impl PersistOptions {
                 FsOperation::PersistTemp,
                 "atomic temporary persistence is required but not supported",
             )
-            .with_required_capability(
-                FileSystemCapability::AtomicTempPersist,
-            ));
+            .with_required_capability(FileSystemCapability::AtomicTempPersist));
         }
         Ok(())
     }

@@ -132,8 +132,7 @@ pub(crate) fn limited_write_filesystem(maximum: u64) -> FileSystem {
         fail_write: false,
         commit_failure: None,
         abort_failure: None,
-        limits: FileSystemLimits::unknown()
-            .with_max_write_bytes(FileSystemLimit::Maximum(maximum)),
+        limits: FileSystemLimits::unknown().with_max_write_bytes(FileSystemLimit::Maximum(maximum)),
         entries: Mutex::new(Vec::new()),
         cleanup_calls: Arc::new(Mutex::new(0)),
         persist_calls: Arc::new(Mutex::new(0)),
@@ -351,10 +350,7 @@ pub(crate) fn non_atomic_temp_directory_filesystem() -> FileSystem {
 fn test_handle_support_constructs_file_system() {
     let (file_system, _, _) = filesystem(false, Vec::new());
 
-    assert_eq!(
-        "handles-test",
-        file_system.properties().info().id().as_str()
-    );
+    assert_eq!("handles-test", file_system.properties().info().id().as_str());
 }
 
 /// Exercises synchronous facade dispatch for directory creation and both
@@ -397,12 +393,7 @@ fn test_handle_support_dispatches_successful_facade_operations() {
     let mut directory = file_system
         .list(&source, ListOptions::default())
         .expect("list should succeed");
-    assert!(
-        directory
-            .next_entry()
-            .expect("stream should succeed")
-            .is_none()
-    );
+    assert!(directory.next_entry().expect("stream should succeed").is_none());
 
     let mut reader = file_system
         .open_reader(&source, ReadOptions::default())
@@ -410,29 +401,23 @@ fn test_handle_support_dispatches_successful_facade_operations() {
     let mut bytes = [0_u8; 5];
     assert_eq!(
         5,
-        Input::read(&mut reader, &mut bytes)
-            .expect("reader should transfer bytes")
+        Input::read(&mut reader, &mut bytes).expect("reader should transfer bytes")
     );
 
     let mut writer = file_system
         .open_writer(&target, WriteOptions::default())
         .expect("writer should open");
-    Output::write_fully(&mut writer, b"bytes")
-        .expect("writer should accept bytes");
+    Output::write_fully(&mut writer, b"bytes").expect("writer should accept bytes");
     writer.commit().expect("writer should commit");
 
     let mut temporary_file = file_system
         .create_temp_file(TempOptions::default())
         .expect("temporary file should open");
-    temporary_file
-        .keep()
-        .expect("temporary file should be kept");
+    temporary_file.keep().expect("temporary file should be kept");
     let mut temporary_directory = file_system
         .create_temp_directory(TempOptions::default())
         .expect("temporary directory should open");
-    temporary_directory
-        .keep()
-        .expect("temporary directory should be kept");
+    temporary_directory.keep().expect("temporary directory should be kept");
 }
 
 /// Invokes the synchronous SPI's optional default copy method and completes
@@ -479,9 +464,7 @@ fn test_handle_support_enriches_open_and_temp_provider_failures() {
             .expect_err("temporary-file provider failure should propagate"),
         file_system
             .create_temp_directory(TempOptions::default())
-            .expect_err(
-                "temporary-directory provider failure should propagate",
-            ),
+            .expect_err("temporary-directory provider failure should propagate"),
     ] {
         assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
         assert_eq!(Some("handles-test"), error.provider());
@@ -510,24 +493,17 @@ fn test_handle_support_keeps_pathless_temp_errors_pathless() {
 #[test]
 fn test_handle_support_validates_temp_parent_before_provider_call() {
     let file_system = provider_open_failure_filesystem();
-    let parent =
-        Path::parse("relative").expect("relative test path should parse");
+    let parent = Path::parse("relative").expect("relative test path should parse");
     let file_error = file_system
-        .create_temp_file(
-            TempOptions::default().with_parent(Some(parent.clone())),
-        )
+        .create_temp_file(TempOptions::default().with_parent(Some(parent.clone())))
         .expect_err("invalid temporary-file parent must fail in the facade");
     assert_eq!(FsErrorKind::InvalidPath, file_error.kind());
     assert_eq!(FsOperation::CreateTemp, file_error.operation());
     assert_eq!(Some(&parent), file_error.path());
 
     let directory_error = file_system
-        .create_temp_directory(
-            TempOptions::default().with_parent(Some(parent.clone())),
-        )
-        .expect_err(
-            "invalid temporary-directory parent must fail in the facade",
-        );
+        .create_temp_directory(TempOptions::default().with_parent(Some(parent.clone())))
+        .expect_err("invalid temporary-directory parent must fail in the facade");
     assert_eq!(FsErrorKind::InvalidPath, directory_error.kind());
     assert_eq!(FsOperation::CreateTemp, directory_error.operation());
     assert_eq!(Some(&parent), directory_error.path());
@@ -544,16 +520,14 @@ fn test_handle_support_rejects_invalid_temp_identities_with_cleanup_failure() {
             .expect_err("foreign temporary file identity must be rejected"),
         file_system
             .create_temp_directory(TempOptions::default())
-            .expect_err(
-                "foreign temporary directory identity must be rejected",
-            ),
+            .expect_err("foreign temporary directory identity must be rejected"),
     ] {
         assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
         assert_eq!(FsOperation::CreateTemp, error.operation());
         assert!(
-            error.source().is_some_and(|source| source
-                .to_string()
-                .contains("injected temporary cleanup failure")),
+            error
+                .source()
+                .is_some_and(|source| source.to_string().contains("injected temporary cleanup failure")),
             "cleanup failure must remain the inspectable source"
         );
     }
@@ -649,25 +623,17 @@ impl FileSystemSpi for BehaviorSpi {
             FileMetadata::new(FileKind::File),
         ))
     }
-    fn list(
-        &self,
-        request: ListRequest<'_>,
-    ) -> FsResult<OpenedDirectoryStream> {
+    fn list(&self, request: ListRequest<'_>) -> FsResult<OpenedDirectoryStream> {
         let _ = request.path();
         let _ = request.options();
         if self.provider_open_error {
             return Err(Self::unsupported());
         }
-        Ok(OpenedDirectoryStream::new(Box::new(Entries(
-            std::mem::take(
-                &mut *self.entries.lock().expect("entries lock should succeed"),
-            ),
-        ))))
+        Ok(OpenedDirectoryStream::new(Box::new(Entries(std::mem::take(
+            &mut *self.entries.lock().expect("entries lock should succeed"),
+        )))))
     }
-    fn open_reader(
-        &self,
-        request: OpenReaderRequest<'_>,
-    ) -> FsResult<OpenedReader> {
+    fn open_reader(&self, request: OpenReaderRequest<'_>) -> FsResult<OpenedReader> {
         if self.provider_open_error {
             return Err(Self::unsupported());
         }
@@ -680,10 +646,7 @@ impl FileSystemSpi for BehaviorSpi {
             Box::new(Cursor::new(b"bytes".to_vec())),
         ))
     }
-    fn open_writer(
-        &self,
-        request: OpenWriterRequest<'_>,
-    ) -> FsResult<OpenedWriter> {
+    fn open_writer(&self, request: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
         let _ = request.options();
         if self.provider_open_error {
             return Err(Self::unsupported());
@@ -702,34 +665,22 @@ impl FileSystemSpi for BehaviorSpi {
             }),
         ))
     }
-    fn create_directory(
-        &self,
-        request: CreateDirectoryRequest<'_>,
-    ) -> FsResult<CreateDirectoryOutcome> {
+    fn create_directory(&self, request: CreateDirectoryRequest<'_>) -> FsResult<CreateDirectoryOutcome> {
         let _ = request.path();
         let _ = request.options();
         Ok(CreateDirectoryOutcome::new(false))
     }
-    fn delete_file(
-        &self,
-        request: DeleteFileRequest<'_>,
-    ) -> FsResult<DeleteOutcome> {
+    fn delete_file(&self, request: DeleteFileRequest<'_>) -> FsResult<DeleteOutcome> {
         let _ = request.path();
         let _ = request.options();
         Ok(DeleteOutcome::new(false))
     }
-    fn delete_directory(
-        &self,
-        request: DeleteDirectoryRequest<'_>,
-    ) -> FsResult<DeleteOutcome> {
+    fn delete_directory(&self, request: DeleteDirectoryRequest<'_>) -> FsResult<DeleteOutcome> {
         let _ = request.path();
         let _ = request.options();
         Ok(DeleteOutcome::new(false))
     }
-    fn rename(
-        &self,
-        request: RenameRequest<'_>,
-    ) -> Result<RenameOutcome, SpiRenameFailure> {
+    fn rename(&self, request: RenameRequest<'_>) -> Result<RenameOutcome, SpiRenameFailure> {
         let _ = request.source();
         let _ = request.target();
         let _ = request.options();
@@ -738,10 +689,7 @@ impl FileSystemSpi for BehaviorSpi {
             RenameFailureState::Unchanged,
         ))
     }
-    fn create_temp_file(
-        &self,
-        request: CreateTempFileRequest,
-    ) -> FsResult<OpenedTempFile> {
+    fn create_temp_file(&self, request: CreateTempFileRequest) -> FsResult<OpenedTempFile> {
         let _ = request.options();
         if self.provider_open_error {
             return Err(Self::unsupported());
@@ -762,10 +710,7 @@ impl FileSystemSpi for BehaviorSpi {
             }),
         ))
     }
-    fn create_temp_directory(
-        &self,
-        request: CreateTempDirectoryRequest,
-    ) -> FsResult<OpenedTempDirectory> {
+    fn create_temp_directory(&self, request: CreateTempDirectoryRequest) -> FsResult<OpenedTempDirectory> {
         let _ = request.options();
         if self.provider_open_error {
             return Err(Self::unsupported());
@@ -792,12 +737,7 @@ struct Writer {
 }
 impl Output for Writer {
     type Item = u8;
-    unsafe fn write_unchecked(
-        &mut self,
-        _: &[u8],
-        _: usize,
-        count: usize,
-    ) -> IoResult<usize> {
+    unsafe fn write_unchecked(&mut self, _: &[u8], _: usize, count: usize) -> IoResult<usize> {
         if self.fail_write {
             Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -815,21 +755,13 @@ impl FileWriterSpi for Writer {
     fn commit(&mut self) -> Result<WriteOutcome, SpiWriteFailure> {
         if let Some(state) = self.commit_failure {
             return Err(SpiWriteFailure::new(
-                FsError::new(
-                    FsErrorKind::Io,
-                    FsOperation::CommitWriter,
-                    "injected commit failure",
-                ),
+                FsError::new(FsErrorKind::Io, FsOperation::CommitWriter, "injected commit failure"),
                 state,
             ));
         }
         if self.fail_commit {
             Err(SpiWriteFailure::new(
-                FsError::new(
-                    FsErrorKind::Io,
-                    FsOperation::CommitWriter,
-                    "injected commit failure",
-                ),
+                FsError::new(FsErrorKind::Io, FsOperation::CommitWriter, "injected commit failure"),
                 WriteFailureState::RetryableNotPublished,
             ))
         } else {
@@ -845,21 +777,13 @@ impl FileWriterSpi for Writer {
     }
     fn abort(&mut self) -> FsResult<WriteAbortOutcome> {
         match self.abort_failure {
-            Some(kind) => Err(FsError::new(
-                kind,
-                FsOperation::AbortWriter,
-                "injected abort failure",
-            )),
+            Some(kind) => Err(FsError::new(kind, FsOperation::AbortWriter, "injected abort failure")),
             None => Ok(match self.commit_failure {
-                Some(WriteFailureState::Published) => {
-                    WriteAbortOutcome::Published
+                Some(WriteFailureState::Published) => WriteAbortOutcome::Published,
+                Some(WriteFailureState::Indeterminate) => WriteAbortOutcome::Indeterminate,
+                Some(WriteFailureState::RetryableNotPublished) | Some(WriteFailureState::NotPublished) | None => {
+                    WriteAbortOutcome::NotPublished
                 }
-                Some(WriteFailureState::Indeterminate) => {
-                    WriteAbortOutcome::Indeterminate
-                }
-                Some(WriteFailureState::RetryableNotPublished)
-                | Some(WriteFailureState::NotPublished)
-                | None => WriteAbortOutcome::NotPublished,
             }),
         }
     }
@@ -879,14 +803,8 @@ struct Temp {
     cleanup_error: Option<FsErrorKind>,
 }
 impl TempResourceSpi for Temp {
-    fn persist(
-        &mut self,
-        request: PersistRequest<'_>,
-    ) -> Result<PersistOutcome, SpiPersistFailure> {
-        *self
-            .persist_calls
-            .lock()
-            .expect("persist lock should succeed") += 1;
+    fn persist(&mut self, request: PersistRequest<'_>) -> Result<PersistOutcome, SpiPersistFailure> {
+        *self.persist_calls.lock().expect("persist lock should succeed") += 1;
         if let Some(state) = self.failure {
             return Err(SpiPersistFailure::new(
                 FsError::new(
@@ -898,8 +816,7 @@ impl TempResourceSpi for Temp {
             ));
         }
         let target = if request.target().as_str() == "/wrong-persist-target" {
-            Path::parse("/reported-persist-target")
-                .expect("generated path should parse")
+            Path::parse("/reported-persist-target").expect("generated path should parse")
         } else {
             request.target().clone()
         };
@@ -923,10 +840,7 @@ impl TempResourceSpi for Temp {
         })
     }
     fn cleanup(&mut self) -> FsResult<()> {
-        *self
-            .cleanup_calls
-            .lock()
-            .expect("cleanup lock should succeed") += 1;
+        *self.cleanup_calls.lock().expect("cleanup lock should succeed") += 1;
         self.cleanup_error.map_or(Ok(()), |kind| {
             Err(FsError::new(
                 kind,

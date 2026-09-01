@@ -46,11 +46,7 @@ impl<'a> AsyncWriteOperation<'a> {
             .validate_write_size(path, bytes.len())
         {
             return Err(AsyncWriteAllFailure::new(
-                self.filesystem.core().enrich(
-                    error,
-                    Some(path),
-                    FsOperation::Write,
-                ),
+                self.filesystem.core().enrich(error, Some(path), FsOperation::Write),
                 None,
             ));
         }
@@ -79,8 +75,9 @@ impl<'a> AsyncWriteOperation<'a> {
                 Some(writer),
             ));
         }
-        writer.commit_async().await.map_err(|failure| {
-            AsyncWriteAllFailure::new(failure.into_error(), Some(writer))
-        })
+        writer
+            .commit_async()
+            .await
+            .map_err(|failure| AsyncWriteAllFailure::new(failure.into_error(), Some(writer)))
     }
 }

@@ -28,11 +28,7 @@ use qubit_fs::write::WriteFailureState;
 #[test]
 fn test_spi_copy_failure_preserves_typed_state() {
     let failure = SpiCopyFailure::new(
-        FsError::new(
-            FsErrorKind::Indeterminate,
-            FsOperation::Copy,
-            "test failure",
-        ),
+        FsError::new(FsErrorKind::Indeterminate, FsOperation::Copy, "test failure"),
         CopyFailureState::Indeterminate,
         CopyStats::default(),
     );
@@ -47,11 +43,7 @@ fn test_spi_copy_failure_preserves_typed_state() {
 #[test]
 fn test_spi_rename_failure_preserves_typed_state() {
     let failure = SpiRenameFailure::new(
-        FsError::new(
-            FsErrorKind::Indeterminate,
-            FsOperation::Rename,
-            "test failure",
-        ),
+        FsError::new(FsErrorKind::Indeterminate, FsOperation::Rename, "test failure"),
         RenameFailureState::Indeterminate,
     );
     assert_eq!(RenameFailureState::Indeterminate, failure.state());
@@ -65,8 +57,7 @@ fn test_spi_rename_failure_preserves_typed_state() {
 #[test]
 fn test_stat_response_exposes_path_and_metadata_snapshot() {
     let path = Path::parse("/file").expect("test path should parse");
-    let response =
-        StatResponse::new(path.clone(), FileMetadata::new(FileKind::File));
+    let response = StatResponse::new(path.clone(), FileMetadata::new(FileKind::File));
     assert_eq!(&path, response.path());
     assert_eq!(&FileKind::File, response.metadata().kind());
 }
@@ -75,11 +66,7 @@ fn test_stat_response_exposes_path_and_metadata_snapshot() {
 #[test]
 fn test_spi_write_failure_preserves_typed_state() {
     let failure = SpiWriteFailure::new(
-        FsError::new(
-            FsErrorKind::Io,
-            FsOperation::CommitWriter,
-            "test failure",
-        ),
+        FsError::new(FsErrorKind::Io, FsOperation::CommitWriter, "test failure"),
         WriteFailureState::RetryableNotPublished,
     );
     assert_eq!(FsErrorKind::Io, failure.error().kind());
@@ -97,10 +84,7 @@ fn test_spi_persist_failure_preserves_typed_state() {
         PersistFailureState::PublishedSourceRetained,
     );
     assert_eq!(FsErrorKind::Io, failure.error().kind());
-    assert_eq!(
-        PersistFailureState::PublishedSourceRetained,
-        failure.state()
-    );
+    assert_eq!(PersistFailureState::PublishedSourceRetained, failure.state());
     let (error, state) = failure.into_parts();
     assert_eq!(FsErrorKind::Io, error.kind());
     assert_eq!(PersistFailureState::PublishedSourceRetained, state);

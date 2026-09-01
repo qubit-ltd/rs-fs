@@ -66,8 +66,7 @@ impl AsyncFileSystemSpi for CopySpi {
     fn properties(&self) -> ProviderProperties {
         ProviderProperties::new(
             FileSystemInfo::new(
-                FileSystemId::new("copy-test")
-                    .expect("test id should be valid"),
+                FileSystemId::new("copy-test").expect("test id should be valid"),
                 "copy-test",
                 PathSemantics::Hierarchical,
             ),
@@ -76,8 +75,7 @@ impl AsyncFileSystemSpi for CopySpi {
                 .with(ProviderOperation::OpenReader)
                 .with(ProviderOperation::OpenWriter)
                 .with(ProviderOperation::TryCopy),
-            FileSystemCapabilities::new()
-                .with_guaranteed(FileSystemCapability::Copy),
+            FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::Copy),
             FileSystemLimits::unknown(),
             PathConstraints::absolute(),
             SymlinkPolicy::Reject,
@@ -85,28 +83,16 @@ impl AsyncFileSystemSpi for CopySpi {
         .expect("test properties should be valid")
     }
 
-    fn stat<'a>(
-        &'a self,
-        _: StatRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<StatResponse>> {
+    fn stat<'a>(&'a self, _: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
         Box::pin(async { Err(unused()) })
     }
-    fn list<'a>(
-        &'a self,
-        _: ListRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<OpenedAsyncDirectoryStream>> {
+    fn list<'a>(&'a self, _: ListRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncDirectoryStream>> {
         Box::pin(async { Err(unused()) })
     }
-    fn open_reader<'a>(
-        &'a self,
-        _: OpenReaderRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
+    fn open_reader<'a>(&'a self, _: OpenReaderRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
         Box::pin(async { Err(unused()) })
     }
-    fn open_writer<'a>(
-        &'a self,
-        _: OpenWriterRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
+    fn open_writer<'a>(&'a self, _: OpenWriterRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
         Box::pin(async { Err(unused()) })
     }
     fn create_directory<'a>(
@@ -115,33 +101,16 @@ impl AsyncFileSystemSpi for CopySpi {
     ) -> SpiFuture<'a, FsResult<CreateDirectoryOutcome>> {
         Box::pin(async { Err(unused()) })
     }
-    fn delete_file<'a>(
-        &'a self,
-        _: DeleteFileRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<DeleteOutcome>> {
+    fn delete_file<'a>(&'a self, _: DeleteFileRequest<'a>) -> SpiFuture<'a, FsResult<DeleteOutcome>> {
         Box::pin(async { Err(unused()) })
     }
-    fn delete_directory<'a>(
-        &'a self,
-        _: DeleteDirectoryRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<DeleteOutcome>> {
+    fn delete_directory<'a>(&'a self, _: DeleteDirectoryRequest<'a>) -> SpiFuture<'a, FsResult<DeleteOutcome>> {
         Box::pin(async { Err(unused()) })
     }
-    fn rename<'a>(
-        &'a self,
-        _: RenameRequest<'a>,
-    ) -> SpiFuture<'a, Result<RenameOutcome, SpiRenameFailure>> {
-        Box::pin(async {
-            Err(SpiRenameFailure::new(
-                unused(),
-                RenameFailureState::Unchanged,
-            ))
-        })
+    fn rename<'a>(&'a self, _: RenameRequest<'a>) -> SpiFuture<'a, Result<RenameOutcome, SpiRenameFailure>> {
+        Box::pin(async { Err(SpiRenameFailure::new(unused(), RenameFailureState::Unchanged)) })
     }
-    fn create_temp_file<'a>(
-        &'a self,
-        _: CreateTempFileRequest,
-    ) -> SpiFuture<'a, FsResult<OpenedAsyncTempFile>> {
+    fn create_temp_file<'a>(&'a self, _: CreateTempFileRequest) -> SpiFuture<'a, FsResult<OpenedAsyncTempFile>> {
         Box::pin(async { Err(unused()) })
     }
     fn create_temp_directory<'a>(
@@ -151,26 +120,18 @@ impl AsyncFileSystemSpi for CopySpi {
         Box::pin(async { Err(unused()) })
     }
 
-    fn try_copy<'a>(
-        &'a self,
-        _: CopyRequest<'a>,
-    ) -> SpiFuture<'a, Result<CopyAttempt, SpiCopyFailure>> {
+    fn try_copy<'a>(&'a self, _: CopyRequest<'a>) -> SpiFuture<'a, Result<CopyAttempt, SpiCopyFailure>> {
         Box::pin(pending())
     }
 }
 
 fn unused() -> FsError {
-    FsError::new(
-        FsErrorKind::UnsupportedOperation,
-        FsOperation::Other,
-        "unused",
-    )
+    FsError::new(FsErrorKind::UnsupportedOperation, FsOperation::Other, "unused")
 }
 
 #[test]
 fn test_begin_copy_only_runs_synchronous_preflight() {
-    let file_system =
-        AsyncFileSystem::from_spi(CopySpi).expect("facade should construct");
+    let file_system = AsyncFileSystem::from_spi(CopySpi).expect("facade should construct");
     let operation = file_system
         .begin_copy(
             Path::parse("/source").expect("source path should parse"),
@@ -183,8 +144,7 @@ fn test_begin_copy_only_runs_synchronous_preflight() {
 
 #[test]
 fn test_dropping_polled_execute_future_marks_operation_indeterminate() {
-    let file_system =
-        AsyncFileSystem::from_spi(CopySpi).expect("facade should construct");
+    let file_system = AsyncFileSystem::from_spi(CopySpi).expect("facade should construct");
     let mut operation = file_system
         .begin_copy(
             Path::parse("/source").expect("source path should parse"),

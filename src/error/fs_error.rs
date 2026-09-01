@@ -64,11 +64,7 @@ impl FsError {
     /// New filesystem error.
     #[inline]
     #[must_use]
-    pub fn new(
-        kind: FsErrorKind,
-        operation: FsOperation,
-        message: &str,
-    ) -> Self {
+    pub fn new(kind: FsErrorKind, operation: FsOperation, message: &str) -> Self {
         Self {
             kind,
             operation,
@@ -97,12 +93,7 @@ impl FsError {
     /// # Returns
     /// New filesystem error with source context.
     #[inline]
-    pub fn with_source<E>(
-        kind: FsErrorKind,
-        operation: FsOperation,
-        message: &str,
-        source: E,
-    ) -> Self
+    pub fn with_source<E>(kind: FsErrorKind, operation: FsOperation, message: &str, source: E) -> Self
     where
         E: Error + Send + Sync + 'static,
     {
@@ -199,10 +190,7 @@ impl FsError {
     /// Updated filesystem error.
     #[inline]
     #[must_use]
-    pub fn with_required_capability(
-        mut self,
-        capability: FileSystemCapability,
-    ) -> Self {
+    pub fn with_required_capability(mut self, capability: FileSystemCapability) -> Self {
         self.required_capability = Some(capability);
         self
     }
@@ -223,12 +211,7 @@ impl FsError {
     /// Updated error with every previously absent context field filled.
     #[inline]
     #[must_use]
-    pub(crate) fn with_missing_context(
-        mut self,
-        path: &Path,
-        target: Option<&Path>,
-        provider: &str,
-    ) -> Self {
+    pub(crate) fn with_missing_context(mut self, path: &Path, target: Option<&Path>, provider: &str) -> Self {
         if self.path.is_none() {
             self.path = Some(Box::new(path.clone()));
         }
@@ -318,27 +301,14 @@ impl FsError {
     /// A typed filesystem error with the public operation and path rebound.
     #[allow(dead_code)]
     #[inline]
-    pub(crate) fn from_stream_io(
-        error: io::Error,
-        operation: FsOperation,
-        path: &Path,
-    ) -> Self {
+    pub(crate) fn from_stream_io(error: io::Error, operation: FsOperation, path: &Path) -> Self {
         match error.downcast::<Self>() {
-            Ok(error) => {
-                error.with_operation(operation).with_path(path.clone())
-            }
+            Ok(error) => error.with_operation(operation).with_path(path.clone()),
             Err(error) if error.kind() == io::ErrorKind::InvalidData => {
-                Self::with_source(
-                    FsErrorKind::Io,
-                    operation,
-                    "stream I/O contract failed",
-                    error,
-                )
-                .with_path(path.clone())
+                Self::with_source(FsErrorKind::Io, operation, "stream I/O contract failed", error)
+                    .with_path(path.clone())
             }
-            Err(error) => {
-                Self::from_io(error, operation).with_path(path.clone())
-            }
+            Err(error) => Self::from_io(error, operation).with_path(path.clone()),
         }
     }
 
@@ -433,20 +403,14 @@ impl FsError {
             FsErrorKind::AlreadyExists => io::ErrorKind::AlreadyExists,
             FsErrorKind::NotDirectory => io::ErrorKind::NotADirectory,
             FsErrorKind::IsDirectory => io::ErrorKind::IsADirectory,
-            FsErrorKind::PermissionDenied
-            | FsErrorKind::AuthenticationFailed => {
-                io::ErrorKind::PermissionDenied
-            }
+            FsErrorKind::PermissionDenied | FsErrorKind::AuthenticationFailed => io::ErrorKind::PermissionDenied,
             FsErrorKind::InvalidPath
             | FsErrorKind::InvalidUri
             | FsErrorKind::InvalidOptions
             | FsErrorKind::InvalidState => io::ErrorKind::InvalidInput,
-            FsErrorKind::UnsupportedOperation
-            | FsErrorKind::UnsupportedCapability => io::ErrorKind::Unsupported,
+            FsErrorKind::UnsupportedOperation | FsErrorKind::UnsupportedCapability => io::ErrorKind::Unsupported,
             FsErrorKind::Timeout => io::ErrorKind::TimedOut,
-            FsErrorKind::Interrupted | FsErrorKind::Cancelled => {
-                io::ErrorKind::Interrupted
-            }
+            FsErrorKind::Interrupted | FsErrorKind::Cancelled => io::ErrorKind::Interrupted,
             FsErrorKind::QuotaExceeded => io::ErrorKind::StorageFull,
             FsErrorKind::DataCorruption => io::ErrorKind::InvalidData,
             _ => io::ErrorKind::Other,
@@ -488,8 +452,6 @@ impl Display for FsError {
 impl Error for FsError {
     #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        self.source
-            .as_deref()
-            .map(|source| source as &(dyn Error + 'static))
+        self.source.as_deref().map(|source| source as &(dyn Error + 'static))
     }
 }

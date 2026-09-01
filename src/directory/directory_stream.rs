@@ -96,28 +96,15 @@ impl DirectoryStream {
         }
         match self.session.next_entry() {
             Ok(Some(entry)) => {
-                if let Err(error) = directory_entry_validation::validate_entry(
-                    &entry,
-                    &self.root,
-                    self.path_semantics,
-                    self.limits,
-                ) {
+                if let Err(error) =
+                    directory_entry_validation::validate_entry(&entry, &self.root, self.path_semantics, self.limits)
+                {
                     self.state = DirectoryStreamState::Failed;
                     return Err(self.contextual_error(error));
                 }
-                if let Err(message) =
-                    directory_entry_validation::matches_options(
-                        &entry,
-                        &self.root,
-                        &self.options,
-                    )
-                {
+                if let Err(message) = directory_entry_validation::matches_options(&entry, &self.root, &self.options) {
                     self.state = DirectoryStreamState::Failed;
-                    return Err(self.contextual_error(
-                        directory_entry_validation::option_error(
-                            &self.root, message,
-                        ),
-                    ));
+                    return Err(self.contextual_error(directory_entry_validation::option_error(&self.root, message)));
                 }
                 Ok(Some(entry))
             }
@@ -143,8 +130,6 @@ impl DirectoryStream {
 impl Debug for DirectoryStream {
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
-        formatter
-            .debug_struct("DirectoryStream")
-            .finish_non_exhaustive()
+        formatter.debug_struct("DirectoryStream").finish_non_exhaustive()
     }
 }

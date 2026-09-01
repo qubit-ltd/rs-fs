@@ -42,8 +42,7 @@ fn test_uri_rejects_password_sensitive_query_and_fragment() {
 /// Verifies secret-free URIs allow a visible username but reject passwords.
 #[test]
 fn test_uri_allows_username_only_userinfo() {
-    let uri = Uri::parse("s3://user@bucket/key")
-        .expect("username-only URI should remain visible and valid");
+    let uri = Uri::parse("s3://user@bucket/key").expect("username-only URI should remain visible and valid");
     assert_eq!(uri.authority(), Some("user@bucket"));
 }
 
@@ -58,8 +57,7 @@ fn test_uri_rejects_percent_encoded_sensitive_query_key() {
 /// survive parsing.
 #[test]
 fn test_uri_preserves_raw_path_and_ordered_duplicate_query() {
-    let uri =
-        Uri::parse("S3://bucket/a%2Fb?x=1&x=2").expect("URI should parse");
+    let uri = Uri::parse("S3://bucket/a%2Fb?x=1&x=2").expect("URI should parse");
     assert_eq!(uri.scheme(), "s3");
     assert_eq!(uri.path(), "/a%2Fb");
     assert_eq!(uri.query(), Some("x=1&x=2"));
@@ -69,10 +67,8 @@ fn test_uri_preserves_raw_path_and_ordered_duplicate_query() {
 /// changing URI identity.
 #[test]
 fn test_uri_canonical_text_round_trips() {
-    let uri =
-        Uri::parse("S3://bucket/a%2Fb?x=1&x=2").expect("URI should parse");
-    let reparsed =
-        Uri::parse(uri.as_str()).expect("canonical URI should reparse");
+    let uri = Uri::parse("S3://bucket/a%2Fb?x=1&x=2").expect("URI should parse");
+    let reparsed = Uri::parse(uri.as_str()).expect("canonical URI should reparse");
     assert_eq!(uri, reparsed);
 }
 
@@ -94,8 +90,7 @@ fn test_uri_accessors_preserve_authority_presence_and_full_text() {
 
 #[test]
 fn test_uri_query_and_authority_accessors_are_directly_callable() {
-    let uri = Uri::parse("HTTPS://host/path?mode=fast")
-        .expect("ordinary URI should parse");
+    let uri = Uri::parse("HTTPS://host/path?mode=fast").expect("ordinary URI should parse");
     let has_authority: fn(&Uri) -> bool = Uri::has_authority;
     let query: fn(&Uri) -> Option<&str> = Uri::query;
     let as_str: fn(&Uri) -> &str = Uri::as_str;

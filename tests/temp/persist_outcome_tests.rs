@@ -17,8 +17,7 @@ use qubit_fs::temp::PersistOutcome;
 /// guarantees, and non-sensitive provider diagnostics.
 #[test]
 fn test_persist_outcome_preserves_publication_details_and_diagnostics() {
-    let target =
-        Path::parse("published/report.txt").expect("path should parse");
+    let target = Path::parse("published/report.txt").expect("path should parse");
     let outcome = PersistOutcome::new(
         target.clone(),
         AchievedAtomicity::Atomic,
@@ -36,8 +35,7 @@ fn test_persist_outcome_preserves_publication_details_and_diagnostics() {
     assert!(outcome.diagnostics().contains_key("storage_class"));
     assert_eq!(PersistCleanupState::Complete, outcome.cleanup_state());
 
-    let residual = outcome
-        .with_cleanup_state(PersistCleanupState::ResidualTemporaryContainer);
+    let residual = outcome.with_cleanup_state(PersistCleanupState::ResidualTemporaryContainer);
     assert_eq!(
         PersistCleanupState::ResidualTemporaryContainer,
         residual.cleanup_state()

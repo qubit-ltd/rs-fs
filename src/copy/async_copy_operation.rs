@@ -141,14 +141,7 @@ impl AsyncCopyOperation {
             writer,
         } = self;
         let mut guard = CopyCancellationGuard::start(state, writer);
-        let result = execute_copy(
-            file_system,
-            source,
-            target,
-            options,
-            guard.writer_mut(),
-        )
-        .await;
+        let result = execute_copy(file_system, source, target, options, guard.writer_mut()).await;
         guard.finish(&result);
         result
     }
@@ -163,30 +156,21 @@ async fn execute_copy(
     options: &ResolvedCopyOptions,
     writer: &mut Option<Box<crate::write::AsyncFileWriter>>,
 ) -> Result<CopyOutcome, AsyncCopyFailure> {
-    if !filesystem
-        .core()
-        .provider_supports(ProviderOperation::TryCopy)
-    {
-        return stream_copy_fallback(
-            filesystem, source, target, options, writer,
-        )
-        .await;
+    if !filesystem.core().provider_supports(ProviderOperation::TryCopy) {
+        return stream_copy_fallback(filesystem, source, target, options, writer).await;
     }
     match filesystem
         .spi()
         .try_copy(CopyRequest::new(source, target, options.clone()))
         .await
     {
-        Ok(CopyAttempt::Completed(outcome)) => filesystem
-            .verify_completed_copy(outcome, options.options(), source, target),
-        Ok(CopyAttempt::Declined(_)) => {
-            stream_copy_fallback(filesystem, source, target, options, writer)
-                .await
+        Ok(CopyAttempt::Completed(outcome)) => {
+            filesystem.verify_completed_copy(outcome, options.options(), source, target)
         }
+        Ok(CopyAttempt::Declined(_)) => stream_copy_fallback(filesystem, source, target, options, writer).await,
         Err(failure) => {
             let (error, state, stats) = failure.into_parts();
-            Err(filesystem
-                .contextual_copy_failure(error, state, stats, source, target))
+            Err(filesystem.contextual_copy_failure(error, state, stats, source, target))
         }
     }
 }
@@ -217,13 +201,7 @@ fn stream_copy_fallback<'a>(
         }
         filesystem
             .require(FileSystemCapability::Read, FsOperation::Copy, source)
-            .and_then(|_| {
-                filesystem.require(
-                    FileSystemCapability::Write,
-                    FsOperation::Copy,
-                    target,
-                )
-            })
+            .and_then(|_| filesystem.require(FileSystemCapability::Write, FsOperation::Copy, target))
             .map_err(|error| {
                 filesystem.contextual_copy_failure(
                     error,
@@ -234,13 +212,7 @@ fn stream_copy_fallback<'a>(
                 )
             })?;
         let metadata = filesystem.stat(source).await.map_err(|error| {
-            filesystem.contextual_copy_failure(
-                error,
-                CopyFailureState::Unchanged,
-                CopyStats::default(),
-                source,
-                target,
-            )
+            filesystem.contextual_copy_failure(error, CopyFailureState::Unchanged, CopyStats::default(), source, target)
         })?;
         if !is_file_kind_supported(metadata.kind().clone()) {
             return Err(filesystem.contextual_copy_failure(
@@ -256,12 +228,8 @@ fn stream_copy_fallback<'a>(
             ));
         }
         if let Some(length) = metadata.len()
-            && let Err(error) = validate_stream_copy_length_limits(
-                filesystem.properties().limits(),
-                source,
-                target,
-                length,
-            )
+            && let Err(error) =
+                validate_stream_copy_length_limits(filesystem.properties().limits(), source, target, length)
         {
             return Err(filesystem.contextual_copy_failure(
                 error,
@@ -289,8 +257,7 @@ fn stream_copy_fallback<'a>(
         match filesystem.open_writer(target, writer_options).await {
             Ok(writer) => *writer_slot = Some(Box::new(writer)),
             Err(error)
-                if error.kind() == FsErrorKind::AlreadyExists
-                    && options.conflict() == CopyConflictPolicy::Skip =>
+                if error.kind() == FsErrorKind::AlreadyExists && options.conflict() == CopyConflictPolicy::Skip =>
             {
                 return Ok(CopyOutcome::streamed_fallback(
                     CopyStats {
@@ -313,66 +280,49 @@ fn stream_copy_fallback<'a>(
         let mut bytes = 0_u64;
         let mut buffer = [0_u8; 8192];
         loop {
-            let read =
-                reader.read_async(&mut buffer).await.map_err(|error| {
-                    filesystem.contextual_copy_failure(
-                        FsError::from_stream_io(
-                            error,
-                            FsOperation::Read,
-                            source,
-                        ),
-                        from_writer_state(
-                            writer_slot
-                                .as_ref()
-                                .expect("writer is retained before transfer")
-                                .state(),
-                        ),
-                        fallback_failure_stats(
-                            writer_slot
-                                .as_ref()
-                                .expect("writer is retained before transfer")
-                                .written_bytes(),
-                        ),
-                        source,
-                        target,
-                    )
-                })?;
+            let read = reader.read_async(&mut buffer).await.map_err(|error| {
+                filesystem.contextual_copy_failure(
+                    FsError::from_stream_io(error, FsOperation::Read, source),
+                    from_writer_state(
+                        writer_slot
+                            .as_ref()
+                            .expect("writer is retained before transfer")
+                            .state(),
+                    ),
+                    fallback_failure_stats(
+                        writer_slot
+                            .as_ref()
+                            .expect("writer is retained before transfer")
+                            .written_bytes(),
+                    ),
+                    source,
+                    target,
+                )
+            })?;
             if read == 0 {
                 break;
             }
-            let writer = writer_slot
-                .as_mut()
-                .expect("writer is retained before transfer");
-            writer.write_fully_async(&buffer[..read]).await.map_err(
-                |error| {
-                    filesystem.contextual_copy_failure(
-                        FsError::from_stream_io(
-                            error,
-                            FsOperation::Write,
-                            target,
-                        ),
-                        from_writer_state(writer.state()),
-                        fallback_failure_stats(writer.written_bytes()),
-                        source,
-                        target,
-                    )
-                },
-            )?;
-            bytes = filesystem.add_copied_bytes(bytes, read, source).map_err(
-                |error| {
-                    filesystem.contextual_copy_failure(
-                        error,
-                        from_writer_state(writer.state()),
-                        fallback_failure_stats(writer.written_bytes()),
-                        source,
-                        target,
-                    )
-                },
-            )?;
+            let writer = writer_slot.as_mut().expect("writer is retained before transfer");
+            writer.write_fully_async(&buffer[..read]).await.map_err(|error| {
+                filesystem.contextual_copy_failure(
+                    FsError::from_stream_io(error, FsOperation::Write, target),
+                    from_writer_state(writer.state()),
+                    fallback_failure_stats(writer.written_bytes()),
+                    source,
+                    target,
+                )
+            })?;
+            bytes = filesystem.add_copied_bytes(bytes, read, source).map_err(|error| {
+                filesystem.contextual_copy_failure(
+                    error,
+                    from_writer_state(writer.state()),
+                    fallback_failure_stats(writer.written_bytes()),
+                    source,
+                    target,
+                )
+            })?;
         }
-        let writer = writer_slot
-            .as_mut()
-            .expect("writer is retained before flush");
+        let writer = writer_slot.as_mut().expect("writer is retained before flush");
         writer.flush_async().await.map_err(|error| {
             filesystem.contextual_copy_failure(
                 FsError::from_stream_io(error, FsOperation::Write, target),
@@ -382,16 +332,13 @@ fn stream_copy_fallback<'a>(
                 target,
             )
         })?;
-        let writer = writer_slot
-            .as_mut()
-            .expect("writer is retained before commit");
+        let writer = writer_slot.as_mut().expect("writer is retained before commit");
         let write_outcome = match writer.commit_async().await {
             Ok(outcome) => outcome,
             Err(failure)
                 if failure.error().kind() == FsErrorKind::AlreadyExists
                     && options.conflict() == CopyConflictPolicy::Skip
-                    && from_writer_state(writer.state())
-                        == CopyFailureState::Unchanged =>
+                    && from_writer_state(writer.state()) == CopyFailureState::Unchanged =>
             {
                 if let Err(cleanup_error) = writer.abort_async().await {
                     return Err(filesystem.contextual_copy_failure(
@@ -434,11 +381,7 @@ fn stream_copy_fallback<'a>(
 }
 
 /// Builds the stable failure used for an invalid execute retry.
-fn invalid_state_failure(
-    source: &Path,
-    target: &Path,
-    provider: &str,
-) -> AsyncCopyFailure {
+fn invalid_state_failure(source: &Path, target: &Path, provider: &str) -> AsyncCopyFailure {
     AsyncCopyFailure::new(
         FsError::new(
             FsErrorKind::InvalidState,

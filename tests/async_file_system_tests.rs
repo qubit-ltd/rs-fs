@@ -83,8 +83,7 @@ impl AsyncFileSystemSpi for CountingPropertiesSpi {
         self.property_calls.fetch_add(1, Ordering::SeqCst);
         ProviderProperties::new(
             FileSystemInfo::new(
-                FileSystemId::new("async-properties-test")
-                    .expect("test id should be valid"),
+                FileSystemId::new("async-properties-test").expect("test id should be valid"),
                 "async-properties-test",
                 PathSemantics::Hierarchical,
             ),
@@ -103,10 +102,7 @@ impl AsyncFileSystemSpi for CountingPropertiesSpi {
     }
 
     /// Rejects metadata requests because this test performs no provider I/O.
-    fn stat<'a>(
-        &'a self,
-        _: StatRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<StatResponse>> {
+    fn stat<'a>(&'a self, _: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
         Box::pin(async { Err(unused()) })
     }
 }
@@ -115,16 +111,14 @@ impl AsyncFileSystemSpi for PropertiesOnlySpi {
     fn properties(&self) -> ProviderProperties {
         ProviderProperties::new(
             FileSystemInfo::new(
-                FileSystemId::new("async-test")
-                    .expect("test id should be valid"),
+                FileSystemId::new("async-test").expect("test id should be valid"),
                 "async-test",
                 PathSemantics::Hierarchical,
             ),
             ProviderOperations::new()
                 .with(ProviderOperation::Stat)
                 .with(ProviderOperation::TryCopy),
-            FileSystemCapabilities::new()
-                .with_guaranteed(FileSystemCapability::Copy),
+            FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::Copy),
             FileSystemLimits::unknown(),
             PathConstraints::absolute(),
             SymlinkPolicy::Reject,
@@ -132,28 +126,16 @@ impl AsyncFileSystemSpi for PropertiesOnlySpi {
         .expect("test properties should be valid")
     }
 
-    fn stat<'a>(
-        &'a self,
-        _: StatRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<StatResponse>> {
+    fn stat<'a>(&'a self, _: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
         Box::pin(async { Err(unused()) })
     }
-    fn list<'a>(
-        &'a self,
-        _: ListRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<OpenedAsyncDirectoryStream>> {
+    fn list<'a>(&'a self, _: ListRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncDirectoryStream>> {
         Box::pin(async { Err(unused()) })
     }
-    fn open_reader<'a>(
-        &'a self,
-        _: OpenReaderRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
+    fn open_reader<'a>(&'a self, _: OpenReaderRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
         Box::pin(async { Err(unused()) })
     }
-    fn open_writer<'a>(
-        &'a self,
-        _: OpenWriterRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
+    fn open_writer<'a>(&'a self, _: OpenWriterRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
         Box::pin(async { Err(unused()) })
     }
     fn create_directory<'a>(
@@ -162,33 +144,16 @@ impl AsyncFileSystemSpi for PropertiesOnlySpi {
     ) -> SpiFuture<'a, FsResult<CreateDirectoryOutcome>> {
         Box::pin(async { Err(unused()) })
     }
-    fn delete_file<'a>(
-        &'a self,
-        _: DeleteFileRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<DeleteOutcome>> {
+    fn delete_file<'a>(&'a self, _: DeleteFileRequest<'a>) -> SpiFuture<'a, FsResult<DeleteOutcome>> {
         Box::pin(async { Err(unused()) })
     }
-    fn delete_directory<'a>(
-        &'a self,
-        _: DeleteDirectoryRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<DeleteOutcome>> {
+    fn delete_directory<'a>(&'a self, _: DeleteDirectoryRequest<'a>) -> SpiFuture<'a, FsResult<DeleteOutcome>> {
         Box::pin(async { Err(unused()) })
     }
-    fn rename<'a>(
-        &'a self,
-        _: RenameRequest<'a>,
-    ) -> SpiFuture<'a, Result<RenameOutcome, SpiRenameFailure>> {
-        Box::pin(async {
-            Err(SpiRenameFailure::new(
-                unused(),
-                RenameFailureState::Unchanged,
-            ))
-        })
+    fn rename<'a>(&'a self, _: RenameRequest<'a>) -> SpiFuture<'a, Result<RenameOutcome, SpiRenameFailure>> {
+        Box::pin(async { Err(SpiRenameFailure::new(unused(), RenameFailureState::Unchanged)) })
     }
-    fn create_temp_file<'a>(
-        &'a self,
-        _: CreateTempFileRequest,
-    ) -> SpiFuture<'a, FsResult<OpenedAsyncTempFile>> {
+    fn create_temp_file<'a>(&'a self, _: CreateTempFileRequest) -> SpiFuture<'a, FsResult<OpenedAsyncTempFile>> {
         Box::pin(async { Err(unused()) })
     }
     fn create_temp_directory<'a>(
@@ -211,10 +176,7 @@ impl AsyncFileSystemSpi for DefaultAsyncSpi {
     }
 
     /// Supplies the required metadata implementation for the test provider.
-    fn stat<'a>(
-        &'a self,
-        request: StatRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<StatResponse>> {
+    fn stat<'a>(&'a self, request: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
         Box::pin(async move {
             Ok(StatResponse::new(
                 request.path().clone(),
@@ -228,8 +190,7 @@ impl AsyncFileSystemSpi for DefaultAsyncSpi {
 fn default_async_properties() -> ProviderProperties {
     ProviderProperties::new(
         FileSystemInfo::new(
-            FileSystemId::new("default-async")
-                .expect("test provider id should be valid"),
+            FileSystemId::new("default-async").expect("test provider id should be valid"),
             "default-async",
             PathSemantics::Hierarchical,
         ),
@@ -263,11 +224,7 @@ fn default_async_properties() -> ProviderProperties {
 }
 
 fn unused() -> FsError {
-    FsError::new(
-        FsErrorKind::UnsupportedOperation,
-        FsOperation::Other,
-        "unused",
-    )
+    FsError::new(FsErrorKind::UnsupportedOperation, FsOperation::Other, "unused")
 }
 
 fn assert_async_spi_object_safe(_: Arc<dyn AsyncFileSystemSpi>) {}
@@ -288,8 +245,7 @@ where
 
 #[test]
 fn test_async_file_system_is_clone_but_not_a_trait_object() {
-    let file_system = AsyncFileSystem::from_spi(PropertiesOnlySpi)
-        .expect("facade construction should succeed");
+    let file_system = AsyncFileSystem::from_spi(PropertiesOnlySpi).expect("facade construction should succeed");
     let clone = file_system.clone();
     assert_eq!(
         file_system.properties().info().provider_id(),
@@ -316,10 +272,7 @@ fn test_async_properties_derive_conditional_copy_and_cache_snapshot() {
             .support(FileSystemCapability::Copy),
     );
     let clone = file_system.clone();
-    assert_eq!(
-        file_system.properties().info().id(),
-        clone.properties().info().id(),
-    );
+    assert_eq!(file_system.properties().info().id(), clone.properties().info().id(),);
     assert_eq!(1, property_calls.load(Ordering::SeqCst));
 }
 
@@ -327,8 +280,7 @@ fn test_async_properties_derive_conditional_copy_and_cache_snapshot() {
 /// native copy primitive before the facade reports missing fallback support.
 #[test]
 fn test_async_spi_default_copy_declines_without_provider_override() {
-    let file_system = AsyncFileSystem::from_spi(PropertiesOnlySpi)
-        .expect("facade construction should succeed");
+    let file_system = AsyncFileSystem::from_spi(PropertiesOnlySpi).expect("facade construction should succeed");
     let mut operation = file_system
         .begin_copy(
             Path::parse("/source").expect("source path should parse"),
@@ -336,8 +288,7 @@ fn test_async_spi_default_copy_declines_without_provider_override() {
             CopyOptions::default(),
         )
         .expect("copy preflight should accept advertised copy capability");
-    let error = ready(operation.execute())
-        .expect_err("fallback must require reader and writer capabilities");
+    let error = ready(operation.execute()).expect_err("fallback must require reader and writer capabilities");
     assert_eq!(FsErrorKind::UnsupportedCapability, error.error().kind());
 }
 
@@ -367,10 +318,8 @@ fn test_async_spi_default_operations_report_unsupported() {
     assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
     assert_eq!(FsOperation::OpenWriter, error.operation());
 
-    let error = ready(
-        file_system.create_directory(&path, CreateDirectoryOptions::default()),
-    )
-    .expect_err("default directory implementation must reject the request");
+    let error = ready(file_system.create_directory(&path, CreateDirectoryOptions::default()))
+        .expect_err("default directory implementation must reject the request");
     assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
     assert_eq!(FsOperation::CreateDir, error.operation());
 
@@ -379,43 +328,31 @@ fn test_async_spi_default_operations_report_unsupported() {
     assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
     assert_eq!(FsOperation::Delete, error.operation());
 
-    let error =
-        ready(file_system.delete_directory(&path, DeleteOptions::default()))
-            .expect_err("default directory deletion must reject the request");
+    let error = ready(file_system.delete_directory(&path, DeleteOptions::default()))
+        .expect_err("default directory deletion must reject the request");
     assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
     assert_eq!(FsOperation::Delete, error.operation());
 
-    let error =
-        ready(file_system.rename(&path, &target, RenameOptions::default()))
-            .expect_err(
-                "default rename implementation must reject the request",
-            );
+    let error = ready(file_system.rename(&path, &target, RenameOptions::default()))
+        .expect_err("default rename implementation must reject the request");
     assert_eq!(FsErrorKind::UnsupportedOperation, error.error().kind());
     assert_eq!(FsOperation::Rename, error.error().operation());
 
     let mut operation = file_system
         .begin_copy(path.clone(), target.clone(), CopyOptions::default())
         .expect("copy preflight should accept advertised copy capability");
-    let error = ready(operation.execute())
-        .expect_err("default copy implementation must not complete");
+    let error = ready(operation.execute()).expect_err("default copy implementation must not complete");
     assert_eq!(FsOperation::Copy, error.error().operation());
 
-    let error =
-        match ready(file_system.create_temp_file(TempOptions::default())) {
-            Ok(_) => panic!(
-                "default temporary-file implementation must reject the request"
-            ),
-            Err(error) => error,
-        };
+    let error = match ready(file_system.create_temp_file(TempOptions::default())) {
+        Ok(_) => panic!("default temporary-file implementation must reject the request"),
+        Err(error) => error,
+    };
     assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
     assert_eq!(FsOperation::CreateTemp, error.operation());
 
-    let error = match ready(
-        file_system.create_temp_directory(TempOptions::default()),
-    ) {
-        Ok(_) => panic!(
-            "default temporary-directory implementation must reject the request"
-        ),
+    let error = match ready(file_system.create_temp_directory(TempOptions::default())) {
+        Ok(_) => panic!("default temporary-directory implementation must reject the request"),
         Err(error) => error,
     };
     assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());

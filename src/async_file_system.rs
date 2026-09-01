@@ -125,10 +125,7 @@ impl AsyncFileSystem {
             .await
             .map_err(|error| self.enrich(error, path, FsOperation::Stat))?;
         if response.path() != path {
-            return Err(self.contract_error(
-                path,
-                "provider returned metadata for a different path",
-            ));
+            return Err(self.contract_error(path, "provider returned metadata for a different path"));
         }
         Ok(response.into_metadata())
     }
@@ -143,103 +140,55 @@ impl AsyncFileSystem {
     }
 
     /// Asynchronously opens a validated directory stream.
-    pub async fn list(
-        &self,
-        path: &Path,
-        options: ListOptions,
-    ) -> FsResult<AsyncDirectoryStream> {
+    pub async fn list(&self, path: &Path, options: ListOptions) -> FsResult<AsyncDirectoryStream> {
         AsyncDirectoryOperation::new(self).list(path, options).await
     }
 
     /// Asynchronously opens a validated reader and verifies its identity.
-    pub async fn open_reader(
-        &self,
-        path: &Path,
-        options: ReadOptions,
-    ) -> FsResult<AsyncFileReader> {
+    pub async fn open_reader(&self, path: &Path, options: ReadOptions) -> FsResult<AsyncFileReader> {
         self.validate_path(path, FsOperation::OpenReader)?;
         options
             .validate_against(self.properties().capabilities())
-            .map_err(|error| {
-                self.enrich(error, path, FsOperation::OpenReader)
-            })?;
+            .map_err(|error| self.enrich(error, path, FsOperation::OpenReader))?;
         self.properties()
             .limits()
             .validate_read_range(path, options.length())
-            .map_err(|error| {
-                self.enrich(error, path, FsOperation::OpenReader)
-            })?;
-        self.require(
-            FileSystemCapability::Read,
-            FsOperation::OpenReader,
-            path,
-        )?;
+            .map_err(|error| self.enrich(error, path, FsOperation::OpenReader))?;
+        self.require(FileSystemCapability::Read, FsOperation::OpenReader, path)?;
         let opened = self
             .spi
-            .open_reader(OpenReaderRequest::new(
-                path,
-                ResolvedReadOptions::new(options),
-            ))
+            .open_reader(OpenReaderRequest::new(path, ResolvedReadOptions::new(options)))
             .await
-            .map_err(|error| {
-                self.enrich(error, path, FsOperation::OpenReader)
-            })?;
+            .map_err(|error| self.enrich(error, path, FsOperation::OpenReader))?;
         self.validate_opened_info(opened.info(), path)?;
         Ok(opened.into_reader())
     }
 
     /// Asynchronously reads an entire file while enforcing a strict byte cap.
-    pub async fn read_all(
-        &self,
-        path: &Path,
-        options: ReadOptions,
-        max_bytes: usize,
-    ) -> FsResult<Vec<u8>> {
-        AsyncReadOperation::new(self)
-            .read_all(path, options, max_bytes)
-            .await
+    pub async fn read_all(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
+        AsyncReadOperation::new(self).read_all(path, options, max_bytes).await
     }
 
     /// Asynchronously reads at most max_bytes from a file.
-    pub async fn read_prefix(
-        &self,
-        path: &Path,
-        options: ReadOptions,
-        max_bytes: usize,
-    ) -> FsResult<Vec<u8>> {
+    pub async fn read_prefix(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
         AsyncReadOperation::new(self)
             .read_prefix(path, options, max_bytes)
             .await
     }
 
     /// Asynchronously opens a validated writer and verifies its identity.
-    pub async fn open_writer(
-        &self,
-        path: &Path,
-        options: WriteOptions,
-    ) -> FsResult<AsyncFileWriter> {
+    pub async fn open_writer(&self, path: &Path, options: WriteOptions) -> FsResult<AsyncFileWriter> {
         self.validate_path(path, FsOperation::OpenWriter)?;
         options
             .validate_against(self.properties().capabilities())
-            .map_err(|error| {
-                self.enrich(error, path, FsOperation::OpenWriter)
-            })?;
-        self.require(
-            FileSystemCapability::Write,
-            FsOperation::OpenWriter,
-            path,
-        )?;
+            .map_err(|error| self.enrich(error, path, FsOperation::OpenWriter))?;
+        self.require(FileSystemCapability::Write, FsOperation::OpenWriter, path)?;
         let atomicity = options.atomicity();
         let opened = self
             .spi
-            .open_writer(OpenWriterRequest::new(
-                path,
-                ResolvedWriteOptions::new(options),
-            ))
+            .open_writer(OpenWriterRequest::new(path, ResolvedWriteOptions::new(options)))
             .await
-            .map_err(|error| {
-                self.enrich(error, path, FsOperation::OpenWriter)
-            })?;
+            .map_err(|error| self.enrich(error, path, FsOperation::OpenWriter))?;
         self.validate_opened_info(opened.info(), path)?;
         Ok(opened.into_writer(
             atomicity,
@@ -255,9 +204,7 @@ impl AsyncFileSystem {
         bytes: &[u8],
         options: WriteOptions,
     ) -> Result<crate::metadata::WriteOutcome, AsyncWriteAllFailure> {
-        AsyncWriteOperation::new(self)
-            .write_all(path, bytes, options)
-            .await
+        AsyncWriteOperation::new(self).write_all(path, bytes, options).await
     }
 
     /// Asynchronously creates a directory after local validation.
@@ -267,11 +214,7 @@ impl AsyncFileSystem {
         options: CreateDirectoryOptions,
     ) -> FsResult<CreateDirectoryOutcome> {
         self.validate_path(path, FsOperation::CreateDir)?;
-        self.require(
-            FileSystemCapability::CreateDirectory,
-            FsOperation::CreateDir,
-            path,
-        )?;
+        self.require(FileSystemCapability::CreateDirectory, FsOperation::CreateDir, path)?;
         let exists_ok = options.exists_ok();
         let outcome = self
             .spi
@@ -280,35 +223,22 @@ impl AsyncFileSystem {
                 ResolvedCreateDirectoryOptions::new(options),
             ))
             .await
-            .map_err(|error| {
-                self.enrich(error, path, FsOperation::CreateDir)
-            })?;
+            .map_err(|error| self.enrich(error, path, FsOperation::CreateDir))?;
         if outcome.already_existed() && !exists_ok {
-            return Err(self.contract_error(
-                path,
-                "provider accepted an existing directory without exists_ok",
-            ));
+            return Err(self.contract_error(path, "provider accepted an existing directory without exists_ok"));
         }
         Ok(outcome)
     }
 
     /// Asynchronously deletes a file after local validation.
     #[inline]
-    pub async fn delete_file(
-        &self,
-        path: &Path,
-        options: DeleteOptions,
-    ) -> FsResult<DeleteOutcome> {
+    pub async fn delete_file(&self, path: &Path, options: DeleteOptions) -> FsResult<DeleteOutcome> {
         self.delete(path, options, false).await
     }
 
     /// Asynchronously deletes a directory after local validation.
     #[inline]
-    pub async fn delete_directory(
-        &self,
-        path: &Path,
-        options: DeleteOptions,
-    ) -> FsResult<DeleteOutcome> {
+    pub async fn delete_directory(&self, path: &Path, options: DeleteOptions) -> FsResult<DeleteOutcome> {
         self.delete(path, options, true).await
     }
 
@@ -320,12 +250,7 @@ impl AsyncFileSystem {
         options: RenameOptions,
     ) -> Result<RenameOutcome, RenameFailure> {
         if let Err(error) = self.rename_preflight(source, target, &options) {
-            return Err(self.contextual_rename_failure(
-                error,
-                RenameFailureState::Unchanged,
-                source,
-                target,
-            ));
+            return Err(self.contextual_rename_failure(error, RenameFailureState::Unchanged, source, target));
         }
         match self
             .spi
@@ -336,9 +261,7 @@ impl AsyncFileSystem {
             ))
             .await
         {
-            Ok(outcome) => match validate_rename_outcome(
-                &outcome, &options, source, target,
-            ) {
+            Ok(outcome) => match validate_rename_outcome(&outcome, &options, source, target) {
                 Some(violation) => Err(self.contextual_rename_failure(
                     self.contract_error(source, violation.message),
                     violation.state,
@@ -349,40 +272,25 @@ impl AsyncFileSystem {
             },
             Err(failure) => {
                 let (error, state) = failure.into_parts();
-                Err(self
-                    .contextual_rename_failure(error, state, source, target))
+                Err(self.contextual_rename_failure(error, state, source, target))
             }
         }
     }
 
     /// Asynchronously creates a temporary file and validates its provider
     /// identity.
-    pub async fn create_temp_file(
-        &self,
-        options: TempOptions,
-    ) -> FsResult<AsyncTempFile> {
+    pub async fn create_temp_file(&self, options: TempOptions) -> FsResult<AsyncTempFile> {
         let parent = options.parent().cloned();
         self.core.validate_temp_parent(parent.as_ref())?;
-        self.core.require(
-            FileSystemCapability::TempFile,
-            FsOperation::CreateTemp,
-            parent.as_ref(),
-        )?;
+        self.core
+            .require(FileSystemCapability::TempFile, FsOperation::CreateTemp, parent.as_ref())?;
         let opened = self
             .spi
             .create_temp_file(crate::spi::CreateTempFileRequest::new(options))
             .await
-            .map_err(|error| {
-                self.core.enrich(
-                    error,
-                    parent.as_ref(),
-                    FsOperation::CreateTemp,
-                )
-            })?;
+            .map_err(|error| self.core.enrich(error, parent.as_ref(), FsOperation::CreateTemp))?;
         let (info, session) = opened.into_parts();
-        if let Err(error) =
-            self.validate_temp_info(&info, crate::metadata::FileKind::File)
-        {
+        if let Err(error) = self.validate_temp_info(&info, crate::metadata::FileKind::File) {
             let path = error.path().cloned().unwrap_or_else(Path::root);
             let mut session = Box::into_pin(session);
             return Err(match session.as_mut().cleanup().await {
@@ -406,10 +314,7 @@ impl AsyncFileSystem {
     }
 
     /// Asynchronously creates a temporary directory and validates its identity.
-    pub async fn create_temp_directory(
-        &self,
-        options: TempOptions,
-    ) -> FsResult<AsyncTempDirectory> {
+    pub async fn create_temp_directory(&self, options: TempOptions) -> FsResult<AsyncTempDirectory> {
         let parent = options.parent().cloned();
         self.core.validate_temp_parent(parent.as_ref())?;
         self.core.require(
@@ -419,21 +324,11 @@ impl AsyncFileSystem {
         )?;
         let opened = self
             .spi
-            .create_temp_directory(crate::spi::CreateTempDirectoryRequest::new(
-                options,
-            ))
+            .create_temp_directory(crate::spi::CreateTempDirectoryRequest::new(options))
             .await
-            .map_err(|error| {
-                self.core.enrich(
-                    error,
-                    parent.as_ref(),
-                    FsOperation::CreateTemp,
-                )
-            })?;
+            .map_err(|error| self.core.enrich(error, parent.as_ref(), FsOperation::CreateTemp))?;
         let (info, session) = opened.into_parts();
-        if let Err(error) =
-            self.validate_temp_info(&info, crate::metadata::FileKind::Directory)
-        {
+        if let Err(error) = self.validate_temp_info(&info, crate::metadata::FileKind::Directory) {
             let mut session = Box::into_pin(session);
             return Err(match session.as_mut().cleanup().await {
                 Ok(()) => error,
@@ -447,11 +342,7 @@ impl AsyncFileSystem {
                 .with_provider(self.properties().info().provider_id()),
             });
         }
-        Ok(AsyncTempDirectory::new(
-            self.clone(),
-            info.path().clone(),
-            session,
-        ))
+        Ok(AsyncTempDirectory::new(self.clone(), info.path().clone(), session))
     }
 
     /// Begins a copy after synchronous path, option, and capability preflight.
@@ -465,16 +356,15 @@ impl AsyncFileSystem {
         target: Path,
         options: CopyOptions,
     ) -> Result<AsyncCopyOperation, AsyncCopyFailure> {
-        self.copy_preflight(&source, &target, &options)
-            .map_err(|error| {
-                self.contextual_copy_failure(
-                    error,
-                    CopyFailureState::Unchanged,
-                    CopyStats::default(),
-                    &source,
-                    &target,
-                )
-            })?;
+        self.copy_preflight(&source, &target, &options).map_err(|error| {
+            self.contextual_copy_failure(
+                error,
+                CopyFailureState::Unchanged,
+                CopyStats::default(),
+                &source,
+                &target,
+            )
+        })?;
         let symlink_policy = options
             .symlink_policy_override()
             .unwrap_or(self.properties().symlink_policy());
@@ -498,11 +388,7 @@ impl AsyncFileSystem {
     ) -> Result<CopyOutcome, AsyncCopyFailure> {
         if let Some(message) = outcome.contract_violation(options) {
             return Err(self.contextual_copy_failure(
-                FsError::new(
-                    FsErrorKind::ProviderContractViolation,
-                    FsOperation::Copy,
-                    message,
-                ),
+                FsError::new(FsErrorKind::ProviderContractViolation, FsOperation::Copy, message),
                 CopyFailureState::Published,
                 *outcome.stats(),
                 source,
@@ -513,12 +399,7 @@ impl AsyncFileSystem {
     }
 
     /// Performs all no-I/O copy validation required before an operation exists.
-    fn copy_preflight(
-        &self,
-        source: &Path,
-        target: &Path,
-        options: &CopyOptions,
-    ) -> FsResult<()> {
+    fn copy_preflight(&self, source: &Path, target: &Path, options: &CopyOptions) -> FsResult<()> {
         self.validate_path(source, FsOperation::Copy)?;
         self.validate_path(target, FsOperation::Copy)?;
         options
@@ -540,12 +421,7 @@ impl AsyncFileSystem {
     }
 
     /// Performs no-I/O validation for the single rename primitive.
-    fn rename_preflight(
-        &self,
-        source: &Path,
-        target: &Path,
-        options: &RenameOptions,
-    ) -> FsResult<()> {
+    fn rename_preflight(&self, source: &Path, target: &Path, options: &RenameOptions) -> FsResult<()> {
         self.validate_path(source, FsOperation::Rename)?;
         self.validate_path(target, FsOperation::Rename)?;
         options
@@ -554,11 +430,7 @@ impl AsyncFileSystem {
                 self.enrich(error, source, FsOperation::Rename)
                     .with_target(target.clone())
             })?;
-        self.require(
-            FileSystemCapability::Rename,
-            FsOperation::Rename,
-            source,
-        )?;
+        self.require(FileSystemCapability::Rename, FsOperation::Rename, source)?;
         if source == target {
             return Err(FsError::new(
                 FsErrorKind::InvalidOptions,
@@ -572,12 +444,7 @@ impl AsyncFileSystem {
     }
 
     /// Dispatches the selected deletion primitive after local validation.
-    async fn delete(
-        &self,
-        path: &Path,
-        options: DeleteOptions,
-        directory: bool,
-    ) -> FsResult<DeleteOutcome> {
+    async fn delete(&self, path: &Path, options: DeleteOptions, directory: bool) -> FsResult<DeleteOutcome> {
         self.validate_path(path, FsOperation::Delete)?;
         options
             .validate_against(self.properties().capabilities())
@@ -587,10 +454,7 @@ impl AsyncFileSystem {
         let request_options = ResolvedDeleteOptions::new(options);
         let outcome = if directory {
             self.spi
-                .delete_directory(DeleteDirectoryRequest::new(
-                    path,
-                    request_options,
-                ))
+                .delete_directory(DeleteDirectoryRequest::new(path, request_options))
                 .await
         } else {
             self.spi
@@ -599,20 +463,13 @@ impl AsyncFileSystem {
         }
         .map_err(|error| self.enrich(error, path, FsOperation::Delete))?;
         if outcome.already_missing() && !missing_ok {
-            return Err(self.contract_error(
-                path,
-                "provider accepted a missing target without missing_ok",
-            ));
+            return Err(self.contract_error(path, "provider accepted a missing target without missing_ok"));
         }
         Ok(outcome)
     }
 
     /// Validates a logical path against the cached provider snapshot.
-    fn validate_path(
-        &self,
-        path: &Path,
-        operation: FsOperation,
-    ) -> FsResult<()> {
+    fn validate_path(&self, path: &Path, operation: FsOperation) -> FsResult<()> {
         self.core.validate_path(path, operation)
     }
 
@@ -637,13 +494,11 @@ impl AsyncFileSystem {
         target: &Path,
     ) -> AsyncCopyFailure {
         AsyncCopyFailure::new(
-            error
-                .with_operation(FsOperation::Copy)
-                .with_missing_context(
-                    source,
-                    Some(target),
-                    self.properties().info().provider_id(),
-                ),
+            error.with_operation(FsOperation::Copy).with_missing_context(
+                source,
+                Some(target),
+                self.properties().info().provider_id(),
+            ),
             state,
             stats,
         )
@@ -659,34 +514,24 @@ impl AsyncFileSystem {
         target: &Path,
     ) -> RenameFailure {
         RenameFailure::new(
-            error
-                .with_operation(FsOperation::Rename)
-                .with_missing_context(
-                    source,
-                    Some(target),
-                    self.properties().info().provider_id(),
-                ),
+            error.with_operation(FsOperation::Rename).with_missing_context(
+                source,
+                Some(target),
+                self.properties().info().provider_id(),
+            ),
             state,
         )
     }
 
     /// Adds missing public context to a provider error.
-    fn enrich(
-        &self,
-        error: FsError,
-        path: &Path,
-        operation: FsOperation,
-    ) -> FsError {
+    fn enrich(&self, error: FsError, path: &Path, operation: FsOperation) -> FsError {
         self.core.enrich(error, Some(path), operation)
     }
 
     /// Creates a provider-contract violation bound to the requested path.
     fn contract_error(&self, path: &Path, message: &'static str) -> FsError {
-        self.core.contract_error(
-            path,
-            FsOperation::ValidateProviderOutcome,
-            message,
-        )
+        self.core
+            .contract_error(path, FsOperation::ValidateProviderOutcome, message)
     }
 
     /// Adds a native read count to the public `u64` copy-statistics total.
@@ -695,14 +540,8 @@ impl AsyncFileSystem {
     ///
     /// Returns [`FsErrorKind::ResourceLimitExceeded`] when the native count or
     /// accumulated total cannot be represented by [`CopyStats`].
-    pub(crate) fn add_copied_bytes(
-        &self,
-        total: u64,
-        count: usize,
-        source: &Path,
-    ) -> FsResult<u64> {
-        let count = u64::try_from(count)
-            .map_err(|_| self.copy_byte_count_error(source))?;
+    pub(crate) fn add_copied_bytes(&self, total: u64, count: usize, source: &Path) -> FsResult<u64> {
+        let count = u64::try_from(count).map_err(|_| self.copy_byte_count_error(source))?;
         total
             .checked_add(count)
             .ok_or_else(|| self.copy_byte_count_error(source))
@@ -721,18 +560,9 @@ impl AsyncFileSystem {
 
     /// Validates a provider-opened handle identity before exposing it to
     /// callers.
-    fn validate_opened_info(
-        &self,
-        info: &crate::metadata::OpenedFileInfo,
-        path: &Path,
-    ) -> FsResult<()> {
-        if info.filesystem_id() != self.properties().info().id()
-            || info.path() != path
-        {
-            return Err(self.contract_error(
-                path,
-                "provider returned an opened handle with a different identity",
-            ));
+    fn validate_opened_info(&self, info: &crate::metadata::OpenedFileInfo, path: &Path) -> FsResult<()> {
+        if info.filesystem_id() != self.properties().info().id() || info.path() != path {
+            return Err(self.contract_error(path, "provider returned an opened handle with a different identity"));
         }
         Ok(())
     }
@@ -749,17 +579,13 @@ impl AsyncFileSystem {
                 "provider returned a temporary handle for a different filesystem",
             ));
         }
-        self.validate_path(info.path(), FsOperation::CreateTemp)
-            .map_err(|_| {
-                self.contract_error(
-                    info.path(),
-                    "provider returned a temporary handle with an invalid logical path",
-                )
-            })?;
-        if info
-            .metadata()
-            .is_none_or(|metadata| metadata.kind() != &expected_kind)
-        {
+        self.validate_path(info.path(), FsOperation::CreateTemp).map_err(|_| {
+            self.contract_error(
+                info.path(),
+                "provider returned a temporary handle with an invalid logical path",
+            )
+        })?;
+        if info.metadata().is_none_or(|metadata| metadata.kind() != &expected_kind) {
             return Err(self.contract_error(
                 info.path(),
                 "provider returned a temporary handle with an inconsistent resource kind",

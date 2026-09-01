@@ -47,10 +47,7 @@ impl ConnectionUri {
     /// * `text` - URI text to parse and canonicalize.
     /// * `policy` - Policy captured for later secret classification and
     ///   formatting.
-    pub fn parse_with_policy(
-        text: &str,
-        policy: &RedactionPolicy,
-    ) -> FsResult<Self> {
+    pub fn parse_with_policy(text: &str, policy: &RedactionPolicy) -> FsResult<Self> {
         let parsed = parse_canonical(text)?;
         if parsed.fragment().is_some() {
             return Err(invalid_uri("URI fragments are not supported"));
@@ -127,16 +124,13 @@ impl ConnectionUri {
     #[inline]
     #[must_use]
     fn redacted_text(&self) -> String {
-        let redaction = Redactor::new(self.redaction_policy.clone())
-            .redact_uri(self.parsed.as_str());
+        let redaction = Redactor::new(self.redaction_policy.clone()).redact_uri(self.parsed.as_str());
         match redaction.summary().completion() {
             RedactionCompletion::Complete => redaction
                 .into_complete_text()
                 .expect("complete redaction must retain text")
                 .into_string(),
-            RedactionCompletion::Truncated | RedactionCompletion::Exhausted => {
-                "<truncated>".to_owned()
-            }
+            RedactionCompletion::Truncated | RedactionCompletion::Exhausted => "<truncated>".to_owned(),
         }
     }
 }
@@ -154,9 +148,6 @@ impl Debug for ConnectionUri {
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         let redacted = self.redacted_text();
-        formatter
-            .debug_tuple("ConnectionUri")
-            .field(&redacted)
-            .finish()
+        formatter.debug_tuple("ConnectionUri").field(&redacted).finish()
     }
 }

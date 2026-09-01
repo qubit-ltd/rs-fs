@@ -32,11 +32,7 @@ pub(crate) fn validate_entry(
         ));
     }
     if limits
-        .validate_path(
-            &entry.path,
-            semantics,
-            FsOperation::ValidateProviderOutcome,
-        )
+        .validate_path(&entry.path, semantics, FsOperation::ValidateProviderOutcome)
         .is_err()
     {
         return Err(contract_error(
@@ -71,26 +67,15 @@ pub(crate) fn validate_entry(
 }
 
 /// Checks whether one validated entry is selected by listing options.
-pub(crate) fn matches_options(
-    entry: &DirEntry,
-    root: &Path,
-    options: &ListOptions,
-) -> Result<(), &'static str> {
+pub(crate) fn matches_options(entry: &DirEntry, root: &Path, options: &ListOptions) -> Result<(), &'static str> {
     let Some(relative) = relative_path(root, &entry.path) else {
         return Err("provider returned directory entry outside requested root");
     };
-    if !options.recursive()
-        && options.prefix().is_none()
-        && relative.contains('/')
-    {
-        return Err(
-            "provider returned nested directory entry for non-recursive listing",
-        );
+    if !options.recursive() && options.prefix().is_none() && relative.contains('/') {
+        return Err("provider returned nested directory entry for non-recursive listing");
     }
     if options.include_metadata() && entry.metadata.is_none() {
-        return Err(
-            "provider returned directory entry without requested metadata",
-        );
+        return Err("provider returned directory entry without requested metadata");
     }
     if options.prefix().is_none_or(|prefix| {
         relative == prefix

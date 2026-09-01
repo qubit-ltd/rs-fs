@@ -28,10 +28,7 @@ impl ResolvedListOptions {
     /// - `options`: Validated caller options after normalization.
     /// - `symlink_policy`: Effective provider policy for this request.
     #[inline]
-    pub(crate) const fn new(
-        options: ListOptions,
-        symlink_policy: SymlinkPolicy,
-    ) -> Self {
+    pub(crate) const fn new(options: ListOptions, symlink_policy: SymlinkPolicy) -> Self {
         Self {
             options,
             symlink_policy,

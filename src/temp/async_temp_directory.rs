@@ -39,17 +39,8 @@ impl AsyncTempDirectory {
     /// # Returns
     /// An owned asynchronous temporary-directory handle.
     #[inline(always)]
-    pub(crate) fn new(
-        file_system: AsyncFileSystem,
-        path: Path,
-        session: Box<dyn AsyncTempResourceSpi>,
-    ) -> Self {
-        Self(AsyncTempFile::new(
-            file_system,
-            path,
-            session,
-            "temporary directory",
-        ))
+    pub(crate) fn new(file_system: AsyncFileSystem, path: Path, session: Box<dyn AsyncTempResourceSpi>) -> Self {
+        Self(AsyncTempFile::new(file_system, path, session, "temporary directory"))
     }
 
     /// Returns the provider-local temporary path.

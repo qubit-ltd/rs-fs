@@ -21,20 +21,13 @@ use qubit_io::Output;
 /// Keeps abort publication certainty as a first-class provider result.
 #[test]
 fn test_write_abort_outcome_exposes_all_publication_states() {
-    assert_ne!(
-        WriteAbortOutcome::NotPublished,
-        WriteAbortOutcome::Published,
-    );
-    assert_ne!(
-        WriteAbortOutcome::Published,
-        WriteAbortOutcome::Indeterminate,
-    );
+    assert_ne!(WriteAbortOutcome::NotPublished, WriteAbortOutcome::Published,);
+    assert_ne!(WriteAbortOutcome::Published, WriteAbortOutcome::Indeterminate,);
 }
 
 #[test]
 fn test_write_all_commit_failure_retains_open_writer_for_recovery() {
-    let (filesystem, _, _) =
-        crate::handle_support::filesystem(true, Vec::new());
+    let (filesystem, _, _) = crate::handle_support::filesystem(true, Vec::new());
     let failure = filesystem
         .write_all(
             &Path::parse("/target").expect("path should parse"),
@@ -53,8 +46,7 @@ fn test_write_all_commit_failure_retains_open_writer_for_recovery() {
 /// terminal-state behavior through the public filesystem facade.
 #[test]
 fn test_open_writer_transfers_bytes_and_rejects_closed_operations() {
-    let (filesystem, _, _) =
-        crate::handle_support::filesystem(false, Vec::new());
+    let (filesystem, _, _) = crate::handle_support::filesystem(false, Vec::new());
     let target = Path::parse("/target").expect("path should parse");
     let mut writer = filesystem
         .open_writer(&target, WriteOptions::default())
@@ -63,8 +55,7 @@ fn test_open_writer_transfers_bytes_and_rejects_closed_operations() {
     assert_eq!(WriterState::Open, writer.state());
     assert!(!writer.is_buffered());
     assert!(format!("{writer:?}").contains("FileWriter"));
-    Output::write_fully(&mut writer, b"bytes")
-        .expect("writer should accept bytes");
+    Output::write_fully(&mut writer, b"bytes").expect("writer should accept bytes");
     writer.flush().expect("writer should flush");
     writer.commit().expect("writer should commit");
     assert_eq!(WriterState::Committed, writer.state());
@@ -72,16 +63,11 @@ fn test_open_writer_transfers_bytes_and_rejects_closed_operations() {
         .commit()
         .expect_err("committed writer must reject a second commit");
     assert_eq!(FsErrorKind::InvalidState, commit.error().kind());
-    let write = Output::write_fully(&mut writer, b"bytes")
-        .expect_err("committed writer must reject byte transfer");
+    let write = Output::write_fully(&mut writer, b"bytes").expect_err("committed writer must reject byte transfer");
     assert!(write.to_string().contains("writer no longer accepts bytes"));
-    let flush = writer
-        .flush()
-        .expect_err("committed writer must reject flush");
+    let flush = writer.flush().expect_err("committed writer must reject flush");
     assert!(flush.to_string().contains("writer no longer accepts bytes"));
-    let abort = writer
-        .abort()
-        .expect_err("committed writer must reject abort");
+    let abort = writer.abort().expect_err("committed writer must reject abort");
     assert_eq!(FsErrorKind::InvalidState, abort.kind());
 }
 
@@ -89,11 +75,7 @@ fn test_open_writer_transfers_bytes_and_rejects_closed_operations() {
 #[test]
 fn test_write_failure_exposes_error_state_and_parts() {
     let failure = WriteFailure::new(
-        FsError::new(
-            FsErrorKind::Io,
-            FsOperation::CommitWriter,
-            "commit failed",
-        ),
+        FsError::new(FsErrorKind::Io, FsOperation::CommitWriter, "commit failed"),
         WriteFailureState::RetryableNotPublished,
     );
     assert_eq!(WriteFailureState::RetryableNotPublished, failure.state());
@@ -105,11 +87,7 @@ fn test_write_failure_exposes_error_state_and_parts() {
     assert_eq!(WriteFailureState::RetryableNotPublished, state);
 
     let error = WriteFailure::new(
-        FsError::new(
-            FsErrorKind::Io,
-            FsOperation::CommitWriter,
-            "commit failed",
-        ),
+        FsError::new(FsErrorKind::Io, FsOperation::CommitWriter, "commit failed"),
         WriteFailureState::NotPublished,
     )
     .into_error();
@@ -125,19 +103,14 @@ fn test_open_writer_preserves_provider_commit_and_abort_states() {
         (WriteFailureState::Published, WriterState::Published),
         (WriteFailureState::Indeterminate, WriterState::Indeterminate),
     ] {
-        let filesystem = crate::handle_support::writer_lifecycle_filesystem(
-            Some(failure_state),
-            None,
-        );
+        let filesystem = crate::handle_support::writer_lifecycle_filesystem(Some(failure_state), None);
         let mut writer = filesystem
             .open_writer(
                 &Path::parse("/target").expect("path should parse"),
                 WriteOptions::default(),
             )
             .expect("writer should open");
-        let error = writer
-            .commit()
-            .expect_err("configured commit failure should propagate");
+        let error = writer.commit().expect_err("configured commit failure should propagate");
         assert_eq!(failure_state, error.state());
         assert_eq!(expected_state, writer.state());
         let outcome = writer.abort().expect("failed writer should allow abort");
@@ -147,9 +120,7 @@ fn test_open_writer_preserves_provider_commit_and_abort_states() {
             WriteAbortOutcome::Indeterminate => WriterState::Indeterminate,
         };
         assert_eq!(expected_after_abort, writer.state());
-        let repeated = writer
-            .abort()
-            .expect_err("completed abort must reject a second abort");
+        let repeated = writer.abort().expect_err("completed abort must reject a second abort");
         assert_eq!(FsErrorKind::InvalidState, repeated.kind());
     }
 }
@@ -162,19 +133,14 @@ fn test_open_writer_abort_failure_tracks_certainty() {
         (FsErrorKind::Io, WriterState::Open),
         (FsErrorKind::Indeterminate, WriterState::Indeterminate),
     ] {
-        let filesystem = crate::handle_support::writer_lifecycle_filesystem(
-            None,
-            Some(kind),
-        );
+        let filesystem = crate::handle_support::writer_lifecycle_filesystem(None, Some(kind));
         let mut writer = filesystem
             .open_writer(
                 &Path::parse("/target").expect("path should parse"),
                 WriteOptions::default(),
             )
             .expect("writer should open");
-        let error = writer
-            .abort()
-            .expect_err("configured abort failure should propagate");
+        let error = writer.abort().expect_err("configured abort failure should propagate");
         assert_eq!(kind, error.kind());
         assert_eq!(expected_state, writer.state());
     }
@@ -184,13 +150,11 @@ fn test_open_writer_abort_failure_tracks_certainty() {
 /// publication after the writer has reached the published state.
 #[test]
 fn test_open_writer_rejects_non_atomic_required_commit_outcome() {
-    let filesystem =
-        crate::handle_support::non_atomic_temp_directory_filesystem();
+    let filesystem = crate::handle_support::non_atomic_temp_directory_filesystem();
     let mut writer = filesystem
         .open_writer(
             &Path::parse("/target").expect("path should parse"),
-            WriteOptions::default()
-                .with_atomicity(AtomicityRequirement::Required),
+            WriteOptions::default().with_atomicity(AtomicityRequirement::Required),
         )
         .expect("writer should open with advertised atomic capability");
     let error = writer

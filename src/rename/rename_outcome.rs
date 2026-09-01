@@ -43,12 +43,7 @@ impl RenameOutcome {
     /// A rename outcome without diagnostics.
     #[inline]
     #[must_use]
-    pub fn new(
-        source: Path,
-        target: Path,
-        atomicity: AchievedAtomicity,
-        method: PublicationMethod,
-    ) -> Self {
+    pub fn new(source: Path, target: Path, atomicity: AchievedAtomicity, method: PublicationMethod) -> Self {
         Self {
             atomicity,
             method,

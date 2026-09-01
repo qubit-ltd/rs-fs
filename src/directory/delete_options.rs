@@ -78,21 +78,14 @@ impl DeleteOptions {
     ///
     /// Returns [`FsErrorKind::RequirementNotMet`] with the exact missing
     /// recursive or conditional-delete capability.
-    pub fn validate_against(
-        &self,
-        capabilities: FileSystemCapabilities,
-    ) -> Result<(), FsError> {
-        if self.recursive()
-            && !capabilities.supports(FileSystemCapability::RecursiveDelete)
-        {
+    pub fn validate_against(&self, capabilities: FileSystemCapabilities) -> Result<(), FsError> {
+        if self.recursive() && !capabilities.supports(FileSystemCapability::RecursiveDelete) {
             return Err(missing_requirement(
                 FileSystemCapability::RecursiveDelete,
                 "recursive deletion is required but not supported",
             ));
         }
-        if self.if_match().is_some()
-            && !capabilities.supports(FileSystemCapability::ConditionalDelete)
-        {
+        if self.if_match().is_some() && !capabilities.supports(FileSystemCapability::ConditionalDelete) {
             return Err(missing_requirement(
                 FileSystemCapability::ConditionalDelete,
                 "conditional deletion is required but not supported",
@@ -103,10 +96,6 @@ impl DeleteOptions {
 }
 
 /// Builds a typed unmet delete requirement.
-fn missing_requirement(
-    capability: FileSystemCapability,
-    message: &str,
-) -> FsError {
-    FsError::new(FsErrorKind::RequirementNotMet, FsOperation::Delete, message)
-        .with_required_capability(capability)
+fn missing_requirement(capability: FileSystemCapability, message: &str) -> FsError {
+    FsError::new(FsErrorKind::RequirementNotMet, FsOperation::Delete, message).with_required_capability(capability)
 }

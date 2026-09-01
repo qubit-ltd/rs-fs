@@ -28,10 +28,7 @@ impl ResolvedCopyOptions {
     /// - `options`: Validated caller options after normalization.
     /// - `symlink_policy`: Effective provider policy for this request.
     #[inline]
-    pub(crate) const fn new(
-        options: CopyOptions,
-        symlink_policy: SymlinkPolicy,
-    ) -> Self {
+    pub(crate) const fn new(options: CopyOptions, symlink_policy: SymlinkPolicy) -> Self {
         Self {
             options,
             symlink_policy,

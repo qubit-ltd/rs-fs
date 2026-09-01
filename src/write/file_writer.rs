@@ -78,9 +78,8 @@ impl FileWriter {
             abort_completed: false,
             atomicity,
             provider: provider.into(),
-            write_budget: max_write_bytes.map(|maximum| {
-                FacadeCore::byte_budget(FileSystemResource::WriteBytes, maximum)
-            }),
+            write_budget: max_write_bytes
+                .map(|maximum| FacadeCore::byte_budget(FileSystemResource::WriteBytes, maximum)),
             written_bytes: 0,
         }
     }
@@ -138,8 +137,7 @@ impl FileWriter {
         match outcome {
             Ok(outcome) => {
                 self.state = WriterState::Committed;
-                if self.atomicity == AtomicityRequirement::Required
-                    && outcome.atomicity() != AchievedAtomicity::Atomic
+                if self.atomicity == AtomicityRequirement::Required && outcome.atomicity() != AchievedAtomicity::Atomic
                 {
                     self.state = WriterState::Published;
                     return Err(WriteFailure::new(
@@ -148,7 +146,8 @@ impl FileWriter {
                             FsOperation::CommitWriter,
                             "provider reported non-atomic success for an atomic-required write",
                         )
-                        .with_path(self.info.path().clone()).with_provider(&self.provider),
+                        .with_path(self.info.path().clone())
+                        .with_provider(&self.provider),
                         WriteFailureState::Published,
                     ));
                 }
@@ -162,7 +161,8 @@ impl FileWriter {
                             FsOperation::CommitWriter,
                             "provider reported a byte count different from the bytes accepted by the writer",
                         )
-                            .with_path(self.info.path().clone()).with_provider(&self.provider),
+                        .with_path(self.info.path().clone())
+                        .with_provider(&self.provider),
                         WriteFailureState::Published,
                     ));
                 }
@@ -170,16 +170,10 @@ impl FileWriter {
             }
             Err(failure) => {
                 self.state = match failure.state() {
-                    WriteFailureState::RetryableNotPublished => {
-                        WriterState::Open
-                    }
-                    WriteFailureState::NotPublished => {
-                        WriterState::NotPublished
-                    }
+                    WriteFailureState::RetryableNotPublished => WriterState::Open,
+                    WriteFailureState::NotPublished => WriterState::NotPublished,
                     WriteFailureState::Published => WriterState::Published,
-                    WriteFailureState::Indeterminate => {
-                        WriterState::Indeterminate
-                    }
+                    WriteFailureState::Indeterminate => WriterState::Indeterminate,
                 };
                 let (error, state) = failure.into_parts();
                 Err(WriteFailure::new(
@@ -207,10 +201,7 @@ impl FileWriter {
         if self.abort_completed
             || !matches!(
                 self.state,
-                WriterState::Open
-                    | WriterState::NotPublished
-                    | WriterState::Published
-                    | WriterState::Indeterminate
+                WriterState::Open | WriterState::NotPublished | WriterState::Published | WriterState::Indeterminate
             )
         {
             return Err(self.invalid_state(
@@ -224,9 +215,7 @@ impl FileWriter {
                 self.state = match outcome {
                     WriteAbortOutcome::NotPublished => WriterState::Aborted,
                     WriteAbortOutcome::Published => WriterState::Published,
-                    WriteAbortOutcome::Indeterminate => {
-                        WriterState::Indeterminate
-                    }
+                    WriteAbortOutcome::Indeterminate => WriterState::Indeterminate,
                 };
                 Ok(outcome)
             }
@@ -250,22 +239,14 @@ impl FileWriter {
     fn closed_io_error(&self) -> IoError {
         IoError::new(
             IoErrorKind::BrokenPipe,
-            self.invalid_state(
-                FsOperation::Write,
-                "writer no longer accepts bytes",
-            ),
+            self.invalid_state(FsOperation::Write, "writer no longer accepts bytes"),
         )
     }
 
     /// Checks whether a provider write can fit in the session budget.
     fn check_write_limit(&self, count: usize) -> IoResult<u64> {
-        let count = FacadeCore::quantity_from_usize(
-            count,
-            FsOperation::Write,
-            self.info.path(),
-            &self.provider,
-        )
-        .map_err(FsError::into_io_error)?;
+        let count = FacadeCore::quantity_from_usize(count, FsOperation::Write, self.info.path(), &self.provider)
+            .map_err(FsError::into_io_error)?;
         if let Some(budget) = &self.write_budget
             && let Err(error) = budget.check_available(count)
         {
@@ -287,13 +268,8 @@ impl FileWriter {
     /// Returns an I/O error when the native byte count or accumulated total
     /// cannot be represented by the filesystem API's `u64` byte counters.
     fn record_written_bytes(&mut self, count: usize) -> IoResult<()> {
-        let count = FacadeCore::quantity_from_usize(
-            count,
-            FsOperation::Write,
-            self.info.path(),
-            &self.provider,
-        )
-        .map_err(FsError::into_io_error)?;
+        let count = FacadeCore::quantity_from_usize(count, FsOperation::Write, self.info.path(), &self.provider)
+            .map_err(FsError::into_io_error)?;
         if let Some(error) = self
             .write_budget
             .as_mut()
@@ -329,16 +305,10 @@ impl FileWriter {
     }
 
     /// Adds only missing facade context to a provider lifecycle error.
-    fn contextual_error(
-        &self,
-        error: FsError,
-        operation: FsOperation,
-    ) -> FsError {
-        error.with_operation(operation).with_missing_context(
-            self.info.path(),
-            None,
-            &self.provider,
-        )
+    fn contextual_error(&self, error: FsError, operation: FsOperation) -> FsError {
+        error
+            .with_operation(operation)
+            .with_missing_context(self.info.path(), None, &self.provider)
     }
 }
 
@@ -350,12 +320,7 @@ impl Output for FileWriter {
         self.session.is_buffered()
     }
 
-    unsafe fn write_unchecked(
-        &mut self,
-        input: &[u8],
-        index: usize,
-        count: usize,
-    ) -> IoResult<usize> {
+    unsafe fn write_unchecked(&mut self, input: &[u8], index: usize, count: usize) -> IoResult<usize> {
         if self.state != WriterState::Open {
             return Err(self.closed_io_error());
         }
@@ -407,9 +372,7 @@ impl Drop for FileWriter {
         if !self.abort_completed
             && matches!(
                 self.state,
-                WriterState::Open
-                    | WriterState::NotPublished
-                    | WriterState::Published
+                WriterState::Open | WriterState::NotPublished | WriterState::Published
             )
         {
             let _ = self.session.abort();

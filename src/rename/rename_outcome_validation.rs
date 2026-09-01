@@ -37,9 +37,7 @@ pub(crate) fn validate_rename_outcome(
             state: RenameFailureState::Renamed,
         });
     }
-    if options.durability() == DurabilityRequirement::Required
-        && !outcome.durable()
-    {
+    if options.durability() == DurabilityRequirement::Required && !outcome.durable() {
         return Some(RenameOutcomeValidationError {
             message: "provider reported non-durable success for a durability-required rename",
             state: RenameFailureState::Renamed,

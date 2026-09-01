@@ -35,12 +35,7 @@ impl<'a> ReadOperation<'a> {
     }
 
     /// Reads one file into memory up to `max_bytes` after opening a reader.
-    pub(crate) fn read_all(
-        &self,
-        path: &Path,
-        options: ReadOptions,
-        max_bytes: usize,
-    ) -> FsResult<Vec<u8>> {
+    pub(crate) fn read_all(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
         let mut reader = self.filesystem.open_reader(path, options)?;
         let mut result = Vec::new();
         let maximum = FacadeCore::quantity_from_usize(
@@ -49,8 +44,7 @@ impl<'a> ReadOperation<'a> {
             path,
             self.filesystem.properties().info().provider_id(),
         )?;
-        let mut read_budget =
-            FacadeCore::byte_budget(FileSystemResource::ReadBytes, maximum);
+        let mut read_budget = FacadeCore::byte_budget(FileSystemResource::ReadBytes, maximum);
         if let Some(metadata) = reader.info().metadata()
             && let Some(length) = metadata.len()
         {
@@ -72,24 +66,19 @@ impl<'a> ReadOperation<'a> {
                         error,
                     )
                     .with_path(path.clone())
-                    .with_provider(
-                        self.filesystem.properties().info().provider_id(),
-                    )
+                    .with_provider(self.filesystem.properties().info().provider_id())
                 })?;
             }
         }
         let mut buffer = [0_u8; 8192];
         loop {
             let remaining = read_budget.remaining();
-            let read_len = usize::try_from(remaining.saturating_add(1))
-                .map_or(buffer.len(), |value| value.min(buffer.len()));
-            let read = Input::read(&mut reader, &mut buffer[..read_len])
-                .map_err(|error| {
-                    FsError::from_stream_io(error, FsOperation::Read, path)
-                        .with_provider(
-                            self.filesystem.properties().info().provider_id(),
-                        )
-                })?;
+            let read_len =
+                usize::try_from(remaining.saturating_add(1)).map_or(buffer.len(), |value| value.min(buffer.len()));
+            let read = Input::read(&mut reader, &mut buffer[..read_len]).map_err(|error| {
+                FsError::from_stream_io(error, FsOperation::Read, path)
+                    .with_provider(self.filesystem.properties().info().provider_id())
+            })?;
             if read == 0 {
                 return Ok(result);
             }
@@ -108,37 +97,24 @@ impl<'a> ReadOperation<'a> {
                     "read exceeds maximum byte count",
                 ));
             }
-            result.extend_from_slice(
-                &buffer[..usize::try_from(read)
-                    .expect("read count originated as usize")],
-            );
+            result.extend_from_slice(&buffer[..usize::try_from(read).expect("read count originated as usize")]);
         }
     }
 
     /// Reads at most `max_bytes` from a file without requiring a complete read.
-    pub(crate) fn read_prefix(
-        &self,
-        path: &Path,
-        options: ReadOptions,
-        max_bytes: usize,
-    ) -> FsResult<Vec<u8>> {
+    pub(crate) fn read_prefix(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
         let mut reader = self.filesystem.open_reader(path, options)?;
         if max_bytes == 0 {
             return Ok(Vec::new());
         }
-        let mut result =
-            Vec::with_capacity(max_bytes.min(FacadeCore::PREFIX_BUFFER_SIZE));
+        let mut result = Vec::with_capacity(max_bytes.min(FacadeCore::PREFIX_BUFFER_SIZE));
         let mut buffer = [0_u8; FacadeCore::PREFIX_BUFFER_SIZE];
         while result.len() < max_bytes {
-            let read_len =
-                FacadeCore::next_prefix_read_len(result.len(), max_bytes);
-            let read = Input::read(&mut reader, &mut buffer[..read_len])
-                .map_err(|error| {
-                    FsError::from_stream_io(error, FsOperation::Read, path)
-                        .with_provider(
-                            self.filesystem.properties().info().provider_id(),
-                        )
-                })?;
+            let read_len = FacadeCore::next_prefix_read_len(result.len(), max_bytes);
+            let read = Input::read(&mut reader, &mut buffer[..read_len]).map_err(|error| {
+                FsError::from_stream_io(error, FsOperation::Read, path)
+                    .with_provider(self.filesystem.properties().info().provider_id())
+            })?;
             if read == 0 {
                 break;
             }

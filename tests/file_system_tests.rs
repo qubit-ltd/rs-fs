@@ -92,11 +92,7 @@ impl FileSystemSpi for CountingSpi {
     fn stat(&self, request: StatRequest<'_>) -> FsResult<StatResponse> {
         self.stat_calls.fetch_add(1, Ordering::SeqCst);
         if let Some(kind) = self.stat_error {
-            return Err(FsError::new(
-                kind,
-                FsOperation::Stat,
-                "injected stat error",
-            ));
+            return Err(FsError::new(kind, FsOperation::Stat, "injected stat error"));
         }
         let path = if self.wrong_stat_path {
             Path::parse("/wrong").expect("test path should parse")
@@ -114,10 +110,7 @@ impl FileSystemSpi for CountingSpi {
     fn open_writer(&self, _: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
         Err(Self::unsupported())
     }
-    fn create_directory(
-        &self,
-        _: CreateDirectoryRequest<'_>,
-    ) -> FsResult<CreateDirectoryOutcome> {
+    fn create_directory(&self, _: CreateDirectoryRequest<'_>) -> FsResult<CreateDirectoryOutcome> {
         if self.direct_error {
             Err(Self::unsupported())
         } else {
@@ -131,20 +124,14 @@ impl FileSystemSpi for CountingSpi {
             Ok(DeleteOutcome::new(self.unexpected_delete))
         }
     }
-    fn delete_directory(
-        &self,
-        _: DeleteDirectoryRequest<'_>,
-    ) -> FsResult<DeleteOutcome> {
+    fn delete_directory(&self, _: DeleteDirectoryRequest<'_>) -> FsResult<DeleteOutcome> {
         if self.direct_error {
             Err(Self::unsupported())
         } else {
             Ok(DeleteOutcome::new(self.unexpected_delete))
         }
     }
-    fn rename(
-        &self,
-        request: RenameRequest<'_>,
-    ) -> Result<RenameOutcome, SpiRenameFailure> {
+    fn rename(&self, request: RenameRequest<'_>) -> Result<RenameOutcome, SpiRenameFailure> {
         if self.direct_error {
             Err(SpiRenameFailure::new(
                 Self::unsupported(),
@@ -159,16 +146,10 @@ impl FileSystemSpi for CountingSpi {
             ))
         }
     }
-    fn create_temp_file(
-        &self,
-        _: CreateTempFileRequest,
-    ) -> FsResult<OpenedTempFile> {
+    fn create_temp_file(&self, _: CreateTempFileRequest) -> FsResult<OpenedTempFile> {
         Err(Self::unsupported())
     }
-    fn create_temp_directory(
-        &self,
-        _: CreateTempDirectoryRequest,
-    ) -> FsResult<OpenedTempDirectory> {
+    fn create_temp_directory(&self, _: CreateTempDirectoryRequest) -> FsResult<OpenedTempDirectory> {
         Err(Self::unsupported())
     }
 }
@@ -197,8 +178,7 @@ impl FileSystemSpi for DefaultSyncSpi {
 fn default_sync_properties() -> ProviderProperties {
     ProviderProperties::new(
         FileSystemInfo::new(
-            FileSystemId::new("default-sync")
-                .expect("test provider id should be valid"),
+            FileSystemId::new("default-sync").expect("test provider id should be valid"),
             "default-sync",
             PathSemantics::Hierarchical,
         ),
@@ -306,8 +286,7 @@ fn test_stat_rejects_path_with_different_semantics_before_spi_call() {
         unexpected_delete: false,
     })
     .expect("facade should construct");
-    let hierarchical =
-        Path::parse("object").expect("hierarchical path should parse");
+    let hierarchical = Path::parse("object").expect("hierarchical path should parse");
     let error = filesystem
         .stat(&hierarchical)
         .expect_err("different path semantics must fail before SPI");
@@ -393,9 +372,7 @@ fn test_exists_maps_not_found_only_and_contextualizes_other_errors() {
         unexpected_delete: false,
     })
     .expect("facade should construct");
-    let error = failed
-        .exists(&path)
-        .expect_err("non-not-found errors must propagate");
+    let error = failed.exists(&path).expect_err("non-not-found errors must propagate");
     assert_eq!(FsErrorKind::Io, error.kind());
     assert_eq!(FsOperation::Exists, error.operation());
 }
@@ -648,9 +625,7 @@ fn test_sync_spi_default_operations_report_unsupported() {
     assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
     assert_eq!(FsOperation::OpenWriter, error.operation());
 
-    let error = match filesystem
-        .create_directory(&path, CreateDirectoryOptions::default())
-    {
+    let error = match filesystem.create_directory(&path, CreateDirectoryOptions::default()) {
         Ok(_) => {
             panic!("default directory implementation must reject the request")
         }
@@ -666,22 +641,19 @@ fn test_sync_spi_default_operations_report_unsupported() {
     assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
     assert_eq!(FsOperation::Delete, error.operation());
 
-    let error = match filesystem
-        .delete_directory(&path, DeleteOptions::default())
-    {
+    let error = match filesystem.delete_directory(&path, DeleteOptions::default()) {
         Ok(_) => panic!("default directory deletion must reject the request"),
         Err(error) => error,
     };
     assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
     assert_eq!(FsOperation::Delete, error.operation());
 
-    let error =
-        match filesystem.rename(&path, &target, RenameOptions::default()) {
-            Ok(_) => {
-                panic!("default rename implementation must reject the request")
-            }
-            Err(error) => error,
-        };
+    let error = match filesystem.rename(&path, &target, RenameOptions::default()) {
+        Ok(_) => {
+            panic!("default rename implementation must reject the request")
+        }
+        Err(error) => error,
+    };
     assert_eq!(FsErrorKind::UnsupportedOperation, error.error().kind());
     assert_eq!(FsOperation::Rename, error.error().operation());
 
@@ -692,18 +664,14 @@ fn test_sync_spi_default_operations_report_unsupported() {
     assert_eq!(FsOperation::Copy, error.error().operation());
 
     let error = match filesystem.create_temp_file(TempOptions::default()) {
-        Ok(_) => panic!(
-            "default temporary-file implementation must reject the request"
-        ),
+        Ok(_) => panic!("default temporary-file implementation must reject the request"),
         Err(error) => error,
     };
     assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
     assert_eq!(FsOperation::CreateTemp, error.operation());
 
     let error = match filesystem.create_temp_directory(TempOptions::default()) {
-        Ok(_) => panic!(
-            "default temporary-directory implementation must reject the request"
-        ),
+        Ok(_) => panic!("default temporary-directory implementation must reject the request"),
         Err(error) => error,
     };
     assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());

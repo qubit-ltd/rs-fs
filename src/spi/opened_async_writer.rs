@@ -33,10 +33,7 @@ impl OpenedAsyncWriter {
     /// An opened-writer envelope for facade validation.
     #[inline]
     #[must_use]
-    pub fn new(
-        info: OpenedFileInfo,
-        session: Box<dyn AsyncFileWriteSession>,
-    ) -> Self {
+    pub fn new(info: OpenedFileInfo, session: Box<dyn AsyncFileWriteSession>) -> Self {
         Self { info, session }
     }
 
@@ -67,12 +64,6 @@ impl OpenedAsyncWriter {
         provider: &str,
         max_write_bytes: Option<u64>,
     ) -> AsyncFileWriter {
-        AsyncFileWriter::new(
-            self.info,
-            self.session,
-            atomicity,
-            provider,
-            max_write_bytes,
-        )
+        AsyncFileWriter::new(self.info, self.session, atomicity, provider, max_write_bytes)
     }
 }

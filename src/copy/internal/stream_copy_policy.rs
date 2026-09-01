@@ -26,12 +26,8 @@ pub(crate) fn fallback_options_supported(options: &CopyOptions) -> bool {
         && options.server_side() != ServerSidePreference::Require
         && !options.create_parent()
         && options.durability() != DurabilityRequirement::Required
-        && !(options.conflict() == CopyConflictPolicy::Skip
-            && options.atomicity() == AtomicityRequirement::Required)
-        && matches!(
-            options.conflict(),
-            CopyConflictPolicy::Fail | CopyConflictPolicy::Skip
-        )
+        && !(options.conflict() == CopyConflictPolicy::Skip && options.atomicity() == AtomicityRequirement::Required)
+        && matches!(options.conflict(), CopyConflictPolicy::Fail | CopyConflictPolicy::Skip)
 }
 
 /// Validates stream-copy read/write size constraints using the provided limits.
