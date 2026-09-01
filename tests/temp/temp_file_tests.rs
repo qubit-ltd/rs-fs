@@ -212,12 +212,16 @@ fn test_temp_file_lifecycle_errors_preserve_recovery_state() {
             .create_temp_file(TempOptions::default())
             .expect("temporary file should open");
 
-        let result = if operation == "keep" {
-            temporary.keep()
+        let error = if operation == "keep" {
+            temporary
+                .keep()
+                .expect_err("lifecycle operation should surface provider error")
+                .into_error()
         } else {
-            temporary.cleanup()
+            temporary
+                .cleanup()
+                .expect_err("lifecycle operation should surface provider error")
         };
-        let error = result.expect_err("lifecycle operation should surface provider error");
         assert_eq!(
             if operation == "keep" {
                 FsOperation::KeepTemp
