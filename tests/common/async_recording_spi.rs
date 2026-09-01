@@ -719,18 +719,21 @@ impl AsyncTempResourceSpi for RecordingTempSession {
             }
         })
     }
-    fn keep<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<()>> {
+    fn keep<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<PersistOutcome, SpiPersistFailure>> {
         self.as_ref().get_ref().record("keep");
         let keep_failure = self.as_ref().get_ref().keep_failure;
         Box::pin(async move {
             if keep_failure {
-                Err(FsError::new(
-                    FsErrorKind::Io,
-                    FsOperation::KeepTemp,
-                    "injected keep failure",
+                Err(SpiPersistFailure::new(
+                    FsError::new(FsErrorKind::Io, FsOperation::KeepTemp, "injected keep failure"),
+                    PersistFailureState::NotPublished,
                 ))
             } else {
-                Ok(())
+                Ok(PersistOutcome::new(
+                    Path::parse("/kept-resource").expect("generated path should parse"),
+                    AchievedAtomicity::Atomic,
+                    PublicationMethod::Direct,
+                ))
             }
         })
     }

@@ -201,8 +201,10 @@ use a typed failure state to choose a safe next action.
 
 Temporary files and directories are facade-owned handles. `TempFile`,
 `TempDirectory`, and their async counterparts expose explicit `cleanup`, `keep`,
-and `persist` operations. Their states remain meaningful after recoverable
-failure. Do not rely on `Drop` for an I/O operation whose completion matters.
+and `persist` operations. `keep` and `persist` return a `PersistOutcome` with
+the confirmed target, achieved atomicity, method, and cleanup state. Their
+states remain meaningful after recoverable failure. Do not rely on `Drop` for
+an I/O operation whose completion matters.
 
 ## Troubleshooting
 
