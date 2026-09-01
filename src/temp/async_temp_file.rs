@@ -117,17 +117,50 @@ impl AsyncTempFile {
         })
     }
 
-    /// Asynchronously transfers cleanup responsibility to the caller.
+    /// Asynchronously publishes this temporary resource to a generated target.
     ///
     /// # Returns
-    /// A future resolving after the provider confirms ownership transfer.
+    /// A future resolving to the provider's confirmed publication outcome.
     ///
     /// # Errors
     /// Resolves to an invalid-state error when the resource is no longer owned,
     /// or to the provider ownership-transfer failure.
     #[inline]
-    pub fn keep(&mut self) -> SpiFuture<'_, FsResult<()>> {
-        self.lifecycle("cannot be kept now", FsOperation::KeepTemp, |session| session.keep())
+    pub fn keep(&mut self) -> SpiFuture<'_, Result<PersistOutcome, PersistFailure>> {
+        if self.state != TempResourceState::Owned {
+            let error = self.invalid_state(FsOperation::KeepTemp, "cannot be kept now");
+            return Box::pin(async move { Err(PersistFailure::new(error, PersistFailureState::NotPublished)) });
+        }
+        Box::pin(async move {
+            self.state = TempResourceState::Indeterminate;
+            match self.session.as_mut().keep().await {
+                Ok(outcome) => {
+                    if let Err(error) = self.file_system.validate_temp_keep_target(&self.path, outcome.target()) {
+                        return Err(PersistFailure::new(error, PersistFailureState::Indeterminate));
+                    }
+                    self.path = outcome.target().clone();
+                    self.state = TempResourceState::Kept;
+                    Ok(outcome)
+                }
+                Err(failure) => {
+                    let (error, state) = failure.into_parts();
+                    self.state = match state {
+                        PersistFailureState::NotPublished => TempResourceState::Owned,
+                        PersistFailureState::PublishedSourceRetained => TempResourceState::CleanupRequired,
+                        PersistFailureState::Indeterminate => TempResourceState::Indeterminate,
+                    };
+                    let target = self.path.clone();
+                    Err(PersistFailure::new(
+                        error.with_operation(FsOperation::KeepTemp).with_missing_context(
+                            &self.path,
+                            Some(&target),
+                            self.file_system.properties().info().provider_id(),
+                        ),
+                        state,
+                    ))
+                }
+            }
+        })
     }
 
     /// Asynchronously persists this resource to a validated destination.

@@ -37,7 +37,8 @@ qubit-fs = { version = "0.2", features = ["async"] }
 - Default URI parsing uses the fixed standard redaction policy; pass an explicit
   policy to `Uri::parse_with_policy` or `ConnectionUri::parse_with_policy` when
   application-specific query names must be protected.
-- Copy, rename, writes, and temporary-resource publication preserve typed
+- Copy, rename, writes, and temporary-resource publication (including `keep`)
+  preserve typed
   recovery facts. Inspect the relevant failure state before retrying, cleaning
   up, or reconciling a visible target.
 - `exists` returns `false` only when `stat` reports `NotFound`; permission,

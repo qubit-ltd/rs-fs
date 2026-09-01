@@ -90,16 +90,16 @@ impl AsyncTempDirectory {
         self.0.cleanup()
     }
 
-    /// Asynchronously transfers cleanup responsibility to the caller.
+    /// Asynchronously publishes this directory to a generated target.
     ///
     /// # Returns
-    /// A future resolving after the provider confirms ownership transfer.
+    /// A future resolving to the confirmed publication outcome.
     ///
     /// # Errors
     /// Resolves to an invalid-state error when the directory is no longer
     /// owned, or to the provider ownership-transfer failure.
     #[inline(always)]
-    pub fn keep(&mut self) -> SpiFuture<'_, FsResult<()>> {
+    pub fn keep(&mut self) -> SpiFuture<'_, Result<PersistOutcome, PersistFailure>> {
         self.0.keep()
     }
 

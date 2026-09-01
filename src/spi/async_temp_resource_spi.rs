@@ -42,19 +42,19 @@ pub trait AsyncTempResourceSpi: Send {
     /// error when the provider cannot determine whether cleanup completed.
     fn cleanup<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<()>>;
 
-    /// Asynchronously releases caller cleanup responsibility.
+    /// Asynchronously publishes this resource to a provider-generated target.
     ///
     /// The returned future performs provider I/O when polled. Dropping it
     /// before completion does not transfer cleanup responsibility.
     ///
     /// # Returns
-    /// A runtime-neutral future resolving after ownership transfer is
-    /// confirmed.
+    /// A runtime-neutral future resolving to the confirmed publication
+    /// outcome.
     ///
     /// # Errors
-    /// Resolves to the provider failure when cleanup responsibility cannot be
-    /// transferred.
-    fn keep<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<()>>;
+    /// Resolves to the provider-confirmed failure and recovery state when
+    /// publication cannot be completed.
+    fn keep<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<PersistOutcome, SpiPersistFailure>>;
 
     /// Asynchronously persists this resource to a validated target.
     ///

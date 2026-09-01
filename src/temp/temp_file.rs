@@ -106,24 +106,26 @@ impl TempFile {
                 self.state = TempResourceState::Persisted;
                 Ok(outcome)
             }
-            Err(failure) => Err(self.record_persist_failure(failure, target)),
+            Err(failure) => Err(self.record_persist_failure(failure, target, FsOperation::PersistTemp)),
         }
     }
-    /// Releases automatic cleanup responsibility to the caller.
-    pub fn keep(&mut self) -> FsResult<()> {
-        self.ensure_owned(FsOperation::KeepTemp)?;
-        let previous_state = self.state;
-        self.session
-            .keep()
-            .map(|()| self.state = TempResourceState::Kept)
-            .map_err(|error| self.record_lifecycle_error(error, FsOperation::KeepTemp))
-            .inspect_err(|error| {
-                if error.kind() == FsErrorKind::Indeterminate {
+    /// Publishes this temporary file to the provider-generated target.
+    pub fn keep(&mut self) -> Result<PersistOutcome, PersistFailure> {
+        if let Err(error) = self.ensure_owned(FsOperation::KeepTemp) {
+            return Err(PersistFailure::new(error, PersistFailureState::NotPublished));
+        }
+        match self.session.keep() {
+            Ok(outcome) => {
+                if let Err(error) = self.filesystem.validate_temp_keep_target(&self.path, outcome.target()) {
                     self.state = TempResourceState::Indeterminate;
-                } else {
-                    self.state = previous_state;
+                    return Err(PersistFailure::new(error, PersistFailureState::Indeterminate));
                 }
-            })
+                self.path = outcome.target().clone();
+                self.state = TempResourceState::Kept;
+                Ok(outcome)
+            }
+            Err(failure) => Err(self.record_persist_failure(failure, &self.path.clone(), FsOperation::KeepTemp)),
+        }
     }
     /// Cleans the source and releases the session responsibility.
     pub fn cleanup(&mut self) -> FsResult<()> {
@@ -139,7 +141,12 @@ impl TempFile {
             .map_err(|error| self.record_lifecycle_error(error, FsOperation::CleanupTemp))
     }
     /// Records provider partial persistence facts in facade state and error.
-    fn record_persist_failure(&mut self, failure: SpiPersistFailure, target: &Path) -> PersistFailure {
+    fn record_persist_failure(
+        &mut self,
+        failure: SpiPersistFailure,
+        target: &Path,
+        operation: FsOperation,
+    ) -> PersistFailure {
         let (error, state) = failure.into_parts();
         self.state = match state {
             PersistFailureState::NotPublished => TempResourceState::Owned,
@@ -147,7 +154,7 @@ impl TempFile {
             PersistFailureState::Indeterminate => TempResourceState::Indeterminate,
         };
         PersistFailure::new(
-            error.with_operation(FsOperation::PersistTemp).with_missing_context(
+            error.with_operation(operation).with_missing_context(
                 &self.path,
                 Some(target),
                 self.filesystem.properties().info().provider_id(),

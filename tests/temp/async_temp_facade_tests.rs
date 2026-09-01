@@ -46,7 +46,7 @@ impl AsyncTempResourceSpi for DefaultTempResource {
     }
 
     /// This test session never transfers cleanup responsibility.
-    fn keep<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<()>> {
+    fn keep<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<PersistOutcome, SpiPersistFailure>> {
         unimplemented!("keep is outside this default-hook test")
     }
 
@@ -265,10 +265,10 @@ fn test_async_temp_lifecycle_failures_preserve_expected_states() {
     });
     let mut file = ready(file_system.create_temp_file(TempOptions::default())).expect("temporary file should open");
     let keep = ready(file.keep()).expect_err("configured keep failure should propagate");
-    assert_eq!(FsErrorKind::Io, keep.kind());
-    assert_eq!(FsOperation::KeepTemp, keep.operation());
-    assert_eq!(Some(&path("/tmp/recording")), keep.path());
-    assert_eq!(Some("async-recording"), keep.provider());
+    assert_eq!(FsErrorKind::Io, keep.error().kind());
+    assert_eq!(FsOperation::KeepTemp, keep.error().operation());
+    assert_eq!(Some(&path("/tmp/recording")), keep.error().path());
+    assert_eq!(Some("async-recording"), keep.error().provider());
     assert_eq!(TempResourceState::Owned, file.state());
 
     let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
