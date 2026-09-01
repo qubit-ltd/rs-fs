@@ -41,9 +41,7 @@ fn test_list_options_reject_invalid_page_size_and_noncanonical_prefix() {
         ListOptions::default().with_prefix(Some("../escape".to_owned())),
         ListOptions::default().with_prefix(Some("nested/../entry".to_owned())),
     ] {
-        let error = options
-            .validate()
-            .expect_err("invalid list option must be rejected");
+        let error = options.validate().expect_err("invalid list option must be rejected");
         assert_eq!(FsErrorKind::InvalidOptions, error.kind());
         assert_eq!(FsOperation::List, error.operation());
     }

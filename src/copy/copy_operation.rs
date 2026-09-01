@@ -81,11 +81,7 @@ impl<'a> CopyOperation<'a> {
                 None,
             )));
         }
-        if self
-            .filesystem
-            .core()
-            .provider_supports(ProviderOperation::TryCopy)
-        {
+        if self.filesystem.core().provider_supports(ProviderOperation::TryCopy) {
             self.execute_provider_attempt()
         } else {
             self.execute_stream_fallback()
@@ -106,14 +102,10 @@ impl<'a> CopyOperation<'a> {
                     .unwrap_or(self.filesystem.properties().symlink_policy()),
             ),
         )) {
-            Ok(CopyAttempt::Completed(outcome)) => {
-                self.verify_completed_copy(outcome)
-            }
+            Ok(CopyAttempt::Completed(outcome)) => self.verify_completed_copy(outcome),
             Err(failure) => {
                 let (error, state, stats) = failure.into_parts();
-                Err(self.contextualize_failure(
-                    self.failure(error, state, stats, None),
-                ))
+                Err(self.contextualize_failure(self.failure(error, state, stats, None)))
             }
             Ok(CopyAttempt::Declined(_)) => self
                 .execute_stream_fallback()
@@ -123,17 +115,10 @@ impl<'a> CopyOperation<'a> {
 
     /// Verifies that provider success honors requested guarantees.
     #[allow(clippy::result_large_err)]
-    fn verify_completed_copy(
-        &self,
-        outcome: CopyOutcome,
-    ) -> Result<CopyOutcome, CopyFailure> {
+    fn verify_completed_copy(&self, outcome: CopyOutcome) -> Result<CopyOutcome, CopyFailure> {
         if let Some(message) = outcome.contract_violation(&self.options) {
             return Err(self.contextualize_failure(self.failure(
-                FsError::new(
-                    FsErrorKind::ProviderContractViolation,
-                    FsOperation::Copy,
-                    message,
-                ),
+                FsError::new(FsErrorKind::ProviderContractViolation, FsOperation::Copy, message),
                 CopyFailureState::Published,
                 *outcome.stats(),
                 None,
@@ -144,12 +129,8 @@ impl<'a> CopyOperation<'a> {
 
     /// Performs no-I/O validation before selecting a copy implementation.
     fn copy_preflight(&self) -> FsResult<()> {
-        self.filesystem
-            .core()
-            .validate_path(self.source, FsOperation::Copy)?;
-        self.filesystem
-            .core()
-            .validate_path(self.target, FsOperation::Copy)?;
+        self.filesystem.core().validate_path(self.source, FsOperation::Copy)?;
+        self.filesystem.core().validate_path(self.target, FsOperation::Copy)?;
         self.options
             .validate_against(self.filesystem.properties().capabilities())
             .map_err(|error| {
@@ -187,34 +168,17 @@ impl<'a> CopyOperation<'a> {
         }
         self.filesystem
             .core()
-            .require(
-                FileSystemCapability::Read,
-                FsOperation::Copy,
-                Some(self.source),
-            )
+            .require(FileSystemCapability::Read, FsOperation::Copy, Some(self.source))
             .and_then(|_| {
-                self.filesystem.core().require(
-                    FileSystemCapability::Write,
-                    FsOperation::Copy,
-                    Some(self.target),
-                )
+                self.filesystem
+                    .core()
+                    .require(FileSystemCapability::Write, FsOperation::Copy, Some(self.target))
             })
-            .map_err(|error| {
-                self.failure(
-                    error,
-                    CopyFailureState::Unchanged,
-                    CopyStats::default(),
-                    None,
-                )
-            })?;
-        let metadata = self.filesystem.stat(self.source).map_err(|error| {
-            self.failure(
-                error,
-                CopyFailureState::Unchanged,
-                CopyStats::default(),
-                None,
-            )
-        })?;
+            .map_err(|error| self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None))?;
+        let metadata = self
+            .filesystem
+            .stat(self.source)
+            .map_err(|error| self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None))?;
         if !is_file_kind_supported(metadata.kind().clone()) {
             return Err(self.failure(
                 FsError::new(
@@ -236,52 +200,33 @@ impl<'a> CopyOperation<'a> {
                 length,
             )
         {
-            return Err(self.failure(
-                error,
-                CopyFailureState::Unchanged,
-                CopyStats::default(),
-                None,
-            ));
+            return Err(self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None));
         }
         let mut reader = self
             .filesystem
             .open_reader(self.source, ReadOptions::default())
-            .map_err(|error| {
-                self.failure(
-                    error,
-                    CopyFailureState::Unchanged,
-                    CopyStats::default(),
-                    None,
-                )
-            })?;
+            .map_err(|error| self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None))?;
         let writer_options = WriteOptions::default()
             .with_disposition(WriteDisposition::CreateNew)
             .with_atomicity(self.options.atomicity());
-        let mut writer =
-            match self.filesystem.open_writer(self.target, writer_options) {
-                Ok(writer) => writer,
-                Err(error)
-                    if error.kind() == FsErrorKind::AlreadyExists
-                        && self.options.conflict()
-                            == CopyConflictPolicy::Skip =>
-                {
-                    return Ok(CopyOutcome::streamed_fallback(
-                        CopyStats {
-                            skipped: 1,
-                            ..CopyStats::default()
-                        },
-                        AchievedAtomicity::NonAtomic,
-                    ));
-                }
-                Err(error) => {
-                    return Err(self.failure(
-                        error,
-                        CopyFailureState::Unchanged,
-                        CopyStats::default(),
-                        None,
-                    ));
-                }
-            };
+        let mut writer = match self.filesystem.open_writer(self.target, writer_options) {
+            Ok(writer) => writer,
+            Err(error)
+                if error.kind() == FsErrorKind::AlreadyExists
+                    && self.options.conflict() == CopyConflictPolicy::Skip =>
+            {
+                return Ok(CopyOutcome::streamed_fallback(
+                    CopyStats {
+                        skipped: 1,
+                        ..CopyStats::default()
+                    },
+                    AchievedAtomicity::NonAtomic,
+                ));
+            }
+            Err(error) => {
+                return Err(self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None));
+            }
+        };
         let mut bytes = 0_u64;
         let mut buffer = [0_u8; 8192];
         loop {
@@ -299,9 +244,7 @@ impl<'a> CopyOperation<'a> {
             if read == 0 {
                 break;
             }
-            if let Err(error) =
-                Output::write_fully(&mut writer, &buffer[..read])
-            {
+            if let Err(error) = Output::write_fully(&mut writer, &buffer[..read]) {
                 return Err(self.failure(
                     self.io_error(self.target, FsOperation::Write, error),
                     from_writer_state(writer.state()),
@@ -380,12 +323,7 @@ impl<'a> CopyOperation<'a> {
         stats: CopyStats,
         writer: Option<FileWriter>,
     ) -> CopyFailure {
-        CopyFailure::new(
-            error.with_operation(FsOperation::Copy),
-            state,
-            stats,
-            writer,
-        )
+        CopyFailure::new(error.with_operation(FsOperation::Copy), state, stats, writer)
     }
 
     /// Adds source, target, and provider facts to a copy failure.
@@ -404,23 +342,14 @@ impl<'a> CopyOperation<'a> {
     }
 
     /// Creates a contextual stream I/O error.
-    fn io_error(
-        &self,
-        path: &Path,
-        operation: FsOperation,
-        error: std::io::Error,
-    ) -> FsError {
-        FsError::from_stream_io(error, operation, path)
-            .with_provider(self.filesystem.properties().info().provider_id())
+    fn io_error(&self, path: &Path, operation: FsOperation, error: std::io::Error) -> FsError {
+        FsError::from_stream_io(error, operation, path).with_provider(self.filesystem.properties().info().provider_id())
     }
 
     /// Adds a native read count to the public copy-statistics total.
     fn add_copied_bytes(&self, total: u64, count: usize) -> FsResult<u64> {
-        let count =
-            u64::try_from(count).map_err(|_| self.copy_byte_count_error())?;
-        total
-            .checked_add(count)
-            .ok_or_else(|| self.copy_byte_count_error())
+        let count = u64::try_from(count).map_err(|_| self.copy_byte_count_error())?;
+        total.checked_add(count).ok_or_else(|| self.copy_byte_count_error())
     }
 
     /// Builds the error for an unrepresentable copy byte count.

@@ -51,10 +51,7 @@ impl Path {
     /// Each item is validated as one component without reparsing a joined path
     /// string. An empty absolute sequence produces the root; an empty relative
     /// sequence returns an invalid-path error.
-    pub fn from_components<I, S>(
-        absolute: bool,
-        components: I,
-    ) -> FsResult<Self>
+    pub fn from_components<I, S>(absolute: bool, components: I) -> FsResult<Self>
     where
         I: IntoIterator<Item = S>,
         S: AsRef<str>,
@@ -107,10 +104,7 @@ impl Path {
     ///
     /// Hierarchical values normalize empty and dot components and reject root
     /// escapes. Object-key and provider-specific values preserve their text.
-    pub fn parse_with_semantics(
-        text: &str,
-        semantics: PathSemantics,
-    ) -> FsResult<Self> {
+    pub fn parse_with_semantics(text: &str, semantics: PathSemantics) -> FsResult<Self> {
         if text.is_empty() || text.contains('\0') {
             return Err(invalid_path());
         }
@@ -173,9 +167,7 @@ impl Path {
         if self.text == "/" || (self.literal && self.text.ends_with('/')) {
             return None;
         }
-        self.text
-            .rsplit('/')
-            .find(|component| !component.is_empty())
+        self.text.rsplit('/').find(|component| !component.is_empty())
     }
 
     /// Returns whether this path is absolute.

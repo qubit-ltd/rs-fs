@@ -29,9 +29,5 @@ fn one_temp_options_type_configures_both_resource_kinds() {
 #[test]
 fn persist_options_expose_parent_creation_policy() {
     assert!(!PersistOptions::default().creates_parent());
-    assert!(
-        PersistOptions::default()
-            .with_create_parent()
-            .creates_parent()
-    );
+    assert!(PersistOptions::default().with_create_parent().creates_parent());
 }

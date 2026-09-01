@@ -112,11 +112,9 @@ impl AsyncTempFile {
     /// to the provider cleanup failure.
     #[inline]
     pub fn cleanup(&mut self) -> SpiFuture<'_, FsResult<()>> {
-        self.lifecycle(
-            "cannot be cleaned now",
-            FsOperation::CleanupTemp,
-            |session| session.cleanup(),
-        )
+        self.lifecycle("cannot be cleaned now", FsOperation::CleanupTemp, |session| {
+            session.cleanup()
+        })
     }
 
     /// Asynchronously transfers cleanup responsibility to the caller.
@@ -129,9 +127,7 @@ impl AsyncTempFile {
     /// or to the provider ownership-transfer failure.
     #[inline]
     pub fn keep(&mut self) -> SpiFuture<'_, FsResult<()>> {
-        self.lifecycle("cannot be kept now", FsOperation::KeepTemp, |session| {
-            session.keep()
-        })
+        self.lifecycle("cannot be kept now", FsOperation::KeepTemp, |session| session.keep())
     }
 
     /// Asynchronously persists this resource to a validated destination.
@@ -152,27 +148,11 @@ impl AsyncTempFile {
         options: PersistOptions,
     ) -> SpiFuture<'a, Result<PersistOutcome, PersistFailure>> {
         if self.state != TempResourceState::Owned {
-            let error = self.invalid_state(
-                FsOperation::PersistTemp,
-                "cannot be persisted now",
-            );
-            return Box::pin(async move {
-                Err(PersistFailure::new(
-                    error,
-                    PersistFailureState::NotPublished,
-                ))
-            });
+            let error = self.invalid_state(FsOperation::PersistTemp, "cannot be persisted now");
+            return Box::pin(async move { Err(PersistFailure::new(error, PersistFailureState::NotPublished)) });
         }
-        if let Err(error) = self
-            .file_system
-            .preflight_temp_persist(&self.path, target, &options)
-        {
-            return Box::pin(async move {
-                Err(PersistFailure::new(
-                    error,
-                    PersistFailureState::NotPublished,
-                ))
-            });
+        if let Err(error) = self.file_system.preflight_temp_persist(&self.path, target, &options) {
+            return Box::pin(async move { Err(PersistFailure::new(error, PersistFailureState::NotPublished)) });
         }
         Box::pin(async move {
             self.state = TempResourceState::Indeterminate;
@@ -183,9 +163,7 @@ impl AsyncTempFile {
                 .persist(PersistRequest::new(target, options))
                 .await;
             self.state = match &result {
-                Ok(outcome) if outcome.target() != target => {
-                    TempResourceState::Indeterminate
-                }
+                Ok(outcome) if outcome.target() != target => TempResourceState::Indeterminate,
                 Ok(outcome)
                     if atomicity == AtomicityRequirement::Required
                         && outcome.atomicity() != AchievedAtomicity::Atomic =>
@@ -194,15 +172,9 @@ impl AsyncTempFile {
                 }
                 Ok(_) => TempResourceState::Persisted,
                 Err(failure) => match failure.state() {
-                    PersistFailureState::NotPublished => {
-                        TempResourceState::Owned
-                    }
-                    PersistFailureState::PublishedSourceRetained => {
-                        TempResourceState::CleanupRequired
-                    }
-                    PersistFailureState::Indeterminate => {
-                        TempResourceState::Indeterminate
-                    }
+                    PersistFailureState::NotPublished => TempResourceState::Owned,
+                    PersistFailureState::PublishedSourceRetained => TempResourceState::CleanupRequired,
+                    PersistFailureState::Indeterminate => TempResourceState::Indeterminate,
                 },
             };
             match result {
@@ -233,10 +205,7 @@ impl AsyncTempFile {
                 }
                 Err(failure) => {
                     let (error, state) = failure.into_parts();
-                    Err(PersistFailure::new(
-                        self.contextual_persist_error(error, target),
-                        state,
-                    ))
+                    Err(PersistFailure::new(self.contextual_persist_error(error, target), state))
                 }
                 Ok(outcome) => Ok(outcome),
             }
@@ -267,11 +236,7 @@ impl AsyncTempFile {
         call: F,
     ) -> SpiFuture<'a, FsResult<()>>
     where
-        F: FnOnce(
-                Pin<&'a mut dyn AsyncTempResourceSpi>,
-            ) -> SpiFuture<'a, FsResult<()>>
-            + Send
-            + 'a,
+        F: FnOnce(Pin<&'a mut dyn AsyncTempResourceSpi>) -> SpiFuture<'a, FsResult<()>> + Send + 'a,
     {
         if !matches!(
             self.state,
@@ -285,15 +250,9 @@ impl AsyncTempFile {
             self.state = TempResourceState::Indeterminate;
             let result = call(self.session.as_mut()).await;
             self.state = match (operation, &result) {
-                (FsOperation::CleanupTemp, Ok(())) => {
-                    TempResourceState::Cleaned
-                }
+                (FsOperation::CleanupTemp, Ok(())) => TempResourceState::Cleaned,
                 (FsOperation::KeepTemp, Ok(())) => TempResourceState::Kept,
-                (_, Err(error))
-                    if error.kind() == FsErrorKind::Indeterminate =>
-                {
-                    TempResourceState::Indeterminate
-                }
+                (_, Err(error)) if error.kind() == FsErrorKind::Indeterminate => TempResourceState::Indeterminate,
                 (FsOperation::KeepTemp, Err(_)) => previous_state,
                 _ => TempResourceState::CleanupRequired,
             };
@@ -317,8 +276,7 @@ impl AsyncTempFile {
     /// A contextual invalid-state error containing the temporary path.
     fn invalid_state(&self, operation: FsOperation, action: &str) -> FsError {
         let message = format!("{} {}", self.resource_name, action);
-        FsError::new(FsErrorKind::InvalidState, operation, &message)
-            .with_path(self.path.clone())
+        FsError::new(FsErrorKind::InvalidState, operation, &message).with_path(self.path.clone())
     }
 
     /// Adds only missing facade facts to a provider persistence error.
@@ -330,18 +288,12 @@ impl AsyncTempFile {
     /// # Returns
     /// The error enriched with missing operation, path, target, and provider
     /// context.
-    fn contextual_persist_error(
-        &self,
-        error: FsError,
-        target: &Path,
-    ) -> FsError {
-        error
-            .with_operation(FsOperation::PersistTemp)
-            .with_missing_context(
-                &self.path,
-                Some(target),
-                self.file_system.properties().info().provider_id(),
-            )
+    fn contextual_persist_error(&self, error: FsError, target: &Path) -> FsError {
+        error.with_operation(FsOperation::PersistTemp).with_missing_context(
+            &self.path,
+            Some(target),
+            self.file_system.properties().info().provider_id(),
+        )
     }
 }
 

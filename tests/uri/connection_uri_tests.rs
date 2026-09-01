@@ -18,10 +18,8 @@ use qubit_redact::Sensitivity;
 /// values.
 #[test]
 fn test_connection_uri_redacts_password_and_duplicate_sensitive_query() {
-    let uri = ConnectionUri::parse(
-        "s3://user:secret@bucket/key?token=one&x=1&token=two",
-    )
-    .expect("connection URI should parse");
+    let uri = ConnectionUri::parse("s3://user:secret@bucket/key?token=one&x=1&token=two")
+        .expect("connection URI should parse");
     let display = uri.to_string();
     let debug = format!("{uri:?}");
     for rendered in [display, debug] {
@@ -44,16 +42,10 @@ fn test_connection_uri_inspection_detects_identity_mask_and_empty_secret() {
         .expect("policy should be valid")
         .build()
         .expect("policy should build");
-    let identity = ConnectionUri::parse_with_policy(
-        "s3://bucket/key?tenant_payload=raw-secret",
-        &policy,
-    )
-    .expect("connection URI may retain credentials internally");
-    let empty = ConnectionUri::parse_with_policy(
-        "s3://bucket/key?tenant_payload=",
-        &policy,
-    )
-    .expect("connection URI may retain credentials internally");
+    let identity = ConnectionUri::parse_with_policy("s3://bucket/key?tenant_payload=raw-secret", &policy)
+        .expect("connection URI may retain credentials internally");
+    let empty = ConnectionUri::parse_with_policy("s3://bucket/key?tenant_payload=", &policy)
+        .expect("connection URI may retain credentials internally");
 
     assert!(identity.has_embedded_secret());
     assert!(empty.has_embedded_secret());
@@ -66,10 +58,8 @@ fn test_connection_uri_inspection_detects_identity_mask_and_empty_secret() {
 #[test]
 fn test_connection_uri_redacts_generated_secret_text() {
     let secret = "fuzz-derived-secret-42";
-    let uri = ConnectionUri::parse(&format!(
-        "s3://user:{secret}@bucket/key?token={secret}"
-    ))
-    .expect("connection URI should parse");
+    let uri = ConnectionUri::parse(&format!("s3://user:{secret}@bucket/key?token={secret}"))
+        .expect("connection URI should parse");
     assert!(uri.has_embedded_secret());
     assert!(!uri.to_string().contains(secret));
     assert!(!format!("{uri:?}").contains(secret));
@@ -85,8 +75,7 @@ fn test_connection_uri_rejects_fragment() {
 /// password and retaining its host.
 #[test]
 fn test_connection_uri_preserves_authority_and_redacts_userinfo_password() {
-    let uri = ConnectionUri::parse("s3://user:secret@[::1]:9000/key")
-        .expect("connection URI should parse");
+    let uri = ConnectionUri::parse("s3://user:secret@[::1]:9000/key").expect("connection URI should parse");
     let rendered = uri.to_string();
     assert!(rendered.contains("user:"));
     assert!(rendered.contains("@[::1]:9000/key"));
@@ -96,8 +85,7 @@ fn test_connection_uri_preserves_authority_and_redacts_userinfo_password() {
 /// Verifies a username-only authority remains visible by default.
 #[test]
 fn test_connection_uri_preserves_username_only_authority() {
-    let uri = ConnectionUri::parse("s3://access-key@bucket/key")
-        .expect("connection URI should parse");
+    let uri = ConnectionUri::parse("s3://access-key@bucket/key").expect("connection URI should parse");
     let rendered = uri.to_string();
     assert!(rendered.contains("access-key@bucket/key"));
     assert!(rendered.contains("@bucket/key"));
@@ -106,8 +94,7 @@ fn test_connection_uri_preserves_username_only_authority() {
 /// Verifies escaped secret keys cannot bypass connection URI redaction.
 #[test]
 fn test_connection_uri_redacts_percent_encoded_sensitive_query_key() {
-    let uri = ConnectionUri::parse("s3://bucket/key?t%6fken=raw-secret")
-        .expect("connection URI should parse");
+    let uri = ConnectionUri::parse("s3://bucket/key?t%6fken=raw-secret").expect("connection URI should parse");
     let rendered = uri.to_string();
     assert!(rendered.contains("t%6fken="));
     assert!(!rendered.contains("raw-secret"));
@@ -116,8 +103,7 @@ fn test_connection_uri_redacts_percent_encoded_sensitive_query_key() {
 /// Verifies undecodable percent-encoded query keys fail closed.
 #[test]
 fn test_connection_uri_redacts_query_with_invalid_utf8_key() {
-    let uri = ConnectionUri::parse("s3://bucket/key?%FFtoken=raw-secret")
-        .expect("connection URI should parse");
+    let uri = ConnectionUri::parse("s3://bucket/key?%FFtoken=raw-secret").expect("connection URI should parse");
     let rendered = uri.to_string();
     assert!(!rendered.contains("raw-secret"));
 }
@@ -126,13 +112,9 @@ fn test_connection_uri_redacts_query_with_invalid_utf8_key() {
 /// formatting remains redacted and preserves a URI without authority.
 #[test]
 fn test_connection_uri_exposes_unredacted_text_only_to_callback() {
-    let uri = ConnectionUri::parse("s3:/key?token=raw-secret")
-        .expect("connection URI should parse");
+    let uri = ConnectionUri::parse("s3:/key?token=raw-secret").expect("connection URI should parse");
 
-    assert_eq!(
-        "s3:/key?token=raw-secret",
-        uri.expose_unredacted(str::to_owned)
-    );
+    assert_eq!("s3:/key?token=raw-secret", uri.expose_unredacted(str::to_owned));
     assert!(!uri.to_string().contains("raw-secret"));
 }
 
@@ -140,12 +122,9 @@ fn test_connection_uri_exposes_unredacted_text_only_to_callback() {
 /// exposing credentials and classifies only secret-bearing URI components.
 #[test]
 fn test_connection_uri_exposes_safe_scheme_and_secret_presence() {
-    let password = ConnectionUri::parse("S3://user:secret@bucket/key")
-        .expect("connection URI should parse");
-    let sensitive_query = ConnectionUri::parse("s3://bucket/key?token=secret")
-        .expect("connection URI should parse");
-    let username_only = ConnectionUri::parse("s3://user@bucket/key")
-        .expect("connection URI should parse");
+    let password = ConnectionUri::parse("S3://user:secret@bucket/key").expect("connection URI should parse");
+    let sensitive_query = ConnectionUri::parse("s3://bucket/key?token=secret").expect("connection URI should parse");
+    let username_only = ConnectionUri::parse("s3://user@bucket/key").expect("connection URI should parse");
 
     assert_eq!(password.scheme(), "s3");
     assert!(password.has_embedded_secret());
@@ -157,18 +136,13 @@ fn test_connection_uri_exposes_safe_scheme_and_secret_presence() {
 /// resource locations and rejects embedded credentials.
 #[test]
 fn test_connection_uri_try_to_uri_rejects_embedded_secrets() {
-    let safe = ConnectionUri::parse("s3://bucket/key?region=cn")
-        .expect("connection URI should parse");
-    let password = ConnectionUri::parse("s3://user:secret@bucket/key")
-        .expect("connection URI should parse");
-    let sensitive_query = ConnectionUri::parse("s3://bucket/key?token=secret")
-        .expect("connection URI should parse");
+    let safe = ConnectionUri::parse("s3://bucket/key?region=cn").expect("connection URI should parse");
+    let password = ConnectionUri::parse("s3://user:secret@bucket/key").expect("connection URI should parse");
+    let sensitive_query = ConnectionUri::parse("s3://bucket/key?token=secret").expect("connection URI should parse");
 
     assert_eq!(
-        safe.try_to_uri()
-            .expect("secret-free connection URI must convert"),
-        Uri::parse("s3://bucket/key?region=cn")
-            .expect("test resource URI must parse"),
+        safe.try_to_uri().expect("secret-free connection URI must convert"),
+        Uri::parse("s3://bucket/key?region=cn").expect("test resource URI must parse"),
     );
     assert!(password.try_to_uri().is_err());
     assert!(sensitive_query.try_to_uri().is_err());

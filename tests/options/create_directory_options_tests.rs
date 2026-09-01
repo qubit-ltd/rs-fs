@@ -32,8 +32,7 @@ fn test_create_directory_options_with_user_metadata_replaces_metadata() {
         .with("owner", "storage")
         .expect("safe metadata key must be accepted");
 
-    let options =
-        CreateDirectoryOptions::default().with_user_metadata(metadata);
+    let options = CreateDirectoryOptions::default().with_user_metadata(metadata);
 
     assert_eq!(options.user_metadata().get("owner"), Some("storage"));
 }

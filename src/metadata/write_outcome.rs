@@ -39,10 +39,7 @@ impl WriteOutcome {
     /// A write outcome with no byte count, version, or diagnostics.
     #[inline]
     #[must_use]
-    pub fn new(
-        atomicity: AchievedAtomicity,
-        method: PublicationMethod,
-    ) -> Self {
+    pub fn new(atomicity: AchievedAtomicity, method: PublicationMethod) -> Self {
         Self {
             bytes_written: None,
             version: None,

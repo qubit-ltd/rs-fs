@@ -54,9 +54,7 @@ impl BenchmarkSpi {
             ProviderOperations::new()
                 .with(ProviderOperation::Stat)
                 .with(ProviderOperation::OpenReader),
-            FileSystemCapabilities::new().with_guaranteed(
-                qubit_fs::metadata::FileSystemCapability::Read,
-            ),
+            FileSystemCapabilities::new().with_guaranteed(qubit_fs::metadata::FileSystemCapability::Read),
             FileSystemLimits::unknown(),
             PathConstraints::absolute(),
             SymlinkPolicy::Reject,
@@ -77,20 +75,13 @@ impl FileSystemSpi for BenchmarkSpi {
     fn stat(&self, request: StatRequest<'_>) -> FsResult<StatResponse> {
         Ok(StatResponse::new(
             request.path().clone(),
-            FileMetadata::new(FileKind::File)
-                .with_len(Some(self.payload.len() as u64)),
+            FileMetadata::new(FileKind::File).with_len(Some(self.payload.len() as u64)),
         ))
     }
 
-    fn open_reader(
-        &self,
-        request: OpenReaderRequest<'_>,
-    ) -> FsResult<OpenedReader> {
+    fn open_reader(&self, request: OpenReaderRequest<'_>) -> FsResult<OpenedReader> {
         Ok(OpenedReader::new(
-            OpenedFileInfo::new(
-                self.properties.info().id().clone(),
-                request.path().clone(),
-            ),
+            OpenedFileInfo::new(self.properties.info().id().clone(), request.path().clone()),
             Box::new(Cursor::new(Arc::clone(&self.payload))),
         ))
     }
@@ -101,8 +92,7 @@ fn read_prefix(c: &mut Criterion) {
     let mut group = c.benchmark_group("read_prefix");
     for size in [1_usize << 10, 1_usize << 20, 1_usize << 26] {
         let filesystem =
-            FileSystem::from_spi(BenchmarkSpi::new(vec![0xA5; size]))
-                .expect("benchmark facade should construct");
+            FileSystem::from_spi(BenchmarkSpi::new(vec![0xA5; size])).expect("benchmark facade should construct");
         for max_bytes in [8 * 1024, 64 * 1024, 1024 * 1024] {
             group.throughput(Throughput::Bytes(size.min(max_bytes) as u64));
             group.bench_with_input(
@@ -111,11 +101,7 @@ fn read_prefix(c: &mut Criterion) {
                 |bench, filesystem| {
                     bench.iter(|| {
                         let bytes = filesystem
-                            .read_prefix(
-                                black_box(&path),
-                                Default::default(),
-                                max_bytes,
-                            )
+                            .read_prefix(black_box(&path), Default::default(), max_bytes)
                             .expect("benchmark prefix read should succeed");
                         black_box(bytes.len());
                     });

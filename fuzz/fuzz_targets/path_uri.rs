@@ -48,33 +48,23 @@ fuzz_target!(|data: &[u8]| {
 
     if let Ok(text) = std::str::from_utf8(data) {
         if let Ok(path) = Path::parse(text) {
-            assert_eq!(
-                path,
-                Path::parse(path.as_str())
-                    .expect("canonical path must reparse")
-            );
+            assert_eq!(path, Path::parse(path.as_str()).expect("canonical path must reparse"));
         }
         if let Ok(path) = RelativePath::parse(text) {
             assert_eq!(
                 path,
-                RelativePath::parse(path.as_str())
-                    .expect("canonical relative path must reparse")
+                RelativePath::parse(path.as_str()).expect("canonical relative path must reparse")
             );
         }
         if let Ok(uri) = Uri::parse(text) {
-            assert_eq!(
-                uri,
-                Uri::parse(uri.as_str()).expect("canonical URI must reparse")
-            );
+            assert_eq!(uri, Uri::parse(uri.as_str()).expect("canonical URI must reparse"));
         }
         let _ = ConnectionUri::parse(text);
     }
 
     let secret = secret_text(data);
-    let uri = ConnectionUri::parse(&format!(
-        "s3://user:{secret}@bucket/key?token={secret}"
-    ))
-    .expect("generated connection URI must parse");
+    let uri = ConnectionUri::parse(&format!("s3://user:{secret}@bucket/key?token={secret}"))
+        .expect("generated connection URI must parse");
     let display = uri.to_string();
     let debug = format!("{uri:?}");
     assert!(uri.has_embedded_secret());

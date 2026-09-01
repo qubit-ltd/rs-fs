@@ -57,9 +57,7 @@ impl FileSystemProperties {
     /// # Errors
     /// Returns an invalid-options error when the derived snapshot violates a
     /// shared property invariant.
-    pub(crate) fn from_provider(
-        provider: &ProviderProperties,
-    ) -> FsResult<Self> {
+    pub(crate) fn from_provider(provider: &ProviderProperties) -> FsResult<Self> {
         let mut capabilities = provider.declared_capabilities();
         let operations = provider.operations();
         let streamed_copy = operations.supports(ProviderOperation::Stat)
@@ -68,8 +66,7 @@ impl FileSystemProperties {
             && capabilities.supports(FileSystemCapability::Read)
             && capabilities.supports(FileSystemCapability::Write);
         if streamed_copy && !capabilities.supports(FileSystemCapability::Copy) {
-            capabilities =
-                capabilities.with_conditional(FileSystemCapability::Copy);
+            capabilities = capabilities.with_conditional(FileSystemCapability::Copy);
         }
         Self::new(
             provider.info().clone(),
@@ -176,19 +173,13 @@ impl FileSystemProperties {
     /// Returns an invalid-options error when the snapshot violates core value
     /// invariants.
     pub(crate) fn validate(&self) -> FsResult<()> {
-        if self.info.provider_id().is_empty()
-            || self.info.provider_id().chars().any(char::is_control)
-        {
+        if self.info.provider_id().is_empty() || self.info.provider_id().chars().any(char::is_control) {
             return Err(invalid_properties(
                 "provider id must be non-empty and contain no controls",
             ));
         }
-        if let Some((_capability, _dependency)) =
-            self.capabilities.missing_dependency()
-        {
-            return Err(invalid_properties(
-                "advertised capability dependency is missing",
-            ));
+        if let Some((_capability, _dependency)) = self.capabilities.missing_dependency() {
+            return Err(invalid_properties("advertised capability dependency is missing"));
         }
         if [
             self.limits.max_path_text_bytes(),
@@ -198,9 +189,8 @@ impl FileSystemProperties {
             self.limits.max_list_page_entries(),
         ]
         .into_iter()
-        .any(|limit| {
-            matches!(limit, crate::metadata::FileSystemLimit::Maximum(0))
-        }) {
+        .any(|limit| matches!(limit, crate::metadata::FileSystemLimit::Maximum(0)))
+        {
             return Err(invalid_properties(
                 "finite filesystem limits must have a positive value",
             ));
@@ -224,9 +214,5 @@ impl FileSystemProperties {
 /// # Returns
 /// An invalid-options error scoped to provider configuration.
 fn invalid_properties(message: &'static str) -> FsError {
-    FsError::new(
-        FsErrorKind::InvalidOptions,
-        FsOperation::ValidateProperties,
-        message,
-    )
+    FsError::new(FsErrorKind::InvalidOptions, FsOperation::ValidateProperties, message)
 }

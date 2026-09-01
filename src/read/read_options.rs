@@ -80,10 +80,7 @@ impl ReadOptions {
     /// Returns a copy with the negative version precondition replaced.
     #[inline]
     #[must_use]
-    pub fn with_if_none_match(
-        mut self,
-        if_none_match: Option<ResourceVersion>,
-    ) -> Self {
+    pub fn with_if_none_match(mut self, if_none_match: Option<ResourceVersion>) -> Self {
         self.if_none_match = if_none_match;
         self
     }
@@ -120,10 +117,7 @@ impl ReadOptions {
     /// Returns [`FsErrorKind::InvalidOptions`] for mutually exclusive version
     /// conditions, or [`FsErrorKind::RequirementNotMet`] with the exact
     /// missing capability for range, conditional, or required-checksum reads.
-    pub fn validate_against(
-        &self,
-        capabilities: FileSystemCapabilities,
-    ) -> Result<(), FsError> {
+    pub fn validate_against(&self, capabilities: FileSystemCapabilities) -> Result<(), FsError> {
         if self.if_match.is_some() && self.if_none_match.is_some() {
             return Err(FsError::new(
                 FsErrorKind::InvalidOptions,
@@ -131,9 +125,7 @@ impl ReadOptions {
                 "if_match and if_none_match cannot both be specified",
             ));
         }
-        if (self.offset.is_some() || self.length.is_some())
-            && !capabilities.supports(FileSystemCapability::RangeRead)
-        {
+        if (self.offset.is_some() || self.length.is_some()) && !capabilities.supports(FileSystemCapability::RangeRead) {
             return Err(missing_requirement(
                 FileSystemCapability::RangeRead,
                 "byte-range reads are required but not supported",
@@ -147,8 +139,7 @@ impl ReadOptions {
                 "conditional reads are required but not supported",
             ));
         }
-        if self.checksum == ChecksumPolicy::Required
-            && !capabilities.supports(FileSystemCapability::ChecksumValidation)
+        if self.checksum == ChecksumPolicy::Required && !capabilities.supports(FileSystemCapability::ChecksumValidation)
         {
             return Err(missing_requirement(
                 FileSystemCapability::ChecksumValidation,
@@ -160,14 +151,6 @@ impl ReadOptions {
 }
 
 /// Builds a typed unmet read requirement.
-fn missing_requirement(
-    capability: FileSystemCapability,
-    message: &str,
-) -> FsError {
-    FsError::new(
-        FsErrorKind::RequirementNotMet,
-        FsOperation::OpenReader,
-        message,
-    )
-    .with_required_capability(capability)
+fn missing_requirement(capability: FileSystemCapability, message: &str) -> FsError {
+    FsError::new(FsErrorKind::RequirementNotMet, FsOperation::OpenReader, message).with_required_capability(capability)
 }

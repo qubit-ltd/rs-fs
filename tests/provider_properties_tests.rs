@@ -63,8 +63,7 @@ fn provider_properties(
 ) -> ProviderProperties {
     ProviderProperties::new(
         FileSystemInfo::new(
-            FileSystemId::new("provider-properties-test")
-                .expect("test filesystem id should be valid"),
+            FileSystemId::new("provider-properties-test").expect("test filesystem id should be valid"),
             "provider-properties-test",
             PathSemantics::Hierarchical,
         ),
@@ -85,8 +84,7 @@ fn try_provider_properties(
 ) -> FsResult<ProviderProperties> {
     ProviderProperties::new(
         FileSystemInfo::new(
-            FileSystemId::new("invalid-provider-properties-test")
-                .expect("test filesystem id should be valid"),
+            FileSystemId::new("invalid-provider-properties-test").expect("test filesystem id should be valid"),
             "provider-properties-test",
             PathSemantics::Hierarchical,
         ),
@@ -123,36 +121,26 @@ fn operations_without(missing: ProviderOperation) -> ProviderOperations {
 
 /// Adds the capability dependencies required by the public capability value
 /// object before declaring `capability` itself.
-fn declared_capabilities_for(
-    capability: FileSystemCapability,
-) -> FileSystemCapabilities {
+fn declared_capabilities_for(capability: FileSystemCapability) -> FileSystemCapabilities {
     let capabilities = FileSystemCapabilities::new();
     let capabilities = match capability {
         FileSystemCapability::RangeRead
         | FileSystemCapability::ConditionalRead
-        | FileSystemCapability::ChecksumValidation => {
-            capabilities.with_guaranteed(FileSystemCapability::Read)
-        }
-        FileSystemCapability::Append
-        | FileSystemCapability::ConditionalWrite
-        | FileSystemCapability::AtomicReplace => {
+        | FileSystemCapability::ChecksumValidation => capabilities.with_guaranteed(FileSystemCapability::Read),
+        FileSystemCapability::Append | FileSystemCapability::ConditionalWrite | FileSystemCapability::AtomicReplace => {
             capabilities.with_guaranteed(FileSystemCapability::Write)
         }
-        FileSystemCapability::RecursiveDelete
-        | FileSystemCapability::ConditionalDelete => {
+        FileSystemCapability::RecursiveDelete | FileSystemCapability::ConditionalDelete => {
             capabilities.with_guaranteed(FileSystemCapability::Delete)
         }
-        FileSystemCapability::AtomicRename
-        | FileSystemCapability::DurableRename => {
+        FileSystemCapability::AtomicRename | FileSystemCapability::DurableRename => {
             capabilities.with_guaranteed(FileSystemCapability::Rename)
         }
         FileSystemCapability::ServerSideCopy
         | FileSystemCapability::AtomicFileCopy
         | FileSystemCapability::AtomicTreeCopy
         | FileSystemCapability::DurableFileCopy
-        | FileSystemCapability::DurableTreeCopy => {
-            capabilities.with_guaranteed(FileSystemCapability::Copy)
-        }
+        | FileSystemCapability::DurableTreeCopy => capabilities.with_guaranteed(FileSystemCapability::Copy),
         _ => capabilities,
     };
     capabilities.with_guaranteed(capability)
@@ -171,8 +159,7 @@ fn test_facade_derives_conditional_copy_without_native_try_copy() {
         .with_guaranteed(FileSystemCapability::Write);
     let provider = provider_properties(operations, declared);
     let filesystem =
-        FileSystem::from_spi(PropertiesOnlySpi::new(provider.clone()))
-            .expect("provider properties must be valid");
+        FileSystem::from_spi(PropertiesOnlySpi::new(provider.clone())).expect("provider properties must be valid");
 
     assert!(!provider.operations().supports(ProviderOperation::TryCopy));
     assert_eq!(
@@ -191,66 +178,33 @@ fn test_provider_properties_rejects_missing_capability_operations() {
     let cases = [
         (FileSystemCapability::List, ProviderOperation::List),
         (FileSystemCapability::Read, ProviderOperation::OpenReader),
-        (
-            FileSystemCapability::RangeRead,
-            ProviderOperation::OpenReader,
-        ),
-        (
-            FileSystemCapability::ConditionalRead,
-            ProviderOperation::OpenReader,
-        ),
-        (
-            FileSystemCapability::ChecksumValidation,
-            ProviderOperation::OpenReader,
-        ),
+        (FileSystemCapability::RangeRead, ProviderOperation::OpenReader),
+        (FileSystemCapability::ConditionalRead, ProviderOperation::OpenReader),
+        (FileSystemCapability::ChecksumValidation, ProviderOperation::OpenReader),
         (FileSystemCapability::Write, ProviderOperation::OpenWriter),
         (FileSystemCapability::Append, ProviderOperation::OpenWriter),
-        (
-            FileSystemCapability::ConditionalWrite,
-            ProviderOperation::OpenWriter,
-        ),
-        (
-            FileSystemCapability::AtomicReplace,
-            ProviderOperation::OpenWriter,
-        ),
+        (FileSystemCapability::ConditionalWrite, ProviderOperation::OpenWriter),
+        (FileSystemCapability::AtomicReplace, ProviderOperation::OpenWriter),
         (
             FileSystemCapability::CreateDirectory,
             ProviderOperation::CreateDirectory,
         ),
-        (
-            FileSystemCapability::EmptyDirectory,
-            ProviderOperation::CreateDirectory,
-        ),
+        (FileSystemCapability::EmptyDirectory, ProviderOperation::CreateDirectory),
         (FileSystemCapability::Delete, ProviderOperation::DeleteFile),
-        (
-            FileSystemCapability::Delete,
-            ProviderOperation::DeleteDirectory,
-        ),
+        (FileSystemCapability::Delete, ProviderOperation::DeleteDirectory),
         (
             FileSystemCapability::RecursiveDelete,
             ProviderOperation::DeleteDirectory,
         ),
-        (
-            FileSystemCapability::ConditionalDelete,
-            ProviderOperation::DeleteFile,
-        ),
+        (FileSystemCapability::ConditionalDelete, ProviderOperation::DeleteFile),
         (
             FileSystemCapability::ConditionalDelete,
             ProviderOperation::DeleteDirectory,
         ),
         (FileSystemCapability::Rename, ProviderOperation::Rename),
-        (
-            FileSystemCapability::AtomicRename,
-            ProviderOperation::Rename,
-        ),
-        (
-            FileSystemCapability::DurableRename,
-            ProviderOperation::Rename,
-        ),
-        (
-            FileSystemCapability::TempFile,
-            ProviderOperation::CreateTempFile,
-        ),
+        (FileSystemCapability::AtomicRename, ProviderOperation::Rename),
+        (FileSystemCapability::DurableRename, ProviderOperation::Rename),
+        (FileSystemCapability::TempFile, ProviderOperation::CreateTempFile),
         (
             FileSystemCapability::TempDirectory,
             ProviderOperation::CreateTempDirectory,
@@ -264,26 +218,11 @@ fn test_provider_properties_rejects_missing_capability_operations() {
             ProviderOperation::CreateTempDirectory,
         ),
         (FileSystemCapability::Copy, ProviderOperation::TryCopy),
-        (
-            FileSystemCapability::ServerSideCopy,
-            ProviderOperation::TryCopy,
-        ),
-        (
-            FileSystemCapability::AtomicFileCopy,
-            ProviderOperation::TryCopy,
-        ),
-        (
-            FileSystemCapability::AtomicTreeCopy,
-            ProviderOperation::TryCopy,
-        ),
-        (
-            FileSystemCapability::DurableFileCopy,
-            ProviderOperation::TryCopy,
-        ),
-        (
-            FileSystemCapability::DurableTreeCopy,
-            ProviderOperation::TryCopy,
-        ),
+        (FileSystemCapability::ServerSideCopy, ProviderOperation::TryCopy),
+        (FileSystemCapability::AtomicFileCopy, ProviderOperation::TryCopy),
+        (FileSystemCapability::AtomicTreeCopy, ProviderOperation::TryCopy),
+        (FileSystemCapability::DurableFileCopy, ProviderOperation::TryCopy),
+        (FileSystemCapability::DurableTreeCopy, ProviderOperation::TryCopy),
     ];
 
     for (capability, missing_operation) in cases {
@@ -313,10 +252,7 @@ fn test_provider_properties_reports_first_missing_capability_operation() {
         .expect_err("the first missing mapped operation must be reported");
 
     assert_eq!(FsOperation::ValidateProperties, error.operation());
-    assert_eq!(
-        Some(FileSystemCapability::List),
-        error.required_capability(),
-    );
+    assert_eq!(Some(FileSystemCapability::List), error.required_capability(),);
     assert!(format!("{error}").contains("List"));
 }
 
@@ -326,15 +262,12 @@ fn test_provider_properties_reports_first_missing_capability_operation() {
 fn test_provider_properties_accepts_symlink_without_operation() {
     let provider = try_provider_properties(
         ProviderOperations::new(),
-        FileSystemCapabilities::new()
-            .with_guaranteed(FileSystemCapability::Symlink),
+        FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::Symlink),
     )
     .expect("symlink policy guarantee must not require an entry point");
 
     assert_eq!(
         FileSystemCapabilitySupport::Guaranteed,
-        provider
-            .declared_capabilities()
-            .support(FileSystemCapability::Symlink),
+        provider.declared_capabilities().support(FileSystemCapability::Symlink),
     );
 }

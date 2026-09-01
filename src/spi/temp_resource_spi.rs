@@ -27,10 +27,7 @@ pub trait TempResourceSpi: Send {
     /// # Errors
     /// Returns provider-confirmed failure and recovery state when persistence
     /// does not complete successfully.
-    fn persist(
-        &mut self,
-        request: PersistRequest<'_>,
-    ) -> Result<PersistOutcome, SpiPersistFailure>;
+    fn persist(&mut self, request: PersistRequest<'_>) -> Result<PersistOutcome, SpiPersistFailure>;
 
     /// Transfers source ownership to the caller.
     ///

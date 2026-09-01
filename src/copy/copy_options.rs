@@ -78,10 +78,7 @@ impl CopyOptions {
     /// Returns a copy with the metadata preservation policy replaced.
     #[inline]
     #[must_use]
-    pub const fn with_preserve_metadata(
-        mut self,
-        preserve_metadata: MetadataPreservePolicy,
-    ) -> Self {
+    pub const fn with_preserve_metadata(mut self, preserve_metadata: MetadataPreservePolicy) -> Self {
         self.preserve_metadata = preserve_metadata;
         self
     }
@@ -96,10 +93,7 @@ impl CopyOptions {
     /// Returns a copy with the server-side preference replaced.
     #[inline]
     #[must_use]
-    pub const fn with_server_side(
-        mut self,
-        server_side: ServerSidePreference,
-    ) -> Self {
+    pub const fn with_server_side(mut self, server_side: ServerSidePreference) -> Self {
         self.server_side = server_side;
         self
     }
@@ -144,10 +138,7 @@ impl CopyOptions {
     /// Returns a copy with continuation policy replaced.
     #[inline]
     #[must_use]
-    pub const fn with_continue_on_error(
-        mut self,
-        continue_on_error: bool,
-    ) -> Self {
+    pub const fn with_continue_on_error(mut self, continue_on_error: bool) -> Self {
         self.continue_on_error = continue_on_error;
         self
     }
@@ -162,10 +153,7 @@ impl CopyOptions {
     /// Returns a copy with the atomicity requirement replaced.
     #[inline]
     #[must_use]
-    pub const fn with_atomicity(
-        mut self,
-        atomicity: AtomicityRequirement,
-    ) -> Self {
+    pub const fn with_atomicity(mut self, atomicity: AtomicityRequirement) -> Self {
         self.atomicity = atomicity;
         self
     }
@@ -180,10 +168,7 @@ impl CopyOptions {
     /// Returns a copy with the durability requirement replaced.
     #[inline]
     #[must_use]
-    pub const fn with_durability(
-        mut self,
-        durability: DurabilityRequirement,
-    ) -> Self {
+    pub const fn with_durability(mut self, durability: DurabilityRequirement) -> Self {
         self.durability = durability;
         self
     }
@@ -232,10 +217,7 @@ impl CopyOptions {
     /// Returns [`FsErrorKind::RequirementNotMet`] with
     /// [`FileSystemCapability::ServerSideCopy`] when required server-side copy
     /// is unavailable.
-    pub fn validate_against(
-        &self,
-        capabilities: FileSystemCapabilities,
-    ) -> Result<(), FsError> {
+    pub fn validate_against(&self, capabilities: FileSystemCapabilities) -> Result<(), FsError> {
         if self.server_side == ServerSidePreference::Require
             && !capabilities.supports(FileSystemCapability::ServerSideCopy)
         {
@@ -254,15 +236,11 @@ impl CopyOptions {
         let atomic_supported = match self.mode {
             CopyMode::Auto => {
                 capabilities.supports(FileSystemCapability::AtomicFileCopy)
-                    || capabilities
-                        .supports(FileSystemCapability::AtomicTreeCopy)
+                    || capabilities.supports(FileSystemCapability::AtomicTreeCopy)
             }
-            CopyMode::File | CopyMode::Tree => {
-                capabilities.supports(atomic_capability)
-            }
+            CopyMode::File | CopyMode::Tree => capabilities.supports(atomic_capability),
         };
-        if self.atomicity == AtomicityRequirement::Required && !atomic_supported
-        {
+        if self.atomicity == AtomicityRequirement::Required && !atomic_supported {
             return Err(FsError::new(
                 FsErrorKind::RequirementNotMet,
                 FsOperation::Copy,
@@ -278,16 +256,11 @@ impl CopyOptions {
         let durable_supported = match self.mode {
             CopyMode::Auto => {
                 capabilities.supports(FileSystemCapability::DurableFileCopy)
-                    || capabilities
-                        .supports(FileSystemCapability::DurableTreeCopy)
+                    || capabilities.supports(FileSystemCapability::DurableTreeCopy)
             }
-            CopyMode::File | CopyMode::Tree => {
-                capabilities.supports(durable_capability)
-            }
+            CopyMode::File | CopyMode::Tree => capabilities.supports(durable_capability),
         };
-        if self.durability == DurabilityRequirement::Required
-            && !durable_supported
-        {
+        if self.durability == DurabilityRequirement::Required && !durable_supported {
             return Err(FsError::new(
                 FsErrorKind::RequirementNotMet,
                 FsOperation::Copy,

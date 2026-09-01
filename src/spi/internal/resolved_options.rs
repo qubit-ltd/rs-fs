@@ -24,8 +24,7 @@ macro_rules! resolved_options {
             /// Creates this value inside the facade boundary.
             ///
             /// # Parameters
-            /// - `options`: Caller options after facade validation and
-            ///   normalization.
+            /// - `options`: Caller options after facade validation and normalization.
             ///
             /// # Returns
             /// An immutable provider-facing option envelope.
