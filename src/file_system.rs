@@ -474,6 +474,18 @@ impl FileSystem {
         Ok(())
     }
 
+    /// Validates a provider-generated target reported by temporary keep.
+    pub(crate) fn validate_temp_keep_target(&self, source: &Path, target: &Path) -> FsResult<()> {
+        self.validate_path(target, FsOperation::KeepTemp).map_err(|_| {
+            self.contract_error(
+                source,
+                FsOperation::ValidateProviderOutcome,
+                "provider returned a temporary keep target with an invalid logical path",
+            )
+            .with_target(target.clone())
+        })
+    }
+
     /// Reads one file into memory up to `max_bytes` after opening a reader.
     pub fn read_all(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
         ReadOperation::new(self).read_all(path, options, max_bytes)

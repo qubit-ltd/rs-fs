@@ -830,14 +830,26 @@ impl TempResourceSpi for Temp {
             PublicationMethod::Direct,
         ))
     }
-    fn keep(&mut self) -> FsResult<()> {
-        self.keep_error.map_or(Ok(()), |kind| {
-            Err(FsError::new(
-                kind,
-                FsOperation::KeepTemp,
-                "injected temporary keep failure",
-            ))
-        })
+    fn keep(&mut self) -> Result<PersistOutcome, SpiPersistFailure> {
+        self.keep_error.map_or_else(
+            || {
+                Ok(PersistOutcome::new(
+                    Path::parse("/kept-resource").expect("generated path should parse"),
+                    AchievedAtomicity::Atomic,
+                    PublicationMethod::Direct,
+                ))
+            },
+            |kind| {
+                Err(SpiPersistFailure::new(
+                    FsError::new(kind, FsOperation::KeepTemp, "injected temporary keep failure"),
+                    if kind == FsErrorKind::Indeterminate {
+                        PersistFailureState::Indeterminate
+                    } else {
+                        PersistFailureState::NotPublished
+                    },
+                ))
+            },
+        )
     }
     fn cleanup(&mut self) -> FsResult<()> {
         *self.cleanup_calls.lock().expect("cleanup lock should succeed") += 1;

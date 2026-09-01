@@ -610,4 +610,15 @@ impl AsyncFileSystem {
                     .with_target(target.clone())
             })
     }
+
+    /// Validates a provider-generated target reported by temporary keep.
+    pub(crate) fn validate_temp_keep_target(&self, source: &Path, target: &Path) -> FsResult<()> {
+        self.validate_path(target, FsOperation::KeepTemp).map_err(|_| {
+            self.contract_error(
+                source,
+                "provider returned a temporary keep target with an invalid logical path",
+            )
+            .with_target(target.clone())
+        })
+    }
 }

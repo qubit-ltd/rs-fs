@@ -29,14 +29,15 @@ pub trait TempResourceSpi: Send {
     /// does not complete successfully.
     fn persist(&mut self, request: PersistRequest<'_>) -> Result<PersistOutcome, SpiPersistFailure>;
 
-    /// Transfers source ownership to the caller.
+    /// Publishes the temporary resource to a provider-generated target.
     ///
     /// # Returns
-    /// `Ok(())` after the provider releases cleanup responsibility.
+    /// The confirmed publication outcome.
     ///
     /// # Errors
-    /// Returns the provider failure when ownership cannot be transferred.
-    fn keep(&mut self) -> FsResult<()>;
+    /// Returns the provider-confirmed failure and recovery state when
+    /// publication cannot be completed.
+    fn keep(&mut self) -> Result<PersistOutcome, SpiPersistFailure>;
 
     /// Cleans the temporary source.
     ///
