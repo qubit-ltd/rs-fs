@@ -7,6 +7,9 @@
 // =============================================================================
 //! Directory listing options.
 
+use std::time::Duration;
+use std::time::Instant;
+
 use crate::error::FsError;
 use crate::error::FsErrorKind;
 use crate::error::FsOperation;
@@ -33,6 +36,12 @@ pub struct ListOptions {
     /// `/root/nested/item`, while `prefix: Some("item")` only matches an
     /// immediate child named `item`.
     prefix: Option<String>,
+    /// Maximum returned descendant depth relative to the list root.
+    max_depth: Option<usize>,
+    /// Maximum number of entries returned to the caller.
+    max_entries: Option<usize>,
+    /// Maximum elapsed duration from stream creation.
+    deadline: Option<Duration>,
 }
 
 impl ListOptions {
@@ -111,6 +120,51 @@ impl ListOptions {
         self.prefix.as_deref()
     }
 
+    /// Returns a copy with the maximum descendant depth replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_max_depth(mut self, max_depth: Option<usize>) -> Self {
+        self.max_depth = max_depth;
+        self
+    }
+
+    /// Returns the optional maximum descendant depth.
+    #[inline(always)]
+    #[must_use]
+    pub const fn max_depth(&self) -> Option<usize> {
+        self.max_depth
+    }
+
+    /// Returns a copy with the maximum returned entry count replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_max_entries(mut self, max_entries: Option<usize>) -> Self {
+        self.max_entries = max_entries;
+        self
+    }
+
+    /// Returns the optional maximum returned entry count.
+    #[inline(always)]
+    #[must_use]
+    pub const fn max_entries(&self) -> Option<usize> {
+        self.max_entries
+    }
+
+    /// Returns a copy with the maximum elapsed duration replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_deadline(mut self, deadline: Option<Duration>) -> Self {
+        self.deadline = deadline;
+        self
+    }
+
+    /// Returns the optional maximum elapsed duration from stream creation.
+    #[inline(always)]
+    #[must_use]
+    pub const fn deadline(&self) -> Option<Duration> {
+        self.deadline
+    }
+
     /// Validates pagination and canonical provider-facing prefix values.
     ///
     /// # Errors
@@ -140,6 +194,16 @@ impl ListOptions {
                     "list prefix must be a canonical relative path",
                 ));
             }
+        }
+        if self
+            .deadline
+            .is_some_and(|deadline| Instant::now().checked_add(deadline).is_none())
+        {
+            return Err(FsError::new(
+                FsErrorKind::InvalidOptions,
+                FsOperation::List,
+                "list deadline exceeds the platform monotonic-clock range",
+            ));
         }
         Ok(())
     }

@@ -192,6 +192,23 @@ impl CopyOutcome {
         if options.conflict() != CopyConflictPolicy::Overwrite && self.stats.overwritten != 0 {
             return Some("provider reported overwritten copy entries without an overwrite conflict policy");
         }
+        if options.max_bytes().is_some_and(|maximum| self.stats.bytes > maximum) {
+            return Some("provider reported copy bytes beyond the requested limit");
+        }
+        let entries = self
+            .stats
+            .files
+            .checked_add(self.stats.directories)
+            .and_then(|value| value.checked_add(self.stats.symlinks))
+            .and_then(|value| value.checked_add(self.stats.objects))
+            .and_then(|value| value.checked_add(self.stats.prefixes));
+        if entries.is_none()
+            || options.max_entries().is_some_and(|maximum| {
+                u64::try_from(maximum).is_ok_and(|maximum| entries.is_some_and(|entries| entries > maximum))
+            })
+        {
+            return Some("provider reported copy entries beyond the requested limit");
+        }
         None
     }
 }

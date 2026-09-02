@@ -7,6 +7,8 @@
 // =============================================================================
 //! Owning asynchronous copy operation with cancellation-safe state tracking.
 
+use std::time::Instant;
+
 use qubit_io::AsyncInput;
 use qubit_io::AsyncOutput;
 
@@ -55,6 +57,8 @@ pub struct AsyncCopyOperation {
     state: AsyncCopyOperationState,
     /// Destination writer retained when recovery remains possible.
     writer: Option<Box<AsyncFileWriter>>,
+    /// Monotonic start used to enforce caller elapsed-time budgets.
+    started_at: Instant,
 }
 
 impl AsyncCopyOperation {
@@ -73,6 +77,7 @@ impl AsyncCopyOperation {
             options: ResolvedCopyOptions::new(options, symlink_policy),
             state: AsyncCopyOperationState::Ready,
             writer: None,
+            started_at: Instant::now(),
         }
     }
 
@@ -139,9 +144,10 @@ impl AsyncCopyOperation {
             options,
             state,
             writer,
+            started_at,
         } = self;
         let mut guard = CopyCancellationGuard::start(state, writer);
-        let result = execute_copy(file_system, source, target, options, guard.writer_mut()).await;
+        let result = execute_copy(file_system, source, target, options, *started_at, guard.writer_mut()).await;
         guard.finish(&result);
         result
     }
@@ -154,10 +160,30 @@ async fn execute_copy(
     source: &Path,
     target: &Path,
     options: &ResolvedCopyOptions,
+    started_at: Instant,
     writer: &mut Option<Box<crate::write::AsyncFileWriter>>,
 ) -> Result<CopyOutcome, AsyncCopyFailure> {
+    let caller_options = options.options();
+    if caller_options.max_entries() == Some(0) {
+        return Err(filesystem.contextual_copy_failure(
+            budget_error(source, target, "copy entry limit was exceeded"),
+            CopyFailureState::Unchanged,
+            CopyStats::default(),
+            source,
+            target,
+        ));
+    }
+    if deadline_expired(caller_options, started_at) {
+        return Err(filesystem.contextual_copy_failure(
+            budget_error(source, target, "copy deadline was exceeded"),
+            CopyFailureState::Unchanged,
+            CopyStats::default(),
+            source,
+            target,
+        ));
+    }
     if !filesystem.core().provider_supports(ProviderOperation::TryCopy) {
-        return stream_copy_fallback(filesystem, source, target, options, writer).await;
+        return stream_copy_fallback(filesystem, source, target, options, started_at, writer).await;
     }
     match filesystem
         .spi()
@@ -165,9 +191,20 @@ async fn execute_copy(
         .await
     {
         Ok(CopyAttempt::Completed(outcome)) => {
+            if deadline_expired(caller_options, started_at) {
+                return Err(filesystem.contextual_copy_failure(
+                    budget_error(source, target, "copy deadline was exceeded"),
+                    CopyFailureState::Published,
+                    *outcome.stats(),
+                    source,
+                    target,
+                ));
+            }
             filesystem.verify_completed_copy(outcome, options.options(), source, target)
         }
-        Ok(CopyAttempt::Declined(_)) => stream_copy_fallback(filesystem, source, target, options, writer).await,
+        Ok(CopyAttempt::Declined(_)) => {
+            stream_copy_fallback(filesystem, source, target, options, started_at, writer).await
+        }
         Err(failure) => {
             let (error, state, stats) = failure.into_parts();
             Err(filesystem.contextual_copy_failure(error, state, stats, source, target))
@@ -182,6 +219,7 @@ fn stream_copy_fallback<'a>(
     source: &'a Path,
     target: &'a Path,
     options: &'a ResolvedCopyOptions,
+    started_at: Instant,
     writer_slot: &'a mut Option<Box<crate::write::AsyncFileWriter>>,
 ) -> SpiFuture<'a, Result<CopyOutcome, AsyncCopyFailure>> {
     Box::pin(async move {
@@ -193,6 +231,24 @@ fn stream_copy_fallback<'a>(
                     FsOperation::Copy,
                     "declined copy cannot use the stream fallback for these options",
                 ),
+                CopyFailureState::Unchanged,
+                CopyStats::default(),
+                source,
+                target,
+            ));
+        }
+        if options.max_entries() == Some(0) {
+            return Err(filesystem.contextual_copy_failure(
+                budget_error(source, target, "copy entry limit was exceeded"),
+                CopyFailureState::Unchanged,
+                CopyStats::default(),
+                source,
+                target,
+            ));
+        }
+        if deadline_expired(options, started_at) {
+            return Err(filesystem.contextual_copy_failure(
+                budget_error(source, target, "copy deadline was exceeded"),
                 CopyFailureState::Unchanged,
                 CopyStats::default(),
                 source,
@@ -233,6 +289,17 @@ fn stream_copy_fallback<'a>(
         {
             return Err(filesystem.contextual_copy_failure(
                 error,
+                CopyFailureState::Unchanged,
+                CopyStats::default(),
+                source,
+                target,
+            ));
+        }
+        if let Some(length) = metadata.len()
+            && options.max_bytes().is_some_and(|maximum| length > maximum)
+        {
+            return Err(filesystem.contextual_copy_failure(
+                budget_error(source, target, "copy byte limit was exceeded"),
                 CopyFailureState::Unchanged,
                 CopyStats::default(),
                 source,
@@ -280,6 +347,16 @@ fn stream_copy_fallback<'a>(
         let mut bytes = 0_u64;
         let mut buffer = [0_u8; 8192];
         loop {
+            if deadline_expired(options, started_at) {
+                let writer = writer_slot.as_ref().expect("writer is retained before transfer");
+                return Err(filesystem.contextual_copy_failure(
+                    budget_error(source, target, "copy deadline was exceeded"),
+                    from_writer_state(writer.state()),
+                    fallback_failure_stats(writer.written_bytes()),
+                    source,
+                    target,
+                ));
+            }
             let read = reader.read_async(&mut buffer).await.map_err(|error| {
                 filesystem.contextual_copy_failure(
                     FsError::from_stream_io(error, FsOperation::Read, source),
@@ -303,6 +380,24 @@ fn stream_copy_fallback<'a>(
                 break;
             }
             let writer = writer_slot.as_mut().expect("writer is retained before transfer");
+            let next_bytes = filesystem.add_copied_bytes(bytes, read, source).map_err(|error| {
+                filesystem.contextual_copy_failure(
+                    error,
+                    from_writer_state(writer.state()),
+                    fallback_failure_stats(writer.written_bytes()),
+                    source,
+                    target,
+                )
+            })?;
+            if options.max_bytes().is_some_and(|maximum| next_bytes > maximum) {
+                return Err(filesystem.contextual_copy_failure(
+                    budget_error(source, target, "copy byte limit was exceeded"),
+                    from_writer_state(writer.state()),
+                    fallback_failure_stats(writer.written_bytes()),
+                    source,
+                    target,
+                ));
+            }
             writer.write_fully_async(&buffer[..read]).await.map_err(|error| {
                 filesystem.contextual_copy_failure(
                     FsError::from_stream_io(error, FsOperation::Write, target),
@@ -312,15 +407,7 @@ fn stream_copy_fallback<'a>(
                     target,
                 )
             })?;
-            bytes = filesystem.add_copied_bytes(bytes, read, source).map_err(|error| {
-                filesystem.contextual_copy_failure(
-                    error,
-                    from_writer_state(writer.state()),
-                    fallback_failure_stats(writer.written_bytes()),
-                    source,
-                    target,
-                )
-            })?;
+            bytes = next_bytes;
         }
         let writer = writer_slot.as_mut().expect("writer is retained before flush");
         writer.flush_async().await.map_err(|error| {
@@ -378,6 +465,20 @@ fn stream_copy_fallback<'a>(
             write_outcome.atomicity(),
         ))
     })
+}
+
+/// Returns whether the caller elapsed-time budget has expired.
+fn deadline_expired(options: &CopyOptions, started_at: Instant) -> bool {
+    options
+        .deadline()
+        .is_some_and(|deadline| started_at.elapsed() >= deadline)
+}
+
+/// Builds a caller-budget error for an asynchronous copy.
+fn budget_error(source: &Path, target: &Path, message: &str) -> FsError {
+    FsError::new(FsErrorKind::ResourceLimitExceeded, FsOperation::Copy, message)
+        .with_path(source.clone())
+        .with_target(target.clone())
 }
 
 /// Builds the stable failure used for an invalid execute retry.

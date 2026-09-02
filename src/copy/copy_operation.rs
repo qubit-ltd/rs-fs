@@ -9,6 +9,8 @@
 // copy fallback tests.
 //! Synchronous copy operation implementation.
 
+use std::time::Instant;
+
 use qubit_io::Input;
 use qubit_io::Output;
 
@@ -51,22 +53,20 @@ pub(crate) struct CopyOperation<'a> {
     target: &'a Path,
     /// Requested copy policy.
     options: CopyOptions,
+    /// Monotonic start used to enforce caller elapsed-time budgets.
+    started_at: Instant,
 }
 
 impl<'a> CopyOperation<'a> {
     /// Creates a pending synchronous copy operation.
     #[inline]
-    pub(crate) const fn new(
-        filesystem: &'a FileSystem,
-        source: &'a Path,
-        target: &'a Path,
-        options: CopyOptions,
-    ) -> Self {
+    pub(crate) fn new(filesystem: &'a FileSystem, source: &'a Path, target: &'a Path, options: CopyOptions) -> Self {
         Self {
             filesystem,
             source,
             target,
             options,
+            started_at: Instant::now(),
         }
     }
 
@@ -76,6 +76,22 @@ impl<'a> CopyOperation<'a> {
         if let Err(error) = self.copy_preflight() {
             return Err(self.contextualize_failure(self.failure(
                 error,
+                CopyFailureState::Unchanged,
+                CopyStats::default(),
+                None,
+            )));
+        }
+        if let Some(error) = self.deadline_error() {
+            return Err(self.contextualize_failure(self.failure(
+                error,
+                CopyFailureState::Unchanged,
+                CopyStats::default(),
+                None,
+            )));
+        }
+        if self.options.max_entries() == Some(0) {
+            return Err(self.contextualize_failure(self.failure(
+                self.budget_error("copy entry limit was exceeded"),
                 CopyFailureState::Unchanged,
                 CopyStats::default(),
                 None,
@@ -102,7 +118,17 @@ impl<'a> CopyOperation<'a> {
                     .unwrap_or(self.filesystem.properties().symlink_policy()),
             ),
         )) {
-            Ok(CopyAttempt::Completed(outcome)) => self.verify_completed_copy(outcome),
+            Ok(CopyAttempt::Completed(outcome)) => {
+                if let Some(error) = self.deadline_error() {
+                    return Err(self.contextualize_failure(self.failure(
+                        error,
+                        CopyFailureState::Published,
+                        *outcome.stats(),
+                        None,
+                    )));
+                }
+                self.verify_completed_copy(outcome)
+            }
             Err(failure) => {
                 let (error, state, stats) = failure.into_parts();
                 Err(self.contextualize_failure(self.failure(error, state, stats, None)))
@@ -166,6 +192,17 @@ impl<'a> CopyOperation<'a> {
                 None,
             ));
         }
+        if let Some(error) = self.deadline_error() {
+            return Err(self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None));
+        }
+        if self.options.max_entries() == Some(0) {
+            return Err(self.failure(
+                self.budget_error("copy entry limit was exceeded"),
+                CopyFailureState::Unchanged,
+                CopyStats::default(),
+                None,
+            ));
+        }
         self.filesystem
             .core()
             .require(FileSystemCapability::Read, FsOperation::Copy, Some(self.source))
@@ -193,12 +230,7 @@ impl<'a> CopyOperation<'a> {
             ));
         }
         if let Some(length) = metadata.len()
-            && let Err(error) = validate_stream_copy_length_limits(
-                self.filesystem.properties().limits(),
-                self.source,
-                self.target,
-                length,
-            )
+            && let Err(error) = self.validate_fallback_length(length)
         {
             return Err(self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None));
         }
@@ -230,6 +262,14 @@ impl<'a> CopyOperation<'a> {
         let mut bytes = 0_u64;
         let mut buffer = [0_u8; 8192];
         loop {
+            if let Some(error) = self.deadline_error() {
+                return Err(self.failure(
+                    error,
+                    from_writer_state(writer.state()),
+                    fallback_failure_stats(writer.written_bytes()),
+                    Some(writer),
+                ));
+            }
             let read = match Input::read(&mut reader, &mut buffer) {
                 Ok(read) => read,
                 Err(error) => {
@@ -244,16 +284,8 @@ impl<'a> CopyOperation<'a> {
             if read == 0 {
                 break;
             }
-            if let Err(error) = Output::write_fully(&mut writer, &buffer[..read]) {
-                return Err(self.failure(
-                    self.io_error(self.target, FsOperation::Write, error),
-                    from_writer_state(writer.state()),
-                    fallback_failure_stats(writer.written_bytes()),
-                    Some(writer),
-                ));
-            }
-            bytes = match self.add_copied_bytes(bytes, read) {
-                Ok(bytes) => bytes,
+            let next_bytes = match self.add_copied_bytes(bytes, read) {
+                Ok(next_bytes) => next_bytes,
                 Err(error) => {
                     return Err(self.failure(
                         error,
@@ -263,6 +295,23 @@ impl<'a> CopyOperation<'a> {
                     ));
                 }
             };
+            if self.options.max_bytes().is_some_and(|maximum| next_bytes > maximum) {
+                return Err(self.failure(
+                    self.budget_error("copy byte limit was exceeded"),
+                    from_writer_state(writer.state()),
+                    fallback_failure_stats(writer.written_bytes()),
+                    Some(writer),
+                ));
+            }
+            if let Err(error) = Output::write_fully(&mut writer, &buffer[..read]) {
+                return Err(self.failure(
+                    self.io_error(self.target, FsOperation::Write, error),
+                    from_writer_state(writer.state()),
+                    fallback_failure_stats(writer.written_bytes()),
+                    Some(writer),
+                ));
+            }
+            bytes = next_bytes;
         }
         if let Err(error) = Output::flush(&mut writer) {
             return Err(self.failure(
@@ -361,5 +410,35 @@ impl<'a> CopyOperation<'a> {
         )
         .with_path(self.source.clone())
         .with_provider(self.filesystem.properties().info().provider_id())
+    }
+
+    /// Validates provider and caller size limits before opening fallback
+    /// streams.
+    fn validate_fallback_length(&self, length: u64) -> FsResult<()> {
+        validate_stream_copy_length_limits(self.filesystem.properties().limits(), self.source, self.target, length)?;
+        if self.options.max_bytes().is_some_and(|maximum| length > maximum) {
+            return Err(self.budget_error("copy byte limit was exceeded"));
+        }
+        Ok(())
+    }
+
+    /// Returns a caller-budget error when the elapsed-time limit expired.
+    fn deadline_error(&self) -> Option<FsError> {
+        if self
+            .options
+            .deadline()
+            .is_some_and(|deadline| self.started_at.elapsed() >= deadline)
+        {
+            return Some(self.budget_error("copy deadline was exceeded"));
+        }
+        None
+    }
+
+    /// Builds a caller-budget error with stable copy context.
+    fn budget_error(&self, message: &str) -> FsError {
+        FsError::new(FsErrorKind::ResourceLimitExceeded, FsOperation::Copy, message)
+            .with_path(self.source.clone())
+            .with_target(self.target.clone())
+            .with_provider(self.filesystem.properties().info().provider_id())
     }
 }

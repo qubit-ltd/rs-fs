@@ -6,6 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use std::time::Duration;
+
 use qubit_fs::FileSystem;
 use qubit_fs::FsResult;
 use qubit_fs::Path;
@@ -32,6 +34,63 @@ use qubit_fs::spi::ProviderOperations;
 use qubit_fs::spi::ProviderProperties;
 use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
+
+#[test]
+fn test_directory_stream_enforces_entry_budget_before_returning_excess_entry() {
+    let entries = vec![
+        DirEntry::new(Path::parse("/root/first").expect("entry should parse"), FileKind::File),
+        DirEntry::new(Path::parse("/root/second").expect("entry should parse"), FileKind::File),
+    ];
+    let (filesystem, _, _) = crate::handle_support::filesystem(false, entries);
+    let mut stream = filesystem
+        .list(
+            &Path::parse("/root").expect("root should parse"),
+            ListOptions::default().with_max_entries(Some(1)),
+        )
+        .expect("stream should open");
+
+    assert!(stream.next_entry().expect("first entry should fit").is_some());
+    let error = stream.next_entry().expect_err("second entry must exceed the budget");
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, error.kind());
+    assert_eq!(DirectoryStreamState::Failed, stream.state());
+}
+
+#[test]
+fn test_directory_stream_enforces_depth_and_deadline_budgets() {
+    let nested = DirEntry::new(
+        Path::parse("/root/nested/item").expect("entry should parse"),
+        FileKind::File,
+    );
+    let (filesystem, _, _) = crate::handle_support::filesystem(false, vec![nested]);
+    let mut stream = filesystem
+        .list(
+            &Path::parse("/root").expect("root should parse"),
+            ListOptions::default().with_recursive(true).with_max_depth(Some(1)),
+        )
+        .expect("stream should open");
+    assert_eq!(
+        FsErrorKind::ResourceLimitExceeded,
+        stream
+            .next_entry()
+            .expect_err("nested entry must exceed depth one")
+            .kind(),
+    );
+
+    let (filesystem, _, _) = crate::handle_support::filesystem(false, Vec::new());
+    let mut stream = filesystem
+        .list(
+            &Path::parse("/root").expect("root should parse"),
+            ListOptions::default().with_deadline(Some(Duration::ZERO)),
+        )
+        .expect("stream should open");
+    assert_eq!(
+        FsErrorKind::ResourceLimitExceeded,
+        stream
+            .next_entry()
+            .expect_err("zero deadline must expire before polling")
+            .kind(),
+    );
+}
 #[test]
 fn test_directory_entry_path_can_be_compared_with_requested_root() {
     let entry = DirEntry::new(Path::parse("/outside").expect("entry should parse"), FileKind::File);
