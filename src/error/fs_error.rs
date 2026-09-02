@@ -16,6 +16,7 @@ use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
 use std::io;
 
+use crate::error::FsEffectState;
 use crate::error::FsErrorKind;
 use crate::error::FsOperation;
 use crate::metadata::FileSystemCapability;
@@ -45,6 +46,8 @@ pub struct FsError {
     provider: Option<Box<str>>,
     /// Capability needed to satisfy the request, when applicable.
     required_capability: Option<FileSystemCapability>,
+    /// Strongest known external effect of the failed operation.
+    effect_state: Option<FsEffectState>,
     /// Human-readable, non-sensitive error message.
     message: Box<str>,
     /// Lower-level source error, excluded from automatic formatting.
@@ -74,6 +77,7 @@ impl FsError {
             failure_target: None,
             provider: None,
             required_capability: None,
+            effect_state: None,
             message: message.into(),
             source: None,
         }
@@ -192,6 +196,22 @@ impl FsError {
     #[must_use]
     pub fn with_required_capability(mut self, capability: FileSystemCapability) -> Self {
         self.required_capability = Some(capability);
+        self
+    }
+
+    /// Adds the strongest known external effect of the failed operation.
+    ///
+    /// # Parameters
+    ///
+    /// * `effect_state` - Provider-neutral effect state proven by the provider.
+    ///
+    /// # Returns
+    ///
+    /// Updated filesystem error.
+    #[inline]
+    #[must_use]
+    pub fn with_effect_state(mut self, effect_state: FsEffectState) -> Self {
+        self.effect_state = Some(effect_state);
         self
     }
 
@@ -387,6 +407,18 @@ impl FsError {
         self.required_capability
     }
 
+    /// Gets the strongest known external effect of the failed operation.
+    ///
+    /// # Returns
+    ///
+    /// `Some` when a provider proved an effect state, or `None` when the error
+    /// carries no effect-state claim.
+    #[inline(always)]
+    #[must_use]
+    pub fn effect_state(&self) -> Option<FsEffectState> {
+        self.effect_state
+    }
+
     /// Converts this filesystem error into a byte-stream error.
     ///
     /// The complete [`FsError`] is retained as the [`io::Error`] source so
@@ -432,6 +464,7 @@ impl Debug for FsError {
             .field("failure_target", &self.failure_target.as_deref())
             .field("provider", &self.provider)
             .field("required_capability", &self.required_capability)
+            .field("effect_state", &self.effect_state)
             .field("message", &self.message)
             .field("source_present", &self.source.is_some())
             .finish()

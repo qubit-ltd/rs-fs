@@ -11,9 +11,23 @@ use std::io;
 
 use qubit_fs::FsError;
 use qubit_fs::Path;
+use qubit_fs::error::FsEffectState;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::error::FsOperation;
 use qubit_fs::metadata::FileSystemCapability;
+
+/// Verifies filesystem errors retain the strongest known external effect
+/// independently of path and provider enrichment.
+#[test]
+fn test_fs_error_preserves_effect_state() {
+    let path = Path::parse("/partial").expect("path should parse");
+    let error = FsError::new(FsErrorKind::Io, FsOperation::Delete, "partial mutation")
+        .with_effect_state(FsEffectState::PartiallyApplied)
+        .with_path(path)
+        .with_provider("test-provider");
+
+    assert_eq!(Some(FsEffectState::PartiallyApplied), error.effect_state());
+}
 
 #[test]
 fn test_fs_error_keeps_request_and_failure_paths_separate() {
