@@ -11,6 +11,7 @@
 
 use super::AsyncFileWriteSession;
 use crate::metadata::AtomicityRequirement;
+use crate::metadata::DurabilityRequirement;
 use crate::metadata::OpenedFileInfo;
 use crate::write::AsyncFileWriter;
 
@@ -51,6 +52,7 @@ impl OpenedAsyncWriter {
     ///
     /// # Parameters
     /// - `atomicity`: Publication atomicity requested by the caller.
+    /// - `durability`: Publication durability requested by the caller.
     /// - `provider`: Stable provider identifier used in generated errors.
     /// - `max_write_bytes`: Optional provider write-size limit.
     ///
@@ -61,9 +63,17 @@ impl OpenedAsyncWriter {
     pub(crate) fn into_writer(
         self,
         atomicity: AtomicityRequirement,
+        durability: DurabilityRequirement,
         provider: &str,
         max_write_bytes: Option<u64>,
     ) -> AsyncFileWriter {
-        AsyncFileWriter::new(self.info, self.session, atomicity, provider, max_write_bytes)
+        AsyncFileWriter::new(
+            self.info,
+            self.session,
+            atomicity,
+            durability,
+            provider,
+            max_write_bytes,
+        )
     }
 }

@@ -20,7 +20,15 @@ fn write_outcome_reports_actual_publication_semantics() {
     assert_eq!(Some(7), outcome.bytes_written());
     assert_eq!(AchievedAtomicity::Atomic, outcome.atomicity());
     assert_eq!(PublicationMethod::AtomicRename, outcome.method());
+    assert!(!outcome.durable());
     assert_eq!(Some("v7"), outcome.version().map(ResourceVersion::as_str));
+}
+
+#[test]
+fn write_outcome_reports_confirmed_durability() {
+    let outcome = WriteOutcome::new(AchievedAtomicity::Atomic, PublicationMethod::Direct).with_durable(true);
+
+    assert!(outcome.durable());
 }
 
 #[test]

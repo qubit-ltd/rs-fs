@@ -8,9 +8,11 @@
 
 use qubit_fs::FsError;
 use qubit_fs::Path;
+use qubit_fs::error::FsEffectState;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::error::FsOperation;
 use qubit_fs::metadata::AtomicityRequirement;
+use qubit_fs::metadata::DurabilityRequirement;
 use qubit_fs::write::WriteAbortOutcome;
 use qubit_fs::write::WriteFailure;
 use qubit_fs::write::WriteFailureState;
@@ -161,5 +163,25 @@ fn test_open_writer_rejects_non_atomic_required_commit_outcome() {
         .commit()
         .expect_err("non-atomic provider outcome must violate the contract");
     assert_eq!(FsErrorKind::ProviderContractViolation, error.error().kind());
+    assert_eq!(Some(FsEffectState::Applied), error.error().effect_state());
+    assert_eq!(WriterState::Published, writer.state());
+}
+
+/// Rejects a provider outcome that does not confirm durability after a
+/// durability-required write has already been published.
+#[test]
+fn test_open_writer_rejects_non_durable_required_commit_outcome() {
+    let (filesystem, _, _) = crate::handle_support::filesystem(false, Vec::new());
+    let mut writer = filesystem
+        .open_writer(
+            &Path::parse("/target").expect("path should parse"),
+            WriteOptions::default().with_durability(DurabilityRequirement::Required),
+        )
+        .expect("writer should open with advertised durable-write capability");
+    let error = writer
+        .commit()
+        .expect_err("non-durable provider outcome must violate the contract");
+    assert_eq!(FsErrorKind::ProviderContractViolation, error.error().kind());
+    assert_eq!(Some(FsEffectState::Applied), error.error().effect_state());
     assert_eq!(WriterState::Published, writer.state());
 }

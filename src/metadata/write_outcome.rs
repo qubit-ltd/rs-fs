@@ -24,6 +24,8 @@ pub struct WriteOutcome {
     atomicity: AchievedAtomicity,
     /// Concrete publication method that completed the write.
     method: PublicationMethod,
+    /// Whether data and namespace publication were durably synchronized.
+    durable: bool,
     /// Provider-native non-sensitive diagnostics.
     diagnostics: NonSensitiveMetadata,
 }
@@ -45,6 +47,7 @@ impl WriteOutcome {
             version: None,
             atomicity,
             method,
+            durable: false,
             diagnostics: NonSensitiveMetadata::new(),
         }
     }
@@ -77,6 +80,13 @@ impl WriteOutcome {
         self.method
     }
 
+    /// Returns whether the provider confirmed durable publication.
+    #[inline(always)]
+    #[must_use]
+    pub const fn durable(&self) -> bool {
+        self.durable
+    }
+
     /// Returns provider-native non-sensitive diagnostics.
     #[inline(always)]
     #[must_use]
@@ -97,6 +107,15 @@ impl WriteOutcome {
     #[must_use]
     pub fn with_version(mut self, version: ResourceVersion) -> Self {
         self.version = Some(version);
+        self
+    }
+
+    /// Records whether data and namespace publication were durably
+    /// synchronized.
+    #[inline]
+    #[must_use]
+    pub const fn with_durable(mut self, durable: bool) -> Self {
+        self.durable = durable;
         self
     }
 

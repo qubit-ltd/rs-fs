@@ -68,6 +68,8 @@ pub enum FileSystemCapability {
     DurableTreeCopy = 25,
     /// Durable publication of a renamed resource.
     DurableRename = 26,
+    /// Durable publication of a completed write session.
+    DurableWrite = 27,
 }
 
 impl FileSystemCapability {
@@ -100,6 +102,7 @@ impl FileSystemCapability {
         Self::DurableFileCopy,
         Self::DurableTreeCopy,
         Self::DurableRename,
+        Self::DurableWrite,
     ];
 
     /// Returns the bit representing this capability in a capability set.
