@@ -199,7 +199,8 @@ impl ProviderProperties {
             FileSystemCapability::Write
             | FileSystemCapability::Append
             | FileSystemCapability::ConditionalWrite
-            | FileSystemCapability::AtomicReplace => {
+            | FileSystemCapability::AtomicReplace
+            | FileSystemCapability::DurableWrite => {
                 (!operations.supports(ProviderOperation::OpenWriter)).then_some(ProviderOperation::OpenWriter)
             }
             FileSystemCapability::CreateDirectory | FileSystemCapability::EmptyDirectory => {
@@ -325,6 +326,7 @@ mod tests {
                 Some(ProviderOperation::OpenWriter),
             ),
             (FileSystemCapability::AtomicReplace, Some(ProviderOperation::OpenWriter)),
+            (FileSystemCapability::DurableWrite, Some(ProviderOperation::OpenWriter)),
             (
                 FileSystemCapability::CreateDirectory,
                 Some(ProviderOperation::CreateDirectory),

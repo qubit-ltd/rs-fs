@@ -604,6 +604,7 @@ impl FileSystemSpi for BehaviorSpi {
                 .with_guaranteed(FileSystemCapability::Copy)
                 .with_guaranteed(FileSystemCapability::Read)
                 .with_guaranteed(FileSystemCapability::Write)
+                .with_guaranteed(FileSystemCapability::DurableWrite)
                 .with_guaranteed(FileSystemCapability::CreateDirectory)
                 .with_guaranteed(FileSystemCapability::Delete)
                 .with_guaranteed(FileSystemCapability::AtomicReplace)

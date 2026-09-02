@@ -30,6 +30,7 @@ use qubit_fs::directory::CreateDirectoryOutcome;
 use qubit_fs::directory::DeleteOptions;
 use qubit_fs::directory::DeleteOutcome;
 use qubit_fs::directory::ListOptions;
+use qubit_fs::error::FsEffectState;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::error::FsOperation;
 use qubit_fs::metadata::AchievedAtomicity;
@@ -85,6 +86,7 @@ use qubit_fs::write::WriteAbortOutcome;
 use qubit_fs::write::WriteFailure;
 use qubit_fs::write::WriteFailureState;
 use qubit_fs::write::WriteOptions;
+use qubit_fs::write::WriterState;
 use qubit_io::AsyncInput;
 use qubit_io::AsyncOutput;
 
@@ -173,7 +175,8 @@ impl StreamCopyFallbackSpi {
         let capabilities = FileSystemCapabilities::new()
             .with_guaranteed(FileSystemCapability::Copy)
             .with_guaranteed(FileSystemCapability::Read)
-            .with_guaranteed(FileSystemCapability::Write);
+            .with_guaranteed(FileSystemCapability::Write)
+            .with_guaranteed(FileSystemCapability::DurableWrite);
         ProviderProperties::new(
             FileSystemInfo::new(
                 FileSystemId::new("async-fallback-review").expect("test provider id should be valid"),
@@ -662,6 +665,23 @@ fn test_async_facade_stream_fallback_returns_completed_outcome() {
         .expect("copy preflight should succeed");
     let outcome = ready(operation.execute()).expect("stream fallback should return its completed outcome");
     assert_eq!(1, outcome.stats().files);
+}
+
+/// Rejects an asynchronous provider outcome that fails to confirm required
+/// durability after publication.
+#[test]
+fn test_async_writer_rejects_non_durable_required_commit_outcome() {
+    let file_system =
+        AsyncFileSystem::from_spi(StreamCopyFallbackSpi::new(false, None)).expect("test SPI should construct");
+    let mut writer = ready(file_system.open_writer(
+        &path("/target"),
+        WriteOptions::default().with_durability(DurabilityRequirement::Required),
+    ))
+    .expect("writer should open with advertised durable-write capability");
+    let failure = ready(writer.commit_async()).expect_err("non-durable provider outcome must violate the contract");
+    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+    assert_eq!(Some(FsEffectState::Applied), failure.error().effect_state());
+    assert_eq!(WriterState::Published, writer.state());
 }
 
 /// Covers facade preflight error exits that must remain free of provider I/O.

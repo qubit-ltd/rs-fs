@@ -184,6 +184,7 @@ impl AsyncFileSystem {
             .map_err(|error| self.enrich(error, path, FsOperation::OpenWriter))?;
         self.require(FileSystemCapability::Write, FsOperation::OpenWriter, path)?;
         let atomicity = options.atomicity();
+        let durability = options.durability();
         let opened = self
             .spi
             .open_writer(OpenWriterRequest::new(path, ResolvedWriteOptions::new(options)))
@@ -192,6 +193,7 @@ impl AsyncFileSystem {
         self.validate_opened_info(opened.info(), path)?;
         Ok(opened.into_writer(
             atomicity,
+            durability,
             self.properties().info().provider_id(),
             self.properties().limits().max_write_bytes().maximum(),
         ))

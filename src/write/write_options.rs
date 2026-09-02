@@ -12,6 +12,7 @@ use crate::error::FsErrorKind;
 use crate::error::FsOperation;
 use crate::metadata::AtomicityRequirement;
 use crate::metadata::Checksum;
+use crate::metadata::DurabilityRequirement;
 use crate::metadata::FileSystemCapabilities;
 use crate::metadata::FileSystemCapability;
 use crate::metadata::NonSensitiveMetadata;
@@ -29,6 +30,8 @@ pub struct WriteOptions {
     disposition: WriteDisposition,
     /// Required atomicity of destination publication.
     atomicity: AtomicityRequirement,
+    /// Required durability of completed publication.
+    durability: DurabilityRequirement,
     /// Version precondition applied to the destination.
     precondition: WritePrecondition,
     /// Optional content type.
@@ -46,6 +49,7 @@ impl Default for WriteOptions {
             create_parent: false,
             disposition: WriteDisposition::default(),
             atomicity: AtomicityRequirement::default(),
+            durability: DurabilityRequirement::default(),
             precondition: WritePrecondition::default(),
             content_type: None,
             user_metadata: NonSensitiveMetadata::new(),
@@ -98,6 +102,21 @@ impl WriteOptions {
     #[must_use]
     pub const fn atomicity(&self) -> AtomicityRequirement {
         self.atomicity
+    }
+
+    /// Returns a copy with the durability requirement replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_durability(mut self, durability: DurabilityRequirement) -> Self {
+        self.durability = durability;
+        self
+    }
+
+    /// Returns the completed-publication durability requirement.
+    #[inline(always)]
+    #[must_use]
+    pub const fn durability(&self) -> DurabilityRequirement {
+        self.durability
     }
 
     /// Returns a copy with the version precondition replaced.
@@ -222,6 +241,14 @@ impl WriteOptions {
             return Err(missing_requirement(
                 FileSystemCapability::AtomicReplace,
                 "atomic write publication is required but not supported",
+            ));
+        }
+        if self.durability == DurabilityRequirement::Required
+            && !capabilities.supports(FileSystemCapability::DurableWrite)
+        {
+            return Err(missing_requirement(
+                FileSystemCapability::DurableWrite,
+                "durable write publication is required but not supported",
             ));
         }
         Ok(())

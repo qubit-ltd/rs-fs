@@ -9,6 +9,7 @@ use qubit_fs::error::FsErrorKind;
 use qubit_fs::metadata::AtomicityRequirement;
 use qubit_fs::metadata::Checksum;
 use qubit_fs::metadata::ChecksumAlgorithm;
+use qubit_fs::metadata::DurabilityRequirement;
 use qubit_fs::metadata::FileSystemCapabilities;
 use qubit_fs::metadata::FileSystemCapability;
 use qubit_fs::metadata::ResourceVersion;
@@ -24,6 +25,7 @@ fn test_write_options_full_configuration_is_usable() {
         .with_create_parent(true)
         .with_disposition(WriteDisposition::CreateOrReplace)
         .with_atomicity(AtomicityRequirement::Required)
+        .with_durability(DurabilityRequirement::Preferred)
         .with_precondition(WritePrecondition::IfMatch(ResourceVersion::new("v1")))
         .with_content_type(Some("text/plain".to_owned()))
         .with_checksum(Some(checksum));
@@ -32,6 +34,7 @@ fn test_write_options_full_configuration_is_usable() {
     assert_eq!(Some("text/plain"), options.content_type());
     assert!(options.checksum().is_some());
     assert_eq!(AtomicityRequirement::Required, options.atomicity());
+    assert_eq!(DurabilityRequirement::Preferred, options.durability());
     assert_eq!(WriteDisposition::CreateOrReplace, options.disposition());
     assert!(matches!(options.precondition(), WritePrecondition::IfMatch(_)));
     assert!(options.user_metadata().is_empty());
@@ -66,6 +69,14 @@ fn write_requirements_are_checked_against_typed_capabilities() {
     assert!(atomic.validate_against(capabilities).is_ok());
     assert!(append.validate_against(capabilities).is_ok());
     assert!(conditional.validate_against(capabilities).is_ok());
+
+    let durable = WriteOptions::default().with_durability(DurabilityRequirement::Required);
+    let error = durable
+        .validate_against(FileSystemCapabilities::default())
+        .expect_err("required durability must be preflighted");
+    assert_eq!(Some(FileSystemCapability::DurableWrite), error.required_capability());
+    let capabilities = capabilities.with_guaranteed(FileSystemCapability::DurableWrite);
+    assert!(durable.validate_against(capabilities).is_ok());
 }
 
 #[test]

@@ -85,6 +85,15 @@ fn capability_all_matches_stable_iteration_order() {
 }
 
 #[test]
+fn durable_write_depends_on_write() {
+    let capabilities = FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::DurableWrite);
+    assert_eq!(
+        Some((FileSystemCapability::DurableWrite, FileSystemCapability::Write)),
+        capabilities.missing_dependency(),
+    );
+}
+
+#[test]
 fn capability_set_reports_the_first_missing_dependency() {
     let capabilities = FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::AtomicRename);
 

@@ -21,6 +21,7 @@ use std::task::Poll;
 
 use qubit_io::AsyncOutput;
 
+use crate::error::FsEffectState;
 use crate::error::FsError;
 use crate::error::FsErrorKind;
 use crate::error::FsOperation;
@@ -29,6 +30,7 @@ use crate::facade::facade_core::FacadeCore;
 use crate::facade::facade_core::FileSystemResource;
 use crate::metadata::AchievedAtomicity;
 use crate::metadata::AtomicityRequirement;
+use crate::metadata::DurabilityRequirement;
 use crate::metadata::OpenedFileInfo;
 use crate::metadata::WriteOutcome;
 use crate::spi::AsyncFileWriteSession;
@@ -50,6 +52,8 @@ pub struct AsyncFileWriter {
     abort_completed: bool,
     /// Atomicity required by the caller.
     atomicity: AtomicityRequirement,
+    /// Durability required by the caller.
+    durability: DurabilityRequirement,
     /// Provider identifier attached to facade-generated errors.
     provider: Box<str>,
     /// Optional inclusive byte limit for this write session.
@@ -73,6 +77,7 @@ impl AsyncFileWriter {
         info: OpenedFileInfo,
         session: Box<dyn AsyncFileWriteSession>,
         atomicity: AtomicityRequirement,
+        durability: DurabilityRequirement,
         provider: &str,
         max_write_bytes: Option<u64>,
     ) -> Self {
@@ -82,6 +87,7 @@ impl AsyncFileWriter {
             state: WriterState::Open,
             abort_completed: false,
             atomicity,
+            durability,
             provider: provider.into(),
             write_budget: max_write_bytes
                 .map(|maximum| FacadeCore::byte_budget(FileSystemResource::WriteBytes, maximum)),
@@ -158,7 +164,22 @@ impl AsyncFileWriter {
                                 "provider reported non-atomic success for an atomic-required write",
                             )
                             .with_path(self.info.path().clone())
-                            .with_provider(&self.provider),
+                            .with_provider(&self.provider)
+                            .with_effect_state(FsEffectState::Applied),
+                            WriteFailureState::Published,
+                        ));
+                    }
+                    if self.durability == DurabilityRequirement::Required && !outcome.durable() {
+                        self.state = WriterState::Published;
+                        return Err(WriteFailure::new(
+                            FsError::new(
+                                FsErrorKind::ProviderContractViolation,
+                                FsOperation::CommitWriter,
+                                "provider reported non-durable success for a durability-required write",
+                            )
+                            .with_path(self.info.path().clone())
+                            .with_provider(&self.provider)
+                            .with_effect_state(FsEffectState::Applied),
                             WriteFailureState::Published,
                         ));
                     }
@@ -173,7 +194,8 @@ impl AsyncFileWriter {
                                 "provider reported a byte count different from the bytes accepted by the writer",
                             )
                             .with_path(self.info.path().clone())
-                            .with_provider(&self.provider),
+                            .with_provider(&self.provider)
+                            .with_effect_state(FsEffectState::Applied),
                             WriteFailureState::Published,
                         ));
                     }

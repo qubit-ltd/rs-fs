@@ -21,6 +21,7 @@ const CAPABILITY_DEPENDENCIES: &[(FileSystemCapability, FileSystemCapability)] =
     (FileSystemCapability::Append, FileSystemCapability::Write),
     (FileSystemCapability::ConditionalWrite, FileSystemCapability::Write),
     (FileSystemCapability::AtomicReplace, FileSystemCapability::Write),
+    (FileSystemCapability::DurableWrite, FileSystemCapability::Write),
     (FileSystemCapability::RecursiveDelete, FileSystemCapability::Delete),
     (FileSystemCapability::ConditionalDelete, FileSystemCapability::Delete),
     (FileSystemCapability::AtomicRename, FileSystemCapability::Rename),

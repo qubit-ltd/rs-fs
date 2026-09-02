@@ -221,6 +221,7 @@ impl FileSystem {
             .map_err(|error| self.enrich(error, path, FsOperation::OpenWriter))?;
         self.require(FileSystemCapability::Write, FsOperation::OpenWriter, path)?;
         let atomicity = options.atomicity();
+        let durability = options.durability();
         self.spi
             .open_writer(OpenWriterRequest::new(path, ResolvedWriteOptions::new(options)))
             .and_then(|opened| {
@@ -230,6 +231,7 @@ impl FileSystem {
                     info,
                     writer,
                     atomicity,
+                    durability,
                     self.properties().info().provider_id(),
                     self.properties().limits().max_write_bytes().maximum(),
                 ))
