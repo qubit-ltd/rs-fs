@@ -7,6 +7,8 @@
 // =============================================================================
 //! Copy operation options and policy types.
 
+use std::time::Duration;
+
 use crate::copy::CopyConflictPolicy;
 use crate::copy::CopyMode;
 use crate::copy::MetadataPreservePolicy;
@@ -42,6 +44,14 @@ pub struct CopyOptions {
     atomicity: AtomicityRequirement,
     /// Required durability of destination publication.
     durability: DurabilityRequirement,
+    /// Maximum descendant depth for tree copy.
+    max_depth: Option<usize>,
+    /// Maximum number of copied entries.
+    max_entries: Option<usize>,
+    /// Maximum number of copied payload bytes.
+    max_bytes: Option<u64>,
+    /// Maximum elapsed duration for the copy operation.
+    deadline: Option<Duration>,
 }
 
 impl CopyOptions {
@@ -180,6 +190,66 @@ impl CopyOptions {
         self.durability
     }
 
+    /// Returns a copy with the maximum tree depth replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_max_depth(mut self, max_depth: Option<usize>) -> Self {
+        self.max_depth = max_depth;
+        self
+    }
+
+    /// Returns the optional maximum tree depth.
+    #[inline(always)]
+    #[must_use]
+    pub const fn max_depth(&self) -> Option<usize> {
+        self.max_depth
+    }
+
+    /// Returns a copy with the maximum copied entry count replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_max_entries(mut self, max_entries: Option<usize>) -> Self {
+        self.max_entries = max_entries;
+        self
+    }
+
+    /// Returns the optional maximum copied entry count.
+    #[inline(always)]
+    #[must_use]
+    pub const fn max_entries(&self) -> Option<usize> {
+        self.max_entries
+    }
+
+    /// Returns a copy with the maximum copied byte count replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_max_bytes(mut self, max_bytes: Option<u64>) -> Self {
+        self.max_bytes = max_bytes;
+        self
+    }
+
+    /// Returns the optional maximum copied byte count.
+    #[inline(always)]
+    #[must_use]
+    pub const fn max_bytes(&self) -> Option<u64> {
+        self.max_bytes
+    }
+
+    /// Returns a copy with the maximum elapsed duration replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_deadline(mut self, deadline: Option<Duration>) -> Self {
+        self.deadline = deadline;
+        self
+    }
+
+    /// Returns the optional maximum elapsed duration.
+    #[inline(always)]
+    #[must_use]
+    pub const fn deadline(&self) -> Option<Duration> {
+        self.deadline
+    }
+
     /// Creates options for copying one file-like resource.
     ///
     /// # Returns
@@ -285,6 +355,10 @@ impl Default for CopyOptions {
             continue_on_error: false,
             atomicity: AtomicityRequirement::NotRequired,
             durability: DurabilityRequirement::NotRequired,
+            max_depth: None,
+            max_entries: None,
+            max_bytes: None,
+            deadline: None,
         }
     }
 }

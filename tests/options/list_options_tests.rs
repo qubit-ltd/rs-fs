@@ -6,6 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use std::time::Duration;
+
 use qubit_fs::directory::ListOptions;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::error::FsOperation;
@@ -30,6 +32,18 @@ fn test_list_options_full_configuration_is_usable() {
     assert!(options.include_metadata());
     assert_eq!(Some(10), options.page_size());
     assert_eq!(Some("a"), options.prefix());
+}
+
+#[test]
+fn list_options_preserve_generic_budgets() {
+    let options = ListOptions::default()
+        .with_max_depth(Some(3))
+        .with_max_entries(Some(100))
+        .with_deadline(Some(Duration::from_secs(2)));
+
+    assert_eq!(Some(3), options.max_depth());
+    assert_eq!(Some(100), options.max_entries());
+    assert_eq!(Some(Duration::from_secs(2)), options.deadline());
 }
 
 /// Rejects invalid provider-facing pagination and prefix values before they

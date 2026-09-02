@@ -11,6 +11,7 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
+use std::time::Instant;
 
 use crate::directory::DirectoryStreamState;
 use crate::directory::ListOptions;
@@ -40,6 +41,10 @@ pub struct DirectoryStream {
     limits: FileSystemLimits,
     /// Whether enumeration has completed or encountered a terminal failure.
     state: DirectoryStreamState,
+    /// Monotonic deadline computed when the stream is created.
+    deadline: Option<Instant>,
+    /// Number of entries already returned to the caller.
+    returned_entries: usize,
 }
 
 impl DirectoryStream {
@@ -60,6 +65,9 @@ impl DirectoryStream {
         path_semantics: crate::path::PathSemantics,
         limits: FileSystemLimits,
     ) -> Self {
+        let deadline = options
+            .deadline()
+            .and_then(|duration| Instant::now().checked_add(duration));
         Self {
             session,
             root,
@@ -68,6 +76,8 @@ impl DirectoryStream {
             path_semantics,
             limits,
             state: DirectoryStreamState::Open,
+            deadline,
+            returned_entries: 0,
         }
     }
 
@@ -94,6 +104,10 @@ impl DirectoryStream {
                 "directory stream is terminal",
             ));
         }
+        if self.deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+            self.state = DirectoryStreamState::Failed;
+            return Err(self.resource_limit_error("directory listing deadline was exceeded"));
+        }
         match self.session.next_entry() {
             Ok(Some(entry)) => {
                 if let Err(error) =
@@ -106,6 +120,25 @@ impl DirectoryStream {
                     self.state = DirectoryStreamState::Failed;
                     return Err(self.contextual_error(directory_entry_validation::option_error(&self.root, message)));
                 }
+                if self.options.max_depth().is_some_and(|maximum| {
+                    directory_entry_validation::entry_depth(&self.root, &entry.path)
+                        .is_some_and(|depth| depth > maximum)
+                }) {
+                    self.state = DirectoryStreamState::Failed;
+                    return Err(self.resource_limit_error("directory listing depth limit was exceeded"));
+                }
+                if self
+                    .options
+                    .max_entries()
+                    .is_some_and(|maximum| self.returned_entries >= maximum)
+                {
+                    self.state = DirectoryStreamState::Failed;
+                    return Err(self.resource_limit_error("directory listing entry limit was exceeded"));
+                }
+                self.returned_entries = self.returned_entries.checked_add(1).ok_or_else(|| {
+                    self.state = DirectoryStreamState::Failed;
+                    self.resource_limit_error("directory listing entry count exceeded the API range")
+                })?;
                 Ok(Some(entry))
             }
             Ok(None) => {
@@ -124,6 +157,15 @@ impl DirectoryStream {
         error
             .with_operation(FsOperation::List)
             .with_missing_context(&self.root, None, &self.provider)
+    }
+
+    /// Builds a terminal caller-budget error with list context.
+    fn resource_limit_error(&self, message: &str) -> FsError {
+        self.contextual_error(FsError::new(
+            FsErrorKind::ResourceLimitExceeded,
+            FsOperation::List,
+            message,
+        ))
     }
 }
 

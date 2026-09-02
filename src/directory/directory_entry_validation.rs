@@ -110,6 +110,16 @@ fn relative_path<'a>(root: &Path, entry: &'a Path) -> Option<&'a str> {
     }
 }
 
+/// Returns the descendant depth of `entry` below `root`.
+pub(crate) fn entry_depth(root: &Path, entry: &Path) -> Option<usize> {
+    let relative = relative_path(root, entry)?;
+    if relative.is_empty() {
+        Some(0)
+    } else {
+        Some(relative.split('/').count())
+    }
+}
+
 /// Builds a provider-contract error for one invalid entry identity.
 fn contract_error(path: &Path, message: &'static str) -> FsError {
     FsError::new(

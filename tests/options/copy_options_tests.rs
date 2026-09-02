@@ -5,6 +5,8 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+use std::time::Duration;
+
 use qubit_fs::copy::CopyConflictPolicy;
 use qubit_fs::copy::CopyMode;
 use qubit_fs::copy::CopyOptions;
@@ -58,6 +60,20 @@ fn test_copy_options_full_configuration_is_usable() {
     assert!(options.continue_on_error());
     assert_eq!(AtomicityRequirement::Required, options.atomicity());
     assert_eq!(DurabilityRequirement::Required, options.durability());
+}
+
+#[test]
+fn copy_options_preserve_generic_budgets() {
+    let options = CopyOptions::tree()
+        .with_max_depth(Some(3))
+        .with_max_entries(Some(10))
+        .with_max_bytes(Some(1024))
+        .with_deadline(Some(Duration::from_secs(2)));
+
+    assert_eq!(Some(3), options.max_depth());
+    assert_eq!(Some(10), options.max_entries());
+    assert_eq!(Some(1024), options.max_bytes());
+    assert_eq!(Some(Duration::from_secs(2)), options.deadline());
 }
 
 #[test]

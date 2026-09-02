@@ -7,6 +7,8 @@
 // =============================================================================
 //! External fallback failures and cancellation behavior for asynchronous copy.
 
+use std::time::Duration;
+
 use qubit_fs::Path;
 use qubit_fs::copy::AsyncCopyOperationState;
 use qubit_fs::copy::CopyConflictPolicy;
@@ -165,6 +167,35 @@ fn test_async_stream_fallback_rejects_known_length_over_limits_before_opening_ha
         assert_eq!(CopyFailureState::Unchanged, failure.state());
         assert!(!operation.has_recovery_writer());
         assert_eq!(vec!["try_copy", "stat"], probe.calls());
+    }
+}
+
+#[test]
+fn test_async_stream_fallback_enforces_caller_budgets_before_opening_handles() {
+    for (options, must_precede_provider) in [
+        (CopyOptions::default().with_max_bytes(Some(4)), false),
+        (CopyOptions::default().with_max_entries(Some(0)), true),
+        (CopyOptions::default().with_deadline(Some(Duration::ZERO)), true),
+    ] {
+        let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig::default());
+        let mut operation = file_system
+            .begin_copy(path("/source"), path("/target"), options)
+            .expect("copy preflight should succeed");
+        let failure = ready(operation.execute()).expect_err("caller budget must reject the fallback");
+        assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
+        assert_eq!(CopyFailureState::Unchanged, failure.state());
+        assert!(!operation.has_recovery_writer());
+        if must_precede_provider {
+            assert!(
+                probe.calls().is_empty(),
+                "zero work budgets should fail before provider I/O"
+            );
+        } else {
+            assert!(
+                probe.calls() == ["try_copy"] || probe.calls() == ["try_copy", "stat"],
+                "byte budget should fail before stream handles open",
+            );
+        }
     }
 }
 #[test]

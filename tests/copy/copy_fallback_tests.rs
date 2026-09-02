@@ -11,6 +11,7 @@ use std::io::Cursor;
 use std::io::Result as IoResult;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::time::Duration;
 
 use qubit_fs::FileSystem;
 use qubit_fs::FsError;
@@ -525,6 +526,43 @@ fn test_copy_declined_uses_allowlisted_stream_fallback() {
         ["try_copy", "stat", "open_reader", "open_writer"],
         calls.lock().expect("calls lock should succeed").as_slice()
     );
+}
+
+#[test]
+fn test_copy_stream_fallback_enforces_byte_and_entry_budgets() {
+    let (filesystem, _, bytes) = recording_filesystem(CopyResponse::Declined);
+    let failure = filesystem
+        .copy(
+            &path("/source"),
+            &path("/target"),
+            CopyOptions::default().with_max_bytes(Some(4)),
+        )
+        .expect_err("five source bytes must exceed a four-byte budget");
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
+    assert_eq!(CopyFailureState::Unchanged, failure.state());
+    assert!(bytes.lock().expect("bytes lock should succeed").is_empty());
+
+    let (filesystem, calls, _) = recording_filesystem(CopyResponse::Declined);
+    let failure = filesystem
+        .copy(
+            &path("/source"),
+            &path("/target"),
+            CopyOptions::default().with_max_entries(Some(0)),
+        )
+        .expect_err("a file copy must consume one entry");
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
+    assert!(calls.lock().expect("calls lock should succeed").is_empty());
+
+    let (filesystem, calls, _) = recording_filesystem(CopyResponse::Declined);
+    let failure = filesystem
+        .copy(
+            &path("/source"),
+            &path("/target"),
+            CopyOptions::default().with_deadline(Some(Duration::ZERO)),
+        )
+        .expect_err("a zero deadline must expire before provider I/O");
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
+    assert!(calls.lock().expect("calls lock should succeed").is_empty());
 }
 #[test]
 fn test_copy_stream_fallback_ignores_range_read_limit() {

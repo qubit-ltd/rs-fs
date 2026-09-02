@@ -264,6 +264,47 @@ fn test_async_directory_stream_rejects_outside_root_and_becomes_terminal() {
     assert_eq!(FsErrorKind::InvalidState, terminal.kind());
 }
 
+/// Enforces caller entry and depth budgets on asynchronous provider streams.
+#[test]
+fn test_async_directory_stream_enforces_generic_budgets() {
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
+        directory_entries: vec![
+            DirEntry::new(path("/root/first"), FileKind::File),
+            DirEntry::new(path("/root/second"), FileKind::File),
+        ],
+        ..AsyncRecordingConfig::default()
+    });
+    let mut stream = ready(file_system.list(&path("/root"), ListOptions::default().with_max_entries(Some(1))))
+        .expect("directory stream should open");
+    assert!(
+        ready(stream.next_entry_async())
+            .expect("first entry should fit")
+            .is_some()
+    );
+    assert_eq!(
+        FsErrorKind::ResourceLimitExceeded,
+        ready(stream.next_entry_async())
+            .expect_err("second entry must exceed the budget")
+            .kind(),
+    );
+
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
+        directory_entries: vec![DirEntry::new(path("/root/nested/item"), FileKind::File)],
+        ..AsyncRecordingConfig::default()
+    });
+    let mut stream = ready(file_system.list(
+        &path("/root"),
+        ListOptions::default().with_recursive(true).with_max_depth(Some(1)),
+    ))
+    .expect("directory stream should open");
+    assert_eq!(
+        FsErrorKind::ResourceLimitExceeded,
+        ready(stream.next_entry_async())
+            .expect_err("nested entry must exceed depth one")
+            .kind(),
+    );
+}
+
 /// Verifies a nested prefix is accepted without enabling recursive listing.
 #[test]
 fn test_async_directory_stream_accepts_nested_prefix_without_recursive_option() {
