@@ -77,6 +77,7 @@ pub mod write;
 
 #[cfg(feature = "async")]
 pub use async_file_system::AsyncFileSystem;
+pub use error::FsEffectState;
 pub use error::FsError;
 pub use error::FsResult;
 pub use file_system::FileSystem;
