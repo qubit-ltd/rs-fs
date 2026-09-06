@@ -224,7 +224,7 @@ fn stream_copy_fallback<'a>(
 ) -> SpiFuture<'a, Result<CopyOutcome, AsyncCopyFailure>> {
     Box::pin(async move {
         let options = options.options();
-        if !fallback_options_supported(options) {
+        if !fallback_options_supported(options, filesystem.properties().symlink_policy()) {
             return Err(filesystem.contextual_copy_failure(
                 FsError::new(
                     FsErrorKind::RequirementNotMet,
