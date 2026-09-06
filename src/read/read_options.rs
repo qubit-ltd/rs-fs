@@ -32,6 +32,17 @@ pub struct ReadOptions {
 }
 
 impl ReadOptions {
+    /// Returns the number of bytes selected from a resource of `resource_length`.
+    ///
+    /// The resource length is the complete object length reported by a provider;
+    /// an offset and optional length describe the window requested by the caller.
+    #[inline]
+    pub(crate) fn selected_length(&self, resource_length: u64) -> u64 {
+        let remaining = resource_length.saturating_sub(self.offset.unwrap_or(0));
+        self.length
+            .map_or(remaining, |length| remaining.min(length))
+    }
+
     /// Returns a copy with the byte offset replaced.
     #[inline]
     #[must_use]
@@ -125,7 +136,9 @@ impl ReadOptions {
                 "if_match and if_none_match cannot both be specified",
             ));
         }
-        if (self.offset.is_some() || self.length.is_some()) && !capabilities.supports(FileSystemCapability::RangeRead) {
+        if (self.offset.is_some() || self.length.is_some())
+            && !capabilities.supports(FileSystemCapability::RangeRead)
+        {
             return Err(missing_requirement(
                 FileSystemCapability::RangeRead,
                 "byte-range reads are required but not supported",
@@ -139,7 +152,8 @@ impl ReadOptions {
                 "conditional reads are required but not supported",
             ));
         }
-        if self.checksum == ChecksumPolicy::Required && !capabilities.supports(FileSystemCapability::ChecksumValidation)
+        if self.checksum == ChecksumPolicy::Required
+            && !capabilities.supports(FileSystemCapability::ChecksumValidation)
         {
             return Err(missing_requirement(
                 FileSystemCapability::ChecksumValidation,
@@ -152,5 +166,10 @@ impl ReadOptions {
 
 /// Builds a typed unmet read requirement.
 fn missing_requirement(capability: FileSystemCapability, message: &str) -> FsError {
-    FsError::new(FsErrorKind::RequirementNotMet, FsOperation::OpenReader, message).with_required_capability(capability)
+    FsError::new(
+        FsErrorKind::RequirementNotMet,
+        FsOperation::OpenReader,
+        message,
+    )
+    .with_required_capability(capability)
 }
