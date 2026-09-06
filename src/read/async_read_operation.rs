@@ -35,8 +35,13 @@ impl<'a> AsyncReadOperation<'a> {
     }
 
     /// Reads an entire file asynchronously while enforcing `max_bytes`.
-    pub(crate) async fn read_all(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
-        let mut reader = self.filesystem.open_reader(path, options).await?;
+    pub(crate) async fn read_all(
+        &self,
+        path: &Path,
+        options: ReadOptions,
+        max_bytes: usize,
+    ) -> FsResult<Vec<u8>> {
+        let mut reader = self.filesystem.open_reader(path, options.clone()).await?;
         let mut bytes = Vec::new();
         let maximum = FacadeCore::quantity_from_usize(
             max_bytes,
@@ -48,7 +53,8 @@ impl<'a> AsyncReadOperation<'a> {
         if let Some(metadata) = reader.info().metadata()
             && let Some(length) = metadata.len()
         {
-            read_budget.check_available(length).map_err(|error| {
+            let selected = options.selected_length(length);
+            read_budget.check_available(selected).map_err(|error| {
                 FacadeCore::budget_error(
                     error,
                     FsOperation::Read,
@@ -57,7 +63,7 @@ impl<'a> AsyncReadOperation<'a> {
                     "read exceeds maximum byte count",
                 )
             })?;
-            if let Ok(capacity) = usize::try_from(length) {
+            if let Ok(capacity) = usize::try_from(selected) {
                 bytes.try_reserve(capacity).map_err(|error| {
                     FsError::with_source(
                         FsErrorKind::ResourceLimitExceeded,
@@ -73,15 +79,18 @@ impl<'a> AsyncReadOperation<'a> {
         let mut buffer = [0_u8; 8192];
         loop {
             let remaining = read_budget.remaining();
-            let read_len =
-                usize::try_from(remaining.saturating_add(1)).map_or(buffer.len(), |value| value.min(buffer.len()));
-            let read = reader.read_async(&mut buffer[..read_len]).await.map_err(|error| {
-                self.filesystem.core().enrich(
-                    FsError::from_stream_io(error, FsOperation::Read, path),
-                    Some(path),
-                    FsOperation::Read,
-                )
-            })?;
+            let read_len = usize::try_from(remaining.saturating_add(1))
+                .map_or(buffer.len(), |value| value.min(buffer.len()));
+            let read = reader
+                .read_async(&mut buffer[..read_len])
+                .await
+                .map_err(|error| {
+                    self.filesystem.core().enrich(
+                        FsError::from_stream_io(error, FsOperation::Read, path),
+                        Some(path),
+                        FsOperation::Read,
+                    )
+                })?;
             if read == 0 {
                 return Ok(bytes);
             }
@@ -100,12 +109,19 @@ impl<'a> AsyncReadOperation<'a> {
                     "read exceeds maximum byte count",
                 ));
             }
-            bytes.extend_from_slice(&buffer[..usize::try_from(read).expect("read count originated as usize")]);
+            bytes.extend_from_slice(
+                &buffer[..usize::try_from(read).expect("read count originated as usize")],
+            );
         }
     }
 
     /// Reads at most `max_bytes` from a file asynchronously.
-    pub(crate) async fn read_prefix(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
+    pub(crate) async fn read_prefix(
+        &self,
+        path: &Path,
+        options: ReadOptions,
+        max_bytes: usize,
+    ) -> FsResult<Vec<u8>> {
         let mut reader = self.filesystem.open_reader(path, options).await?;
         if max_bytes == 0 {
             return Ok(Vec::new());
@@ -114,13 +130,16 @@ impl<'a> AsyncReadOperation<'a> {
         let mut buffer = [0_u8; FacadeCore::PREFIX_BUFFER_SIZE];
         while bytes.len() < max_bytes {
             let read_len = FacadeCore::next_prefix_read_len(bytes.len(), max_bytes);
-            let read = reader.read_async(&mut buffer[..read_len]).await.map_err(|error| {
-                self.filesystem.core().enrich(
-                    FsError::from_stream_io(error, FsOperation::Read, path),
-                    Some(path),
-                    FsOperation::Read,
-                )
-            })?;
+            let read = reader
+                .read_async(&mut buffer[..read_len])
+                .await
+                .map_err(|error| {
+                    self.filesystem.core().enrich(
+                        FsError::from_stream_io(error, FsOperation::Read, path),
+                        Some(path),
+                        FsOperation::Read,
+                    )
+                })?;
             if read == 0 {
                 break;
             }
