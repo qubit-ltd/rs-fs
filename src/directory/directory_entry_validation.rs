@@ -8,7 +8,6 @@
 // qubit-style: allow source-test-pair
 //! Shared validation for provider directory entries.
 
-use crate::directory::ListOptions;
 use crate::error::FsError;
 use crate::error::FsErrorKind;
 use crate::error::FsOperation;
@@ -57,7 +56,7 @@ pub(crate) fn validate_entry(
             "provider returned directory metadata with a different kind",
         ));
     }
-    if relative_path(root, &entry.path).is_none() {
+    if crate::directory::internal::relative_path(root, &entry.path, semantics).is_none() {
         return Err(contract_error(
             root,
             "provider returned directory entry outside requested root",
@@ -67,28 +66,6 @@ pub(crate) fn validate_entry(
 }
 
 /// Checks whether one validated entry is selected by listing options.
-pub(crate) fn matches_options(entry: &DirEntry, root: &Path, options: &ListOptions) -> Result<(), &'static str> {
-    let Some(relative) = relative_path(root, &entry.path) else {
-        return Err("provider returned directory entry outside requested root");
-    };
-    if !options.recursive() && options.prefix().is_none() && relative.contains('/') {
-        return Err("provider returned nested directory entry for non-recursive listing");
-    }
-    if options.include_metadata() && entry.metadata.is_none() {
-        return Err("provider returned directory entry without requested metadata");
-    }
-    if options.prefix().is_none_or(|prefix| {
-        relative == prefix
-            || relative
-                .strip_prefix(prefix)
-                .is_some_and(|remaining| remaining.starts_with('/'))
-    }) {
-        Ok(())
-    } else {
-        Err("provider returned directory entry outside requested prefix")
-    }
-}
-
 /// Builds a stable provider-contract error for list option filtering.
 pub(crate) fn option_error(root: &Path, message: &'static str) -> FsError {
     contract_error(root, message)

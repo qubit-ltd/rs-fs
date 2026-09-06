@@ -256,7 +256,7 @@ impl AsyncFileWriter {
                     Ok(outcome)
                 }
                 Err(error) => {
-                    if error.kind() != FsErrorKind::Indeterminate {
+                    if !error.has_indeterminate_effect() {
                         self.state = previous_state;
                     }
                     Err(self.contextual_error(error, FsOperation::AbortWriter))

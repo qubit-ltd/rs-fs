@@ -10,12 +10,18 @@
 #[cfg(feature = "async")]
 mod copy_cancellation_guard;
 mod copy_deadline;
+mod copy_failure_parts;
+#[cfg(feature = "async")]
+mod copy_recovery_snapshot;
 mod fallback_failure_state;
 mod stream_copy_policy;
 
 #[cfg(feature = "async")]
 pub(super) use copy_cancellation_guard::CopyCancellationGuard;
 pub(crate) use copy_deadline::CopyDeadline;
+pub(in crate::copy) use copy_failure_parts::CopyFailureParts;
+#[cfg(feature = "async")]
+pub(crate) use copy_recovery_snapshot::CopyRecoverySnapshot;
 pub(crate) use fallback_failure_state::fallback_failure_stats;
 pub(crate) use fallback_failure_state::from_completed_stats;
 pub(crate) use fallback_failure_state::from_write_failure_state;

@@ -13,6 +13,7 @@ use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
 
 use crate::error::FsError;
+use crate::path::Path;
 use crate::temp::PersistFailureState;
 
 /// Persistence error paired with provider-confirmed partial progress.
@@ -22,6 +23,7 @@ pub struct PersistFailure {
     error: FsError,
     /// Provider-confirmed source and destination progress.
     state: PersistFailureState,
+    publication_target: Option<Path>,
 }
 
 impl PersistFailure {
@@ -36,7 +38,15 @@ impl PersistFailure {
     #[inline]
     #[must_use]
     pub fn new(error: FsError, state: PersistFailureState) -> Self {
-        Self { error, state }
+        Self {
+            error,
+            state,
+            publication_target: None,
+        }
+    }
+    pub(crate) fn with_publication_target(mut self, target: Option<&Path>) -> Self {
+        self.publication_target = target.cloned();
+        self
     }
 
     /// Returns provider-confirmed partial progress.
@@ -59,6 +69,13 @@ impl PersistFailure {
         &self.error
     }
 
+    /// Returns the target associated with the retained recovery fact.
+    #[inline]
+    #[must_use]
+    pub fn publication_target(&self) -> Option<&Path> {
+        self.publication_target.as_ref()
+    }
+
     /// Consumes this failure and returns the underlying filesystem error.
     ///
     /// # Returns
@@ -74,6 +91,13 @@ impl PersistFailure {
     #[must_use]
     pub fn into_parts(self) -> (FsError, PersistFailureState) {
         (self.error, self.state)
+    }
+
+    /// Consumes the failure and returns its complete recovery snapshot.
+    #[inline]
+    #[must_use]
+    pub fn into_recovery_parts(self) -> (FsError, PersistFailureState, Option<Path>) {
+        (self.error, self.state, self.publication_target)
     }
 }
 

@@ -159,7 +159,7 @@ fn test_directory_stream_accepts_object_key_root_with_trailing_slash() {
     let filesystem = FileSystem::from_spi(ObjectKeySpi).expect("object-key filesystem should construct");
     let root = Path::parse_literal("bucket/prefix/").expect("object-key root should parse");
     let mut stream = filesystem
-        .list(&root, ListOptions::default())
+        .list(&root, ListOptions::object_keys())
         .expect("object-key stream should open");
 
     assert!(

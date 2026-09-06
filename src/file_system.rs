@@ -215,11 +215,7 @@ impl FileSystem {
 
     /// Opens a provider writer after local option validation.
     pub fn open_writer(&self, path: &Path, options: WriteOptions) -> FsResult<FileWriter> {
-        self.validate_path(path, FsOperation::OpenWriter)?;
-        options
-            .validate_against(self.properties().capabilities())
-            .map_err(|error| self.enrich(error, path, FsOperation::OpenWriter))?;
-        self.require(FileSystemCapability::Write, FsOperation::OpenWriter, path)?;
+        self.core.validate_write_request(path, &options)?;
         let atomicity = options.atomicity();
         let durability = options.durability();
         self.spi

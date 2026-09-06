@@ -28,6 +28,7 @@ use crate::temp::PersistFailureState;
 use crate::temp::PersistOptions;
 use crate::temp::PersistOutcome;
 use crate::temp::TempResourceState;
+use crate::temp::internal::TempLifecycle;
 
 /// A facade-owned asynchronous temporary file.
 pub struct AsyncTempFile {
@@ -38,7 +39,7 @@ pub struct AsyncTempFile {
     /// Pinned provider lifecycle session.
     session: Pin<Box<dyn AsyncTempResourceSpi>>,
     /// Current cleanup and publication lifecycle state.
-    state: TempResourceState,
+    lifecycle: TempLifecycle,
     /// Human-readable resource kind used in lifecycle diagnostics.
     resource_name: &'static str,
 }
@@ -63,7 +64,7 @@ impl AsyncTempFile {
             file_system,
             path,
             session: Box::into_pin(session),
-            state: TempResourceState::Owned,
+            lifecycle: TempLifecycle::new(),
             resource_name,
         }
     }
@@ -85,7 +86,7 @@ impl AsyncTempFile {
     #[inline(always)]
     #[must_use]
     pub const fn state(&self) -> TempResourceState {
-        self.state
+        self.lifecycle.state()
     }
 
     /// Returns one lexically safe child path.
@@ -127,28 +128,24 @@ impl AsyncTempFile {
     /// or to the provider ownership-transfer failure.
     #[inline]
     pub fn keep(&mut self) -> SpiFuture<'_, Result<PersistOutcome, PersistFailure>> {
-        if self.state != TempResourceState::Owned {
+        if self.lifecycle.state() != TempResourceState::Owned {
             let error = self.invalid_state(FsOperation::KeepTemp, "cannot be kept now");
-            return Box::pin(async move { Err(PersistFailure::new(error, PersistFailureState::NotPublished)) });
+            return Box::pin(async move { Err(PersistFailure::new(error, failure_state_for(self.lifecycle.state()))) });
         }
         Box::pin(async move {
-            self.state = TempResourceState::Indeterminate;
+            self.lifecycle.begin_pending();
             match self.session.as_mut().keep().await {
                 Ok(outcome) => {
                     if let Err(error) = self.file_system.validate_temp_keep_target(&self.path, outcome.target()) {
                         return Err(PersistFailure::new(error, PersistFailureState::Indeterminate));
                     }
                     self.path = outcome.target().clone();
-                    self.state = TempResourceState::Kept;
+                    self.lifecycle.record_success(true, outcome.target().clone());
                     Ok(outcome)
                 }
                 Err(failure) => {
                     let (error, state) = failure.into_parts();
-                    self.state = match state {
-                        PersistFailureState::NotPublished => TempResourceState::Owned,
-                        PersistFailureState::PublishedSourceRetained => TempResourceState::CleanupRequired,
-                        PersistFailureState::Indeterminate => TempResourceState::Indeterminate,
-                    };
+                    self.lifecycle.record_failure(state, None, true);
                     let target = self.path.clone();
                     Err(PersistFailure::new(
                         error.with_operation(FsOperation::KeepTemp).with_missing_context(
@@ -180,36 +177,40 @@ impl AsyncTempFile {
         target: &'a Path,
         options: PersistOptions,
     ) -> SpiFuture<'a, Result<PersistOutcome, PersistFailure>> {
-        if self.state != TempResourceState::Owned {
+        if self.lifecycle.state() != TempResourceState::Owned {
             let error = self.invalid_state(FsOperation::PersistTemp, "cannot be persisted now");
-            return Box::pin(async move { Err(PersistFailure::new(error, PersistFailureState::NotPublished)) });
+            return Box::pin(async move { Err(PersistFailure::new(error, failure_state_for(self.lifecycle.state()))) });
         }
         if let Err(error) = self.file_system.preflight_temp_persist(&self.path, target, &options) {
             return Box::pin(async move { Err(PersistFailure::new(error, PersistFailureState::NotPublished)) });
         }
         Box::pin(async move {
-            self.state = TempResourceState::Indeterminate;
+            self.lifecycle.begin_pending();
             let atomicity = options.atomicity();
             let result = self
                 .session
                 .as_mut()
                 .persist(PersistRequest::new(target, options))
                 .await;
-            self.state = match &result {
-                Ok(outcome) if outcome.target() != target => TempResourceState::Indeterminate,
+            match &result {
                 Ok(outcome)
-                    if atomicity == AtomicityRequirement::Required
-                        && outcome.atomicity() != AchievedAtomicity::Atomic =>
+                    if outcome.target() == target
+                        && !(atomicity == AtomicityRequirement::Required
+                            && outcome.atomicity() != AchievedAtomicity::Atomic) =>
                 {
-                    TempResourceState::CleanupRequired
+                    self.lifecycle.record_success(false, outcome.target().clone());
                 }
-                Ok(_) => TempResourceState::Persisted,
-                Err(failure) => match failure.state() {
-                    PersistFailureState::NotPublished => TempResourceState::Owned,
-                    PersistFailureState::PublishedSourceRetained => TempResourceState::CleanupRequired,
-                    PersistFailureState::Indeterminate => TempResourceState::Indeterminate,
-                },
-            };
+                Ok(outcome) if outcome.target() != target => {
+                    self.lifecycle
+                        .record_failure(PersistFailureState::Indeterminate, Some(target.clone()), false);
+                }
+                Ok(_) => self.lifecycle.record_failure(
+                    PersistFailureState::PublishedSourceRetained,
+                    Some(target.clone()),
+                    false,
+                ),
+                Err(failure) => self.lifecycle.record_failure(failure.state(), None, false),
+            }
             match result {
                 Ok(outcome) if outcome.target() != target => Err(PersistFailure::new(
                     FsError::new(
@@ -272,22 +273,37 @@ impl AsyncTempFile {
         F: FnOnce(Pin<&'a mut dyn AsyncTempResourceSpi>) -> SpiFuture<'a, FsResult<()>> + Send + 'a,
     {
         if !matches!(
-            self.state,
+            self.lifecycle.state(),
             TempResourceState::Owned | TempResourceState::CleanupRequired
         ) {
             let error = self.invalid_state(operation, action);
             return Box::pin(async move { Err(error) });
         }
-        let previous_state = self.state;
+        let previous_state = self.lifecycle.state();
         Box::pin(async move {
-            self.state = TempResourceState::Indeterminate;
+            self.lifecycle.begin_pending();
             let result = call(self.session.as_mut()).await;
-            self.state = match (operation, &result) {
-                (FsOperation::CleanupTemp, Ok(())) => TempResourceState::Cleaned,
-                (FsOperation::KeepTemp, Ok(())) => TempResourceState::Kept,
-                (_, Err(error)) if error.kind() == FsErrorKind::Indeterminate => TempResourceState::Indeterminate,
-                (FsOperation::KeepTemp, Err(_)) => previous_state,
-                _ => TempResourceState::CleanupRequired,
+            match (operation, &result) {
+                (FsOperation::CleanupTemp, Ok(())) => {
+                    self.lifecycle.record_cleanup_success();
+                    self.lifecycle.state()
+                }
+                (FsOperation::KeepTemp, Ok(())) => {
+                    self.lifecycle.record_success(true, self.path.clone());
+                    self.lifecycle.state()
+                }
+                (_, Err(error)) if error.has_indeterminate_effect() => {
+                    self.lifecycle.begin_pending();
+                    self.lifecycle.state()
+                }
+                (FsOperation::KeepTemp, Err(_)) => {
+                    self.lifecycle.restore_state(previous_state);
+                    self.lifecycle.state()
+                }
+                _ => {
+                    self.lifecycle.restore_state(TempResourceState::CleanupRequired);
+                    self.lifecycle.state()
+                }
             };
             result.map_err(|error| {
                 error.with_operation(operation).with_missing_context(
@@ -330,10 +346,20 @@ impl AsyncTempFile {
     }
 }
 
+fn failure_state_for(state: TempResourceState) -> PersistFailureState {
+    match state {
+        TempResourceState::Owned => PersistFailureState::NotPublished,
+        TempResourceState::Cleaned => PersistFailureState::NotPublishedSourceReleased,
+        TempResourceState::CleanupRequired => PersistFailureState::PublishedSourceRetained,
+        TempResourceState::Persisted | TempResourceState::Kept => PersistFailureState::PublishedSourceReleased,
+        TempResourceState::Indeterminate => PersistFailureState::Indeterminate,
+    }
+}
+
 impl Drop for AsyncTempFile {
     fn drop(&mut self) {
         if matches!(
-            self.state,
+            self.lifecycle.state(),
             TempResourceState::Owned | TempResourceState::CleanupRequired
         ) {
             self.session.as_mut().cancel_on_drop();

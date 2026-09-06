@@ -23,21 +23,23 @@ fn test_async_write_all_failure_exposes_recovery_and_formatting() {
         writer_commit_failure: Some(WriteFailureState::NotPublished),
         ..AsyncRecordingConfig::default()
     });
-    let mut failure = ready(filesystem.write_all(
-        &Path::parse("/target").expect("path should parse"),
-        b"bytes",
-        WriteOptions::default(),
-    ))
-    .expect_err("commit failure should retain an async writer");
+    let mut operation = filesystem
+        .begin_write_all(
+            Path::parse("/target").expect("path should parse"),
+            b"bytes",
+            WriteOptions::default(),
+        )
+        .expect("write preflight should succeed");
+    let failure = ready(operation.execute()).expect_err("commit failure should retain an async writer");
 
     assert_eq!(FsErrorKind::Io, failure.error().kind());
-    assert!(failure.writer().is_some());
-    assert!(failure.writer_mut().is_some());
+    assert!(operation.has_recovery_writer());
     assert!(failure.to_string().contains("commit failure"));
-    assert!(format!("{failure:?}").contains("has_writer"));
+    assert!(format!("{failure:?}").contains("written_bytes"));
     assert!(Error::source(&failure).is_some());
 
-    let (error, writer) = failure.into_parts();
+    let (error, state, written_bytes) = failure.into_parts();
     assert_eq!(FsErrorKind::Io, error.kind());
-    assert!(writer.is_some());
+    assert_eq!(WriteFailureState::NotPublished, state);
+    assert_eq!(5, written_bytes);
 }

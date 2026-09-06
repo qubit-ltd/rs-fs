@@ -419,6 +419,13 @@ impl FsError {
         self.effect_state
     }
 
+    /// Returns whether the operation's external effect cannot be determined.
+    #[inline]
+    #[must_use]
+    pub fn has_indeterminate_effect(&self) -> bool {
+        self.kind == FsErrorKind::Indeterminate || self.effect_state == Some(FsEffectState::Indeterminate)
+    }
+
     /// Converts this filesystem error into a byte-stream error.
     ///
     /// The complete [`FsError`] is retained as the [`io::Error`] source so

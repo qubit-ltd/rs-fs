@@ -243,7 +243,7 @@ impl FileWriter {
                 Ok(outcome)
             }
             Err(error) => {
-                if error.kind() == FsErrorKind::Indeterminate {
+                if error.has_indeterminate_effect() {
                     self.state = WriterState::Indeterminate;
                 }
                 Err(self.contextual_error(error, FsOperation::AbortWriter))

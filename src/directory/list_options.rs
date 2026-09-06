@@ -10,16 +10,18 @@
 use std::time::Duration;
 use std::time::Instant;
 
+use crate::directory::ListFilter;
 use crate::error::FsError;
 use crate::error::FsErrorKind;
 use crate::error::FsOperation;
 use crate::error::FsResult;
 use crate::metadata::SymlinkPolicy;
+use crate::path::PathSemantics;
 use crate::path::RelativePath;
 
 /// Options controlling directory or prefix listing.
 #[non_exhaustive]
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct ListOptions {
     /// Whether listing should recurse into child containers.
     recursive: bool,
@@ -35,7 +37,7 @@ pub struct ListOptions {
     /// listing `/root` with `prefix: Some("nested/item")` matches
     /// `/root/nested/item`, while `prefix: Some("item")` only matches an
     /// immediate child named `item`.
-    prefix: Option<String>,
+    filter: Option<ListFilter>,
     /// Maximum returned descendant depth relative to the list root.
     max_depth: Option<usize>,
     /// Maximum number of entries returned to the caller.
@@ -109,7 +111,7 @@ impl ListOptions {
     #[inline]
     #[must_use]
     pub fn with_prefix(mut self, prefix: Option<String>) -> Self {
-        self.prefix = prefix;
+        self.filter = prefix.map(ListFilter::Subtree);
         self
     }
 
@@ -117,7 +119,33 @@ impl ListOptions {
     #[inline(always)]
     #[must_use]
     pub fn prefix(&self) -> Option<&str> {
-        self.prefix.as_deref()
+        match self.filter.as_ref() {
+            Some(ListFilter::Subtree(prefix)) => Some(prefix),
+            _ => None,
+        }
+    }
+
+    /// Replaces the explicit listing filter.
+    #[must_use]
+    pub fn with_filter(mut self, filter: Option<ListFilter>) -> Self {
+        self.filter = filter;
+        self
+    }
+
+    /// Returns the explicit listing filter.
+    #[must_use]
+    pub fn filter(&self) -> Option<&ListFilter> {
+        self.filter.as_ref()
+    }
+
+    /// Returns defaults for a flat object-key listing.
+    #[must_use]
+    pub fn object_keys() -> Self {
+        Self {
+            recursive: true,
+            filter: Some(ListFilter::LiteralPrefix(String::new())),
+            ..Self::default()
+        }
     }
 
     /// Returns a copy with the maximum descendant depth replaced.
@@ -179,19 +207,20 @@ impl ListOptions {
                 "list page size must be greater than zero",
             ));
         }
-        if let Some(prefix) = self.prefix.as_deref() {
+        self.validate_common()?;
+        if let Some(ListFilter::Subtree(prefix)) = self.filter.as_ref() {
             let parsed = RelativePath::parse(prefix).map_err(|_| {
                 FsError::new(
                     FsErrorKind::InvalidOptions,
                     FsOperation::List,
-                    "list prefix must be a canonical relative path",
+                    "list subtree must be a canonical relative path",
                 )
             })?;
             if parsed.as_str() != prefix {
                 return Err(FsError::new(
                     FsErrorKind::InvalidOptions,
                     FsOperation::List,
-                    "list prefix must be a canonical relative path",
+                    "list subtree must be a canonical relative path",
                 ));
             }
         }
@@ -203,6 +232,86 @@ impl ListOptions {
                 FsErrorKind::InvalidOptions,
                 FsOperation::List,
                 "list deadline exceeds the platform monotonic-clock range",
+            ));
+        }
+        Ok(())
+    }
+
+    /// Validates options against the filesystem path semantics.
+    pub fn validate_for(&self, semantics: PathSemantics) -> FsResult<()> {
+        self.validate_common()?;
+        self.validate_filter(semantics)
+    }
+    fn validate_common(&self) -> FsResult<()> {
+        if self.page_size == Some(0) {
+            return Err(FsError::new(
+                FsErrorKind::InvalidOptions,
+                FsOperation::List,
+                "list page size must be greater than zero",
+            ));
+        }
+        if self
+            .deadline
+            .is_some_and(|deadline| Instant::now().checked_add(deadline).is_none())
+        {
+            return Err(FsError::new(
+                FsErrorKind::InvalidOptions,
+                FsOperation::List,
+                "list deadline exceeds the platform monotonic-clock range",
+            ));
+        }
+        Ok(())
+    }
+    fn validate_filter(&self, semantics: PathSemantics) -> FsResult<()> {
+        match (semantics, self.filter.as_ref()) {
+            (PathSemantics::Hierarchical, Some(ListFilter::Subtree(prefix))) => {
+                let parsed = RelativePath::parse(prefix).map_err(|_| {
+                    FsError::new(
+                        FsErrorKind::InvalidOptions,
+                        FsOperation::List,
+                        "list subtree must be a canonical relative path",
+                    )
+                })?;
+                if parsed.as_str() != prefix {
+                    return Err(FsError::new(
+                        FsErrorKind::InvalidOptions,
+                        FsOperation::List,
+                        "list subtree must be a canonical relative path",
+                    ));
+                }
+            }
+            (PathSemantics::Hierarchical, Some(ListFilter::LiteralPrefix(_))) => {
+                return Err(FsError::new(
+                    FsErrorKind::InvalidOptions,
+                    FsOperation::List,
+                    "literal prefix requires flat path semantics",
+                ));
+            }
+            (PathSemantics::ObjectKey | PathSemantics::ProviderSpecific, Some(ListFilter::Subtree(_))) => {
+                return Err(FsError::new(
+                    FsErrorKind::InvalidOptions,
+                    FsOperation::List,
+                    "subtree filter requires hierarchical path semantics",
+                ));
+            }
+            (PathSemantics::ObjectKey | PathSemantics::ProviderSpecific, Some(ListFilter::LiteralPrefix(prefix)))
+                if prefix.contains('\0') =>
+            {
+                return Err(FsError::new(
+                    FsErrorKind::InvalidOptions,
+                    FsOperation::List,
+                    "literal prefix contains NUL",
+                ));
+            }
+            _ => {}
+        }
+        if matches!(semantics, PathSemantics::ObjectKey | PathSemantics::ProviderSpecific)
+            && (!self.recursive || self.max_depth.is_some())
+        {
+            return Err(FsError::new(
+                FsErrorKind::InvalidOptions,
+                FsOperation::List,
+                "flat listing requires recursive traversal without max_depth",
             ));
         }
         Ok(())

@@ -118,7 +118,8 @@ impl AsyncDirectoryStream {
                         self.state = DirectoryStreamState::Failed;
                         return Err(self.contextual_error(error));
                     }
-                    if let Err(message) = directory_entry_validation::matches_options(&entry, &self.root, &self.options)
+                    if let Err(message) =
+                        crate::directory::internal::select(&entry, &self.root, &self.options, self.path_semantics)
                     {
                         self.state = DirectoryStreamState::Failed;
                         return Err(
