@@ -16,12 +16,17 @@ use crate::metadata::AtomicityRequirement;
 use crate::metadata::DurabilityRequirement;
 use crate::metadata::FileKind;
 use crate::metadata::FileSystemLimits;
+use crate::metadata::SymlinkPolicy;
 use crate::path::Path;
 
 /// Returns true when copy options remain within the fallback policy allowlist.
 #[inline]
-pub(crate) fn fallback_options_supported(options: &CopyOptions) -> bool {
-    !options.continue_on_error()
+pub(crate) fn fallback_options_supported(options: &CopyOptions, filesystem_symlink_policy: SymlinkPolicy) -> bool {
+    !matches!(options.mode(), crate::copy::CopyMode::Tree)
+        && options
+            .symlink_policy_override()
+            .is_none_or(|policy| policy == filesystem_symlink_policy)
+        && !options.continue_on_error()
         && options.preserve_metadata() == MetadataPreservePolicy::None
         && options.server_side() != ServerSidePreference::Require
         && !options.create_parent()
@@ -52,4 +57,28 @@ pub(crate) fn validate_stream_copy_length_limits(
 #[inline]
 pub(crate) fn is_file_kind_supported(kind: FileKind) -> bool {
     matches!(kind, FileKind::File | FileKind::Object)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::fallback_options_supported;
+    use crate::copy::CopyOptions;
+    use crate::metadata::SymlinkPolicy;
+
+    #[test]
+    fn fallback_rejects_tree_mode() {
+        assert!(!fallback_options_supported(&CopyOptions::tree(), SymlinkPolicy::Reject,));
+    }
+
+    #[test]
+    fn fallback_rejects_symlink_policy_override_that_provider_cannot_honor() {
+        assert!(!fallback_options_supported(
+            &CopyOptions::default().with_symlink_policy(SymlinkPolicy::FollowWithinFileSystem),
+            SymlinkPolicy::Reject,
+        ));
+        assert!(fallback_options_supported(
+            &CopyOptions::default().with_symlink_policy(SymlinkPolicy::Reject),
+            SymlinkPolicy::Reject,
+        ));
+    }
 }

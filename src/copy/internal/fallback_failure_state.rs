@@ -55,6 +55,29 @@ pub(crate) const fn from_write_failure_state(state: WriteFailureState) -> CopyFa
     }
 }
 
+/// Maps validated native success statistics to publication certainty after a
+/// later cooperative deadline check fails.
+#[inline]
+pub(crate) const fn from_completed_stats(stats: &CopyStats) -> CopyFailureState {
+    if stats.files != 0
+        || stats.directories != 0
+        || stats.symlinks != 0
+        || stats.objects != 0
+        || stats.prefixes != 0
+        || stats.overwritten != 0
+    {
+        if stats.failed == 0 {
+            CopyFailureState::Published
+        } else {
+            CopyFailureState::PartiallyPublished
+        }
+    } else if stats.skipped != 0 && stats.failed == 0 && stats.bytes == 0 {
+        CopyFailureState::Unchanged
+    } else {
+        CopyFailureState::Indeterminate
+    }
+}
+
 /// Builds failure statistics after a fallback destination writer was opened.
 ///
 /// # Parameters

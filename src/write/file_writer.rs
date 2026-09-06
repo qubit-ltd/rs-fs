@@ -131,12 +131,13 @@ impl FileWriter {
     /// provider publication error.
     pub fn commit(&mut self) -> Result<WriteOutcome, WriteFailure> {
         if self.state != WriterState::Open {
+            let publication_state = self.state.publication_failure_state();
             return Err(WriteFailure::new(
                 self.invalid_state(
                     FsOperation::CommitWriter,
                     "writer cannot be committed in its current state",
                 ),
-                WriteFailureState::NotPublished,
+                publication_state,
             ));
         }
         let outcome = self.session.commit();

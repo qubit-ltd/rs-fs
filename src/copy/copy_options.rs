@@ -50,7 +50,12 @@ pub struct CopyOptions {
     max_entries: Option<usize>,
     /// Maximum number of copied payload bytes.
     max_bytes: Option<u64>,
-    /// Maximum elapsed duration for the copy operation.
+    /// Maximum cumulative elapsed duration for the copy operation.
+    ///
+    /// The budget starts when the copy operation is constructed and is
+    /// checked cooperatively around provider calls. It does not forcibly
+    /// interrupt a pending call or roll back a publication that already
+    /// completed.
     deadline: Option<Duration>,
 }
 

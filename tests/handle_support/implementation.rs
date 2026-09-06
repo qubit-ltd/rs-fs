@@ -13,6 +13,9 @@ use std::io::Cursor;
 use std::io::Result as IoResult;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
 
 use qubit_fs::FileSystem;
 use qubit_fs::FsError;
@@ -82,6 +85,19 @@ use qubit_fs::write::WriteOptions;
 use qubit_io::Input;
 use qubit_io::Output;
 
+static WRITER_FLUSH_DELAY_MS: AtomicU64 = AtomicU64::new(0);
+static WRITER_COMMIT_DELAY_MS: AtomicU64 = AtomicU64::new(0);
+static WRITER_DELAY_LOCK: Mutex<()> = Mutex::new(());
+
+pub(crate) fn writer_delay_guard() -> std::sync::MutexGuard<'static, ()> {
+    WRITER_DELAY_LOCK.lock().expect("writer delay lock should succeed")
+}
+
+pub(crate) fn set_writer_delays(flush: Duration, commit: Duration) {
+    WRITER_FLUSH_DELAY_MS.store(flush.as_millis() as u64, Ordering::Relaxed);
+    WRITER_COMMIT_DELAY_MS.store(commit.as_millis() as u64, Ordering::Relaxed);
+}
+
 pub(crate) struct BehaviorSpi {
     pub(crate) fail_commit: bool,
     pub(crate) fail_write: bool,
@@ -91,6 +107,8 @@ pub(crate) struct BehaviorSpi {
     pub(crate) entries: Mutex<Vec<DirEntry>>,
     pub(crate) cleanup_calls: Arc<Mutex<usize>>,
     pub(crate) persist_calls: Arc<Mutex<usize>>,
+    pub(crate) commit_calls: Arc<Mutex<usize>>,
+    pub(crate) abort_calls: Arc<Mutex<usize>>,
     pub(crate) temp_path: Path,
     pub(crate) temp_failure: Option<PersistFailureState>,
     pub(crate) temp_keep_error: Option<FsErrorKind>,
@@ -104,6 +122,8 @@ pub(crate) fn filesystem(
 ) -> (FileSystem, Arc<Mutex<usize>>, Arc<Mutex<usize>>) {
     let cleanup_calls = Arc::new(Mutex::new(0));
     let persist_calls = Arc::new(Mutex::new(0));
+    let commit_calls = Arc::new(Mutex::new(0));
+    let abort_calls = Arc::new(Mutex::new(0));
     let spi = BehaviorSpi {
         fail_commit,
         fail_write: false,
@@ -113,6 +133,8 @@ pub(crate) fn filesystem(
         entries: Mutex::new(entries),
         cleanup_calls: Arc::clone(&cleanup_calls),
         persist_calls: Arc::clone(&persist_calls),
+        commit_calls: Arc::clone(&commit_calls),
+        abort_calls: Arc::clone(&abort_calls),
         temp_path: Path::parse("/temporary").expect("test path should parse"),
         temp_failure: None,
         temp_keep_error: None,
@@ -136,6 +158,8 @@ pub(crate) fn limited_write_filesystem(maximum: u64) -> FileSystem {
         entries: Mutex::new(Vec::new()),
         cleanup_calls: Arc::new(Mutex::new(0)),
         persist_calls: Arc::new(Mutex::new(0)),
+        commit_calls: Arc::new(Mutex::new(0)),
+        abort_calls: Arc::new(Mutex::new(0)),
         temp_path: Path::parse("/temporary").expect("test path should parse"),
         temp_failure: None,
         temp_keep_error: None,
@@ -155,6 +179,8 @@ pub(crate) fn stream_failure_filesystem() -> FileSystem {
         entries: Mutex::new(Vec::new()),
         cleanup_calls: Arc::new(Mutex::new(0)),
         persist_calls: Arc::new(Mutex::new(0)),
+        commit_calls: Arc::new(Mutex::new(0)),
+        abort_calls: Arc::new(Mutex::new(0)),
         temp_path: Path::parse("/temporary").expect("test path should parse"),
         temp_failure: None,
         temp_keep_error: None,
@@ -177,6 +203,8 @@ pub(crate) fn provider_open_failure_filesystem() -> FileSystem {
         entries: Mutex::new(Vec::new()),
         cleanup_calls: Arc::new(Mutex::new(0)),
         persist_calls: Arc::new(Mutex::new(0)),
+        commit_calls: Arc::new(Mutex::new(0)),
+        abort_calls: Arc::new(Mutex::new(0)),
         temp_path: Path::parse("/temporary").expect("test path should parse"),
         temp_failure: None,
         temp_keep_error: None,
@@ -192,7 +220,16 @@ pub(crate) fn writer_lifecycle_filesystem(
     commit_failure: Option<WriteFailureState>,
     abort_failure: Option<FsErrorKind>,
 ) -> FileSystem {
-    FileSystem::from_spi(BehaviorSpi {
+    writer_lifecycle_filesystem_with_counts(commit_failure, abort_failure).0
+}
+
+pub(crate) fn writer_lifecycle_filesystem_with_counts(
+    commit_failure: Option<WriteFailureState>,
+    abort_failure: Option<FsErrorKind>,
+) -> (FileSystem, Arc<Mutex<usize>>, Arc<Mutex<usize>>) {
+    let commit_calls = Arc::new(Mutex::new(0));
+    let abort_calls = Arc::new(Mutex::new(0));
+    let filesystem = FileSystem::from_spi(BehaviorSpi {
         fail_commit: false,
         fail_write: false,
         commit_failure,
@@ -201,6 +238,8 @@ pub(crate) fn writer_lifecycle_filesystem(
         entries: Mutex::new(Vec::new()),
         cleanup_calls: Arc::new(Mutex::new(0)),
         persist_calls: Arc::new(Mutex::new(0)),
+        commit_calls: Arc::clone(&commit_calls),
+        abort_calls: Arc::clone(&abort_calls),
         temp_path: Path::parse("/temporary").expect("test path should parse"),
         temp_failure: None,
         temp_keep_error: None,
@@ -208,7 +247,8 @@ pub(crate) fn writer_lifecycle_filesystem(
         directory_persist_non_atomic: false,
         provider_open_error: false,
     })
-    .expect("facade should construct")
+    .expect("facade should construct");
+    (filesystem, commit_calls, abort_calls)
 }
 pub(crate) fn invalid_temp_path_filesystem() -> FileSystem {
     FileSystem::from_spi(BehaviorSpi {
@@ -220,6 +260,8 @@ pub(crate) fn invalid_temp_path_filesystem() -> FileSystem {
         entries: Mutex::new(Vec::new()),
         cleanup_calls: Arc::new(Mutex::new(0)),
         persist_calls: Arc::new(Mutex::new(0)),
+        commit_calls: Arc::new(Mutex::new(0)),
+        abort_calls: Arc::new(Mutex::new(0)),
         temp_path: Path::parse("relative").expect("test path should parse"),
         temp_failure: None,
         temp_keep_error: None,
@@ -241,6 +283,8 @@ pub(crate) fn wrong_temp_kind_filesystem() -> FileSystem {
         entries: Mutex::new(Vec::new()),
         cleanup_calls: Arc::new(Mutex::new(0)),
         persist_calls: Arc::new(Mutex::new(0)),
+        commit_calls: Arc::new(Mutex::new(0)),
+        abort_calls: Arc::new(Mutex::new(0)),
         temp_path: Path::parse("/wrong-kind").expect("test path should parse"),
         temp_failure: None,
         temp_keep_error: None,
@@ -263,6 +307,8 @@ fn invalid_temp_cleanup_filesystem() -> FileSystem {
         entries: Mutex::new(Vec::new()),
         cleanup_calls: Arc::new(Mutex::new(0)),
         persist_calls: Arc::new(Mutex::new(0)),
+        commit_calls: Arc::new(Mutex::new(0)),
+        abort_calls: Arc::new(Mutex::new(0)),
         temp_path: Path::parse("/foreign").expect("test path should parse"),
         temp_failure: None,
         temp_keep_error: None,
@@ -288,6 +334,8 @@ pub(crate) fn temp_failure_filesystem(
         entries: Mutex::new(Vec::new()),
         cleanup_calls: Arc::clone(&cleanup_calls),
         persist_calls: Arc::clone(&persist_calls),
+        commit_calls: Arc::new(Mutex::new(0)),
+        abort_calls: Arc::new(Mutex::new(0)),
         temp_path: Path::parse("/temporary").expect("test path should parse"),
         temp_failure: Some(state),
         temp_keep_error: None,
@@ -314,6 +362,8 @@ pub(crate) fn temp_lifecycle_error_filesystem(
         entries: Mutex::new(Vec::new()),
         cleanup_calls: Arc::clone(&cleanup_calls),
         persist_calls: Arc::new(Mutex::new(0)),
+        commit_calls: Arc::new(Mutex::new(0)),
+        abort_calls: Arc::new(Mutex::new(0)),
         temp_path: Path::parse("/temporary").expect("test path should parse"),
         temp_failure: None,
         temp_keep_error: keep_error,
@@ -336,6 +386,8 @@ pub(crate) fn non_atomic_temp_directory_filesystem() -> FileSystem {
         entries: Mutex::new(Vec::new()),
         cleanup_calls: Arc::new(Mutex::new(0)),
         persist_calls: Arc::new(Mutex::new(0)),
+        commit_calls: Arc::new(Mutex::new(0)),
+        abort_calls: Arc::new(Mutex::new(0)),
         temp_path: Path::parse("/temporary").expect("test path should parse"),
         temp_failure: None,
         temp_keep_error: None,
@@ -663,6 +715,8 @@ impl FileSystemSpi for BehaviorSpi {
                 commit_failure: self.commit_failure,
                 abort_failure: self.abort_failure,
                 non_atomic_commit: self.directory_persist_non_atomic,
+                commit_calls: Arc::clone(&self.commit_calls),
+                abort_calls: Arc::clone(&self.abort_calls),
             }),
         ))
     }
@@ -735,6 +789,8 @@ struct Writer {
     commit_failure: Option<WriteFailureState>,
     abort_failure: Option<FsErrorKind>,
     non_atomic_commit: bool,
+    commit_calls: Arc<Mutex<usize>>,
+    abort_calls: Arc<Mutex<usize>>,
 }
 impl Output for Writer {
     type Item = u8;
@@ -749,11 +805,20 @@ impl Output for Writer {
         }
     }
     fn flush(&mut self) -> IoResult<()> {
+        let delay = WRITER_FLUSH_DELAY_MS.load(Ordering::Relaxed);
+        if delay != 0 {
+            std::thread::sleep(Duration::from_millis(delay));
+        }
         Ok(())
     }
 }
 impl FileWriterSpi for Writer {
     fn commit(&mut self) -> Result<WriteOutcome, SpiWriteFailure> {
+        let delay = WRITER_COMMIT_DELAY_MS.load(Ordering::Relaxed);
+        if delay != 0 {
+            std::thread::sleep(Duration::from_millis(delay));
+        }
+        *self.commit_calls.lock().expect("commit counter lock should succeed") += 1;
         if let Some(state) = self.commit_failure {
             return Err(SpiWriteFailure::new(
                 FsError::new(FsErrorKind::Io, FsOperation::CommitWriter, "injected commit failure"),
@@ -777,6 +842,7 @@ impl FileWriterSpi for Writer {
         }
     }
     fn abort(&mut self) -> FsResult<WriteAbortOutcome> {
+        *self.abort_calls.lock().expect("abort counter lock should succeed") += 1;
         match self.abort_failure {
             Some(kind) => Err(FsError::new(kind, FsOperation::AbortWriter, "injected abort failure")),
             None => Ok(match self.commit_failure {

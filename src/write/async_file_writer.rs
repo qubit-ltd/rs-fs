@@ -141,11 +141,12 @@ impl AsyncFileWriter {
     /// A future resolving to the actual publication outcome.
     pub fn commit_async(&mut self) -> SpiFuture<'_, Result<WriteOutcome, WriteFailure>> {
         if self.state != WriterState::Open {
+            let publication_state = self.state.publication_failure_state();
             let error = self.invalid_state(
                 FsOperation::CommitWriter,
                 "writer cannot be committed in its current state",
             );
-            return Box::pin(async move { Err(WriteFailure::new(error, WriteFailureState::NotPublished)) });
+            return Box::pin(async move { Err(WriteFailure::new(error, publication_state)) });
         }
         Box::pin(async move {
             self.state = WriterState::Indeterminate;
