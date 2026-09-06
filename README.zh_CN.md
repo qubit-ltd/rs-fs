@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![English Document](https://img.shields.io/badge/Document-English-blue.svg)](README.md)
 
-`qubit-fs` 0.2.0 是 Rust 1.94 及以上版本可用的 provider-neutral 文件系统抽象，
+`qubit-fs` 0.3.0 是 Rust 1.94 及以上版本可用的 provider-neutral 文件系统抽象，
 同时提供同步和异步 API。它向应用提供具体门面 `FileSystem` 与
 `AsyncFileSystem`，但不会替应用选择存储后端或异步运行时。
 
@@ -17,13 +17,13 @@
 
 ```toml
 [dependencies]
-qubit-fs = "0.2"
+qubit-fs = "0.3"
 ```
 
 同步 API 默认启用。需要异步门面时必须显式开启 async feature：
 
 ```toml
-qubit-fs = { version = "0.2", features = ["async"] }
+qubit-fs = { version = "0.3", features = ["async"] }
 ```
 
 ## 门面明确表达的语义

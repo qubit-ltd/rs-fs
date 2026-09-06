@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![中文文档](https://img.shields.io/badge/文档-中文版-blue.svg)](README.zh_CN.md)
 
-`qubit-fs` 0.2.0 is a provider-neutral, synchronous and asynchronous filesystem
+`qubit-fs` 0.3.0 is a provider-neutral, synchronous and asynchronous filesystem
 abstraction for Rust 1.94 or later. It supplies application-facing concrete
 facades—`FileSystem` and `AsyncFileSystem`—instead of choosing a storage backend
 or an async runtime for you.
@@ -19,14 +19,14 @@ public facade while allowing providers to be selected outside the core crate.
 
 ```toml
 [dependencies]
-qubit-fs = "0.2"
+qubit-fs = "0.3"
 ```
 
 Synchronous APIs are enabled by default. Enable the asynchronous facade
 explicitly when it is needed:
 
 ```toml
-qubit-fs = { version = "0.2", features = ["async"] }
+qubit-fs = { version = "0.3", features = ["async"] }
 ```
 
 ## What the facade makes explicit
