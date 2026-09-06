@@ -43,6 +43,7 @@ qubit-fs = { version = "0.3", features = ["async"] }
 ## 从这里开始
 
 - [English user guide](doc/user_guide.md)
+- [0.3 迁移指南](doc/migration_0_3.zh_CN.md)
 - [中文用户指南](doc/user_guide.zh_CN.md)
 - [中文架构设计](doc/file_system_design.zh_CN.md)
 - [API 文档](https://docs.rs/qubit-fs)

@@ -1,6 +1,6 @@
 # Qubit FS 用户指南
 
-`qubit-fs` 0.2.0 是适用于 Rust 1.94 及以上版本的 provider-neutral 文件系统抽象。它提供
+`qubit-fs` 0.3.0 是适用于 Rust 1.94 及以上版本的 provider-neutral 文件系统抽象。它提供
 同步和异步应用门面，但不内置存储后端，也不绑定异步 runtime。
 
 ## 目的与读者
@@ -66,7 +66,7 @@ canonical `Uri` 前消费或移除这些字段，并在自己的凭据处理边�
 
 ```toml
 [dependencies]
-qubit-fs = "0.2.0"
+qubit-fs = "0.3.0"
 ```
 
 `async` feature 默认启用。只使用同步 API 的应用可以关闭默认 feature，避免编译异步门面和
