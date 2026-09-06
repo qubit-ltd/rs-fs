@@ -24,6 +24,11 @@ use super::uri::parse_canonical;
 use crate::error::FsResult;
 
 /// A connection URI whose normal formatting always redacts credentials.
+///
+/// The standard redaction policy is an unavoidable safety floor. An explicit
+/// policy may classify additional provider-specific fields, but cannot make a
+/// standard sensitive component safe. Providers remain responsible for
+/// clearing credentials that neither policy recognizes.
 #[derive(Clone, Eq, PartialEq)]
 pub struct ConnectionUri {
     /// RFC 3986 parser-owned raw connection URI representation.
@@ -67,7 +72,7 @@ impl ConnectionUri {
     }
 
     /// Returns whether the URI contains any component classified as sensitive
-    /// by the policy snapshot captured during parsing.
+    /// by the standard floor or the policy snapshot captured during parsing.
     ///
     /// Username-only userinfo is not considered a secret because it can be
     /// paired with an external credential reference. Classification uses
@@ -83,6 +88,13 @@ impl ConnectionUri {
     #[inline]
     #[must_use]
     pub fn has_embedded_secret(&self) -> bool {
+        let floor = RedactionPolicy::standard();
+        let floor_secret = Redactor::new(floor.clone())
+            .inspect_uri(self.parsed.as_str())
+            .map_or(true, |inspection| inspection.contains_sensitive());
+        if floor_secret || self.redaction_policy == floor {
+            return floor_secret;
+        }
         Redactor::new(self.redaction_policy.clone())
             .inspect_uri(self.parsed.as_str())
             .map_or(true, |inspection| inspection.contains_sensitive())
@@ -120,10 +132,15 @@ impl ConnectionUri {
     /// # Returns
     ///
     /// The complete redacted URI, or `<truncated>` when redaction did not
-    /// complete.
+    /// complete. When a non-standard policy detects a secret, the complete
+    /// display is conservatively reduced to `<redacted>` instead of relying
+    /// on that policy's individual masking rules.
     #[inline]
     #[must_use]
     fn redacted_text(&self) -> String {
+        if self.redaction_policy != RedactionPolicy::standard() && self.has_embedded_secret() {
+            return "<redacted>".to_owned();
+        }
         let redaction = Redactor::new(self.redaction_policy.clone()).redact_uri(self.parsed.as_str());
         match redaction.summary().completion() {
             RedactionCompletion::Complete => redaction

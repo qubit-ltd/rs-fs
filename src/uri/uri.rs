@@ -43,17 +43,18 @@ impl Uri {
     /// * `text` - URI text to parse and canonicalize.
     /// * `policy` - Policy used to classify sensitive URI components.
     ///
-    /// # FIXME
-    ///
-    /// An explicit policy can currently weaken or disable the URI policy floor,
-    /// so the resulting "secret-free" invariant is relative to that policy.
-    /// A future compatibility change should separate customizable
-    /// classification from a non-removable URI validation floor. Until then,
-    /// callers must not weaken `policy` for untrusted URI input.
+    /// The standard policy is always applied as a non-removable safety floor;
+    /// an explicit policy can only add classifications. Provider-specific
+    /// credentials that are not recognized by either policy remain the
+    /// provider's responsibility to remove before constructing a URI.
     #[inline]
     pub fn parse_with_policy(text: &str, policy: &RedactionPolicy) -> FsResult<Self> {
         let parsed = parse_canonical(text)?;
-        reject_secrets(&parsed, policy)?;
+        let floor = RedactionPolicy::standard();
+        reject_secrets(&parsed, &floor)?;
+        if policy != &floor {
+            reject_secrets(&parsed, policy)?;
+        }
         Ok(Self { parsed })
     }
 
