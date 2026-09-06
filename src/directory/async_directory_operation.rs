@@ -36,7 +36,7 @@ impl<'a> AsyncDirectoryOperation<'a> {
     pub(crate) async fn list(&self, path: &Path, options: ListOptions) -> FsResult<AsyncDirectoryStream> {
         self.filesystem.core().validate_path(path, FsOperation::List)?;
         options
-            .validate()
+            .validate_for(self.filesystem.properties().info().path_semantics())
             .map_err(|error| self.filesystem.core().enrich(error, Some(path), FsOperation::List))?;
         self.filesystem
             .core()

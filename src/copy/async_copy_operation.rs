@@ -15,6 +15,7 @@ use super::fallback_options_supported;
 use super::from_writer_state;
 use super::internal::CopyCancellationGuard;
 use super::internal::CopyDeadline;
+use super::internal::CopyRecoverySnapshot;
 use super::internal::from_completed_stats;
 use super::is_file_kind_supported;
 use super::validate_stream_copy_length_limits;
@@ -59,6 +60,7 @@ pub struct AsyncCopyOperation {
     writer: Option<Box<AsyncFileWriter>>,
     /// Monotonic start used to enforce caller elapsed-time budgets.
     deadline: CopyDeadline,
+    recovery: CopyRecoverySnapshot,
 }
 
 impl AsyncCopyOperation {
@@ -78,6 +80,7 @@ impl AsyncCopyOperation {
             options: ResolvedCopyOptions::new(options, symlink_policy),
             state: AsyncCopyOperationState::Ready,
             writer: None,
+            recovery: CopyRecoverySnapshot::unchanged(),
         }
     }
 
@@ -138,6 +141,7 @@ impl AsyncCopyOperation {
                 &self.source,
                 &self.target,
                 self.file_system.properties().info().provider_id(),
+                self.recovery,
             ));
         }
         let Self {
@@ -148,8 +152,9 @@ impl AsyncCopyOperation {
             state,
             writer,
             deadline,
+            recovery,
         } = self;
-        let mut guard = CopyCancellationGuard::start(state, writer);
+        let mut guard = CopyCancellationGuard::start(state, writer, recovery);
         let result = execute_copy(file_system, source, target, options, *deadline, guard.writer_mut()).await;
         guard.finish(&result);
         result
@@ -558,7 +563,12 @@ fn budget_error(source: &Path, target: &Path, message: &str) -> FsError {
 }
 
 /// Builds the stable failure used for an invalid execute retry.
-fn invalid_state_failure(source: &Path, target: &Path, provider: &str) -> AsyncCopyFailure {
+fn invalid_state_failure(
+    source: &Path,
+    target: &Path,
+    provider: &str,
+    snapshot: CopyRecoverySnapshot,
+) -> AsyncCopyFailure {
     AsyncCopyFailure::new(
         FsError::new(
             FsErrorKind::InvalidState,
@@ -568,7 +578,7 @@ fn invalid_state_failure(source: &Path, target: &Path, provider: &str) -> AsyncC
         .with_path(source.clone())
         .with_target(target.clone())
         .with_provider(provider),
-        CopyFailureState::Unchanged,
-        CopyStats::default(),
+        snapshot.state,
+        snapshot.stats,
     )
 }

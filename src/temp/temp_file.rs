@@ -27,6 +27,7 @@ use crate::temp::PersistFailureState;
 use crate::temp::PersistOptions;
 use crate::temp::PersistOutcome;
 use crate::temp::TempResourceState;
+use crate::temp::internal::TempLifecycle;
 
 /// Temporary file retaining the provider session until its lifecycle completes.
 pub struct TempFile {
@@ -37,7 +38,7 @@ pub struct TempFile {
     /// Provider lifecycle session.
     session: Box<dyn TempResourceSpi>,
     /// Current cleanup and publication lifecycle state.
-    state: TempResourceState,
+    lifecycle: TempLifecycle,
 }
 
 impl TempFile {
@@ -47,7 +48,7 @@ impl TempFile {
             filesystem,
             path,
             session,
-            state: TempResourceState::Owned,
+            lifecycle: TempLifecycle::new(),
         }
     }
     /// Returns the temporary logical path.
@@ -60,15 +61,17 @@ impl TempFile {
     #[inline(always)]
     #[must_use]
     pub const fn state(&self) -> TempResourceState {
-        self.state
+        self.lifecycle.state()
     }
     /// Persists this temporary file to `target`.
+    #[allow(clippy::result_large_err)]
     pub fn persist(&mut self, target: &Path, options: PersistOptions) -> Result<PersistOutcome, PersistFailure> {
-        if self.state != TempResourceState::Owned {
+        if self.lifecycle.state() != TempResourceState::Owned {
             return Err(PersistFailure::new(
                 self.invalid_state(FsOperation::PersistTemp),
-                PersistFailureState::NotPublished,
-            ));
+                self.lifecycle.failure_state(),
+            )
+            .with_publication_target(self.lifecycle.publication_target()));
         }
         if let Err(error) = self.filesystem.preflight_temp_persist(&self.path, target, &options) {
             return Err(PersistFailure::new(error, PersistFailureState::NotPublished));
@@ -76,7 +79,8 @@ impl TempFile {
         match self.session.persist(PersistRequest::new(target, options.clone())) {
             Ok(outcome) => {
                 if outcome.target() != target {
-                    self.state = TempResourceState::Indeterminate;
+                    self.lifecycle
+                        .record_failure(PersistFailureState::Indeterminate, Some(target.clone()), false);
                     return Err(PersistFailure::new(
                         FsError::new(
                             FsErrorKind::ProviderContractViolation,
@@ -91,7 +95,11 @@ impl TempFile {
                 if options.atomicity() == AtomicityRequirement::Required
                     && outcome.atomicity() != AchievedAtomicity::Atomic
                 {
-                    self.state = TempResourceState::CleanupRequired;
+                    self.lifecycle.record_failure(
+                        PersistFailureState::PublishedSourceRetained,
+                        Some(target.clone()),
+                        false,
+                    );
                     return Err(PersistFailure::new(
                         FsError::new(
                             FsErrorKind::ProviderContractViolation,
@@ -103,25 +111,31 @@ impl TempFile {
                         PersistFailureState::PublishedSourceRetained,
                     ));
                 }
-                self.state = TempResourceState::Persisted;
+                self.lifecycle.record_success(false, outcome.target().clone());
                 Ok(outcome)
             }
             Err(failure) => Err(self.record_persist_failure(failure, target, FsOperation::PersistTemp)),
         }
     }
     /// Publishes this temporary file to the provider-generated target.
+    #[allow(clippy::result_large_err)]
     pub fn keep(&mut self) -> Result<PersistOutcome, PersistFailure> {
         if let Err(error) = self.ensure_owned(FsOperation::KeepTemp) {
-            return Err(PersistFailure::new(error, PersistFailureState::NotPublished));
+            return Err(PersistFailure::new(error, self.lifecycle.failure_state())
+                .with_publication_target(self.lifecycle.publication_target()));
         }
         match self.session.keep() {
             Ok(outcome) => {
                 if let Err(error) = self.filesystem.validate_temp_keep_target(&self.path, outcome.target()) {
-                    self.state = TempResourceState::Indeterminate;
+                    self.lifecycle.record_failure(
+                        PersistFailureState::Indeterminate,
+                        Some(outcome.target().clone()),
+                        true,
+                    );
                     return Err(PersistFailure::new(error, PersistFailureState::Indeterminate));
                 }
                 self.path = outcome.target().clone();
-                self.state = TempResourceState::Kept;
+                self.lifecycle.record_success(true, outcome.target().clone());
                 Ok(outcome)
             }
             Err(failure) => Err(self.record_persist_failure(failure, &self.path.clone(), FsOperation::KeepTemp)),
@@ -130,14 +144,14 @@ impl TempFile {
     /// Cleans the source and releases the session responsibility.
     pub fn cleanup(&mut self) -> FsResult<()> {
         if !matches!(
-            self.state,
+            self.lifecycle.state(),
             TempResourceState::Owned | TempResourceState::CleanupRequired
         ) {
             return Err(self.invalid_state(FsOperation::CleanupTemp));
         }
         self.session
             .cleanup()
-            .map(|()| self.state = TempResourceState::Cleaned)
+            .map(|()| self.lifecycle.record_cleanup_success())
             .map_err(|error| self.record_lifecycle_error(error, FsOperation::CleanupTemp))
     }
     /// Records provider partial persistence facts in facade state and error.
@@ -148,11 +162,7 @@ impl TempFile {
         operation: FsOperation,
     ) -> PersistFailure {
         let (error, state) = failure.into_parts();
-        self.state = match state {
-            PersistFailureState::NotPublished => TempResourceState::Owned,
-            PersistFailureState::PublishedSourceRetained => TempResourceState::CleanupRequired,
-            PersistFailureState::Indeterminate => TempResourceState::Indeterminate,
-        };
+        self.lifecycle.record_failure(state, Some(target.clone()), false);
         PersistFailure::new(
             error.with_operation(operation).with_missing_context(
                 &self.path,
@@ -161,10 +171,11 @@ impl TempFile {
             ),
             state,
         )
+        .with_publication_target(self.lifecycle.publication_target())
     }
     /// Requires an owned, unpublished source.
     fn ensure_owned(&self, operation: FsOperation) -> FsResult<()> {
-        if self.state == TempResourceState::Owned {
+        if self.lifecycle.state() == TempResourceState::Owned {
             Ok(())
         } else {
             Err(self.invalid_state(operation))
@@ -172,11 +183,7 @@ impl TempFile {
     }
     /// Records a cleanup or ownership-transfer error with resource context.
     fn record_lifecycle_error(&mut self, error: FsError, operation: FsOperation) -> FsError {
-        if error.kind() == FsErrorKind::Indeterminate {
-            self.state = TempResourceState::Indeterminate;
-        } else {
-            self.state = TempResourceState::CleanupRequired;
-        }
+        self.lifecycle.record_cleanup_error(&error);
         error.with_operation(operation).with_missing_context(
             &self.path,
             None,
@@ -199,14 +206,14 @@ impl Debug for TempFile {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         f.debug_struct("TempFile")
             .field("path", &self.path)
-            .field("state", &self.state)
+            .field("state", &self.lifecycle.state())
             .finish_non_exhaustive()
     }
 }
 impl Drop for TempFile {
     fn drop(&mut self) {
         if matches!(
-            self.state,
+            self.lifecycle.state(),
             TempResourceState::Owned | TempResourceState::CleanupRequired
         ) {
             let _ = self.session.cleanup();

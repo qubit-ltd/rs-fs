@@ -110,8 +110,10 @@ fn test_async_write_all_publishes_complete_bytes() {
         ..AsyncRecordingConfig::default()
     };
     let (filesystem, probe) = async_recording_file_system(config);
-    let outcome = ready(filesystem.write_all(&path("/async-write-all"), b"bytes", WriteOptions::default()))
-        .expect("async write-all should commit");
+    let mut operation = filesystem
+        .begin_write_all(path("/async-write-all"), b"bytes", WriteOptions::default())
+        .expect("write preflight should succeed");
+    let outcome = ready(operation.execute()).expect("async write-all should commit");
     assert_eq!(AchievedAtomicity::Atomic, outcome.atomicity());
     assert_eq!(vec!["open_writer"], probe.calls(),);
 }
@@ -124,10 +126,12 @@ fn test_async_write_all_commit_failure_retains_writer() {
         ..AsyncRecordingConfig::default()
     };
     let (filesystem, _) = async_recording_file_system(config);
-    let failure = ready(filesystem.write_all(&path("/async-write-all-failure"), b"bytes", WriteOptions::default()))
-        .expect_err("injected commit failure should retain writer");
+    let mut operation = filesystem
+        .begin_write_all(path("/async-write-all-failure"), b"bytes", WriteOptions::default())
+        .expect("write preflight should succeed");
+    let failure = ready(operation.execute()).expect_err("injected commit failure should retain writer");
     assert_eq!(FsErrorKind::Io, failure.error().kind());
-    assert!(failure.writer().is_some());
+    assert!(operation.has_recovery_writer());
 }
 
 /// Includes provider context when the asynchronous write-all limit is hit.
@@ -138,8 +142,10 @@ fn test_async_write_all_limit_error_includes_provider_context() {
         ..AsyncRecordingConfig::default()
     };
     let (filesystem, _) = async_recording_file_system(config);
-    let failure = ready(filesystem.write_all(&path("/async-write-all-limit"), b"bytes", WriteOptions::default()))
-        .expect_err("async write-all limit should reject oversized content");
+    let failure = match filesystem.begin_write_all(path("/async-write-all-limit"), b"bytes", WriteOptions::default()) {
+        Ok(_) => panic!("async write-all limit should reject oversized content"),
+        Err(failure) => failure,
+    };
 
     assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
     assert_eq!(Some("async-recording"), failure.error().provider());

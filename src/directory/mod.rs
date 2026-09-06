@@ -19,6 +19,8 @@ mod directory_entry_validation;
 mod directory_operation;
 mod directory_stream;
 mod directory_stream_state;
+mod internal;
+mod list_filter;
 mod list_options;
 
 #[cfg(feature = "async")]
@@ -32,4 +34,5 @@ pub use delete_outcome::DeleteOutcome;
 pub(crate) use directory_operation::DirectoryOperation;
 pub use directory_stream::DirectoryStream;
 pub use directory_stream_state::DirectoryStreamState;
+pub use list_filter::ListFilter;
 pub use list_options::ListOptions;

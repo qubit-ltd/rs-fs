@@ -17,22 +17,12 @@ use std::fmt::Result as FmtResult;
 
 use crate::copy::CopyFailureState;
 use crate::copy::CopyStats;
+use crate::copy::internal::CopyFailureParts;
 use crate::error::FsError;
 use crate::write::FileWriter;
 
 /// A copy error with publication state, partial statistics, and optional writer
 /// recovery.
-struct CopyFailureParts {
-    /// Contextual filesystem error that caused the copy to fail.
-    error: FsError,
-    /// Confirmed destination publication state at failure time.
-    state: CopyFailureState,
-    /// Transfer progress confirmed before the failure.
-    partial_stats: CopyStats,
-    /// Destination writer retained when explicit recovery remains possible.
-    writer: Option<Box<FileWriter>>,
-}
-
 /// A copy error with publication state, partial statistics, and optional writer
 /// recovery.
 pub struct CopyFailure {

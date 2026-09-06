@@ -58,7 +58,8 @@ use crate::temp::PersistOptions;
 use crate::temp::TempOptions;
 use crate::write::AsyncFileWriter;
 use crate::write::AsyncWriteAllFailure;
-use crate::write::AsyncWriteOperation;
+use crate::write::AsyncWriteAllOperation;
+use crate::write::AsyncWriteAllOperationFailure;
 use crate::write::WriteOptions;
 
 /// Application-facing asynchronous filesystem facade.
@@ -178,11 +179,7 @@ impl AsyncFileSystem {
 
     /// Asynchronously opens a validated writer and verifies its identity.
     pub async fn open_writer(&self, path: &Path, options: WriteOptions) -> FsResult<AsyncFileWriter> {
-        self.validate_path(path, FsOperation::OpenWriter)?;
-        options
-            .validate_against(self.properties().capabilities())
-            .map_err(|error| self.enrich(error, path, FsOperation::OpenWriter))?;
-        self.require(FileSystemCapability::Write, FsOperation::OpenWriter, path)?;
+        self.core.validate_write_request(path, &options)?;
         let atomicity = options.atomicity();
         let durability = options.durability();
         let opened = self
@@ -200,13 +197,49 @@ impl AsyncFileSystem {
     }
 
     /// Asynchronously writes all bytes and retains the writer on failure.
+    #[deprecated(
+        since = "0.3.0",
+        note = "use begin_write_all and retain the operation across cancellation"
+    )]
     pub async fn write_all(
         &self,
         path: &Path,
         bytes: &[u8],
         options: WriteOptions,
     ) -> Result<crate::metadata::WriteOutcome, AsyncWriteAllFailure> {
-        AsyncWriteOperation::new(self).write_all(path, bytes, options).await
+        let mut operation = self
+            .begin_write_all(path.clone(), bytes, options)
+            .map_err(|failure| AsyncWriteAllFailure::new(failure.into_error(), None))?;
+        match operation.execute().await {
+            Ok(outcome) => Ok(outcome),
+            Err(failure) => Err(AsyncWriteAllFailure::new(
+                failure.into_error(),
+                operation.take_recovery_writer(),
+            )),
+        }
+    }
+
+    /// Begins an owning asynchronous whole-file write operation.
+    pub fn begin_write_all<'a>(
+        &'a self,
+        path: Path,
+        bytes: &'a [u8],
+        options: WriteOptions,
+    ) -> Result<AsyncWriteAllOperation<'a>, AsyncWriteAllOperationFailure> {
+        self.core.validate_write_request(&path, &options).map_err(|error| {
+            AsyncWriteAllOperationFailure::new(error, crate::write::WriteFailureState::NotPublished, 0)
+        })?;
+        self.properties()
+            .limits()
+            .validate_write_size(&path, bytes.len())
+            .map_err(|error| {
+                AsyncWriteAllOperationFailure::new(
+                    self.core.enrich(error, Some(&path), FsOperation::Write),
+                    crate::write::WriteFailureState::NotPublished,
+                    0,
+                )
+            })?;
+        Ok(AsyncWriteAllOperation::new(self, path, bytes, options))
     }
 
     /// Asynchronously creates a directory after local validation.

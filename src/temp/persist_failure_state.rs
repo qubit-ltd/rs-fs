@@ -13,8 +13,12 @@
 pub enum PersistFailureState {
     /// The target was not published and the handle still owns the source.
     NotPublished,
+    /// The target was not published and the handle released its source.
+    NotPublishedSourceReleased,
     /// The target was published, but the handle still owns source cleanup.
     PublishedSourceRetained,
+    /// The target was published and the handle released its source.
+    PublishedSourceReleased,
     /// The provider cannot determine the final target or source state.
     Indeterminate,
 }

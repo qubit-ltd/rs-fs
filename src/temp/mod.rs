@@ -11,6 +11,7 @@
 mod async_temp_directory;
 #[cfg(feature = "async")]
 mod async_temp_file;
+mod internal;
 mod persist_cleanup_state;
 mod persist_failure;
 mod persist_failure_state;

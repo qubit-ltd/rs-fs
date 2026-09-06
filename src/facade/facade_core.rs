@@ -22,6 +22,7 @@ use crate::path::Path;
 use crate::spi::ProviderOperation;
 use crate::spi::ProviderOperations;
 use crate::spi::ProviderProperties;
+use crate::write::WriteOptions;
 
 mod resource_budget {
     use qubit_budget::ResourceBudget;
@@ -96,6 +97,15 @@ impl FacadeCore {
     /// does not satisfy the cached filesystem rules.
     pub(crate) fn validate_temp_parent(&self, parent: Option<&Path>) -> FsResult<()> {
         parent.map_or(Ok(()), |path| self.validate_path(path, FsOperation::CreateTemp))
+    }
+
+    /// Validates a writer path, options, and required write capability.
+    pub(crate) fn validate_write_request(&self, path: &Path, options: &WriteOptions) -> FsResult<()> {
+        self.validate_path(path, FsOperation::OpenWriter)?;
+        options
+            .validate_against(self.properties.capabilities())
+            .map_err(|error| self.enrich(error, Some(path), FsOperation::OpenWriter))?;
+        self.require(FileSystemCapability::Write, FsOperation::OpenWriter, Some(path))
     }
 
     /// Requires one capability before an operation can create provider I/O.
