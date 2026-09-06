@@ -13,6 +13,9 @@ use std::io::Cursor;
 use std::io::Result as IoResult;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
 
 use qubit_fs::FileSystem;
 use qubit_fs::FsError;
@@ -81,6 +84,19 @@ use qubit_fs::write::WriteFailureState;
 use qubit_fs::write::WriteOptions;
 use qubit_io::Input;
 use qubit_io::Output;
+
+static WRITER_FLUSH_DELAY_MS: AtomicU64 = AtomicU64::new(0);
+static WRITER_COMMIT_DELAY_MS: AtomicU64 = AtomicU64::new(0);
+static WRITER_DELAY_LOCK: Mutex<()> = Mutex::new(());
+
+pub(crate) fn writer_delay_guard() -> std::sync::MutexGuard<'static, ()> {
+    WRITER_DELAY_LOCK.lock().expect("writer delay lock should succeed")
+}
+
+pub(crate) fn set_writer_delays(flush: Duration, commit: Duration) {
+    WRITER_FLUSH_DELAY_MS.store(flush.as_millis() as u64, Ordering::Relaxed);
+    WRITER_COMMIT_DELAY_MS.store(commit.as_millis() as u64, Ordering::Relaxed);
+}
 
 pub(crate) struct BehaviorSpi {
     pub(crate) fail_commit: bool,
@@ -789,11 +805,19 @@ impl Output for Writer {
         }
     }
     fn flush(&mut self) -> IoResult<()> {
+        let delay = WRITER_FLUSH_DELAY_MS.load(Ordering::Relaxed);
+        if delay != 0 {
+            std::thread::sleep(Duration::from_millis(delay));
+        }
         Ok(())
     }
 }
 impl FileWriterSpi for Writer {
     fn commit(&mut self) -> Result<WriteOutcome, SpiWriteFailure> {
+        let delay = WRITER_COMMIT_DELAY_MS.load(Ordering::Relaxed);
+        if delay != 0 {
+            std::thread::sleep(Duration::from_millis(delay));
+        }
         *self.commit_calls.lock().expect("commit counter lock should succeed") += 1;
         if let Some(state) = self.commit_failure {
             return Err(SpiWriteFailure::new(
