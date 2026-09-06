@@ -51,6 +51,65 @@ fn test_connection_uri_inspection_detects_identity_mask_and_empty_secret() {
     assert!(empty.has_embedded_secret());
     assert!(identity.try_to_uri().is_err());
     assert!(empty.try_to_uri().is_err());
+    assert_eq!(identity.to_string(), "<redacted>");
+    assert_eq!(empty.to_string(), "<redacted>");
+}
+
+/// Verifies custom fields are redacted as a whole while safe values retain
+/// the policy's normal URI rendering.
+#[test]
+fn test_connection_uri_custom_policy_redacts_sensitive_display() {
+    let policy = RedactionPolicy::builder()
+        .fields(|fields| {
+            fields.secret_sensitive("tenant_payload");
+        })
+        .expect("policy should be valid")
+        .build()
+        .expect("policy should build");
+    let sensitive =
+        ConnectionUri::parse_with_policy("s3://bucket/key?tenant_payload=raw-secret", &policy)
+            .expect("connection URI may retain credentials internally");
+    let safe = ConnectionUri::parse_with_policy("s3://bucket/key?region=cn", &policy)
+        .expect("safe connection URI should parse");
+    let username_only = ConnectionUri::parse_with_policy("s3://access-key@bucket/key", &policy)
+        .expect("username-only URI should parse");
+
+    assert!(sensitive.has_embedded_secret());
+    assert_eq!(sensitive.to_string(), "<redacted>");
+    assert_eq!(format!("{sensitive:?}"), "ConnectionUri(\"<redacted>\")");
+    assert!(safe.to_string().contains("region=cn"));
+    assert!(username_only.to_string().contains("access-key@bucket/key"));
+}
+
+/// Verifies inspection failures fail closed and output-budget truncation stays
+/// within the existing incomplete-rendering contract.
+#[test]
+fn test_connection_uri_custom_policy_limits_remain_bounded() {
+    let input_limited = RedactionPolicy::builder()
+        .limits(|limits| {
+            limits.max_input_bytes(1);
+        })
+        .expect("policy should be valid")
+        .build()
+        .expect("policy should build");
+    let input_limited_uri =
+        ConnectionUri::parse_with_policy("s3://bucket/key?region=cn", &input_limited)
+            .expect("connection URI stores the original text");
+    assert!(input_limited_uri.has_embedded_secret());
+    assert_eq!(input_limited_uri.to_string(), "<redacted>");
+
+    let output_limited = RedactionPolicy::builder()
+        .limits(|limits| {
+            limits.max_output_bytes(1);
+        })
+        .expect("policy should be valid")
+        .build()
+        .expect("policy should build");
+    let output_limited_uri =
+        ConnectionUri::parse_with_policy("s3://bucket/key?region=cn", &output_limited)
+            .expect("safe connection URI should parse");
+    assert!(!output_limited_uri.has_embedded_secret());
+    assert_eq!(output_limited_uri.to_string(), "<truncated>");
 }
 
 /// Verifies generated credential text never crosses a normal display or debug
