@@ -102,7 +102,9 @@ filesystem 的克隆，以及完成生命周期所需的公共契约状态；它
 
 ### 4.1 URI 与 path 的边界
 
-URI 是跨边界定位及 provider 选择表示；path 是 provider 解码后的内部资源表示：
+`ConnectionUri` 是 registry/provider 的选择与配置输入；绑定完成后，canonical resource
+`Uri` 只表示选定 configured filesystem 上下文内的资源位置。它不包含 filesystem identity，
+不能独立解析为跨 provider 位置。`path` 是 provider 解码后的内部资源表示：
 
 ```text
 ConnectionUri
@@ -139,7 +141,9 @@ object://bucket/a%2Fb
 ```
 
 `Uri` 不解码 `%2F`、不规范化 dot segment、不合并 repeated separator，也不推断
-hierarchy。它的普通 `Display` 可以无损输出 canonical、secret-free URI。
+hierarchy。它的普通 `Display` 可以无损输出 canonical、secret-free URI。这里的
+secret-free 约束是不可弱化的标准凭据底线；URI 仍然只在对应 filesystem 上下文中解释，
+不能因为可持久化就变成独立的全局资源地址。
 
 ### 4.3 Credential 边界
 
@@ -148,9 +152,14 @@ URI 输入和长期保存的 canonical URI 使用不同类型：
 - `ConnectionUri` 是 registry/configuration ingress，可以接受 authority userinfo
   中的 password，以及 password、token、access key、secret key、signed-URL
   signature 等敏感 query；
+- `ConnectionUri` 可以在受控配置解析期间保留原始文本；只有不含敏感 component 时，
+  `try_to_uri` 才能生成 `Uri`。`expose_unredacted` 仅向显式 callback 临时提供原文，
+  不得用于日志、序列化、metadata、错误消息或 cache key；
 - `ConnectionUri` 的 `Display` 和 `Debug` 必须通过 `qubit-redact` 输出脱敏结果；
-- 默认解析使用固定的 `RedactionPolicy::standard()`；需要应用自定义字段规则时，调用方必须
-  通过 `Uri::parse_with_policy` 或 `ConnectionUri::parse_with_policy` 显式传入策略快照；
+- 默认解析使用固定的 `RedactionPolicy::standard()`；这是不可移除的安全底线。
+  `Uri::parse_with_policy` 始终先应用该标准策略，自定义策略只能增加 provider-specific
+  字段规则，不能让标准敏感 component 变得可接受；`ConnectionUri` 保存传入的策略快照，
+  用于后续 secret 分类和脱敏格式化；
 - 脱敏直接基于 RFC URI component，不得先转换为可能改写原始表示的
   `url::Url`；
 - 原始值只能通过名称醒目的显式暴露方法读取，不能依赖 `Display::to_string`；
@@ -170,7 +179,9 @@ URI 输入和长期保存的 canonical URI 使用不同类型：
 - `FsError` 的 `Display` 和 `Debug` 不自动展开底层 source error。
 
 完整 secret value 只存在于 `ConnectionUri` 和 registry/provider 的受控配置解析过程，
-不进入 SPI request、canonical `Uri`、公开 handle 或其他 `qubit-fs` 值对象。
+不进入 SPI request、canonical `Uri`、公开 handle 或其他 `qubit-fs` 值对象。标准策略未识别
+的 provider 私有凭据仍由 provider 负责消费、移除和私下保存；自定义策略不是转移这项责任的
+许可。
 
 ### 4.4 `Path`
 
@@ -649,6 +660,10 @@ Provider 仍负责只能在执行时发现的条件：
 `Path` 只标识 configured filesystem 内的逻辑路径；它不包含 filesystem identity，也
 不能独立解析为跨 provider 位置。
 
+canonical `Uri` 也只在对应的 configured filesystem 上下文内表示资源位置。它可以作为
+registry 的持久化或选择输入，但不携带 filesystem identity，不能脱离 resolution 独立解析为
+全局资源地址。
+
 `qubit-fs` 不公开 `FileLocation`、`FileResource` 或 `AsyncFileResource`：
 
 - registry 使用自己的 `FileSystemResolution` /
@@ -1118,7 +1133,8 @@ session，但不会暗中执行 cleanup。调用者必须在 drop 前通过 `sta
 
 Resolution 保存门面、provider-local `Path` 和 canonical `Uri`，不保存
 `ConnectionUri`、credential 或 `Arc<dyn FileSystemSpi>`。Canonical `Uri` 必须在
-resolution 返回前通过 secret-free 结构校验。
+resolution 返回前通过不可弱化的标准 secret-free 结构校验；provider 私有凭据必须由 provider
+在进入该边界前消费或移除。
 
 `qubit-fs` 不依赖 registry，也不重新解释 provider 已解码的 URI path。
 

@@ -42,16 +42,34 @@ namespace or root boundary.
 | Type | Role | Credential boundary |
 | --- | --- | --- |
 | `Path` | Validated logical name inside one configured filesystem | Not a cross-filesystem address; facade operations also validate it against that filesystem's constraints. |
-| `Uri` | Canonical, secret-free address for persistence and selection | Rejects userinfo, credential-like query fields, and fragments; preserves RFC 3986 lexical distinctions. |
+| `Uri` | Canonical, secret-free resource location for persistence and selection | It is interpreted within a configured filesystem context; rejects userinfo, credential-like query fields, and fragments while preserving RFC 3986 lexical distinctions. |
 | `ConnectionUri` | Registry/configuration ingress | May carry connection credentials, but `Display` and `Debug` redact them. Do not log or persist the original connection text. |
 
-`ConnectionUri` lets the registry or provider consume credentials at a controlled
-boundary and create a safe canonical `Uri`. It does not permit secrets in
-metadata, logs, normal URI values, or error messages.
+An ordinary `Uri` is a resource location only when interpreted with its
+configured filesystem context. It does not contain filesystem identity and
+cannot resolve a cross-provider location by itself; registry resolution binds
+the facade, provider-local `Path`, and canonical `Uri` together.
 
-Default parsing uses the fixed standard redaction policy. Applications with
-additional sensitive query names must pass an explicit policy snapshot through
-`Uri::parse_with_policy` or `ConnectionUri::parse_with_policy`.
+`ConnectionUri` lets the registry or provider consume credentials at a controlled
+boundary and create a safe canonical `Uri`. It may retain the original text
+internally for that controlled operation, but `try_to_uri` succeeds only after
+all sensitive components have been removed. Its `expose_unredacted` callback
+is for the same controlled boundary and must not feed logging, serialization,
+metadata, errors, or cache keys.
+
+Provider-specific credential fields that `qubit-fs` cannot recognize remain the
+provider's responsibility: the provider must consume or remove them before
+constructing a canonical `Uri` and keep their secret values in its private
+credential handling.
+
+Default parsing uses the fixed standard redaction policy. This policy is a
+non-removable safety floor: `parse_with_policy` always applies it, and an
+explicit policy can only add provider-specific sensitive query names. It cannot
+make a standard sensitive component acceptable. Applications with additional
+sensitive query names must pass an explicit policy snapshot through
+`Uri::parse_with_policy` or `ConnectionUri::parse_with_policy`; the
+`ConnectionUri` snapshot is also used for later secret classification and
+redacted formatting.
 
 ## Install and obtain a facade
 
@@ -215,7 +233,9 @@ registry or provider integration, then obtain a concrete facade.
 **A URI fails validation or logs show masked values.** Keep `ConnectionUri` at
 configuration ingress, convert it through the controlled registry/provider path,
 and store the resulting `Uri`. Canonical `Uri` values cannot contain userinfo,
-credential-like query fields, or fragments.
+credential-like query fields, or fragments. A custom policy cannot weaken the
+standard credential safety floor; provider-private credentials must be removed
+before the provider constructs the canonical `Uri`.
 
 **`exists` did not return `false`.** Only `NotFound` maps to absence. Permission,
 authentication, network, timeout, and I/O errors mean that existence was not
