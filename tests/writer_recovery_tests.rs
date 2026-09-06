@@ -2,6 +2,7 @@
 
 use qubit_fs::Path;
 use qubit_fs::error::FsErrorKind;
+use qubit_fs::write::FileWriter;
 use qubit_fs::write::WriteFailureState;
 use qubit_fs::write::WriteOptions;
 use qubit_fs::write::WriterState;
@@ -9,7 +10,7 @@ use qubit_fs::write::WriterState;
 #[path = "handle_support/mod.rs"]
 mod handle_support;
 
-fn opened_writer(commit_failure: Option<WriteFailureState>) -> qubit_fs::write::FileWriter {
+fn opened_writer(commit_failure: Option<WriteFailureState>) -> FileWriter {
     handle_support::writer_lifecycle_filesystem(commit_failure, None)
         .open_writer(
             &Path::parse("/target").expect("path should parse"),
