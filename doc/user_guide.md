@@ -1,6 +1,6 @@
 # Qubit FS User Guide
 
-`qubit-fs` 0.2.0 is a provider-neutral filesystem abstraction for Rust 1.94 or
+`qubit-fs` 0.3.0 is a provider-neutral filesystem abstraction for Rust 1.94 or
 later. It provides synchronous and asynchronous application facades without a
 storage backend or an async-runtime dependency.
 
@@ -80,7 +80,7 @@ redacted formatting.
 
 ```toml
 [dependencies]
-qubit-fs = "0.2.0"
+qubit-fs = "0.3.0"
 ```
 
 The `async` feature is enabled by default. A synchronous-only application can
