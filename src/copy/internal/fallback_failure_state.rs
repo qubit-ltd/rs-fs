@@ -31,7 +31,9 @@ use crate::write::WriterState;
 #[inline(always)]
 pub(crate) const fn from_writer_state(state: WriterState) -> CopyFailureState {
     match state {
-        WriterState::Open | WriterState::NotPublished | WriterState::Aborted => CopyFailureState::Unchanged,
+        WriterState::Open | WriterState::NotPublished | WriterState::Aborted => {
+            CopyFailureState::Unchanged
+        }
         WriterState::Committed | WriterState::Published => CopyFailureState::Published,
         WriterState::Indeterminate => CopyFailureState::Indeterminate,
     }
@@ -49,9 +51,34 @@ pub(crate) const fn from_writer_state(state: WriterState) -> CopyFailureState {
 #[inline(always)]
 pub(crate) const fn from_write_failure_state(state: WriteFailureState) -> CopyFailureState {
     match state {
-        WriteFailureState::RetryableNotPublished | WriteFailureState::NotPublished => CopyFailureState::Unchanged,
+        WriteFailureState::RetryableNotPublished | WriteFailureState::NotPublished => {
+            CopyFailureState::Unchanged
+        }
         WriteFailureState::Published => CopyFailureState::Published,
         WriteFailureState::Indeterminate => CopyFailureState::Indeterminate,
+    }
+}
+
+/// Maps validated native success statistics to publication certainty after a
+/// later cooperative deadline check fails.
+#[inline]
+pub(crate) const fn from_completed_stats(stats: &CopyStats) -> CopyFailureState {
+    if stats.files != 0
+        || stats.directories != 0
+        || stats.symlinks != 0
+        || stats.objects != 0
+        || stats.prefixes != 0
+        || stats.overwritten != 0
+    {
+        if stats.failed == 0 {
+            CopyFailureState::Published
+        } else {
+            CopyFailureState::PartiallyPublished
+        }
+    } else if stats.skipped != 0 && stats.failed == 0 && stats.bytes == 0 {
+        CopyFailureState::Unchanged
+    } else {
+        CopyFailureState::Indeterminate
     }
 }
 

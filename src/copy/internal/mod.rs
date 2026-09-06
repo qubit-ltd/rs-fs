@@ -9,12 +9,15 @@
 
 #[cfg(feature = "async")]
 mod copy_cancellation_guard;
+mod copy_deadline;
 mod fallback_failure_state;
 mod stream_copy_policy;
 
 #[cfg(feature = "async")]
 pub(super) use copy_cancellation_guard::CopyCancellationGuard;
+pub(crate) use copy_deadline::CopyDeadline;
 pub(crate) use fallback_failure_state::fallback_failure_stats;
+pub(crate) use fallback_failure_state::from_completed_stats;
 pub(crate) use fallback_failure_state::from_write_failure_state;
 pub(crate) use fallback_failure_state::from_writer_state;
 pub(crate) use stream_copy_policy::fallback_options_supported;
