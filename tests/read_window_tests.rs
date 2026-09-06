@@ -6,21 +6,44 @@ use std::sync::Arc;
 use qubit_fs::FileSystem;
 use qubit_fs::FsResult;
 use qubit_fs::Path;
-use qubit_fs::directory::{CreateDirectoryOutcome, DeleteOutcome};
-use qubit_fs::error::{FsError, FsErrorKind, FsOperation};
-use qubit_fs::metadata::{
-    FileKind, FileMetadata, FileSystemCapabilities, FileSystemCapability, FileSystemId,
-    FileSystemInfo, FileSystemLimits, OpenedFileInfo, SymlinkPolicy,
-};
-use qubit_fs::path::{PathConstraints, PathSemantics};
-use qubit_fs::rename::{RenameFailureState, RenameOutcome};
-use qubit_fs::spi::{
-    CreateDirectoryRequest, CreateTempDirectoryRequest, CreateTempFileRequest,
-    DeleteDirectoryRequest, DeleteFileRequest, FileSystemSpi, ListRequest, OpenReaderRequest,
-    OpenWriterRequest, OpenedDirectoryStream, OpenedTempDirectory, OpenedTempFile, OpenedWriter,
-    ProviderOperation, ProviderOperations, ProviderProperties, RenameRequest, SpiRenameFailure,
-    StatRequest, StatResponse,
-};
+use qubit_fs::directory::CreateDirectoryOutcome;
+use qubit_fs::directory::DeleteOutcome;
+use qubit_fs::error::FsError;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
+use qubit_fs::metadata::FileKind;
+use qubit_fs::metadata::FileMetadata;
+use qubit_fs::metadata::FileSystemCapabilities;
+use qubit_fs::metadata::FileSystemCapability;
+use qubit_fs::metadata::FileSystemId;
+use qubit_fs::metadata::FileSystemInfo;
+use qubit_fs::metadata::FileSystemLimits;
+use qubit_fs::metadata::OpenedFileInfo;
+use qubit_fs::metadata::SymlinkPolicy;
+use qubit_fs::path::PathConstraints;
+use qubit_fs::path::PathSemantics;
+use qubit_fs::rename::RenameFailureState;
+use qubit_fs::rename::RenameOutcome;
+use qubit_fs::spi::CreateDirectoryRequest;
+use qubit_fs::spi::CreateTempDirectoryRequest;
+use qubit_fs::spi::CreateTempFileRequest;
+use qubit_fs::spi::DeleteDirectoryRequest;
+use qubit_fs::spi::DeleteFileRequest;
+use qubit_fs::spi::FileSystemSpi;
+use qubit_fs::spi::ListRequest;
+use qubit_fs::spi::OpenReaderRequest;
+use qubit_fs::spi::OpenWriterRequest;
+use qubit_fs::spi::OpenedDirectoryStream;
+use qubit_fs::spi::OpenedTempDirectory;
+use qubit_fs::spi::OpenedTempFile;
+use qubit_fs::spi::OpenedWriter;
+use qubit_fs::spi::ProviderOperation;
+use qubit_fs::spi::ProviderOperations;
+use qubit_fs::spi::ProviderProperties;
+use qubit_fs::spi::RenameRequest;
+use qubit_fs::spi::SpiRenameFailure;
+use qubit_fs::spi::StatRequest;
+use qubit_fs::spi::StatResponse;
 
 struct RangeSpi {
     metadata: bool,
@@ -29,11 +52,17 @@ struct RangeSpi {
 
 impl RangeSpi {
     fn with_metadata() -> Self {
-        Self { metadata: true, fail_open: false }
+        Self {
+            metadata: true,
+            fail_open: false,
+        }
     }
 
     fn without_metadata() -> Self {
-        Self { metadata: false, fail_open: false }
+        Self {
+            metadata: false,
+            fail_open: false,
+        }
     }
 }
 
@@ -68,17 +97,17 @@ impl FileSystemSpi for RangeSpi {
         let options = request.options().options();
         let total = b"0123456789";
         let start = options.offset().unwrap_or(0).min(total.len() as u64) as usize;
-        let end = options.length().map_or(total.len(), |n| {
-            start.saturating_add(n as usize).min(total.len())
-        });
-        let mut info = OpenedFileInfo::new(
-                FileSystemId::new("read-window").unwrap(),
-                request.path().clone(),
-            );
+        let end = options
+            .length()
+            .map_or(total.len(), |n| start.saturating_add(n as usize).min(total.len()));
+        let mut info = OpenedFileInfo::new(FileSystemId::new("read-window").unwrap(), request.path().clone());
         if self.metadata {
             info = info.with_metadata(FileMetadata::new(FileKind::File).with_len(Some(total.len() as u64)));
         }
-        Ok(qubit_fs::spi::OpenedReader::new(info, Box::new(Cursor::new(total[start..end].to_vec()))))
+        Ok(qubit_fs::spi::OpenedReader::new(
+            info,
+            Box::new(Cursor::new(total[start..end].to_vec())),
+        ))
     }
     fn open_writer(&self, _: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
         Err(unused())
@@ -93,28 +122,18 @@ impl FileSystemSpi for RangeSpi {
         Err(unused())
     }
     fn rename(&self, _: RenameRequest<'_>) -> Result<RenameOutcome, SpiRenameFailure> {
-        Err(SpiRenameFailure::new(
-            unused(),
-            RenameFailureState::Unchanged,
-        ))
+        Err(SpiRenameFailure::new(unused(), RenameFailureState::Unchanged))
     }
     fn create_temp_file(&self, _: CreateTempFileRequest) -> FsResult<OpenedTempFile> {
         Err(unused())
     }
-    fn create_temp_directory(
-        &self,
-        _: CreateTempDirectoryRequest,
-    ) -> FsResult<OpenedTempDirectory> {
+    fn create_temp_directory(&self, _: CreateTempDirectoryRequest) -> FsResult<OpenedTempDirectory> {
         Err(unused())
     }
 }
 
 fn unused() -> FsError {
-    FsError::new(
-        FsErrorKind::UnsupportedOperation,
-        FsOperation::Other,
-        "unused",
-    )
+    FsError::new(FsErrorKind::UnsupportedOperation, FsOperation::Other, "unused")
 }
 
 #[test]
@@ -124,10 +143,7 @@ fn metadata_length_is_compared_with_selected_window() {
     let options = qubit_fs::read::ReadOptions::default()
         .with_offset(Some(2))
         .with_length(Some(3));
-    assert_eq!(
-        b"234",
-        fs.read_all(&path, options.clone(), 3).unwrap().as_slice()
-    );
+    assert_eq!(b"234", fs.read_all(&path, options.clone(), 3).unwrap().as_slice());
     assert_eq!(
         FsErrorKind::ResourceLimitExceeded,
         fs.read_all(&path, options, 2).unwrap_err().kind()
@@ -150,12 +166,21 @@ fn read_all_accepts_unknown_metadata_but_still_enforces_stream_budget() {
         .with_offset(Some(2))
         .with_length(Some(3));
     assert_eq!(b"234", fs.read_all(&path, options.clone(), 3).unwrap().as_slice());
-    assert_eq!(FsErrorKind::ResourceLimitExceeded, fs.read_all(&path, options, 2).unwrap_err().kind());
+    assert_eq!(
+        FsErrorKind::ResourceLimitExceeded,
+        fs.read_all(&path, options, 2).unwrap_err().kind()
+    );
 }
 
 #[test]
 fn read_all_reports_open_error_before_budget_collection() {
-    let fs = FileSystem::from_spi(RangeSpi { metadata: true, fail_open: true }).unwrap();
-    let error = fs.read_all(&Path::parse("/source").unwrap(), Default::default(), 16).unwrap_err();
+    let fs = FileSystem::from_spi(RangeSpi {
+        metadata: true,
+        fail_open: true,
+    })
+    .unwrap();
+    let error = fs
+        .read_all(&Path::parse("/source").unwrap(), Default::default(), 16)
+        .unwrap_err();
     assert_eq!(FsErrorKind::Io, error.kind());
 }

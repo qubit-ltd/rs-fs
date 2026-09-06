@@ -65,10 +65,7 @@ mod tests {
 
     #[test]
     fn fallback_rejects_tree_mode() {
-        assert!(!fallback_options_supported(
-            &CopyOptions::tree(),
-            SymlinkPolicy::Reject,
-        ));
+        assert!(!fallback_options_supported(&CopyOptions::tree(), SymlinkPolicy::Reject,));
     }
 
     #[test]

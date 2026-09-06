@@ -175,17 +175,14 @@ impl FileSystemProperties {
                 "path semantics do not match this filesystem",
             ))
         } else {
-            self.path_constraints.validate(path).and_then(|()| {
-                self.limits
-                    .validate_path(path, self.info.path_semantics(), operation)
-            })
+            self.path_constraints
+                .validate(path)
+                .and_then(|()| self.limits.validate_path(path, self.info.path_semantics(), operation))
         };
         result.map_err(|error| {
-            error.with_operation(operation).with_missing_context(
-                path,
-                None,
-                self.info.provider_id(),
-            )
+            error
+                .with_operation(operation)
+                .with_missing_context(path, None, self.info.provider_id())
         })
     }
 
