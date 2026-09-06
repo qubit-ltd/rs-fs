@@ -37,6 +37,11 @@ an operation-scoped `SymlinkPolicy` override. The portable abstraction supports
 `Reject` and `FollowWithinFileSystem`; providers map the latter to their own
 namespace or root boundary.
 
+Every facade operation validates a `Path` against the configured filesystem's
+path semantics, accepted form, and declared limits before provider I/O. A
+registry resolution applies the same static validation; a successful resolution
+does not imply that `stat` or any other I/O has run.
+
 ### Names, addresses, and secrets
 
 | Type | Role | Credential boundary |
@@ -135,6 +140,12 @@ applicable, a recovery writer. Inspect the state before retrying, calling
 returns `WriteAbortOutcome`; inspect it because cleanup can complete after the
 destination was published or while its final state remains indeterminate.
 
+Calling `commit` again after a writer leaves `Open` is invalid and does not call
+the provider again. The returned failure still reports the writer's known
+publication fact: a committed or published writer reports `Published`, an
+aborted or not-published writer reports `NotPublished`, and an indeterminate
+writer reports `Indeterminate`.
+
 Required atomicity and other declared guarantees are checked before side effects
 when the facade can determine they cannot be met. Copy guarantees are explicit
 about source mode: `AtomicFileCopy` and `DurableFileCopy` cover regular files,
@@ -148,6 +159,12 @@ absent, the facade directly evaluates its allowlisted stream fallback and
 requires `Read` and `Write` instead. This fallback is limited to the documented
 copy options and does not satisfy required server-side, atomic, or durable copy
 guarantees.
+
+The fallback rejects `CopyMode::Tree` and rejects a symlink-policy override that
+differs from the filesystem default before stat, reader, or writer I/O. A
+missing override or one equal to the default is eligible for the allowlist.
+The native `try_copy` path may support tree mode or an override; these
+restrictions apply only after it is unavailable or explicitly declined.
 
 ### Asynchronous workflow
 
@@ -184,6 +201,15 @@ operation until recovery is resolved. If an execution future has been polled
 and then dropped before completion, the operation records an indeterminate
 state; dropping an unpolled execution future leaves it ready. Explicitly await
 async writer and temporary-resource cleanup when completion must be confirmed.
+
+`CopyOptions::deadline` is a cooperative cumulative budget. The clock starts
+when the synchronous copy operation or asynchronous `begin_copy` handle is
+constructed, so time spent waiting before `execute` counts. The facade checks
+before and after native copy, around each fallback read/write, before and after
+flush, and before and after commit. A provider error is retained rather than
+replaced by a timeout. A timeout before publication retains the recovery writer;
+if commit already published the target, the failure is `Published` with its
+successful statistics and no retryable completed writer.
 
 ## Errors, diagnosis, and recovery
 
@@ -228,6 +254,13 @@ resume or restart from a safe checkpoint.
 **A copy, write, rename, or temp publish may have had side effects.** Read the
 typed state first. `Published` and `Indeterminate` need reconciliation; retain
 any writer or temp handle until the recovery decision is complete.
+
+**A ranged read exceeded its budget unexpectedly.** `read_all` applies
+`max_bytes` to the selected range, not the complete resource length. For a
+known resource length, the selected length is
+`min(max(resource_length - offset, 0), requested_length)`; the complete length
+remains in `FileMetadata`. Streaming still enforces the byte budget when
+metadata is missing or inaccurate.
 
 ## Limits and non-goals
 
