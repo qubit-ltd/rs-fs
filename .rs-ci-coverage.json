@@ -29,7 +29,31 @@
       "src/temp/temp_options.rs",
       "src/temp/temp_file.rs",
       "src/uri/connection_uri.rs",
-      "src/uri/uri.rs"
+      "src/uri/uri.rs",
+      "src/copy/internal/copy_failure_parts.rs",
+      "src/copy/internal/copy_recovery_snapshot.rs",
+      "src/directory/internal/list_selection.rs",
+      "src/directory/list_filter.rs",
+      "src/temp/internal/temp_lifecycle.rs",
+      "src/write/async_write_all_operation.rs",
+      "src/write/async_write_all_operation_failure.rs",
+      "src/write/async_write_all_operation_state.rs",
+      "src/write/internal/write_all_cancellation_guard.rs",
+      "src/write/internal/write_all_recovery_snapshot.rs",
+      "src/directory/async_directory_operation.rs",
+      "src/directory/async_directory_stream.rs",
+      "src/directory/directory_entry_validation.rs",
+      "src/directory/directory_operation.rs",
+      "src/directory/directory_stream.rs",
+      "src/directory/list_options.rs",
+      "src/error/fs_error.rs",
+      "src/facade/facade_core.rs",
+      "src/file_system.rs",
+      "src/temp/async_temp_file.rs",
+      "src/temp/persist_failure.rs",
+      "src/temp/persist_failure_state.rs",
+      "src/metadata/symlink_policy.rs",
+      "src/path_constraints.rs"
     ]
   }
 }
