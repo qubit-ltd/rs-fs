@@ -20,7 +20,14 @@ fn opened_writer(commit_failure: Option<WriteFailureState>) -> qubit_fs::write::
 
 #[test]
 fn repeated_commit_preserves_known_sync_publication_state() {
-    let mut writer = opened_writer(None);
+    let (filesystem, commit_calls, abort_calls) =
+        handle_support::writer_lifecycle_filesystem_with_counts(None, None);
+    let mut writer = filesystem
+        .open_writer(
+            &Path::parse("/target").expect("path should parse"),
+            WriteOptions::default(),
+        )
+        .expect("writer should open");
     writer.commit().expect("first commit should succeed");
 
     let failure = writer
@@ -29,6 +36,8 @@ fn repeated_commit_preserves_known_sync_publication_state() {
     assert_eq!(FsErrorKind::InvalidState, failure.error().kind());
     assert_eq!(WriteFailureState::Published, failure.state());
     assert_eq!(WriterState::Committed, writer.state());
+    assert_eq!(1, *commit_calls.lock().expect("counter lock should succeed"));
+    assert_eq!(0, *abort_calls.lock().expect("counter lock should succeed"));
 }
 
 #[test]
@@ -54,7 +63,16 @@ fn repeated_commit_preserves_failed_sync_publication_states() {
 
 #[test]
 fn retryable_sync_commit_remains_retryable() {
-    let mut writer = opened_writer(Some(WriteFailureState::RetryableNotPublished));
+    let (filesystem, commit_calls, abort_calls) = handle_support::writer_lifecycle_filesystem_with_counts(
+        Some(WriteFailureState::RetryableNotPublished),
+        None,
+    );
+    let mut writer = filesystem
+        .open_writer(
+            &Path::parse("/target").expect("path should parse"),
+            WriteOptions::default(),
+        )
+        .expect("writer should open");
     let first = writer.commit().expect_err("configured commit should fail");
     assert_eq!(WriteFailureState::RetryableNotPublished, first.state());
     assert_eq!(WriterState::Open, writer.state());
@@ -67,6 +85,13 @@ fn retryable_sync_commit_remains_retryable() {
         .expect_err("retry should reach the provider");
     assert_eq!(WriteFailureState::RetryableNotPublished, retry.state());
     assert_eq!(WriterState::Open, writer.state());
+    assert_eq!(2, *commit_calls.lock().expect("counter lock should succeed"));
+
+    let _ = writer.abort().expect("abort should succeed");
+    assert_eq!(1, *abort_calls.lock().expect("counter lock should succeed"));
+    let _ = writer.commit().expect_err("aborted writer must reject commit");
+    assert_eq!(2, *commit_calls.lock().expect("counter lock should succeed"));
+    assert_eq!(1, *abort_calls.lock().expect("counter lock should succeed"));
 }
 
 #[test]
@@ -109,6 +134,31 @@ fn repeated_commit_preserves_async_publication_state() {
     assert_eq!(FsErrorKind::InvalidState, failure.error().kind());
     assert_eq!(WriteFailureState::Published, failure.state());
     assert_eq!(WriterState::Committed, writer.state());
+}
+
+#[cfg(feature = "async")]
+#[test]
+fn retryable_async_commit_remains_retryable() {
+    use async_recording_spi::async_recording_file_system;
+    use async_recording_spi::AsyncRecordingConfig;
+    use poll_support::ready;
+
+    let (filesystem, _) = async_recording_file_system(AsyncRecordingConfig {
+        writer_commit_failure: Some(WriteFailureState::RetryableNotPublished),
+        ..AsyncRecordingConfig::default()
+    });
+    let target = Path::parse("/target").expect("path should parse");
+    let mut writer = ready(filesystem.open_writer(&target, WriteOptions::default()))
+        .expect("writer should open");
+    let first = ready(writer.commit_async()).expect_err("configured commit should fail");
+    assert_eq!(WriteFailureState::RetryableNotPublished, first.state());
+    assert_eq!(WriterState::Open, writer.state());
+    let retry = ready(writer.commit_async()).expect_err("retry should reach the provider");
+    assert_eq!(WriteFailureState::RetryableNotPublished, retry.state());
+    assert_eq!(WriterState::Open, writer.state());
+    let _ = ready(writer.abort_async()).expect("abort should succeed");
+    let repeated = ready(writer.commit_async()).expect_err("aborted writer must reject commit");
+    assert_eq!(FsErrorKind::InvalidState, repeated.error().kind());
 }
 
 #[cfg(feature = "async")]
