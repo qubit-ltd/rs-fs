@@ -37,14 +37,26 @@ root、region 或 credential profile 不同，同一 provider 也可以产生多
 | 类型 | 职责 | 凭据边界 |
 | --- | --- | --- |
 | `Path` | 一个已配置 filesystem 内的已验证逻辑名称 | 不是跨 filesystem 地址；门面操作还会按该 filesystem 的路径约束校验。 |
-| `Uri` | 用于持久化和选择的、不含 secret 的 canonical 地址 | 拒绝 userinfo、credential-like query field 与 fragment，并保留 RFC 3986 词法差异。 |
+| `Uri` | 用于持久化和选择的、不含 secret 的 canonical 资源位置 | 只能在 configured filesystem 上下文中解释；拒绝 userinfo、credential-like query field 与 fragment，并保留 RFC 3986 词法差异。 |
 | `ConnectionUri` | registry/配置入口 | 可以携带连接凭据，但 `Display` 与 `Debug` 会脱敏；不得记录或持久化原始连接文本。 |
 
-`ConnectionUri` 让 registry/provider 在受控边界消费凭据，再生成安全的 canonical `Uri`。
-它并不允许把 secret 放进 metadata、日志、普通 URI 或错误消息。
+普通 `Uri` 只有结合 configured filesystem 上下文才表示资源位置。它不包含 filesystem
+identity，不能独立解析为跨 provider 位置；registry resolution 会把门面、provider-local
+`Path` 和 canonical `Uri` 绑定在一起。
 
-默认解析使用固定的标准脱敏策略。应用如果还有额外的敏感 query 名称，必须通过
-`Uri::parse_with_policy` 或 `ConnectionUri::parse_with_policy` 显式传入策略快照。
+`ConnectionUri` 让 registry/provider 在受控边界消费凭据，再生成安全的 canonical `Uri`。
+它可以在受控处理期间内部保留原始文本，但只有移除全部敏感 component 后，`try_to_uri`
+才会成功。`expose_unredacted` 只用于同一个受控边界，不能把结果送入日志、序列化、metadata、
+错误消息或 cache key。
+
+`qubit-fs` 无法识别的 provider 私有凭据字段仍由 provider 负责：provider 必须在构造
+canonical `Uri` 前消费或移除这些字段，并在自己的凭据处理边界内保存 secret value。
+
+默认解析使用固定的标准脱敏策略。这是不可移除的安全底线：`parse_with_policy` 始终应用该
+底线，自定义策略只能增加 provider-specific 的敏感 query 名称，不能让标准敏感 component
+变得可接受。应用如果还有额外的敏感 query 名称，必须通过 `Uri::parse_with_policy` 或
+`ConnectionUri::parse_with_policy` 显式传入策略快照；`ConnectionUri` 还会用保存的策略完成
+后续 secret 分类和脱敏格式化。
 
 ## 安装与取得门面
 
@@ -191,7 +203,8 @@ provider。请通过 registry 或 provider 集成完成配置，再取得具体�
 
 **URI 校验失败，或日志只显示被遮蔽的值。** 仅在配置入口使用 `ConnectionUri`，通过受控的
 registry/provider 路径转换，并保存产生的 `Uri`。canonical `Uri` 不允许 userinfo、
-credential-like query field 或 fragment。
+credential-like query field 或 fragment。自定义策略不能削弱标准凭据安全底线；provider 私有
+凭据必须在 provider 构造 canonical `Uri` 前移除。
 
 **`exists` 没有返回 `false`。** 只有 `NotFound` 才映射为不存在。权限、认证、网络、超时和
 I/O error 表明尚未确定资源是否存在。
