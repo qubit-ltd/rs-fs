@@ -14,7 +14,7 @@ use std::fmt::Result as FmtResult;
 
 use fluent_uri::Uri as FluentUri;
 use qubit_redact::RedactionPolicy;
-use qubit_redact::Redactor;
+use qubit_redact::formats::uri::UriRedactionBoundary;
 
 use super::invalid_uri;
 use crate::error::FsResult;
@@ -127,7 +127,7 @@ pub(crate) fn reject_secrets(parsed: &FluentUri<String>, policy: &RedactionPolic
     if parsed.fragment().is_some() {
         return Err(invalid_uri("URI fragments are not supported"));
     }
-    match Redactor::new(policy.clone()).inspect_uri(parsed.as_str()) {
+    match UriRedactionBoundary::new(policy).inspect_uri(parsed.as_str()) {
         Ok(inspection) if !inspection.contains_sensitive() => {}
         Ok(_) => {
             return Err(invalid_uri("sensitive URI components are not supported"));
