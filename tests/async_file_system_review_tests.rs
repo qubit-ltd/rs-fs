@@ -476,6 +476,20 @@ fn test_async_facade_convenience_operations_enforce_contracts() {
     assert_eq!(FsErrorKind::ProviderContractViolation, rename_error.error().kind());
 }
 
+/// Ensures asynchronous whole-file reads compare a configured byte cap with
+/// the requested range window rather than the source object's full length.
+#[test]
+fn test_async_read_all_enforces_selected_range_budget() {
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
+        range_read: true,
+        ..AsyncRecordingConfig::default()
+    });
+    let options = ReadOptions::default().with_offset(Some(2)).with_length(Some(3));
+    let error = ready(file_system.read_all(&path("/file"), options, 2))
+        .expect_err("the selected three-byte window must exceed a two-byte cap");
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, error.kind());
+}
+
 /// Covers asynchronous facade contract failures and declined-copy boundary
 /// failures that must remain typed and contextualized.
 #[test]
