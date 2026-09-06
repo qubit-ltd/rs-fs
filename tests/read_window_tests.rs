@@ -35,6 +35,7 @@ use qubit_fs::spi::ListRequest;
 use qubit_fs::spi::OpenReaderRequest;
 use qubit_fs::spi::OpenWriterRequest;
 use qubit_fs::spi::OpenedDirectoryStream;
+use qubit_fs::spi::OpenedReader;
 use qubit_fs::spi::OpenedTempDirectory;
 use qubit_fs::spi::OpenedTempFile;
 use qubit_fs::spi::OpenedWriter;
@@ -91,7 +92,7 @@ impl FileSystemSpi for RangeSpi {
     fn list(&self, _: ListRequest<'_>) -> FsResult<OpenedDirectoryStream> {
         Err(unused())
     }
-    fn open_reader(&self, request: OpenReaderRequest<'_>) -> FsResult<qubit_fs::spi::OpenedReader> {
+    fn open_reader(&self, request: OpenReaderRequest<'_>) -> FsResult<OpenedReader> {
         if self.fail_open {
             return Err(FsError::new(FsErrorKind::Io, FsOperation::OpenReader, "open failed"));
         }
@@ -105,7 +106,7 @@ impl FileSystemSpi for RangeSpi {
         if self.metadata {
             info = info.with_metadata(FileMetadata::new(FileKind::File).with_len(Some(total.len() as u64)));
         }
-        Ok(qubit_fs::spi::OpenedReader::new(
+        Ok(OpenedReader::new(
             info,
             Box::new(Cursor::new(total[start..end].to_vec())),
         ))
