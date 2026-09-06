@@ -16,7 +16,7 @@ use std::fmt::Result as FmtResult;
 use fluent_uri::Uri as FluentUri;
 use qubit_redact::RedactionCompletion;
 use qubit_redact::RedactionPolicy;
-use qubit_redact::Redactor;
+use qubit_redact::formats::uri::UriRedactionBoundary;
 
 use super::invalid_uri;
 use super::uri::Uri;
@@ -88,14 +88,7 @@ impl ConnectionUri {
     #[inline]
     #[must_use]
     pub fn has_embedded_secret(&self) -> bool {
-        let floor = RedactionPolicy::standard();
-        let floor_secret = Redactor::new(floor.clone())
-            .inspect_uri(self.parsed.as_str())
-            .map_or(true, |inspection| inspection.contains_sensitive());
-        if floor_secret || self.redaction_policy == floor {
-            return floor_secret;
-        }
-        Redactor::new(self.redaction_policy.clone())
+        UriRedactionBoundary::new(&self.redaction_policy)
             .inspect_uri(self.parsed.as_str())
             .map_or(true, |inspection| inspection.contains_sensitive())
     }
@@ -132,16 +125,13 @@ impl ConnectionUri {
     /// # Returns
     ///
     /// The complete redacted URI, or `<truncated>` when redaction did not
-    /// complete. When a non-standard policy detects a secret, the complete
-    /// display is conservatively reduced to `<redacted>` instead of relying
-    /// on that policy's individual masking rules.
+    /// complete. The standard URI boundary masks sensitive components while
+    /// retaining non-sensitive URI structure even when application rules add
+    /// provider-specific classifications.
     #[inline]
     #[must_use]
     fn redacted_text(&self) -> String {
-        if self.redaction_policy != RedactionPolicy::standard() && self.has_embedded_secret() {
-            return "<redacted>".to_owned();
-        }
-        let redaction = Redactor::new(self.redaction_policy.clone()).redact_uri(self.parsed.as_str());
+        let redaction = UriRedactionBoundary::new(&self.redaction_policy).redact_uri(self.parsed.as_str());
         match redaction.summary().completion() {
             RedactionCompletion::Complete => redaction
                 .into_complete_text()

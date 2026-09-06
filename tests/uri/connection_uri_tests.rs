@@ -74,8 +74,11 @@ fn test_connection_uri_custom_policy_redacts_sensitive_display() {
         .expect("username-only URI should parse");
 
     assert!(sensitive.has_embedded_secret());
-    assert_eq!(sensitive.to_string(), "<redacted>");
-    assert_eq!(format!("{sensitive:?}"), "ConnectionUri(\"<redacted>\")");
+    assert_eq!(sensitive.to_string(), "s3://bucket/key?tenant_payload=%3Credacted%3E");
+    assert_eq!(
+        format!("{sensitive:?}"),
+        "ConnectionUri(\"s3://bucket/key?tenant_payload=%3Credacted%3E\")"
+    );
     assert!(safe.to_string().contains("region=cn"));
     assert!(username_only.to_string().contains("access-key@bucket/key"));
 }
@@ -94,7 +97,7 @@ fn test_connection_uri_custom_policy_limits_remain_bounded() {
     let input_limited_uri = ConnectionUri::parse_with_policy("s3://bucket/key?region=cn", &input_limited)
         .expect("connection URI stores the original text");
     assert!(input_limited_uri.has_embedded_secret());
-    assert_eq!(input_limited_uri.to_string(), "<redacted>");
+    assert_eq!(input_limited_uri.to_string(), "<truncated>");
 
     let output_limited = RedactionPolicy::builder()
         .limits(|limits| {
