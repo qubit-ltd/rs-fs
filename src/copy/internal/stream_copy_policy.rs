@@ -61,7 +61,9 @@ pub(crate) fn is_file_kind_supported(kind: FileKind) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::fallback_options_supported;
+    use crate::copy::CopyOptions;
+    use crate::metadata::SymlinkPolicy;
 
     #[test]
     fn fallback_rejects_tree_mode() {
