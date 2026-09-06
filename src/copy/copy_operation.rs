@@ -180,7 +180,7 @@ impl<'a> CopyOperation<'a> {
     /// Streams a copy through facade-owned handles when the provider declines.
     #[allow(clippy::result_large_err)]
     fn execute_stream_fallback(&self) -> Result<CopyOutcome, CopyFailure> {
-        if !fallback_options_supported(&self.options) {
+        if !fallback_options_supported(&self.options, self.filesystem.properties().symlink_policy()) {
             return Err(self.failure(
                 FsError::new(
                     FsErrorKind::RequirementNotMet,
