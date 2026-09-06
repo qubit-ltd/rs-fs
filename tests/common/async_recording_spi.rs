@@ -147,6 +147,7 @@ pub(crate) struct AsyncRecordingConfig {
 pub(crate) struct AsyncRecordingProbe(Arc<Mutex<Vec<&'static str>>>, Arc<Mutex<usize>>, Arc<Mutex<usize>>);
 impl AsyncRecordingProbe {
     /// Returns the calls observed so far.
+    #[allow(dead_code)]
     pub(crate) fn calls(&self) -> Vec<&'static str> {
         self.0.lock().expect("calls lock should succeed").clone()
     }
