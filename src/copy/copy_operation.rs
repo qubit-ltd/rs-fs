@@ -9,8 +9,6 @@
 // copy fallback tests.
 //! Synchronous copy operation implementation.
 
-use std::time::Instant;
-
 use qubit_io::Input;
 use qubit_io::Output;
 
@@ -24,6 +22,8 @@ use super::fallback_failure_stats;
 use super::fallback_options_supported;
 use super::from_write_failure_state;
 use super::from_writer_state;
+use super::internal::CopyDeadline;
+use super::internal::from_completed_stats;
 use super::is_file_kind_supported;
 use super::validate_stream_copy_length_limits;
 use crate::FileSystem;
@@ -54,19 +54,20 @@ pub(crate) struct CopyOperation<'a> {
     /// Requested copy policy.
     options: CopyOptions,
     /// Monotonic start used to enforce caller elapsed-time budgets.
-    started_at: Instant,
+    deadline: CopyDeadline,
 }
 
 impl<'a> CopyOperation<'a> {
     /// Creates a pending synchronous copy operation.
     #[inline]
     pub(crate) fn new(filesystem: &'a FileSystem, source: &'a Path, target: &'a Path, options: CopyOptions) -> Self {
+        let deadline = CopyDeadline::new(options.deadline());
         Self {
             filesystem,
             source,
             target,
             options,
-            started_at: Instant::now(),
+            deadline,
         }
     }
 
@@ -119,15 +120,16 @@ impl<'a> CopyOperation<'a> {
             ),
         )) {
             Ok(CopyAttempt::Completed(outcome)) => {
+                let outcome = self.verify_completed_copy(outcome)?;
                 if let Some(error) = self.deadline_error() {
                     return Err(self.contextualize_failure(self.failure(
                         error,
-                        CopyFailureState::Published,
+                        from_completed_stats(outcome.stats()),
                         *outcome.stats(),
                         None,
                     )));
                 }
-                self.verify_completed_copy(outcome)
+                Ok(outcome)
             }
             Err(failure) => {
                 let (error, state, stats) = failure.into_parts();
@@ -180,7 +182,7 @@ impl<'a> CopyOperation<'a> {
     /// Streams a copy through facade-owned handles when the provider declines.
     #[allow(clippy::result_large_err)]
     fn execute_stream_fallback(&self) -> Result<CopyOutcome, CopyFailure> {
-        if !fallback_options_supported(&self.options) {
+        if !fallback_options_supported(&self.options, self.filesystem.properties().symlink_policy()) {
             return Err(self.failure(
                 FsError::new(
                     FsErrorKind::RequirementNotMet,
@@ -216,6 +218,9 @@ impl<'a> CopyOperation<'a> {
             .filesystem
             .stat(self.source)
             .map_err(|error| self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None))?;
+        if let Some(error) = self.deadline_error() {
+            return Err(self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None));
+        }
         if !is_file_kind_supported(metadata.kind().clone()) {
             return Err(self.failure(
                 FsError::new(
@@ -238,6 +243,9 @@ impl<'a> CopyOperation<'a> {
             .filesystem
             .open_reader(self.source, ReadOptions::default())
             .map_err(|error| self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None))?;
+        if let Some(error) = self.deadline_error() {
+            return Err(self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None));
+        }
         let writer_options = WriteOptions::default()
             .with_disposition(WriteDisposition::CreateNew)
             .with_atomicity(self.options.atomicity());
@@ -259,6 +267,14 @@ impl<'a> CopyOperation<'a> {
                 return Err(self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None));
             }
         };
+        if let Some(error) = self.deadline_error() {
+            return Err(self.failure(
+                error,
+                from_writer_state(writer.state()),
+                fallback_failure_stats(writer.written_bytes()),
+                Some(writer),
+            ));
+        }
         let mut bytes = 0_u64;
         let mut buffer = [0_u8; 8192];
         loop {
@@ -281,6 +297,14 @@ impl<'a> CopyOperation<'a> {
                     ));
                 }
             };
+            if let Some(error) = self.deadline_error() {
+                return Err(self.failure(
+                    error,
+                    from_writer_state(writer.state()),
+                    fallback_failure_stats(writer.written_bytes()),
+                    Some(writer),
+                ));
+            }
             if read == 0 {
                 break;
             }
@@ -311,11 +335,35 @@ impl<'a> CopyOperation<'a> {
                     Some(writer),
                 ));
             }
+            if let Some(error) = self.deadline_error() {
+                return Err(self.failure(
+                    error,
+                    from_writer_state(writer.state()),
+                    fallback_failure_stats(writer.written_bytes()),
+                    Some(writer),
+                ));
+            }
             bytes = next_bytes;
+        }
+        if let Some(error) = self.deadline_error() {
+            return Err(self.failure(
+                error,
+                from_writer_state(writer.state()),
+                fallback_failure_stats(writer.written_bytes()),
+                Some(writer),
+            ));
         }
         if let Err(error) = Output::flush(&mut writer) {
             return Err(self.failure(
                 self.io_error(self.target, FsOperation::Write, error),
+                from_writer_state(writer.state()),
+                fallback_failure_stats(writer.written_bytes()),
+                Some(writer),
+            ));
+        }
+        if let Some(error) = self.deadline_error() {
+            return Err(self.failure(
+                error,
                 from_writer_state(writer.state()),
                 fallback_failure_stats(writer.written_bytes()),
                 Some(writer),
@@ -354,6 +402,18 @@ impl<'a> CopyOperation<'a> {
                 ));
             }
         };
+        if let Some(error) = self.deadline_error() {
+            return Err(self.failure(
+                error,
+                CopyFailureState::Published,
+                CopyStats {
+                    files: 1,
+                    bytes,
+                    ..CopyStats::default()
+                },
+                None,
+            ));
+        }
         Ok(CopyOutcome::streamed_fallback(
             CopyStats {
                 files: 1,
@@ -424,11 +484,7 @@ impl<'a> CopyOperation<'a> {
 
     /// Returns a caller-budget error when the elapsed-time limit expired.
     fn deadline_error(&self) -> Option<FsError> {
-        if self
-            .options
-            .deadline()
-            .is_some_and(|deadline| self.started_at.elapsed() >= deadline)
-        {
+        if self.deadline.expired() {
             return Some(self.budget_error("copy deadline was exceeded"));
         }
         None

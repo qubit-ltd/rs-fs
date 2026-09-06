@@ -32,6 +32,10 @@ root、region 或 credential profile 不同，同一 provider 也可以产生多
 `SymlinkPolicy`；可移植抽象提供 `Reject` 与 `FollowWithinFileSystem`，provider 负责把后者映射到
 自己的 namespace 或 rooted 边界。
 
+每个门面操作都会在 provider I/O 前，按 configured filesystem 的 path semantics、允许的
+form 和声明的 limits 校验 `Path`。registry resolution 使用相同的静态校验；resolution
+构造成功不代表已经执行 `stat` 或其他 I/O。
+
 ### 名称、地址与 secret
 
 | 类型 | 职责 | 凭据边界 |
@@ -134,6 +138,10 @@ recovery writer。重试、`abort`、cleanup 或核对 source/target 前，都�
 `abort` 成功会返回 `WriteAbortOutcome`；cleanup 完成并不等于 destination 未发布，
 调用者仍需检查其中的 `NotPublished`、`Published` 或 `Indeterminate`。
 
+writer 离开 `Open` 后再次调用 `commit` 属于非法状态，且不会再次调用 provider。返回的
+failure 仍报告 writer 已知的发布事实：已 commit 或已发布的 writer 报告 `Published`，
+已 abort 或未发布的 writer 报告 `NotPublished`，不确定 writer 报告 `Indeterminate`。
+
 只要门面能在本地确定所要求的 atomicity 或其他 guarantee 无法满足，就会在产生副作用前进行
 检查。Copy guarantee 会明确区分 source mode：`AtomicFileCopy` 和
 `DurableFileCopy` 用于普通文件，`AtomicTreeCopy` 和 `DurableTreeCopy` 用于目录树。
@@ -144,6 +152,11 @@ outcome 只报告其实际建模的保证。
 的唯一方式。未声明该 capability 时，门面会直接评估 allowlist 内的流式 fallback，并要求
 `Read` 与 `Write`。该 fallback 受文档规定的 copy options 限制，也不能满足 required
 server-side、atomic 或 durable copy guarantee。
+
+fallback 会在 `stat`、reader 或 writer I/O 前拒绝 `CopyMode::Tree`，也拒绝与 filesystem
+默认策略不同的符号链接策略 override。缺省 override 或与默认策略相同才可进入 allowlist。
+原生 `try_copy` 可以支持 Tree 或策略 override；这些限制只适用于原生能力缺失或明确
+`Declined` 后的 fallback。
 
 ### 异步工作流
 
@@ -178,6 +191,12 @@ async fn publish_async(
 已经被 poll、却在完成前被 drop，operation 会记录 indeterminate state；未被 poll 的 future
 被 drop 后 operation 仍是 ready。需要确认完成时，应显式 await async writer 和临时资源的
 cleanup。
+
+`CopyOptions::deadline` 是协作式累计时间预算。同步 copy operation 或异步 `begin_copy`
+handle 构造时开始计时，因此调用 `execute` 前的等待也计入预算。门面会在 native copy
+前后、fallback 每轮 read/write 前后、flush 前后以及 commit 前后检查。provider 已返回的
+错误会被保留，不会被 timeout 覆盖。发布前超时会保留 recovery writer；若 commit 已发布
+target 后才超时，failure 必须是 `Published`，保留成功统计且不返回可重试的已完成 writer。
 
 ## 错误诊断与恢复
 
@@ -214,6 +233,11 @@ I/O error 表明尚未确定资源是否存在。
 
 **copy、write、rename 或临时发布可能已产生副作用。** 先读取 typed state。`Published` 与
 `Indeterminate` 需要对账；在完成恢复决策前，应保留所有 writer 或 temp handle。
+
+**range read 意外超过预算。** `read_all` 将 `max_bytes` 应用于选定的 range，而不是完整
+资源长度。已知资源长度时，选定长度为
+`min(max(resource_length - offset, 0), requested_length)`；`FileMetadata` 中仍保存完整
+长度。即使 metadata 缺失或不准确，流式读取仍会执行实际字节预算检查。
 
 ## 限制与非目标
 

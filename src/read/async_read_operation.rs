@@ -36,7 +36,7 @@ impl<'a> AsyncReadOperation<'a> {
 
     /// Reads an entire file asynchronously while enforcing `max_bytes`.
     pub(crate) async fn read_all(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
-        let mut reader = self.filesystem.open_reader(path, options).await?;
+        let mut reader = self.filesystem.open_reader(path, options.clone()).await?;
         let mut bytes = Vec::new();
         let maximum = FacadeCore::quantity_from_usize(
             max_bytes,
@@ -48,7 +48,8 @@ impl<'a> AsyncReadOperation<'a> {
         if let Some(metadata) = reader.info().metadata()
             && let Some(length) = metadata.len()
         {
-            read_budget.check_available(length).map_err(|error| {
+            let selected = options.selected_length(length);
+            read_budget.check_available(selected).map_err(|error| {
                 FacadeCore::budget_error(
                     error,
                     FsOperation::Read,
@@ -57,7 +58,7 @@ impl<'a> AsyncReadOperation<'a> {
                     "read exceeds maximum byte count",
                 )
             })?;
-            if let Ok(capacity) = usize::try_from(length) {
+            if let Ok(capacity) = usize::try_from(selected) {
                 bytes.try_reserve(capacity).map_err(|error| {
                     FsError::with_source(
                         FsErrorKind::ResourceLimitExceeded,

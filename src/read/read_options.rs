@@ -32,6 +32,18 @@ pub struct ReadOptions {
 }
 
 impl ReadOptions {
+    /// Returns the number of bytes selected from a resource of
+    /// `resource_length`.
+    ///
+    /// The resource length is the complete object length reported by a
+    /// provider; an offset and optional length describe the window
+    /// requested by the caller.
+    #[inline]
+    pub(crate) fn selected_length(&self, resource_length: u64) -> u64 {
+        let remaining = resource_length.saturating_sub(self.offset.unwrap_or(0));
+        self.length.map_or(remaining, |length| remaining.min(length))
+    }
+
     /// Returns a copy with the byte offset replaced.
     #[inline]
     #[must_use]

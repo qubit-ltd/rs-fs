@@ -694,7 +694,17 @@ metadata 只是 snapshot，不能冒充 live `stat`。
 才能产生 `FileReader`。Public handle 的直接 `new` 构造器删除。
 
 `read_all` 在分配前检查已知长度，并在流式读取时再次执行实际字节上限，防止 provider
-metadata 缺失或错误导致无界分配。
+metadata 缺失或错误导致无界分配。若 `ReadOptions` 指定 `offset` 或 `length`，预判使用
+请求窗口的长度，而不是完整资源长度：
+
+```text
+selected = min(max(resource_length - offset, 0), requested_length)
+```
+
+未指定 `length` 时，窗口延伸到资源末尾；`FileMetadata::len` 始终表示完整资源长度。
+因此一个 1 MiB 资源的 8 字节 range 在 `max_bytes = 8` 时可以通过预判。实际流读取仍
+逐批执行预算检查，metadata 缺失时也不能绕过上限。`read_all` 仍然先打开 reader，以
+保留 NotFound、权限和条件版本错误；本次不把 `read_prefix` 自动转换成 range read。
 
 ### 8.3 Directory stream
 
@@ -753,6 +763,12 @@ ACL/IAM 管理 API。这些模型的作用域和语义不同，不能放入所�
 - `Skip` 通过 create-new 的 already-exists 结果实现；
 - 不执行通用 `Overwrite` fallback；
 - 不隐式创建 parent 或执行其他未被 failure state 覆盖的前置副作用。
+
+`CopyMode::Tree` 永远不能进入单文件 fallback。`CopyOptions` 带有与 filesystem 默认
+`SymlinkPolicy` 不同的 override 时也必须在 `stat`、`open_reader` 或 `open_writer` 前
+拒绝；override 缺省或等于默认策略时才可继续 allowlist 检查。这样 fallback 不会把
+普通文件操作伪装成树复制，也不会静默忽略符号链接策略。原生 `try_copy` 成功路径可以
+支持 Tree 或策略 override；这些限制只约束无原生实现或原生明确 `Declined` 后的 fallback。
 
 Fallback 需要 `Read` 与 `Write`，但不需要 `Copy`；`Copy` 缺失只表示 provider-native
 fast path 不可用。要求 server-side、atomicity 或 durability 的 request 仍在副作用前
@@ -958,6 +974,12 @@ abort 的成功只表示 cleanup 已完成，不能被解释为 destination 一�
 - 在 provider 报告成功但违反 required semantics 时返回
   `ProviderContractViolation`，并按已知事实进入 `Published`，不能伪装成未写入。
 
+非 `Open` writer 再次调用 `commit` 仍返回 `InvalidState`，但 failure 中的
+`WriteFailureState` 必须反映 writer 已知的发布事实：`Committed` 映射为 `Published`，
+`Aborted`/`NotPublished` 映射为 `NotPublished`，`Published` 保持 `Published`，
+`Indeterminate` 保持 `Indeterminate`。这次非法调用不得再次调用 provider commit、
+不得自动 abort，也不得改变 writer 状态；“本次调用非法”不能覆盖历史上已经确认的发布事实。
+
 `abort` 可用于清理 `Open`、`NotPublished`、`Published` 或 `Indeterminate` session。
 对 `Published` 的 abort 只能清理 staging，绝不能回滚已经发布的 target。
 facade 必须以 `WriteAbortOutcome` 更新公开状态，不能从 `Ok` 自行推断
@@ -1120,6 +1142,19 @@ operation 不产生动作；Drop 一个 `Failed` operation 会显式放弃仍由
 session，但不会暗中执行 cleanup。调用者必须在 drop 前通过 `state()` 和
 `has_recovery_writer()` 判断恢复责任，并按需使用或取走 writer。
 
+### 13.3 Copy deadline
+
+`CopyOptions::deadline` 是从 copy operation 构造时开始计算的累计、协作式时间预算。
+同步 `copy` 在 operation 构造时开始计时；异步 `begin_copy` 在返回 operation 时开始计时，
+即使尚未调用 `execute`，等待时间也计入预算。它不承诺硬中断；provider 一次不可中断的
+调用必须先返回，门面在下一检查点报告超时。
+
+检查点覆盖原生调用前及其成功或 `Declined` 后、fallback 各阶段成功后和下一次 I/O 前、
+每轮 read/write 前后、`flush` 前后以及 `commit` 前后。provider 已返回的错误优先保留，
+不能被 deadline 错误覆盖。超时发生在 writer 已打开但尚未发布时，failure 保留 writer
+及其状态；`flush` 超时不得继续 `commit`。若 `commit` 已成功而之后超时，target 已发布，
+failure 必须是 `Published`，保留成功统计且不返回可重试的已完成 writer。
+
 ## 14. Registry 集成边界
 
 `qubit-fs-registry` 负责：
@@ -1135,6 +1170,11 @@ Resolution 保存门面、provider-local `Path` 和 canonical `Uri`，不保存
 `ConnectionUri`、credential 或 `Arc<dyn FileSystemSpi>`。Canonical `Uri` 必须在
 resolution 返回前通过不可弱化的标准 secret-free 结构校验；provider 私有凭据必须由 provider
 在进入该边界前消费或移除。
+
+构造 resolution 时必须复用核心的无 I/O 路径校验：`Path` 的 semantics、form、component
+以及 provider 声明的 path limits 都要与 configured filesystem 的
+`FileSystemProperties` 一致。校验失败时 resolution 构造失败；成功只表示静态绑定有效，
+不代表执行 `stat` 或其他 provider I/O 已成功。
 
 `qubit-fs` 不依赖 registry，也不重新解释 provider 已解码的 URI path。
 
@@ -1210,6 +1250,10 @@ Crate 根部只重导出应用层类型；SPI 始终保留在 `spi` 命名空间
 20. provider-specific native 算法留在 provider 原生实现，不复制到 adapter；
 21. SPI session 的 cleanup 不能擅自回滚已确认 published target；
 22. provider contract violation 不能降格为普通 I/O 错误。
+23. registry resolution 必须校验 path semantics、form 和 limits；成功不代表已执行 I/O。
+24. range read 的 max-bytes 预判按选定窗口计算，不能用完整资源长度误拒绝合法窗口。
+25. 非 Open writer 的重复 commit 保留已知 publication state，且不得再次触发 provider I/O。
+26. deadline 超时不能覆盖已经返回的 provider error；发布后超时必须报告 Published。
 
 ## 17. 验证策略
 

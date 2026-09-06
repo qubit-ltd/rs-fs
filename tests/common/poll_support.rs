@@ -30,6 +30,7 @@ where
 
 /// Verifies that one poll leaves a future pending without a runtime.
 #[cfg(feature = "async")]
+#[allow(dead_code)]
 pub(crate) fn assert_pending<F>(mut future: Pin<&mut F>)
 where
     F: Future + ?Sized,

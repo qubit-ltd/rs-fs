@@ -21,6 +21,7 @@ use qubit_fs::metadata::AchievedAtomicity;
 use qubit_fs::metadata::AtomicityRequirement;
 use qubit_fs::metadata::DurabilityRequirement;
 use qubit_fs::metadata::FileSystemCapability;
+use qubit_fs::metadata::SymlinkPolicy;
 use qubit_fs::write::WriteFailureState;
 use qubit_fs::write::WriterState;
 
@@ -227,6 +228,39 @@ fn test_async_copy_fallback_does_not_require_copy_capability() {
 
     assert!(outcome.used_fallback());
     assert_eq!(vec!["stat", "open_reader", "open_writer"], probe.calls());
+}
+
+#[test]
+fn test_async_native_path_does_not_apply_fallback_mode_restrictions() {
+    let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig {
+        completed_copy: Some(AchievedAtomicity::Atomic),
+        ..AsyncRecordingConfig::default()
+    });
+    let mut operation = file_system
+        .begin_copy(path("/source"), path("/target"), CopyOptions::tree())
+        .expect("native copy owns tree semantics");
+    let outcome = ready(operation.execute()).expect("native copy should succeed");
+    assert!(!outcome.used_fallback());
+    assert_eq!(vec!["try_copy"], probe.calls());
+}
+
+#[test]
+fn test_async_declined_rejects_tree_and_symlink_overrides_before_stream_io() {
+    for options in [
+        CopyOptions::tree(),
+        CopyOptions::default().with_symlink_policy(SymlinkPolicy::FollowWithinFileSystem),
+    ] {
+        let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig {
+            decline_copy: true,
+            ..AsyncRecordingConfig::default()
+        });
+        let mut operation = file_system
+            .begin_copy(path("/source"), path("/target"), options)
+            .expect("copy preflight should succeed");
+        let failure = ready(operation.execute()).expect_err("unsupported fallback semantics must fail");
+        assert_eq!(FsErrorKind::RequirementNotMet, failure.error().kind());
+        assert_eq!(vec!["try_copy"], probe.calls());
+    }
 }
 
 /// Applies the same no-fallback rule to requirements that pass normal copy

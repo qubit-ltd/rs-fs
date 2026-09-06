@@ -86,21 +86,7 @@ impl FacadeCore {
     /// Returns an enriched invalid-path or resource-limit error when the path
     /// semantics, form, constraints, or limits do not match the filesystem.
     pub(crate) fn validate_path(&self, path: &Path, operation: FsOperation) -> FsResult<()> {
-        if path.semantics() != self.properties.info().path_semantics() {
-            return Err(
-                FsError::invalid_path(operation, "path semantics do not match this filesystem")
-                    .with_path(path.clone())
-                    .with_provider(self.properties.info().provider_id()),
-            );
-        }
-        self.properties
-            .path_constraints()
-            .validate(path)
-            .map_err(|error| self.enrich(error, Some(path), operation))?;
-        self.properties
-            .limits()
-            .validate_path(path, self.properties.info().path_semantics(), operation)
-            .map_err(|error| self.enrich(error, Some(path), operation))
+        self.properties.validate_path(path, operation)
     }
 
     /// Validates the optional parent used for temporary resource creation.
