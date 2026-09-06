@@ -22,6 +22,7 @@ use qubit_fs::metadata::OpenedFileInfo;
 use qubit_fs::metadata::SymlinkPolicy;
 use qubit_fs::path::PathConstraints;
 use qubit_fs::path::PathSemantics;
+use qubit_fs::read::ReadOptions;
 use qubit_fs::rename::RenameFailureState;
 use qubit_fs::rename::RenameOutcome;
 use qubit_fs::spi::CreateDirectoryRequest;
@@ -140,9 +141,7 @@ fn unused() -> FsError {
 fn metadata_length_is_compared_with_selected_window() {
     let fs = FileSystem::from_spi(RangeSpi::with_metadata()).unwrap();
     let path = Path::parse("/source").unwrap();
-    let options = qubit_fs::read::ReadOptions::default()
-        .with_offset(Some(2))
-        .with_length(Some(3));
+    let options = ReadOptions::default().with_offset(Some(2)).with_length(Some(3));
     assert_eq!(b"234", fs.read_all(&path, options.clone(), 3).unwrap().as_slice());
     assert_eq!(
         FsErrorKind::ResourceLimitExceeded,
@@ -154,7 +153,7 @@ fn metadata_length_is_compared_with_selected_window() {
 fn metadata_length_does_not_reject_empty_range_at_eof() {
     let fs = FileSystem::from_shared_spi(Arc::new(RangeSpi::with_metadata())).unwrap();
     let path = Path::parse("/source").unwrap();
-    let options = qubit_fs::read::ReadOptions::default().with_offset(Some(100));
+    let options = ReadOptions::default().with_offset(Some(100));
     assert!(fs.read_all(&path, options, 0).unwrap().is_empty());
 }
 
@@ -162,9 +161,7 @@ fn metadata_length_does_not_reject_empty_range_at_eof() {
 fn read_all_accepts_unknown_metadata_but_still_enforces_stream_budget() {
     let fs = FileSystem::from_spi(RangeSpi::without_metadata()).unwrap();
     let path = Path::parse("/source").unwrap();
-    let options = qubit_fs::read::ReadOptions::default()
-        .with_offset(Some(2))
-        .with_length(Some(3));
+    let options = ReadOptions::default().with_offset(Some(2)).with_length(Some(3));
     assert_eq!(b"234", fs.read_all(&path, options.clone(), 3).unwrap().as_slice());
     assert_eq!(
         FsErrorKind::ResourceLimitExceeded,
