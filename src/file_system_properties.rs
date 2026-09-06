@@ -19,6 +19,7 @@ use crate::metadata::FileSystemCapability;
 use crate::metadata::FileSystemInfo;
 use crate::metadata::FileSystemLimits;
 use crate::metadata::SymlinkPolicy;
+use crate::path::Path;
 use crate::path::PathConstraints;
 use crate::path::PathForm;
 use crate::path::PathSemantics;
@@ -159,6 +160,33 @@ impl FileSystemProperties {
     #[must_use = "the filesystem symbolic-link policy must be used"]
     pub const fn symlink_policy(&self) -> SymlinkPolicy {
         self.symlink_policy
+    }
+
+    /// Validates a logical path against the provider's semantics, form, and
+    /// byte limits without performing I/O.
+    ///
+    /// # Errors
+    /// Returns an enriched invalid-path or resource-limit error when the path
+    /// does not satisfy this filesystem's declared contract.
+    pub fn validate_path(&self, path: &Path, operation: FsOperation) -> FsResult<()> {
+        let result = if path.semantics() != self.info.path_semantics() {
+            Err(FsError::invalid_path(
+                operation,
+                "path semantics do not match this filesystem",
+            ))
+        } else {
+            self.path_constraints.validate(path).and_then(|()| {
+                self.limits
+                    .validate_path(path, self.info.path_semantics(), operation)
+            })
+        };
+        result.map_err(|error| {
+            error.with_operation(operation).with_missing_context(
+                path,
+                None,
+                self.info.provider_id(),
+            )
+        })
     }
 
     /// Defensively validates a provider-supplied snapshot at the facade
