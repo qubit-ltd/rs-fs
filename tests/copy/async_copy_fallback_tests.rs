@@ -488,6 +488,52 @@ fn test_async_copy_failure_exposes_owned_error_state_and_stats() {
     assert_eq!(0, stats.bytes);
 }
 
+#[test]
+fn test_async_repeated_native_failure_replays_snapshot_without_provider_retry() {
+    let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig {
+        copy_failure: true,
+        ..AsyncRecordingConfig::default()
+    });
+    let mut operation = file_system
+        .begin_copy(path("/source"), path("/target"), CopyOptions::default())
+        .expect("preflight should succeed");
+
+    let first = ready(operation.execute()).expect_err("injected copy failure should propagate");
+    let first_state = first.state();
+    let first_stats = *first.partial_stats();
+    let repeated = ready(operation.execute()).expect_err("a failed operation cannot execute again");
+
+    assert_eq!(FsErrorKind::InvalidState, repeated.error().kind());
+    assert_eq!(first_state, repeated.state());
+    assert_eq!(first_stats, *repeated.partial_stats());
+    assert_eq!(
+        AsyncCopyOperationState::Failed(CopyFailureState::Indeterminate),
+        operation.state()
+    );
+    assert_eq!(vec!["try_copy"], probe.calls());
+}
+
+#[test]
+fn test_async_repeated_completed_copy_replays_published_snapshot_without_provider_retry() {
+    let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig {
+        completed_copy: Some(AchievedAtomicity::Atomic),
+        ..AsyncRecordingConfig::default()
+    });
+    let mut operation = file_system
+        .begin_copy(path("/source"), path("/target"), CopyOptions::default())
+        .expect("preflight should succeed");
+
+    let outcome = ready(operation.execute()).expect("configured copy should complete");
+    let stats = *outcome.stats();
+    let repeated = ready(operation.execute()).expect_err("a completed operation cannot execute again");
+
+    assert_eq!(FsErrorKind::InvalidState, repeated.error().kind());
+    assert_eq!(CopyFailureState::Published, repeated.state());
+    assert_eq!(stats, *repeated.partial_stats());
+    assert_eq!(AsyncCopyOperationState::Completed, operation.state());
+    assert_eq!(vec!["try_copy"], probe.calls());
+}
+
 /// Taking and dropping an indeterminate recovery writer does not request
 /// unconfirmed provider cancellation.
 #[test]
