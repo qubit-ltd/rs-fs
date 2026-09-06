@@ -37,11 +37,7 @@ fn properties(semantics: PathSemantics, constraints: PathConstraints) -> FileSys
 fn validates_semantics_and_path_form_without_io() {
     let hierarchical = properties(PathSemantics::Hierarchical, PathConstraints::absolute());
     let absolute = Path::parse("/a").expect("absolute path should parse");
-    assert!(
-        hierarchical
-            .validate_path(&absolute, FsOperation::Stat)
-            .is_ok()
-    );
+    assert!(hierarchical.validate_path(&absolute, FsOperation::Stat).is_ok());
 
     let relative = Path::parse("a").expect("relative path should parse");
     let error = hierarchical
@@ -54,11 +50,7 @@ fn validates_semantics_and_path_form_without_io() {
 
     let object_key = properties(PathSemantics::ObjectKey, PathConstraints::relative());
     let literal = Path::parse_literal("a").expect("literal path should parse");
-    assert!(
-        object_key
-            .validate_path(&literal, FsOperation::Stat)
-            .is_ok()
-    );
+    assert!(object_key.validate_path(&literal, FsOperation::Stat).is_ok());
     let hierarchical_path = Path::parse("a").expect("hierarchical path should parse");
     let error = object_key
         .validate_path(&hierarchical_path, FsOperation::Stat)

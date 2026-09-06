@@ -93,10 +93,7 @@ impl CopyOptions {
     /// Returns a copy with the metadata preservation policy replaced.
     #[inline]
     #[must_use]
-    pub const fn with_preserve_metadata(
-        mut self,
-        preserve_metadata: MetadataPreservePolicy,
-    ) -> Self {
+    pub const fn with_preserve_metadata(mut self, preserve_metadata: MetadataPreservePolicy) -> Self {
         self.preserve_metadata = preserve_metadata;
         self
     }

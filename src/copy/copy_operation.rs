@@ -60,12 +60,7 @@ pub(crate) struct CopyOperation<'a> {
 impl<'a> CopyOperation<'a> {
     /// Creates a pending synchronous copy operation.
     #[inline]
-    pub(crate) fn new(
-        filesystem: &'a FileSystem,
-        source: &'a Path,
-        target: &'a Path,
-        options: CopyOptions,
-    ) -> Self {
+    pub(crate) fn new(filesystem: &'a FileSystem, source: &'a Path, target: &'a Path, options: CopyOptions) -> Self {
         let deadline = CopyDeadline::new(options.deadline());
         Self {
             filesystem,
@@ -103,11 +98,7 @@ impl<'a> CopyOperation<'a> {
                 None,
             )));
         }
-        if self
-            .filesystem
-            .core()
-            .provider_supports(ProviderOperation::TryCopy)
-        {
+        if self.filesystem.core().provider_supports(ProviderOperation::TryCopy) {
             self.execute_provider_attempt()
         } else {
             self.execute_stream_fallback()
@@ -155,11 +146,7 @@ impl<'a> CopyOperation<'a> {
     fn verify_completed_copy(&self, outcome: CopyOutcome) -> Result<CopyOutcome, CopyFailure> {
         if let Some(message) = outcome.contract_violation(&self.options) {
             return Err(self.contextualize_failure(self.failure(
-                FsError::new(
-                    FsErrorKind::ProviderContractViolation,
-                    FsOperation::Copy,
-                    message,
-                ),
+                FsError::new(FsErrorKind::ProviderContractViolation, FsOperation::Copy, message),
                 CopyFailureState::Published,
                 *outcome.stats(),
                 None,
@@ -170,12 +157,8 @@ impl<'a> CopyOperation<'a> {
 
     /// Performs no-I/O validation before selecting a copy implementation.
     fn copy_preflight(&self) -> FsResult<()> {
-        self.filesystem
-            .core()
-            .validate_path(self.source, FsOperation::Copy)?;
-        self.filesystem
-            .core()
-            .validate_path(self.target, FsOperation::Copy)?;
+        self.filesystem.core().validate_path(self.source, FsOperation::Copy)?;
+        self.filesystem.core().validate_path(self.target, FsOperation::Copy)?;
         self.options
             .validate_against(self.filesystem.properties().capabilities())
             .map_err(|error| {
@@ -199,8 +182,7 @@ impl<'a> CopyOperation<'a> {
     /// Streams a copy through facade-owned handles when the provider declines.
     #[allow(clippy::result_large_err)]
     fn execute_stream_fallback(&self) -> Result<CopyOutcome, CopyFailure> {
-        if !fallback_options_supported(&self.options, self.filesystem.properties().symlink_policy())
-        {
+        if !fallback_options_supported(&self.options, self.filesystem.properties().symlink_policy()) {
             return Err(self.failure(
                 FsError::new(
                     FsErrorKind::RequirementNotMet,
@@ -213,12 +195,7 @@ impl<'a> CopyOperation<'a> {
             ));
         }
         if let Some(error) = self.deadline_error() {
-            return Err(self.failure(
-                error,
-                CopyFailureState::Unchanged,
-                CopyStats::default(),
-                None,
-            ));
+            return Err(self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None));
         }
         if self.options.max_entries() == Some(0) {
             return Err(self.failure(
@@ -230,41 +207,19 @@ impl<'a> CopyOperation<'a> {
         }
         self.filesystem
             .core()
-            .require(
-                FileSystemCapability::Read,
-                FsOperation::Copy,
-                Some(self.source),
-            )
+            .require(FileSystemCapability::Read, FsOperation::Copy, Some(self.source))
             .and_then(|_| {
-                self.filesystem.core().require(
-                    FileSystemCapability::Write,
-                    FsOperation::Copy,
-                    Some(self.target),
-                )
+                self.filesystem
+                    .core()
+                    .require(FileSystemCapability::Write, FsOperation::Copy, Some(self.target))
             })
-            .map_err(|error| {
-                self.failure(
-                    error,
-                    CopyFailureState::Unchanged,
-                    CopyStats::default(),
-                    None,
-                )
-            })?;
-        let metadata = self.filesystem.stat(self.source).map_err(|error| {
-            self.failure(
-                error,
-                CopyFailureState::Unchanged,
-                CopyStats::default(),
-                None,
-            )
-        })?;
+            .map_err(|error| self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None))?;
+        let metadata = self
+            .filesystem
+            .stat(self.source)
+            .map_err(|error| self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None))?;
         if let Some(error) = self.deadline_error() {
-            return Err(self.failure(
-                error,
-                CopyFailureState::Unchanged,
-                CopyStats::default(),
-                None,
-            ));
+            return Err(self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None));
         }
         if !is_file_kind_supported(metadata.kind().clone()) {
             return Err(self.failure(
@@ -282,31 +237,14 @@ impl<'a> CopyOperation<'a> {
         if let Some(length) = metadata.len()
             && let Err(error) = self.validate_fallback_length(length)
         {
-            return Err(self.failure(
-                error,
-                CopyFailureState::Unchanged,
-                CopyStats::default(),
-                None,
-            ));
+            return Err(self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None));
         }
         let mut reader = self
             .filesystem
             .open_reader(self.source, ReadOptions::default())
-            .map_err(|error| {
-                self.failure(
-                    error,
-                    CopyFailureState::Unchanged,
-                    CopyStats::default(),
-                    None,
-                )
-            })?;
+            .map_err(|error| self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None))?;
         if let Some(error) = self.deadline_error() {
-            return Err(self.failure(
-                error,
-                CopyFailureState::Unchanged,
-                CopyStats::default(),
-                None,
-            ));
+            return Err(self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None));
         }
         let writer_options = WriteOptions::default()
             .with_disposition(WriteDisposition::CreateNew)
@@ -326,12 +264,7 @@ impl<'a> CopyOperation<'a> {
                 ));
             }
             Err(error) => {
-                return Err(self.failure(
-                    error,
-                    CopyFailureState::Unchanged,
-                    CopyStats::default(),
-                    None,
-                ));
+                return Err(self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None));
             }
         };
         if let Some(error) = self.deadline_error() {
@@ -386,11 +319,7 @@ impl<'a> CopyOperation<'a> {
                     ));
                 }
             };
-            if self
-                .options
-                .max_bytes()
-                .is_some_and(|maximum| next_bytes > maximum)
-            {
+            if self.options.max_bytes().is_some_and(|maximum| next_bytes > maximum) {
                 return Err(self.failure(
                     self.budget_error("copy byte limit was exceeded"),
                     from_writer_state(writer.state()),
@@ -503,12 +432,7 @@ impl<'a> CopyOperation<'a> {
         stats: CopyStats,
         writer: Option<FileWriter>,
     ) -> CopyFailure {
-        CopyFailure::new(
-            error.with_operation(FsOperation::Copy),
-            state,
-            stats,
-            writer,
-        )
+        CopyFailure::new(error.with_operation(FsOperation::Copy), state, stats, writer)
     }
 
     /// Adds source, target, and provider facts to a copy failure.
@@ -528,16 +452,13 @@ impl<'a> CopyOperation<'a> {
 
     /// Creates a contextual stream I/O error.
     fn io_error(&self, path: &Path, operation: FsOperation, error: std::io::Error) -> FsError {
-        FsError::from_stream_io(error, operation, path)
-            .with_provider(self.filesystem.properties().info().provider_id())
+        FsError::from_stream_io(error, operation, path).with_provider(self.filesystem.properties().info().provider_id())
     }
 
     /// Adds a native read count to the public copy-statistics total.
     fn add_copied_bytes(&self, total: u64, count: usize) -> FsResult<u64> {
         let count = u64::try_from(count).map_err(|_| self.copy_byte_count_error())?;
-        total
-            .checked_add(count)
-            .ok_or_else(|| self.copy_byte_count_error())
+        total.checked_add(count).ok_or_else(|| self.copy_byte_count_error())
     }
 
     /// Builds the error for an unrepresentable copy byte count.
@@ -554,17 +475,8 @@ impl<'a> CopyOperation<'a> {
     /// Validates provider and caller size limits before opening fallback
     /// streams.
     fn validate_fallback_length(&self, length: u64) -> FsResult<()> {
-        validate_stream_copy_length_limits(
-            self.filesystem.properties().limits(),
-            self.source,
-            self.target,
-            length,
-        )?;
-        if self
-            .options
-            .max_bytes()
-            .is_some_and(|maximum| length > maximum)
-        {
+        validate_stream_copy_length_limits(self.filesystem.properties().limits(), self.source, self.target, length)?;
+        if self.options.max_bytes().is_some_and(|maximum| length > maximum) {
             return Err(self.budget_error("copy byte limit was exceeded"));
         }
         Ok(())
@@ -580,13 +492,9 @@ impl<'a> CopyOperation<'a> {
 
     /// Builds a caller-budget error with stable copy context.
     fn budget_error(&self, message: &str) -> FsError {
-        FsError::new(
-            FsErrorKind::ResourceLimitExceeded,
-            FsOperation::Copy,
-            message,
-        )
-        .with_path(self.source.clone())
-        .with_target(self.target.clone())
-        .with_provider(self.filesystem.properties().info().provider_id())
+        FsError::new(FsErrorKind::ResourceLimitExceeded, FsOperation::Copy, message)
+            .with_path(self.source.clone())
+            .with_target(self.target.clone())
+            .with_provider(self.filesystem.properties().info().provider_id())
     }
 }

@@ -9,9 +9,9 @@
 
 use std::time::Duration;
 
-use qubit_fs::copy::CopyOptions;
-use qubit_fs::copy::CopyFailureState;
 use qubit_fs::Path;
+use qubit_fs::copy::CopyFailureState;
+use qubit_fs::copy::CopyOptions;
 
 #[path = "handle_support/mod.rs"]
 mod handle_support;
@@ -79,10 +79,8 @@ fn test_deadline_checked_after_commit_reports_published_without_writer() {
 
 #[test]
 fn test_indeterminate_commit_retains_writer_for_recovery() {
-    let filesystem = handle_support::writer_lifecycle_filesystem(
-        Some(qubit_fs::write::WriteFailureState::Indeterminate),
-        None,
-    );
+    let filesystem =
+        handle_support::writer_lifecycle_filesystem(Some(qubit_fs::write::WriteFailureState::Indeterminate), None);
 
     let failure = filesystem
         .copy(
