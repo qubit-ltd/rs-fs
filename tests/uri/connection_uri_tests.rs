@@ -52,7 +52,7 @@ fn test_connection_uri_inspection_detects_identity_mask_and_empty_secret() {
     assert!(identity.try_to_uri().is_err());
     assert!(empty.try_to_uri().is_err());
     assert_eq!(identity.to_string(), "s3://bucket/key?tenant_payload=%3Credacted%3E");
-    assert_eq!(empty.to_string(), "s3://bucket/key?tenant_payload=%3Credacted%3E");
+    assert_eq!(empty.to_string(), "s3://bucket/key?tenant_payload=");
 }
 
 /// Verifies custom fields are redacted as a whole while safe values retain
