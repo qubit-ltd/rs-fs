@@ -66,9 +66,8 @@ fn test_connection_uri_custom_policy_redacts_sensitive_display() {
         .expect("policy should be valid")
         .build()
         .expect("policy should build");
-    let sensitive =
-        ConnectionUri::parse_with_policy("s3://bucket/key?tenant_payload=raw-secret", &policy)
-            .expect("connection URI may retain credentials internally");
+    let sensitive = ConnectionUri::parse_with_policy("s3://bucket/key?tenant_payload=raw-secret", &policy)
+        .expect("connection URI may retain credentials internally");
     let safe = ConnectionUri::parse_with_policy("s3://bucket/key?region=cn", &policy)
         .expect("safe connection URI should parse");
     let username_only = ConnectionUri::parse_with_policy("s3://access-key@bucket/key", &policy)
@@ -92,9 +91,8 @@ fn test_connection_uri_custom_policy_limits_remain_bounded() {
         .expect("policy should be valid")
         .build()
         .expect("policy should build");
-    let input_limited_uri =
-        ConnectionUri::parse_with_policy("s3://bucket/key?region=cn", &input_limited)
-            .expect("connection URI stores the original text");
+    let input_limited_uri = ConnectionUri::parse_with_policy("s3://bucket/key?region=cn", &input_limited)
+        .expect("connection URI stores the original text");
     assert!(input_limited_uri.has_embedded_secret());
     assert_eq!(input_limited_uri.to_string(), "<redacted>");
 
@@ -105,9 +103,8 @@ fn test_connection_uri_custom_policy_limits_remain_bounded() {
         .expect("policy should be valid")
         .build()
         .expect("policy should build");
-    let output_limited_uri =
-        ConnectionUri::parse_with_policy("s3://bucket/key?region=cn", &output_limited)
-            .expect("safe connection URI should parse");
+    let output_limited_uri = ConnectionUri::parse_with_policy("s3://bucket/key?region=cn", &output_limited)
+        .expect("safe connection URI should parse");
     assert!(!output_limited_uri.has_embedded_secret());
     assert_eq!(output_limited_uri.to_string(), "<truncated>");
 }
