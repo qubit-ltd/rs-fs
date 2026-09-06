@@ -22,7 +22,20 @@ use qubit_fs::spi::{
     StatRequest, StatResponse,
 };
 
-struct RangeSpi;
+struct RangeSpi {
+    metadata: bool,
+    fail_open: bool,
+}
+
+impl RangeSpi {
+    fn with_metadata() -> Self {
+        Self { metadata: true, fail_open: false }
+    }
+
+    fn without_metadata() -> Self {
+        Self { metadata: false, fail_open: false }
+    }
+}
 
 impl FileSystemSpi for RangeSpi {
     fn properties(&self) -> ProviderProperties {
@@ -49,20 +62,23 @@ impl FileSystemSpi for RangeSpi {
         Err(unused())
     }
     fn open_reader(&self, request: OpenReaderRequest<'_>) -> FsResult<qubit_fs::spi::OpenedReader> {
+        if self.fail_open {
+            return Err(FsError::new(FsErrorKind::Io, FsOperation::OpenReader, "open failed"));
+        }
         let options = request.options().options();
         let total = b"0123456789";
         let start = options.offset().unwrap_or(0).min(total.len() as u64) as usize;
         let end = options.length().map_or(total.len(), |n| {
             start.saturating_add(n as usize).min(total.len())
         });
-        Ok(qubit_fs::spi::OpenedReader::new(
-            OpenedFileInfo::new(
+        let mut info = OpenedFileInfo::new(
                 FileSystemId::new("read-window").unwrap(),
                 request.path().clone(),
-            )
-            .with_metadata(FileMetadata::new(FileKind::File).with_len(Some(total.len() as u64))),
-            Box::new(Cursor::new(total[start..end].to_vec())),
-        ))
+            );
+        if self.metadata {
+            info = info.with_metadata(FileMetadata::new(FileKind::File).with_len(Some(total.len() as u64)));
+        }
+        Ok(qubit_fs::spi::OpenedReader::new(info, Box::new(Cursor::new(total[start..end].to_vec()))))
     }
     fn open_writer(&self, _: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
         Err(unused())
@@ -103,7 +119,7 @@ fn unused() -> FsError {
 
 #[test]
 fn metadata_length_is_compared_with_selected_window() {
-    let fs = FileSystem::from_spi(RangeSpi).unwrap();
+    let fs = FileSystem::from_spi(RangeSpi::with_metadata()).unwrap();
     let path = Path::parse("/source").unwrap();
     let options = qubit_fs::read::ReadOptions::default()
         .with_offset(Some(2))
@@ -120,8 +136,26 @@ fn metadata_length_is_compared_with_selected_window() {
 
 #[test]
 fn metadata_length_does_not_reject_empty_range_at_eof() {
-    let fs = FileSystem::from_shared_spi(Arc::new(RangeSpi)).unwrap();
+    let fs = FileSystem::from_shared_spi(Arc::new(RangeSpi::with_metadata())).unwrap();
     let path = Path::parse("/source").unwrap();
     let options = qubit_fs::read::ReadOptions::default().with_offset(Some(100));
     assert!(fs.read_all(&path, options, 0).unwrap().is_empty());
+}
+
+#[test]
+fn read_all_accepts_unknown_metadata_but_still_enforces_stream_budget() {
+    let fs = FileSystem::from_spi(RangeSpi::without_metadata()).unwrap();
+    let path = Path::parse("/source").unwrap();
+    let options = qubit_fs::read::ReadOptions::default()
+        .with_offset(Some(2))
+        .with_length(Some(3));
+    assert_eq!(b"234", fs.read_all(&path, options.clone(), 3).unwrap().as_slice());
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, fs.read_all(&path, options, 2).unwrap_err().kind());
+}
+
+#[test]
+fn read_all_reports_open_error_before_budget_collection() {
+    let fs = FileSystem::from_spi(RangeSpi { metadata: true, fail_open: true }).unwrap();
+    let error = fs.read_all(&Path::parse("/source").unwrap(), Default::default(), 16).unwrap_err();
+    assert_eq!(FsErrorKind::Io, error.kind());
 }

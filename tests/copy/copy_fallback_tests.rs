@@ -512,6 +512,31 @@ fn test_copy_completed_does_not_open_fallback_handles() {
         calls.lock().expect("calls lock should succeed").as_slice()
     );
 }
+
+#[test]
+fn test_copy_native_path_does_not_apply_fallback_mode_restrictions() {
+    let (filesystem, calls, _) = recording_filesystem(CopyResponse::Completed);
+    let outcome = filesystem
+        .copy(&path("/source"), &path("/target"), CopyOptions::tree())
+        .expect("native copy owns tree semantics");
+    assert_eq!(CopyMethod::Native, outcome.method());
+    assert_eq!(["try_copy"], calls.lock().expect("calls lock should succeed").as_slice());
+}
+
+#[test]
+fn test_copy_declined_rejects_tree_and_symlink_overrides_before_stream_io() {
+    for options in [
+        CopyOptions::tree(),
+        CopyOptions::default().with_symlink_policy(SymlinkPolicy::FollowWithinFileSystem),
+    ] {
+        let (filesystem, calls, _) = recording_filesystem(CopyResponse::Declined);
+        let failure = filesystem
+            .copy(&path("/source"), &path("/target"), options)
+            .expect_err("declined copy must reject unsupported fallback semantics");
+        assert_eq!(FsErrorKind::RequirementNotMet, failure.error().kind());
+        assert_eq!(["try_copy"], calls.lock().expect("calls lock should succeed").as_slice());
+    }
+}
 /// Verifies that a provider decline alone reaches the explicit stream fallback.
 #[test]
 fn test_copy_declined_uses_allowlisted_stream_fallback() {
@@ -733,6 +758,23 @@ fn test_copy_declined_preserves_stream_and_writer_recovery_states() {
             .expect_err("fallback writer failure should preserve recovery");
         assert_eq!(CopyFailureState::Unchanged, failure.state());
         assert!(!failure.has_writer());
+    }
+}
+
+#[test]
+fn test_copy_stream_fallback_reports_each_sync_io_stage_state() {
+    for (response, expected, writer_state) in [
+        (CopyResponse::DeclinedReadFailure, CopyFailureState::Unchanged, WriterState::Open),
+        (CopyResponse::DeclinedWriteFailure, CopyFailureState::Indeterminate, WriterState::Indeterminate),
+        (CopyResponse::DeclinedFlushFailure, CopyFailureState::Indeterminate, WriterState::Indeterminate),
+        (CopyResponse::DeclinedCommitFailure, CopyFailureState::Unchanged, WriterState::NotPublished),
+    ] {
+        let (filesystem, _, _) = recording_filesystem(response);
+        let failure = filesystem
+            .copy(&path("/source"), &path("/target"), CopyOptions::default())
+            .expect_err("injected fallback stage should fail");
+        assert_eq!(expected, failure.state());
+        assert_eq!(writer_state, failure.writer().expect("opened writer is retained").state());
     }
 }
 
