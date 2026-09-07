@@ -43,7 +43,8 @@
 | 包 | 版本 |
 | --- | --- |
 | `qubit-fs` | 0.4 |
-| `qubit-fs-local`、`qubit-fs-registry`、`qubit-fs-testkit` | 0.3 |
+| `qubit-fs-local` | 0.4 |
+| `qubit-fs-registry`、`qubit-fs-testkit` | 0.3 |
 | `qubit-mime` | 0.12 |
 | `qubit-magika` | 0.10 |
 
