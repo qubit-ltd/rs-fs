@@ -35,7 +35,7 @@ async = []
 qubit-budget = "0.5"
 fluent-uri = "0.4.1"
 qubit-io = "0.16"
-qubit-redact = { version = "0.7", path = "../rs-redact", features = ["uri"] }
+qubit-redact = { version = "0.8", path = "../rs-redact", features = ["uri"] }
 
 [dev-dependencies]
 criterion = "0.5"
