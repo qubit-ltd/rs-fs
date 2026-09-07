@@ -359,3 +359,45 @@ fn test_async_temp_persist_failure_states_drive_lifecycle() {
         assert_eq!(expected_state, file.state());
     }
 }
+
+/// Rejected lifecycle calls retain a kept file's confirmed destination.
+#[test]
+fn test_async_temp_file_repeat_preserves_publication_target() {
+    let (filesystem, probe) = async_recording_file_system(AsyncRecordingConfig::default());
+    let mut file = ready(filesystem.create_temp_file(TempOptions::default())).expect("create file");
+    let outcome = ready(file.keep()).expect("keep file");
+    let calls = probe.calls();
+    let keep = ready(file.keep()).expect_err("kept file must reject another keep");
+    assert_eq!(keep.error().kind(), FsErrorKind::InvalidState);
+    assert_eq!(keep.state(), PersistFailureState::PublishedSourceReleased);
+    assert_eq!(keep.publication_target(), Some(outcome.target()));
+    let persist =
+        ready(file.persist(&path("/other"), PersistOptions::default())).expect_err("kept file must reject persist");
+    assert_eq!(persist.state(), PersistFailureState::PublishedSourceReleased);
+    assert_eq!(persist.publication_target(), Some(outcome.target()));
+    assert_eq!(file.state(), TempResourceState::Kept);
+    assert_eq!(probe.calls(), calls, "repeat must not call the provider");
+}
+
+/// Rejected lifecycle calls retain a persisted directory's confirmed
+/// destination.
+#[test]
+fn test_async_temp_directory_repeat_preserves_publication_target() {
+    let (filesystem, probe) = async_recording_file_system(AsyncRecordingConfig {
+        atomic_temp_persist: true,
+        ..AsyncRecordingConfig::default()
+    });
+    let mut directory = ready(filesystem.create_temp_directory(TempOptions::default())).expect("create directory");
+    let outcome = ready(directory.persist(&path("/published"), PersistOptions::default())).expect("persist directory");
+    let calls = probe.calls();
+    let keep = ready(directory.keep()).expect_err("persisted directory must reject keep");
+    assert_eq!(keep.error().kind(), FsErrorKind::InvalidState);
+    assert_eq!(keep.state(), PersistFailureState::PublishedSourceReleased);
+    assert_eq!(keep.publication_target(), Some(outcome.target()));
+    let persist = ready(directory.persist(&path("/other"), PersistOptions::default()))
+        .expect_err("directory must reject repeat persist");
+    assert_eq!(persist.state(), PersistFailureState::PublishedSourceReleased);
+    assert_eq!(persist.publication_target(), Some(outcome.target()));
+    assert_eq!(directory.state(), TempResourceState::Persisted);
+    assert_eq!(probe.calls(), calls, "repeat must not call the provider");
+}
