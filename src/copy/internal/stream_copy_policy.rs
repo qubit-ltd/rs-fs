@@ -18,10 +18,15 @@ use crate::metadata::FileKind;
 use crate::metadata::FileSystemLimits;
 use crate::metadata::SymlinkPolicy;
 use crate::path::Path;
+use crate::write::WriteDisposition;
+use crate::write::WriteOptions;
 
 /// Returns true when copy options remain within the fallback policy allowlist.
 #[inline]
-pub(crate) fn fallback_options_supported(options: &CopyOptions, filesystem_symlink_policy: SymlinkPolicy) -> bool {
+pub(crate) fn fallback_options_supported(
+    options: &CopyOptions,
+    filesystem_symlink_policy: SymlinkPolicy,
+) -> bool {
     !matches!(options.mode(), crate::copy::CopyMode::Tree)
         && options
             .symlink_policy_override()
@@ -31,8 +36,21 @@ pub(crate) fn fallback_options_supported(options: &CopyOptions, filesystem_symli
         && options.server_side() != ServerSidePreference::Require
         && !options.create_parent()
         && options.durability() != DurabilityRequirement::Required
-        && !(options.conflict() == CopyConflictPolicy::Skip && options.atomicity() == AtomicityRequirement::Required)
-        && matches!(options.conflict(), CopyConflictPolicy::Fail | CopyConflictPolicy::Skip)
+        && !(options.conflict() == CopyConflictPolicy::Skip
+            && options.atomicity() == AtomicityRequirement::Required)
+        && matches!(
+            options.conflict(),
+            CopyConflictPolicy::Fail | CopyConflictPolicy::Skip
+        )
+}
+
+/// Builds the writer request used by a streamed copy fallback.
+#[inline]
+pub(crate) fn fallback_write_options(options: &CopyOptions) -> WriteOptions {
+    WriteOptions::default()
+        .with_disposition(WriteDisposition::CreateNew)
+        .with_atomicity(options.atomicity())
+        .with_durability(options.durability())
 }
 
 /// Validates stream-copy read/write size constraints using the provided limits.
@@ -67,7 +85,10 @@ mod tests {
 
     #[test]
     fn fallback_rejects_tree_mode() {
-        assert!(!fallback_options_supported(&CopyOptions::tree(), SymlinkPolicy::Reject,));
+        assert!(!fallback_options_supported(
+            &CopyOptions::tree(),
+            SymlinkPolicy::Reject,
+        ));
     }
 
     #[test]
