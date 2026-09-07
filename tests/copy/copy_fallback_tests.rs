@@ -95,6 +95,7 @@ enum CopyResponse {
     CompletedInvalidSkippedStats,
     CompletedInvalidFailedStats,
     CompletedInvalidOverwrittenStats,
+    CompletedInvalidFileStats,
     CompletedStreamedOutcome,
     Declined,
     DeclinedSkipAtomic,
@@ -450,6 +451,16 @@ impl FileSystemSpi for RecordingSpi {
                 Ok(CopyAttempt::Completed(CopyOutcome::new(
                     CopyStats {
                         overwritten: 1,
+                        ..CopyStats::default()
+                    },
+                    CopyMethod::Native,
+                    AchievedAtomicity::Atomic,
+                )))
+            }
+            CopyResponse::CompletedInvalidFileStats => {
+                Ok(CopyAttempt::Completed(CopyOutcome::new(
+                    CopyStats {
+                        directories: 1,
                         ..CopyStats::default()
                     },
                     CopyMethod::Native,
@@ -1183,6 +1194,20 @@ fn test_copy_completed_overwritten_stats_violate_fail_conflict_policy() {
     let failure = filesystem
         .copy(&path("/source"), &path("/target"), CopyOptions::default())
         .expect_err("overwritten stats must match the conflict policy");
+    assert_eq!(CopyFailureState::Published, failure.state());
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
+}
+
+/// Verifies file-mode completion reports exactly one non-tree resource.
+#[test]
+fn test_copy_file_mode_rejects_tree_stats() {
+    let (filesystem, _, _) = recording_filesystem(CopyResponse::CompletedInvalidFileStats);
+    let failure = filesystem
+        .copy(&path("/source"), &path("/target"), CopyOptions::file())
+        .expect_err("file mode must reject tree-shaped completion stats");
     assert_eq!(CopyFailureState::Published, failure.state());
     assert_eq!(
         FsErrorKind::ProviderContractViolation,
