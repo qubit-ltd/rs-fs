@@ -238,8 +238,9 @@ impl CopyOptions {
     /// Returns the optional maximum source entry count.
     ///
     /// `None` leaves the entry count unbounded. The count includes every
-    /// source resource represented in the completed [`CopyOutcome`](crate::copy::CopyOutcome)
-    /// statistics, including directories and prefixes.
+    /// source resource represented in the completed
+    /// [`CopyOutcome`](crate::copy::CopyOutcome) statistics, including
+    /// directories and prefixes.
     #[inline(always)]
     #[must_use]
     pub const fn max_entries(&self) -> Option<usize> {
