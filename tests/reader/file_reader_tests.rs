@@ -114,28 +114,18 @@ impl FileSystemSpi for ReaderSpi {
         Err(unsupported())
     }
     fn rename(&self, _: RenameRequest<'_>) -> Result<RenameOutcome, SpiRenameFailure> {
-        Err(SpiRenameFailure::new(
-            unsupported(),
-            RenameFailureState::Unchanged,
-        ))
+        Err(SpiRenameFailure::new(unsupported(), RenameFailureState::Unchanged))
     }
     fn create_temp_file(&self, _: CreateTempFileRequest) -> FsResult<OpenedTempFile> {
         Err(unsupported())
     }
-    fn create_temp_directory(
-        &self,
-        _: CreateTempDirectoryRequest,
-    ) -> FsResult<OpenedTempDirectory> {
+    fn create_temp_directory(&self, _: CreateTempDirectoryRequest) -> FsResult<OpenedTempDirectory> {
         Err(unsupported())
     }
 }
 
 fn unsupported() -> FsError {
-    FsError::new(
-        FsErrorKind::UnsupportedOperation,
-        FsOperation::Other,
-        "unused",
-    )
+    FsError::new(FsErrorKind::UnsupportedOperation, FsOperation::Other, "unused")
 }
 
 #[test]
@@ -168,12 +158,7 @@ fn test_open_reader_reads_bytes_and_exposes_identity() {
     assert!(!reader.is_buffered());
     assert!(format!("{reader:?}").contains("FileReader"));
     let mut bytes = [0; 5];
-    assert_eq!(
-        5,
-        reader
-            .read_fully(&mut bytes)
-            .expect("reader should fill bytes")
-    );
+    assert_eq!(5, reader.read_fully(&mut bytes).expect("reader should fill bytes"));
     assert_eq!(b"bytes", &bytes);
 }
 
@@ -242,16 +227,8 @@ struct RecordingReader {
 impl Input for RecordingReader {
     type Item = u8;
 
-    unsafe fn read_unchecked(
-        &mut self,
-        output: &mut [u8],
-        index: usize,
-        count: usize,
-    ) -> std::io::Result<usize> {
-        self.read_requests
-            .lock()
-            .expect("requests lock")
-            .push(count);
+    unsafe fn read_unchecked(&mut self, output: &mut [u8], index: usize, count: usize) -> std::io::Result<usize> {
+        self.read_requests.lock().expect("requests lock").push(count);
         std::io::Read::read(&mut self.inner, &mut output[index..index + count])
     }
 }

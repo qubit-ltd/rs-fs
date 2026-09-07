@@ -71,8 +71,7 @@ fn test_open_writer_rejects_cumulative_bytes_over_finite_write_limit() {
         )
         .expect("writer should open");
     Output::write_fully(&mut writer, b"two").expect("the first write should fit the limit");
-    let error = Output::write_fully(&mut writer, b"xx")
-        .expect_err("the cumulative write should exceed the limit");
+    let error = Output::write_fully(&mut writer, b"xx").expect_err("the cumulative write should exceed the limit");
     assert!(error.to_string().contains("provider byte limit"));
 }
 
