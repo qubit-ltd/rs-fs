@@ -120,6 +120,7 @@ enum CopyResponse {
 struct RecordingSpi {
     response: CopyResponse,
     advertise_copy: bool,
+    source_length: u64,
     maximum_read_range_bytes: Option<u64>,
     maximum_write_bytes: Option<u64>,
     calls: Arc<Mutex<Vec<&'static str>>>,
@@ -158,6 +159,7 @@ fn recording_filesystem_with_range_limit(
     let filesystem = FileSystem::from_spi(RecordingSpi {
         response,
         advertise_copy: true,
+        source_length: 5,
         maximum_read_range_bytes: Some(maximum_read_range_bytes),
         maximum_write_bytes: None,
         calls: Arc::clone(&calls),
@@ -179,8 +181,30 @@ fn recording_filesystem_with_options(
     let filesystem = FileSystem::from_spi(RecordingSpi {
         response,
         advertise_copy,
+        source_length: 5,
         maximum_read_range_bytes: None,
         maximum_write_bytes,
+        calls: Arc::clone(&calls),
+        bytes: Arc::clone(&bytes),
+        writer_options: Arc::new(Mutex::new(Vec::new())),
+        writer_durable: false,
+    })
+    .expect("recording facade should construct");
+    (filesystem, calls, bytes)
+}
+/// Constructs a recording filesystem whose metadata reports a selected source length.
+fn recording_filesystem_with_source_length(
+    response: CopyResponse,
+    source_length: u64,
+) -> RecordingHandles {
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let bytes = Arc::new(Mutex::new(Vec::new()));
+    let filesystem = FileSystem::from_spi(RecordingSpi {
+        response,
+        advertise_copy: true,
+        source_length,
+        maximum_read_range_bytes: None,
+        maximum_write_bytes: None,
         calls: Arc::clone(&calls),
         bytes: Arc::clone(&bytes),
         writer_options: Arc::new(Mutex::new(Vec::new())),
@@ -198,6 +222,7 @@ fn recording_filesystem_with_writer_durability(
     let filesystem = FileSystem::from_spi(RecordingSpi {
         response: CopyResponse::Declined,
         advertise_copy: true,
+        source_length: 5,
         maximum_read_range_bytes: None,
         maximum_write_bytes: None,
         calls: Arc::new(Mutex::new(Vec::new())),
@@ -303,7 +328,7 @@ impl FileSystemSpi for RecordingSpi {
         if matches!(self.response, CopyResponse::DeclinedUnsupportedSourceKind) {
             metadata = metadata.with_kind(FileKind::Directory);
         }
-        metadata = metadata.with_len(Some(5));
+        metadata = metadata.with_len(Some(self.source_length));
         Ok(StatResponse::new(request.path().clone(), metadata))
     }
     fn list(&self, _: ListRequest<'_>) -> FsResult<OpenedDirectoryStream> {
@@ -711,6 +736,26 @@ fn test_copy_stream_fallback_enforces_byte_and_entry_budgets() {
         .expect_err("a zero deadline must expire before provider I/O");
     assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
     assert!(calls.lock().expect("calls lock should succeed").is_empty());
+}
+
+/// Keeps a large metadata length in the u64 domain until provider validation.
+#[test]
+fn test_stream_fallback_does_not_narrow_metadata_length_to_usize() {
+    let (filesystem, _, bytes) =
+        recording_filesystem_with_source_length(CopyResponse::Declined, u64::MAX);
+    let outcome = filesystem
+        .copy(&path("/source"), &path("/target"), CopyOptions::default())
+        .expect("an unbounded write limit must accept the u64 metadata length");
+
+    assert_eq!(CopyMethod::Streamed, outcome.method());
+    assert_eq!(5, outcome.stats().bytes);
+    assert_eq!(
+        b"bytes",
+        bytes
+            .lock()
+            .expect("bytes lock should succeed")
+            .as_slice()
+    );
 }
 #[test]
 fn test_copy_stream_fallback_ignores_range_read_limit() {

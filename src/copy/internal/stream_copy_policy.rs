@@ -56,19 +56,11 @@ pub(crate) fn fallback_write_options(options: &CopyOptions) -> WriteOptions {
 /// Validates stream-copy read/write size constraints using the provided limits.
 pub(crate) fn validate_stream_copy_length_limits(
     limits: &FileSystemLimits,
-    source: &Path,
+    _source: &Path,
     target: &Path,
     length: u64,
 ) -> Result<(), FsError> {
-    let length = usize::try_from(length).map_err(|_| {
-        FsError::new(
-            crate::error::FsErrorKind::ResourceLimitExceeded,
-            crate::error::FsOperation::Copy,
-            "source length cannot fit in a native write session",
-        )
-        .with_path(source.clone())
-    })?;
-    limits.validate_write_size(target, length)?;
+    limits.validate_write_size_u64(target, length)?;
     Ok(())
 }
 
