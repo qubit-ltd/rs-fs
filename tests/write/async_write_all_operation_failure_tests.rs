@@ -30,7 +30,8 @@ fn test_async_write_all_operation_failure_exposes_recovery_and_formatting() {
             WriteOptions::default(),
         )
         .expect("write preflight should succeed");
-    let failure = ready(operation.execute()).expect_err("commit failure should retain an async writer");
+    let failure =
+        ready(operation.execute()).expect_err("commit failure should retain an async writer");
 
     assert_eq!(FsErrorKind::Io, failure.error().kind());
     assert!(operation.has_recovery_writer());

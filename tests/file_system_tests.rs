@@ -149,7 +149,10 @@ impl FileSystemSpi for CountingSpi {
     fn create_temp_file(&self, _: CreateTempFileRequest) -> FsResult<OpenedTempFile> {
         Err(Self::unsupported())
     }
-    fn create_temp_directory(&self, _: CreateTempDirectoryRequest) -> FsResult<OpenedTempDirectory> {
+    fn create_temp_directory(
+        &self,
+        _: CreateTempDirectoryRequest,
+    ) -> FsResult<OpenedTempDirectory> {
         Err(Self::unsupported())
     }
 }
@@ -372,7 +375,9 @@ fn test_exists_maps_not_found_only_and_contextualizes_other_errors() {
         unexpected_delete: false,
     })
     .expect("facade should construct");
-    let error = failed.exists(&path).expect_err("non-not-found errors must propagate");
+    let error = failed
+        .exists(&path)
+        .expect_err("non-not-found errors must propagate");
     assert_eq!(FsErrorKind::Io, error.kind());
     assert_eq!(FsOperation::Exists, error.operation());
 }

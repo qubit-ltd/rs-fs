@@ -133,7 +133,9 @@ pub(crate) fn reject_secrets(parsed: &FluentUri<String>, policy: &RedactionPolic
             return Err(invalid_uri("sensitive URI components are not supported"));
         }
         Err(_) => {
-            return Err(invalid_uri("URI contains invalid or uninspectable components"));
+            return Err(invalid_uri(
+                "URI contains invalid or uninspectable components",
+            ));
         }
     }
     Ok(())

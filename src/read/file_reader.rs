@@ -82,7 +82,12 @@ impl Input for FileReader {
     }
 
     #[inline]
-    unsafe fn read_unchecked(&mut self, output: &mut [u8], index: usize, count: usize) -> IoResult<usize> {
+    unsafe fn read_unchecked(
+        &mut self,
+        output: &mut [u8],
+        index: usize,
+        count: usize,
+    ) -> IoResult<usize> {
         // SAFETY: The caller guarantees the same range contract required by
         // the wrapped input.
         unsafe { self.inner.read_unchecked(output, index, count) }

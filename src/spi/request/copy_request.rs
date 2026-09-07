@@ -34,7 +34,11 @@ impl<'a> CopyRequest<'a> {
     /// A provider copy request borrowing both paths.
     #[allow(dead_code)]
     #[inline]
-    pub(crate) const fn new(source: &'a Path, target: &'a Path, options: ResolvedCopyOptions) -> Self {
+    pub(crate) const fn new(
+        source: &'a Path,
+        target: &'a Path,
+        options: ResolvedCopyOptions,
+    ) -> Self {
         Self {
             source,
             target,

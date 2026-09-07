@@ -197,7 +197,8 @@ impl WriteOptions {
     #[inline]
     pub fn validate(&self) -> Result<(), FsError> {
         if self.disposition == WriteDisposition::Append
-            && (self.atomicity == AtomicityRequirement::Required || self.precondition != WritePrecondition::None)
+            && (self.atomicity == AtomicityRequirement::Required
+                || self.precondition != WritePrecondition::None)
         {
             return Err(FsError::new(
                 FsErrorKind::InvalidOptions,
@@ -230,7 +231,9 @@ impl WriteOptions {
     /// or required-atomic writes.
     pub fn validate_against(&self, capabilities: FileSystemCapabilities) -> Result<(), FsError> {
         self.validate()?;
-        if self.disposition == WriteDisposition::Append && !capabilities.supports(FileSystemCapability::Append) {
+        if self.disposition == WriteDisposition::Append
+            && !capabilities.supports(FileSystemCapability::Append)
+        {
             return Err(missing_requirement(
                 FileSystemCapability::Append,
                 "append writes are required but not supported",
@@ -266,5 +269,10 @@ impl WriteOptions {
 
 /// Builds a typed unmet write requirement.
 fn missing_requirement(capability: FileSystemCapability, message: &str) -> FsError {
-    FsError::new(FsErrorKind::RequirementNotMet, FsOperation::OpenWriter, message).with_required_capability(capability)
+    FsError::new(
+        FsErrorKind::RequirementNotMet,
+        FsOperation::OpenWriter,
+        message,
+    )
+    .with_required_capability(capability)
 }

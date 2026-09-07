@@ -10,5 +10,8 @@ use qubit_fs::copy::ServerSidePreference;
 
 #[test]
 fn test_server_side_preference_default_is_disable() {
-    assert_eq!(ServerSidePreference::Disable, ServerSidePreference::default());
+    assert_eq!(
+        ServerSidePreference::Disable,
+        ServerSidePreference::default()
+    );
 }

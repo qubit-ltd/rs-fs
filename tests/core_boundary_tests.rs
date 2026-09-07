@@ -92,7 +92,8 @@ fn test_public_value_accessors_preserve_core_contracts() {
 
     let metadata_get: for<'a> fn(&'a UserMetadata, &str) -> Option<&'a str> = UserMetadata::get;
     let metadata_contains: fn(&UserMetadata, &str) -> bool = UserMetadata::contains_key;
-    let safe_get: for<'a> fn(&'a NonSensitiveMetadata, &str) -> Option<&'a str> = NonSensitiveMetadata::get;
+    let safe_get: for<'a> fn(&'a NonSensitiveMetadata, &str) -> Option<&'a str> =
+        NonSensitiveMetadata::get;
     let safe_contains: fn(&NonSensitiveMetadata, &str) -> bool = NonSensitiveMetadata::contains_key;
     let version_text: for<'a> fn(&'a ResourceVersion) -> &'a str = ResourceVersion::as_str;
 
@@ -110,33 +111,45 @@ fn test_public_option_and_outcome_accessors_are_stable() {
     let copy_mode: fn(&CopyOptions) -> CopyMode = black_box(CopyOptions::mode);
     assert_eq!(CopyMode::File, copy_mode(&copy_options));
 
-    let copy_outcome = CopyOutcome::new(CopyStats::default(), CopyMethod::Native, AchievedAtomicity::Atomic)
-        .with_metadata(MetadataPreservePolicy::Portable)
-        .with_target_version(ResourceVersion::new("v2"))
-        .with_durable(true);
+    let copy_outcome = CopyOutcome::new(
+        CopyStats::default(),
+        CopyMethod::Native,
+        AchievedAtomicity::Atomic,
+    )
+    .with_metadata(MetadataPreservePolicy::Portable)
+    .with_target_version(ResourceVersion::new("v2"))
+    .with_durable(true);
     let durable: fn(&CopyOutcome) -> bool = black_box(CopyOutcome::durable);
-    let target_version: fn(&CopyOutcome) -> Option<&ResourceVersion> = black_box(CopyOutcome::target_version);
+    let target_version: fn(&CopyOutcome) -> Option<&ResourceVersion> =
+        black_box(CopyOutcome::target_version);
     let used_fallback: fn(&CopyOutcome) -> bool = black_box(CopyOutcome::used_fallback);
     assert!(durable(&copy_outcome));
-    assert_eq!(Some("v2"), target_version(&copy_outcome).map(ResourceVersion::as_str));
+    assert_eq!(
+        Some("v2"),
+        target_version(&copy_outcome).map(ResourceVersion::as_str)
+    );
     assert!(!used_fallback(&copy_outcome));
 
     let create_options = CreateDirectoryOptions::default()
         .with_recursive(true)
         .with_exists_ok(true);
-    let recursive: fn(&CreateDirectoryOptions) -> bool = black_box(CreateDirectoryOptions::recursive);
-    let exists_ok: fn(&CreateDirectoryOptions) -> bool = black_box(CreateDirectoryOptions::exists_ok);
+    let recursive: fn(&CreateDirectoryOptions) -> bool =
+        black_box(CreateDirectoryOptions::recursive);
+    let exists_ok: fn(&CreateDirectoryOptions) -> bool =
+        black_box(CreateDirectoryOptions::exists_ok);
     let user_metadata = black_box(CreateDirectoryOptions::user_metadata)(&create_options);
     assert!(recursive(&create_options));
     assert!(exists_ok(&create_options));
     assert!(user_metadata.is_empty());
 
     let created = CreateDirectoryOutcome::new(false).with_created_ancestors(2);
-    let ancestors: fn(CreateDirectoryOutcome) -> Option<u64> = black_box(CreateDirectoryOutcome::created_ancestors);
+    let ancestors: fn(CreateDirectoryOutcome) -> Option<u64> =
+        black_box(CreateDirectoryOutcome::created_ancestors);
     assert_eq!(Some(2), ancestors(created));
 
     let deleted = DeleteOutcome::new(false).with_deleted_entries(2);
-    let deleted_entries: fn(DeleteOutcome) -> Option<u64> = black_box(DeleteOutcome::deleted_entries);
+    let deleted_entries: fn(DeleteOutcome) -> Option<u64> =
+        black_box(DeleteOutcome::deleted_entries);
     assert_eq!(Some(2), deleted_entries(deleted));
 
     let read_options = ReadOptions::default();
@@ -149,8 +162,13 @@ fn test_public_option_and_outcome_accessors_are_stable() {
     let create_parent: fn(&WriteOptions) -> bool = black_box(WriteOptions::create_parent);
     assert!(create_parent(&write_options));
 
-    let persist = PersistOutcome::new(Path::root(), AchievedAtomicity::Atomic, PublicationMethod::Direct)
-        .with_cleanup_state(PersistCleanupState::Complete);
-    let cleanup_state: fn(&PersistOutcome) -> PersistCleanupState = black_box(PersistOutcome::cleanup_state);
+    let persist = PersistOutcome::new(
+        Path::root(),
+        AchievedAtomicity::Atomic,
+        PublicationMethod::Direct,
+    )
+    .with_cleanup_state(PersistCleanupState::Complete);
+    let cleanup_state: fn(&PersistOutcome) -> PersistCleanupState =
+        black_box(PersistOutcome::cleanup_state);
     assert_eq!(PersistCleanupState::Complete, cleanup_state(&persist));
 }

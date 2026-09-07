@@ -307,16 +307,20 @@ impl ListOptions {
                     "literal prefix requires flat path semantics",
                 ));
             }
-            (PathSemantics::ObjectKey | PathSemantics::ProviderSpecific, Some(ListFilter::Subtree(_))) => {
+            (
+                PathSemantics::ObjectKey | PathSemantics::ProviderSpecific,
+                Some(ListFilter::Subtree(_)),
+            ) => {
                 return Err(FsError::new(
                     FsErrorKind::InvalidOptions,
                     FsOperation::List,
                     "subtree filter requires hierarchical path semantics",
                 ));
             }
-            (PathSemantics::ObjectKey | PathSemantics::ProviderSpecific, Some(ListFilter::LiteralPrefix(prefix)))
-                if prefix.contains('\0') =>
-            {
+            (
+                PathSemantics::ObjectKey | PathSemantics::ProviderSpecific,
+                Some(ListFilter::LiteralPrefix(prefix)),
+            ) if prefix.contains('\0') => {
                 return Err(FsError::new(
                     FsErrorKind::InvalidOptions,
                     FsOperation::List,
@@ -325,8 +329,10 @@ impl ListOptions {
             }
             _ => {}
         }
-        if matches!(semantics, PathSemantics::ObjectKey | PathSemantics::ProviderSpecific)
-            && (!self.recursive || self.max_depth.is_some())
+        if matches!(
+            semantics,
+            PathSemantics::ObjectKey | PathSemantics::ProviderSpecific
+        ) && (!self.recursive || self.max_depth.is_some())
         {
             return Err(FsError::new(
                 FsErrorKind::InvalidOptions,

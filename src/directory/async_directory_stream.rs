@@ -121,7 +121,10 @@ impl AsyncDirectoryStream {
                 ))
             });
         }
-        if self.deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+        if self
+            .deadline
+            .is_some_and(|deadline| Instant::now() >= deadline)
+        {
             self.state = DirectoryStreamState::Failed;
             let error = self.resource_limit_error("directory listing deadline was exceeded");
             return Box::pin(async move { Err(error) });
@@ -129,26 +132,34 @@ impl AsyncDirectoryStream {
         Box::pin(async move {
             match self.session.next_entry_async().await {
                 Ok(Some(entry)) => {
-                    if let Err(error) =
-                        directory_entry_validation::validate_entry(&entry, &self.root, self.path_semantics, self.limits)
-                    {
+                    if let Err(error) = directory_entry_validation::validate_entry(
+                        &entry,
+                        &self.root,
+                        self.path_semantics,
+                        self.limits,
+                    ) {
                         self.state = DirectoryStreamState::Failed;
                         return Err(self.contextual_error(error));
                     }
-                    if let Err(message) =
-                        crate::directory::internal::select(&entry, &self.root, &self.options, self.path_semantics)
-                    {
+                    if let Err(message) = crate::directory::internal::select(
+                        &entry,
+                        &self.root,
+                        &self.options,
+                        self.path_semantics,
+                    ) {
                         self.state = DirectoryStreamState::Failed;
-                        return Err(
-                            self.contextual_error(directory_entry_validation::option_error(&self.root, message))
-                        );
+                        return Err(self.contextual_error(
+                            directory_entry_validation::option_error(&self.root, message),
+                        ));
                     }
                     if self.options.max_depth().is_some_and(|maximum| {
                         directory_entry_validation::entry_depth(&self.root, &entry.path)
                             .is_some_and(|depth| depth > maximum)
                     }) {
                         self.state = DirectoryStreamState::Failed;
-                        return Err(self.resource_limit_error("directory listing depth limit was exceeded"));
+                        return Err(
+                            self.resource_limit_error("directory listing depth limit was exceeded")
+                        );
                     }
                     if self
                         .options
@@ -156,12 +167,17 @@ impl AsyncDirectoryStream {
                         .is_some_and(|maximum| self.returned_entries >= maximum)
                     {
                         self.state = DirectoryStreamState::Failed;
-                        return Err(self.resource_limit_error("directory listing entry limit was exceeded"));
+                        return Err(
+                            self.resource_limit_error("directory listing entry limit was exceeded")
+                        );
                     }
-                    self.returned_entries = self.returned_entries.checked_add(1).ok_or_else(|| {
-                        self.state = DirectoryStreamState::Failed;
-                        self.resource_limit_error("directory listing entry count exceeded the API range")
-                    })?;
+                    self.returned_entries =
+                        self.returned_entries.checked_add(1).ok_or_else(|| {
+                            self.state = DirectoryStreamState::Failed;
+                            self.resource_limit_error(
+                                "directory listing entry count exceeded the API range",
+                            )
+                        })?;
                     Ok(Some(entry))
                 }
                 Ok(None) => {
@@ -196,6 +212,8 @@ impl AsyncDirectoryStream {
 impl Debug for AsyncDirectoryStream {
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
-        formatter.debug_struct("AsyncDirectoryStream").finish_non_exhaustive()
+        formatter
+            .debug_struct("AsyncDirectoryStream")
+            .finish_non_exhaustive()
     }
 }

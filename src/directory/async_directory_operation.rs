@@ -33,14 +33,26 @@ impl<'a> AsyncDirectoryOperation<'a> {
     }
 
     /// Opens a validated asynchronous provider directory stream.
-    pub(crate) async fn list(&self, path: &Path, options: ListOptions) -> FsResult<AsyncDirectoryStream> {
-        self.filesystem.core().validate_path(path, FsOperation::List)?;
-        options
-            .validate_for(self.filesystem.properties().info().path_semantics())
-            .map_err(|error| self.filesystem.core().enrich(error, Some(path), FsOperation::List))?;
+    pub(crate) async fn list(
+        &self,
+        path: &Path,
+        options: ListOptions,
+    ) -> FsResult<AsyncDirectoryStream> {
         self.filesystem
             .core()
-            .require(FileSystemCapability::List, FsOperation::List, Some(path))?;
+            .validate_path(path, FsOperation::List)?;
+        options
+            .validate_for(self.filesystem.properties().info().path_semantics())
+            .map_err(|error| {
+                self.filesystem
+                    .core()
+                    .enrich(error, Some(path), FsOperation::List)
+            })?;
+        self.filesystem.core().require(
+            FileSystemCapability::List,
+            FsOperation::List,
+            Some(path),
+        )?;
         let page_size = self
             .filesystem
             .properties()
@@ -60,7 +72,11 @@ impl<'a> AsyncDirectoryOperation<'a> {
                 ),
             ))
             .await
-            .map_err(|error| self.filesystem.core().enrich(error, Some(path), FsOperation::List))?;
+            .map_err(|error| {
+                self.filesystem
+                    .core()
+                    .enrich(error, Some(path), FsOperation::List)
+            })?;
         Ok(opened.into_stream(
             path.clone(),
             options,
