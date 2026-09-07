@@ -55,13 +55,6 @@ impl OpenedAsyncDirectoryStream {
         path_semantics: PathSemantics,
         limits: FileSystemLimits,
     ) -> AsyncDirectoryStream {
-        AsyncDirectoryStream::new(
-            root,
-            self.session,
-            options,
-            provider,
-            path_semantics,
-            limits,
-        )
+        AsyncDirectoryStream::new(root, self.session, options, provider, path_semantics, limits)
     }
 }

@@ -76,19 +76,12 @@ impl FileSystemSpi for OpenFailureSpi {
     }
     fn open_reader(&self, request: OpenReaderRequest<'_>) -> FsResult<OpenedReader> {
         Ok(OpenedReader::new(
-            OpenedFileInfo::new(
-                self.properties().info().id().clone(),
-                request.path().clone(),
-            ),
+            OpenedFileInfo::new(self.properties().info().id().clone(), request.path().clone()),
             Box::new(Cursor::new(b"bytes".to_vec())),
         ))
     }
     fn open_writer(&self, _: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
-        let error = FsError::new(
-            self.kind,
-            FsOperation::OpenWriter,
-            "controlled open failure",
-        );
+        let error = FsError::new(self.kind, FsOperation::OpenWriter, "controlled open failure");
         Err(match self.effect {
             Some(effect) => error.with_effect_state(effect),
             None => error,
@@ -147,11 +140,7 @@ fn test_sync_copy_open_failure_requires_explicit_evidence() {
 
 #[test]
 fn test_sync_copy_skip_requires_explicit_unchanged_effect() {
-    for effect in [
-        Some(FsEffectState::Unchanged),
-        None,
-        Some(FsEffectState::Indeterminate),
-    ] {
+    for effect in [Some(FsEffectState::Unchanged), None, Some(FsEffectState::Indeterminate)] {
         let fs = FileSystem::from_spi(OpenFailureSpi {
             kind: FsErrorKind::AlreadyExists,
             effect,
@@ -163,10 +152,7 @@ fn test_sync_copy_skip_requires_explicit_unchanged_effect() {
             CopyOptions::default().with_conflict(CopyConflictPolicy::Skip),
         );
         if effect == Some(FsEffectState::Unchanged) {
-            assert_eq!(
-                1,
-                result.expect("proved unchanged may skip").stats().skipped
-            );
+            assert_eq!(1, result.expect("proved unchanged may skip").stats().skipped);
         } else {
             assert_eq!(
                 CopyFailureState::Indeterminate,
@@ -208,11 +194,7 @@ fn test_async_copy_skip_requires_explicit_unchanged_effect() {
     use crate::async_recording_spi::AsyncRecordingConfig;
     use crate::async_recording_spi::async_recording_file_system;
     use crate::poll_support::ready;
-    for effect in [
-        Some(FsEffectState::Unchanged),
-        None,
-        Some(FsEffectState::Indeterminate),
-    ] {
+    for effect in [Some(FsEffectState::Unchanged), None, Some(FsEffectState::Indeterminate)] {
         let (fs, _) = async_recording_file_system(AsyncRecordingConfig {
             decline_copy: true,
             writer_open_error: Some(FsErrorKind::AlreadyExists),
@@ -228,10 +210,7 @@ fn test_async_copy_skip_requires_explicit_unchanged_effect() {
             .expect("preflight");
         let result = ready(op.execute());
         if effect == Some(FsEffectState::Unchanged) {
-            assert_eq!(
-                1,
-                result.expect("proved unchanged may skip").stats().skipped
-            );
+            assert_eq!(1, result.expect("proved unchanged may skip").stats().skipped);
         } else {
             assert_eq!(
                 CopyFailureState::Indeterminate,

@@ -172,20 +172,13 @@ impl CopyOutcome {
         {
             return Some("provider reported non-atomic success for an atomic-required copy");
         }
-        if options.durability() == crate::metadata::DurabilityRequirement::Required && !self.durable
-        {
+        if options.durability() == crate::metadata::DurabilityRequirement::Required && !self.durable {
             return Some("provider reported non-durable success for a durability-required copy");
         }
-        if options.server_side() == ServerSidePreference::Require
-            && self.method != CopyMethod::ServerSide
-        {
-            return Some(
-                "provider reported a non-server-side success for a server-side-required copy",
-            );
+        if options.server_side() == ServerSidePreference::Require && self.method != CopyMethod::ServerSide {
+            return Some("provider reported a non-server-side success for a server-side-required copy");
         }
-        if options.server_side() == ServerSidePreference::Disable
-            && self.method == CopyMethod::ServerSide
-        {
+        if options.server_side() == ServerSidePreference::Disable && self.method == CopyMethod::ServerSide {
             return Some("provider reported a server-side success for a server-side-disabled copy");
         }
         if self.metadata != options.preserve_metadata() {
@@ -198,14 +191,9 @@ impl CopyOutcome {
             return Some("provider reported skipped copy entries without a skip conflict policy");
         }
         if options.conflict() != CopyConflictPolicy::Overwrite && self.stats.overwritten != 0 {
-            return Some(
-                "provider reported overwritten copy entries without an overwrite conflict policy",
-            );
+            return Some("provider reported overwritten copy entries without an overwrite conflict policy");
         }
-        if options
-            .max_bytes()
-            .is_some_and(|maximum| self.stats.bytes > maximum)
-        {
+        if options.max_bytes().is_some_and(|maximum| self.stats.bytes > maximum) {
             return Some("provider reported copy bytes beyond the requested limit");
         }
         let entries = self
@@ -225,8 +213,7 @@ impl CopyOutcome {
         }
         if entries.is_none()
             || options.max_entries().is_some_and(|maximum| {
-                u64::try_from(maximum)
-                    .is_ok_and(|maximum| entries.is_some_and(|entries| entries > maximum))
+                u64::try_from(maximum).is_ok_and(|maximum| entries.is_some_and(|entries| entries > maximum))
             })
         {
             return Some("provider reported copy entries beyond the requested limit");

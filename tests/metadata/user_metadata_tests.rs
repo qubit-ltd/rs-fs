@@ -19,10 +19,7 @@ fn test_user_metadata_debug_hides_values() {
     assert!(!debug.contains("private-value"));
     assert!(!metadata.is_empty());
     assert!(metadata.contains_key("language"));
-    assert_eq!(
-        vec![("language", "private-value")],
-        metadata.iter().collect::<Vec<_>>()
-    );
+    assert_eq!(vec![("language", "private-value")], metadata.iter().collect::<Vec<_>>());
 }
 
 /// Verifies metadata keys are classified directly instead of through a URI.

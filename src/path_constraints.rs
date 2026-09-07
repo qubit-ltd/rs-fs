@@ -54,9 +54,7 @@ impl PathConstraints {
     #[inline(always)]
     #[must_use]
     pub const fn either() -> Self {
-        Self {
-            form: PathForm::Either,
-        }
+        Self { form: PathForm::Either }
     }
 
     /// Returns the configured accepted path form.
