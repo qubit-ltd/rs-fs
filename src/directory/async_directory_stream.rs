@@ -28,6 +28,23 @@ use crate::spi::AsyncDirectoryStreamSession;
 use crate::spi::SpiFuture;
 
 /// Type-erased asynchronous directory enumeration handle.
+///
+/// The stream validates each provider entry before yielding it and preserves
+/// terminal state across asynchronous calls.
+///
+/// # Examples
+///
+/// ```
+/// # use qubit_fs::{AsyncFileSystem, FsResult, Path};
+/// # use qubit_fs::directory::ListOptions;
+/// # async fn visit(filesystem: &AsyncFileSystem, root: &Path) -> FsResult<()> {
+/// let mut stream = filesystem.list(root, ListOptions::default()).await?;
+/// while let Some(entry) = stream.next_entry_async().await? {
+///     println!("{}", entry.path);
+/// }
+/// # Ok(())
+/// # }
+/// ```
 pub struct AsyncDirectoryStream {
     /// Provider enumeration session.
     session: Box<dyn AsyncDirectoryStreamSession>,

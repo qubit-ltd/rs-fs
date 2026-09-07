@@ -27,6 +27,32 @@ use crate::spi::ProviderOperation;
 use crate::spi::ProviderProperties;
 
 /// Immutable construction-time properties cached by a filesystem facade.
+///
+/// A facade exposes the provider's validated identity, limits, path rules, and
+/// effective capabilities through one stable snapshot. The capability set may
+/// include facts derived by the facade; it is therefore not necessarily a
+/// byte-for-byte copy of the provider declaration.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_fs::metadata::{FileSystemCapabilities, FileSystemId, FileSystemInfo,
+///     FileSystemLimit, FileSystemLimits, SymlinkPolicy};
+/// use qubit_fs::path::{PathConstraints, PathForm, PathSemantics};
+/// use qubit_fs::metadata::FileSystemProperties;
+///
+/// let properties = FileSystemProperties::new(
+///     FileSystemInfo::new(FileSystemId::new("example")?, "example", PathSemantics::Hierarchical),
+///     FileSystemCapabilities::new(),
+///     FileSystemLimits::unknown().with_max_path_text_bytes(FileSystemLimit::Maximum(4096)),
+///     PathConstraints::absolute(),
+///     SymlinkPolicy::Reject,
+/// )?;
+/// assert_eq!(properties.info().provider_id(), "example");
+/// assert_eq!(properties.limits().max_path_text_bytes(), FileSystemLimit::Maximum(4096));
+/// assert_eq!(properties.path_constraints().form(), PathForm::Absolute);
+/// # Ok::<(), qubit_fs::FsError>(())
+/// ```
 #[derive(Clone, Debug)]
 pub struct FileSystemProperties {
     /// Stable filesystem information.
@@ -125,10 +151,13 @@ impl FileSystemProperties {
         &self.info
     }
 
-    /// Returns the stable advertised capabilities.
+    /// Returns the effective application-visible capabilities.
+    ///
+    /// The snapshot contains provider-declared capabilities plus capabilities
+    /// derived by the facade, such as conditional streamed copy support.
     ///
     /// # Returns
-    /// Capabilities explicitly advertised by the provider.
+    /// Capabilities available to callers of the facade.
     #[inline(always)]
     #[must_use]
     pub const fn capabilities(&self) -> FileSystemCapabilities {

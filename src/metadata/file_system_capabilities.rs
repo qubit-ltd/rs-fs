@@ -34,6 +34,33 @@ const CAPABILITY_DEPENDENCIES: &[(FileSystemCapability, FileSystemCapability)] =
 ];
 
 /// Stable typed capability support for one configured filesystem.
+///
+/// Capabilities have one of two support strengths: conditional capabilities
+/// may be attempted and can still be rejected for an individual request, while
+/// guaranteed capabilities are promised for every valid request in scope.
+/// Derived capabilities must not be stronger than their base capability.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_fs::metadata::{FileSystemCapabilities, FileSystemCapability,
+///     FileSystemCapabilitySupport};
+///
+/// let capabilities = FileSystemCapabilities::new()
+///     .with_conditional(FileSystemCapability::Read)
+///     .with_conditional(FileSystemCapability::RangeRead);
+/// assert_eq!(capabilities.support(FileSystemCapability::RangeRead),
+///     FileSystemCapabilitySupport::Conditional);
+/// assert_eq!(capabilities.support(FileSystemCapability::Write),
+///     FileSystemCapabilitySupport::Unsupported);
+/// assert!(capabilities.missing_dependency().is_none());
+///
+/// let invalid = FileSystemCapabilities::new()
+///     .with_guaranteed(FileSystemCapability::RangeRead)
+///     .with_conditional(FileSystemCapability::Read);
+/// assert_eq!(invalid.missing_dependency(), Some((
+///     FileSystemCapability::RangeRead, FileSystemCapability::Read)));
+/// ```
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub struct FileSystemCapabilities {
     /// Capabilities that can be attempted conditionally.

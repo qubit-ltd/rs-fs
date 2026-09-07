@@ -20,6 +20,26 @@ use crate::path::PathSemantics;
 use crate::path::RelativePath;
 
 /// Options controlling directory or prefix listing.
+///
+/// Options are validated by [`crate::FileSystem::list`] before a provider
+/// session is opened. A page-size hint is bounded by the provider's declared
+/// limit; `max_depth` and `max_entries` are caller-side safety bounds.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_fs::directory::{ListFilter, ListOptions};
+///
+/// let options = ListOptions::default()
+///     .with_page_size(Some(100))
+///     .with_max_depth(Some(2))
+///     .with_max_entries(Some(500))
+///     .with_filter(Some(ListFilter::Subtree("reports".to_owned())));
+/// assert_eq!(options.page_size(), Some(100));
+/// assert_eq!(options.max_depth(), Some(2));
+/// assert_eq!(options.max_entries(), Some(500));
+/// assert!(options.validate().is_ok());
+/// ```
 #[non_exhaustive]
 #[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct ListOptions {
