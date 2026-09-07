@@ -34,21 +34,13 @@ impl<'a> DirectoryOperation<'a> {
 
     /// Opens a provider directory stream after local option validation.
     pub(crate) fn list(&self, path: &Path, options: ListOptions) -> FsResult<DirectoryStream> {
-        self.filesystem
-            .core()
-            .validate_path(path, FsOperation::List)?;
+        self.filesystem.core().validate_path(path, FsOperation::List)?;
         options
             .validate_for(self.filesystem.properties().info().path_semantics())
-            .map_err(|error| {
-                self.filesystem
-                    .core()
-                    .enrich(error, Some(path), FsOperation::List)
-            })?;
-        self.filesystem.core().require(
-            FileSystemCapability::List,
-            FsOperation::List,
-            Some(path),
-        )?;
+            .map_err(|error| self.filesystem.core().enrich(error, Some(path), FsOperation::List))?;
+        self.filesystem
+            .core()
+            .require(FileSystemCapability::List, FsOperation::List, Some(path))?;
         let page_size = self
             .filesystem
             .properties()
@@ -76,10 +68,6 @@ impl<'a> DirectoryOperation<'a> {
                     *self.filesystem.properties().limits(),
                 )
             })
-            .map_err(|error| {
-                self.filesystem
-                    .core()
-                    .enrich(error, Some(path), FsOperation::List)
-            })
+            .map_err(|error| self.filesystem.core().enrich(error, Some(path), FsOperation::List))
     }
 }

@@ -65,12 +65,7 @@ impl TempLifecycle {
     }
     /// Records provider failure without discarding an earlier known target.
     #[inline]
-    pub(crate) fn record_failure(
-        &mut self,
-        state: PersistFailureState,
-        target: Option<Path>,
-        kept: bool,
-    ) {
+    pub(crate) fn record_failure(&mut self, state: PersistFailureState, target: Option<Path>, kept: bool) {
         if let Some(target) = target {
             self.publication_target = Some(target);
         }
@@ -94,8 +89,7 @@ impl TempLifecycle {
     pub(crate) fn record_cleanup_success(&mut self) {
         self.state = TempResourceState::Cleaned;
         self.failure_state = match self.failure_state {
-            PersistFailureState::PublishedSourceRetained
-            | PersistFailureState::PublishedSourceReleased => {
+            PersistFailureState::PublishedSourceRetained | PersistFailureState::PublishedSourceReleased => {
                 PersistFailureState::PublishedSourceReleased
             }
             PersistFailureState::Indeterminate => PersistFailureState::Indeterminate,

@@ -29,11 +29,7 @@ impl PathComponent {
     /// Returns an invalid-path error for empty input, separators, traversal
     /// markers, or NUL. This method performs no native-path conversion.
     pub fn parse(text: &str) -> FsResult<Self> {
-        if text.is_empty()
-            || matches!(text, "." | "..")
-            || text.contains('/')
-            || text.contains('\0')
-        {
+        if text.is_empty() || matches!(text, "." | "..") || text.contains('/') || text.contains('\0') {
             return Err(FsError::invalid_path(
                 FsOperation::ParsePath,
                 "path component must be a non-empty non-traversal component",

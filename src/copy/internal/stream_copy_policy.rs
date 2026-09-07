@@ -23,10 +23,7 @@ use crate::write::WriteOptions;
 
 /// Returns true when copy options remain within the fallback policy allowlist.
 #[inline]
-pub(crate) fn fallback_options_supported(
-    options: &CopyOptions,
-    filesystem_symlink_policy: SymlinkPolicy,
-) -> bool {
+pub(crate) fn fallback_options_supported(options: &CopyOptions, filesystem_symlink_policy: SymlinkPolicy) -> bool {
     !matches!(options.mode(), crate::copy::CopyMode::Tree)
         && options
             .symlink_policy_override()
@@ -36,12 +33,8 @@ pub(crate) fn fallback_options_supported(
         && options.server_side() != ServerSidePreference::Require
         && !options.create_parent()
         && options.durability() != DurabilityRequirement::Required
-        && !(options.conflict() == CopyConflictPolicy::Skip
-            && options.atomicity() == AtomicityRequirement::Required)
-        && matches!(
-            options.conflict(),
-            CopyConflictPolicy::Fail | CopyConflictPolicy::Skip
-        )
+        && !(options.conflict() == CopyConflictPolicy::Skip && options.atomicity() == AtomicityRequirement::Required)
+        && matches!(options.conflict(), CopyConflictPolicy::Fail | CopyConflictPolicy::Skip)
 }
 
 /// Builds the writer request used by a streamed copy fallback.
@@ -77,10 +70,7 @@ mod tests {
 
     #[test]
     fn fallback_rejects_tree_mode() {
-        assert!(!fallback_options_supported(
-            &CopyOptions::tree(),
-            SymlinkPolicy::Reject,
-        ));
+        assert!(!fallback_options_supported(&CopyOptions::tree(), SymlinkPolicy::Reject,));
     }
 
     #[test]

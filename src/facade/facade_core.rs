@@ -79,26 +79,16 @@ impl FacadeCore {
     /// Returns an enriched path-validation error when `parent` is present and
     /// does not satisfy the cached filesystem rules.
     pub(crate) fn validate_temp_parent(&self, parent: Option<&Path>) -> FsResult<()> {
-        parent.map_or(Ok(()), |path| {
-            self.validate_path(path, FsOperation::CreateTemp)
-        })
+        parent.map_or(Ok(()), |path| self.validate_path(path, FsOperation::CreateTemp))
     }
 
     /// Validates a writer path, options, and required write capability.
-    pub(crate) fn validate_write_request(
-        &self,
-        path: &Path,
-        options: &WriteOptions,
-    ) -> FsResult<()> {
+    pub(crate) fn validate_write_request(&self, path: &Path, options: &WriteOptions) -> FsResult<()> {
         self.validate_path(path, FsOperation::OpenWriter)?;
         options
             .validate_against(self.properties.capabilities())
             .map_err(|error| self.enrich(error, Some(path), FsOperation::OpenWriter))?;
-        self.require(
-            FileSystemCapability::Write,
-            FsOperation::OpenWriter,
-            Some(path),
-        )
+        self.require(FileSystemCapability::Write, FsOperation::OpenWriter, Some(path))
     }
 
     /// Requires one capability before an operation can create provider I/O.
@@ -135,30 +125,18 @@ impl FacadeCore {
     ///
     /// Existing provider-supplied context is preserved. `None` does not invent
     /// a path for pathless operations.
-    pub(crate) fn enrich(
-        &self,
-        error: FsError,
-        path: Option<&Path>,
-        operation: FsOperation,
-    ) -> FsError {
+    pub(crate) fn enrich(&self, error: FsError, path: Option<&Path>, operation: FsOperation) -> FsError {
         let error = error
             .with_operation(operation)
             .with_missing_provider(self.properties.info().provider_id());
         match path {
-            Some(path) => {
-                error.with_missing_context(path, None, self.properties.info().provider_id())
-            }
+            Some(path) => error.with_missing_context(path, None, self.properties.info().provider_id()),
             None => error,
         }
     }
 
     /// Builds a provider-contract error bound to a requested path.
-    pub(crate) fn contract_error(
-        &self,
-        path: &Path,
-        operation: FsOperation,
-        message: &str,
-    ) -> FsError {
+    pub(crate) fn contract_error(&self, path: &Path, operation: FsOperation, message: &str) -> FsError {
         FsError::new(FsErrorKind::ProviderContractViolation, operation, message)
             .with_path(path.clone())
             .with_provider(self.properties.info().provider_id())
@@ -203,21 +181,14 @@ impl FacadeCore {
         provider: &str,
         message: &'static str,
     ) -> FsError {
-        FsError::with_source(
-            FsErrorKind::ResourceLimitExceeded,
-            operation,
-            message,
-            error,
-        )
-        .with_path(path.clone())
-        .with_provider(provider)
+        FsError::with_source(FsErrorKind::ResourceLimitExceeded, operation, message, error)
+            .with_path(path.clone())
+            .with_provider(provider)
     }
 
     /// Returns the next bounded read length for an accumulated prefix.
     #[inline(always)]
     pub(crate) fn next_prefix_read_len(accumulated: usize, maximum: usize) -> usize {
-        maximum
-            .saturating_sub(accumulated)
-            .min(Self::PREFIX_BUFFER_SIZE)
+        maximum.saturating_sub(accumulated).min(Self::PREFIX_BUFFER_SIZE)
     }
 }

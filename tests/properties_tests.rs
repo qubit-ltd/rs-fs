@@ -108,11 +108,7 @@ fn test_file_system_properties_does_not_derive_copy_from_read_and_write() {
         SymlinkPolicy::FollowWithinFileSystem,
     )
     .expect("properties should validate");
-    assert!(
-        !properties
-            .capabilities()
-            .supports(FileSystemCapability::Copy)
-    );
+    assert!(!properties.capabilities().supports(FileSystemCapability::Copy));
 }
 
 /// Verifies snapshots expose their stored limits and capabilities unchanged
@@ -203,10 +199,7 @@ fn test_file_system_limits_configure_all_dimensions() {
         .with_max_list_page_entries(FileSystemLimit::Maximum(10));
 
     assert_eq!(FileSystemLimit::Maximum(20), limits.max_path_text_bytes());
-    assert_eq!(
-        FileSystemLimit::Maximum(8),
-        limits.max_component_text_bytes()
-    );
+    assert_eq!(FileSystemLimit::Maximum(8), limits.max_component_text_bytes());
     assert_eq!(FileSystemLimit::Maximum(32), limits.max_read_range_bytes());
     assert_eq!(FileSystemLimit::Maximum(64), limits.max_write_bytes());
     assert_eq!(FileSystemLimit::Maximum(10), limits.max_list_page_entries());
@@ -216,8 +209,7 @@ fn test_file_system_limits_configure_all_dimensions() {
 /// missing and non-finite hints.
 #[test]
 fn test_file_system_limits_clamp_list_page_size() {
-    let limited =
-        FileSystemLimits::unknown().with_max_list_page_entries(FileSystemLimit::Maximum(10));
+    let limited = FileSystemLimits::unknown().with_max_list_page_entries(FileSystemLimit::Maximum(10));
     assert_eq!(None, limited.clamp_list_page_size(None));
     assert_eq!(Some(4), limited.clamp_list_page_size(Some(4)));
     assert_eq!(Some(10), limited.clamp_list_page_size(Some(20)));
@@ -252,11 +244,7 @@ fn test_file_system_limits_validate_path_read_and_write_boundaries() {
     );
     assert!(
         limits
-            .validate_path(
-                &long_component,
-                PathSemantics::Hierarchical,
-                FsOperation::Stat,
-            )
+            .validate_path(&long_component, PathSemantics::Hierarchical, FsOperation::Stat,)
             .is_err()
     );
     assert!(

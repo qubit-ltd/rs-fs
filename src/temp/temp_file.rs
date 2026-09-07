@@ -61,11 +61,7 @@ pub struct TempFile {
 
 impl TempFile {
     /// Creates the facade handle from validated provider parts.
-    pub(crate) fn new(
-        filesystem: FileSystem,
-        path: Path,
-        session: Box<dyn TempResourceSpi>,
-    ) -> Self {
+    pub(crate) fn new(filesystem: FileSystem, path: Path, session: Box<dyn TempResourceSpi>) -> Self {
         Self {
             filesystem,
             path,
@@ -87,11 +83,7 @@ impl TempFile {
     }
     /// Persists this temporary file to `target`.
     #[allow(clippy::result_large_err)]
-    pub fn persist(
-        &mut self,
-        target: &Path,
-        options: PersistOptions,
-    ) -> Result<PersistOutcome, PersistFailure> {
+    pub fn persist(&mut self, target: &Path, options: PersistOptions) -> Result<PersistOutcome, PersistFailure> {
         if self.lifecycle.state() != TempResourceState::Owned {
             return Err(PersistFailure::new(
                 self.invalid_state(FsOperation::PersistTemp),
@@ -99,26 +91,14 @@ impl TempFile {
             )
             .with_publication_target(self.lifecycle.publication_target()));
         }
-        if let Err(error) = self
-            .filesystem
-            .preflight_temp_persist(&self.path, target, &options)
-        {
-            return Err(PersistFailure::new(
-                error,
-                PersistFailureState::NotPublished,
-            ));
+        if let Err(error) = self.filesystem.preflight_temp_persist(&self.path, target, &options) {
+            return Err(PersistFailure::new(error, PersistFailureState::NotPublished));
         }
-        match self
-            .session
-            .persist(PersistRequest::new(target, options.clone()))
-        {
+        match self.session.persist(PersistRequest::new(target, options.clone())) {
             Ok(outcome) => {
                 if outcome.target() != target {
-                    self.lifecycle.record_failure(
-                        PersistFailureState::Indeterminate,
-                        Some(target.clone()),
-                        false,
-                    );
+                    self.lifecycle
+                        .record_failure(PersistFailureState::Indeterminate, Some(target.clone()), false);
                     return Err(PersistFailure::new(
                         FsError::new(
                             FsErrorKind::ProviderContractViolation,
@@ -149,13 +129,10 @@ impl TempFile {
                         PersistFailureState::PublishedSourceRetained,
                     ));
                 }
-                self.lifecycle
-                    .record_success(false, outcome.target().clone());
+                self.lifecycle.record_success(false, outcome.target().clone());
                 Ok(outcome)
             }
-            Err(failure) => {
-                Err(self.record_persist_failure(failure, target, FsOperation::PersistTemp))
-            }
+            Err(failure) => Err(self.record_persist_failure(failure, target, FsOperation::PersistTemp)),
         }
     }
     /// Publishes this temporary file to the provider-generated target.
@@ -167,28 +144,19 @@ impl TempFile {
         }
         match self.session.keep() {
             Ok(outcome) => {
-                if let Err(error) = self
-                    .filesystem
-                    .validate_temp_keep_target(&self.path, outcome.target())
-                {
+                if let Err(error) = self.filesystem.validate_temp_keep_target(&self.path, outcome.target()) {
                     self.lifecycle.record_failure(
                         PersistFailureState::Indeterminate,
                         Some(outcome.target().clone()),
                         true,
                     );
-                    return Err(PersistFailure::new(
-                        error,
-                        PersistFailureState::Indeterminate,
-                    ));
+                    return Err(PersistFailure::new(error, PersistFailureState::Indeterminate));
                 }
                 self.path = outcome.target().clone();
-                self.lifecycle
-                    .record_success(true, outcome.target().clone());
+                self.lifecycle.record_success(true, outcome.target().clone());
                 Ok(outcome)
             }
-            Err(failure) => {
-                Err(self.record_persist_failure(failure, &self.path.clone(), FsOperation::KeepTemp))
-            }
+            Err(failure) => Err(self.record_persist_failure(failure, &self.path.clone(), FsOperation::KeepTemp)),
         }
     }
     /// Cleans the source and releases the session responsibility.
@@ -212,8 +180,7 @@ impl TempFile {
         operation: FsOperation,
     ) -> PersistFailure {
         let (error, state) = failure.into_parts();
-        self.lifecycle
-            .record_failure(state, Some(target.clone()), false);
+        self.lifecycle.record_failure(state, Some(target.clone()), false);
         PersistFailure::new(
             error.with_operation(operation).with_missing_context(
                 &self.path,

@@ -255,10 +255,7 @@ impl AsyncFileWriter {
         if self.abort_completed
             || !matches!(
                 self.state,
-                WriterState::Open
-                    | WriterState::NotPublished
-                    | WriterState::Published
-                    | WriterState::Indeterminate
+                WriterState::Open | WriterState::NotPublished | WriterState::Published | WriterState::Indeterminate
             )
         {
             let error = self.invalid_state(
@@ -307,13 +304,8 @@ impl AsyncFileWriter {
 
     /// Checks whether a provider write can fit in the session budget.
     fn check_write_limit(&self, count: usize) -> IoResult<u64> {
-        let count = FacadeCore::quantity_from_usize(
-            count,
-            FsOperation::Write,
-            self.info.path(),
-            &self.provider,
-        )
-        .map_err(FsError::into_io_error)?;
+        let count = FacadeCore::quantity_from_usize(count, FsOperation::Write, self.info.path(), &self.provider)
+            .map_err(FsError::into_io_error)?;
         if let Some(budget) = &self.write_budget
             && let Err(error) = budget.check_available(count)
         {
@@ -335,13 +327,8 @@ impl AsyncFileWriter {
     /// Returns an I/O error when the native byte count or accumulated total
     /// cannot be represented by the filesystem API's `u64` byte counters.
     fn record_written_bytes(&mut self, count: usize) -> IoResult<()> {
-        let count = FacadeCore::quantity_from_usize(
-            count,
-            FsOperation::Write,
-            self.info.path(),
-            &self.provider,
-        )
-        .map_err(FsError::into_io_error)?;
+        let count = FacadeCore::quantity_from_usize(count, FsOperation::Write, self.info.path(), &self.provider)
+            .map_err(FsError::into_io_error)?;
         if let Some(error) = self
             .write_budget
             .as_mut()
@@ -408,11 +395,7 @@ impl AsyncOutput for AsyncFileWriter {
         }
         // SAFETY: The caller guarantees the same range contract required by
         // the wrapped asynchronous output session.
-        match unsafe {
-            this.session
-                .as_mut()
-                .poll_write_unchecked(cx, input, index, count)
-        } {
+        match unsafe { this.session.as_mut().poll_write_unchecked(cx, input, index, count) } {
             Poll::Ready(Ok(written)) => {
                 if let Err(error) = this.record_written_bytes(written) {
                     this.state = WriterState::Indeterminate;

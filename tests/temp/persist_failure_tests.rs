@@ -44,10 +44,7 @@ fn persist_failure_exposes_progress_cause_display_and_owned_error() {
         PersistFailureState::PublishedSourceRetained,
     );
 
-    assert_eq!(
-        PersistFailureState::PublishedSourceRetained,
-        failure.state(),
-    );
+    assert_eq!(PersistFailureState::PublishedSourceRetained, failure.state(),);
     assert_eq!(FsErrorKind::Io, failure.error().kind());
     assert!(failure.to_string().contains("PublishedSourceRetained"));
     assert!(failure.source().is_some());
@@ -79,11 +76,7 @@ fn persist_failure_debug_does_not_expand_secret_fs_error_source() {
 #[test]
 fn test_persist_failure_into_parts_preserves_error_and_state() {
     let failure = PersistFailure::new(
-        FsError::new(
-            FsErrorKind::Io,
-            FsOperation::PersistTemp,
-            "persistence lost its source",
-        ),
+        FsError::new(FsErrorKind::Io, FsOperation::PersistTemp, "persistence lost its source"),
         PersistFailureState::NotPublished,
     );
 

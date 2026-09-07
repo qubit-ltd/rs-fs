@@ -46,11 +46,7 @@ fn file_metadata_preserves_validated_provider_and_user_metadata() {
     assert!(provider.provider_metadata().contains_key("storage_class"));
     assert!(!format!("{provider:?}").contains("private-tier"));
 
-    assert!(
-        UserMetadata::new()
-            .with("access_token", "plaintext")
-            .is_err()
-    );
+    assert!(UserMetadata::new().with("access_token", "plaintext").is_err());
 }
 
 /// Verifies optional metadata builders and accessors preserve every value.
