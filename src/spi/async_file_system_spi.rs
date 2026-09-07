@@ -34,6 +34,7 @@ use super::StatRequest;
 use super::StatResponse;
 use crate::directory::CreateDirectoryOutcome;
 use crate::directory::DeleteOutcome;
+use crate::error::FsEffectState;
 use crate::error::FsError;
 use crate::error::FsErrorKind;
 use crate::error::FsOperation;
@@ -97,6 +98,11 @@ pub trait AsyncFileSystemSpi: Send + Sync {
 
     /// Asynchronously opens a writer.
     ///
+    /// An unsuccessful open must describe its external effects. Attach
+    /// `FsEffectState::Unchanged` only when no mutation occurred and no cleanup
+    /// responsibility remains. Missing evidence is conservatively indeterminate
+    /// in aggregate operations, including an `AlreadyExists` skip request.
+    ///
     /// # Parameters
     /// - `request`: Facade-validated writer request.
     ///
@@ -106,7 +112,9 @@ pub trait AsyncFileSystemSpi: Send + Sync {
     /// # Errors
     /// Resolves to the provider open failure with filesystem context.
     fn open_writer<'a>(&'a self, request: OpenWriterRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
-        Box::pin(async move { Err(unsupported(FsOperation::OpenWriter, request.path())) })
+        Box::pin(async move {
+            Err(unsupported(FsOperation::OpenWriter, request.path()).with_effect_state(FsEffectState::Unchanged))
+        })
     }
 
     /// Asynchronously creates a directory.

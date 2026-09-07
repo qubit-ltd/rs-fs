@@ -18,7 +18,7 @@
 //!
 //! ## Addressing a resource
 //!
-//! ```no_run
+//! ```rust
 //! use qubit_fs::Path;
 //!
 //! let path = Path::parse("/reports/2026/summary.csv")?;

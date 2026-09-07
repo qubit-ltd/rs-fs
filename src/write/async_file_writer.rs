@@ -25,9 +25,9 @@ use crate::error::FsEffectState;
 use crate::error::FsError;
 use crate::error::FsErrorKind;
 use crate::error::FsOperation;
-use crate::facade::facade_core::ByteBudget;
 use crate::facade::facade_core::FacadeCore;
-use crate::facade::facade_core::FileSystemResource;
+use crate::facade::internal::ByteBudget;
+use crate::facade::internal::FileSystemResource;
 use crate::metadata::AchievedAtomicity;
 use crate::metadata::AtomicityRequirement;
 use crate::metadata::DurabilityRequirement;
@@ -41,6 +41,28 @@ use crate::write::WriteFailureState;
 use crate::write::WriterState;
 
 /// Type-erased asynchronous provider write session associated with a file.
+///
+/// # Examples
+///
+/// This example uses an isolated in-memory provider fixture.
+///
+/// ```rust
+/// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
+/// # use support::*;
+/// # let (filesystem, _) = async_recording_spi::async_recording_file_system(Default::default());
+/// # poll_support::ready(async {
+/// use qubit_fs::Path;
+/// use qubit_fs::write::WriteOptions;
+/// use qubit_fs::write::WriterState;
+/// use qubit_io::AsyncOutput;
+///
+/// let mut writer = filesystem.open_writer(&Path::parse("/report")?, WriteOptions::default()).await?;
+/// writer.write_fully_async(b"bytes").await?;
+/// writer.commit_async().await?;
+/// assert_eq!(WriterState::Committed, writer.state());
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// # }).unwrap();
+/// ```
 pub struct AsyncFileWriter {
     /// Pinned provider write session.
     session: Pin<Box<dyn AsyncFileWriteSession>>,

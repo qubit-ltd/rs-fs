@@ -57,7 +57,6 @@ use crate::temp::AsyncTempFile;
 use crate::temp::PersistOptions;
 use crate::temp::TempOptions;
 use crate::write::AsyncFileWriter;
-use crate::write::AsyncWriteAllFailure;
 use crate::write::AsyncWriteAllOperation;
 use crate::write::AsyncWriteAllOperationFailure;
 use crate::write::WriteOptions;
@@ -66,6 +65,25 @@ use crate::write::WriteOptions;
 ///
 /// It validates provider boundaries, exposes asynchronous operations, and owns
 /// the cancellation-safe copy operation entry point.
+///
+/// # Examples
+///
+/// The example runs against an isolated in-memory fixture. Applications obtain
+/// their configured facade from a provider or registry integration.
+///
+/// ```rust
+/// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
+/// # use support::*;
+/// # let (filesystem, _) = async_recording_spi::async_recording_file_system(Default::default());
+/// # poll_support::ready(async {
+/// use qubit_fs::Path;
+/// use qubit_fs::read::ReadOptions;
+///
+/// let bytes = filesystem.read_prefix(&Path::parse("/report")?, ReadOptions::default(), 3).await?;
+/// assert_eq!(b"byt", bytes.as_slice());
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// # }).unwrap();
+/// ```
 #[derive(Clone)]
 pub struct AsyncFileSystem {
     /// Provider implementation receiving validated asynchronous requests.
@@ -196,36 +214,30 @@ impl AsyncFileSystem {
         ))
     }
 
-    /// Asynchronously writes all bytes and retains the writer on failure.
-    #[deprecated(
-        since = "0.3.0",
-        note = "use begin_write_all and retain the operation across cancellation"
-    )]
-    pub async fn write_all(
-        &self,
-        path: &Path,
-        bytes: &[u8],
-        options: WriteOptions,
-    ) -> Result<crate::metadata::WriteOutcome, AsyncWriteAllFailure> {
-        let mut operation = self
-            .begin_write_all(path.clone(), bytes, options)
-            .map_err(|failure| AsyncWriteAllFailure::new(failure.into_error(), None))?;
-        match operation.execute().await {
-            Ok(outcome) => Ok(outcome),
-            Err(failure) => Err(AsyncWriteAllFailure::new(
-                failure.into_error(),
-                operation.take_recovery_writer(),
-            )),
-        }
-    }
-
     /// Begins an owning asynchronous whole-file write operation.
-    pub fn begin_write_all<'a>(
-        &'a self,
+    ///
+    /// Moves `path`, `bytes`, and `options` into the request and retains a
+    /// clone of this filesystem. Construction performs no provider I/O.
+    /// Keep the operation outside the cancellation scope and cancel only
+    /// its `execute` future so publication facts and recovery
+    /// responsibility remain available.
+    ///
+    /// # Returns
+    ///
+    /// A ready operation that no longer borrows the caller's filesystem or
+    /// payload. The payload is released after execution ends or is cancelled.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `NotPublished` failure with zero confirmed bytes if the path,
+    /// capabilities, options, or payload size fail local validation. Rejected
+    /// construction consumes and releases the payload.
+    pub fn begin_write_all(
+        &self,
         path: Path,
-        bytes: &'a [u8],
+        bytes: Vec<u8>,
         options: WriteOptions,
-    ) -> Result<AsyncWriteAllOperation<'a>, AsyncWriteAllOperationFailure> {
+    ) -> Result<AsyncWriteAllOperation, AsyncWriteAllOperationFailure> {
         self.core.validate_write_request(&path, &options).map_err(|error| {
             AsyncWriteAllOperationFailure::new(error, crate::write::WriteFailureState::NotPublished, 0)
         })?;
@@ -239,7 +251,7 @@ impl AsyncFileSystem {
                     0,
                 )
             })?;
-        Ok(AsyncWriteAllOperation::new(self, path, bytes, options))
+        Ok(AsyncWriteAllOperation::new(self.clone(), path, bytes, options))
     }
 
     /// Asynchronously creates a directory after local validation.

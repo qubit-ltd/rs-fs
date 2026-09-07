@@ -27,6 +27,7 @@ use crate::copy::CopyFailureState;
 use crate::copy::CopyOptions;
 use crate::copy::CopyOutcome;
 use crate::copy::CopyStats;
+use crate::copy::internal::from_write_failure_state;
 use crate::error::FsError;
 use crate::error::FsErrorKind;
 use crate::error::FsOperation;
@@ -42,9 +43,32 @@ use crate::spi::SpiFuture;
 use crate::write::AsyncFileWriter;
 use crate::write::WriteDisposition;
 use crate::write::WriteOptions;
+use crate::write::internal::is_unchanged_open_failure;
+use crate::write::internal::open_failure_state;
 
 /// An owning copy request whose recovery writer remains accessible after
 /// failure.
+///
+/// # Examples
+///
+/// This example uses an isolated in-memory provider fixture.
+///
+/// ```rust
+/// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
+/// # use support::*;
+/// # let (filesystem, _) = async_recording_spi::async_recording_file_system(Default::default());
+/// # poll_support::ready(async {
+/// use qubit_fs::Path;
+/// use qubit_fs::copy::CopyOptions;
+///
+/// let mut operation = filesystem.begin_copy(
+///     Path::parse("/source")?, Path::parse("/target")?, CopyOptions::default(),
+/// )?;
+/// let outcome = operation.execute().await?;
+/// assert_eq!(5, outcome.stats().bytes);
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// # }).unwrap();
+/// ```
 pub struct AsyncCopyOperation {
     /// Facade used to validate and execute the pending operation.
     pub(crate) file_system: AsyncFileSystem,
@@ -351,7 +375,9 @@ fn stream_copy_fallback<'a>(
         match filesystem.open_writer(target, writer_options).await {
             Ok(writer) => *writer_slot = Some(Box::new(writer)),
             Err(error)
-                if error.kind() == FsErrorKind::AlreadyExists && options.conflict() == CopyConflictPolicy::Skip =>
+                if error.kind() == FsErrorKind::AlreadyExists
+                    && is_unchanged_open_failure(&error)
+                    && options.conflict() == CopyConflictPolicy::Skip =>
             {
                 return Ok(CopyOutcome::streamed_fallback(
                     CopyStats {
@@ -362,13 +388,8 @@ fn stream_copy_fallback<'a>(
                 ));
             }
             Err(error) => {
-                return Err(filesystem.contextual_copy_failure(
-                    error,
-                    CopyFailureState::Unchanged,
-                    CopyStats::default(),
-                    source,
-                    target,
-                ));
+                let state = from_write_failure_state(open_failure_state(&error));
+                return Err(filesystem.contextual_copy_failure(error, state, CopyStats::default(), source, target));
             }
         }
         if deadline.expired() {

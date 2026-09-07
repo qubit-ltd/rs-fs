@@ -21,6 +21,15 @@ use crate::write::WriteDisposition;
 use crate::write::WritePrecondition;
 
 /// Options controlling a write operation.
+///
+/// # Examples
+/// ```rust
+/// use qubit_fs::write::WriteOptions;
+/// use qubit_fs::metadata::AtomicityRequirement;
+/// use qubit_fs::metadata::FileSystemCapabilities;
+/// let options = WriteOptions::default().with_atomicity(AtomicityRequirement::Required);
+/// assert!(options.validate_against(FileSystemCapabilities::new()).is_err());
+/// ```
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub struct WriteOptions {

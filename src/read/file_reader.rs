@@ -17,6 +17,26 @@ use qubit_io::Input;
 use crate::metadata::OpenedFileInfo;
 
 /// Type-erased byte input explicitly associated with an opened file.
+///
+/// # Examples
+///
+/// The example runs against an isolated in-memory fixture. Applications obtain
+/// their configured facade from a provider or registry integration.
+///
+/// ```rust
+/// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
+/// # use support::*;
+/// # let filesystem = rustdoc_provider::filesystem();
+/// use qubit_fs::Path;
+/// use qubit_fs::read::ReadOptions;
+/// use qubit_io::Input;
+///
+/// let mut reader = filesystem.open_reader(&Path::parse("/report")?, ReadOptions::default())?;
+/// let mut prefix = [0; 3];
+/// assert_eq!(3, reader.read_fully(&mut prefix)?);
+/// assert_eq!(*b"rep", prefix);
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 pub struct FileReader {
     /// Provider byte input.
     inner: Box<dyn Input<Item = u8> + Send>,

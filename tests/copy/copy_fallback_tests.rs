@@ -27,6 +27,7 @@ use qubit_fs::copy::MetadataPreservePolicy;
 use qubit_fs::copy::ServerSidePreference;
 use qubit_fs::directory::CreateDirectoryOutcome;
 use qubit_fs::directory::DeleteOutcome;
+use qubit_fs::error::FsEffectState;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::error::FsOperation;
 use qubit_fs::metadata::AchievedAtomicity;
@@ -295,14 +296,14 @@ impl FileSystemSpi for RecordingSpi {
                 FsErrorKind::AlreadyExists,
                 FsOperation::OpenWriter,
                 "injected existing target",
-            ));
+            )
+            .with_effect_state(FsEffectState::Unchanged));
         }
         if matches!(self.response, CopyResponse::DeclinedWriterFailure) {
-            return Err(FsError::new(
-                FsErrorKind::Io,
-                FsOperation::OpenWriter,
-                "injected writer failure",
-            ));
+            return Err(
+                FsError::new(FsErrorKind::Io, FsOperation::OpenWriter, "injected writer failure")
+                    .with_effect_state(FsEffectState::Unchanged),
+            );
         }
         let opened_path = if matches!(self.response, CopyResponse::DeclinedWriterInvalidIdentity) {
             path("/wrong")
@@ -754,15 +755,18 @@ fn test_copy_declined_preserves_stream_and_writer_recovery_states() {
         );
     }
 
-    for response in [
-        CopyResponse::DeclinedWriterFailure,
-        CopyResponse::DeclinedWriterInvalidIdentity,
+    for (response, expected) in [
+        (CopyResponse::DeclinedWriterFailure, CopyFailureState::Unchanged),
+        (
+            CopyResponse::DeclinedWriterInvalidIdentity,
+            CopyFailureState::Indeterminate,
+        ),
     ] {
         let (filesystem, _, _) = recording_filesystem(response);
         let failure = filesystem
             .copy(&path("/source"), &path("/target"), CopyOptions::default())
             .expect_err("fallback writer failure should preserve recovery");
-        assert_eq!(CopyFailureState::Unchanged, failure.state());
+        assert_eq!(expected, failure.state());
         assert!(!failure.has_writer());
     }
 }

@@ -17,7 +17,7 @@ use crate::error::FsErrorKind;
 use crate::error::FsOperation;
 use crate::error::FsResult;
 use crate::facade::facade_core::FacadeCore;
-use crate::facade::facade_core::FileSystemResource;
+use crate::facade::internal::FileSystemResource;
 use crate::path::Path;
 use crate::read::ReadOptions;
 

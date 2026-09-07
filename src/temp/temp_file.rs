@@ -30,6 +30,24 @@ use crate::temp::TempResourceState;
 use crate::temp::internal::TempLifecycle;
 
 /// Temporary file retaining the provider session until its lifecycle completes.
+///
+/// # Examples
+///
+/// This example uses an isolated in-memory provider fixture.
+///
+/// ```rust
+/// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
+/// # use support::*;
+/// # let filesystem = rustdoc_provider::filesystem();
+/// use qubit_fs::temp::TempOptions;
+/// use qubit_fs::temp::TempResourceState;
+///
+/// let mut temporary = filesystem.create_temp_file(TempOptions::default())?;
+/// assert_eq!(TempResourceState::Owned, temporary.state());
+/// temporary.cleanup()?;
+/// assert_eq!(TempResourceState::Cleaned, temporary.state());
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 pub struct TempFile {
     /// Facade that owns validation and persistence policy.
     filesystem: FileSystem,

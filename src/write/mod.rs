@@ -10,16 +10,13 @@
 #[cfg(feature = "async")]
 mod async_file_writer;
 #[cfg(feature = "async")]
-mod async_write_all_failure;
-#[cfg(feature = "async")]
 mod async_write_all_operation;
 #[cfg(feature = "async")]
 mod async_write_all_operation_failure;
 #[cfg(feature = "async")]
 mod async_write_all_operation_state;
 mod file_writer;
-#[cfg(feature = "async")]
-mod internal;
+pub(crate) mod internal;
 mod write_abort_outcome;
 mod write_all_failure;
 mod write_disposition;
@@ -32,8 +29,6 @@ mod writer_state;
 
 #[cfg(feature = "async")]
 pub use async_file_writer::AsyncFileWriter;
-#[cfg(feature = "async")]
-pub use async_write_all_failure::AsyncWriteAllFailure;
 #[cfg(feature = "async")]
 pub use async_write_all_operation::AsyncWriteAllOperation;
 #[cfg(feature = "async")]

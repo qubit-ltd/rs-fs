@@ -21,6 +21,17 @@ use crate::error::FsOperation;
 use crate::error::FsResult;
 
 /// A validated logical path independent of any provider-native representation.
+///
+/// # Examples
+/// ```rust
+/// use qubit_fs::Path;
+/// use qubit_fs::path::RelativePath;
+/// let root = Path::parse("/reports")?;
+/// let report = root.join(&RelativePath::parse("daily.csv")?);
+/// assert_eq!("/reports/daily.csv", report.as_str());
+/// assert!(report.is_absolute());
+/// # Ok::<(), qubit_fs::FsError>(())
+/// ```
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Path {
     /// Whether this logical path starts at a provider root.

@@ -8,3 +8,5 @@
 //! Shared state and deterministic policy for filesystem facades.
 
 pub(crate) mod facade_core;
+
+pub(crate) mod internal;
