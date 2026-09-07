@@ -88,6 +88,7 @@ impl FileSystemCapabilities {
 
     /// Returns the support status of `capability`.
     #[inline(always)]
+    #[must_use]
     pub const fn support(&self, capability: FileSystemCapability) -> FileSystemCapabilitySupport {
         let bit = capability.bit();
         if self.guaranteed & bit != 0 {
@@ -163,7 +164,14 @@ impl FileSystemCapabilities {
         CAPABILITY_DEPENDENCIES
             .iter()
             .copied()
-            .find(|(capability, dependency)| self.supports(*capability) && !self.supports(*dependency))
+            .find(|(capability, dependency)| {
+                let capability_support = self.support(*capability);
+                let dependency_support = self.support(*dependency);
+                matches!(capability_support, FileSystemCapabilitySupport::Conditional)
+                    && matches!(dependency_support, FileSystemCapabilitySupport::Unsupported)
+                    || matches!(capability_support, FileSystemCapabilitySupport::Guaranteed)
+                        && !matches!(dependency_support, FileSystemCapabilitySupport::Guaranteed)
+            })
     }
 }
 
