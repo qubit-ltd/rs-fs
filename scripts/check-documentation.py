@@ -11,12 +11,15 @@ SOURCES = {
     'quick-start': FIXTURE / 'bin/quick_start.rs',
     'sync-recovery': FIXTURE / 'sync_recovery.rs',
     'async-recovery': FIXTURE / 'async_recovery.rs',
+    'provider-minimal': FIXTURE / 'provider_minimal.rs',
 }
 DOCUMENTS = {
     'README.md': {'quick-start'},
     'README.zh_CN.md': {'quick-start'},
-    'doc/user_guide.md': set(SOURCES),
-    'doc/user_guide.zh_CN.md': set(SOURCES),
+    'doc/user_guide.md': {'quick-start', 'sync-recovery', 'async-recovery'},
+    'doc/user_guide.zh_CN.md': {'quick-start', 'sync-recovery', 'async-recovery'},
+    'doc/provider_guide.md': {'provider-minimal'},
+    'doc/provider_guide.zh_CN.md': {'provider-minimal'},
 }
 PATTERN = re.compile(r'<!-- example: ([a-z-]+) -->\n```rust\n(.*?)\n```', re.S)
 
