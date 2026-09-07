@@ -1,0 +1,18 @@
+[package]
+name = "qubit-fs-documentation-examples"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.94"
+publish = false
+
+[workspace]
+
+[features]
+default = ["async"]
+async = []
+
+[dependencies]
+qubit-fs = { path = "../../..", features = ["async"] }
+qubit-fs-local = { path = "../../../../rs-fs-local" }
+qubit-io = "0.16"
+tempfile = "3"

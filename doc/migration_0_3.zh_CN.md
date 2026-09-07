@@ -1,5 +1,8 @@
 # qubit-fs 0.3 迁移指南
 
+> 本页仅适用于历史版本 0.3。当前 API 请参阅 [0.4 迁移指南](migration_0_4.zh_CN.md)。
+
+
 0.3 版把操作恢复事实明确暴露给调用方。同步 API 和旧的异步 `write_all` 保持兼容，同时新增一个拥有请求数据和恢复句柄的异步整文件写入操作，用于必须安全处理取消的调用方。
 
 ## effect 确定性与临时资源
@@ -8,7 +11,7 @@
 
 `PersistFailureState` 现在区分 source 是否仍由 handle 负责：
 
-```rust
+```text
 match failure.state() {
     PersistFailureState::NotPublished => { /* handle 仍负责清理 source */ }
     PersistFailureState::NotPublishedSourceReleased => { /* source 已释放 */ }
@@ -24,18 +27,7 @@ match failure.state() {
 
 如果调用方可能在 open、write、flush、commit 之间被取消，优先使用 `begin_write_all`：
 
-```rust
-let mut operation = filesystem.begin_write_all(path.clone(), bytes, options)?;
-match operation.execute().await {
-    Ok(outcome) => println!("published {} bytes", outcome.bytes_written().unwrap_or(0)),
-    Err(failure) => {
-        if let Some(mut writer) = operation.take_recovery_writer() {
-            let _ = writer.abort_async().await;
-        }
-        return Err(failure.into_error());
-    }
-}
-```
+当前代码请使用 [0.4 恢复示例](user_guide.zh_CN.md#异步写入与取消)，同时保留错误和 operation。0.3 API 借用数据；其取消恢复同样必须持续持有 operation，不能丢弃 abort 错误。
 
 `AsyncWriteAllOperationFailure` 携带状态和已确认的字节数。取消后如果 operation 保留 recovery writer，应显式 abort，并保留主错误与 abort 错误。旧的 `AsyncFileSystem::write_all` 仍作为兼容包装存在；需要恢复句柄时应迁移到拥有 operation 的入口。
 

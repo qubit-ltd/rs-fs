@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![中文文档](https://img.shields.io/badge/文档-中文版-blue.svg)](README.zh_CN.md)
 
-`qubit-fs` 0.3.0 is a provider-neutral, synchronous and asynchronous filesystem
+`qubit-fs` 0.4.0 is a provider-neutral, synchronous and asynchronous filesystem
 abstraction for Rust 1.94 or later. It supplies application-facing concrete
 facades—`FileSystem` and `AsyncFileSystem`—instead of choosing a storage backend
 or an async runtime for you.
@@ -19,14 +19,48 @@ public facade while allowing providers to be selected outside the core crate.
 
 ```toml
 [dependencies]
-qubit-fs = "0.3"
+qubit-fs = "0.4"
 ```
 
 Synchronous APIs are enabled by default. Enable the asynchronous facade
 explicitly when it is needed:
 
 ```toml
-qubit-fs = { version = "0.3", features = ["async"] }
+qubit-fs = { version = "0.4", features = ["async"] }
+```
+
+## Try a local report workflow
+
+A report job can keep its reads and writes on `FileSystem` while provider setup
+chooses the storage authority. This executable demo creates an isolated local
+root, writes a report, reads it with a 1 KiB limit, and prints `report ready`.
+The temporary directory is removed when the demo ends.
+
+```toml
+[dependencies]
+qubit-fs = "0.4"
+qubit-fs-local = "0.3"
+tempfile = "3"
+```
+
+<!-- example: quick-start -->
+```rust
+use qubit_fs::Path;
+use qubit_fs::read::ReadOptions;
+use qubit_fs::write::WriteOptions;
+use qubit_fs_local::LocalFileSystems;
+use qubit_fs_local::LocalResourcePolicy;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let directory = tempfile::tempdir()?;
+    let filesystem = LocalFileSystems::rooted(directory.path(), LocalResourcePolicy::unbounded())?;
+    let path = Path::parse("/report.txt")?;
+    filesystem.write_all(&path, b"report ready", WriteOptions::default())?;
+    let bytes = filesystem.read_all(&path, ReadOptions::default(), 1024)?;
+    assert_eq!(b"report ready", bytes.as_slice());
+    println!("{}", String::from_utf8(bytes)?);
+    Ok(())
+}
 ```
 
 ## What the facade makes explicit
@@ -49,7 +83,8 @@ qubit-fs = { version = "0.3", features = ["async"] }
 ## Start here
 
 - [English user guide](doc/user_guide.md)
-- [Migration guide for 0.3](doc/migration_0_3.md)
+- [Migration guide for 0.4](doc/migration_0_4.md)
+- [Architecture design](doc/file_system_design.md)
 - [中文用户指南](doc/user_guide.zh_CN.md)
 - [中文架构设计](doc/file_system_design.zh_CN.md)
 - [API reference](https://docs.rs/qubit-fs)

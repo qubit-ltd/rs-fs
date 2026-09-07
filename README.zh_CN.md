@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![English Document](https://img.shields.io/badge/Document-English-blue.svg)](README.md)
 
-`qubit-fs` 0.3.0 是 Rust 1.94 及以上版本可用的 provider-neutral 文件系统抽象，
+`qubit-fs` 0.4.0 是 Rust 1.94 及以上版本可用的 provider-neutral 文件系统抽象，
 同时提供同步和异步 API。它向应用提供具体门面 `FileSystem` 与
 `AsyncFileSystem`，但不会替应用选择存储后端或异步运行时。
 
@@ -17,13 +17,45 @@
 
 ```toml
 [dependencies]
-qubit-fs = "0.3"
+qubit-fs = "0.4"
 ```
 
 同步 API 默认启用。需要异步门面时必须显式开启 async feature：
 
 ```toml
-qubit-fs = { version = "0.3", features = ["async"] }
+qubit-fs = { version = "0.4", features = ["async"] }
+```
+
+## 运行一个本地报告示例
+
+报告任务通过 `FileSystem` 完成读写，由初始化代码选择存储位置。下面的完整示例创建独立的
+本地临时目录，写入报告，再以 1 KiB 上限读取，输出 `report ready`。退出时清理临时目录。
+
+```toml
+[dependencies]
+qubit-fs = "0.4"
+qubit-fs-local = "0.3"
+tempfile = "3"
+```
+
+<!-- example: quick-start -->
+```rust
+use qubit_fs::Path;
+use qubit_fs::read::ReadOptions;
+use qubit_fs::write::WriteOptions;
+use qubit_fs_local::LocalFileSystems;
+use qubit_fs_local::LocalResourcePolicy;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let directory = tempfile::tempdir()?;
+    let filesystem = LocalFileSystems::rooted(directory.path(), LocalResourcePolicy::unbounded())?;
+    let path = Path::parse("/report.txt")?;
+    filesystem.write_all(&path, b"report ready", WriteOptions::default())?;
+    let bytes = filesystem.read_all(&path, ReadOptions::default(), 1024)?;
+    assert_eq!(b"report ready", bytes.as_slice());
+    println!("{}", String::from_utf8(bytes)?);
+    Ok(())
+}
 ```
 
 ## 门面明确表达的语义
@@ -43,7 +75,7 @@ qubit-fs = { version = "0.3", features = ["async"] }
 ## 从这里开始
 
 - [English user guide](doc/user_guide.md)
-- [0.3 迁移指南](doc/migration_0_3.zh_CN.md)
+- [0.4 迁移指南](doc/migration_0_4.zh_CN.md)
 - [中文用户指南](doc/user_guide.zh_CN.md)
 - [中文架构设计](doc/file_system_design.zh_CN.md)
 - [API 文档](https://docs.rs/qubit-fs)
