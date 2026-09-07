@@ -23,6 +23,7 @@ use super::fallback_options_supported;
 use super::from_write_failure_state;
 use super::from_writer_state;
 use super::internal::CopyDeadline;
+use super::internal::fallback_write_options;
 use super::internal::from_completed_stats;
 use super::is_file_kind_supported;
 use super::validate_stream_copy_length_limits;
@@ -40,8 +41,6 @@ use crate::spi::CopyRequest;
 use crate::spi::ProviderOperation;
 use crate::spi::ResolvedCopyOptions;
 use crate::write::FileWriter;
-use crate::write::WriteDisposition;
-use crate::write::WriteOptions;
 use crate::write::internal::is_unchanged_open_failure;
 use crate::write::internal::open_failure_state;
 
@@ -248,9 +247,7 @@ impl<'a> CopyOperation<'a> {
         if let Some(error) = self.deadline_error() {
             return Err(self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None));
         }
-        let writer_options = WriteOptions::default()
-            .with_disposition(WriteDisposition::CreateNew)
-            .with_atomicity(self.options.atomicity());
+        let writer_options = fallback_write_options(&self.options);
         let mut writer = match self.filesystem.open_writer(self.target, writer_options) {
             Ok(writer) => writer,
             Err(error)
@@ -264,6 +261,7 @@ impl<'a> CopyOperation<'a> {
                         ..CopyStats::default()
                     },
                     AchievedAtomicity::NonAtomic,
+                    false,
                 ));
             }
             Err(error) => {
@@ -396,6 +394,7 @@ impl<'a> CopyOperation<'a> {
                             ..CopyStats::default()
                         },
                         AchievedAtomicity::NonAtomic,
+                        false,
                     ));
                 }
                 return Err(self.failure(
@@ -425,6 +424,7 @@ impl<'a> CopyOperation<'a> {
                 ..CopyStats::default()
             },
             write_outcome.atomicity(),
+            write_outcome.durable(),
         ))
     }
 

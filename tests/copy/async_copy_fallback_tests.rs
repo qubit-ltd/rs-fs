@@ -231,6 +231,28 @@ fn test_async_copy_fallback_does_not_require_copy_capability() {
 }
 
 #[test]
+fn test_async_stream_fallback_propagates_preferred_durability_and_reports_result() {
+    for writer_durable in [true, false] {
+        let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig {
+            decline_copy: true,
+            writer_durable,
+            ..AsyncRecordingConfig::default()
+        });
+        let mut operation = file_system
+            .begin_copy(
+                path("/source"),
+                path("/target"),
+                CopyOptions::default().with_durability(DurabilityRequirement::Preferred),
+            )
+            .expect("copy preflight should succeed");
+        let outcome = ready(operation.execute()).expect("stream fallback should succeed");
+        assert_eq!(DurabilityRequirement::Preferred, probe.writer_options()[0].durability());
+        assert_eq!(writer_durable, outcome.durable());
+        assert!(outcome.used_fallback());
+    }
+}
+
+#[test]
 fn test_async_native_path_does_not_apply_fallback_mode_restrictions() {
     let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig {
         completed_copy: Some(AchievedAtomicity::Atomic),

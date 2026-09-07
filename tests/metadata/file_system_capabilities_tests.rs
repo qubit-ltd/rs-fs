@@ -94,6 +94,27 @@ fn durable_write_depends_on_write() {
 }
 
 #[test]
+fn guaranteed_derived_capability_requires_guaranteed_dependency() {
+    let capabilities = FileSystemCapabilities::new()
+        .with_conditional(FileSystemCapability::Write)
+        .with_guaranteed(FileSystemCapability::DurableWrite);
+
+    assert_eq!(
+        Some((FileSystemCapability::DurableWrite, FileSystemCapability::Write)),
+        capabilities.missing_dependency(),
+    );
+}
+
+#[test]
+fn conditional_derived_capability_accepts_conditional_dependency() {
+    let capabilities = FileSystemCapabilities::new()
+        .with_conditional(FileSystemCapability::Write)
+        .with_conditional(FileSystemCapability::DurableWrite);
+
+    assert_eq!(None, capabilities.missing_dependency());
+}
+
+#[test]
 fn capability_set_reports_the_first_missing_dependency() {
     let capabilities = FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::AtomicRename);
 
@@ -150,6 +171,7 @@ fn capability_discriminants_remain_stable_for_capability_sets() {
         FileSystemCapability::DurableFileCopy,
         FileSystemCapability::DurableTreeCopy,
         FileSystemCapability::DurableRename,
+        FileSystemCapability::DurableWrite,
     ];
 
     for (expected, capability) in capabilities.into_iter().enumerate() {

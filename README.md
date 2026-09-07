@@ -83,9 +83,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ## Start here
 
 - [English user guide](doc/user_guide.md)
+- [English provider guide](doc/provider_guide.md)
+- [中文用户指南](doc/user_guide.zh_CN.md)
+- [中文 provider 指南](doc/provider_guide.zh_CN.md)
 - [Migration guide for 0.4](doc/migration_0_4.md)
 - [Architecture design](doc/file_system_design.md)
-- [中文用户指南](doc/user_guide.zh_CN.md)
 - [中文架构设计](doc/file_system_design.zh_CN.md)
 - [API reference](https://docs.rs/qubit-fs)
 

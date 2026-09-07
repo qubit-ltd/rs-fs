@@ -82,6 +82,7 @@ use qubit_fs::temp::PersistOutcome;
 use qubit_fs::write::WriteAbortOutcome;
 use qubit_fs::write::WriteFailure;
 use qubit_fs::write::WriteFailureState;
+use qubit_fs::write::WriteOptions;
 use qubit_io::AsyncInput;
 use qubit_io::AsyncOutput;
 
@@ -125,6 +126,7 @@ pub(crate) struct AsyncRecordingConfig {
     pub(crate) temp_keep_failure: bool,
     pub(crate) temp_create_error: bool,
     pub(crate) writer_atomicity: Option<AchievedAtomicity>,
+    pub(crate) writer_durable: bool,
     pub(crate) writer_commit_failure: Option<WriteFailureState>,
     pub(crate) writer_abort_failure: Option<FsErrorKind>,
     pub(crate) writer_open_error: Option<FsErrorKind>,
@@ -150,22 +152,41 @@ pub(crate) struct AsyncRecordingConfig {
 /// Exposes ordered provider call facts without leaking session internals.
 #[derive(Clone, Debug)]
 #[allow(dead_code)]
-pub(crate) struct AsyncRecordingProbe(Arc<Mutex<Vec<&'static str>>>, Arc<Mutex<usize>>, Arc<Mutex<usize>>);
+pub(crate) struct AsyncRecordingProbe {
+    calls: Arc<Mutex<Vec<&'static str>>>,
+    writer_cancellations: Arc<Mutex<usize>>,
+    temp_cancellations: Arc<Mutex<usize>>,
+    writer_options: Arc<Mutex<Vec<WriteOptions>>>,
+}
 impl AsyncRecordingProbe {
     /// Returns the calls observed so far.
     #[allow(dead_code)]
     pub(crate) fn calls(&self) -> Vec<&'static str> {
-        self.0.lock().expect("calls lock should succeed").clone()
+        self.calls.lock().expect("calls lock should succeed").clone()
     }
     /// Returns local writer cancellation notifications.
     #[allow(dead_code)]
     pub(crate) fn writer_cancellations(&self) -> usize {
-        *self.1.lock().expect("cancellation lock should succeed")
+        *self
+            .writer_cancellations
+            .lock()
+            .expect("cancellation lock should succeed")
     }
     /// Returns local temporary-resource cancellation notifications.
     #[allow(dead_code)]
     pub(crate) fn temp_cancellations(&self) -> usize {
-        *self.2.lock().expect("temporary cancellation lock should succeed")
+        *self
+            .temp_cancellations
+            .lock()
+            .expect("temporary cancellation lock should succeed")
+    }
+    /// Returns writer options observed by the provider.
+    #[allow(dead_code)]
+    pub(crate) fn writer_options(&self) -> Vec<WriteOptions> {
+        self.writer_options
+            .lock()
+            .expect("writer options lock should succeed")
+            .clone()
     }
 }
 
@@ -174,16 +195,19 @@ pub(crate) fn async_recording_file_system(config: AsyncRecordingConfig) -> (Asyn
     let calls = Arc::new(Mutex::new(Vec::new()));
     let cancellations = Arc::new(Mutex::new(0));
     let temp_cancellations = Arc::new(Mutex::new(0));
-    let probe = AsyncRecordingProbe(
-        Arc::clone(&calls),
-        Arc::clone(&cancellations),
-        Arc::clone(&temp_cancellations),
-    );
+    let writer_options = Arc::new(Mutex::new(Vec::new()));
+    let probe = AsyncRecordingProbe {
+        calls: Arc::clone(&calls),
+        writer_cancellations: Arc::clone(&cancellations),
+        temp_cancellations: Arc::clone(&temp_cancellations),
+        writer_options: Arc::clone(&writer_options),
+    };
     let file_system = AsyncFileSystem::from_spi(AsyncRecordingSpi {
         config,
         calls,
         cancellations,
         temp_cancellations,
+        writer_options,
     })
     .expect("recording async facade should construct");
     (file_system, probe)
@@ -195,6 +219,7 @@ struct AsyncRecordingSpi {
     calls: Arc<Mutex<Vec<&'static str>>>,
     cancellations: Arc<Mutex<usize>>,
     temp_cancellations: Arc<Mutex<usize>>,
+    writer_options: Arc<Mutex<Vec<WriteOptions>>>,
 }
 impl AsyncRecordingSpi {
     /// Records an SPI invocation.
@@ -315,7 +340,6 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
     }
     fn stat<'a>(&'a self, request: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
         self.record("stat");
-        let _ = request.options();
         if self.config.pending_stage == Some(AsyncCopyStage::Stat) {
             return Box::pin(std::future::pending());
         }
@@ -375,6 +399,10 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
     fn open_writer<'a>(&'a self, request: OpenWriterRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
         self.record("open_writer");
         let _ = request.options();
+        self.writer_options
+            .lock()
+            .expect("writer options lock should succeed")
+            .push(request.options().options().clone());
         if self.config.pending_stage == Some(AsyncCopyStage::OpenWriter) {
             return Box::pin(std::future::pending());
         }
@@ -671,7 +699,8 @@ impl AsyncFileWriteSession for RecordingWriter {
             Ok(WriteOutcome::new(
                 config.writer_atomicity.unwrap_or(AchievedAtomicity::NonAtomic),
                 PublicationMethod::StreamCopy,
-            ))
+            )
+            .with_durable(config.writer_durable))
         })
     }
     fn abort_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<WriteAbortOutcome>> {

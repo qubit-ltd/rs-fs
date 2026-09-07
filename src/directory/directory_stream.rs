@@ -26,6 +26,26 @@ use crate::path::Path;
 use crate::spi::DirectoryStreamSpi;
 
 /// Type-erased synchronous directory enumeration handle.
+///
+/// The stream validates every provider entry against the requested root and
+/// listing options before returning it to the caller.
+///
+/// # Examples
+///
+/// This helper demonstrates the normal bounded-listing workflow without
+/// requiring a concrete provider in the documentation build.
+///
+/// ```
+/// # use qubit_fs::{FileSystem, FsResult, Path};
+/// # use qubit_fs::directory::ListOptions;
+/// # fn visit(filesystem: &FileSystem, root: &Path) -> FsResult<()> {
+/// let mut stream = filesystem.list(root, ListOptions::default())?;
+/// while let Some(entry) = stream.next_entry()? {
+///     println!("{}", entry.path);
+/// }
+/// # Ok(())
+/// # }
+/// ```
 pub struct DirectoryStream {
     /// Provider enumeration session.
     session: Box<dyn DirectoryStreamSpi>,
