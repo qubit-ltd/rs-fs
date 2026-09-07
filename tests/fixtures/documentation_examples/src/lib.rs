@@ -1,6 +1,7 @@
 //! Executable guide examples; this fixture is separate from production
 //! dependencies.
 pub mod async_recovery;
+pub mod provider_minimal;
 pub mod sync_recovery;
 
 #[cfg(test)]
