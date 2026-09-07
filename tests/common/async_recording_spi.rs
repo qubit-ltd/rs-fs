@@ -82,6 +82,7 @@ use qubit_fs::temp::PersistOutcome;
 use qubit_fs::write::WriteAbortOutcome;
 use qubit_fs::write::WriteFailure;
 use qubit_fs::write::WriteFailureState;
+use qubit_fs::write::WriteOptions;
 use qubit_io::AsyncInput;
 use qubit_io::AsyncOutput;
 
@@ -125,6 +126,7 @@ pub(crate) struct AsyncRecordingConfig {
     pub(crate) temp_keep_failure: bool,
     pub(crate) temp_create_error: bool,
     pub(crate) writer_atomicity: Option<AchievedAtomicity>,
+    pub(crate) writer_durable: bool,
     pub(crate) writer_commit_failure: Option<WriteFailureState>,
     pub(crate) writer_abort_failure: Option<FsErrorKind>,
     pub(crate) writer_open_error: Option<FsErrorKind>,
@@ -150,40 +152,66 @@ pub(crate) struct AsyncRecordingConfig {
 /// Exposes ordered provider call facts without leaking session internals.
 #[derive(Clone, Debug)]
 #[allow(dead_code)]
-pub(crate) struct AsyncRecordingProbe(Arc<Mutex<Vec<&'static str>>>, Arc<Mutex<usize>>, Arc<Mutex<usize>>);
+pub(crate) struct AsyncRecordingProbe {
+    calls: Arc<Mutex<Vec<&'static str>>>,
+    writer_cancellations: Arc<Mutex<usize>>,
+    temp_cancellations: Arc<Mutex<usize>>,
+    writer_options: Arc<Mutex<Vec<WriteOptions>>>,
+}
 impl AsyncRecordingProbe {
     /// Returns the calls observed so far.
     #[allow(dead_code)]
     pub(crate) fn calls(&self) -> Vec<&'static str> {
-        self.0.lock().expect("calls lock should succeed").clone()
+        self.calls
+            .lock()
+            .expect("calls lock should succeed")
+            .clone()
     }
     /// Returns local writer cancellation notifications.
     #[allow(dead_code)]
     pub(crate) fn writer_cancellations(&self) -> usize {
-        *self.1.lock().expect("cancellation lock should succeed")
+        *self
+            .writer_cancellations
+            .lock()
+            .expect("cancellation lock should succeed")
     }
     /// Returns local temporary-resource cancellation notifications.
     #[allow(dead_code)]
     pub(crate) fn temp_cancellations(&self) -> usize {
-        *self.2.lock().expect("temporary cancellation lock should succeed")
+        *self
+            .temp_cancellations
+            .lock()
+            .expect("temporary cancellation lock should succeed")
+    }
+    /// Returns writer options observed by the provider.
+    pub(crate) fn writer_options(&self) -> Vec<WriteOptions> {
+        self.writer_options
+            .lock()
+            .expect("writer options lock should succeed")
+            .clone()
     }
 }
 
 /// Creates an async facade with controllable fallback and temporary sessions.
-pub(crate) fn async_recording_file_system(config: AsyncRecordingConfig) -> (AsyncFileSystem, AsyncRecordingProbe) {
+pub(crate) fn async_recording_file_system(
+    config: AsyncRecordingConfig,
+) -> (AsyncFileSystem, AsyncRecordingProbe) {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let cancellations = Arc::new(Mutex::new(0));
     let temp_cancellations = Arc::new(Mutex::new(0));
-    let probe = AsyncRecordingProbe(
-        Arc::clone(&calls),
-        Arc::clone(&cancellations),
-        Arc::clone(&temp_cancellations),
-    );
+    let writer_options = Arc::new(Mutex::new(Vec::new()));
+    let probe = AsyncRecordingProbe {
+        calls: Arc::clone(&calls),
+        writer_cancellations: Arc::clone(&cancellations),
+        temp_cancellations: Arc::clone(&temp_cancellations),
+        writer_options: Arc::clone(&writer_options),
+    };
     let file_system = AsyncFileSystem::from_spi(AsyncRecordingSpi {
         config,
         calls,
         cancellations,
         temp_cancellations,
+        writer_options,
     })
     .expect("recording async facade should construct");
     (file_system, probe)
@@ -195,11 +223,15 @@ struct AsyncRecordingSpi {
     calls: Arc<Mutex<Vec<&'static str>>>,
     cancellations: Arc<Mutex<usize>>,
     temp_cancellations: Arc<Mutex<usize>>,
+    writer_options: Arc<Mutex<Vec<WriteOptions>>>,
 }
 impl AsyncRecordingSpi {
     /// Records an SPI invocation.
     fn record(&self, call: &'static str) {
-        self.calls.lock().expect("calls lock should succeed").push(call);
+        self.calls
+            .lock()
+            .expect("calls lock should succeed")
+            .push(call);
     }
     /// Builds the property snapshot used by tests.
     fn properties_for(&self) -> ProviderProperties {
@@ -216,7 +248,10 @@ impl AsyncRecordingSpi {
         ] {
             let omitted = self.config.omitted_capability == Some(capability)
                 || (self.config.omit_read_and_write
-                    && matches!(capability, FileSystemCapability::Read | FileSystemCapability::Write));
+                    && matches!(
+                        capability,
+                        FileSystemCapability::Read | FileSystemCapability::Write
+                    ));
             if !omitted {
                 capabilities = capabilities.with_guaranteed(capability);
             }
@@ -288,7 +323,8 @@ impl AsyncRecordingSpi {
         } else {
             FileSystemId::new("async-recording").expect("test id should be valid")
         };
-        OpenedFileInfo::new(id, path.clone()).with_metadata(FileMetadata::new(FileKind::File).with_len(Some(5)))
+        OpenedFileInfo::new(id, path.clone())
+            .with_metadata(FileMetadata::new(FileKind::File).with_len(Some(5)))
     }
     /// Returns a temporary identity, optionally invalid for boundary testing.
     fn temp_info(&self, kind: FileKind) -> OpenedFileInfo {
@@ -315,7 +351,6 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
     }
     fn stat<'a>(&'a self, request: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
         self.record("stat");
-        let _ = request.options();
         if self.config.pending_stage == Some(AsyncCopyStage::Stat) {
             return Box::pin(std::future::pending());
         }
@@ -331,7 +366,8 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
                 ))
             });
         }
-        let mut metadata = FileMetadata::new(self.config.stat_kind.clone().unwrap_or(FileKind::File));
+        let mut metadata =
+            FileMetadata::new(self.config.stat_kind.clone().unwrap_or(FileKind::File));
         metadata = metadata.with_len(Some(5));
         let path = if self.config.invalid_stat_path {
             Path::parse("/different").expect("test path should parse")
@@ -340,7 +376,10 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
         };
         Box::pin(async move { Ok(StatResponse::new(path, metadata)) })
     }
-    fn list<'a>(&'a self, request: ListRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncDirectoryStream>> {
+    fn list<'a>(
+        &'a self,
+        request: ListRequest<'a>,
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncDirectoryStream>> {
         let _ = request.path();
         let _ = request.options();
         if self.config.list_open_error {
@@ -349,13 +388,15 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
         let entries = self.config.directory_entries.clone();
         let fail = self.config.directory_error;
         Box::pin(async move {
-            Ok(OpenedAsyncDirectoryStream::new(Box::new(RecordingDirectorySession {
-                entries,
-                fail,
-            })))
+            Ok(OpenedAsyncDirectoryStream::new(Box::new(
+                RecordingDirectorySession { entries, fail },
+            )))
         })
     }
-    fn open_reader<'a>(&'a self, request: OpenReaderRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
+    fn open_reader<'a>(
+        &'a self,
+        request: OpenReaderRequest<'a>,
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
         self.record("open_reader");
         let _ = request.options();
         if self.config.pending_stage == Some(AsyncCopyStage::OpenReader) {
@@ -367,14 +408,27 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
         let info = self.info(request.path());
         let config = self.config.clone();
         Box::pin(async move {
-            let opened = OpenedAsyncReader::new(info, Box::new(RecordingInput { position: 0, config }));
+            let opened = OpenedAsyncReader::new(
+                info,
+                Box::new(RecordingInput {
+                    position: 0,
+                    config,
+                }),
+            );
             let _ = opened.info();
             Ok(opened)
         })
     }
-    fn open_writer<'a>(&'a self, request: OpenWriterRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
+    fn open_writer<'a>(
+        &'a self,
+        request: OpenWriterRequest<'a>,
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
         self.record("open_writer");
         let _ = request.options();
+        self.writer_options
+            .lock()
+            .expect("writer options lock should succeed")
+            .push(request.options().options().clone());
         if self.config.pending_stage == Some(AsyncCopyStage::OpenWriter) {
             return Box::pin(std::future::pending());
         }
@@ -383,7 +437,11 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
         }
         if let Some(kind) = self.config.writer_open_error {
             return Box::pin(async move {
-                let error = FsError::new(kind, FsOperation::OpenWriter, "injected writer-open failure");
+                let error = FsError::new(
+                    kind,
+                    FsOperation::OpenWriter,
+                    "injected writer-open failure",
+                );
                 Err(match self.config.writer_open_effect {
                     Some(effect) => error.with_effect_state(effect),
                     None => error,
@@ -418,7 +476,10 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
         let already_existed = self.config.create_directory_already_existed;
         Box::pin(async move { Ok(CreateDirectoryOutcome::new(already_existed)) })
     }
-    fn delete_file<'a>(&'a self, request: DeleteFileRequest<'a>) -> SpiFuture<'a, FsResult<DeleteOutcome>> {
+    fn delete_file<'a>(
+        &'a self,
+        request: DeleteFileRequest<'a>,
+    ) -> SpiFuture<'a, FsResult<DeleteOutcome>> {
         self.record("delete_file");
         let _ = request.path();
         let _ = request.options();
@@ -428,7 +489,10 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
         let already_missing = self.config.delete_already_missing;
         Box::pin(async move { Ok(DeleteOutcome::new(already_missing)) })
     }
-    fn delete_directory<'a>(&'a self, request: DeleteDirectoryRequest<'a>) -> SpiFuture<'a, FsResult<DeleteOutcome>> {
+    fn delete_directory<'a>(
+        &'a self,
+        request: DeleteDirectoryRequest<'a>,
+    ) -> SpiFuture<'a, FsResult<DeleteOutcome>> {
         self.record("delete_directory");
         let _ = request.path();
         let _ = request.options();
@@ -438,7 +502,10 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
         let already_missing = self.config.delete_already_missing;
         Box::pin(async move { Ok(DeleteOutcome::new(already_missing)) })
     }
-    fn try_copy<'a>(&'a self, request: CopyRequest<'a>) -> SpiFuture<'a, Result<CopyAttempt, SpiCopyFailure>> {
+    fn try_copy<'a>(
+        &'a self,
+        request: CopyRequest<'a>,
+    ) -> SpiFuture<'a, Result<CopyAttempt, SpiCopyFailure>> {
         self.record("try_copy");
         let _ = request.source();
         let _ = request.target();
@@ -469,11 +536,19 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
         }
         Box::pin(async { Ok(CopyAttempt::Declined(CopyDeclineReason::NotApplicable)) })
     }
-    fn rename<'a>(&'a self, request: RenameRequest<'a>) -> SpiFuture<'a, Result<RenameOutcome, SpiRenameFailure>> {
+    fn rename<'a>(
+        &'a self,
+        request: RenameRequest<'a>,
+    ) -> SpiFuture<'a, Result<RenameOutcome, SpiRenameFailure>> {
         self.record("rename");
         let _ = request.options();
         if self.config.rename_error {
-            return Box::pin(async { Err(SpiRenameFailure::new(unused(), RenameFailureState::Indeterminate)) });
+            return Box::pin(async {
+                Err(SpiRenameFailure::new(
+                    unused(),
+                    RenameFailureState::Indeterminate,
+                ))
+            });
         }
         if let Some(atomicity) = self.config.rename_atomicity {
             let source = request.source().clone();
@@ -495,9 +570,17 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
                 ))
             });
         }
-        Box::pin(async { Err(SpiRenameFailure::new(unused(), RenameFailureState::Unchanged)) })
+        Box::pin(async {
+            Err(SpiRenameFailure::new(
+                unused(),
+                RenameFailureState::Unchanged,
+            ))
+        })
     }
-    fn create_temp_file<'a>(&'a self, request: CreateTempFileRequest) -> SpiFuture<'a, FsResult<OpenedAsyncTempFile>> {
+    fn create_temp_file<'a>(
+        &'a self,
+        request: CreateTempFileRequest,
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncTempFile>> {
         self.record("create_temp_file");
         let _ = request.options();
         if self.config.temp_create_error {
@@ -632,7 +715,11 @@ impl AsyncOutput for RecordingWriter {
         }
         let mut accepted = count.min(config.writer_chunk.unwrap_or(count));
         if pending || failing {
-            accepted = accepted.min(config.writer_progress_before_stop.saturating_sub(this.confirmed));
+            accepted = accepted.min(
+                config
+                    .writer_progress_before_stop
+                    .saturating_sub(this.confirmed),
+            );
         }
         this.confirmed += accepted;
         Poll::Ready(Ok(accepted))
@@ -650,7 +737,9 @@ impl AsyncOutput for RecordingWriter {
     }
 }
 impl AsyncFileWriteSession for RecordingWriter {
-    fn commit_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
+    fn commit_async<'a>(
+        self: Pin<&'a mut Self>,
+    ) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
         let config = self.get_mut().config.clone();
         if config.pending_stage == Some(AsyncCopyStage::WriterCommit) {
             return Box::pin(std::future::pending());
@@ -658,33 +747,48 @@ impl AsyncFileWriteSession for RecordingWriter {
         Box::pin(async move {
             if let Some(state) = config.writer_commit_failure {
                 return Err(WriteFailure::new(
-                    FsError::new(FsErrorKind::Io, FsOperation::CommitWriter, "injected commit failure"),
+                    FsError::new(
+                        FsErrorKind::Io,
+                        FsOperation::CommitWriter,
+                        "injected commit failure",
+                    ),
                     state,
                 ));
             }
             if config.failing_stage == Some(AsyncCopyStage::WriterCommit) {
                 return Err(WriteFailure::new(
-                    FsError::new(FsErrorKind::Io, FsOperation::CommitWriter, "injected commit failure"),
+                    FsError::new(
+                        FsErrorKind::Io,
+                        FsOperation::CommitWriter,
+                        "injected commit failure",
+                    ),
                     WriteFailureState::NotPublished,
                 ));
             }
             Ok(WriteOutcome::new(
-                config.writer_atomicity.unwrap_or(AchievedAtomicity::NonAtomic),
+                config
+                    .writer_atomicity
+                    .unwrap_or(AchievedAtomicity::NonAtomic),
                 PublicationMethod::StreamCopy,
-            ))
+            )
+            .with_durable(config.writer_durable))
         })
     }
     fn abort_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<WriteAbortOutcome>> {
         let config = self.get_mut().config.clone();
         Box::pin(async move {
             match config.writer_abort_failure {
-                Some(kind) => Err(FsError::new(kind, FsOperation::AbortWriter, "injected abort failure")),
+                Some(kind) => Err(FsError::new(
+                    kind,
+                    FsOperation::AbortWriter,
+                    "injected abort failure",
+                )),
                 None => Ok(match config.writer_commit_failure {
                     Some(WriteFailureState::Published) => WriteAbortOutcome::Published,
                     Some(WriteFailureState::Indeterminate) => WriteAbortOutcome::Indeterminate,
-                    Some(WriteFailureState::RetryableNotPublished) | Some(WriteFailureState::NotPublished) | None => {
-                        WriteAbortOutcome::NotPublished
-                    }
+                    Some(WriteFailureState::RetryableNotPublished)
+                    | Some(WriteFailureState::NotPublished)
+                    | None => WriteAbortOutcome::NotPublished,
                 }),
             }
         })
@@ -711,7 +815,10 @@ struct RecordingTempSession {
 impl RecordingTempSession {
     /// Records one temporary lifecycle call.
     fn record(&self, call: &'static str) {
-        self.calls.lock().expect("calls lock should succeed").push(call);
+        self.calls
+            .lock()
+            .expect("calls lock should succeed")
+            .push(call);
     }
 }
 impl AsyncTempResourceSpi for RecordingTempSession {
@@ -739,13 +846,19 @@ impl AsyncTempResourceSpi for RecordingTempSession {
             }
         })
     }
-    fn keep<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<PersistOutcome, SpiPersistFailure>> {
+    fn keep<'a>(
+        self: Pin<&'a mut Self>,
+    ) -> SpiFuture<'a, Result<PersistOutcome, SpiPersistFailure>> {
         self.as_ref().get_ref().record("keep");
         let keep_failure = self.as_ref().get_ref().keep_failure;
         Box::pin(async move {
             if keep_failure {
                 Err(SpiPersistFailure::new(
-                    FsError::new(FsErrorKind::Io, FsOperation::KeepTemp, "injected keep failure"),
+                    FsError::new(
+                        FsErrorKind::Io,
+                        FsOperation::KeepTemp,
+                        "injected keep failure",
+                    ),
                     PersistFailureState::NotPublished,
                 ))
             } else {
@@ -773,7 +886,11 @@ impl AsyncTempResourceSpi for RecordingTempSession {
         Box::pin(async move {
             if let Some(state) = failure {
                 return Err(SpiPersistFailure::new(
-                    FsError::new(FsErrorKind::Io, FsOperation::PersistTemp, "injected persist failure"),
+                    FsError::new(
+                        FsErrorKind::Io,
+                        FsOperation::PersistTemp,
+                        "injected persist failure",
+                    ),
                     state,
                 ));
             }
@@ -789,7 +906,10 @@ impl AsyncTempResourceSpi for RecordingTempSession {
             }
             Ok(PersistOutcome::new(
                 target,
-                self.as_ref().get_ref().atomicity.unwrap_or(AchievedAtomicity::Atomic),
+                self.as_ref()
+                    .get_ref()
+                    .atomicity
+                    .unwrap_or(AchievedAtomicity::Atomic),
                 PublicationMethod::AtomicRename,
             ))
         })
@@ -798,5 +918,9 @@ impl AsyncTempResourceSpi for RecordingTempSession {
 
 /// Builds an error for unsupported provider methods outside this test scope.
 fn unused() -> FsError {
-    FsError::new(FsErrorKind::UnsupportedOperation, FsOperation::Other, "unused")
+    FsError::new(
+        FsErrorKind::UnsupportedOperation,
+        FsOperation::Other,
+        "unused",
+    )
 }
