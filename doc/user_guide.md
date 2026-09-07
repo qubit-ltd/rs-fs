@@ -1,299 +1,291 @@
 # Qubit FS User Guide
 
-`qubit-fs` 0.3.0 is a provider-neutral filesystem abstraction for Rust 1.94 or
-later. It provides synchronous and asynchronous application facades without a
-storage backend or an async-runtime dependency.
+[中文指南](user_guide.zh_CN.md) · [README](../README.md)
 
-## Purpose and audience
+This guide covers `qubit-fs` 0.4 for Rust 1.94 and later. It is for applications
+that publish reports through a configured filesystem and need to retain recovery
+facts when a write, copy, or cancellation does not complete normally.
 
-This guide is for application developers who need a configured filesystem but
-do not want to couple filesystem operations to a provider implementation. It
-explains how to use `FileSystem` and `AsyncFileSystem`, and how to make safe
-decisions after an operation reports a recoverable failure.
+## Model and setup
 
-Providers implement extension contracts in `qubit_fs::spi`. Provider discovery,
-configuration, and credentials belong to `qubit-fs-registry`; the core crate
-does not discover a provider or select a runtime by itself.
+`FileSystem` and `AsyncFileSystem` are concrete application facades. Providers
+implement `qubit_fs::spi`; registry discovery, configuration, and credentials
+belong to `qubit-fs-registry`. The core has no backend and no async runtime.
+`qubit-fs-local` supplies a synchronous host or rooted local filesystem.
 
-## Conceptual model
+`FileSystemProperties` is an immutable snapshot of identity, effective
+capabilities, limits, path constraints, and symlink policy. Reading it performs
+no I/O. Successful registry resolution validates static constraints; it does not
+prove that a resource exists or that future I/O will succeed.
 
-```text
-application
-  │  uses FileSystem / AsyncFileSystem and logical Path values
-  ▼
-qubit-fs facade ─────────────► handles, options, outcomes, typed failures
-  │
-  └── qubit_fs::spi ◄──────── provider implementation
+| Concept | Meaning |
+| --- | --- |
+| `Path` | Logical name in one configured filesystem; hierarchical and object-key namespaces have distinct semantics. |
+| `Uri` | Secret-free canonical location interpreted with filesystem context; username-only authority is allowed, passwords, sensitive query fields and fragments are rejected. |
+| `ConnectionUri` | Configuration ingress that can retain credentials; `Display` and `Debug` redact them. |
+| Publication | Whether the requested target data became visible. |
+| Cleanup | Whether staging/source resources have been released; this does not prove target rollback. |
+| Recovery handle | Ownership of a session still needing a decision; its absence does not prove no side effects. |
 
-qubit-fs-registry ───────────► provider discovery, configuration, credentials
-```
+The default feature set is empty and provides synchronous APIs. Enable
+`qubit-fs = { version = "0.4", features = ["async"] }` for asynchronous APIs.
+The application chooses its executor; the library does not require Tokio.
 
-A `FileSystem` or `AsyncFileSystem` is one configured filesystem. A provider
-may yield several facades when its endpoint, bucket, root, region, or credential
-profile differs. `FileSystemProperties` is an immutable snapshot of identity,
-capabilities, limits, path constraints, and the provider-declared symbolic-link
-policy; reading it performs no I/O. `ListOptions` and `CopyOptions` can provide
-an operation-scoped `SymlinkPolicy` override. The portable abstraction supports
-`Reject` and `FollowWithinFileSystem`; providers map the latter to their own
-namespace or root boundary.
-
-Every facade operation validates a `Path` against the configured filesystem's
-path semantics, accepted form, and declared limits before provider I/O. A
-registry resolution applies the same static validation; a successful resolution
-does not imply that `stat` or any other I/O has run.
-
-### Names, addresses, and secrets
-
-| Type | Role | Credential boundary |
-| --- | --- | --- |
-| `Path` | Validated logical name inside one configured filesystem | Not a cross-filesystem address; facade operations also validate it against that filesystem's constraints. |
-| `Uri` | Canonical, secret-free resource location for persistence and selection | It is interpreted within a configured filesystem context; rejects userinfo, credential-like query fields, and fragments while preserving RFC 3986 lexical distinctions. |
-| `ConnectionUri` | Registry/configuration ingress | May carry connection credentials, but `Display` and `Debug` redact them. Do not log or persist the original connection text. |
-
-An ordinary `Uri` is a resource location only when interpreted with its
-configured filesystem context. It does not contain filesystem identity and
-cannot resolve a cross-provider location by itself; registry resolution binds
-the facade, provider-local `Path`, and canonical `Uri` together.
-
-`ConnectionUri` lets the registry or provider consume credentials at a controlled
-boundary and create a safe canonical `Uri`. It may retain the original text
-internally for that controlled operation, but `try_to_uri` succeeds only after
-all sensitive components have been removed. Its `expose_unredacted` callback
-is for the same controlled boundary and must not feed logging, serialization,
-metadata, errors, or cache keys.
-
-Provider-specific credential fields that `qubit-fs` cannot recognize remain the
-provider's responsibility: the provider must consume or remove them before
-constructing a canonical `Uri` and keep their secret values in its private
-credential handling.
-
-Default parsing uses the fixed standard redaction policy. This policy is a
-non-removable safety floor: `parse_with_policy` always applies it, and an
-explicit policy can only add provider-specific sensitive query names. It cannot
-make a standard sensitive component acceptable. Applications with additional
-sensitive query names must pass an explicit policy snapshot through
-`Uri::parse_with_policy` or `ConnectionUri::parse_with_policy`; the
-`ConnectionUri` snapshot is also used for later secret classification and
-redacted formatting.
-
-## Install and obtain a facade
+For the runnable local example, use:
 
 ```toml
 [dependencies]
-qubit-fs = "0.3.0"
+qubit-fs = "0.4"
+qubit-fs-local = "0.3"
+tempfile = "3"
 ```
 
-The `async` feature is enabled by default. A synchronous-only application can
-disable default features to avoid compiling the asynchronous facade and SPI:
+## Publish and read a report
 
-```toml
-qubit-fs = { version = "0.2.0", default-features = false }
-```
+Put the following in `src/main.rs` and run `cargo run`. The example isolates its
+files in a temporary rooted filesystem, writes a report, reads at most 1024 bytes,
+and prints `report ready`. `tempfile` is only a convenience for this demo's root.
+In an application, construct the provider with its configured existing root and
+choose explicit resource budgets for the workload.
 
-Obtain a configured `FileSystem` or `AsyncFileSystem` from provider setup or a
-registry integration. The following public construction boundary is useful to
-provider implementations and focused tests:
+<!-- example: quick-start -->
+```rust
+use qubit_fs::Path;
+use qubit_fs::read::ReadOptions;
+use qubit_fs::write::WriteOptions;
+use qubit_fs_local::LocalFileSystems;
+use qubit_fs_local::LocalResourcePolicy;
 
-```rust,ignore
-use qubit_fs::{FileSystem, Path, ReadOptions};
-use qubit_fs::spi::FileSystemSpi;
-
-fn inspect<S: FileSystemSpi + 'static>(provider: S) -> qubit_fs::FsResult<()> {
-    let fs = FileSystem::from_spi(provider)?;
-    let report = Path::parse("/reports/2026/summary.csv")?;
-    let _metadata = fs.stat(&report)?;
-    let _reader = fs.open_reader(&report, ReadOptions::default())?;
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let directory = tempfile::tempdir()?;
+    let filesystem = LocalFileSystems::rooted(directory.path(), LocalResourcePolicy::unbounded())?;
+    let path = Path::parse("/report.txt")?;
+    filesystem.write_all(&path, b"report ready", WriteOptions::default())?;
+    let bytes = filesystem.read_all(&path, ReadOptions::default(), 1024)?;
+    assert_eq!(b"report ready", bytes.as_slice());
+    println!("{}", String::from_utf8(bytes)?);
     Ok(())
 }
 ```
 
-Application code should remain on `FileSystem` and `AsyncFileSystem`. Provider
-traits, requests, sessions, and envelopes are under `qubit_fs::spi`.
+Logical `/report.txt` is inside that root; it is not the host path `/report.txt`.
+Use `host_path_to_logical` from `qubit-fs-local` when converting a native host
+path. Do not feed arbitrary OS path text through logical path parsing.
 
-## A real workflow: publish a daily report
+For larger data, use `open_reader` or `open_writer` and bounded chunks.
+`read_all` requires a byte limit and applies it to the selected range, rather
+than the entire metadata length. `read_prefix` bounds the returned prefix.
+Commit a writer explicitly; flushing alone does not confirm publication.
 
-Suppose a job copies a completed report to a release location and then enumerates
-the release directory for downstream work. The decision after failure depends on
-what its typed state proves—not merely on whether an error occurred.
+## Copy and retain recovery responsibility
 
-### Synchronous workflow
+A completed report can be copied using the following application helper. On
+failure it returns the original `CopyFailure`, its publication state, partial
+statistics, and any retained writer. An abort failure is stored separately.
+The caller must keep the returned recovery object until it decides how to
+reconcile or finish cleanup. The helper does not automatically repeat the copy.
 
-```rust,ignore
-use qubit_fs::{CopyOptions, FileSystem, ListOptions, Path};
+<!-- example: sync-recovery -->
+```rust
+use qubit_fs::FileSystem;
+use qubit_fs::Path;
+use qubit_fs::copy::CopyFailure;
+use qubit_fs::copy::CopyOptions;
+use qubit_fs::copy::CopyOutcome;
+use qubit_fs::error::FsError;
 
-fn publish(fs: &FileSystem, source: &Path, release_dir: &Path) -> qubit_fs::FsResult<()> {
-    let target = Path::parse("/releases/2026-07-30/summary.csv")?;
-
-    match fs.copy(source, &target, CopyOptions::default()) {
-        Ok(_outcome) => {}
-        Err(failure) => {
-            // Record failure.state() and failure.partial_stats(). Retain a
-            // recovery writer, when present, until its state is resolved.
-            let (error, _, _, _) = failure.into_parts();
-            return Err(error);
-        }
-    }
-
-    let mut entries = fs.list(release_dir, ListOptions::default())?;
-    while let Some(entry) = entries.next_entry()? {
-        // Process one entry and impose an application-specific bound.
-        let _path = entry.path;
-    }
-    Ok(())
+#[derive(Debug)]
+pub struct CopyRecovery {
+    pub failure: CopyFailure,
+    pub cleanup_error: Option<FsError>,
 }
-```
 
-`DirectoryStream::next_entry` enumerates incrementally. This avoids an unbounded
-in-memory collection, but an error can arrive after earlier entries were
-processed. Make downstream work idempotent or record a checkpoint before asking
-for the next entry.
-
-For writes, `open_writer` returns a `FileWriter`; write bytes and call `commit`.
-A failed commit returns `WriteFailure`, which distinguishes retryable/not-
-published, published, and indeterminate facts. `write_all` preserves its writer
-in typed `WriteAllFailure` when recovery is required. `rename` returns
-`RenameFailure`; `copy` returns `CopyFailure` with partial statistics and, when
-applicable, a recovery writer. Inspect the state before retrying, calling
-`abort`, cleaning up, or reconciling source and target. A successful `abort`
-returns `WriteAbortOutcome`; inspect it because cleanup can complete after the
-destination was published or while its final state remains indeterminate.
-
-Calling `commit` again after a writer leaves `Open` is invalid and does not call
-the provider again. The returned failure still reports the writer's known
-publication fact: a committed or published writer reports `Published`, an
-aborted or not-published writer reports `NotPublished`, and an indeterminate
-writer reports `Indeterminate`.
-
-Required atomicity and other declared guarantees are checked before side effects
-when the facade can determine they cannot be met. Copy guarantees are explicit
-about source mode: `AtomicFileCopy` and `DurableFileCopy` cover regular files,
-while `AtomicTreeCopy` and `DurableTreeCopy` cover directory trees. Write,
-rename, and temporary persistence outcomes do not claim durable publication. A
-successful outcome reports only the guarantees it models.
-
-`FileSystemCapability::Copy` advertises the provider-native copy fast path; it
-is not the only way the facade can copy a regular file. When that capability is
-absent, the facade directly evaluates its allowlisted stream fallback and
-requires `Read` and `Write` instead. This fallback is limited to the documented
-copy options and does not satisfy required server-side, atomic, or durable copy
-guarantees.
-
-The fallback rejects `CopyMode::Tree` and rejects a symlink-policy override that
-differs from the filesystem default before stat, reader, or writer I/O. A
-missing override or one equal to the default is eligible for the allowlist.
-The native `try_copy` path may support tree mode or an override; these
-restrictions apply only after it is unavailable or explicitly declined.
-
-### Asynchronous workflow
-
-`AsyncFileSystem` mirrors the facade through runtime-neutral futures. Run them
-on the runtime already used by the application; `qubit-fs` does not impose Tokio,
-`futures-io`, or another executor.
-
-`write_all` is also available asynchronously and returns `AsyncWriteAllFailure`
-when it must retain an `AsyncFileWriter` for recovery.
-
-```rust,ignore
-use qubit_fs::{AsyncFileSystem, CopyOptions, Path};
-
-async fn publish_async(
-    fs: &AsyncFileSystem,
-    source: Path,
-    target: Path,
-) -> qubit_fs::FsResult<()> {
-    let mut operation = fs.begin_copy(source, target, CopyOptions::default())?;
-    match operation.execute().await {
-        Ok(_outcome) => Ok(()),
-        Err(failure) => {
-            // Retain operation and inspect failure.state() for recovery.
-            let (error, _, _) = failure.into_parts();
-            Err(error)
+pub fn copy_report(filesystem: &FileSystem, source: &Path, target: &Path) -> Result<CopyOutcome, CopyRecovery> {
+    match filesystem.copy(source, target, CopyOptions::default()) {
+        Ok(outcome) => Ok(outcome),
+        Err(mut failure) => {
+            // Abort handles the retained session; it does not promise target rollback.
+            let cleanup_error = match failure.writer_mut() {
+                Some(writer) => writer.abort().err(),
+                None => None,
+            };
+            // Preserve the publication facts and writer even when cleanup fails.
+            Err(CopyRecovery { failure, cleanup_error })
         }
     }
 }
 ```
 
-`begin_copy` returns `AsyncCopyOperation` because streamed copy can retain a
-recoverable async writer. Call `execute(&mut self).await` and retain the
-operation until recovery is resolved. If an execution future has been polled
-and then dropped before completion, the operation records an indeterminate
-state; dropping an unpolled execution future leaves it ready. Explicitly await
-async writer and temporary-resource cleanup when completion must be confirmed.
+After success, enumerate the release path with `filesystem.list(path,
+ListOptions::default())` and call `next_entry()` in a bounded loop. Import
+`ListOptions` from `qubit_fs::directory`. Entries arrive incrementally and errors
+can occur after earlier entries were processed. Record progress before fetching
+the next entry; a listing is not an atomic snapshot.
 
-`CopyOptions::deadline` is a cooperative cumulative budget. The clock starts
-when the synchronous copy operation or asynchronous `begin_copy` handle is
-constructed, so time spent waiting before `execute` counts. The facade checks
-before and after native copy, around each fallback read/write, before and after
-flush, and before and after commit. A provider error is retained rather than
-replaced by a timeout. A timeout before publication retains the recovery writer;
-if commit already published the target, the failure is `Published` with its
-successful statistics and no retryable completed writer.
+Use `ListFilter::Subtree` for hierarchical subtrees. For flat object keys,
+`ListOptions::object_keys().with_filter(ListFilter::LiteralPrefix(...))` performs
+raw prefix matching without decoding or normalizing keys. A nonempty root is
+required; providers can reject requests they cannot represent faithfully.
 
-## Errors, diagnosis, and recovery
+## Async writing and cancellation
 
-`FsError` contains an error kind and operation, plus available logical path,
-source, target, and provider context. Start with the kind and operation, then
-use a typed failure state to choose a safe next action.
+`begin_write_all` consumes a `Vec<u8>` and returns an operation that owns a
+filesystem clone, path, options, and payload. Borrowed input must be explicitly
+copied with `to_vec()`. For streaming without a whole-file allocation, manage an
+`AsyncFileWriter` directly. The removed asynchronous `write_all` has no wrapper.
 
-| Situation | What the API says | Typical next action |
-| --- | --- | --- |
-| `exists` returns `Ok(false)` | `stat` explicitly returned `NotFound` | Treat the resource as absent. |
-| `exists` returns `Err` | The cause was not `NotFound` | Handle it; permission, authentication, timeout, and I/O do not mean absence. |
-| Copy/rename/write fails | Typed state, and for copy partial statistics plus possible writer recovery | Retry only when the state supports it; otherwise abort, clean up, or reconcile. |
-| Temp persistence fails | `PersistFailureState` is `NotPublished`, `PublishedSourceRetained`, or `Indeterminate` | Retain ownership, clean up a retained source, or reconcile before republishing. |
-| A guarantee is unavailable | Capability/requirement failure can be found before side effects | Change provider/options or relax the requirement. |
+The following complete helper takes an application cancellation future. Keep
+this helper running through recovery; cancel the write through its `cancel`
+argument, rather than dropping the entire helper during cleanup. The operation
+lives outside the scope containing the execution future. Successful execution
+wins if both execution and cancellation are ready on the same poll.
 
-Temporary files and directories are facade-owned handles. `TempFile`,
-`TempDirectory`, and their async counterparts expose explicit `cleanup`, `keep`,
-and `persist` operations. `keep` and `persist` return a `PersistOutcome` with
-the confirmed target, achieved atomicity, method, and cleanup state. Their
-states remain meaningful after recoverable failure. Do not rely on `Drop` for
-an I/O operation whose completion matters.
+<!-- example: async-recovery -->
+```rust
+use std::future::Future;
+use std::future::poll_fn;
+use std::pin::pin;
+use std::task::Poll;
 
-## Troubleshooting
+use qubit_fs::AsyncFileSystem;
+use qubit_fs::Path;
+use qubit_fs::error::FsError;
+use qubit_fs::metadata::WriteOutcome;
+use qubit_fs::write::AsyncWriteAllOperation;
+use qubit_fs::write::AsyncWriteAllOperationFailure;
+use qubit_fs::write::WriteOptions;
 
-**No filesystem is available.** This is expected when only `qubit-fs` is present:
-the crate has no backend or provider selection. Configure a provider through the
-registry or provider integration, then obtain a concrete facade.
+#[derive(Debug)]
+pub struct WriteRecovery {
+    pub operation: AsyncWriteAllOperation,
+    pub primary: Option<AsyncWriteAllOperationFailure>,
+    pub cleanup_error: Option<FsError>,
+}
 
-**A URI fails validation or logs show masked values.** Keep `ConnectionUri` at
-configuration ingress, convert it through the controlled registry/provider path,
-and store the resulting `Uri`. Canonical `Uri` values cannot contain userinfo,
-credential-like query fields, or fragments. A custom policy cannot weaken the
-standard credential safety floor; provider-private credentials must be removed
-before the provider constructs the canonical `Uri`.
+#[derive(Debug)]
+pub enum WriteReportError {
+    Preflight(AsyncWriteAllOperationFailure),
+    Recovery(Box<WriteRecovery>),
+}
 
-**`exists` did not return `false`.** Only `NotFound` maps to absence. Permission,
-authentication, network, timeout, and I/O errors mean that existence was not
-established.
+pub async fn write_report(
+    filesystem: &AsyncFileSystem,
+    path: Path,
+    bytes: Vec<u8>,
+    cancel: impl Future<Output = ()>,
+) -> Result<WriteOutcome, WriteReportError> {
+    let mut operation = filesystem
+        .begin_write_all(path, bytes, WriteOptions::default())
+        .map_err(WriteReportError::Preflight)?;
+    // Only the execute future enters the cancellation scope.
+    let result = {
+        let mut execution = pin!(operation.execute());
+        let mut cancellation = pin!(cancel);
+        poll_fn(|context| {
+            if let Poll::Ready(result) = execution.as_mut().poll(context) {
+                return Poll::Ready(Some(result));
+            }
+            if cancellation.as_mut().poll(context).is_ready() {
+                return Poll::Ready(None);
+            }
+            Poll::Pending
+        })
+        .await
+    };
+    let primary = match result {
+        Some(Ok(outcome)) => return Ok(outcome),
+        Some(Err(failure)) => Some(failure),
+        None => None, // The operation now records cancellation facts.
+    };
+    let cleanup_error = match operation.recovery_writer() {
+        Some(writer) => writer.abort_async().await.err(),
+        None => None,
+    };
+    // Published means do not resend. Indeterminate requires reconciliation,
+    // including when no writer was returned. A missing stat result is not
+    // proof that a remote request cannot finish later.
+    Err(WriteReportError::Recovery(Box::new(WriteRecovery {
+        operation,
+        primary,
+        cleanup_error,
+    })))
+}
+```
 
-**A listing stopped partway through.** Directory enumeration is incremental, not
-an atomic snapshot or preloaded vector. Preserve progress in the application and
-resume or restart from a safe checkpoint.
+An explicit error is in `primary`; cancellation has `primary == None` and leaves
+its state in `operation`. A failed abort leaves both `cleanup_error` and the
+writer in the returned recovery object. Inspect `operation.filesystem()` and
+`operation.path()` when no writer was returned. Neither a missing writer nor
+one `stat` returning `NotFound` establishes that pending remote work cannot
+publish later. Reconciliation depends on the provider's request identity and
+completion guarantees.
 
-**A copy, write, rename, or temp publish may have had side effects.** Read the
-typed state first. `Published` and `Indeterminate` need reconciliation; retain
-any writer or temp handle until the recovery decision is complete.
+| Execution event | Retained facts |
+| --- | --- |
+| Drop an unpolled execute future | `Ready`; no provider call; payload retained. |
+| Cancel after execution starts | `Failed(Indeterminate)`; confirmed byte count and any opened writer remain. |
+| Success | `Completed`; full confirmed byte count; committed writer and payload released. |
+| Explicit failure | Typed publication state, confirmed byte count, and relevant recovery writer. |
+| Execute again | `InvalidState`; no new provider call; historical state and count unchanged. |
+| Take recovery writer | Responsibility transfers; later writer recovery does not rewrite the operation snapshot. |
 
-**A ranged read exceeded its budget unexpectedly.** `read_all` applies
-`max_bytes` to the selected range, not the complete resource length. For a
-known resource length, the selected length is
-`min(max(resource_length - offset, 0), requested_length)`; the complete length
-remains in `FileMetadata`. Streaming still enforces the byte budget when
-metadata is missing or inaccurate.
+`begin_copy` follows the same ownership principle for streamed async copy.
+Retain its operation across cancellation. `Drop` does not start an executor or
+perform required asynchronous cleanup; await cleanup when confirmation matters.
 
-## Limits and non-goals
+## Guarantees and error decisions
 
-- The core crate does not ship local, remote, or object-storage backends.
-- It does not discover providers, manage credentials, or bind to an async runtime.
-- It does not promise every provider supports every operation or guarantee.
-- It does not turn object keys into hierarchical paths or normalize provider
-  semantics outside the public contracts.
-- It does not make incremental directory enumeration complete or atomic.
+Writer opening only proves no side effects when the provider explicitly reports
+`FsEffectState::Unchanged` without an indeterminate error. Missing effect,
+`Applied`, `PartiallyApplied`, or indeterminate evidence becomes `Indeterminate`
+for the whole write/copy. Applied opening is not completed file publication.
+`AlreadyExists + Skip` is successful only with explicit unchanged evidence.
+Preflight rejection before provider I/O is known not to publish.
+
+Commit failures retain their stage-specific publication facts. `Published` is
+not a reason to resend; cleanup may still be necessary. Never infer safe retry
+from an error kind alone. `exists` returns false only for `NotFound`; permission,
+authentication, timeout, and I/O failures remain errors.
+
+Requests distinguish optional and required guarantees. `WriteOutcome`,
+`RenameOutcome`, and `CopyOutcome` expose durability facts. `PersistOutcome`
+reports publication and cleanup but has no durability field; successful temporary
+persistence alone does not establish durable publication. Atomicity and durability are different; neither implies
+the other. Required guarantees are checked before I/O when statically impossible
+and against provider outcomes after completion. A violated guarantee after known
+publication does not change that publication into an unchanged result.
+
+The facade can perform allowlisted regular-file stream copy without native
+copy, or after a provider explicitly declines without effects. It does not
+retry a failed native copy. Required server-side, atomic, or durable copy,
+tree mode, and a changed symlink policy cannot use that fallback.
+`CopyOptions::deadline` is a cooperative cumulative budget starting at operation
+construction. It is checked around stages; it is not a timer that interrupts
+an arbitrary pending provider future. Provider failures remain the primary error.
+
+Temporary files and directories retain explicit lifecycle ownership. Their
+`cleanup`, `keep`, and `persist` methods report what happened. Persistence has
+five failure states: `NotPublished`, `NotPublishedSourceReleased`,
+`PublishedSourceRetained`, `PublishedSourceReleased`, and `Indeterminate`.
+`PersistFailure::publication_target()` preserves the confirmed published target.
+Do not treat released source ownership as proof that publication did not happen.
+
+## Diagnosis and operational limits
+
+- Missing backend: configure a provider or registry resolution; the core does not select one.
+- Unsupported requirement: inspect effective capabilities and request options; changing providers or requirements is an application decision.
+- Partial listing: preserve processed-entry progress and account for provider consistency; do not assume a snapshot.
+- Uncertain write/copy: retain operation and errors, inspect publication facts, then reconcile without implicit retry.
+- URI rejection: keep credentials at the configuration boundary. `expose_unredacted` is for controlled provider consumption, never logging or cache keys.
+- Custom secret names: use an explicit redaction policy. The standard policy remains a mandatory floor; providers must remove unrecognized private credentials before creating a canonical `Uri`.
+- Resource usage: `Vec` ownership makes whole-file memory cost explicit. Choose limits for reads, listings, copies and temporary resources; advertised limits are not aggregate quotas across concurrent requests.
+
+No portable contract turns object keys into hierarchical paths, guarantees every
+provider capability, or implements cross-filesystem move. Platform behavior and
+rooted authority are provided by the backend.
 
 ## Further reading
 
-- [README](../README.md) · [中文 README](../README.zh_CN.md)
-- [中文用户指南](user_guide.zh_CN.md)
-- [Architecture design (Chinese)](file_system_design.zh_CN.md)
+- [Migration to 0.4](migration_0_4.md)
+- [Architecture design](file_system_design.md)
 - [API reference](https://docs.rs/qubit-fs)

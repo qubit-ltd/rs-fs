@@ -1,5 +1,8 @@
 # Migrating to qubit-fs 0.3
 
+> Historical notes for 0.3. For the current API see [migration to 0.4](migration_0_4.md).
+
+
 Version 0.3 makes operation recovery facts explicit. The provider-neutral facade keeps the existing synchronous APIs and the legacy asynchronous `write_all`, while adding an owning asynchronous write operation for callers that must survive cancellation.
 
 ## Effect certainty and temporary resources
@@ -8,7 +11,7 @@ Use `FsError::has_indeterminate_effect()` whenever recovery depends on whether a
 
 `PersistFailureState` now distinguishes source ownership:
 
-```rust
+```text
 match failure.state() {
     PersistFailureState::NotPublished => { /* the handle still owns cleanup */ }
     PersistFailureState::NotPublishedSourceReleased => { /* the source is already released */ }
@@ -24,18 +27,7 @@ After publication, `PersistFailure::publication_target()` reports the target tha
 
 Prefer `begin_write_all` when the caller may be cancelled between open, write, flush, and commit:
 
-```rust
-let mut operation = filesystem.begin_write_all(path.clone(), bytes, options)?;
-match operation.execute().await {
-    Ok(outcome) => println!("published {} bytes", outcome.bytes_written().unwrap_or(0)),
-    Err(failure) => {
-        if let Some(mut writer) = operation.take_recovery_writer() {
-            let _ = writer.abort_async().await;
-        }
-        return Err(failure.into_error());
-    }
-}
-```
+For current code, use the [0.4 recovery example](user_guide.md#async-writing-and-cancellation), which retains both errors and the operation. The 0.3 API borrowed its payload; its cancellation recovery pattern must also retain the operation and never discard abort errors.
 
 `AsyncWriteAllOperationFailure` carries the state and confirmed byte count. If a cancellation leaves a recovery writer, abort it explicitly and retain any abort error alongside the primary failure. The deprecated `AsyncFileSystem::write_all` remains as a compatibility wrapper; callers that need a recovery handle should migrate to the owning operation.
 
