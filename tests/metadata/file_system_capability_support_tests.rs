@@ -18,8 +18,5 @@ fn capability_support_statuses_are_debuggable_and_distinct() {
         FileSystemCapabilitySupport::Conditional,
         FileSystemCapabilitySupport::Guaranteed,
     );
-    assert_eq!(
-        "Guaranteed",
-        format!("{:?}", FileSystemCapabilitySupport::Guaranteed),
-    );
+    assert_eq!("Guaranteed", format!("{:?}", FileSystemCapabilitySupport::Guaranteed),);
 }

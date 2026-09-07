@@ -54,9 +54,7 @@ pub trait AsyncTempResourceSpi: Send {
     /// # Errors
     /// Resolves to the provider-confirmed failure and recovery state when
     /// publication cannot be completed.
-    fn keep<'a>(
-        self: Pin<&'a mut Self>,
-    ) -> SpiFuture<'a, Result<PersistOutcome, SpiPersistFailure>>;
+    fn keep<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<PersistOutcome, SpiPersistFailure>>;
 
     /// Asynchronously persists this resource to a validated target.
     ///

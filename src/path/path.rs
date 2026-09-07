@@ -178,9 +178,7 @@ impl Path {
         if self.text == "/" || (self.literal && self.text.ends_with('/')) {
             return None;
         }
-        self.text
-            .rsplit('/')
-            .find(|component| !component.is_empty())
+        self.text.rsplit('/').find(|component| !component.is_empty())
     }
 
     /// Returns whether this path is absolute.
