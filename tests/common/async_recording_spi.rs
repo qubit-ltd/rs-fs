@@ -184,6 +184,7 @@ impl AsyncRecordingProbe {
             .expect("temporary cancellation lock should succeed")
     }
     /// Returns writer options observed by the provider.
+    #[allow(dead_code)]
     pub(crate) fn writer_options(&self) -> Vec<WriteOptions> {
         self.writer_options
             .lock()
