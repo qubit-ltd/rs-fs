@@ -232,7 +232,7 @@ fn test_file_system_limits_validate_path_read_and_write_boundaries() {
         .with_max_path_text_bytes(FileSystemLimit::Maximum(10))
         .with_max_component_text_bytes(FileSystemLimit::Maximum(4))
         .with_max_read_range_bytes(FileSystemLimit::Maximum(5))
-        .with_max_write_bytes(FileSystemLimit::Maximum(6));
+        .with_max_write_bytes(FileSystemLimit::Maximum(5));
     let short_path = Path::parse("a/bbbb").expect("path should parse");
     let long_component = Path::parse("a/ccccc").expect("path should parse");
     let long_path = Path::parse("abcdefghijk").expect("path should parse");
@@ -261,6 +261,6 @@ fn test_file_system_limits_validate_path_read_and_write_boundaries() {
     assert!(limits.validate_read_range(&short_path, None).is_ok());
     assert!(limits.validate_read_range(&short_path, Some(5)).is_ok());
     assert!(limits.validate_read_range(&short_path, Some(6)).is_err());
-    assert!(limits.validate_write_size(&short_path, 6).is_ok());
-    assert!(limits.validate_write_size(&short_path, 7).is_err());
+    assert!(limits.validate_write_size(&short_path, 5).is_ok());
+    assert!(limits.validate_write_size(&short_path, 6).is_err());
 }

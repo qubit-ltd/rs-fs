@@ -16,6 +16,7 @@ use super::from_writer_state;
 use super::internal::CopyCancellationGuard;
 use super::internal::CopyDeadline;
 use super::internal::CopyRecoverySnapshot;
+use super::internal::fallback_write_options;
 use super::internal::from_completed_stats;
 use super::is_file_kind_supported;
 use super::validate_stream_copy_length_limits;
@@ -41,8 +42,6 @@ use crate::spi::ProviderOperation;
 use crate::spi::ResolvedCopyOptions;
 use crate::spi::SpiFuture;
 use crate::write::AsyncFileWriter;
-use crate::write::WriteDisposition;
-use crate::write::WriteOptions;
 use crate::write::internal::is_unchanged_open_failure;
 use crate::write::internal::open_failure_state;
 
@@ -369,9 +368,7 @@ fn stream_copy_fallback<'a>(
                 target,
             ));
         }
-        let writer_options = WriteOptions::default()
-            .with_disposition(WriteDisposition::CreateNew)
-            .with_atomicity(options.atomicity());
+        let writer_options = fallback_write_options(options);
         match filesystem.open_writer(target, writer_options).await {
             Ok(writer) => *writer_slot = Some(Box::new(writer)),
             Err(error)
@@ -385,6 +382,7 @@ fn stream_copy_fallback<'a>(
                         ..CopyStats::default()
                     },
                     crate::metadata::AchievedAtomicity::NonAtomic,
+                    false,
                 ));
             }
             Err(error) => {
@@ -538,6 +536,7 @@ fn stream_copy_fallback<'a>(
                         ..CopyStats::default()
                     },
                     crate::metadata::AchievedAtomicity::NonAtomic,
+                    false,
                 ));
             }
             Err(failure) => {
@@ -572,6 +571,7 @@ fn stream_copy_fallback<'a>(
                 ..CopyStats::default()
             },
             write_outcome.atomicity(),
+            write_outcome.durable(),
         ))
     })
 }

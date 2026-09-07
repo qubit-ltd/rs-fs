@@ -271,3 +271,20 @@ fn test_provider_properties_accepts_symlink_without_operation() {
         provider.declared_capabilities().support(FileSystemCapability::Symlink),
     );
 }
+
+/// Verifies provider properties reject a guaranteed capability backed only by
+/// a conditional dependency.
+#[test]
+fn test_provider_properties_rejects_capability_strength_mismatch() {
+    let operations = ProviderOperations::new()
+        .with(ProviderOperation::Stat)
+        .with(ProviderOperation::OpenWriter);
+    let declared = FileSystemCapabilities::new()
+        .with_conditional(FileSystemCapability::Write)
+        .with_guaranteed(FileSystemCapability::DurableWrite);
+    let error = try_provider_properties(operations, declared)
+        .expect_err("a guaranteed capability must require a guaranteed dependency");
+
+    assert_eq!(FsErrorKind::InvalidOptions, error.kind());
+    assert_eq!(FsOperation::ValidateProperties, error.operation());
+}

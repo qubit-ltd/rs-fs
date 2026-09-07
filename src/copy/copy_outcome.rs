@@ -9,6 +9,7 @@
 
 use crate::copy::CopyConflictPolicy;
 use crate::copy::CopyMethod;
+use crate::copy::CopyMode;
 use crate::copy::CopyOptions;
 use crate::copy::CopyStats;
 use crate::copy::MetadataPreservePolicy;
@@ -147,12 +148,12 @@ impl CopyOutcome {
         &self.diagnostics
     }
     /// Marks this result as the facade's streamed fallback.
-    pub(crate) fn streamed_fallback(stats: CopyStats, atomicity: AchievedAtomicity) -> Self {
+    pub(crate) fn streamed_fallback(stats: CopyStats, atomicity: AchievedAtomicity, durable: bool) -> Self {
         Self {
             stats,
             method: CopyMethod::Streamed,
             atomicity,
-            durable: false,
+            durable,
             metadata: MetadataPreservePolicy::None,
             target_version: None,
             used_fallback: true,
@@ -202,6 +203,14 @@ impl CopyOutcome {
             .and_then(|value| value.checked_add(self.stats.symlinks))
             .and_then(|value| value.checked_add(self.stats.objects))
             .and_then(|value| value.checked_add(self.stats.prefixes));
+        let valid_skipped_file = options.mode() == CopyMode::File
+            && options.conflict() == CopyConflictPolicy::Skip
+            && self.stats.skipped == 1
+            && entries == Some(0);
+        let valid_copied_file = entries == Some(1) && self.stats.directories == 0 && self.stats.prefixes == 0;
+        if options.mode() == CopyMode::File && !valid_copied_file && !valid_skipped_file {
+            return Some("provider reported a file-mode copy without exactly one resource");
+        }
         if entries.is_none()
             || options.max_entries().is_some_and(|maximum| {
                 u64::try_from(maximum).is_ok_and(|maximum| entries.is_some_and(|entries| entries > maximum))

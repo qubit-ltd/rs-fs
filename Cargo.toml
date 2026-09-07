@@ -20,7 +20,7 @@ include = [
     "/benches/**",
     "/doc/*.md",
     "/src/**",
-    "/tests/**",
+    "/tests/common/rustdoc_support.rs",
 ]
 
 [lib]

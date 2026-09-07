@@ -24,6 +24,33 @@ use crate::metadata::SymlinkPolicy;
 use crate::path::PathConstraints;
 
 /// Immutable provider-declared operations, guarantees, and constraints.
+///
+/// This is the provider boundary snapshot. Its operation set describes the
+/// entry points available for dispatch, while its capabilities describe the
+/// support strength the provider declares for those entry points.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_fs::metadata::{FileSystemCapabilities, FileSystemCapability,
+///     FileSystemId, FileSystemInfo, FileSystemLimits, SymlinkPolicy};
+/// use qubit_fs::path::{PathConstraints, PathSemantics};
+/// use qubit_fs::spi::{ProviderOperation, ProviderOperations, ProviderProperties};
+///
+/// let properties = ProviderProperties::new(
+///     FileSystemInfo::new(FileSystemId::new("health")?, "health", PathSemantics::Hierarchical),
+///     ProviderOperations::new()
+///         .with(ProviderOperation::Stat)
+///         .with(ProviderOperation::OpenReader),
+///     FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::Read),
+///     FileSystemLimits::unknown(),
+///     PathConstraints::absolute(),
+///     SymlinkPolicy::Reject,
+/// )?;
+/// assert!(properties.operations().supports(ProviderOperation::OpenReader));
+/// assert!(properties.declared_capabilities().guarantees(FileSystemCapability::Read));
+/// # Ok::<(), qubit_fs::FsError>(())
+/// ```
 #[derive(Clone, Debug)]
 pub struct ProviderProperties {
     /// Stable filesystem information.

@@ -4,6 +4,19 @@
 
 2026-09-07
 
+## Post-hardening measurement (2026-09-07)
+
+Measured at hardening commit `a1a0b49` on Linux with stable `cargo llvm-cov 0.8.6` (Cargo toolchain `1.94.0`) and `nightly-2026-06-05` for branches. These are full-source reports with an empty exemption set; the configured exemptions were not used for these totals.
+
+| Mode | Functions | Lines | Regions | Branches (nightly) |
+| --- | --- | --- | --- | --- |
+| default (`--no-default-features`) | 718/753 (95.35%) | 4438/4786 (92.73%) | 5564/6051 (91.95%) | 493/606 (81.35%) |
+| all (`--all-features`) | 916/1020 (89.80%) | 6211/6950 (89.37%) | 8009/9070 (88.30%) | 665/814 (81.70%) |
+
+The behavior assertions added in this hardening round cover streamed-copy durability and capability-strength validation, plus file-mode copy statistics validation. The touched exempt files do not all meet the stable removal rule (functions >=95%, lines >90%, and regions >85%) in the all-features report: `src/copy/async_copy_operation.rs` is 21/25, 383/511, 489/685; `src/copy/copy_operation.rs` is 21/25, 373/476, 487/630; and `src/copy/copy_outcome.rs` is 14/22, 113/135, 116/143. No exemption was removed. `src/copy/internal/stream_copy_policy.rs` (7/7, 52/52, 57/57) and `src/metadata/file_system_limits.rs` (21/21, 109/110, 119/121) are not configured exemptions, so no configuration change is needed.
+
+The historical 56-to-39 snapshot below is retained unchanged. The post-hardening measurements are a new snapshot and do not overwrite historical data.
+
 This change reduces the original 56 exemptions to 39 by removing 17. It adds no exemptions, lowers no thresholds, and introduces no coverage-dependent production paths. Retained entries are recorded testing debt, not evidence that the code is untestable or verified correct. Add behavioral assertions, validate both default and all-features gates, then remove exemptions.
 
 ## Measurement scope

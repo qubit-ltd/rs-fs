@@ -211,6 +211,23 @@ impl FileSystemLimits {
             Ok(())
         }
     }
+
+    /// Validates a streamed write-session byte length without narrowing it to
+    /// the native pointer-sized integer.
+    ///
+    /// Returns [`FsErrorKind::ResourceLimitExceeded`] when `bytes` exceeds the
+    /// declared finite write-session maximum.
+    pub(crate) fn validate_write_size_u64(&self, path: &Path, bytes: u64) -> FsResult<()> {
+        if self.max_write_bytes.is_exceeded_by(bytes) {
+            Err(limit_error(
+                FsOperation::Write,
+                "write session exceeds the provider byte limit",
+                path,
+            ))
+        } else {
+            Ok(())
+        }
+    }
 }
 
 /// Tests whether a `usize` count exceeds the declared filesystem limit.

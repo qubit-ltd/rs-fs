@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![English Document](https://img.shields.io/badge/Document-English-blue.svg)](README.md)
 
-`qubit-fs` 0.4.0 是 Rust 1.94 及以上版本可用的 provider-neutral 文件系统抽象，
+`qubit-fs` 0.4.0 是 Rust 1.94 及以上版本可用的、与具体 provider 无关的文件系统抽象，
 同时提供同步和异步 API。它向应用提供具体门面 `FileSystem` 与
 `AsyncFileSystem`，但不会替应用选择存储后端或异步运行时。
 
@@ -60,7 +60,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## 门面明确表达的语义
 
-- `Path` 是一个已配置 filesystem 内的逻辑名称。`Uri` 是不含 secret 的 canonical
+- `Path` 是一个已配置 filesystem 内的逻辑名称。`Uri` 是不含 secret 的规范
   地址；`ConnectionUri` 是配置入口，可以接受凭据，但在 `Display` 和 `Debug` 中会
   脱敏。
 - 默认 URI 解析使用固定的标准脱敏策略；如果应用还有自定义敏感 query 名称，应向
@@ -75,8 +75,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ## 从这里开始
 
 - [English user guide](doc/user_guide.md)
-- [0.4 迁移指南](doc/migration_0_4.zh_CN.md)
+- [English provider guide](doc/provider_guide.md)
 - [中文用户指南](doc/user_guide.zh_CN.md)
+- [中文 provider 指南](doc/provider_guide.zh_CN.md)
+- [0.4 迁移指南](doc/migration_0_4.zh_CN.md)
+- [English architecture](doc/file_system_design.md)
 - [中文架构设计](doc/file_system_design.zh_CN.md)
 - [API 文档](https://docs.rs/qubit-fs)
 

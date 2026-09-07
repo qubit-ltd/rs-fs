@@ -47,6 +47,21 @@ directory/temp 等领域组织，私有辅助类型归属对应领域。同步�
 `ProviderOperations`、声明能力、限制、路径约束和符号链接策略。门面捕获该快照并推导面向
 应用的 `FileSystemProperties`。属性保持不可变，读取不执行 I/O。
 
+声明的 capability 依赖关系如下：
+
+| 派生 capability | 必需的基础 capability |
+| --- | --- |
+| `RangeRead`、`ConditionalRead`、`ChecksumValidation` | `Read` |
+| `Append`、`ConditionalWrite`、`AtomicReplace`、`DurableWrite` | `Write` |
+| `RecursiveDelete`、`ConditionalDelete` | `Delete` |
+| `AtomicRename`、`DurableRename` | `Rename` |
+| `ServerSideCopy`、`AtomicFileCopy`、`AtomicTreeCopy`、`DurableFileCopy`、`DurableTreeCopy` | `Copy` |
+
+这张表展开后正好对应 `CAPABILITY_DEPENDENCIES` 中的 16 对关系。Conditional 派生能力
+要求基础能力至少可支持；Guaranteed 派生能力则要求基础能力也是 Guaranteed。
+`ProviderProperties` 是 provider 的声明，`FileSystemProperties` 是门面校验后对应用
+暴露的有效视图。`ProviderOperations` 决定原语分派，capability 描述语义保证。
+
 具体原语是否存在与有效能力是不同事实。分派查看 `ProviderOperation`；某个组合操作可以
 在没有原生 fast path 时仍然可用。例如，原生复制不存在或明确无副作用地拒绝后，普通文件
 复制可使用符合条件的 reader/writer 原语。声明能力却缺少必需原语会被拒绝，每次操作仍需

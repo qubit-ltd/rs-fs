@@ -58,6 +58,23 @@ capabilities, limits, path constraints and symlink policy. The facade captures
 this once and derives application-facing `FileSystemProperties`. Properties are
 immutable and reading them performs no I/O.
 
+The declared capability dependency graph is:
+
+| Derived capability | Required base capability |
+| --- | --- |
+| `RangeRead`, `ConditionalRead`, `ChecksumValidation` | `Read` |
+| `Append`, `ConditionalWrite`, `AtomicReplace`, `DurableWrite` | `Write` |
+| `RecursiveDelete`, `ConditionalDelete` | `Delete` |
+| `AtomicRename`, `DurableRename` | `Rename` |
+| `ServerSideCopy`, `AtomicFileCopy`, `AtomicTreeCopy`, `DurableFileCopy`, `DurableTreeCopy` | `Copy` |
+
+This table expands to the sixteen pairs in `CAPABILITY_DEPENDENCIES`. A
+conditional derived capability requires a supported base; a guaranteed derived
+capability requires a guaranteed base. `ProviderProperties` is the provider
+declaration, while `FileSystemProperties` is the facade's validated effective
+view. `ProviderOperations` selects primitive dispatch; capabilities describe
+semantic guarantees.
+
 Concrete primitive availability and effective capabilities are separate.
 Dispatch consults `ProviderOperation`; a facade composite can be available
 without a native fast path. A regular-file stream copy uses eligible reader and

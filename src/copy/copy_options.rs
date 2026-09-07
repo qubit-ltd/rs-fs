@@ -55,7 +55,11 @@ pub struct CopyOptions {
     durability: DurabilityRequirement,
     /// Maximum descendant depth for tree copy.
     max_depth: Option<usize>,
-    /// Maximum number of copied entries.
+    /// Maximum number of source entries copied by the operation.
+    ///
+    /// A file-mode copy always consumes exactly one entry, so `Some(0)`
+    /// rejects it before provider I/O. Tree-mode copies count files,
+    /// directories, symbolic links, objects, and prefixes in the aggregate.
     max_entries: Option<usize>,
     /// Maximum number of copied payload bytes.
     max_bytes: Option<u64>,
@@ -219,7 +223,11 @@ impl CopyOptions {
         self.max_depth
     }
 
-    /// Returns a copy with the maximum copied entry count replaced.
+    /// Returns a copy with the maximum source entry count replaced.
+    ///
+    /// `Some(0)` rejects every copy because even a file-mode copy consumes one
+    /// source entry. For tree copies, the limit applies to the aggregate of
+    /// files, directories, symbolic links, objects, and prefixes.
     #[inline]
     #[must_use]
     pub const fn with_max_entries(mut self, max_entries: Option<usize>) -> Self {
@@ -227,7 +235,12 @@ impl CopyOptions {
         self
     }
 
-    /// Returns the optional maximum copied entry count.
+    /// Returns the optional maximum source entry count.
+    ///
+    /// `None` leaves the entry count unbounded. The count includes every
+    /// source resource represented in the completed
+    /// [`CopyOutcome`](crate::copy::CopyOutcome) statistics, including
+    /// directories and prefixes.
     #[inline(always)]
     #[must_use]
     pub const fn max_entries(&self) -> Option<usize> {
