@@ -45,18 +45,32 @@ is compiled by the documentation fixture.
 ```rust
 use std::io::Cursor;
 
-use qubit_fs::error::{FsErrorKind, FsOperation};
-use qubit_fs::metadata::{
-    FileKind, FileMetadata, FileSystemCapabilities, FileSystemCapability, FileSystemId,
-    FileSystemInfo, FileSystemLimits, OpenedFileInfo, SymlinkPolicy,
-};
-use qubit_fs::path::{PathConstraints, PathSemantics};
+use qubit_fs::FileSystem;
+use qubit_fs::FsError;
+use qubit_fs::FsResult;
+use qubit_fs::Path;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
+use qubit_fs::metadata::FileKind;
+use qubit_fs::metadata::FileMetadata;
+use qubit_fs::metadata::FileSystemCapabilities;
+use qubit_fs::metadata::FileSystemCapability;
+use qubit_fs::metadata::FileSystemId;
+use qubit_fs::metadata::FileSystemInfo;
+use qubit_fs::metadata::FileSystemLimits;
+use qubit_fs::metadata::OpenedFileInfo;
+use qubit_fs::metadata::SymlinkPolicy;
+use qubit_fs::path::PathConstraints;
+use qubit_fs::path::PathSemantics;
 use qubit_fs::read::ReadOptions;
-use qubit_fs::spi::{
-    FileSystemSpi, OpenReaderRequest, OpenedReader, ProviderOperation, ProviderOperations,
-    ProviderProperties, StatRequest, StatResponse,
-};
-use qubit_fs::{FileSystem, FsError, FsResult, Path};
+use qubit_fs::spi::FileSystemSpi;
+use qubit_fs::spi::OpenReaderRequest;
+use qubit_fs::spi::OpenedReader;
+use qubit_fs::spi::ProviderOperation;
+use qubit_fs::spi::ProviderOperations;
+use qubit_fs::spi::ProviderProperties;
+use qubit_fs::spi::StatRequest;
+use qubit_fs::spi::StatResponse;
 
 pub struct HealthProvider {
     properties: ProviderProperties,
