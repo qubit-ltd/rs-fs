@@ -13,6 +13,6 @@ async = []
 
 [dependencies]
 qubit-fs = { path = "../../..", features = ["async"] }
-qubit-fs-local = { path = "../../../../rs-fs-local" }
+qubit-fs-local = { path = "../../../../rs-fs-local", version = "0.4" }
 qubit-io = "0.16"
 tempfile = "3"

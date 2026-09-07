@@ -31,7 +31,7 @@
 ```toml
 [dependencies]
 qubit-fs = "0.4"
-qubit-fs-local = "0.3"
+qubit-fs-local = "0.4"
 tempfile = "3"
 ```
 
@@ -43,15 +43,24 @@ tempfile = "3"
 
 <!-- example: quick-start -->
 ```rust
+use std::time::Duration;
+
 use qubit_fs::Path;
 use qubit_fs::read::ReadOptions;
 use qubit_fs::write::WriteOptions;
+use qubit_fs_local::LocalCopyResourceLimits;
+use qubit_fs_local::LocalDeleteResourceLimits;
 use qubit_fs_local::LocalFileSystems;
+use qubit_fs_local::LocalListResourceLimits;
 use qubit_fs_local::LocalResourcePolicy;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let directory = tempfile::tempdir()?;
-    let filesystem = LocalFileSystems::rooted(directory.path(), LocalResourcePolicy::unbounded())?;
+    let list_budget = LocalListResourceLimits::new(8, 64, 4 * 1024, 4, Duration::from_secs(5))?;
+    let copy_budget = LocalCopyResourceLimits::new(8, 64, 1024 * 1024, 4, Duration::from_secs(5))?;
+    let delete_budget = LocalDeleteResourceLimits::new(8, 64, 4 * 1024, Duration::from_secs(5));
+    let policy = LocalResourcePolicy::bounded(list_budget, copy_budget, delete_budget);
+    let filesystem = LocalFileSystems::rooted(directory.path(), policy)?;
     let path = Path::parse("/report.txt")?;
     filesystem.write_all(&path, b"report ready", WriteOptions::default())?;
     let bytes = filesystem.read_all(&path, ReadOptions::default(), 1024)?;
