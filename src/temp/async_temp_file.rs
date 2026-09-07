@@ -144,12 +144,16 @@ impl AsyncTempFile {
     ///
     /// # Errors
     /// Resolves to an invalid-state error when the resource is no longer owned,
-    /// or to the provider ownership-transfer failure.
+    /// or to the provider ownership-transfer failure. An invalid-state failure
+    /// retains any previously confirmed publication target and recovery state.
     #[inline]
     pub fn keep(&mut self) -> SpiFuture<'_, Result<PersistOutcome, PersistFailure>> {
         if self.lifecycle.state() != TempResourceState::Owned {
             let error = self.invalid_state(FsOperation::KeepTemp, "cannot be kept now");
-            return Box::pin(async move { Err(PersistFailure::new(error, failure_state_for(self.lifecycle.state()))) });
+            return Box::pin(async move {
+                Err(PersistFailure::new(error, self.lifecycle.failure_state())
+                    .with_publication_target(self.lifecycle.publication_target()))
+            });
         }
         Box::pin(async move {
             self.lifecycle.begin_pending();
@@ -190,7 +194,8 @@ impl AsyncTempFile {
     ///
     /// # Errors
     /// Resolves to a typed failure for invalid lifecycle state, failed local
-    /// preflight, provider failure, or provider contract violation.
+    /// preflight, provider failure, or provider contract violation. Rejected
+    /// repeated calls preserve the previously confirmed publication facts.
     pub fn persist<'a>(
         &'a mut self,
         target: &'a Path,
@@ -198,7 +203,10 @@ impl AsyncTempFile {
     ) -> SpiFuture<'a, Result<PersistOutcome, PersistFailure>> {
         if self.lifecycle.state() != TempResourceState::Owned {
             let error = self.invalid_state(FsOperation::PersistTemp, "cannot be persisted now");
-            return Box::pin(async move { Err(PersistFailure::new(error, failure_state_for(self.lifecycle.state()))) });
+            return Box::pin(async move {
+                Err(PersistFailure::new(error, self.lifecycle.failure_state())
+                    .with_publication_target(self.lifecycle.publication_target()))
+            });
         }
         if let Err(error) = self.file_system.preflight_temp_persist(&self.path, target, &options) {
             return Box::pin(async move { Err(PersistFailure::new(error, PersistFailureState::NotPublished)) });
@@ -362,16 +370,6 @@ impl AsyncTempFile {
             Some(target),
             self.file_system.properties().info().provider_id(),
         )
-    }
-}
-
-fn failure_state_for(state: TempResourceState) -> PersistFailureState {
-    match state {
-        TempResourceState::Owned => PersistFailureState::NotPublished,
-        TempResourceState::Cleaned => PersistFailureState::NotPublishedSourceReleased,
-        TempResourceState::CleanupRequired => PersistFailureState::PublishedSourceRetained,
-        TempResourceState::Persisted | TempResourceState::Kept => PersistFailureState::PublishedSourceReleased,
-        TempResourceState::Indeterminate => PersistFailureState::Indeterminate,
     }
 }
 
