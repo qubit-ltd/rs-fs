@@ -31,6 +31,25 @@ use crate::temp::TempResourceState;
 use crate::temp::internal::TempLifecycle;
 
 /// A facade-owned asynchronous temporary file.
+///
+/// # Examples
+///
+/// This example uses an isolated in-memory provider fixture.
+///
+/// ```rust
+/// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
+/// # use support::*;
+/// # let (filesystem, _) = async_recording_spi::async_recording_file_system(Default::default());
+/// # poll_support::ready(async {
+/// use qubit_fs::temp::TempOptions;
+/// use qubit_fs::temp::TempResourceState;
+///
+/// let mut temporary = filesystem.create_temp_file(TempOptions::default()).await?;
+/// temporary.cleanup().await?;
+/// assert_eq!(TempResourceState::Cleaned, temporary.state());
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// # }).unwrap();
+/// ```
 pub struct AsyncTempFile {
     /// Facade that owns validation and persistence policy.
     file_system: AsyncFileSystem,

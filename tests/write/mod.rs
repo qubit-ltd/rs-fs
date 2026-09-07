@@ -5,6 +5,10 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Shared private temporary-resource lifecycle rules.
-mod temp_lifecycle;
-pub(crate) use temp_lifecycle::TempLifecycle;
+//! Whole-file write operation contracts.
+
+#[cfg(feature = "async")]
+mod async_write_all_operation_tests;
+
+#[cfg(feature = "async")]
+mod async_write_all_operation_failure_tests;

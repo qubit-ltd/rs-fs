@@ -18,7 +18,7 @@ use crate::async_recording_spi::async_recording_file_system;
 use crate::poll_support::ready;
 
 #[test]
-fn test_async_write_all_failure_exposes_recovery_and_formatting() {
+fn test_async_write_all_operation_failure_exposes_recovery_and_formatting() {
     let (filesystem, _) = async_recording_file_system(AsyncRecordingConfig {
         writer_commit_failure: Some(WriteFailureState::NotPublished),
         ..AsyncRecordingConfig::default()
@@ -26,7 +26,7 @@ fn test_async_write_all_failure_exposes_recovery_and_formatting() {
     let mut operation = filesystem
         .begin_write_all(
             Path::parse("/target").expect("path should parse"),
-            b"bytes",
+            b"bytes".to_vec(),
             WriteOptions::default(),
         )
         .expect("write preflight should succeed");

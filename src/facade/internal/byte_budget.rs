@@ -5,6 +5,11 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Shared private temporary-resource lifecycle rules.
-mod temp_lifecycle;
-pub(crate) use temp_lifecycle::TempLifecycle;
+//! Filesystem byte-budget specialization.
+
+use qubit_budget::ResourceBudget;
+
+use super::FileSystemResource;
+
+/// A budget that counts filesystem bytes.
+pub(crate) type ByteBudget = ResourceBudget<FileSystemResource, u64>;

@@ -16,6 +16,8 @@ use crate::error::FsError;
 use crate::error::FsErrorKind;
 use crate::error::FsOperation;
 use crate::error::FsResult;
+use crate::facade::internal::ByteBudget;
+use crate::facade::internal::FileSystemResource;
 use crate::metadata::FileSystemCapability;
 use crate::metadata::FileSystemProperties;
 use crate::path::Path;
@@ -23,25 +25,6 @@ use crate::spi::ProviderOperation;
 use crate::spi::ProviderOperations;
 use crate::spi::ProviderProperties;
 use crate::write::WriteOptions;
-
-mod resource_budget {
-    use qubit_budget::ResourceBudget;
-
-    /// Resources counted by filesystem facade byte budgets.
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub(crate) enum FileSystemResource {
-        /// Bytes read from a source.
-        ReadBytes,
-        /// Bytes accepted by a destination writer.
-        WriteBytes,
-    }
-
-    /// A budget that counts filesystem bytes.
-    pub(crate) type ByteBudget = ResourceBudget<FileSystemResource, u64>;
-}
-
-pub(crate) use resource_budget::ByteBudget;
-pub(crate) use resource_budget::FileSystemResource;
 
 /// Immutable provider state and deterministic preflight shared by facades.
 pub(crate) struct FacadeCore {

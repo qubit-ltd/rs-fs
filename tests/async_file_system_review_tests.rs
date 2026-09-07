@@ -111,7 +111,7 @@ fn test_async_write_all_publishes_complete_bytes() {
     };
     let (filesystem, probe) = async_recording_file_system(config);
     let mut operation = filesystem
-        .begin_write_all(path("/async-write-all"), b"bytes", WriteOptions::default())
+        .begin_write_all(path("/async-write-all"), b"bytes".to_vec(), WriteOptions::default())
         .expect("write preflight should succeed");
     let outcome = ready(operation.execute()).expect("async write-all should commit");
     assert_eq!(AchievedAtomicity::Atomic, outcome.atomicity());
@@ -127,7 +127,11 @@ fn test_async_write_all_commit_failure_retains_writer() {
     };
     let (filesystem, _) = async_recording_file_system(config);
     let mut operation = filesystem
-        .begin_write_all(path("/async-write-all-failure"), b"bytes", WriteOptions::default())
+        .begin_write_all(
+            path("/async-write-all-failure"),
+            b"bytes".to_vec(),
+            WriteOptions::default(),
+        )
         .expect("write preflight should succeed");
     let failure = ready(operation.execute()).expect_err("injected commit failure should retain writer");
     assert_eq!(FsErrorKind::Io, failure.error().kind());
@@ -142,7 +146,11 @@ fn test_async_write_all_limit_error_includes_provider_context() {
         ..AsyncRecordingConfig::default()
     };
     let (filesystem, _) = async_recording_file_system(config);
-    let failure = match filesystem.begin_write_all(path("/async-write-all-limit"), b"bytes", WriteOptions::default()) {
+    let failure = match filesystem.begin_write_all(
+        path("/async-write-all-limit"),
+        b"bytes".to_vec(),
+        WriteOptions::default(),
+    ) {
         Ok(_) => panic!("async write-all limit should reject oversized content"),
         Err(failure) => failure,
     };
@@ -439,7 +447,7 @@ fn test_async_facade_convenience_operations_enforce_contracts() {
     assert!(ready(file_system.exists(&path("/file"))).expect("existing path should be reported"));
     assert!(!ready(file_system.exists(&path("/missing"))).expect("missing path should be mapped to false"));
     assert_eq!(
-        b"bytes",
+        b"bytes".to_vec(),
         ready(file_system.read_all(&path("/file"), ReadOptions::default(), 5,))
             .expect("reader bytes should be collected")
             .as_slice()
@@ -601,6 +609,7 @@ fn test_async_facade_rejects_contract_and_fallback_boundary_failures() {
 
     let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
         writer_open_error: Some(FsErrorKind::AlreadyExists),
+        writer_open_effect: Some(FsEffectState::Unchanged),
         ..AsyncRecordingConfig::default()
     });
     let mut operation = file_system

@@ -21,9 +21,9 @@ use crate::error::FsError;
 use crate::error::FsErrorKind;
 use crate::error::FsOperation;
 use crate::error::FsResult;
-use crate::facade::facade_core::ByteBudget;
 use crate::facade::facade_core::FacadeCore;
-use crate::facade::facade_core::FileSystemResource;
+use crate::facade::internal::ByteBudget;
+use crate::facade::internal::FileSystemResource;
 use crate::metadata::AchievedAtomicity;
 use crate::metadata::AtomicityRequirement;
 use crate::metadata::DurabilityRequirement;
@@ -36,6 +36,27 @@ use crate::write::WriteFailureState;
 use crate::write::WriterState;
 
 /// Type-erased provider write session explicitly associated with a file.
+///
+/// # Examples
+///
+/// This example uses an isolated in-memory provider fixture.
+///
+/// ```rust
+/// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
+/// # use support::*;
+/// # let filesystem = rustdoc_provider::filesystem();
+/// use qubit_fs::Path;
+/// use qubit_fs::write::WriteOptions;
+/// use qubit_fs::write::WriterState;
+/// use qubit_io::Output;
+///
+/// let mut writer = filesystem.open_writer(&Path::parse("/new-report")?, WriteOptions::default())?;
+/// writer.write_fully(b"report")?;
+/// let outcome = writer.commit()?;
+/// assert_eq!(Some(6), outcome.bytes_written());
+/// assert_eq!(WriterState::Committed, writer.state());
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 pub struct FileWriter {
     /// Provider write session.
     session: Box<dyn FileWriterSpi>,

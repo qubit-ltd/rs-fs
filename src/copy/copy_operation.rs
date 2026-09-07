@@ -42,6 +42,8 @@ use crate::spi::ResolvedCopyOptions;
 use crate::write::FileWriter;
 use crate::write::WriteDisposition;
 use crate::write::WriteOptions;
+use crate::write::internal::is_unchanged_open_failure;
+use crate::write::internal::open_failure_state;
 
 /// Executes one synchronous copy request and retains recovery state on failure.
 pub(crate) struct CopyOperation<'a> {
@@ -253,6 +255,7 @@ impl<'a> CopyOperation<'a> {
             Ok(writer) => writer,
             Err(error)
                 if error.kind() == FsErrorKind::AlreadyExists
+                    && is_unchanged_open_failure(&error)
                     && self.options.conflict() == CopyConflictPolicy::Skip =>
             {
                 return Ok(CopyOutcome::streamed_fallback(
@@ -264,7 +267,8 @@ impl<'a> CopyOperation<'a> {
                 ));
             }
             Err(error) => {
-                return Err(self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None));
+                let state = from_write_failure_state(open_failure_state(&error));
+                return Err(self.failure(error, state, CopyStats::default(), None));
             }
         };
         if let Some(error) = self.deadline_error() {

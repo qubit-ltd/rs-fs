@@ -25,6 +25,7 @@ use qubit_fs::copy::CopyOutcome;
 use qubit_fs::copy::CopyStats;
 use qubit_fs::directory::CreateDirectoryOutcome;
 use qubit_fs::directory::DeleteOutcome;
+use qubit_fs::error::FsEffectState;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::error::FsOperation;
 use qubit_fs::metadata::AchievedAtomicity;
@@ -127,6 +128,11 @@ pub(crate) struct AsyncRecordingConfig {
     pub(crate) writer_commit_failure: Option<WriteFailureState>,
     pub(crate) writer_abort_failure: Option<FsErrorKind>,
     pub(crate) writer_open_error: Option<FsErrorKind>,
+    pub(crate) writer_open_effect: Option<FsEffectState>,
+    /// Maximum bytes acknowledged by one successful provider write.
+    pub(crate) writer_chunk: Option<usize>,
+    /// Successful bytes before an injected write suspension or failure.
+    pub(crate) writer_progress_before_stop: usize,
     pub(crate) range_read: bool,
     pub(crate) maximum_read_range_bytes: Option<u64>,
     pub(crate) maximum_write_bytes: Option<u64>,
@@ -373,15 +379,15 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
             return Box::pin(std::future::pending());
         }
         if self.config.failing_stage == Some(AsyncCopyStage::OpenWriter) {
-            return Box::pin(async { Err(unused()) });
+            return Box::pin(async { Err(unused().with_effect_state(FsEffectState::Unchanged)) });
         }
         if let Some(kind) = self.config.writer_open_error {
             return Box::pin(async move {
-                Err(FsError::new(
-                    kind,
-                    FsOperation::OpenWriter,
-                    "injected writer-open failure",
-                ))
+                let error = FsError::new(kind, FsOperation::OpenWriter, "injected writer-open failure");
+                Err(match self.config.writer_open_effect {
+                    Some(effect) => error.with_effect_state(effect),
+                    None => error,
+                })
             });
         }
         let info = self.info(request.path());
@@ -390,6 +396,7 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
             let opened = OpenedAsyncWriter::new(
                 info,
                 Box::new(RecordingWriter {
+                    confirmed: 0,
                     config,
                     cancellations: Arc::clone(&self.cancellations),
                 }),
@@ -598,6 +605,7 @@ impl AsyncInput for RecordingInput {
 
 /// Supplies fallback destination I/O and publication behavior.
 struct RecordingWriter {
+    confirmed: usize,
     config: AsyncRecordingConfig,
     cancellations: Arc<Mutex<usize>>,
 }
@@ -610,15 +618,26 @@ impl AsyncOutput for RecordingWriter {
         _: usize,
         count: usize,
     ) -> Poll<IoResult<usize>> {
-        let config = self.get_mut().config.clone();
-        if config.pending_stage == Some(AsyncCopyStage::WriterWrite) {
-            Poll::Pending
-        } else if config.failing_stage == Some(AsyncCopyStage::WriterWrite) {
-            Poll::Ready(Err(IoError::other("injected write failure")))
-        } else {
-            Poll::Ready(Ok(count))
+        let this = self.get_mut();
+        let config = &this.config;
+        let pending = config.pending_stage == Some(AsyncCopyStage::WriterWrite);
+        let failing = config.failing_stage == Some(AsyncCopyStage::WriterWrite);
+        if this.confirmed >= config.writer_progress_before_stop {
+            if pending {
+                return Poll::Pending;
+            }
+            if failing {
+                return Poll::Ready(Err(IoError::other("injected write failure")));
+            }
         }
+        let mut accepted = count.min(config.writer_chunk.unwrap_or(count));
+        if pending || failing {
+            accepted = accepted.min(config.writer_progress_before_stop.saturating_sub(this.confirmed));
+        }
+        this.confirmed += accepted;
+        Poll::Ready(Ok(accepted))
     }
+
     fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<IoResult<()>> {
         let config = self.get_mut().config.clone();
         if config.pending_stage == Some(AsyncCopyStage::WriterFlush) {

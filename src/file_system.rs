@@ -61,6 +61,24 @@ use crate::write::WriteOperation;
 use crate::write::WriteOptions;
 
 /// Application-facing synchronous filesystem facade.
+///
+/// # Examples
+///
+/// The example runs against an isolated in-memory fixture. Applications obtain
+/// their configured facade from a provider or registry integration.
+///
+/// ```rust
+/// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
+/// # use support::*;
+/// # let filesystem = rustdoc_provider::filesystem();
+/// use qubit_fs::Path;
+/// use qubit_fs::read::ReadOptions;
+///
+/// let path = Path::parse("/report")?;
+/// let bytes = filesystem.read_prefix(&path, ReadOptions::default(), 3)?;
+/// assert_eq!(b"rep", bytes.as_slice());
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 #[derive(Clone)]
 pub struct FileSystem {
     /// Provider implementation receiving validated synchronous requests.

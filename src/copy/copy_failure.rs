@@ -23,8 +23,28 @@ use crate::write::FileWriter;
 
 /// A copy error with publication state, partial statistics, and optional writer
 /// recovery.
-/// A copy error with publication state, partial statistics, and optional writer
-/// recovery.
+///
+/// # Examples
+///
+/// The example runs against an isolated in-memory fixture. Applications obtain
+/// their configured facade from a provider or registry integration.
+///
+/// ```rust
+/// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
+/// # use support::*;
+/// # let filesystem = rustdoc_provider::filesystem();
+/// use qubit_fs::Path;
+/// use qubit_fs::copy::CopyOptions;
+/// use qubit_fs::copy::CopyFailureState;
+///
+/// let failure = filesystem.copy(
+///     &Path::parse("/missing")?, &Path::parse("/copy")?, CopyOptions::default(),
+/// ).expect_err("the fixture has no source");
+/// assert_eq!(CopyFailureState::Unchanged, failure.state());
+/// assert_eq!(0, failure.partial_stats().bytes);
+/// assert!(!failure.has_writer());
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 pub struct CopyFailure {
     parts: Box<CopyFailureParts>,
 }

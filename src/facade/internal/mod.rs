@@ -5,6 +5,10 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Shared private temporary-resource lifecycle rules.
-mod temp_lifecycle;
-pub(crate) use temp_lifecycle::TempLifecycle;
+//! Private resource types owned by the facade policy layer.
+
+mod byte_budget;
+mod file_system_resource;
+
+pub(crate) use byte_budget::ByteBudget;
+pub(crate) use file_system_resource::FileSystemResource;

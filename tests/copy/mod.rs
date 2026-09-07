@@ -13,3 +13,5 @@ mod async_copy_fallback_tests;
 mod async_copy_operation_tests;
 mod copy_fallback_tests;
 mod copy_policy_tests;
+
+mod open_writer_failure_tests;

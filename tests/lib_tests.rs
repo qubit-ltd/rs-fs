@@ -24,6 +24,7 @@ mod rename;
 mod spi;
 mod temp;
 mod uri;
+mod write;
 mod writer;
 
 #[test]

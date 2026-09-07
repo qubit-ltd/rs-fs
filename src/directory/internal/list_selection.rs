@@ -1,9 +1,17 @@
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 //! Pure matching rules shared by listing streams.
 use crate::directory::ListFilter;
 use crate::directory::ListOptions;
 use crate::metadata::DirEntry;
 use crate::path::Path;
 use crate::path::PathSemantics;
+/// Returns the entry suffix only when it lies within the requested namespace.
 pub(crate) fn relative_path<'a>(root: &Path, entry: &'a Path, semantics: PathSemantics) -> Option<&'a str> {
     if matches!(semantics, PathSemantics::ObjectKey | PathSemantics::ProviderSpecific) {
         return entry.as_str().strip_prefix(root.as_str());
@@ -21,6 +29,10 @@ pub(crate) fn relative_path<'a>(root: &Path, entry: &'a Path, semantics: PathSem
         }
     }
 }
+/// Validates a provider entry against selection and metadata requirements.
+///
+/// # Errors
+/// Returns a fixed diagnostic when the provider entry violates the request.
 pub(crate) fn select(
     entry: &DirEntry,
     root: &Path,

@@ -23,6 +23,15 @@ use crate::metadata::FileSystemCapability;
 use crate::metadata::SymlinkPolicy;
 
 /// Options controlling file, object, or tree copy operations.
+///
+/// # Examples
+/// ```rust
+/// use qubit_fs::copy::CopyOptions;
+/// use qubit_fs::copy::ServerSidePreference;
+/// use qubit_fs::metadata::FileSystemCapabilities;
+/// let options = CopyOptions::default().with_server_side(ServerSidePreference::Require);
+/// assert!(options.validate_against(FileSystemCapabilities::new()).is_err());
+/// ```
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub struct CopyOptions {
