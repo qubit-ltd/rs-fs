@@ -9,6 +9,7 @@
 
 use crate::copy::CopyConflictPolicy;
 use crate::copy::CopyMethod;
+use crate::copy::CopyMode;
 use crate::copy::CopyOptions;
 use crate::copy::CopyStats;
 use crate::copy::MetadataPreservePolicy;
@@ -218,6 +219,11 @@ impl CopyOutcome {
             .and_then(|value| value.checked_add(self.stats.symlinks))
             .and_then(|value| value.checked_add(self.stats.objects))
             .and_then(|value| value.checked_add(self.stats.prefixes));
+        if options.mode() == CopyMode::File
+            && (entries != Some(1) || self.stats.directories != 0 || self.stats.prefixes != 0)
+        {
+            return Some("provider reported a file-mode copy without exactly one resource");
+        }
         if entries.is_none()
             || options.max_entries().is_some_and(|maximum| {
                 u64::try_from(maximum)
