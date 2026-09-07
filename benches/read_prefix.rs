@@ -54,7 +54,8 @@ impl BenchmarkSpi {
             ProviderOperations::new()
                 .with(ProviderOperation::Stat)
                 .with(ProviderOperation::OpenReader),
-            FileSystemCapabilities::new().with_guaranteed(qubit_fs::metadata::FileSystemCapability::Read),
+            FileSystemCapabilities::new()
+                .with_guaranteed(qubit_fs::metadata::FileSystemCapability::Read),
             FileSystemLimits::unknown(),
             PathConstraints::absolute(),
             SymlinkPolicy::Reject,
@@ -91,8 +92,8 @@ fn read_prefix(c: &mut Criterion) {
     let path = Path::parse("/payload").expect("benchmark path is valid");
     let mut group = c.benchmark_group("read_prefix");
     for size in [1_usize << 10, 1_usize << 20, 1_usize << 26] {
-        let filesystem =
-            FileSystem::from_spi(BenchmarkSpi::new(vec![0xA5; size])).expect("benchmark facade should construct");
+        let filesystem = FileSystem::from_spi(BenchmarkSpi::new(vec![0xA5; size]))
+            .expect("benchmark facade should construct");
         for max_bytes in [8 * 1024, 64 * 1024, 1024 * 1024] {
             group.throughput(Throughput::Bytes(size.min(max_bytes) as u64));
             group.bench_with_input(

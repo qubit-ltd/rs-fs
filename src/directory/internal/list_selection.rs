@@ -12,8 +12,15 @@ use crate::metadata::DirEntry;
 use crate::path::Path;
 use crate::path::PathSemantics;
 /// Returns the entry suffix only when it lies within the requested namespace.
-pub(crate) fn relative_path<'a>(root: &Path, entry: &'a Path, semantics: PathSemantics) -> Option<&'a str> {
-    if matches!(semantics, PathSemantics::ObjectKey | PathSemantics::ProviderSpecific) {
+pub(crate) fn relative_path<'a>(
+    root: &Path,
+    entry: &'a Path,
+    semantics: PathSemantics,
+) -> Option<&'a str> {
+    if matches!(
+        semantics,
+        PathSemantics::ObjectKey | PathSemantics::ProviderSpecific
+    ) {
         return entry.as_str().strip_prefix(root.as_str());
     }
     if root == entry {
@@ -44,19 +51,26 @@ pub(crate) fn select(
     };
     match (semantics, options.filter()) {
         (PathSemantics::Hierarchical, Some(ListFilter::Subtree(prefix)))
-            if !(relative == prefix || relative.strip_prefix(prefix).is_some_and(|rest| rest.starts_with('/'))) =>
+            if !(relative == prefix
+                || relative
+                    .strip_prefix(prefix)
+                    .is_some_and(|rest| rest.starts_with('/'))) =>
         {
             return Err("provider returned directory entry outside requested prefix");
         }
         (PathSemantics::Hierarchical, Some(ListFilter::LiteralPrefix(_))) => {
             return Err("literal prefix is not valid for hierarchical listing");
         }
-        (PathSemantics::ObjectKey | PathSemantics::ProviderSpecific, Some(ListFilter::LiteralPrefix(prefix)))
-            if !relative.starts_with(prefix) =>
-        {
+        (
+            PathSemantics::ObjectKey | PathSemantics::ProviderSpecific,
+            Some(ListFilter::LiteralPrefix(prefix)),
+        ) if !relative.starts_with(prefix) => {
             return Err("provider returned directory entry outside requested prefix");
         }
-        (PathSemantics::ObjectKey | PathSemantics::ProviderSpecific, Some(ListFilter::Subtree(_))) => {
+        (
+            PathSemantics::ObjectKey | PathSemantics::ProviderSpecific,
+            Some(ListFilter::Subtree(_)),
+        ) => {
             return Err("subtree filter is not valid for flat listing");
         }
         _ => {}

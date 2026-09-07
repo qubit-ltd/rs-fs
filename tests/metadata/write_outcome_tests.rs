@@ -26,18 +26,20 @@ fn write_outcome_reports_actual_publication_semantics() {
 
 #[test]
 fn write_outcome_reports_confirmed_durability() {
-    let outcome = WriteOutcome::new(AchievedAtomicity::Atomic, PublicationMethod::Direct).with_durable(true);
+    let outcome =
+        WriteOutcome::new(AchievedAtomicity::Atomic, PublicationMethod::Direct).with_durable(true);
 
     assert!(outcome.durable());
 }
 
 #[test]
 fn write_outcome_validates_and_safely_formats_diagnostics() {
-    let outcome = WriteOutcome::new(AchievedAtomicity::Atomic, PublicationMethod::Direct).with_diagnostics(
-        UserMetadata::new()
-            .with("request_id", "private-request-id")
-            .expect("ordinary diagnostic key must be accepted"),
-    );
+    let outcome = WriteOutcome::new(AchievedAtomicity::Atomic, PublicationMethod::Direct)
+        .with_diagnostics(
+            UserMetadata::new()
+                .with("request_id", "private-request-id")
+                .expect("ordinary diagnostic key must be accepted"),
+        );
     assert!(outcome.diagnostics().contains_key("request_id"));
     assert!(!format!("{outcome:?}").contains("private-request-id"));
 }

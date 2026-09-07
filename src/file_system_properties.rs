@@ -204,14 +204,17 @@ impl FileSystemProperties {
                 "path semantics do not match this filesystem",
             ))
         } else {
-            self.path_constraints
-                .validate(path)
-                .and_then(|()| self.limits.validate_path(path, self.info.path_semantics(), operation))
+            self.path_constraints.validate(path).and_then(|()| {
+                self.limits
+                    .validate_path(path, self.info.path_semantics(), operation)
+            })
         };
         result.map_err(|error| {
-            error
-                .with_operation(operation)
-                .with_missing_context(path, None, self.info.provider_id())
+            error.with_operation(operation).with_missing_context(
+                path,
+                None,
+                self.info.provider_id(),
+            )
         })
     }
 
@@ -227,13 +230,17 @@ impl FileSystemProperties {
     /// Returns an invalid-options error when the snapshot violates core value
     /// invariants.
     pub(crate) fn validate(&self) -> FsResult<()> {
-        if self.info.provider_id().is_empty() || self.info.provider_id().chars().any(char::is_control) {
+        if self.info.provider_id().is_empty()
+            || self.info.provider_id().chars().any(char::is_control)
+        {
             return Err(invalid_properties(
                 "provider id must be non-empty and contain no controls",
             ));
         }
         if let Some((_capability, _dependency)) = self.capabilities.missing_dependency() {
-            return Err(invalid_properties("advertised capability dependency is missing"));
+            return Err(invalid_properties(
+                "advertised capability dependency is missing",
+            ));
         }
         if [
             self.limits.max_path_text_bytes(),
@@ -268,5 +275,9 @@ impl FileSystemProperties {
 /// # Returns
 /// An invalid-options error scoped to provider configuration.
 fn invalid_properties(message: &'static str) -> FsError {
-    FsError::new(FsErrorKind::InvalidOptions, FsOperation::ValidateProperties, message)
+    FsError::new(
+        FsErrorKind::InvalidOptions,
+        FsOperation::ValidateProperties,
+        message,
+    )
 }

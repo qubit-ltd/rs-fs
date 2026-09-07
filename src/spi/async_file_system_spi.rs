@@ -78,7 +78,10 @@ pub trait AsyncFileSystemSpi: Send + Sync {
     ///
     /// # Errors
     /// Resolves to the provider open failure with filesystem context.
-    fn list<'a>(&'a self, request: ListRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncDirectoryStream>> {
+    fn list<'a>(
+        &'a self,
+        request: ListRequest<'a>,
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncDirectoryStream>> {
         Box::pin(async move { Err(unsupported(FsOperation::List, request.path())) })
     }
 
@@ -92,7 +95,10 @@ pub trait AsyncFileSystemSpi: Send + Sync {
     ///
     /// # Errors
     /// Resolves to the provider open failure with filesystem context.
-    fn open_reader<'a>(&'a self, request: OpenReaderRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
+    fn open_reader<'a>(
+        &'a self,
+        request: OpenReaderRequest<'a>,
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
         Box::pin(async move { Err(unsupported(FsOperation::OpenReader, request.path())) })
     }
 
@@ -111,9 +117,13 @@ pub trait AsyncFileSystemSpi: Send + Sync {
     ///
     /// # Errors
     /// Resolves to the provider open failure with filesystem context.
-    fn open_writer<'a>(&'a self, request: OpenWriterRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
+    fn open_writer<'a>(
+        &'a self,
+        request: OpenWriterRequest<'a>,
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
         Box::pin(async move {
-            Err(unsupported(FsOperation::OpenWriter, request.path()).with_effect_state(FsEffectState::Unchanged))
+            Err(unsupported(FsOperation::OpenWriter, request.path())
+                .with_effect_state(FsEffectState::Unchanged))
         })
     }
 
@@ -144,7 +154,10 @@ pub trait AsyncFileSystemSpi: Send + Sync {
     ///
     /// # Errors
     /// Resolves to the provider deletion failure with filesystem context.
-    fn delete_file<'a>(&'a self, request: DeleteFileRequest<'a>) -> SpiFuture<'a, FsResult<DeleteOutcome>> {
+    fn delete_file<'a>(
+        &'a self,
+        request: DeleteFileRequest<'a>,
+    ) -> SpiFuture<'a, FsResult<DeleteOutcome>> {
         Box::pin(async move { Err(unsupported(FsOperation::Delete, request.path())) })
     }
 
@@ -158,7 +171,10 @@ pub trait AsyncFileSystemSpi: Send + Sync {
     ///
     /// # Errors
     /// Resolves to the provider deletion failure with filesystem context.
-    fn delete_directory<'a>(&'a self, request: DeleteDirectoryRequest<'a>) -> SpiFuture<'a, FsResult<DeleteOutcome>> {
+    fn delete_directory<'a>(
+        &'a self,
+        request: DeleteDirectoryRequest<'a>,
+    ) -> SpiFuture<'a, FsResult<DeleteOutcome>> {
         Box::pin(async move { Err(unsupported(FsOperation::Delete, request.path())) })
     }
 
@@ -173,7 +189,10 @@ pub trait AsyncFileSystemSpi: Send + Sync {
     /// # Errors
     /// Resolves to a typed failure preserving confirmed publication progress.
     #[inline]
-    fn try_copy<'a>(&'a self, _request: CopyRequest<'a>) -> SpiFuture<'a, Result<CopyAttempt, SpiCopyFailure>> {
+    fn try_copy<'a>(
+        &'a self,
+        _request: CopyRequest<'a>,
+    ) -> SpiFuture<'a, Result<CopyAttempt, SpiCopyFailure>> {
         Box::pin(async { Ok(CopyAttempt::Declined(CopyDeclineReason::NotImplemented)) })
     }
 
@@ -187,10 +206,14 @@ pub trait AsyncFileSystemSpi: Send + Sync {
     ///
     /// # Errors
     /// Resolves to a typed failure preserving confirmed rename progress.
-    fn rename<'a>(&'a self, request: RenameRequest<'a>) -> SpiFuture<'a, Result<RenameOutcome, SpiRenameFailure>> {
+    fn rename<'a>(
+        &'a self,
+        request: RenameRequest<'a>,
+    ) -> SpiFuture<'a, Result<RenameOutcome, SpiRenameFailure>> {
         Box::pin(async move {
             Err(SpiRenameFailure::new(
-                unsupported(FsOperation::Rename, request.source()).with_target(request.target().clone()),
+                unsupported(FsOperation::Rename, request.source())
+                    .with_target(request.target().clone()),
                 RenameFailureState::Unchanged,
             ))
         })
@@ -206,7 +229,10 @@ pub trait AsyncFileSystemSpi: Send + Sync {
     ///
     /// # Errors
     /// Resolves to the provider creation failure with filesystem context.
-    fn create_temp_file<'a>(&'a self, _request: CreateTempFileRequest) -> SpiFuture<'a, FsResult<OpenedAsyncTempFile>> {
+    fn create_temp_file<'a>(
+        &'a self,
+        _request: CreateTempFileRequest,
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncTempFile>> {
         Box::pin(async {
             Err(FsError::new(
                 FsErrorKind::UnsupportedOperation,
