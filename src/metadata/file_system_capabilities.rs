@@ -115,7 +115,6 @@ impl FileSystemCapabilities {
 
     /// Returns the support status of `capability`.
     #[inline(always)]
-    #[must_use]
     pub const fn support(&self, capability: FileSystemCapability) -> FileSystemCapabilitySupport {
         let bit = capability.bit();
         if self.guaranteed & bit != 0 {

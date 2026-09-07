@@ -96,6 +96,7 @@ enum CopyResponse {
     CompletedInvalidFailedStats,
     CompletedInvalidOverwrittenStats,
     CompletedInvalidFileStats,
+    CompletedFileSkipped,
     CompletedStreamedOutcome,
     Declined,
     DeclinedSkipAtomic,
@@ -492,6 +493,14 @@ impl FileSystemSpi for RecordingSpi {
                     AchievedAtomicity::Atomic,
                 )))
             }
+            CopyResponse::CompletedFileSkipped => Ok(CopyAttempt::Completed(CopyOutcome::new(
+                CopyStats {
+                    skipped: 1,
+                    ..CopyStats::default()
+                },
+                CopyMethod::Native,
+                AchievedAtomicity::Atomic,
+            ))),
             CopyResponse::CompletedStreamedOutcome => Ok(CopyAttempt::Completed(CopyOutcome::new(
                 CopyStats::default(),
                 CopyMethod::Streamed,
@@ -1258,6 +1267,21 @@ fn test_copy_file_mode_rejects_tree_stats() {
         FsErrorKind::ProviderContractViolation,
         failure.error().kind()
     );
+}
+
+/// Verifies file-mode completion may report a single skipped source.
+#[test]
+fn test_copy_file_mode_allows_one_skipped_entry() {
+    let (filesystem, _, _) = recording_filesystem(CopyResponse::CompletedFileSkipped);
+    let outcome = filesystem
+        .copy(
+            &path("/source"),
+            &path("/target"),
+            CopyOptions::file().with_conflict(CopyConflictPolicy::Skip),
+        )
+        .expect("file mode should allow a skipped source");
+    assert_eq!(1, outcome.stats().skipped);
+    assert_eq!(0, outcome.stats().files);
 }
 
 /// Verifies only the facade may return a streamed fallback outcome; providers

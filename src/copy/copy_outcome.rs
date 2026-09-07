@@ -219,9 +219,14 @@ impl CopyOutcome {
             .and_then(|value| value.checked_add(self.stats.symlinks))
             .and_then(|value| value.checked_add(self.stats.objects))
             .and_then(|value| value.checked_add(self.stats.prefixes));
-        if options.mode() == CopyMode::File
-            && (entries != Some(1) || self.stats.directories != 0 || self.stats.prefixes != 0)
-        {
+        let valid_skipped_file = options.mode() == CopyMode::File
+            && options.conflict() == CopyConflictPolicy::Skip
+            && self.stats.skipped == 1
+            && entries == Some(0);
+        let valid_copied_file = entries == Some(1)
+            && self.stats.directories == 0
+            && self.stats.prefixes == 0;
+        if options.mode() == CopyMode::File && !valid_copied_file && !valid_skipped_file {
             return Some("provider reported a file-mode copy without exactly one resource");
         }
         if entries.is_none()
