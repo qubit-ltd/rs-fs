@@ -175,8 +175,8 @@ timeout after confirmed publication preserves publication and successful stats.
 
 Directory streams are incremental and can fail after earlier entries. They are
 not snapshots. `Subtree` preserves hierarchical boundaries. `LiteralPrefix`
-compares raw object-key text, requires a nonempty object root, and does not decode
-or normalize keys. List/copy symlink overrides remain scoped to each operation.
+compares raw object-key text relative to `ListScope::Path`, or complete logical
+keys for `ListScope::Namespace`; it does not decode or normalize keys. List/copy symlink overrides remain scoped to each operation.
 
 Atomicity and durability are independent. `WriteOutcome`, `RenameOutcome`,
 and `CopyOutcome` expose durability facts alongside applicable atomicity,
@@ -227,3 +227,33 @@ full platform or repository-wide compliance.
 The maintenance boundary is targeted policy/lifecycle helpers and documented
 public contracts. No generic all-operation engine, provider runtime, or native
 I/O algorithm rewrite is introduced by the recovery work.
+
+## Listing scopes and bounded reads
+
+Pass `ListScope::Path(path)` to list a hierarchical directory or a raw flat-key
+prefix. Use `ListScope::Namespace` to list the entire configured flat namespace;
+it is rejected for hierarchical filesystems, whose root is `ListScope::Path(Path::root())`.
+`Path` still rejects empty strings. Namespace does not permit access beyond the
+configured filesystem, and cannot be used to open, stat, or write a resource.
+
+For flat keys, `LiteralPrefix` is relative to the selected scope. A root `folder/`
+and filter `a` match `folder/a` and `folder/ab`. A root `folder` also matches
+`folderish`; no separator is inserted and no key text is normalized. Namespace
+filters match complete logical keys. The combined root/filter text is checked
+against the provider's path-text limit before opening a stream.
+
+Listing deadlines start when the stream is constructed and are checked before
+and after each provider call. A successful entry or EOF arriving at the deadline
+is rejected; a real provider failure retains its category and source. Checks are
+cooperative and cannot interrupt a permanently pending provider future. Creating
+and dropping an unpolled next-entry future does not change stream state.
+
+`read_prefix` opens once and consumes at most the requested prefix without an
+extra stat. It inserts or narrows a provider range only for **Guaranteed**
+`RangeRead`, no checksum request, a positive prefix length, and representable
+provider limits. Original options are validated first. Conditional or unsupported
+range capabilities still permit sequential prefix reads. BestEffort checksum
+preserves the original request; Required checksum is rejected with
+`RequirementNotMet` because a prefix cannot prove complete checksum validation.
+Use a complete `read_all` when that guarantee is needed. Return and consumption
+bounds do not promise an identical bound on provider network prefetch.

@@ -2,7 +2,7 @@
 
 [English version](provider_guide.md)
 
-本指南面向 `qubit-fs` 0.4 的 provider 作者，说明如何实现一个能够被
+本指南面向 `qubit-fs` 0.5 的 provider 作者，说明如何实现一个能够被
 `FileSystem` 门面信任的最小 provider，以及发布适配器前应完成的检查。它不是后端
 教程、凭据管理器，也不承诺所有后端都支持每个操作。
 
@@ -169,3 +169,27 @@ writer 和临时资源实现必须分别报告发布、清理和恢复失败。�
 - [English user guide](user_guide.md) · [中文用户指南](user_guide.zh_CN.md)
 - [English design](file_system_design.md) · [中文设计文档](file_system_design.zh_CN.md)
 - [API 文档](https://docs.rs/qubit-fs)
+
+## 列举范围与有界读取
+
+列举层级目录或平面键前缀时，传入 `ListScope::Path(path)`；列举整个已配置的平面
+命名空间时，传入 `ListScope::Namespace`。层级文件系统拒绝 Namespace，列举其根目录
+应使用 `ListScope::Path(Path::root())`。`Path` 仍拒绝空字符串。Namespace 不会扩大
+配置的文件系统边界，也不能用来打开、查询属性或写入资源。
+
+平面键的 `LiteralPrefix` 相对于所选范围匹配。例如根为 `folder/`、过滤器为 `a`
+时匹配 `folder/a` 和 `folder/ab`；根为 `folder` 时还会匹配 `folderish`。
+匹配过程不补分隔符，也不规范化键文本。Namespace 的过滤器匹配完整逻辑键。
+打开流之前，会按 provider 的路径文本上限检查根与过滤器合并后的长度。
+
+列举 deadline 从目录流构造完成时开始计算，每次调用 provider 前后都会检查。
+到期后收到的成功条目或 EOF 会被拒绝；实际 provider 错误保留原类型和错误链。
+这是一种协作式预算，不能中断永久 Pending 的 future。只构造再丢弃未经 poll 的
+next-entry future，不会改变流状态。
+
+`read_prefix` 只打开一次 reader，不额外 stat，消费字节数不超过前缀上限。
+只有 `RangeRead` 为 **Guaranteed**、未请求 checksum、前缀长度为正，且范围可表示
+并符合 provider 上限时，才会自动添加或收紧 range；原始选项总是先校验。
+Conditional 或不支持范围读取的 provider 仍可顺序读取前缀。BestEffort checksum
+保留原请求；Required checksum 会返回 `RequirementNotMet`，因为仅读取前缀不能确认
+完整校验。需要该保证时使用完整的 `read_all`。返回和消费上限不等于网络预取量保证。

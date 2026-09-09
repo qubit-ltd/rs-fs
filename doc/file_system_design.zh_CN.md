@@ -141,7 +141,8 @@ copy deadline 是从 operation 构造起累计的协作式预算，在提供者�
 成功统计。
 
 目录流逐步返回条目，可能在已经处理部分条目后失败，不提供快照保证。`Subtree` 保留层级
-边界；`LiteralPrefix` 比较原始对象键文本，要求非空对象根，不解码或规范化键。
+边界；`LiteralPrefix` 相对于 `ListScope::Path` 匹配原始对象键文本，
+对于 `ListScope::Namespace` 则匹配完整逻辑键，不解码或规范化键。
 list/copy 的符号链接覆盖策略仅对本次操作生效。
 
 原子性与持久性独立。`WriteOutcome`、`RenameOutcome`、`CopyOutcome` 报告实际 durability，
@@ -181,3 +182,27 @@ required 保证在可行时于分派前检查，完成后再根据 outcome 校�
 
 维护范围集中在策略／生命周期辅助逻辑和已声明的公共契约。恢复改造不引入通用操作引擎、
 提供者运行时，也不重写原生 I/O 算法。
+
+## 列举范围与有界读取
+
+列举层级目录或平面键前缀时，传入 `ListScope::Path(path)`；列举整个已配置的平面
+命名空间时，传入 `ListScope::Namespace`。层级文件系统拒绝 Namespace，列举其根目录
+应使用 `ListScope::Path(Path::root())`。`Path` 仍拒绝空字符串。Namespace 不会扩大
+配置的文件系统边界，也不能用来打开、查询属性或写入资源。
+
+平面键的 `LiteralPrefix` 相对于所选范围匹配。例如根为 `folder/`、过滤器为 `a`
+时匹配 `folder/a` 和 `folder/ab`；根为 `folder` 时还会匹配 `folderish`。
+匹配过程不补分隔符，也不规范化键文本。Namespace 的过滤器匹配完整逻辑键。
+打开流之前，会按 provider 的路径文本上限检查根与过滤器合并后的长度。
+
+列举 deadline 从目录流构造完成时开始计算，每次调用 provider 前后都会检查。
+到期后收到的成功条目或 EOF 会被拒绝；实际 provider 错误保留原类型和错误链。
+这是一种协作式预算，不能中断永久 Pending 的 future。只构造再丢弃未经 poll 的
+next-entry future，不会改变流状态。
+
+`read_prefix` 只打开一次 reader，不额外 stat，消费字节数不超过前缀上限。
+只有 `RangeRead` 为 **Guaranteed**、未请求 checksum、前缀长度为正，且范围可表示
+并符合 provider 上限时，才会自动添加或收紧 range；原始选项总是先校验。
+Conditional 或不支持范围读取的 provider 仍可顺序读取前缀。BestEffort checksum
+保留原请求；Required checksum 会返回 `RequirementNotMet`，因为仅读取前缀不能确认
+完整校验。需要该保证时使用完整的 `read_all`。返回和消费上限不等于网络预取量保证。

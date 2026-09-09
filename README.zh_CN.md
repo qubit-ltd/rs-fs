@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![English Document](https://img.shields.io/badge/Document-English-blue.svg)](README.md)
 
-`qubit-fs` 0.4.0 是 Rust 1.94 及以上版本可用的、与具体 provider 无关的文件系统抽象，
+`qubit-fs` 0.5.0 是 Rust 1.94 及以上版本可用的、与具体 provider 无关的文件系统抽象，
 同时提供同步和异步 API。它向应用提供具体门面 `FileSystem` 与
 `AsyncFileSystem`，但不会替应用选择存储后端或异步运行时。
 
@@ -17,13 +17,13 @@
 
 ```toml
 [dependencies]
-qubit-fs = "0.4"
+qubit-fs = "0.5"
 ```
 
 同步 API 默认启用。需要异步门面时必须显式开启 async feature：
 
 ```toml
-qubit-fs = { version = "0.4", features = ["async"] }
+qubit-fs = { version = "0.5", features = ["async"] }
 ```
 
 ## 运行一个本地报告示例
@@ -33,8 +33,8 @@ qubit-fs = { version = "0.4", features = ["async"] }
 
 ```toml
 [dependencies]
-qubit-fs = "0.4"
-qubit-fs-local = "0.6"
+qubit-fs = "0.5"
+qubit-fs-local = "0.7"
 tempfile = "3"
 ```
 
@@ -43,6 +43,7 @@ tempfile = "3"
 use std::time::Duration;
 
 use qubit_fs::Path;
+use qubit_fs::directory::ListScope;
 use qubit_fs::read::ReadOptions;
 use qubit_fs::write::WriteOptions;
 use qubit_fs_local::LocalCopyResourceLimits;
@@ -62,6 +63,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     filesystem.write_all(&path, b"report ready", WriteOptions::default())?;
     let bytes = filesystem.read_all(&path, ReadOptions::default(), 1024)?;
     assert_eq!(b"report ready", bytes.as_slice());
+    let scope = ListScope::Path(Path::root());
+    let mut entries = filesystem.list(&scope, Default::default())?;
+    assert_eq!(entries.next_entry()?.expect("published report").path, path);
+    assert!(entries.next_entry()?.is_none());
     println!("{}", String::from_utf8(bytes)?);
     Ok(())
 }
@@ -80,6 +85,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   I/O 失败仍会作为错误返回。
 - `DirectoryStream` 按条目增量读取。应在有界循环中消费它，不应把目录假定为已加载的
   集合。
+
+- 列举范围由 `ListScope::Path` 或平面命名空间 `ListScope::Namespace` 明确指定；前缀读取仅在 `RangeRead` 为 Guaranteed 时自动添加范围。
 
 ## 从这里开始
 
