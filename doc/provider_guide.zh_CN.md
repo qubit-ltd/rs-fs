@@ -168,5 +168,4 @@ writer 和临时资源实现必须分别报告发布、清理和恢复失败。�
 
 - [English user guide](user_guide.md) · [中文用户指南](user_guide.zh_CN.md)
 - [English design](file_system_design.md) · [中文设计文档](file_system_design.zh_CN.md)
-- [0.4 迁移指南](migration_0_4.zh_CN.md)
 - [API 文档](https://docs.rs/qubit-fs)

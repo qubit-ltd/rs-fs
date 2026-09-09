@@ -182,5 +182,4 @@ authentication, timeout, and I/O errors must remain errors.
 - [User guide](user_guide.md) · [中文用户指南](user_guide.zh_CN.md)
 - [File-system design](file_system_design.md) ·
   [中文设计文档](file_system_design.zh_CN.md)
-- [0.4 migration guide](migration_0_4.md)
 - [API reference](https://docs.rs/qubit-fs)
