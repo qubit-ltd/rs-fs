@@ -13,6 +13,7 @@ mod async_file_reader;
 mod async_read_operation;
 mod checksum_policy;
 mod file_reader;
+mod prefix_read_plan;
 mod read_operation;
 mod read_options;
 

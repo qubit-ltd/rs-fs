@@ -20,6 +20,7 @@ use crate::facade::facade_core::FacadeCore;
 use crate::facade::internal::FileSystemResource;
 use crate::path::Path;
 use crate::read::ReadOptions;
+use crate::read::prefix_read_plan::PrefixReadPlan;
 
 /// Executes aggregate synchronous read operations for one facade.
 pub(crate) struct ReadOperation<'a> {
@@ -104,7 +105,8 @@ impl<'a> ReadOperation<'a> {
 
     /// Reads at most `max_bytes` from a file without requiring a complete read.
     pub(crate) fn read_prefix(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
-        let mut reader = self.filesystem.open_reader(path, options)?;
+        let plan = PrefixReadPlan::new(self.filesystem.properties(), path, options, max_bytes)?;
+        let mut reader = self.filesystem.open_reader(path, plan.into_options())?;
         if max_bytes == 0 {
             return Ok(Vec::new());
         }
