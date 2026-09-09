@@ -66,7 +66,6 @@ pub(crate) fn validate_entry(
     Ok(())
 }
 
-/// Checks whether one validated entry is selected by listing options.
 /// Builds a stable provider-contract error for list option filtering.
 pub(crate) fn option_error(scope: &ListScope, message: &'static str) -> FsError {
     let error = FsError::new(
