@@ -8,11 +8,15 @@
 //! Pure matching rules shared by listing streams.
 use crate::directory::ListFilter;
 use crate::directory::ListOptions;
+use crate::directory::ListScope;
 use crate::metadata::DirEntry;
 use crate::path::Path;
 use crate::path::PathSemantics;
 /// Returns the entry suffix only when it lies within the requested namespace.
-pub(crate) fn relative_path<'a>(root: &Path, entry: &'a Path, semantics: PathSemantics) -> Option<&'a str> {
+pub(crate) fn relative_path<'a>(scope: &ListScope, entry: &'a Path, semantics: PathSemantics) -> Option<&'a str> {
+    let Some(root) = scope.path() else {
+        return Some(entry.as_str());
+    };
     if matches!(semantics, PathSemantics::ObjectKey | PathSemantics::ProviderSpecific) {
         return entry.as_str().strip_prefix(root.as_str());
     }
@@ -35,11 +39,11 @@ pub(crate) fn relative_path<'a>(root: &Path, entry: &'a Path, semantics: PathSem
 /// Returns a fixed diagnostic when the provider entry violates the request.
 pub(crate) fn select(
     entry: &DirEntry,
-    root: &Path,
+    scope: &ListScope,
     options: &ListOptions,
     semantics: PathSemantics,
 ) -> Result<(), &'static str> {
-    let Some(relative) = relative_path(root, &entry.path, semantics) else {
+    let Some(relative) = relative_path(scope, &entry.path, semantics) else {
         return Err("provider returned directory entry outside requested root");
     };
     match (semantics, options.filter()) {

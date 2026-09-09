@@ -12,8 +12,8 @@
 use super::AsyncDirectoryStreamSession;
 use crate::directory::AsyncDirectoryStream;
 use crate::directory::ListOptions;
+use crate::directory::ListScope;
 use crate::metadata::FileSystemLimits;
-use crate::path::Path;
 use crate::path::PathSemantics;
 
 /// An already-open asynchronous directory stream.
@@ -46,15 +46,14 @@ impl OpenedAsyncDirectoryStream {
     /// # Returns
     /// A facade-owned asynchronous directory stream.
     #[inline]
-    #[must_use]
     pub(crate) fn into_stream(
         self,
-        root: Path,
+        scope: ListScope,
         options: ListOptions,
         provider: &str,
         path_semantics: PathSemantics,
         limits: FileSystemLimits,
-    ) -> AsyncDirectoryStream {
-        AsyncDirectoryStream::new(root, self.session, options, provider, path_semantics, limits)
+    ) -> crate::error::FsResult<AsyncDirectoryStream> {
+        AsyncDirectoryStream::new(scope, self.session, options, provider, path_semantics, limits)
     }
 }
