@@ -2,7 +2,7 @@
 
 [中文指南](user_guide.zh_CN.md) · [README](../README.md)
 
-This guide covers `qubit-fs` 0.4 for Rust 1.94 and later. It is for applications
+This guide covers `qubit-fs` 0.5 for Rust 1.94 and later. It is for applications
 that publish reports through a configured filesystem and need to retain recovery
 facts when a write, copy, or cancellation does not complete normally.
 
@@ -28,17 +28,48 @@ prove that a resource exists or that future I/O will succeed.
 | Recovery handle | Ownership of a session still needing a decision; its absence does not prove no side effects. |
 
 The default feature set is empty and provides synchronous APIs. Enable
-`qubit-fs = { version = "0.4", features = ["async"] }` for asynchronous APIs.
+`qubit-fs = { version = "0.5", features = ["async"] }` for asynchronous APIs.
 The application chooses its executor; the library does not require Tokio.
 
 For the runnable local example, use:
 
 ```toml
 [dependencies]
-qubit-fs = "0.4"
-qubit-fs-local = "0.6"
+qubit-fs = "0.5"
+qubit-fs-local = "0.7"
 tempfile = "3"
 ```
+
+## Listing scopes and bounded reads
+
+Pass `ListScope::Path(path)` to list a hierarchical directory or a raw flat-key
+prefix. Use `ListScope::Namespace` to list the entire configured flat namespace;
+it is rejected for hierarchical filesystems, whose root is `ListScope::Path(Path::root())`.
+`Path` still rejects empty strings. Namespace does not permit access beyond the
+configured filesystem, and cannot be used to open, stat, or write a resource.
+
+For flat keys, `LiteralPrefix` is relative to the selected scope. A root `folder/`
+and filter `a` match `folder/a` and `folder/ab`. A root `folder` also matches
+`folderish`; no separator is inserted and no key text is normalized. Namespace
+filters match complete logical keys. The combined root/filter text is checked
+against the provider's path-text limit before opening a stream.
+
+Listing deadlines start when the stream is constructed and are checked before
+and after each provider call. A successful entry or EOF arriving at the deadline
+is rejected; a real provider failure retains its category and source. Checks are
+cooperative and cannot interrupt a permanently pending provider future. Creating
+and dropping an unpolled next-entry future does not change stream state.
+
+`read_prefix` opens once and consumes at most the requested prefix without an
+extra stat. It inserts or narrows a provider range only for **Guaranteed**
+`RangeRead`, no checksum request, a positive prefix length, and representable
+provider limits. Original options are validated first. Conditional or unsupported
+range capabilities still permit sequential prefix reads. BestEffort checksum
+preserves the original request; Required checksum is rejected with
+`RequirementNotMet` because a prefix cannot prove complete checksum validation.
+Use a complete `read_all` when that guarantee is needed. Return and consumption
+bounds do not promise an identical bound on provider network prefetch.
+
 
 ## Publish and read a report
 
@@ -53,6 +84,7 @@ choose explicit resource budgets for the workload.
 use std::time::Duration;
 
 use qubit_fs::Path;
+use qubit_fs::directory::ListScope;
 use qubit_fs::read::ReadOptions;
 use qubit_fs::write::WriteOptions;
 use qubit_fs_local::LocalCopyResourceLimits;
@@ -72,6 +104,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     filesystem.write_all(&path, b"report ready", WriteOptions::default())?;
     let bytes = filesystem.read_all(&path, ReadOptions::default(), 1024)?;
     assert_eq!(b"report ready", bytes.as_slice());
+    let scope = ListScope::Path(Path::root());
+    let mut entries = filesystem.list(&scope, Default::default())?;
+    assert_eq!(entries.next_entry()?.expect("published report").path, path);
+    assert!(entries.next_entry()?.is_none());
     println!("{}", String::from_utf8(bytes)?);
     Ok(())
 }
@@ -125,7 +161,7 @@ pub fn copy_report(filesystem: &FileSystem, source: &Path, target: &Path) -> Res
 }
 ```
 
-After success, enumerate the release path with `filesystem.list(path,
+After success, enumerate the release path with `filesystem.list(&ListScope::Path(path.clone()),
 ListOptions::default())` and call `next_entry()` in a bounded loop. Import
 `ListOptions` from `qubit_fs::directory`. Entries arrive incrementally and errors
 can occur after earlier entries were processed. Record progress before fetching
@@ -158,6 +194,9 @@ use std::task::Poll;
 
 use qubit_fs::AsyncFileSystem;
 use qubit_fs::Path;
+use qubit_fs::directory::ListFilter;
+use qubit_fs::directory::ListOptions;
+use qubit_fs::directory::ListScope;
 use qubit_fs::error::FsError;
 use qubit_fs::metadata::WriteOutcome;
 use qubit_fs::write::AsyncWriteAllOperation;
@@ -218,6 +257,20 @@ pub async fn write_report(
         primary,
         cleanup_error,
     })))
+}
+
+/// Lists report keys across a configured flat namespace with a bounded result set.
+pub async fn list_reports(filesystem: &AsyncFileSystem) -> Result<Vec<Path>, FsError> {
+    let scope = ListScope::Namespace;
+    let options = ListOptions::object_keys()
+        .with_filter(Some(ListFilter::LiteralPrefix("reports/".to_owned())))
+        .with_max_entries(Some(1000));
+    let mut stream = filesystem.list(&scope, options).await?;
+    let mut paths = Vec::new();
+    while let Some(entry) = stream.next_entry_async().await? {
+        paths.push(entry.path);
+    }
+    Ok(paths)
 }
 ```
 

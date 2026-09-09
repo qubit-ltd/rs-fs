@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![中文文档](https://img.shields.io/badge/文档-中文版-blue.svg)](README.zh_CN.md)
 
-`qubit-fs` 0.4.0 is a provider-neutral, synchronous and asynchronous filesystem
+`qubit-fs` 0.5.0 is a provider-neutral, synchronous and asynchronous filesystem
 abstraction for Rust 1.94 or later. It supplies application-facing concrete
 facades—`FileSystem` and `AsyncFileSystem`—instead of choosing a storage backend
 or an async runtime for you.
@@ -19,14 +19,14 @@ public facade while allowing providers to be selected outside the core crate.
 
 ```toml
 [dependencies]
-qubit-fs = "0.4"
+qubit-fs = "0.5"
 ```
 
 Synchronous APIs are enabled by default. Enable the asynchronous facade
 explicitly when it is needed:
 
 ```toml
-qubit-fs = { version = "0.4", features = ["async"] }
+qubit-fs = { version = "0.5", features = ["async"] }
 ```
 
 ## Try a local report workflow
@@ -38,8 +38,8 @@ The temporary directory is removed when the demo ends.
 
 ```toml
 [dependencies]
-qubit-fs = "0.4"
-qubit-fs-local = "0.6"
+qubit-fs = "0.5"
+qubit-fs-local = "0.7"
 tempfile = "3"
 ```
 
@@ -48,6 +48,7 @@ tempfile = "3"
 use std::time::Duration;
 
 use qubit_fs::Path;
+use qubit_fs::directory::ListScope;
 use qubit_fs::read::ReadOptions;
 use qubit_fs::write::WriteOptions;
 use qubit_fs_local::LocalCopyResourceLimits;
@@ -67,6 +68,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     filesystem.write_all(&path, b"report ready", WriteOptions::default())?;
     let bytes = filesystem.read_all(&path, ReadOptions::default(), 1024)?;
     assert_eq!(b"report ready", bytes.as_slice());
+    let scope = ListScope::Path(Path::root());
+    let mut entries = filesystem.list(&scope, Default::default())?;
+    assert_eq!(entries.next_entry()?.expect("published report").path, path);
+    assert!(entries.next_entry()?.is_none());
     println!("{}", String::from_utf8(bytes)?);
     Ok(())
 }
@@ -88,6 +93,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   authentication, timeout, and I/O failures remain errors.
 - `DirectoryStream` reads entries incrementally. Consume it in a bounded loop
   instead of assuming that a directory is a preloaded collection.
+
+- Listing uses explicit `ListScope::Path` or flat `ListScope::Namespace`; prefix reads add a byte range only when `RangeRead` is Guaranteed.
 
 ## Start here
 

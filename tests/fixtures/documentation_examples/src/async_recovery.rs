@@ -5,6 +5,9 @@ use std::task::Poll;
 
 use qubit_fs::AsyncFileSystem;
 use qubit_fs::Path;
+use qubit_fs::directory::ListFilter;
+use qubit_fs::directory::ListOptions;
+use qubit_fs::directory::ListScope;
 use qubit_fs::error::FsError;
 use qubit_fs::metadata::WriteOutcome;
 use qubit_fs::write::AsyncWriteAllOperation;
@@ -65,4 +68,18 @@ pub async fn write_report(
         primary,
         cleanup_error,
     })))
+}
+
+/// Lists report keys across a configured flat namespace with a bounded result set.
+pub async fn list_reports(filesystem: &AsyncFileSystem) -> Result<Vec<Path>, FsError> {
+    let scope = ListScope::Namespace;
+    let options = ListOptions::object_keys()
+        .with_filter(Some(ListFilter::LiteralPrefix("reports/".to_owned())))
+        .with_max_entries(Some(1000));
+    let mut stream = filesystem.list(&scope, options).await?;
+    let mut paths = Vec::new();
+    while let Some(entry) = stream.next_entry_async().await? {
+        paths.push(entry.path);
+    }
+    Ok(paths)
 }

@@ -2,7 +2,7 @@
 
 [English guide](user_guide.md) · [README](../README.zh_CN.md)
 
-本指南适用于 `qubit-fs` 0.4、Rust 1.94 及以上版本，面向通过已配置文件系统发布报告的应用。
+本指南适用于 `qubit-fs` 0.5、Rust 1.94 及以上版本，面向通过已配置文件系统发布报告的应用。
 重点说明正常读写流程，以及写入、复制或取消未正常结束时，如何保留恢复所需的信息和资源。
 
 ## 概念与配置
@@ -24,16 +24,41 @@
 | 恢复句柄 | 仍需处理的会话所有权；没有句柄不代表没有副作用。 |
 
 默认 feature 集为空，只提供同步 API。异步应用显式配置
-`qubit-fs = { version = "0.4", features = ["async"] }`，并使用自己已有的执行器；库不要求 Tokio。
+`qubit-fs = { version = "0.5", features = ["async"] }`，并使用自己已有的执行器；库不要求 Tokio。
 
 运行下方本地示例需要：
 
 ```toml
 [dependencies]
-qubit-fs = "0.4"
-qubit-fs-local = "0.6"
+qubit-fs = "0.5"
+qubit-fs-local = "0.7"
 tempfile = "3"
 ```
+
+## 列举范围与有界读取
+
+列举层级目录或平面键前缀时，传入 `ListScope::Path(path)`；列举整个已配置的平面
+命名空间时，传入 `ListScope::Namespace`。层级文件系统拒绝 Namespace，列举其根目录
+应使用 `ListScope::Path(Path::root())`。`Path` 仍拒绝空字符串。Namespace 不会扩大
+配置的文件系统边界，也不能用来打开、查询属性或写入资源。
+
+平面键的 `LiteralPrefix` 相对于所选范围匹配。例如根为 `folder/`、过滤器为 `a`
+时匹配 `folder/a` 和 `folder/ab`；根为 `folder` 时还会匹配 `folderish`。
+匹配过程不补分隔符，也不规范化键文本。Namespace 的过滤器匹配完整逻辑键。
+打开流之前，会按 provider 的路径文本上限检查根与过滤器合并后的长度。
+
+列举 deadline 从目录流构造完成时开始计算，每次调用 provider 前后都会检查。
+到期后收到的成功条目或 EOF 会被拒绝；实际 provider 错误保留原类型和错误链。
+这是一种协作式预算，不能中断永久 Pending 的 future。只构造再丢弃未经 poll 的
+next-entry future，不会改变流状态。
+
+`read_prefix` 只打开一次 reader，不额外 stat，消费字节数不超过前缀上限。
+只有 `RangeRead` 为 **Guaranteed**、未请求 checksum、前缀长度为正，且范围可表示
+并符合 provider 上限时，才会自动添加或收紧 range；原始选项总是先校验。
+Conditional 或不支持范围读取的 provider 仍可顺序读取前缀。BestEffort checksum
+保留原请求；Required checksum 会返回 `RequirementNotMet`，因为仅读取前缀不能确认
+完整校验。需要该保证时使用完整的 `read_all`。返回和消费上限不等于网络预取量保证。
+
 
 ## 写入并读取一份报告
 
@@ -46,6 +71,7 @@ tempfile = "3"
 use std::time::Duration;
 
 use qubit_fs::Path;
+use qubit_fs::directory::ListScope;
 use qubit_fs::read::ReadOptions;
 use qubit_fs::write::WriteOptions;
 use qubit_fs_local::LocalCopyResourceLimits;
@@ -65,6 +91,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     filesystem.write_all(&path, b"report ready", WriteOptions::default())?;
     let bytes = filesystem.read_all(&path, ReadOptions::default(), 1024)?;
     assert_eq!(b"report ready", bytes.as_slice());
+    let scope = ListScope::Path(Path::root());
+    let mut entries = filesystem.list(&scope, Default::default())?;
+    assert_eq!(entries.next_entry()?.expect("published report").path, path);
+    assert!(entries.next_entry()?.is_none());
     println!("{}", String::from_utf8(bytes)?);
     Ok(())
 }
@@ -115,7 +145,7 @@ pub fn copy_report(filesystem: &FileSystem, source: &Path, target: &Path) -> Res
 }
 ```
 
-复制成功后，可通过 `filesystem.list(path, ListOptions::default())` 获取目录流，并在有界
+复制成功后，可通过 `filesystem.list(&ListScope::Path(path.clone()), ListOptions::default())` 获取目录流，并在有界
 循环内调用 `next_entry()`；`ListOptions` 从 `qubit_fs::directory` 导入。条目逐步返回，
 后续读取可能失败，应先记录当前条目的处理进度。目录流不是原子快照。
 
@@ -142,6 +172,9 @@ use std::task::Poll;
 
 use qubit_fs::AsyncFileSystem;
 use qubit_fs::Path;
+use qubit_fs::directory::ListFilter;
+use qubit_fs::directory::ListOptions;
+use qubit_fs::directory::ListScope;
 use qubit_fs::error::FsError;
 use qubit_fs::metadata::WriteOutcome;
 use qubit_fs::write::AsyncWriteAllOperation;
@@ -202,6 +235,20 @@ pub async fn write_report(
         primary,
         cleanup_error,
     })))
+}
+
+/// Lists report keys across a configured flat namespace with a bounded result set.
+pub async fn list_reports(filesystem: &AsyncFileSystem) -> Result<Vec<Path>, FsError> {
+    let scope = ListScope::Namespace;
+    let options = ListOptions::object_keys()
+        .with_filter(Some(ListFilter::LiteralPrefix("reports/".to_owned())))
+        .with_max_entries(Some(1000));
+    let mut stream = filesystem.list(&scope, options).await?;
+    let mut paths = Vec::new();
+    while let Some(entry) = stream.next_entry_async().await? {
+        paths.push(entry.path);
+    }
+    Ok(paths)
 }
 ```
 
