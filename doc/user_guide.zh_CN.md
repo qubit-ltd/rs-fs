@@ -31,7 +31,7 @@
 ```toml
 [dependencies]
 qubit-fs = "0.4"
-qubit-fs-local = "0.4"
+qubit-fs-local = "0.6"
 tempfile = "3"
 ```
 
@@ -264,6 +264,5 @@ write/copy 归为 `Indeterminate`。打开步骤已生效不代表整文件已�
 
 ## 延伸阅读
 
-- [0.4 迁移指南](migration_0_4.zh_CN.md)
 - [架构设计](file_system_design.zh_CN.md)
 - [API 文档](https://docs.rs/qubit-fs)

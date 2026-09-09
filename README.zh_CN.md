@@ -34,7 +34,7 @@ qubit-fs = { version = "0.4", features = ["async"] }
 ```toml
 [dependencies]
 qubit-fs = "0.4"
-qubit-fs-local = "0.4"
+qubit-fs-local = "0.6"
 tempfile = "3"
 ```
 
@@ -87,7 +87,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 - [English provider guide](doc/provider_guide.md)
 - [中文用户指南](doc/user_guide.zh_CN.md)
 - [中文 provider 指南](doc/provider_guide.zh_CN.md)
-- [0.4 迁移指南](doc/migration_0_4.zh_CN.md)
 - [English architecture](doc/file_system_design.md)
 - [中文架构设计](doc/file_system_design.zh_CN.md)
 - [API 文档](https://docs.rs/qubit-fs)

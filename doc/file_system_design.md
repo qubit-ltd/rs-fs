@@ -227,6 +227,3 @@ full platform or repository-wide compliance.
 The maintenance boundary is targeted policy/lifecycle helpers and documented
 public contracts. No generic all-operation engine, provider runtime, or native
 I/O algorithm rewrite is introduced by the recovery work.
-
-The [coverage exemption review](coverage_review.md) records full-source measurements,
-all 17 removed exemptions, and the testing debt behind each retained entry.

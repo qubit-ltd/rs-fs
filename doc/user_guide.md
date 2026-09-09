@@ -36,7 +36,7 @@ For the runnable local example, use:
 ```toml
 [dependencies]
 qubit-fs = "0.4"
-qubit-fs-local = "0.4"
+qubit-fs-local = "0.6"
 tempfile = "3"
 ```
 
@@ -295,6 +295,5 @@ rooted authority are provided by the backend.
 
 ## Further reading
 
-- [Migration to 0.4](migration_0_4.md)
 - [Architecture design](file_system_design.md)
 - [API reference](https://docs.rs/qubit-fs)
