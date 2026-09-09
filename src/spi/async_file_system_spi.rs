@@ -79,7 +79,16 @@ pub trait AsyncFileSystemSpi: Send + Sync {
     /// # Errors
     /// Resolves to the provider open failure with filesystem context.
     fn list<'a>(&'a self, request: ListRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncDirectoryStream>> {
-        Box::pin(async move { Err(unsupported(FsOperation::List, request.path())) })
+        Box::pin(async move {
+            Err(match request.scope().path() {
+                Some(path) => unsupported(FsOperation::List, path),
+                None => FsError::new(
+                    FsErrorKind::UnsupportedOperation,
+                    FsOperation::List,
+                    "provider operation is not supported",
+                ),
+            })
+        })
     }
 
     /// Asynchronously opens a reader.

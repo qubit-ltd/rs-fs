@@ -20,6 +20,7 @@ use crate::directory::DeleteOutcome;
 use crate::directory::DirectoryOperation;
 use crate::directory::DirectoryStream;
 use crate::directory::ListOptions;
+use crate::directory::ListScope;
 use crate::error::FsError;
 use crate::error::FsErrorKind;
 use crate::error::FsOperation;
@@ -206,8 +207,8 @@ impl FileSystem {
     }
 
     /// Opens a provider directory stream after local option validation.
-    pub fn list(&self, path: &Path, options: ListOptions) -> FsResult<DirectoryStream> {
-        DirectoryOperation::new(self).list(path, options)
+    pub fn list(&self, scope: &ListScope, options: ListOptions) -> FsResult<DirectoryStream> {
+        DirectoryOperation::new(self).list(scope, options)
     }
 
     /// Opens a provider reader after local option validation.

@@ -29,6 +29,7 @@ use qubit_fs::directory::CreateDirectoryOptions;
 use qubit_fs::directory::DeleteOptions;
 use qubit_fs::directory::DirectoryStreamState;
 use qubit_fs::directory::ListOptions;
+use qubit_fs::directory::ListScope;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::error::FsOperation;
 use qubit_fs::metadata::AchievedAtomicity;
@@ -139,7 +140,8 @@ fn test_async_facade_enriches_direct_provider_failures() {
     });
 
     for error in [
-        ready(file_system.list(&target, ListOptions::default())).expect_err("list provider failure should propagate"),
+        ready(file_system.list(&ListScope::Path((target).clone()), ListOptions::default()))
+            .expect_err("list provider failure should propagate"),
         ready(file_system.create_directory(&target, CreateDirectoryOptions::default()))
             .expect_err("create provider failure should propagate"),
         ready(file_system.delete_file(&target, DeleteOptions::default()))
@@ -254,8 +256,8 @@ fn test_async_directory_stream_rejects_outside_root_and_becomes_terminal() {
         directory_entries: vec![DirEntry::new(path("/outside"), FileKind::File)],
         ..AsyncRecordingConfig::default()
     });
-    let mut stream =
-        ready(file_system.list(&path("/root"), ListOptions::default())).expect("directory stream should open");
+    let mut stream = ready(file_system.list(&ListScope::Path((path("/root")).clone()), ListOptions::default()))
+        .expect("directory stream should open");
     assert_eq!(DirectoryStreamState::Open, stream.state());
     let error = ready(stream.next_entry_async()).expect_err("outside entry must be rejected");
     assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
@@ -274,8 +276,11 @@ fn test_async_directory_stream_enforces_generic_budgets() {
         ],
         ..AsyncRecordingConfig::default()
     });
-    let mut stream = ready(file_system.list(&path("/root"), ListOptions::default().with_max_entries(Some(1))))
-        .expect("directory stream should open");
+    let mut stream = ready(file_system.list(
+        &ListScope::Path((path("/root")).clone()),
+        ListOptions::default().with_max_entries(Some(1)),
+    ))
+    .expect("directory stream should open");
     assert!(
         ready(stream.next_entry_async())
             .expect("first entry should fit")
@@ -293,7 +298,7 @@ fn test_async_directory_stream_enforces_generic_budgets() {
         ..AsyncRecordingConfig::default()
     });
     let mut stream = ready(file_system.list(
-        &path("/root"),
+        &ListScope::Path((path("/root")).clone()),
         ListOptions::default().with_recursive(true).with_max_depth(Some(1)),
     ))
     .expect("directory stream should open");
@@ -313,7 +318,7 @@ fn test_async_directory_stream_accepts_nested_prefix_without_recursive_option() 
         ..AsyncRecordingConfig::default()
     });
     let mut stream = ready(file_system.list(
-        &path("/root"),
+        &ListScope::Path((path("/root")).clone()),
         ListOptions::default().with_prefix(Some("nested/item".to_owned())),
     ))
     .expect("directory stream should open");
@@ -331,8 +336,8 @@ fn test_async_directory_stream_error_becomes_terminal() {
         directory_error: true,
         ..AsyncRecordingConfig::default()
     });
-    let mut stream =
-        ready(file_system.list(&path("/root"), ListOptions::default())).expect("directory stream should open");
+    let mut stream = ready(file_system.list(&ListScope::Path((path("/root")).clone()), ListOptions::default()))
+        .expect("directory stream should open");
     let error = ready(stream.next_entry_async()).expect_err("provider failure should propagate");
     assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
     let terminal = ready(stream.next_entry_async()).expect_err("failed stream must be terminal");
@@ -347,8 +352,8 @@ fn test_async_directory_stream_rejects_nested_entry_for_direct_listing() {
         directory_entries: vec![DirEntry::new(path("/root/nested/item"), FileKind::File)],
         ..AsyncRecordingConfig::default()
     });
-    let mut stream =
-        ready(file_system.list(&path("/root"), ListOptions::default())).expect("directory stream should open");
+    let mut stream = ready(file_system.list(&ListScope::Path((path("/root")).clone()), ListOptions::default()))
+        .expect("directory stream should open");
 
     let error =
         ready(stream.next_entry_async()).expect_err("non-recursive listing must reject nested provider entries");
@@ -363,8 +368,11 @@ fn test_async_directory_stream_rejects_missing_requested_metadata() {
         directory_entries: vec![DirEntry::new(path("/root/file"), FileKind::File)],
         ..AsyncRecordingConfig::default()
     });
-    let mut stream = ready(file_system.list(&path("/root"), ListOptions::default().with_include_metadata(true)))
-        .expect("directory stream should open");
+    let mut stream = ready(file_system.list(
+        &ListScope::Path((path("/root")).clone()),
+        ListOptions::default().with_include_metadata(true),
+    ))
+    .expect("directory stream should open");
 
     let error =
         ready(stream.next_entry_async()).expect_err("metadata request must be enforced against provider entries");
@@ -380,8 +388,8 @@ fn test_async_directory_stream_rejects_inconsistent_entry_identity() {
         directory_entries: vec![entry],
         ..AsyncRecordingConfig::default()
     });
-    let mut stream =
-        ready(file_system.list(&path("/root"), ListOptions::default())).expect("directory stream should open");
+    let mut stream = ready(file_system.list(&ListScope::Path((path("/root")).clone()), ListOptions::default()))
+        .expect("directory stream should open");
     let error = ready(stream.next_entry_async()).expect_err("inconsistent entry name must fail");
     assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
 }
@@ -395,7 +403,7 @@ fn test_async_directory_stream_accepts_prefix_descendant_and_root_entry() {
         ..AsyncRecordingConfig::default()
     });
     let mut stream = ready(file_system.list(
-        &path("/root"),
+        &ListScope::Path((path("/root")).clone()),
         ListOptions::default().with_prefix(Some("nested".to_owned())),
     ))
     .expect("directory stream should open");
@@ -409,7 +417,8 @@ fn test_async_directory_stream_accepts_prefix_descendant_and_root_entry() {
         directory_entries: vec![DirEntry::new(path("/file"), FileKind::File)],
         ..AsyncRecordingConfig::default()
     });
-    let mut root = ready(file_system.list(&Path::root(), ListOptions::default())).expect("root stream should open");
+    let mut root = ready(file_system.list(&ListScope::Path((Path::root()).clone()), ListOptions::default()))
+        .expect("root stream should open");
     assert!(
         ready(root.next_entry_async())
             .expect("root-relative entry should be accepted")
@@ -432,7 +441,8 @@ fn test_async_facade_dispatches_successful_operations() {
         Some(5),
         ready(file_system.stat(&source)).expect("stat should succeed").len()
     );
-    let mut stream = ready(file_system.list(&source, ListOptions::default())).expect("list should succeed");
+    let mut stream = ready(file_system.list(&ListScope::Path((source).clone()), ListOptions::default()))
+        .expect("list should succeed");
     assert!(
         ready(stream.next_entry_async())
             .expect("empty stream should succeed")

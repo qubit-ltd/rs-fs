@@ -22,6 +22,7 @@ use crate::directory::CreateDirectoryOutcome;
 use crate::directory::DeleteOptions;
 use crate::directory::DeleteOutcome;
 use crate::directory::ListOptions;
+use crate::directory::ListScope;
 use crate::error::FsError;
 use crate::error::FsErrorKind;
 use crate::error::FsOperation;
@@ -159,8 +160,8 @@ impl AsyncFileSystem {
     }
 
     /// Asynchronously opens a validated directory stream.
-    pub async fn list(&self, path: &Path, options: ListOptions) -> FsResult<AsyncDirectoryStream> {
-        AsyncDirectoryOperation::new(self).list(path, options).await
+    pub async fn list(&self, scope: &ListScope, options: ListOptions) -> FsResult<AsyncDirectoryStream> {
+        AsyncDirectoryOperation::new(self).list(scope, options).await
     }
 
     /// Asynchronously opens a validated reader and verifies its identity.

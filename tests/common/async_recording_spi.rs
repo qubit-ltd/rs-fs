@@ -365,7 +365,7 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
         Box::pin(async move { Ok(StatResponse::new(path, metadata)) })
     }
     fn list<'a>(&'a self, request: ListRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncDirectoryStream>> {
-        let _ = request.path();
+        let _ = request.scope().path().expect("path-scoped test request");
         let _ = request.options();
         if self.config.list_open_error {
             return Box::pin(async { Err(unused()) });

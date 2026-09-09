@@ -28,6 +28,7 @@ use qubit_fs::directory::CreateDirectoryOutcome;
 use qubit_fs::directory::DeleteOptions;
 use qubit_fs::directory::DeleteOutcome;
 use qubit_fs::directory::ListOptions;
+use qubit_fs::directory::ListScope;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::error::FsOperation;
 use qubit_fs::metadata::FileKind;
@@ -303,7 +304,7 @@ fn test_async_spi_default_operations_report_unsupported() {
     let path = Path::parse("/resource").expect("test path should parse");
     let target = Path::parse("/target").expect("test target should parse");
 
-    let error = ready(file_system.list(&path, ListOptions::default()))
+    let error = ready(file_system.list(&ListScope::Path((path).clone()), ListOptions::default()))
         .expect_err("default list implementation must reject the request");
     assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
     assert_eq!(FsOperation::List, error.operation());

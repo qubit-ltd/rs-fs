@@ -27,6 +27,7 @@ use qubit_fs::directory::CreateDirectoryOutcome;
 use qubit_fs::directory::DeleteOptions;
 use qubit_fs::directory::DeleteOutcome;
 use qubit_fs::directory::ListOptions;
+use qubit_fs::directory::ListScope;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::error::FsOperation;
 use qubit_fs::metadata::AchievedAtomicity;
@@ -443,7 +444,7 @@ fn test_handle_support_dispatches_successful_facade_operations() {
 
     assert!(file_system.exists(&source).expect("stat should succeed"));
     let mut directory = file_system
-        .list(&source, ListOptions::default())
+        .list(&ListScope::Path((source).clone()), ListOptions::default())
         .expect("list should succeed");
     assert!(directory.next_entry().expect("stream should succeed").is_none());
 
@@ -503,7 +504,7 @@ fn test_handle_support_enriches_open_and_temp_provider_failures() {
     let path = Path::parse("/target").expect("test path should parse");
     for error in [
         file_system
-            .list(&path, ListOptions::default())
+            .list(&ListScope::Path((path).clone()), ListOptions::default())
             .expect_err("list provider failure should propagate"),
         file_system
             .open_writer(&path, WriteOptions::default())
@@ -677,7 +678,7 @@ impl FileSystemSpi for BehaviorSpi {
         ))
     }
     fn list(&self, request: ListRequest<'_>) -> FsResult<OpenedDirectoryStream> {
-        let _ = request.path();
+        let _ = request.scope().path().expect("path-scoped test request");
         let _ = request.options();
         if self.provider_open_error {
             return Err(Self::unsupported());

@@ -12,10 +12,10 @@
 use crate::FileSystem;
 use crate::directory::DirectoryStream;
 use crate::directory::ListOptions;
+use crate::directory::ListScope;
 use crate::error::FsOperation;
 use crate::error::FsResult;
 use crate::metadata::FileSystemCapability;
-use crate::path::Path;
 use crate::spi::ListRequest;
 use crate::spi::ResolvedListOptions;
 
@@ -33,14 +33,12 @@ impl<'a> DirectoryOperation<'a> {
     }
 
     /// Opens a provider directory stream after local option validation.
-    pub(crate) fn list(&self, path: &Path, options: ListOptions) -> FsResult<DirectoryStream> {
-        self.filesystem.core().validate_path(path, FsOperation::List)?;
-        options
-            .validate_for(self.filesystem.properties().info().path_semantics())
-            .map_err(|error| self.filesystem.core().enrich(error, Some(path), FsOperation::List))?;
+    pub(crate) fn list(&self, scope: &ListScope, options: ListOptions) -> FsResult<DirectoryStream> {
+        crate::directory::internal::list_preflight::validate(self.filesystem.properties(), scope, &options)
+            .map_err(|error| self.filesystem.core().enrich(error, scope.path(), FsOperation::List))?;
         self.filesystem
             .core()
-            .require(FileSystemCapability::List, FsOperation::List, Some(path))?;
+            .require(FileSystemCapability::List, FsOperation::List, scope.path())?;
         let page_size = self
             .filesystem
             .properties()
@@ -50,7 +48,7 @@ impl<'a> DirectoryOperation<'a> {
         self.filesystem
             .spi()
             .list(ListRequest::new(
-                path,
+                scope,
                 ResolvedListOptions::new(
                     options.clone(),
                     options
@@ -58,9 +56,9 @@ impl<'a> DirectoryOperation<'a> {
                         .unwrap_or(self.filesystem.properties().symlink_policy()),
                 ),
             ))
-            .map(|opened| {
+            .and_then(|opened| {
                 DirectoryStream::new(
-                    path.clone(),
+                    scope.clone(),
                     opened.into_stream(),
                     options,
                     self.filesystem.properties().info().provider_id(),
@@ -68,6 +66,6 @@ impl<'a> DirectoryOperation<'a> {
                     *self.filesystem.properties().limits(),
                 )
             })
-            .map_err(|error| self.filesystem.core().enrich(error, Some(path), FsOperation::List))
+            .map_err(|error| self.filesystem.core().enrich(error, scope.path(), FsOperation::List))
     }
 }

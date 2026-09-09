@@ -22,6 +22,7 @@ mod directory_stream_state;
 mod internal;
 mod list_filter;
 mod list_options;
+mod list_scope;
 
 #[cfg(feature = "async")]
 pub(crate) use async_directory_operation::AsyncDirectoryOperation;
@@ -36,3 +37,4 @@ pub use directory_stream::DirectoryStream;
 pub use directory_stream_state::DirectoryStreamState;
 pub use list_filter::ListFilter;
 pub use list_options::ListOptions;
+pub use list_scope::ListScope;

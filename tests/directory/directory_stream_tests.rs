@@ -13,6 +13,7 @@ use qubit_fs::FsResult;
 use qubit_fs::Path;
 use qubit_fs::directory::DirectoryStreamState;
 use qubit_fs::directory::ListOptions;
+use qubit_fs::directory::ListScope;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::metadata::DirEntry;
 use qubit_fs::metadata::FileKind;
@@ -44,7 +45,7 @@ fn test_directory_stream_enforces_entry_budget_before_returning_excess_entry() {
     let (filesystem, _, _) = crate::handle_support::filesystem(false, entries);
     let mut stream = filesystem
         .list(
-            &Path::parse("/root").expect("root should parse"),
+            &ListScope::Path((Path::parse("/root").expect("root should parse")).clone()),
             ListOptions::default().with_max_entries(Some(1)),
         )
         .expect("stream should open");
@@ -64,7 +65,7 @@ fn test_directory_stream_enforces_depth_and_deadline_budgets() {
     let (filesystem, _, _) = crate::handle_support::filesystem(false, vec![nested]);
     let mut stream = filesystem
         .list(
-            &Path::parse("/root").expect("root should parse"),
+            &ListScope::Path((Path::parse("/root").expect("root should parse")).clone()),
             ListOptions::default().with_recursive(true).with_max_depth(Some(1)),
         )
         .expect("stream should open");
@@ -79,7 +80,7 @@ fn test_directory_stream_enforces_depth_and_deadline_budgets() {
     let (filesystem, _, _) = crate::handle_support::filesystem(false, Vec::new());
     let mut stream = filesystem
         .list(
-            &Path::parse("/root").expect("root should parse"),
+            &ListScope::Path((Path::parse("/root").expect("root should parse")).clone()),
             ListOptions::default().with_deadline(Some(Duration::ZERO)),
         )
         .expect("stream should open");
@@ -97,7 +98,7 @@ fn test_directory_entry_path_can_be_compared_with_requested_root() {
     let (filesystem, _, _) = crate::handle_support::filesystem(false, vec![entry]);
     let mut stream = filesystem
         .list(
-            &Path::parse("/root").expect("root should parse"),
+            &ListScope::Path((Path::parse("/root").expect("root should parse")).clone()),
             ListOptions::default(),
         )
         .expect("stream should open");
@@ -159,7 +160,7 @@ fn test_directory_stream_accepts_object_key_root_with_trailing_slash() {
     let filesystem = FileSystem::from_spi(ObjectKeySpi).expect("object-key filesystem should construct");
     let root = Path::parse_literal("bucket/prefix/").expect("object-key root should parse");
     let mut stream = filesystem
-        .list(&root, ListOptions::object_keys())
+        .list(&ListScope::Path((root).clone()), ListOptions::object_keys())
         .expect("object-key stream should open");
 
     assert!(
@@ -177,7 +178,7 @@ fn test_directory_stream_rejects_entry_outside_requested_prefix() {
     let (filesystem, _, _) = crate::handle_support::filesystem(false, vec![entry]);
     let mut stream = filesystem
         .list(
-            &Path::parse("/root").expect("root should parse"),
+            &ListScope::Path((Path::parse("/root").expect("root should parse")).clone()),
             ListOptions::default().with_prefix(Some("nested".to_owned())),
         )
         .expect("stream should open");
@@ -198,7 +199,7 @@ fn test_directory_stream_accepts_nested_prefix_without_recursive_option() {
     let (filesystem, _, _) = crate::handle_support::filesystem(false, vec![entry]);
     let mut stream = filesystem
         .list(
-            &Path::parse("/root").expect("root should parse"),
+            &ListScope::Path((Path::parse("/root").expect("root should parse")).clone()),
             ListOptions::default().with_prefix(Some("nested/item".to_owned())),
         )
         .expect("stream should open");
@@ -221,7 +222,7 @@ fn test_directory_stream_rejects_nested_entry_for_direct_listing() {
     let (filesystem, _, _) = crate::handle_support::filesystem(false, vec![entry]);
     let mut stream = filesystem
         .list(
-            &Path::parse("/root").expect("root should parse"),
+            &ListScope::Path((Path::parse("/root").expect("root should parse")).clone()),
             ListOptions::default(),
         )
         .expect("stream should open");
@@ -244,7 +245,7 @@ fn test_directory_stream_validates_metadata_and_prefix_descendants() {
     let (filesystem, _, _) = crate::handle_support::filesystem(false, vec![missing_metadata]);
     let mut stream = filesystem
         .list(
-            &Path::parse("/root").expect("root should parse"),
+            &ListScope::Path((Path::parse("/root").expect("root should parse")).clone()),
             ListOptions::default().with_include_metadata(true),
         )
         .expect("stream should open");
@@ -259,7 +260,7 @@ fn test_directory_stream_validates_metadata_and_prefix_descendants() {
     let (filesystem, _, _) = crate::handle_support::filesystem(false, vec![descendant]);
     let mut stream = filesystem
         .list(
-            &Path::parse("/root").expect("root should parse"),
+            &ListScope::Path((Path::parse("/root").expect("root should parse")).clone()),
             ListOptions::default().with_prefix(Some("nested".to_owned())),
         )
         .expect("stream should open");
@@ -277,7 +278,7 @@ fn test_directory_stream_accepts_root_relative_entry() {
     let entry = DirEntry::new(Path::parse("/file").expect("entry path should parse"), FileKind::File);
     let (filesystem, _, _) = crate::handle_support::filesystem(false, vec![entry]);
     let mut stream = filesystem
-        .list(&Path::root(), ListOptions::default())
+        .list(&ListScope::Path((Path::root()).clone()), ListOptions::default())
         .expect("root stream should open");
     assert!(
         stream
@@ -297,7 +298,7 @@ fn test_directory_stream_rejects_foreign_path_semantics() {
     let (filesystem, _, _) = crate::handle_support::filesystem(false, vec![entry]);
     let mut stream = filesystem
         .list(
-            &Path::parse("/root").expect("root should parse"),
+            &ListScope::Path((Path::parse("/root").expect("root should parse")).clone()),
             ListOptions::default(),
         )
         .expect("stream should open");
@@ -316,7 +317,7 @@ fn test_directory_stream_rejects_inconsistent_entry_identity() {
     let (filesystem, _, _) = crate::handle_support::filesystem(false, vec![wrong_name]);
     let mut stream = filesystem
         .list(
-            &Path::parse("/root").expect("root should parse"),
+            &ListScope::Path((Path::parse("/root").expect("root should parse")).clone()),
             ListOptions::default(),
         )
         .expect("stream should open");
@@ -336,7 +337,7 @@ fn test_directory_stream_rejects_inconsistent_entry_identity() {
     let (filesystem, _, _) = crate::handle_support::filesystem(false, vec![wrong_metadata]);
     let mut stream = filesystem
         .list(
-            &Path::parse("/root").expect("root should parse"),
+            &ListScope::Path((Path::parse("/root").expect("root should parse")).clone()),
             ListOptions::default(),
         )
         .expect("stream should open");
@@ -356,7 +357,7 @@ fn test_directory_stream_handles_end_of_enumeration_and_root_entry() {
     let (filesystem, _, _) = crate::handle_support::filesystem(false, Vec::new());
     let mut empty = filesystem
         .list(
-            &Path::parse("/root").expect("root should parse"),
+            &ListScope::Path((Path::parse("/root").expect("root should parse")).clone()),
             ListOptions::default(),
         )
         .expect("empty stream should open");
@@ -368,7 +369,7 @@ fn test_directory_stream_handles_end_of_enumeration_and_root_entry() {
     let root = DirEntry::new(Path::root(), FileKind::Directory);
     let (filesystem, _, _) = crate::handle_support::filesystem(false, vec![root]);
     let mut root_stream = filesystem
-        .list(&Path::root(), ListOptions::default())
+        .list(&ListScope::Path((Path::root()).clone()), ListOptions::default())
         .expect("root stream should open");
     assert!(
         root_stream

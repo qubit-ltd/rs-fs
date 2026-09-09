@@ -12,10 +12,10 @@
 use crate::AsyncFileSystem;
 use crate::directory::AsyncDirectoryStream;
 use crate::directory::ListOptions;
+use crate::directory::ListScope;
 use crate::error::FsOperation;
 use crate::error::FsResult;
 use crate::metadata::FileSystemCapability;
-use crate::path::Path;
 use crate::spi::ListRequest;
 use crate::spi::ResolvedListOptions;
 
@@ -33,14 +33,12 @@ impl<'a> AsyncDirectoryOperation<'a> {
     }
 
     /// Opens a validated asynchronous provider directory stream.
-    pub(crate) async fn list(&self, path: &Path, options: ListOptions) -> FsResult<AsyncDirectoryStream> {
-        self.filesystem.core().validate_path(path, FsOperation::List)?;
-        options
-            .validate_for(self.filesystem.properties().info().path_semantics())
-            .map_err(|error| self.filesystem.core().enrich(error, Some(path), FsOperation::List))?;
+    pub(crate) async fn list(&self, scope: &ListScope, options: ListOptions) -> FsResult<AsyncDirectoryStream> {
+        crate::directory::internal::list_preflight::validate(self.filesystem.properties(), scope, &options)
+            .map_err(|error| self.filesystem.core().enrich(error, scope.path(), FsOperation::List))?;
         self.filesystem
             .core()
-            .require(FileSystemCapability::List, FsOperation::List, Some(path))?;
+            .require(FileSystemCapability::List, FsOperation::List, scope.path())?;
         let page_size = self
             .filesystem
             .properties()
@@ -51,7 +49,7 @@ impl<'a> AsyncDirectoryOperation<'a> {
             .filesystem
             .spi()
             .list(ListRequest::new(
-                path,
+                scope,
                 ResolvedListOptions::new(
                     options.clone(),
                     options
@@ -60,13 +58,13 @@ impl<'a> AsyncDirectoryOperation<'a> {
                 ),
             ))
             .await
-            .map_err(|error| self.filesystem.core().enrich(error, Some(path), FsOperation::List))?;
-        Ok(opened.into_stream(
-            path.clone(),
+            .map_err(|error| self.filesystem.core().enrich(error, scope.path(), FsOperation::List))?;
+        opened.into_stream(
+            scope.clone(),
             options,
             self.filesystem.properties().info().provider_id(),
             self.filesystem.properties().info().path_semantics(),
             *self.filesystem.properties().limits(),
-        ))
+        )
     }
 }

@@ -8,6 +8,7 @@
 // qubit-style: allow source-test-pair
 //! Shared validation for provider directory entries.
 
+use crate::directory::ListScope;
 use crate::error::FsError;
 use crate::error::FsErrorKind;
 use crate::error::FsOperation;
@@ -20,7 +21,7 @@ use crate::path::PathSemantics;
 /// Validates provider-controlled identity fields before applying list policy.
 pub(crate) fn validate_entry(
     entry: &DirEntry,
-    root: &Path,
+    scope: &ListScope,
     semantics: PathSemantics,
     limits: FileSystemLimits,
 ) -> FsResult<()> {
@@ -56,9 +57,9 @@ pub(crate) fn validate_entry(
             "provider returned directory metadata with a different kind",
         ));
     }
-    if crate::directory::internal::relative_path(root, &entry.path, semantics).is_none() {
+    if crate::directory::internal::relative_path(scope, &entry.path, semantics).is_none() {
         return Err(contract_error(
-            root,
+            &entry.path,
             "provider returned directory entry outside requested root",
         ));
     }
@@ -67,8 +68,16 @@ pub(crate) fn validate_entry(
 
 /// Checks whether one validated entry is selected by listing options.
 /// Builds a stable provider-contract error for list option filtering.
-pub(crate) fn option_error(root: &Path, message: &'static str) -> FsError {
-    contract_error(root, message)
+pub(crate) fn option_error(scope: &ListScope, message: &'static str) -> FsError {
+    let error = FsError::new(
+        FsErrorKind::ProviderContractViolation,
+        FsOperation::ValidateProviderOutcome,
+        message,
+    );
+    match scope.path() {
+        Some(path) => error.with_path(path.clone()),
+        None => error,
+    }
 }
 
 /// Returns the entry path relative to `root` when it remains in the root.

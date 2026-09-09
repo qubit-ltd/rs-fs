@@ -68,7 +68,14 @@ pub trait FileSystemSpi: Send + Sync {
     /// # Errors
     /// Returns the provider open failure with filesystem context.
     fn list(&self, request: ListRequest<'_>) -> FsResult<OpenedDirectoryStream> {
-        Err(unsupported(FsOperation::List, request.path()))
+        Err(match request.scope().path() {
+            Some(path) => unsupported(FsOperation::List, path),
+            None => FsError::new(
+                FsErrorKind::UnsupportedOperation,
+                FsOperation::List,
+                "provider operation is not supported",
+            ),
+        })
     }
     /// Opens a reader.
     ///

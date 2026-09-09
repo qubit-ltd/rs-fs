@@ -30,6 +30,7 @@ use qubit_fs::directory::CreateDirectoryOutcome;
 use qubit_fs::directory::DeleteOptions;
 use qubit_fs::directory::DeleteOutcome;
 use qubit_fs::directory::ListOptions;
+use qubit_fs::directory::ListScope;
 use qubit_fs::error::FsEffectState;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::error::FsOperation;
@@ -721,14 +722,14 @@ fn test_async_facade_preflight_rejects_invalid_paths_options_and_capabilities() 
     let relative = path("relative");
     let (file_system, _) = async_recording_file_system(AsyncRecordingConfig::default());
 
-    ready(file_system.list(&source, ListOptions::default()))
+    ready(file_system.list(&ListScope::Path((source).clone()), ListOptions::default()))
         .expect("listing should dispatch with the advertised capability");
-    assert!(ready(file_system.list(&relative, ListOptions::default())).is_err());
+    assert!(ready(file_system.list(&ListScope::Path((relative).clone()), ListOptions::default())).is_err());
     let (without_list, _) = async_recording_file_system(AsyncRecordingConfig {
         omitted_capability: Some(FileSystemCapability::List),
         ..AsyncRecordingConfig::default()
     });
-    assert!(ready(without_list.list(&source, ListOptions::default())).is_err());
+    assert!(ready(without_list.list(&ListScope::Path((source).clone()), ListOptions::default())).is_err());
     assert!(ready(file_system.open_reader(&relative, ReadOptions::default())).is_err());
     assert!(ready(file_system.open_reader(&source, ReadOptions::default().with_length(Some(1)),),).is_err());
     let (read_limited, _) = async_recording_file_system(AsyncRecordingConfig {

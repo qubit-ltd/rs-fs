@@ -15,14 +15,11 @@ use std::time::Instant;
 
 use crate::directory::DirectoryStreamState;
 use crate::directory::ListOptions;
-use crate::directory::directory_entry_validation;
-use crate::error::FsError;
-use crate::error::FsErrorKind;
-use crate::error::FsOperation;
+use crate::directory::ListScope;
+use crate::directory::internal::ListStreamPolicy;
 use crate::error::FsResult;
 use crate::metadata::DirEntry;
 use crate::metadata::FileSystemLimits;
-use crate::path::Path;
 use crate::spi::DirectoryStreamSpi;
 
 /// Type-erased synchronous directory enumeration handle.
@@ -39,7 +36,7 @@ use crate::spi::DirectoryStreamSpi;
 /// # use qubit_fs::{FileSystem, FsResult, Path};
 /// # use qubit_fs::directory::ListOptions;
 /// # fn visit(filesystem: &FileSystem, root: &Path) -> FsResult<()> {
-/// let mut stream = filesystem.list(root, ListOptions::default())?;
+/// let mut stream = filesystem.list(&qubit_fs::directory::ListScope::Path(root.clone()), ListOptions::default())?;
 /// while let Some(entry) = stream.next_entry()? {
 ///     println!("{}", entry.path);
 /// }
@@ -49,22 +46,8 @@ use crate::spi::DirectoryStreamSpi;
 pub struct DirectoryStream {
     /// Provider enumeration session.
     session: Box<dyn DirectoryStreamSpi>,
-    /// Validated root constraining returned entries.
-    root: Path,
-    /// Listing policy used to validate provider results.
-    options: ListOptions,
-    /// Provider identifier attached to facade-generated errors.
-    provider: Box<str>,
-    /// Provider path semantics used to validate every returned entry.
-    path_semantics: crate::path::PathSemantics,
-    /// Provider path limits used to validate every returned entry.
-    limits: FileSystemLimits,
-    /// Whether enumeration has completed or encountered a terminal failure.
-    state: DirectoryStreamState,
-    /// Monotonic deadline computed when the stream is created.
-    deadline: Option<Instant>,
-    /// Number of entries already returned to the caller.
-    returned_entries: usize,
+    /// Shared validation, deadline, and terminal-state policy.
+    policy: ListStreamPolicy,
 }
 
 impl DirectoryStream {
@@ -76,36 +59,23 @@ impl DirectoryStream {
     /// # Returns
     /// A concrete type-erased directory stream.
     #[inline]
-    #[must_use]
     pub(crate) fn new(
-        root: Path,
+        scope: ListScope,
         session: Box<dyn DirectoryStreamSpi>,
         options: ListOptions,
         provider: &str,
         path_semantics: crate::path::PathSemantics,
         limits: FileSystemLimits,
-    ) -> Self {
-        let deadline = options
-            .deadline()
-            .and_then(|duration| Instant::now().checked_add(duration));
-        Self {
-            session,
-            root,
-            options,
-            provider: provider.into(),
-            path_semantics,
-            limits,
-            state: DirectoryStreamState::Open,
-            deadline,
-            returned_entries: 0,
-        }
+    ) -> FsResult<Self> {
+        let policy = ListStreamPolicy::new(scope, options, provider, path_semantics, limits, Instant::now())?;
+        Ok(Self { session, policy })
     }
 
     /// Returns the current lifecycle state of this stream.
     #[inline]
     #[must_use = "inspect the stream lifecycle state"]
     pub const fn state(&self) -> DirectoryStreamState {
-        self.state
+        self.policy.state()
     }
 
     /// Reads the next directory entry.
@@ -117,77 +87,9 @@ impl DirectoryStream {
     /// Returns a filesystem error when enumeration cannot continue.
     #[inline]
     pub fn next_entry(&mut self) -> FsResult<Option<DirEntry>> {
-        if self.state != DirectoryStreamState::Open {
-            return Err(FsError::new(
-                FsErrorKind::InvalidState,
-                FsOperation::List,
-                "directory stream is terminal",
-            ));
-        }
-        if self.deadline.is_some_and(|deadline| Instant::now() >= deadline) {
-            self.state = DirectoryStreamState::Failed;
-            return Err(self.resource_limit_error("directory listing deadline was exceeded"));
-        }
-        match self.session.next_entry() {
-            Ok(Some(entry)) => {
-                if let Err(error) =
-                    directory_entry_validation::validate_entry(&entry, &self.root, self.path_semantics, self.limits)
-                {
-                    self.state = DirectoryStreamState::Failed;
-                    return Err(self.contextual_error(error));
-                }
-                if let Err(message) =
-                    crate::directory::internal::select(&entry, &self.root, &self.options, self.path_semantics)
-                {
-                    self.state = DirectoryStreamState::Failed;
-                    return Err(self.contextual_error(directory_entry_validation::option_error(&self.root, message)));
-                }
-                if self.options.max_depth().is_some_and(|maximum| {
-                    directory_entry_validation::entry_depth(&self.root, &entry.path)
-                        .is_some_and(|depth| depth > maximum)
-                }) {
-                    self.state = DirectoryStreamState::Failed;
-                    return Err(self.resource_limit_error("directory listing depth limit was exceeded"));
-                }
-                if self
-                    .options
-                    .max_entries()
-                    .is_some_and(|maximum| self.returned_entries >= maximum)
-                {
-                    self.state = DirectoryStreamState::Failed;
-                    return Err(self.resource_limit_error("directory listing entry limit was exceeded"));
-                }
-                self.returned_entries = self.returned_entries.checked_add(1).ok_or_else(|| {
-                    self.state = DirectoryStreamState::Failed;
-                    self.resource_limit_error("directory listing entry count exceeded the API range")
-                })?;
-                Ok(Some(entry))
-            }
-            Ok(None) => {
-                self.state = DirectoryStreamState::Exhausted;
-                Ok(None)
-            }
-            Err(error) => {
-                self.state = DirectoryStreamState::Failed;
-                Err(self.contextual_error(error))
-            }
-        }
-    }
-
-    /// Adds only missing facade facts to a provider stream error.
-    fn contextual_error(&self, error: FsError) -> FsError {
-        error
-            .with_operation(FsOperation::List)
-            .with_missing_context(&self.root, None, &self.provider)
-    }
-
-    /// Builds a terminal caller-budget error with list context.
-    fn resource_limit_error(&self, message: &str) -> FsError {
-        self.contextual_error(FsError::new(
-            FsErrorKind::ResourceLimitExceeded,
-            FsOperation::List,
-            message,
-        ))
+        self.policy.before_next(Instant::now())?;
+        let result = self.session.next_entry();
+        self.policy.finish_next(result, Instant::now())
     }
 }
 
