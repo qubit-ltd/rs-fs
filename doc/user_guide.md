@@ -2,7 +2,7 @@
 
 [中文指南](user_guide.zh_CN.md) · [README](../README.md)
 
-This guide covers `qubit-fs` 0.5 for Rust 1.94 and later. It is for applications
+This guide covers `qubit-fs` 0.6 for Rust 1.94 and later. It is for applications
 that publish reports through a configured filesystem and need to retain recovery
 facts when a write, copy, or cancellation does not complete normally.
 
@@ -28,15 +28,15 @@ prove that a resource exists or that future I/O will succeed.
 | Recovery handle | Ownership of a session still needing a decision; its absence does not prove no side effects. |
 
 The default feature set is empty and provides synchronous APIs. Enable
-`qubit-fs = { version = "0.5", features = ["async"] }` for asynchronous APIs.
+`qubit-fs = { version = "0.6", features = ["async"] }` for asynchronous APIs.
 The application chooses its executor; the library does not require Tokio.
 
 For the runnable local example, use:
 
 ```toml
 [dependencies]
-qubit-fs = "0.5"
-qubit-fs-local = "0.7"
+qubit-fs = "0.6"
+qubit-fs-local = "0.8"
 tempfile = "3"
 ```
 
@@ -81,24 +81,16 @@ choose explicit resource budgets for the workload.
 
 <!-- example: quick-start -->
 ```rust
-use std::time::Duration;
-
 use qubit_fs::Path;
 use qubit_fs::directory::ListScope;
 use qubit_fs::read::ReadOptions;
 use qubit_fs::write::WriteOptions;
-use qubit_fs_local::LocalCopyResourceLimits;
-use qubit_fs_local::LocalDeleteResourceLimits;
 use qubit_fs_local::LocalFileSystems;
-use qubit_fs_local::LocalListResourceLimits;
 use qubit_fs_local::LocalResourcePolicy;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let directory = tempfile::tempdir()?;
-    let list_budget = LocalListResourceLimits::new(8, 64, 4 * 1024, 4, Duration::from_secs(5))?;
-    let copy_budget = LocalCopyResourceLimits::new(8, 64, 1024 * 1024, 4, Duration::from_secs(5))?;
-    let delete_budget = LocalDeleteResourceLimits::new(8, 64, 4 * 1024, Duration::from_secs(5));
-    let policy = LocalResourcePolicy::bounded(list_budget, copy_budget, delete_budget);
+    let policy = LocalResourcePolicy::standard();
     let filesystem = LocalFileSystems::rooted(directory.path(), policy)?;
     let path = Path::parse("/report.txt")?;
     filesystem.write_all(&path, b"report ready", WriteOptions::default())?;
@@ -138,6 +130,7 @@ use qubit_fs::copy::CopyFailure;
 use qubit_fs::copy::CopyOptions;
 use qubit_fs::copy::CopyOutcome;
 use qubit_fs::error::FsError;
+use qubit_fs::write::WriterRecovery;
 
 #[derive(Debug)]
 pub struct CopyRecovery {
@@ -150,8 +143,9 @@ pub fn copy_report(filesystem: &FileSystem, source: &Path, target: &Path) -> Res
         Ok(outcome) => Ok(outcome),
         Err(mut failure) => {
             // Abort handles the retained session; it does not promise target rollback.
-            let cleanup_error = match failure.writer_mut() {
-                Some(writer) => writer.abort().err(),
+            let cleanup_error = match failure.recovery_mut() {
+                Some(WriterRecovery::Opened(writer)) => writer.abort().err(),
+                Some(WriterRecovery::Rejected(writer)) => writer.abort().err(),
                 None => None,
             };
             // Preserve the publication facts and writer even when cleanup fails.
@@ -200,6 +194,7 @@ use qubit_fs::directory::ListScope;
 use qubit_fs::error::FsError;
 use qubit_fs::metadata::WriteOutcome;
 use qubit_fs::write::AsyncWriteAllOperation;
+use qubit_fs::write::AsyncWriterRecovery;
 use qubit_fs::write::AsyncWriteAllOperationFailure;
 use qubit_fs::write::WriteOptions;
 
@@ -245,8 +240,9 @@ pub async fn write_report(
         Some(Err(failure)) => Some(failure),
         None => None, // The operation now records cancellation facts.
     };
-    let cleanup_error = match operation.recovery_writer() {
-        Some(writer) => writer.abort_async().await.err(),
+    let cleanup_error = match operation.recovery() {
+        Some(AsyncWriterRecovery::Opened(writer)) => writer.abort_async().await.err(),
+        Some(AsyncWriterRecovery::Rejected(writer)) => writer.abort_async().await.err(),
         None => None,
     };
     // Published means do not resend. Indeterminate requires reconciliation,
@@ -350,3 +346,57 @@ rooted authority are provided by the backend.
 
 - [Architecture design](file_system_design.md)
 - [API reference](https://docs.rs/qubit-fs)
+
+## Opening failures and recovery in 0.6
+
+`open_writer`, `create_temp_file`, and `create_temp_directory` return
+`OpenFailure<R>` in both facades. `Preflight` and `ProviderOpen` failures have no
+recovery session. `OutcomeValidation` means a provider returned a session with an
+invalid identity: the error owns a `RejectedWriter`, `RejectedAsyncWriter`,
+`RejectedTempResource`, or `RejectedAsyncTempResource`. These handles expose only
+explicit abort/cleanup, never writing, commit, keep, persist, or a raw session.
+Keep the error or transfer its session with `take_recovery`; converting it into
+an ordinary `FsError` would lose recovery responsibility and is not provided.
+
+Cleanup errors and polled-future cancellation retain the session and record
+`RecoveryCleanupState::Indeterminate`; an unpolled cleanup future changes nothing.
+A confirmed cleanup records `Completed`; another cleanup returns `InvalidState`
+without provider I/O. An indeterminate abort is not confirmation. Dropping a
+rejected handle does not initiate cleanup or `cancel_on_drop`. Cleanup uses the
+session's actual ownership, not an unvalidated diagnostic path. Public cleanup
+context contains only the configured provider and known request path; a temporary
+request without a parent has no invented path. Preserve the original failure and
+any cleanup error together.
+
+Whole-write and copy recovery uses `WriterRecovery` / `AsyncWriterRecovery`:
+match `Opened` for a validated writer and `Rejected` for cleanup-only authority.
+Use `recovery`, `recovery_mut` where available, and `take_recovery` instead of the
+removed writer-only accessors. Synchronous `WriteAllFailure::state()` and
+`written_bytes()` capture immutable failure facts, including short writes and
+exact commit states; abort or transferring recovery never changes those facts.
+The failure's `into_parts` returns error, state, confirmed bytes, and recovery.
+A copy collision during opening can count as Skip only when the provider failed with proven
+unchanged effects and no rejected session. Invalid opened identities remain
+indeterminate failures.
+
+The core cannot retain a session a provider has not returned. Providers remain
+responsible for resources created internally during failed or cancelled opening.
+
+## Read windows and allocation limits
+
+`ReadOptions::validate()` rejects explicit offset + length overflow as
+`InvalidOptions` before capability checks, prefix optimization, or provider I/O.
+An omitted offset means zero. A zero-length request still opens or checks the
+resource; missing resources and permission failures remain errors. Windows at or
+beyond EOF are empty, and windows crossing EOF return the available suffix.
+Returned metadata describes the full resource, not the window or a snapshot.
+
+Both sync and async `read_all` and `read_prefix` use fallible geometric buffer
+growth. Metadata is a hint, not an allocation instruction: an enormous hint does
+not reserve the whole object. Reservation failures return `ResourceLimitExceeded`
+with the allocation error as source. `read_all` may consume one extra byte to
+prove the limit was exceeded; `read_prefix` never probes past its prefix limit.
+These are returned-length and consumption bounds, not process RSS bounds or
+limits on provider/network prefetch. The local provider advertises conditional
+range support, so automatic prefix narrowing still requires a provider advertising
+`RangeRead` as Guaranteed.

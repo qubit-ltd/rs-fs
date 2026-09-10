@@ -4,6 +4,7 @@ use qubit_fs::copy::CopyFailure;
 use qubit_fs::copy::CopyOptions;
 use qubit_fs::copy::CopyOutcome;
 use qubit_fs::error::FsError;
+use qubit_fs::write::WriterRecovery;
 
 #[derive(Debug)]
 pub struct CopyRecovery {
@@ -16,8 +17,9 @@ pub fn copy_report(filesystem: &FileSystem, source: &Path, target: &Path) -> Res
         Ok(outcome) => Ok(outcome),
         Err(mut failure) => {
             // Abort handles the retained session; it does not promise target rollback.
-            let cleanup_error = match failure.writer_mut() {
-                Some(writer) => writer.abort().err(),
+            let cleanup_error = match failure.recovery_mut() {
+                Some(WriterRecovery::Opened(writer)) => writer.abort().err(),
+                Some(WriterRecovery::Rejected(writer)) => writer.abort().err(),
                 None => None,
             };
             // Preserve the publication facts and writer even when cleanup fails.

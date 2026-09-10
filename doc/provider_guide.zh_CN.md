@@ -2,7 +2,7 @@
 
 [English version](provider_guide.md)
 
-本指南面向 `qubit-fs` 0.5 的 provider 作者，说明如何实现一个能够被
+本指南面向 `qubit-fs` 0.6 的 provider 作者，说明如何实现一个能够被
 `FileSystem` 门面信任的最小 provider，以及发布适配器前应完成的检查。它不是后端
 教程、凭据管理器，也不承诺所有后端都支持每个操作。
 
@@ -193,3 +193,46 @@ next-entry future，不会改变流状态。
 Conditional 或不支持范围读取的 provider 仍可顺序读取前缀。BestEffort checksum
 保留原请求；Required checksum 会返回 `RequirementNotMet`，因为仅读取前缀不能确认
 完整校验。需要该保证时使用完整的 `read_all`。返回和消费上限不等于网络预取量保证。
+
+## 0.6 的打开失败与恢复协议
+
+同步、异步门面的 `open_writer`、`create_temp_file` 和 `create_temp_directory`
+均返回 `OpenFailure<R>`。`Preflight` 和 `ProviderOpen` 阶段没有可交回的会话；
+`OutcomeValidation` 表示 provider 已返回会话，但身份校验失败。此时错误持有
+`RejectedWriter`、`RejectedAsyncWriter`、`RejectedTempResource` 或
+`RejectedAsyncTempResource`，仅允许显式 abort/cleanup，不提供写入、commit、keep、
+persist 或原始 session。应用应保留错误，或用 `take_recovery` 接管会话；库不提供会
+丢失恢复责任的普通 `FsError` 转换。
+
+清理失败或已轮询的清理 future 被取消后，会话仍保留，清理状态变为
+`RecoveryCleanupState::Indeterminate`；丢弃未轮询的 future 不改变状态。
+确认清理完成后状态为 `Completed`，再次清理只返回 `InvalidState`，不调用 provider。
+不确定的 abort 结果不算完成确认。隔离句柄的 Drop 不启动清理，也不调用
+`cancel_on_drop`。清理必须依据 session 实际拥有的资源，不能依据未校验的诊断路径。
+公开清理错误只使用已配置的 provider 和已知请求路径；没有 parent 的临时请求不伪造路径。
+主失败和清理错误应同时保留。
+
+整文件写入和复制通过 `WriterRecovery` / `AsyncWriterRecovery` 交回资源：
+`Opened` 是已验证 writer，`Rejected` 只有清理权限。用 `recovery`、适用时的
+`recovery_mut` 及 `take_recovery` 替代旧的 writer 专用访问器。
+同步 `WriteAllFailure::state()` 和 `written_bytes()` 保存失败时的事实，包括短写确认
+字节数和确切提交状态；abort 或取走会话都不改写历史。`into_parts` 返回错误、状态、
+已确认字节数和恢复会话。对于打开阶段的 copy 碰撞，只有 provider 打开失败、明确证明无副作用且没有隔离会话
+时，才能把碰撞按 Skip 处理；打开身份违例仍是结果不确定的失败。
+
+provider 尚未交回的会话无法由核心接管。打开失败或取消之前在 provider 内部创建的资源，
+仍由 provider 负责保留和回收。
+
+## 读取窗口与分配上限
+
+`ReadOptions::validate()` 在能力检查、前缀优化和 provider I/O 之前拒绝显式
+ offset + length 溢出，错误为 `InvalidOptions`；未提供 offset 时按零计算。
+零长度请求仍检查或打开资源，不能吞掉不存在、权限等错误。到达或超过 EOF 的窗口为空，
+跨越 EOF 时返回可读取的后缀。metadata 描述完整资源，不表示窗口大小，也不承诺快照。
+
+同步、异步 `read_all` 和 `read_prefix` 共用可失败的几何扩容缓冲。metadata 只是提示，
+即使长度极大也不会据此预分配整份对象。分配失败返回 `ResourceLimitExceeded`，并保留
+底层分配错误 source。`read_all` 可以多读一个字节确认超限；`read_prefix` 不读取前缀
+上限以外的探测字节。这些上限约束返回长度和消费量，不等于进程 RSS 或 provider／网络
+预取上限。本地 provider 的范围能力为 Conditional，自动缩小前缀请求仍只对声明
+Guaranteed `RangeRead` 的 provider 生效。

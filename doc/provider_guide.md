@@ -2,7 +2,7 @@
 
 [中文版本](provider_guide.zh_CN.md)
 
-This guide targets `qubit-fs` 0.5 provider authors. It explains the smallest
+This guide targets `qubit-fs` 0.6 provider authors. It explains the smallest
 provider that can be trusted by the `FileSystem` facade, and the checks to run
 before publishing an adapter. It is not a backend tutorial, a credential
 manager, or a promise that every backend supports every operation.
@@ -213,3 +213,57 @@ preserves the original request; Required checksum is rejected with
 `RequirementNotMet` because a prefix cannot prove complete checksum validation.
 Use a complete `read_all` when that guarantee is needed. Return and consumption
 bounds do not promise an identical bound on provider network prefetch.
+
+## Opening failures and recovery in 0.6
+
+`open_writer`, `create_temp_file`, and `create_temp_directory` return
+`OpenFailure<R>` in both facades. `Preflight` and `ProviderOpen` failures have no
+recovery session. `OutcomeValidation` means a provider returned a session with an
+invalid identity: the error owns a `RejectedWriter`, `RejectedAsyncWriter`,
+`RejectedTempResource`, or `RejectedAsyncTempResource`. These handles expose only
+explicit abort/cleanup, never writing, commit, keep, persist, or a raw session.
+Keep the error or transfer its session with `take_recovery`; converting it into
+an ordinary `FsError` would lose recovery responsibility and is not provided.
+
+Cleanup errors and polled-future cancellation retain the session and record
+`RecoveryCleanupState::Indeterminate`; an unpolled cleanup future changes nothing.
+A confirmed cleanup records `Completed`; another cleanup returns `InvalidState`
+without provider I/O. An indeterminate abort is not confirmation. Dropping a
+rejected handle does not initiate cleanup or `cancel_on_drop`. Cleanup uses the
+session's actual ownership, not an unvalidated diagnostic path. Public cleanup
+context contains only the configured provider and known request path; a temporary
+request without a parent has no invented path. Preserve the original failure and
+any cleanup error together.
+
+Whole-write and copy recovery uses `WriterRecovery` / `AsyncWriterRecovery`:
+match `Opened` for a validated writer and `Rejected` for cleanup-only authority.
+Use `recovery`, `recovery_mut` where available, and `take_recovery` instead of the
+removed writer-only accessors. Synchronous `WriteAllFailure::state()` and
+`written_bytes()` capture immutable failure facts, including short writes and
+exact commit states; abort or transferring recovery never changes those facts.
+The failure's `into_parts` returns error, state, confirmed bytes, and recovery.
+A copy collision during opening can count as Skip only when the provider failed with proven
+unchanged effects and no rejected session. Invalid opened identities remain
+indeterminate failures.
+
+The core cannot retain a session a provider has not returned. Providers remain
+responsible for resources created internally during failed or cancelled opening.
+
+## Read windows and allocation limits
+
+`ReadOptions::validate()` rejects explicit offset + length overflow as
+`InvalidOptions` before capability checks, prefix optimization, or provider I/O.
+An omitted offset means zero. A zero-length request still opens or checks the
+resource; missing resources and permission failures remain errors. Windows at or
+beyond EOF are empty, and windows crossing EOF return the available suffix.
+Returned metadata describes the full resource, not the window or a snapshot.
+
+Both sync and async `read_all` and `read_prefix` use fallible geometric buffer
+growth. Metadata is a hint, not an allocation instruction: an enormous hint does
+not reserve the whole object. Reservation failures return `ResourceLimitExceeded`
+with the allocation error as source. `read_all` may consume one extra byte to
+prove the limit was exceeded; `read_prefix` never probes past its prefix limit.
+These are returned-length and consumption bounds, not process RSS bounds or
+limits on provider/network prefetch. The local provider advertises conditional
+range support, so automatic prefix narrowing still requires a provider advertising
+`RangeRead` as Guaranteed.

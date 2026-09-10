@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![English Document](https://img.shields.io/badge/Document-English-blue.svg)](README.md)
 
-`qubit-fs` 0.5.0 是 Rust 1.94 及以上版本可用的、与具体 provider 无关的文件系统抽象，
+`qubit-fs` 0.6.0 是 Rust 1.94 及以上版本可用的、与具体 provider 无关的文件系统抽象，
 同时提供同步和异步 API。它向应用提供具体门面 `FileSystem` 与
 `AsyncFileSystem`，但不会替应用选择存储后端或异步运行时。
 
@@ -17,13 +17,13 @@
 
 ```toml
 [dependencies]
-qubit-fs = "0.5"
+qubit-fs = "0.6"
 ```
 
 同步 API 默认启用。需要异步门面时必须显式开启 async feature：
 
 ```toml
-qubit-fs = { version = "0.5", features = ["async"] }
+qubit-fs = { version = "0.6", features = ["async"] }
 ```
 
 ## 运行一个本地报告示例
@@ -33,31 +33,23 @@ qubit-fs = { version = "0.5", features = ["async"] }
 
 ```toml
 [dependencies]
-qubit-fs = "0.5"
-qubit-fs-local = "0.7"
+qubit-fs = "0.6"
+qubit-fs-local = "0.8"
 tempfile = "3"
 ```
 
 <!-- example: quick-start -->
 ```rust
-use std::time::Duration;
-
 use qubit_fs::Path;
 use qubit_fs::directory::ListScope;
 use qubit_fs::read::ReadOptions;
 use qubit_fs::write::WriteOptions;
-use qubit_fs_local::LocalCopyResourceLimits;
-use qubit_fs_local::LocalDeleteResourceLimits;
 use qubit_fs_local::LocalFileSystems;
-use qubit_fs_local::LocalListResourceLimits;
 use qubit_fs_local::LocalResourcePolicy;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let directory = tempfile::tempdir()?;
-    let list_budget = LocalListResourceLimits::new(8, 64, 4 * 1024, 4, Duration::from_secs(5))?;
-    let copy_budget = LocalCopyResourceLimits::new(8, 64, 1024 * 1024, 4, Duration::from_secs(5))?;
-    let delete_budget = LocalDeleteResourceLimits::new(8, 64, 4 * 1024, Duration::from_secs(5));
-    let policy = LocalResourcePolicy::bounded(list_budget, copy_budget, delete_budget);
+    let policy = LocalResourcePolicy::standard();
     let filesystem = LocalFileSystems::rooted(directory.path(), policy)?;
     let path = Path::parse("/report.txt")?;
     filesystem.write_all(&path, b"report ready", WriteOptions::default())?;

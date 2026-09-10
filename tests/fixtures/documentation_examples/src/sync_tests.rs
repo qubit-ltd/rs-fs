@@ -127,6 +127,6 @@ fn synchronous_example_retains_publication_and_both_errors() {
             .contains("published but finalization failed")
     );
     assert_eq!(5, recovery.failure.partial_stats().bytes);
-    assert!(recovery.failure.has_writer());
+    assert!(recovery.failure.has_recovery());
     assert_eq!(FsOperation::AbortWriter, recovery.cleanup_error.unwrap().operation());
 }

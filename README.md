@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![中文文档](https://img.shields.io/badge/文档-中文版-blue.svg)](README.zh_CN.md)
 
-`qubit-fs` 0.5.0 is a provider-neutral, synchronous and asynchronous filesystem
+`qubit-fs` 0.6.0 is a provider-neutral, synchronous and asynchronous filesystem
 abstraction for Rust 1.94 or later. It supplies application-facing concrete
 facades—`FileSystem` and `AsyncFileSystem`—instead of choosing a storage backend
 or an async runtime for you.
@@ -19,14 +19,14 @@ public facade while allowing providers to be selected outside the core crate.
 
 ```toml
 [dependencies]
-qubit-fs = "0.5"
+qubit-fs = "0.6"
 ```
 
 Synchronous APIs are enabled by default. Enable the asynchronous facade
 explicitly when it is needed:
 
 ```toml
-qubit-fs = { version = "0.5", features = ["async"] }
+qubit-fs = { version = "0.6", features = ["async"] }
 ```
 
 ## Try a local report workflow
@@ -38,31 +38,23 @@ The temporary directory is removed when the demo ends.
 
 ```toml
 [dependencies]
-qubit-fs = "0.5"
-qubit-fs-local = "0.7"
+qubit-fs = "0.6"
+qubit-fs-local = "0.8"
 tempfile = "3"
 ```
 
 <!-- example: quick-start -->
 ```rust
-use std::time::Duration;
-
 use qubit_fs::Path;
 use qubit_fs::directory::ListScope;
 use qubit_fs::read::ReadOptions;
 use qubit_fs::write::WriteOptions;
-use qubit_fs_local::LocalCopyResourceLimits;
-use qubit_fs_local::LocalDeleteResourceLimits;
 use qubit_fs_local::LocalFileSystems;
-use qubit_fs_local::LocalListResourceLimits;
 use qubit_fs_local::LocalResourcePolicy;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let directory = tempfile::tempdir()?;
-    let list_budget = LocalListResourceLimits::new(8, 64, 4 * 1024, 4, Duration::from_secs(5))?;
-    let copy_budget = LocalCopyResourceLimits::new(8, 64, 1024 * 1024, 4, Duration::from_secs(5))?;
-    let delete_budget = LocalDeleteResourceLimits::new(8, 64, 4 * 1024, Duration::from_secs(5));
-    let policy = LocalResourcePolicy::bounded(list_budget, copy_budget, delete_budget);
+    let policy = LocalResourcePolicy::standard();
     let filesystem = LocalFileSystems::rooted(directory.path(), policy)?;
     let path = Path::parse("/report.txt")?;
     filesystem.write_all(&path, b"report ready", WriteOptions::default())?;
