@@ -30,6 +30,10 @@ fn test_required_non_atomic_temp_persist_retains_cleanup_responsibility() {
         .expect_err("non-atomic result must violate required contract");
     assert_eq!(FsErrorKind::ProviderContractViolation, error.error().kind());
     assert_eq!(TempResourceState::CleanupRequired, temporary.state());
+    assert_eq!(
+        Some(&Path::parse("/target").expect("target")),
+        error.publication_target()
+    );
     temporary.cleanup().expect("cleanup should remain available");
     assert_eq!(1, *cleanup_calls.lock().expect("cleanup lock should succeed"));
 }

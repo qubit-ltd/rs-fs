@@ -123,7 +123,8 @@ impl TempDirectory {
                         .with_path(self.path.clone())
                         .with_target(target.clone()),
                         PersistFailureState::PublishedSourceRetained,
-                    ));
+                    )
+                    .with_publication_target(self.lifecycle.publication_target()));
                 }
                 self.lifecycle.record_success(false, outcome.target().clone());
                 Ok(outcome)
@@ -176,7 +177,13 @@ impl TempDirectory {
         operation: FsOperation,
     ) -> PersistFailure {
         let (error, state) = failure.into_parts();
-        self.lifecycle.record_failure(state, Some(target.clone()), false);
+        let publication_target = if operation == FsOperation::KeepTemp {
+            error.target().cloned()
+        } else {
+            Some(target.clone())
+        };
+        self.lifecycle
+            .record_failure(state, publication_target, operation == FsOperation::KeepTemp);
         PersistFailure::new(
             error.with_operation(operation).with_missing_context(
                 &self.path,

@@ -5,6 +5,8 @@
 // =============================================================================
 //! Invalid opened identities retain isolated cleanup ownership.
 
+use std::error::Error as _;
+use std::ptr::eq;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
@@ -16,6 +18,7 @@ use qubit_fs::Path;
 use qubit_fs::error::FsError;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::error::FsOperation;
+use qubit_fs::error::OpenFailure;
 use qubit_fs::error::OpenFailureStage;
 use qubit_fs::error::RecoveryCleanupState;
 use qubit_fs::metadata::FileKind;
@@ -221,14 +224,27 @@ fn test_rejected_temp_resources_keep_explicit_cleanup_ownership() {
         };
         assert_eq!(failed.stage(), OpenFailureStage::OutcomeValidation);
         assert_eq!(calls.cleanups.load(Ordering::SeqCst), 0);
+        assert_temp_open_failure_reporting(&failed);
         let mut recovery = failed.take_recovery().expect("owned recovery");
         drop(failed);
+        let diagnostic = format!("{recovery:?}");
+        assert!(diagnostic.contains("Pending"));
+        assert!(!diagnostic.contains("untrusted"));
         assert_eq!(calls.drops.load(Ordering::SeqCst), 0);
         calls.fail.store(true, Ordering::SeqCst);
         assert_cleanup_context(&recovery.cleanup().expect_err("cleanup error"), None);
         calls.fail.store(false, Ordering::SeqCst);
         recovery.cleanup().expect("cleanup");
         assert_eq!(recovery.cleanup_state(), RecoveryCleanupState::Completed);
+        let diagnostic = format!("{recovery:?}");
+        assert!(diagnostic.contains("Completed"));
+        assert!(!diagnostic.contains("untrusted"));
+        let repeated = recovery.cleanup().expect_err("completed recovery cannot clean again");
+        assert_eq!(FsErrorKind::InvalidState, repeated.kind());
+        assert_eq!(FsOperation::CleanupTemp, repeated.operation());
+        assert_eq!(Some("test"), repeated.provider());
+        assert_eq!(None, repeated.path());
+        assert_eq!(None, repeated.target());
         drop(recovery);
         assert_eq!(calls.cleanups.load(Ordering::SeqCst), 2);
         assert_eq!(calls.drops.load(Ordering::SeqCst), 1);
@@ -260,6 +276,8 @@ mod asynchronous {
     use qubit_fs::AsyncFileSystem;
     use qubit_fs::FsResult;
     use qubit_fs::Path;
+    use qubit_fs::error::FsErrorKind;
+    use qubit_fs::error::FsOperation;
     use qubit_fs::error::OpenFailureStage;
     use qubit_fs::error::RecoveryCleanupState;
     use qubit_fs::metadata::FileKind;
@@ -292,6 +310,7 @@ mod asynchronous {
     use super::Provider;
     use super::Session;
     use super::assert_cleanup_context;
+    use super::assert_temp_open_failure_reporting;
     use super::failure;
     use super::poll_support::assert_pending;
     use super::poll_support::ready;
@@ -452,8 +471,12 @@ mod asynchronous {
                     .err()
                     .expect("identity")
             };
+            assert_temp_open_failure_reporting(&failed);
             let mut recovery = failed.take_recovery().expect("recovery");
             drop(failed);
+            let diagnostic = format!("{recovery:?}");
+            assert!(diagnostic.contains("Pending"));
+            assert!(!diagnostic.contains("untrusted"));
             drop(recovery.cleanup_async());
             assert_eq!(recovery.cleanup_state(), RecoveryCleanupState::Pending);
             assert_eq!(calls.cleanups.load(Ordering::SeqCst), 0);
@@ -469,6 +492,15 @@ mod asynchronous {
             calls.fail.store(false, Ordering::SeqCst);
             ready(recovery.cleanup_async()).expect("cleanup");
             assert_eq!(recovery.cleanup_state(), RecoveryCleanupState::Completed);
+            let diagnostic = format!("{recovery:?}");
+            assert!(diagnostic.contains("Completed"));
+            assert!(!diagnostic.contains("untrusted"));
+            let repeated = ready(recovery.cleanup_async()).expect_err("completed recovery cannot clean again");
+            assert_eq!(FsErrorKind::InvalidState, repeated.kind());
+            assert_eq!(FsOperation::CleanupTemp, repeated.operation());
+            assert_eq!(Some("test"), repeated.provider());
+            assert_eq!(None, repeated.path());
+            assert_eq!(None, repeated.target());
             drop(recovery);
             assert_eq!(calls.cleanups.load(Ordering::SeqCst), 3);
             assert_eq!(calls.drops.load(Ordering::SeqCst), 1);
@@ -513,4 +545,22 @@ fn assert_cleanup_context(error: &FsError, expected: Option<&str>) {
     assert_eq!(error.path().map(Path::as_str), expected);
     assert!(error.target().is_none());
     assert!(std::error::Error::source(error).is_some());
+}
+
+/// Reporting a rejected temporary opening preserves the causal error and owned
+/// recovery.
+fn assert_temp_open_failure_reporting<R: 'static>(failure: &OpenFailure<R>) {
+    assert_eq!(failure.error().to_string(), failure.to_string());
+    let cause = failure
+        .source()
+        .expect("the original filesystem error remains in the chain");
+    let original = cause
+        .downcast_ref::<FsError>()
+        .expect("filesystem cause type is preserved");
+    assert!(eq(failure.error(), original));
+    assert_eq!(FsErrorKind::ProviderContractViolation, original.kind());
+    assert!(
+        failure.recovery().is_some(),
+        "formatting and error inspection must retain cleanup ownership"
+    );
 }

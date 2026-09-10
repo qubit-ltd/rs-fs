@@ -168,7 +168,7 @@ impl AsyncTempFile {
                 }
                 Err(failure) => {
                     let (error, state) = failure.into_parts();
-                    self.lifecycle.record_failure(state, None, true);
+                    self.lifecycle.record_failure(state, error.target().cloned(), true);
                     let target = self.path.clone();
                     Err(PersistFailure::new(
                         error.with_operation(FsOperation::KeepTemp).with_missing_context(
@@ -177,7 +177,8 @@ impl AsyncTempFile {
                             self.file_system.properties().info().provider_id(),
                         ),
                         state,
-                    ))
+                    )
+                    .with_publication_target(self.lifecycle.publication_target()))
                 }
             }
         })
@@ -236,7 +237,9 @@ impl AsyncTempFile {
                     Some(target.clone()),
                     false,
                 ),
-                Err(failure) => self.lifecycle.record_failure(failure.state(), None, false),
+                Err(failure) => self
+                    .lifecycle
+                    .record_failure(failure.state(), Some(target.clone()), false),
             }
             match result {
                 Ok(outcome) if outcome.target() != target => Err(PersistFailure::new(
@@ -262,11 +265,13 @@ impl AsyncTempFile {
                         .with_path(self.path.clone())
                         .with_target(target.clone()),
                         PersistFailureState::PublishedSourceRetained,
-                    ))
+                    )
+                    .with_publication_target(self.lifecycle.publication_target()))
                 }
                 Err(failure) => {
                     let (error, state) = failure.into_parts();
-                    Err(PersistFailure::new(self.contextual_persist_error(error, target), state))
+                    Err(PersistFailure::new(self.contextual_persist_error(error, target), state)
+                        .with_publication_target(self.lifecycle.publication_target()))
                 }
                 Ok(outcome) => Ok(outcome),
             }
@@ -306,32 +311,15 @@ impl AsyncTempFile {
             let error = self.invalid_state(operation, action);
             return Box::pin(async move { Err(error) });
         }
-        let previous_state = self.lifecycle.state();
         Box::pin(async move {
+            let previous_lifecycle = self.lifecycle.clone();
             self.lifecycle.begin_pending();
             let result = call(self.session.as_mut()).await;
-            match (operation, &result) {
-                (FsOperation::CleanupTemp, Ok(())) => {
-                    self.lifecycle.record_cleanup_success();
-                    self.lifecycle.state()
-                }
-                (FsOperation::KeepTemp, Ok(())) => {
-                    self.lifecycle.record_success(true, self.path.clone());
-                    self.lifecycle.state()
-                }
-                (_, Err(error)) if error.has_indeterminate_effect() => {
-                    self.lifecycle.begin_pending();
-                    self.lifecycle.state()
-                }
-                (FsOperation::KeepTemp, Err(_)) => {
-                    self.lifecycle.restore_state(previous_state);
-                    self.lifecycle.state()
-                }
-                _ => {
-                    self.lifecycle.restore_state(TempResourceState::CleanupRequired);
-                    self.lifecycle.state()
-                }
-            };
+            self.lifecycle = previous_lifecycle;
+            match &result {
+                Ok(()) => self.lifecycle.record_cleanup_success(),
+                Err(error) => self.lifecycle.record_cleanup_error(error),
+            }
             result.map_err(|error| {
                 error.with_operation(operation).with_missing_context(
                     &self.path,

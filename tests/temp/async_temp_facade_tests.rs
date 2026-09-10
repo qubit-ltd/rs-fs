@@ -11,8 +11,10 @@ use std::pin::Pin;
 
 use qubit_fs::FsResult;
 use qubit_fs::Path;
+use qubit_fs::error::FsEffectState;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::error::FsOperation;
+use qubit_fs::metadata::AchievedAtomicity;
 use qubit_fs::metadata::AtomicityRequirement;
 use qubit_fs::path::PathComponent;
 use qubit_fs::path::RelativePath;
@@ -28,6 +30,7 @@ use qubit_fs::temp::TempResourceState;
 
 use crate::async_recording_spi::AsyncRecordingConfig;
 use crate::async_recording_spi::async_recording_file_system;
+use crate::poll_support::assert_pending;
 use crate::poll_support::ready;
 
 /// Returns a stable absolute destination used by persistence tests.
@@ -407,4 +410,418 @@ fn test_async_temp_directory_repeat_preserves_publication_target() {
     assert_eq!(persist.publication_target(), Some(outcome.target()));
     assert_eq!(directory.state(), TempResourceState::Persisted);
     assert_eq!(probe.calls(), calls, "repeat must not call the provider");
+}
+
+/// Cleanup completion and ordinary cleanup errors retain published history.
+#[test]
+fn test_async_temp_cleanup_preserves_published_history() {
+    for cleanup_failure in [false, true] {
+        let (filesystem, probe) = async_recording_file_system(AsyncRecordingConfig {
+            atomic_temp_persist: true,
+            temp_persist_failure: Some(PersistFailureState::PublishedSourceRetained),
+            temp_cleanup_failure: cleanup_failure,
+            ..AsyncRecordingConfig::default()
+        });
+        let mut file = ready(filesystem.create_temp_file(TempOptions::default())).expect("file");
+        let target = path("/published");
+        let failure = ready(file.persist(&target, PersistOptions::default())).expect_err("partial publish");
+        assert_eq!(Some(&target), failure.publication_target());
+        let result = ready(file.cleanup());
+        assert_eq!(cleanup_failure, result.is_err());
+        let calls = probe.calls();
+        let retry = ready(file.persist(&path("relative"), PersistOptions::default())).expect_err("not owned");
+        assert_eq!(FsErrorKind::InvalidState, retry.error().kind());
+        assert_eq!(Some(&target), retry.publication_target());
+        assert_eq!(
+            if cleanup_failure {
+                PersistFailureState::PublishedSourceRetained
+            } else {
+                PersistFailureState::PublishedSourceReleased
+            },
+            retry.state()
+        );
+        assert_eq!(calls, probe.calls());
+    }
+}
+
+/// Asynchronous file recovery preserves source qualification and target facts.
+#[test]
+fn test_async_temp_file_source_failure_states_are_sticky() {
+    for (state, expected, published) in [
+        (
+            PersistFailureState::NotPublishedSourceIndeterminate,
+            TempResourceState::Indeterminate,
+            false,
+        ),
+        (
+            PersistFailureState::PublishedSourceIndeterminate,
+            TempResourceState::Indeterminate,
+            true,
+        ),
+        (
+            PersistFailureState::NotPublishedSourceCleanupRequired,
+            TempResourceState::CleanupRequired,
+            false,
+        ),
+    ] {
+        let (filesystem, probe) = async_recording_file_system(AsyncRecordingConfig {
+            atomic_temp_persist: true,
+            temp_persist_failure: Some(state),
+            ..AsyncRecordingConfig::default()
+        });
+        let mut temporary = ready(filesystem.create_temp_file(TempOptions::default())).expect("resource");
+        let target = path("/published");
+        let failure = ready(temporary.persist(&target, PersistOptions::default())).expect_err("injected failure");
+        assert_eq!(state, failure.state());
+        assert_eq!(expected, temporary.state());
+        assert_eq!(published.then_some(&target), failure.publication_target());
+        let calls = probe.calls();
+        let retry = ready(temporary.persist(&path("relative"), PersistOptions::default())).expect_err("not owned");
+        assert_eq!(FsErrorKind::InvalidState, retry.error().kind());
+        assert_eq!(state, retry.state());
+        assert_eq!(published.then_some(&target), retry.publication_target());
+        let keep = ready(temporary.keep()).expect_err("not owned");
+        assert_eq!(state, keep.state());
+        assert_eq!(published.then_some(&target), keep.publication_target());
+        assert_eq!(calls, probe.calls());
+        if expected == TempResourceState::Indeterminate {
+            assert_eq!(
+                FsErrorKind::InvalidState,
+                ready(temporary.cleanup()).expect_err("uncertain source").kind()
+            );
+            assert_eq!(expected, temporary.state());
+            assert_eq!(calls, probe.calls());
+        } else {
+            ready(temporary.cleanup()).expect("sandbox cleanup");
+            let retry = ready(temporary.keep()).expect_err("cleaned");
+            assert_eq!(PersistFailureState::NotPublishedSourceReleased, retry.state());
+            assert_eq!(None, retry.publication_target());
+        }
+        drop(temporary);
+        assert_eq!(0, probe.temp_cancellations());
+    }
+}
+
+/// Asynchronous directory recovery preserves source qualification and target
+/// facts.
+#[test]
+fn test_async_temp_directory_source_failure_states_are_sticky() {
+    for (state, expected, published) in [
+        (
+            PersistFailureState::NotPublishedSourceIndeterminate,
+            TempResourceState::Indeterminate,
+            false,
+        ),
+        (
+            PersistFailureState::PublishedSourceIndeterminate,
+            TempResourceState::Indeterminate,
+            true,
+        ),
+        (
+            PersistFailureState::NotPublishedSourceCleanupRequired,
+            TempResourceState::CleanupRequired,
+            false,
+        ),
+    ] {
+        let (filesystem, probe) = async_recording_file_system(AsyncRecordingConfig {
+            atomic_temp_persist: true,
+            temp_persist_failure: Some(state),
+            ..AsyncRecordingConfig::default()
+        });
+        let mut temporary = ready(filesystem.create_temp_directory(TempOptions::default())).expect("resource");
+        let target = path("/published");
+        let failure = ready(temporary.persist(&target, PersistOptions::default())).expect_err("injected failure");
+        assert_eq!(state, failure.state());
+        assert_eq!(expected, temporary.state());
+        assert_eq!(published.then_some(&target), failure.publication_target());
+        let calls = probe.calls();
+        let retry = ready(temporary.persist(&path("relative"), PersistOptions::default())).expect_err("not owned");
+        assert_eq!(FsErrorKind::InvalidState, retry.error().kind());
+        assert_eq!(state, retry.state());
+        assert_eq!(published.then_some(&target), retry.publication_target());
+        let keep = ready(temporary.keep()).expect_err("not owned");
+        assert_eq!(state, keep.state());
+        assert_eq!(published.then_some(&target), keep.publication_target());
+        assert_eq!(calls, probe.calls());
+        if expected == TempResourceState::Indeterminate {
+            assert_eq!(
+                FsErrorKind::InvalidState,
+                ready(temporary.cleanup()).expect_err("uncertain source").kind()
+            );
+            assert_eq!(expected, temporary.state());
+            assert_eq!(calls, probe.calls());
+        } else {
+            ready(temporary.cleanup()).expect("sandbox cleanup");
+            let retry = ready(temporary.keep()).expect_err("cleaned");
+            assert_eq!(PersistFailureState::NotPublishedSourceReleased, retry.state());
+            assert_eq!(None, retry.publication_target());
+        }
+        drop(temporary);
+        assert_eq!(0, probe.temp_cancellations());
+    }
+}
+
+/// Keep failures retain the provider-generated destination across cleanup.
+#[test]
+fn test_async_temp_file_keep_failure_retains_generated_target() {
+    for state in [
+        PersistFailureState::PublishedSourceIndeterminate,
+        PersistFailureState::PublishedSourceRetained,
+        PersistFailureState::PublishedSourceReleased,
+    ] {
+        let (filesystem, _) = async_recording_file_system(AsyncRecordingConfig {
+            temp_persist_failure: Some(state),
+            ..AsyncRecordingConfig::default()
+        });
+        let mut temporary = ready(filesystem.create_temp_file(TempOptions::default())).expect("resource");
+        let target = path("/kept-resource");
+        let failure = ready(temporary.keep()).expect_err("injected keep failure");
+        assert_eq!(Some(&target), failure.publication_target());
+        assert_eq!(state, failure.state());
+        if state == PersistFailureState::PublishedSourceRetained {
+            ready(temporary.cleanup()).expect("cleanup");
+        }
+        let retry = ready(temporary.keep()).expect_err("not owned");
+        assert_eq!(Some(&target), retry.publication_target());
+        assert_eq!(
+            if state == PersistFailureState::PublishedSourceRetained {
+                PersistFailureState::PublishedSourceReleased
+            } else {
+                state
+            },
+            retry.state()
+        );
+    }
+}
+
+/// Keep failures retain the provider-generated destination across cleanup.
+#[test]
+fn test_async_temp_directory_keep_failure_retains_generated_target() {
+    for state in [
+        PersistFailureState::PublishedSourceIndeterminate,
+        PersistFailureState::PublishedSourceRetained,
+        PersistFailureState::PublishedSourceReleased,
+    ] {
+        let (filesystem, _) = async_recording_file_system(AsyncRecordingConfig {
+            temp_persist_failure: Some(state),
+            ..AsyncRecordingConfig::default()
+        });
+        let mut temporary = ready(filesystem.create_temp_directory(TempOptions::default())).expect("resource");
+        let target = path("/kept-resource");
+        let failure = ready(temporary.keep()).expect_err("injected keep failure");
+        assert_eq!(Some(&target), failure.publication_target());
+        assert_eq!(state, failure.state());
+        if state == PersistFailureState::PublishedSourceRetained {
+            ready(temporary.cleanup()).expect("cleanup");
+        }
+        let retry = ready(temporary.keep()).expect_err("not owned");
+        assert_eq!(Some(&target), retry.publication_target());
+        assert_eq!(
+            if state == PersistFailureState::PublishedSourceRetained {
+                PersistFailureState::PublishedSourceReleased
+            } else {
+                state
+            },
+            retry.state()
+        );
+    }
+}
+
+/// Cancelling a polled operation never re-enables source mutation authority.
+#[test]
+fn test_async_temp_file_cancellation_retains_uncertainty() {
+    for operation in [
+        FsOperation::PersistTemp,
+        FsOperation::KeepTemp,
+        FsOperation::CleanupTemp,
+    ] {
+        let (filesystem, probe) = async_recording_file_system(AsyncRecordingConfig {
+            atomic_temp_persist: true,
+            temp_pending_operation: Some(operation),
+            temp_persist_failure: (operation == FsOperation::CleanupTemp)
+                .then_some(PersistFailureState::PublishedSourceRetained),
+            ..AsyncRecordingConfig::default()
+        });
+        let mut temporary = ready(filesystem.create_temp_file(TempOptions::default())).expect("resource");
+        let target = path("/published");
+        if operation == FsOperation::CleanupTemp {
+            ready(temporary.persist(&target, PersistOptions::default())).expect_err("partial publish");
+            drop(temporary.cleanup());
+            assert_eq!(TempResourceState::CleanupRequired, temporary.state());
+            let mut pending = temporary.cleanup();
+            assert_pending(pending.as_mut());
+        } else if operation == FsOperation::PersistTemp {
+            drop(temporary.persist(&target, PersistOptions::default()));
+            assert_eq!(TempResourceState::Owned, temporary.state());
+            let mut pending = temporary.persist(&target, PersistOptions::default());
+            assert_pending(pending.as_mut());
+        } else {
+            drop(temporary.keep());
+            assert_eq!(TempResourceState::Owned, temporary.state());
+            let mut pending = temporary.keep();
+            assert_pending(pending.as_mut());
+        }
+        assert_eq!(TempResourceState::Indeterminate, temporary.state());
+        let calls = probe.calls();
+        let retry = ready(temporary.persist(&path("relative"), PersistOptions::default())).expect_err("cancelled");
+        assert_eq!(FsErrorKind::InvalidState, retry.error().kind());
+        assert_eq!(PersistFailureState::Indeterminate, retry.state());
+        assert_eq!(
+            (operation == FsOperation::CleanupTemp).then_some(&target),
+            retry.publication_target()
+        );
+        assert_eq!(
+            FsErrorKind::InvalidState,
+            ready(temporary.cleanup()).expect_err("uncertain").kind()
+        );
+        drop(temporary);
+        assert_eq!(calls, probe.calls());
+        assert_eq!(0, probe.temp_cancellations());
+    }
+}
+
+/// Cancelling a polled operation never re-enables source mutation authority.
+#[test]
+fn test_async_temp_directory_cancellation_retains_uncertainty() {
+    for operation in [
+        FsOperation::PersistTemp,
+        FsOperation::KeepTemp,
+        FsOperation::CleanupTemp,
+    ] {
+        let (filesystem, probe) = async_recording_file_system(AsyncRecordingConfig {
+            atomic_temp_persist: true,
+            temp_pending_operation: Some(operation),
+            temp_persist_failure: (operation == FsOperation::CleanupTemp)
+                .then_some(PersistFailureState::PublishedSourceRetained),
+            ..AsyncRecordingConfig::default()
+        });
+        let mut temporary = ready(filesystem.create_temp_directory(TempOptions::default())).expect("resource");
+        let target = path("/published");
+        if operation == FsOperation::CleanupTemp {
+            ready(temporary.persist(&target, PersistOptions::default())).expect_err("partial publish");
+            drop(temporary.cleanup());
+            assert_eq!(TempResourceState::CleanupRequired, temporary.state());
+            let mut pending = temporary.cleanup();
+            assert_pending(pending.as_mut());
+        } else if operation == FsOperation::PersistTemp {
+            drop(temporary.persist(&target, PersistOptions::default()));
+            assert_eq!(TempResourceState::Owned, temporary.state());
+            let mut pending = temporary.persist(&target, PersistOptions::default());
+            assert_pending(pending.as_mut());
+        } else {
+            drop(temporary.keep());
+            assert_eq!(TempResourceState::Owned, temporary.state());
+            let mut pending = temporary.keep();
+            assert_pending(pending.as_mut());
+        }
+        assert_eq!(TempResourceState::Indeterminate, temporary.state());
+        let calls = probe.calls();
+        let retry = ready(temporary.persist(&path("relative"), PersistOptions::default())).expect_err("cancelled");
+        assert_eq!(FsErrorKind::InvalidState, retry.error().kind());
+        assert_eq!(PersistFailureState::Indeterminate, retry.state());
+        assert_eq!(
+            (operation == FsOperation::CleanupTemp).then_some(&target),
+            retry.publication_target()
+        );
+        assert_eq!(
+            FsErrorKind::InvalidState,
+            ready(temporary.cleanup()).expect_err("uncertain").kind()
+        );
+        drop(temporary);
+        assert_eq!(calls, probe.calls());
+        assert_eq!(0, probe.temp_cancellations());
+    }
+}
+
+/// A contract violation after confirmed publication retains its destination.
+#[test]
+fn test_async_temp_atomicity_violation_retains_publication_target() {
+    let (filesystem, _) = async_recording_file_system(AsyncRecordingConfig {
+        atomic_temp_persist: true,
+        temp_persist_atomicity: Some(AchievedAtomicity::NonAtomic),
+        ..AsyncRecordingConfig::default()
+    });
+    let mut file = ready(filesystem.create_temp_file(TempOptions::default())).expect("file");
+    let target = path("/published");
+    let failure = ready(file.persist(&target, PersistOptions::default())).expect_err("atomicity violation");
+    assert_eq!(PersistFailureState::PublishedSourceRetained, failure.state());
+    assert_eq!(Some(&target), failure.publication_target());
+}
+
+/// Completed cleanup failure preserves publication while source authority
+/// becomes uncertain.
+#[test]
+fn test_async_temp_file_published_cleanup_becomes_source_indeterminate() {
+    let (filesystem, probe) = async_recording_file_system(AsyncRecordingConfig {
+        atomic_temp_persist: true,
+        temp_persist_failure: Some(PersistFailureState::PublishedSourceRetained),
+        temp_cleanup_effect: Some(FsEffectState::Indeterminate),
+        ..AsyncRecordingConfig::default()
+    });
+    let mut temporary = ready(filesystem.create_temp_file(TempOptions::default())).expect("resource");
+    let target = path("/published");
+    let failure = ready(temporary.persist(&target, PersistOptions::default())).expect_err("partial publication");
+    assert_eq!(PersistFailureState::PublishedSourceRetained, failure.state());
+    assert_eq!(TempResourceState::CleanupRequired, temporary.state());
+    assert_eq!(Some(&target), failure.publication_target());
+    let cleanup = ready(temporary.cleanup()).expect_err("uncertain cleanup");
+    assert_eq!(FsErrorKind::Io, cleanup.kind());
+    assert_eq!(Some(FsEffectState::Indeterminate), cleanup.effect_state());
+    assert_eq!(TempResourceState::Indeterminate, temporary.state());
+    let calls = probe.calls();
+    assert_eq!(vec!["create_temp_file", "persist", "cleanup"], calls);
+    let retry = ready(temporary.persist(&path("relative"), PersistOptions::default())).expect_err("uncertain source");
+    assert_eq!(FsErrorKind::InvalidState, retry.error().kind());
+    assert_eq!(PersistFailureState::PublishedSourceIndeterminate, retry.state());
+    assert_eq!(Some(&target), retry.publication_target());
+    let keep = ready(temporary.keep()).expect_err("uncertain source");
+    assert_eq!(PersistFailureState::PublishedSourceIndeterminate, keep.state());
+    assert_eq!(Some(&target), keep.publication_target());
+    assert_eq!(
+        FsErrorKind::InvalidState,
+        ready(temporary.cleanup()).expect_err("no cleanup retry").kind()
+    );
+    assert_eq!(TempResourceState::Indeterminate, temporary.state());
+    drop(temporary);
+    assert_eq!(calls, probe.calls());
+    assert_eq!(0, probe.temp_cancellations());
+}
+
+/// Completed cleanup failure preserves publication while source authority
+/// becomes uncertain.
+#[test]
+fn test_async_temp_directory_published_cleanup_becomes_source_indeterminate() {
+    let (filesystem, probe) = async_recording_file_system(AsyncRecordingConfig {
+        atomic_temp_persist: true,
+        temp_persist_failure: Some(PersistFailureState::PublishedSourceRetained),
+        temp_cleanup_effect: Some(FsEffectState::Indeterminate),
+        ..AsyncRecordingConfig::default()
+    });
+    let mut temporary = ready(filesystem.create_temp_directory(TempOptions::default())).expect("resource");
+    let target = path("/published");
+    let failure = ready(temporary.persist(&target, PersistOptions::default())).expect_err("partial publication");
+    assert_eq!(PersistFailureState::PublishedSourceRetained, failure.state());
+    assert_eq!(TempResourceState::CleanupRequired, temporary.state());
+    assert_eq!(Some(&target), failure.publication_target());
+    let cleanup = ready(temporary.cleanup()).expect_err("uncertain cleanup");
+    assert_eq!(FsErrorKind::Io, cleanup.kind());
+    assert_eq!(Some(FsEffectState::Indeterminate), cleanup.effect_state());
+    assert_eq!(TempResourceState::Indeterminate, temporary.state());
+    let calls = probe.calls();
+    assert_eq!(vec!["create_temp_directory", "persist", "cleanup"], calls);
+    let retry = ready(temporary.persist(&path("relative"), PersistOptions::default())).expect_err("uncertain source");
+    assert_eq!(FsErrorKind::InvalidState, retry.error().kind());
+    assert_eq!(PersistFailureState::PublishedSourceIndeterminate, retry.state());
+    assert_eq!(Some(&target), retry.publication_target());
+    let keep = ready(temporary.keep()).expect_err("uncertain source");
+    assert_eq!(PersistFailureState::PublishedSourceIndeterminate, keep.state());
+    assert_eq!(Some(&target), keep.publication_target());
+    assert_eq!(
+        FsErrorKind::InvalidState,
+        ready(temporary.cleanup()).expect_err("no cleanup retry").kind()
+    );
+    assert_eq!(TempResourceState::Indeterminate, temporary.state());
+    drop(temporary);
+    assert_eq!(calls, probe.calls());
+    assert_eq!(0, probe.temp_cancellations());
 }

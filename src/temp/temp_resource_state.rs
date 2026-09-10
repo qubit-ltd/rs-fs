@@ -19,7 +19,7 @@ pub enum TempResourceState {
     Kept,
     /// The temporary source was explicitly cleaned.
     Cleaned,
-    /// A target was published but source cleanup still belongs to this handle.
+    /// Only residual cleanup is permitted; this does not imply publication.
     CleanupRequired,
     /// The provider cannot determine the final source or target state.
     Indeterminate,
