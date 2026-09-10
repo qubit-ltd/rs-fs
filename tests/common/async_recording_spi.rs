@@ -123,6 +123,8 @@ pub(crate) struct AsyncRecordingConfig {
     pub(crate) temp_persist_indeterminate: bool,
     pub(crate) temp_persist_failure: Option<PersistFailureState>,
     pub(crate) temp_cleanup_failure: bool,
+    pub(crate) temp_cleanup_effect: Option<FsEffectState>,
+    pub(crate) temp_pending_operation: Option<FsOperation>,
     pub(crate) temp_keep_failure: bool,
     pub(crate) temp_create_error: bool,
     pub(crate) writer_atomicity: Option<AchievedAtomicity>,
@@ -547,6 +549,8 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
                     indeterminate_persist: self.config.temp_persist_indeterminate,
                     persist_failure: self.config.temp_persist_failure,
                     cleanup_failure: self.config.temp_cleanup_failure,
+                    cleanup_effect: self.config.temp_cleanup_effect,
+                    pending_operation: self.config.temp_pending_operation,
                     keep_failure: self.config.temp_keep_failure,
                     atomicity: self.config.temp_persist_atomicity,
                 }),
@@ -577,6 +581,8 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
                         && self.config.temp_persist_indeterminate,
                     persist_failure: self.config.temp_persist_failure,
                     cleanup_failure: self.config.temp_cleanup_failure,
+                    cleanup_effect: self.config.temp_cleanup_effect,
+                    pending_operation: self.config.temp_pending_operation,
                     keep_failure: self.config.temp_keep_failure,
                     atomicity: self.config.temp_persist_atomicity,
                 }),
@@ -735,6 +741,8 @@ struct RecordingTempSession {
     persist_failure: Option<PersistFailureState>,
     atomicity: Option<AchievedAtomicity>,
     cleanup_failure: bool,
+    cleanup_effect: Option<FsEffectState>,
+    pending_operation: Option<FsOperation>,
     keep_failure: bool,
 }
 impl RecordingTempSession {
@@ -756,6 +764,15 @@ impl AsyncTempResourceSpi for RecordingTempSession {
         self.as_ref().get_ref().record("cleanup");
         let cleanup_failure = self.as_ref().get_ref().cleanup_failure;
         Box::pin(async move {
+            if self.as_ref().get_ref().pending_operation == Some(FsOperation::CleanupTemp) {
+                std::future::pending::<()>().await;
+            }
+            if let Some(effect) = self.as_ref().get_ref().cleanup_effect {
+                return Err(
+                    FsError::new(FsErrorKind::Io, FsOperation::CleanupTemp, "injected cleanup effect")
+                        .with_effect_state(effect),
+                );
+            }
             if cleanup_failure {
                 Err(FsError::with_source(
                     FsErrorKind::Io,
@@ -771,7 +788,18 @@ impl AsyncTempResourceSpi for RecordingTempSession {
     fn keep<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<PersistOutcome, SpiPersistFailure>> {
         self.as_ref().get_ref().record("keep");
         let keep_failure = self.as_ref().get_ref().keep_failure;
+        let failure_state = self.as_ref().get_ref().persist_failure;
         Box::pin(async move {
+            if self.as_ref().get_ref().pending_operation == Some(FsOperation::KeepTemp) {
+                std::future::pending::<()>().await;
+            }
+            if let Some(state) = failure_state {
+                return Err(SpiPersistFailure::new(
+                    FsError::new(FsErrorKind::Io, FsOperation::KeepTemp, "injected keep failure")
+                        .with_target(Path::parse("/kept-resource").expect("generated target")),
+                    state,
+                ));
+            }
             if keep_failure {
                 Err(SpiPersistFailure::new(
                     FsError::new(FsErrorKind::Io, FsOperation::KeepTemp, "injected keep failure"),
@@ -800,6 +828,9 @@ impl AsyncTempResourceSpi for RecordingTempSession {
         let indeterminate = self.as_ref().get_ref().indeterminate_persist;
         let failure = self.as_ref().get_ref().persist_failure;
         Box::pin(async move {
+            if self.as_ref().get_ref().pending_operation == Some(FsOperation::PersistTemp) {
+                std::future::pending::<()>().await;
+            }
             if let Some(state) = failure {
                 return Err(SpiPersistFailure::new(
                     FsError::new(FsErrorKind::Io, FsOperation::PersistTemp, "injected persist failure"),

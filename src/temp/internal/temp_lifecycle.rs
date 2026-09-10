@@ -47,6 +47,7 @@ impl TempLifecycle {
         self.publication_target.as_ref()
     }
     /// Marks an in-flight mutation uncertain before awaiting the provider.
+    #[cfg(feature = "async")]
     #[inline]
     pub(crate) fn begin_pending(&mut self) {
         self.state = TempResourceState::Indeterminate;
@@ -66,14 +67,22 @@ impl TempLifecycle {
     /// Records provider failure without discarding an earlier known target.
     #[inline]
     pub(crate) fn record_failure(&mut self, state: PersistFailureState, target: Option<Path>, kept: bool) {
-        if let Some(target) = target {
+        if matches!(
+            state,
+            PersistFailureState::PublishedSourceRetained
+                | PersistFailureState::PublishedSourceReleased
+                | PersistFailureState::PublishedSourceIndeterminate
+        ) && let Some(target) = target
+        {
             self.publication_target = Some(target);
         }
         self.failure_state = state;
         self.state = match state {
             PersistFailureState::NotPublished => TempResourceState::Owned,
             PersistFailureState::NotPublishedSourceReleased => TempResourceState::Cleaned,
-            PersistFailureState::PublishedSourceRetained => TempResourceState::CleanupRequired,
+            PersistFailureState::PublishedSourceRetained | PersistFailureState::NotPublishedSourceCleanupRequired => {
+                TempResourceState::CleanupRequired
+            }
             PersistFailureState::PublishedSourceReleased => {
                 if kept {
                     TempResourceState::Kept
@@ -81,17 +90,23 @@ impl TempLifecycle {
                     TempResourceState::Persisted
                 }
             }
-            PersistFailureState::Indeterminate => TempResourceState::Indeterminate,
+            PersistFailureState::Indeterminate
+            | PersistFailureState::NotPublishedSourceIndeterminate
+            | PersistFailureState::PublishedSourceIndeterminate => TempResourceState::Indeterminate,
         };
     }
     /// Releases source ownership while preserving publication certainty.
     #[inline]
     pub(crate) fn record_cleanup_success(&mut self) {
         self.state = TempResourceState::Cleaned;
+        if self.publication_target.is_some() {
+            self.failure_state = PersistFailureState::PublishedSourceReleased;
+            return;
+        }
         self.failure_state = match self.failure_state {
-            PersistFailureState::PublishedSourceRetained | PersistFailureState::PublishedSourceReleased => {
-                PersistFailureState::PublishedSourceReleased
-            }
+            PersistFailureState::PublishedSourceRetained
+            | PersistFailureState::PublishedSourceReleased
+            | PersistFailureState::PublishedSourceIndeterminate => PersistFailureState::PublishedSourceReleased,
             PersistFailureState::Indeterminate => PersistFailureState::Indeterminate,
             _ => PersistFailureState::NotPublishedSourceReleased,
         };
@@ -99,18 +114,25 @@ impl TempLifecycle {
     /// Preserves uncertainty or records outstanding cleanup responsibility.
     #[inline]
     pub(crate) fn record_cleanup_error(&mut self, error: &FsError) {
+        if self.state == TempResourceState::Indeterminate {
+            return;
+        }
         if error.has_indeterminate_effect() {
-            self.begin_pending();
+            self.state = TempResourceState::Indeterminate;
+            self.failure_state = if self.publication_target.is_some()
+                || matches!(
+                    self.failure_state,
+                    PersistFailureState::PublishedSourceRetained | PersistFailureState::PublishedSourceReleased
+                ) {
+                PersistFailureState::PublishedSourceIndeterminate
+            } else {
+                PersistFailureState::NotPublishedSourceIndeterminate
+            };
         } else {
             self.state = TempResourceState::CleanupRequired;
+            if self.failure_state == PersistFailureState::NotPublished {
+                self.failure_state = PersistFailureState::NotPublishedSourceCleanupRequired;
+            }
         }
-    }
-
-    /// Restores ownership state after a provider operation with unchanged
-    /// effects.
-    #[allow(dead_code)]
-    #[inline]
-    pub(crate) fn restore_state(&mut self, state: TempResourceState) {
-        self.state = state;
     }
 }

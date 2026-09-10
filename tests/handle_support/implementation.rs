@@ -323,6 +323,14 @@ fn invalid_temp_cleanup_filesystem() -> FileSystem {
 pub(crate) fn temp_failure_filesystem(
     state: PersistFailureState,
 ) -> (FileSystem, Arc<Mutex<usize>>, Arc<Mutex<usize>>) {
+    temp_failure_with_cleanup_error_filesystem(state, None)
+}
+/// Builds a partial-publication session with a separately controlled cleanup
+/// failure.
+pub(crate) fn temp_failure_with_cleanup_error_filesystem(
+    state: PersistFailureState,
+    cleanup_error: Option<FsErrorKind>,
+) -> (FileSystem, Arc<Mutex<usize>>, Arc<Mutex<usize>>) {
     let cleanup_calls = Arc::new(Mutex::new(0));
     let persist_calls = Arc::new(Mutex::new(0));
     let filesystem = FileSystem::from_spi(BehaviorSpi {
@@ -339,7 +347,7 @@ pub(crate) fn temp_failure_filesystem(
         temp_path: Path::parse("/temporary").expect("test path should parse"),
         temp_failure: Some(state),
         temp_keep_error: None,
-        temp_cleanup_error: None,
+        temp_cleanup_error: cleanup_error,
         directory_persist_non_atomic: false,
         provider_open_error: false,
     })
@@ -907,6 +915,14 @@ impl TempResourceSpi for Temp {
         ))
     }
     fn keep(&mut self) -> Result<PersistOutcome, SpiPersistFailure> {
+        if let Some(state) = self.failure {
+            return Err(SpiPersistFailure::new(
+                FsError::new(FsErrorKind::Io, FsOperation::KeepTemp, "injected keep failure")
+                    .with_target(Path::parse("/kept-resource").expect("generated target")),
+                state,
+            ));
+        }
+
         self.keep_error.map_or_else(
             || {
                 Ok(PersistOutcome::new(

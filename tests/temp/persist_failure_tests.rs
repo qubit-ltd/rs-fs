@@ -9,10 +9,15 @@
 use std::error::Error as _;
 
 use qubit_fs::FsError;
+use qubit_fs::Path;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::error::FsOperation;
 use qubit_fs::temp::PersistFailure;
 use qubit_fs::temp::PersistFailureState;
+use qubit_fs::temp::PersistOptions;
+use qubit_fs::temp::TempOptions;
+
+use crate::handle_support::temp_failure_filesystem;
 
 const SECRET_SOURCE_TEXT: &str = "authorization=secret-token";
 
@@ -83,4 +88,32 @@ fn test_persist_failure_into_parts_preserves_error_and_state() {
     let (error, state) = failure.into_parts();
     assert_eq!(PersistFailureState::NotPublished, state);
     assert_eq!(FsErrorKind::Io, error.kind());
+}
+
+/// Consuming a real facade failure preserves its contextual cause and source
+/// authority.
+#[test]
+fn test_persist_failure_into_parts_preserves_facade_context() {
+    for state in [
+        PersistFailureState::NotPublishedSourceIndeterminate,
+        PersistFailureState::PublishedSourceIndeterminate,
+        PersistFailureState::NotPublishedSourceCleanupRequired,
+    ] {
+        let (filesystem, _, _) = temp_failure_filesystem(state);
+        let mut temporary = filesystem
+            .create_temp_file(TempOptions::default())
+            .expect("temporary file");
+        let source = temporary.path().clone();
+        let target = Path::parse("/published/report").expect("target");
+        let failure = temporary
+            .persist(&target, PersistOptions::default())
+            .expect_err("injected failure");
+        let (error, recovered_state) = failure.into_parts();
+        assert_eq!(state, recovered_state);
+        assert_eq!(FsErrorKind::Io, error.kind());
+        assert_eq!(FsOperation::PersistTemp, error.operation());
+        assert_eq!(Some("handles-test"), error.provider());
+        assert_eq!(Some(&source), error.path());
+        assert_eq!(Some(&target), error.target());
+    }
 }
