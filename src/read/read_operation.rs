@@ -13,13 +13,13 @@ use qubit_io::Input;
 
 use crate::FileSystem;
 use crate::error::FsError;
-use crate::error::FsErrorKind;
 use crate::error::FsOperation;
 use crate::error::FsResult;
 use crate::facade::facade_core::FacadeCore;
 use crate::facade::internal::FileSystemResource;
 use crate::path::Path;
 use crate::read::ReadOptions;
+use crate::read::internal::ReadBuffer;
 use crate::read::prefix_read_plan::PrefixReadPlan;
 
 /// Executes aggregate synchronous read operations for one facade.
@@ -38,7 +38,7 @@ impl<'a> ReadOperation<'a> {
     /// Reads one file into memory up to `max_bytes` after opening a reader.
     pub(crate) fn read_all(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
         let mut reader = self.filesystem.open_reader(path, options.clone())?;
-        let mut result = Vec::new();
+        let mut result = ReadBuffer::new(max_bytes);
         let maximum = FacadeCore::quantity_from_usize(
             max_bytes,
             FsOperation::Read,
@@ -59,18 +59,6 @@ impl<'a> ReadOperation<'a> {
                     "read exceeds maximum byte count",
                 )
             })?;
-            if let Ok(capacity) = usize::try_from(selected) {
-                result.try_reserve(capacity).map_err(|error| {
-                    FsError::with_source(
-                        FsErrorKind::ResourceLimitExceeded,
-                        FsOperation::Read,
-                        "read buffer allocation exceeds available capacity",
-                        error,
-                    )
-                    .with_path(path.clone())
-                    .with_provider(self.filesystem.properties().info().provider_id())
-                })?;
-            }
         }
         let mut buffer = [0_u8; 8192];
         loop {
@@ -82,7 +70,7 @@ impl<'a> ReadOperation<'a> {
                     .with_provider(self.filesystem.properties().info().provider_id())
             })?;
             if read == 0 {
-                return Ok(result);
+                return Ok(result.into_vec());
             }
             let read = FacadeCore::quantity_from_usize(
                 read,
@@ -99,7 +87,9 @@ impl<'a> ReadOperation<'a> {
                     "read exceeds maximum byte count",
                 ));
             }
-            result.extend_from_slice(&buffer[..usize::try_from(read).expect("read count originated as usize")]);
+            result
+                .try_append(&buffer[..usize::try_from(read).expect("read count originated as usize")])
+                .map_err(|error| self.filesystem.core().enrich(error, Some(path), FsOperation::Read))?;
         }
     }
 
@@ -110,7 +100,7 @@ impl<'a> ReadOperation<'a> {
         if max_bytes == 0 {
             return Ok(Vec::new());
         }
-        let mut result = Vec::with_capacity(max_bytes.min(FacadeCore::PREFIX_BUFFER_SIZE));
+        let mut result = ReadBuffer::new(max_bytes);
         let mut buffer = [0_u8; FacadeCore::PREFIX_BUFFER_SIZE];
         while result.len() < max_bytes {
             let read_len = FacadeCore::next_prefix_read_len(result.len(), max_bytes);
@@ -121,8 +111,10 @@ impl<'a> ReadOperation<'a> {
             if read == 0 {
                 break;
             }
-            result.extend_from_slice(&buffer[..read]);
+            result
+                .try_append(&buffer[..read])
+                .map_err(|error| self.filesystem.core().enrich(error, Some(path), FsOperation::Read))?;
         }
-        Ok(result)
+        Ok(result.into_vec())
     }
 }

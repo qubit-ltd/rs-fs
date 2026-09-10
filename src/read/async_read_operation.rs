@@ -13,13 +13,13 @@ use qubit_io::AsyncInput;
 
 use crate::AsyncFileSystem;
 use crate::error::FsError;
-use crate::error::FsErrorKind;
 use crate::error::FsOperation;
 use crate::error::FsResult;
 use crate::facade::facade_core::FacadeCore;
 use crate::facade::internal::FileSystemResource;
 use crate::path::Path;
 use crate::read::ReadOptions;
+use crate::read::internal::ReadBuffer;
 use crate::read::prefix_read_plan::PrefixReadPlan;
 
 /// Executes aggregate asynchronous read operations for one facade.
@@ -38,7 +38,7 @@ impl<'a> AsyncReadOperation<'a> {
     /// Reads an entire file asynchronously while enforcing `max_bytes`.
     pub(crate) async fn read_all(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
         let mut reader = self.filesystem.open_reader(path, options.clone()).await?;
-        let mut bytes = Vec::new();
+        let mut bytes = ReadBuffer::new(max_bytes);
         let maximum = FacadeCore::quantity_from_usize(
             max_bytes,
             FsOperation::Read,
@@ -59,18 +59,6 @@ impl<'a> AsyncReadOperation<'a> {
                     "read exceeds maximum byte count",
                 )
             })?;
-            if let Ok(capacity) = usize::try_from(selected) {
-                bytes.try_reserve(capacity).map_err(|error| {
-                    FsError::with_source(
-                        FsErrorKind::ResourceLimitExceeded,
-                        FsOperation::Read,
-                        "read buffer allocation exceeds available capacity",
-                        error,
-                    )
-                    .with_path(path.clone())
-                    .with_provider(self.filesystem.properties().info().provider_id())
-                })?;
-            }
         }
         let mut buffer = [0_u8; 8192];
         loop {
@@ -85,7 +73,7 @@ impl<'a> AsyncReadOperation<'a> {
                 )
             })?;
             if read == 0 {
-                return Ok(bytes);
+                return Ok(bytes.into_vec());
             }
             let read = FacadeCore::quantity_from_usize(
                 read,
@@ -102,7 +90,9 @@ impl<'a> AsyncReadOperation<'a> {
                     "read exceeds maximum byte count",
                 ));
             }
-            bytes.extend_from_slice(&buffer[..usize::try_from(read).expect("read count originated as usize")]);
+            bytes
+                .try_append(&buffer[..usize::try_from(read).expect("read count originated as usize")])
+                .map_err(|error| self.filesystem.core().enrich(error, Some(path), FsOperation::Read))?;
         }
     }
 
@@ -113,7 +103,7 @@ impl<'a> AsyncReadOperation<'a> {
         if max_bytes == 0 {
             return Ok(Vec::new());
         }
-        let mut bytes = Vec::with_capacity(max_bytes.min(FacadeCore::PREFIX_BUFFER_SIZE));
+        let mut bytes = ReadBuffer::new(max_bytes);
         let mut buffer = [0_u8; FacadeCore::PREFIX_BUFFER_SIZE];
         while bytes.len() < max_bytes {
             let read_len = FacadeCore::next_prefix_read_len(bytes.len(), max_bytes);
@@ -127,8 +117,10 @@ impl<'a> AsyncReadOperation<'a> {
             if read == 0 {
                 break;
             }
-            bytes.extend_from_slice(&buffer[..read]);
+            bytes
+                .try_append(&buffer[..read])
+                .map_err(|error| self.filesystem.core().enrich(error, Some(path), FsOperation::Read))?;
         }
-        Ok(bytes)
+        Ok(bytes.into_vec())
     }
 }
