@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![中文文档](https://img.shields.io/badge/文档-中文版-blue.svg)](README.zh_CN.md)
 
-`qubit-fs` 0.6.0 is a provider-neutral, synchronous and asynchronous filesystem
+`qubit-fs` 0.7.0 is a provider-neutral, synchronous and asynchronous filesystem
 abstraction for Rust 1.94 or later. It supplies application-facing concrete
 facades—`FileSystem` and `AsyncFileSystem`—instead of choosing a storage backend
 or an async runtime for you.
@@ -19,14 +19,14 @@ public facade while allowing providers to be selected outside the core crate.
 
 ```toml
 [dependencies]
-qubit-fs = "0.6"
+qubit-fs = "0.7"
 ```
 
 Synchronous APIs are enabled by default. Enable the asynchronous facade
 explicitly when it is needed:
 
 ```toml
-qubit-fs = { version = "0.6", features = ["async"] }
+qubit-fs = { version = "0.7", features = ["async"] }
 ```
 
 ## Try a local report workflow
@@ -38,7 +38,7 @@ The temporary directory is removed when the demo ends.
 
 ```toml
 [dependencies]
-qubit-fs = "0.6"
+qubit-fs = "0.7"
 qubit-fs-local = "0.8"
 tempfile = "3"
 ```
@@ -69,6 +69,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+For a report assembled in several writes, create a temporary file under the
+same logical parent, write through its returned path, and call `persist` only
+when generation is complete. The final report name then stays free of
+incomplete output. If publication fails, use the retained publication fact,
+source qualification, and `publication_target()` to decide between retry,
+cleanup, and read-only reconciliation.
+
 ## What the facade makes explicit
 
 - `Path` is a logical name inside one configured filesystem. `Uri` is the
@@ -78,9 +85,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   policy to `Uri::parse_with_policy` or `ConnectionUri::parse_with_policy` when
   application-specific query names must be protected.
 - Copy, rename, writes, and temporary-resource publication (including `keep`)
-  preserve typed
-  recovery facts. Inspect the relevant failure state before retrying, cleaning
-  up, or reconciling a visible target.
+  preserve typed recovery facts. Temporary persistence reports target
+  publication separately from source qualification, and
+  `publication_target()` retains an earlier confirmed target across rejected
+  retries, cleanup failures, and asynchronous cancellation. Inspect both facts
+  before retrying, cleaning up, or reconciling a visible target.
 - `exists` returns `false` only when `stat` reports `NotFound`; permission,
   authentication, timeout, and I/O failures remain errors.
 - `DirectoryStream` reads entries incrementally. Consume it in a bounded loop

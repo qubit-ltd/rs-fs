@@ -2,7 +2,7 @@
 
 [English guide](user_guide.md) · [README](../README.zh_CN.md)
 
-本指南适用于 `qubit-fs` 0.6、Rust 1.94 及以上版本，面向通过已配置文件系统发布报告的应用。
+本指南适用于 `qubit-fs` 0.7、Rust 1.94 及以上版本，面向通过已配置文件系统发布报告的应用。
 重点说明正常读写流程，以及写入、复制或取消未正常结束时，如何保留恢复所需的信息和资源。
 
 ## 概念与配置
@@ -24,13 +24,13 @@
 | 恢复句柄 | 仍需处理的会话所有权；没有句柄不代表没有副作用。 |
 
 默认 feature 集为空，只提供同步 API。异步应用显式配置
-`qubit-fs = { version = "0.6", features = ["async"] }`，并使用自己已有的执行器；库不要求 Tokio。
+`qubit-fs = { version = "0.7", features = ["async"] }`，并使用自己已有的执行器；库不要求 Tokio。
 
 运行下方本地示例需要：
 
 ```toml
 [dependencies]
-qubit-fs = "0.6"
+qubit-fs = "0.7"
 qubit-fs-local = "0.8"
 tempfile = "3"
 ```
@@ -287,10 +287,26 @@ write/copy 归为 `Indeterminate`。打开步骤已生效不代表整文件已�
 符号链接策略的请求不能使用该 fallback。`CopyOptions::deadline` 是从 operation 构造时开始
 累计的协作式预算，在阶段边界检查，不是能打断任意 Pending future 的定时器。提供者错误仍是主错误。
 
-临时文件和目录有独立的所有权生命周期，提供 `cleanup`、`keep` 和 `persist`。
-持久化失败包含五种状态：`NotPublished`、`NotPublishedSourceReleased`、
-`PublishedSourceRetained`、`PublishedSourceReleased`、`Indeterminate`。
-`PersistFailure::publication_target()` 保留已确认的发布目标；源资源已释放不等于没有发布。
+临时文件和目录有独立的所有权生命周期，提供 `cleanup`、`keep` 和 `persist`。0.7 的
+恢复快照包含两个相互独立的维度：保留的目标发布事实，以及当前源资格。
+
+| `PersistFailureState` | 保留的目标事实 | 源资格 | 安全的下一步 |
+| --- | --- | --- | --- |
+| `NotPublished` | 未发布 | 仍拥有 | 修正目标后重试，或清理 |
+| `NotPublishedSourceIndeterminate` | 未发布 | 不确定 | 只读核查；不得删除可能的替换物 |
+| `NotPublishedSourceCleanupRequired` | 未发布 | 需要清理 | 只重试 cleanup |
+| `NotPublishedSourceReleased` | 未发布 | 已释放 | 不再执行源操作 |
+| `PublishedSourceRetained` | 已发布 | 需要清理 | 保留目标，只清理残留源 |
+| `PublishedSourceIndeterminate` | 已发布 | 不确定 | 保留目标事实，只读核查源 |
+| `PublishedSourceReleased` | 已发布 | 已释放 | 不得再次发布 |
+| `Indeterminate` | 不确定 | 不确定 | 核查后处理，不自动重试 |
+
+`PersistFailure::publication_target()` 表示最近一次明确确认的目标，而不只是失败调用传入的
+目标。资源先前已经发布后，非法重试会在 provider I/O 前被拒绝；门面错误仍可能保留先前的
+`PublishedSource*` 状态和目标，但这份快照不表示重试又发布了一次。cleanup 错误和异步
+取消同样保留目标历史。源资格一旦不确定，后续路径或选项错误不能把它恢复为可拥有状态。
+选择重试、cleanup 或只读核查前，应同时查看 `failure.state()`、
+`failure.publication_target()` 和句柄的 `TempResourceState`。
 
 ## 排障与运行限制
 

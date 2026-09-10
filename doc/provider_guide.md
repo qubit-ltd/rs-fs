@@ -2,7 +2,7 @@
 
 [中文版本](provider_guide.zh_CN.md)
 
-This guide targets `qubit-fs` 0.6 provider authors. It explains the smallest
+This guide targets `qubit-fs` 0.7 provider authors. It explains the smallest
 provider that can be trusted by the `FileSystem` facade, and the checks to run
 before publishing an adapter. It is not a backend tutorial, a credential
 manager, or a promise that every backend supports every operation.
@@ -148,11 +148,26 @@ cleanup, and recovery failures separately. A failed cleanup is not proof that
 the target is absent. Follow the `CopyOutcome` and write recovery contracts;
 retain the primary failure and any cleanup error for observability.
 
+For temporary persistence, report the current call's publication fact and the
+source qualification independently. Use `NotPublishedSourceIndeterminate` when
+this call is known not to have published the target but source mutation
+authority is uncertain,
+`PublishedSourceIndeterminate` when publication is confirmed but source
+authority is uncertain, and `NotPublishedSourceCleanupRequired` when no target
+was published and only residual cleanup is permitted. Do not collapse these
+states into `Indeterminate`, infer source ownership from target validation, or
+replace a previously confirmed publication target during a rejected retry.
+
 ## 8. Async cancellation
 
 An async operation must own its operation state outside the cancellation domain
 and retain the operation until cleanup and recovery decisions are complete. Do
 not let cancellation discard a writer, temporary path, or publication result.
+If cancellation makes source authority uncertain, preserve any already confirmed
+publication target. The facade's source lifecycle and failure state may
+conservatively become overall `Indeterminate`; use a precise
+source-indeterminate state when a provider returns normally and can establish
+both axes.
 
 ## 9. Use `qubit-fs-testkit`
 
