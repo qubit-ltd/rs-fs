@@ -119,6 +119,36 @@ impl ReadOptions {
         self.checksum
     }
 
+    /// Validates provider-independent read options without performing I/O.
+    ///
+    /// A zero-length window is valid, including at the largest offset. Resource
+    /// existence and access permissions are still checked when opening it.
+    /// Offsets at or beyond EOF produce an empty window; lengths extending past
+    /// EOF are truncated. These windows do not imply a resource snapshot.
+    ///
+    /// # Errors
+    /// Returns `InvalidOptions` for mutually exclusive conditions or an
+    /// explicit range whose exclusive end cannot be represented as `u64`.
+    pub fn validate(&self) -> Result<(), FsError> {
+        if self.if_match.is_some() && self.if_none_match.is_some() {
+            return Err(FsError::new(
+                FsErrorKind::InvalidOptions,
+                FsOperation::OpenReader,
+                "if_match and if_none_match cannot both be specified",
+            ));
+        }
+        if let Some(length) = self.length
+            && self.offset.unwrap_or(0).checked_add(length).is_none()
+        {
+            return Err(FsError::new(
+                FsErrorKind::InvalidOptions,
+                FsOperation::OpenReader,
+                "read range exceeds the representable byte offset",
+            ));
+        }
+        Ok(())
+    }
+
     /// Validates required read semantics against configured capabilities.
     ///
     /// Providers should call this method before opening a reader or producing
@@ -130,13 +160,7 @@ impl ReadOptions {
     /// conditions, or [`FsErrorKind::RequirementNotMet`] with the exact
     /// missing capability for range, conditional, or required-checksum reads.
     pub fn validate_against(&self, capabilities: FileSystemCapabilities) -> Result<(), FsError> {
-        if self.if_match.is_some() && self.if_none_match.is_some() {
-            return Err(FsError::new(
-                FsErrorKind::InvalidOptions,
-                FsOperation::OpenReader,
-                "if_match and if_none_match cannot both be specified",
-            ));
-        }
+        self.validate()?;
         if (self.offset.is_some() || self.length.is_some()) && !capabilities.supports(FileSystemCapability::RangeRead) {
             return Err(missing_requirement(
                 FileSystemCapability::RangeRead,
