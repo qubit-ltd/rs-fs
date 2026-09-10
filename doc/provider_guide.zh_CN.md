@@ -2,7 +2,7 @@
 
 [English version](provider_guide.md)
 
-本指南面向 `qubit-fs` 0.6 的 provider 作者，说明如何实现一个能够被
+本指南面向 `qubit-fs` 0.7 的 provider 作者，说明如何实现一个能够被
 `FileSystem` 门面信任的最小 provider，以及发布适配器前应完成的检查。它不是后端
 教程、凭据管理器，也不承诺所有后端都支持每个操作。
 
@@ -139,10 +139,18 @@ pub fn read_health() -> FsResult<Vec<u8>> {
 writer 和临时资源实现必须分别报告发布、清理和恢复失败。清理失败并不表示目标一定
 不存在。遵循 `CopyOutcome` 与写入恢复契约，保留主失败以及清理错误，便于观测和处置。
 
+临时资源持久化必须分别报告本次调用的发布事实和源资格：目标明确未发布、但源的变更权限
+不确定时使用 `NotPublishedSourceIndeterminate`；目标已发布、但源权限不确定时使用
+`PublishedSourceIndeterminate`；目标未发布且只允许清理残留资源时使用
+`NotPublishedSourceCleanupRequired`。不得把这些状态折叠成 `Indeterminate`，不得根据
+目标校验结果推导源所有权，也不得在重试被拒绝时覆盖先前已确认的发布目标。
+
 ## 8. 异步取消
 
 异步操作必须在取消域之外持有操作状态，并一直保留 operation，直到完成清理和恢复
-决策。不要让取消丢弃 writer、临时路径或发布结果。
+决策。不要让取消丢弃 writer、临时路径或发布结果。取消导致源权限不确定时，仍须保留
+此前已确认的发布目标。门面的源生命周期和失败状态可以保守地变为整体
+`Indeterminate`；provider 正常返回且能够确定两个维度时，才使用精确的源不确定状态。
 
 ## 9. 接入 `qubit-fs-testkit`
 

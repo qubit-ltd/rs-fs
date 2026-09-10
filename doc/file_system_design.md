@@ -2,7 +2,7 @@
 
 [中文设计](file_system_design.zh_CN.md) · [User guide](user_guide.md)
 
-This document describes the 0.4 design. It separates application policy,
+This document describes the 0.7 design. It separates application policy,
 provider capabilities, publication facts, and resource ownership. Rust 1.94,
 edition 2024, an empty default feature set, and opt-in `async` remain the baseline.
 
@@ -195,15 +195,25 @@ where supported and is not a substitute for confirmation.
 | Persist failure state | Target fact | Source responsibility |
 | --- | --- | --- |
 | `NotPublished` | Not published | Retained |
+| `NotPublishedSourceIndeterminate` | Not published | Mutation authority is uncertain; read-only reconciliation only |
+| `NotPublishedSourceCleanupRequired` | Not published | Only residual cleanup is permitted |
 | `NotPublishedSourceReleased` | Not published | Released |
 | `PublishedSourceRetained` | Published | Retained |
+| `PublishedSourceIndeterminate` | Published | Mutation authority is uncertain; read-only reconciliation only |
 | `PublishedSourceReleased` | Published | Released |
 | `Indeterminate` | Uncertain | Must reconcile |
 
-`publication_target()` preserves the confirmed target even if a later request
-names another target. Lifecycle validation cannot erase earlier publication.
-`PersistOutcome` records actual publication and cleanup information; source
-release and target rollback must never be conflated.
+The provider reports publication for the current attempt, while the facade
+retains a lifecycle recovery snapshot. For example, a retry rejected before
+provider I/O is not a new publication, but the returned facade failure may keep
+an earlier `PublishedSource*` state and `publication_target()`. Conversely, a
+provider's `NotPublished` result for a later call cannot erase that historical
+target. The confirmed target is preserved when a later request names another
+target, fails validation, cleanup fails, or an asynchronous lifecycle future is
+cancelled. Source-indeterminate states remain indeterminate across ordinary
+errors; a path-validation failure cannot restore ownership. `PersistOutcome`
+records actual publication and cleanup information; source release and target
+rollback must never be conflated.
 
 ## Verification and maintenance
 

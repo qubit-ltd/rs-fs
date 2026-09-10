@@ -2,7 +2,7 @@
 
 [中文指南](user_guide.zh_CN.md) · [README](../README.md)
 
-This guide covers `qubit-fs` 0.6 for Rust 1.94 and later. It is for applications
+This guide covers `qubit-fs` 0.7 for Rust 1.94 and later. It is for applications
 that publish reports through a configured filesystem and need to retain recovery
 facts when a write, copy, or cancellation does not complete normally.
 
@@ -28,14 +28,14 @@ prove that a resource exists or that future I/O will succeed.
 | Recovery handle | Ownership of a session still needing a decision; its absence does not prove no side effects. |
 
 The default feature set is empty and provides synchronous APIs. Enable
-`qubit-fs = { version = "0.6", features = ["async"] }` for asynchronous APIs.
+`qubit-fs = { version = "0.7", features = ["async"] }` for asynchronous APIs.
 The application chooses its executor; the library does not require Tokio.
 
 For the runnable local example, use:
 
 ```toml
 [dependencies]
-qubit-fs = "0.6"
+qubit-fs = "0.7"
 qubit-fs-local = "0.8"
 tempfile = "3"
 ```
@@ -322,11 +322,30 @@ construction. It is checked around stages; it is not a timer that interrupts
 an arbitrary pending provider future. Provider failures remain the primary error.
 
 Temporary files and directories retain explicit lifecycle ownership. Their
-`cleanup`, `keep`, and `persist` methods report what happened. Persistence has
-five failure states: `NotPublished`, `NotPublishedSourceReleased`,
-`PublishedSourceRetained`, `PublishedSourceReleased`, and `Indeterminate`.
-`PersistFailure::publication_target()` preserves the confirmed published target.
-Do not treat released source ownership as proof that publication did not happen.
+`cleanup`, `keep`, and `persist` methods report what happened. In 0.7, the
+recovery snapshot has two separate axes: the retained target-publication fact
+and the source's current qualification.
+
+| `PersistFailureState` | Retained target fact | Source qualification | Safe next step |
+| --- | --- | --- | --- |
+| `NotPublished` | Not published | Owned | Correct the target and retry, or clean up |
+| `NotPublishedSourceIndeterminate` | Not published | Indeterminate | Read-only reconciliation; do not delete a replacement |
+| `NotPublishedSourceCleanupRequired` | Not published | Cleanup required | Retry cleanup only |
+| `NotPublishedSourceReleased` | Not published | Released | No source operation remains |
+| `PublishedSourceRetained` | Published | Cleanup required | Keep the target; clean the retained source |
+| `PublishedSourceIndeterminate` | Published | Indeterminate | Keep the target fact and reconcile source read-only |
+| `PublishedSourceReleased` | Published | Released | Do not publish again |
+| `Indeterminate` | Indeterminate | Indeterminate | Reconcile without automatic retry |
+
+`PersistFailure::publication_target()` is the last positively confirmed target,
+not merely the target named by the failing call. A later invalid retry is rejected
+before provider I/O, while its facade failure may retain an earlier
+`PublishedSource*` state and target. That snapshot does not mean the retry
+published again. Cleanup errors and asynchronous cancellation preserve the same
+target history. Once source qualification is indeterminate, a later path or
+option error cannot make it owned again. Inspect `failure.state()`,
+`failure.publication_target()`, and the handle's `TempResourceState` before
+choosing retry, cleanup, or read-only reconciliation.
 
 ## Diagnosis and operational limits
 

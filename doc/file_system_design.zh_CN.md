@@ -2,7 +2,7 @@
 
 [English design](file_system_design.md) · [用户指南](user_guide.zh_CN.md)
 
-本文描述 0.4 的设计，明确区分应用策略、提供者能力、发布事实和资源所有权。
+本文描述 0.7 的设计，明确区分应用策略、提供者能力、发布事实和资源所有权。
 基线为 Rust 1.94、edition 2024；默认 feature 集为空，异步 API 通过 `async` 显式启用。
 
 ## 分层与所有权
@@ -159,13 +159,21 @@ required 保证在可行时于分派前检查，完成后再根据 outcome 校�
 | 持久化失败状态 | 目标事实 | 源责任 |
 | --- | --- | --- |
 | `NotPublished` | 未发布 | 保留 |
+| `NotPublishedSourceIndeterminate` | 未发布 | 变更权限不确定，只能只读核查 |
+| `NotPublishedSourceCleanupRequired` | 未发布 | 只允许清理残留资源 |
 | `NotPublishedSourceReleased` | 未发布 | 已释放 |
 | `PublishedSourceRetained` | 已发布 | 保留 |
+| `PublishedSourceIndeterminate` | 已发布 | 变更权限不确定，只能只读核查 |
 | `PublishedSourceReleased` | 已发布 | 已释放 |
 | `Indeterminate` | 不确定 | 需要核查 |
 
-`publication_target()` 保留已经确认的目标，即使之后的请求指向其他位置。生命周期校验
-不能抹去此前发布。`PersistOutcome` 记录实际发布与清理信息；源释放不能与目标回滚混为一谈。
+Provider 报告本次尝试的 publication，门面则保留整个生命周期的恢复快照。例如，资源此前
+已经发布后，重试在 provider I/O 前被拒绝并不构成本次发布，但门面错误仍可能保留先前的
+`PublishedSource*` 状态和 `publication_target()`。反过来，provider 对后续调用报告
+`NotPublished` 也不能抹去历史目标。即使后续请求使用不同目标、路径校验失败、cleanup
+失败或异步生命周期 future 被取消，已经确认的目标仍被保留。源资格不确定后，普通错误
+不能把它改成可清理或重新拥有；路径校验失败也不能恢复所有权。`PersistOutcome` 记录实际
+发布与清理信息；源释放不能与目标回滚混为一谈。
 
 ## 验证与维护
 

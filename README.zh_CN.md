@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![English Document](https://img.shields.io/badge/Document-English-blue.svg)](README.md)
 
-`qubit-fs` 0.6.0 是 Rust 1.94 及以上版本可用的、与具体 provider 无关的文件系统抽象，
+`qubit-fs` 0.7.0 是 Rust 1.94 及以上版本可用的、与具体 provider 无关的文件系统抽象，
 同时提供同步和异步 API。它向应用提供具体门面 `FileSystem` 与
 `AsyncFileSystem`，但不会替应用选择存储后端或异步运行时。
 
@@ -17,13 +17,13 @@
 
 ```toml
 [dependencies]
-qubit-fs = "0.6"
+qubit-fs = "0.7"
 ```
 
 同步 API 默认启用。需要异步门面时必须显式开启 async feature：
 
 ```toml
-qubit-fs = { version = "0.6", features = ["async"] }
+qubit-fs = { version = "0.7", features = ["async"] }
 ```
 
 ## 运行一个本地报告示例
@@ -33,7 +33,7 @@ qubit-fs = { version = "0.6", features = ["async"] }
 
 ```toml
 [dependencies]
-qubit-fs = "0.6"
+qubit-fs = "0.7"
 qubit-fs-local = "0.8"
 tempfile = "3"
 ```
@@ -64,6 +64,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+如果报告需要分多次写入，可先在同一逻辑父目录创建临时文件，通过返回的路径写入，全部生成
+完成后再调用 `persist`。这样最终报告名称不会提前暴露未完成内容。发布失败时，应结合保留的
+发布事实、源资格和 `publication_target()`，在重试、cleanup 与只读核查之间作出选择。
+
 ## 门面明确表达的语义
 
 - `Path` 是一个已配置 filesystem 内的逻辑名称。`Uri` 是不含 secret 的规范
@@ -71,8 +75,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   脱敏。
 - 默认 URI 解析使用固定的标准脱敏策略；如果应用还有自定义敏感 query 名称，应向
   `Uri::parse_with_policy` 或 `ConnectionUri::parse_with_policy` 显式传入策略。
-- copy、rename、写入和临时资源发布会保留带类型的恢复事实。重试、清理或核对已经
-  可见的目标前，应先检查对应的 failure state。
+- copy、rename、写入和临时资源发布会保留带类型的恢复事实。临时资源持久化分别报告
+  目标发布事实与源资格；`publication_target()` 会在调用被拒绝、清理失败和异步取消后
+  继续保留先前已确认的目标。重试、清理或核对可见目标前，应同时检查这两类事实。
 - `exists` 只有在 `stat` 明确返回 `NotFound` 时才返回 `false`；权限、认证、超时和
   I/O 失败仍会作为错误返回。
 - `DirectoryStream` 按条目增量读取。应在有界循环中消费它，不应把目录假定为已加载的
