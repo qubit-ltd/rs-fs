@@ -565,25 +565,27 @@ fn test_sync_facade_requires_operation_capabilities_before_dispatch() {
     .expect("facade should construct");
     let path = Path::parse("/target").expect("path should parse");
 
-    for error in [
-        file_system
-            .open_reader(&path, ReadOptions::default())
-            .expect_err("reader requires advertised capability"),
-        file_system
-            .open_writer(&path, WriteOptions::default())
-            .expect_err("writer requires advertised capability"),
-        file_system
-            .create_temp_file(TempOptions::default())
-            .expect_err("temporary file requires advertised capability"),
-        file_system
-            .create_temp_directory(TempOptions::default())
-            .expect_err("temporary directory requires advertised capability"),
-        file_system
-            .create_directory(&path, CreateDirectoryOptions::default())
-            .expect_err("directory creation requires advertised capability"),
-    ] {
+    let reader = file_system
+        .open_reader(&path, ReadOptions::default())
+        .expect_err("capability");
+    let writer = file_system
+        .open_writer(&path, WriteOptions::default())
+        .expect_err("capability");
+    let file = file_system
+        .create_temp_file(TempOptions::default())
+        .expect_err("capability");
+    let directory = file_system
+        .create_temp_directory(TempOptions::default())
+        .expect_err("capability");
+    let create = file_system
+        .create_directory(&path, CreateDirectoryOptions::default())
+        .expect_err("capability");
+    for error in [&reader, writer.error(), file.error(), directory.error(), &create] {
         assert_eq!(FsErrorKind::UnsupportedCapability, error.kind());
     }
+    assert!(writer.recovery().is_none());
+    assert!(file.recovery().is_none());
+    assert!(directory.recovery().is_none());
     let rename = file_system
         .rename(&path, &Path::root(), RenameOptions::default())
         .expect_err("rename requires advertised capability");
@@ -623,8 +625,8 @@ fn test_sync_spi_default_operations_report_unsupported() {
         }
         Err(error) => error,
     };
-    assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
-    assert_eq!(FsOperation::OpenWriter, error.operation());
+    assert_eq!(FsErrorKind::UnsupportedOperation, error.error().kind());
+    assert_eq!(FsOperation::OpenWriter, error.error().operation());
 
     let error = match filesystem.create_directory(&path, CreateDirectoryOptions::default()) {
         Ok(_) => {
@@ -668,13 +670,13 @@ fn test_sync_spi_default_operations_report_unsupported() {
         Ok(_) => panic!("default temporary-file implementation must reject the request"),
         Err(error) => error,
     };
-    assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
-    assert_eq!(FsOperation::CreateTemp, error.operation());
+    assert_eq!(FsErrorKind::UnsupportedOperation, error.error().kind());
+    assert_eq!(FsOperation::CreateTemp, error.error().operation());
 
     let error = match filesystem.create_temp_directory(TempOptions::default()) {
         Ok(_) => panic!("default temporary-directory implementation must reject the request"),
         Err(error) => error,
     };
-    assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
-    assert_eq!(FsOperation::CreateTemp, error.operation());
+    assert_eq!(FsErrorKind::UnsupportedOperation, error.error().kind());
+    assert_eq!(FsOperation::CreateTemp, error.error().operation());
 }

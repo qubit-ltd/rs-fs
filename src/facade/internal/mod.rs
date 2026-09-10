@@ -12,3 +12,6 @@ mod file_system_resource;
 
 pub(crate) use byte_budget::ByteBudget;
 pub(crate) use file_system_resource::FileSystemResource;
+
+mod recovery_cleanup_guard;
+pub(crate) use recovery_cleanup_guard::RecoveryCleanupGuard;

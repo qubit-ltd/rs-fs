@@ -32,6 +32,7 @@ use crate::error::FsError;
 use crate::error::FsErrorKind;
 use crate::error::FsOperation;
 use crate::error::FsResult;
+use crate::error::OpenFailureStage;
 use crate::metadata::AchievedAtomicity;
 use crate::metadata::FileSystemCapability;
 use crate::path::Path;
@@ -41,6 +42,7 @@ use crate::spi::CopyRequest;
 use crate::spi::ProviderOperation;
 use crate::spi::ResolvedCopyOptions;
 use crate::write::FileWriter;
+use crate::write::WriterRecovery;
 use crate::write::internal::is_unchanged_open_failure;
 use crate::write::internal::open_failure_state;
 
@@ -251,8 +253,10 @@ impl<'a> CopyOperation<'a> {
         let mut writer = match self.filesystem.open_writer(self.target, writer_options) {
             Ok(writer) => writer,
             Err(error)
-                if error.kind() == FsErrorKind::AlreadyExists
-                    && is_unchanged_open_failure(&error)
+                if error.stage() == OpenFailureStage::ProviderOpen
+                    && error.recovery().is_none()
+                    && error.error().kind() == FsErrorKind::AlreadyExists
+                    && is_unchanged_open_failure(error.error())
                     && self.options.conflict() == CopyConflictPolicy::Skip =>
             {
                 return Ok(CopyOutcome::streamed_fallback(
@@ -265,8 +269,18 @@ impl<'a> CopyOperation<'a> {
                 ));
             }
             Err(error) => {
-                let state = from_write_failure_state(open_failure_state(&error));
-                return Err(self.failure(error, state, CopyStats::default(), None));
+                let (error, stage, recovery) = error.into_parts();
+                let state = match stage {
+                    OpenFailureStage::Preflight => CopyFailureState::Unchanged,
+                    OpenFailureStage::ProviderOpen => from_write_failure_state(open_failure_state(&error)),
+                    OpenFailureStage::OutcomeValidation => CopyFailureState::Indeterminate,
+                };
+                return Err(CopyFailure::new(
+                    error.with_operation(FsOperation::Copy),
+                    state,
+                    CopyStats::default(),
+                    recovery.map(WriterRecovery::Rejected),
+                ));
             }
         };
         if let Some(error) = self.deadline_error() {
@@ -436,7 +450,12 @@ impl<'a> CopyOperation<'a> {
         stats: CopyStats,
         writer: Option<FileWriter>,
     ) -> CopyFailure {
-        CopyFailure::new(error.with_operation(FsOperation::Copy), state, stats, writer)
+        CopyFailure::new(
+            error.with_operation(FsOperation::Copy),
+            state,
+            stats,
+            writer.map(|writer| WriterRecovery::Opened(Box::new(writer))),
+        )
     }
 
     /// Adds source, target, and provider facts to a copy failure.

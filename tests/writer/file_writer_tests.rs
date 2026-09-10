@@ -17,6 +17,7 @@ use qubit_fs::write::WriteAbortOutcome;
 use qubit_fs::write::WriteFailure;
 use qubit_fs::write::WriteFailureState;
 use qubit_fs::write::WriteOptions;
+use qubit_fs::write::WriterRecovery;
 use qubit_fs::write::WriterState;
 use qubit_io::Output;
 
@@ -40,7 +41,14 @@ fn test_write_all_commit_failure_retains_open_writer_for_recovery() {
     assert_eq!(FsErrorKind::Io, failure.error().kind());
     assert_eq!(
         WriterState::Open,
-        failure.writer().expect("writer should be retained").state(),
+        failure
+            .recovery()
+            .map(|recovery| match recovery {
+                WriterRecovery::Opened(writer) => writer,
+                WriterRecovery::Rejected(_) => panic!("fixture must return a validated writer"),
+            })
+            .expect("writer should be retained")
+            .state(),
     );
 }
 

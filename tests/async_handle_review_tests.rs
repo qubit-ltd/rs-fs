@@ -32,6 +32,7 @@ use qubit_fs::directory::ListOptions;
 use qubit_fs::directory::ListScope;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::error::FsOperation;
+use qubit_fs::error::OpenFailureStage;
 use qubit_fs::metadata::AchievedAtomicity;
 use qubit_fs::metadata::AtomicityRequirement;
 use qubit_fs::metadata::DirEntry;
@@ -46,6 +47,7 @@ use qubit_fs::temp::PersistFailureState;
 use qubit_fs::temp::PersistOptions;
 use qubit_fs::temp::TempOptions;
 use qubit_fs::temp::TempResourceState;
+use qubit_fs::write::AsyncWriterRecovery;
 use qubit_fs::write::WriteAbortOutcome;
 use qubit_fs::write::WriteFailure;
 use qubit_fs::write::WriteFailureState;
@@ -123,7 +125,7 @@ fn test_async_facade_rejects_invalid_stat_and_opened_identities() {
     assert_eq!(FsErrorKind::ProviderContractViolation, reader.kind());
     let writer = ready(file_system.open_writer(&path("/expected"), WriteOptions::default()))
         .expect_err("a writer from another provider must be rejected");
-    assert_eq!(FsErrorKind::ProviderContractViolation, writer.kind());
+    assert_eq!(FsErrorKind::ProviderContractViolation, writer.error().kind());
 }
 
 /// Enriches provider failures consistently across every direct facade
@@ -172,8 +174,14 @@ fn test_async_facade_enriches_handle_and_temp_provider_failures() {
         let error = match stage {
             AsyncCopyStage::OpenReader => ready(file_system.open_reader(&target, ReadOptions::default()))
                 .expect_err("reader provider failure should propagate"),
-            AsyncCopyStage::OpenWriter => ready(file_system.open_writer(&target, WriteOptions::default()))
-                .expect_err("writer provider failure should propagate"),
+            AsyncCopyStage::OpenWriter => {
+                let failure = ready(file_system.open_writer(&target, WriteOptions::default()))
+                    .expect_err("writer provider failure should propagate");
+                let (error, stage, recovery) = failure.into_parts();
+                assert_eq!(stage, OpenFailureStage::ProviderOpen);
+                assert!(recovery.is_none());
+                error
+            }
             _ => unreachable!("only handle stages are configured"),
         };
         assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
@@ -186,11 +194,11 @@ fn test_async_facade_enriches_handle_and_temp_provider_failures() {
     let Err(file) = ready(file_system.create_temp_file(TempOptions::default())) else {
         panic!("temporary-file provider failure should propagate");
     };
-    assert_eq!(FsErrorKind::UnsupportedOperation, file.kind());
+    assert_eq!(FsErrorKind::UnsupportedOperation, file.error().kind());
     let Err(directory) = ready(file_system.create_temp_directory(TempOptions::default())) else {
         panic!("temporary-directory provider failure should propagate");
     };
-    assert_eq!(FsErrorKind::UnsupportedOperation, directory.kind());
+    assert_eq!(FsErrorKind::UnsupportedOperation, directory.error().kind());
 }
 
 /// Rejects a non-atomic provider writer outcome when the caller requires atomic
@@ -658,8 +666,16 @@ fn test_async_copy_stream_fallback_reads_writes_and_commits() {
     assert_eq!(&path("/source"), operation.source());
     assert_eq!(&path("/target"), operation.target());
     assert_eq!(AsyncCopyOperationState::Completed, operation.state());
-    assert!(!operation.has_recovery_writer());
-    assert!(operation.take_recovery_writer().is_none());
+    assert!(!operation.has_recovery());
+    assert!(
+        operation
+            .take_recovery()
+            .map(|recovery| match recovery {
+                AsyncWriterRecovery::Opened(writer) => writer,
+                AsyncWriterRecovery::Rejected(_) => panic!("fixture must return a validated writer"),
+            })
+            .is_none()
+    );
     let retry = ready(operation.execute()).expect_err("completed copy operation must reject a second execute");
     assert_eq!(FsErrorKind::InvalidState, retry.error().kind());
     assert_eq!(FsOperation::Copy, retry.error().operation());
@@ -681,7 +697,23 @@ fn test_async_copy_failure_exposes_recovery_writer_accessor() {
         .begin_copy(path("/source"), path("/target"), CopyOptions::default())
         .expect("copy preflight should succeed");
     ready(operation.execute()).expect_err("configured transfer failure should propagate");
-    assert!(operation.recovery_writer().is_some());
-    assert!(operation.take_recovery_writer().is_some());
-    assert!(!operation.has_recovery_writer());
+    assert!(
+        operation
+            .recovery()
+            .map(|recovery| match recovery {
+                AsyncWriterRecovery::Opened(writer) => writer,
+                AsyncWriterRecovery::Rejected(_) => panic!("fixture must return a validated writer"),
+            })
+            .is_some()
+    );
+    assert!(
+        operation
+            .take_recovery()
+            .map(|recovery| match recovery {
+                AsyncWriterRecovery::Opened(writer) => writer,
+                AsyncWriterRecovery::Rejected(_) => panic!("fixture must return a validated writer"),
+            })
+            .is_some()
+    );
+    assert!(!operation.has_recovery());
 }

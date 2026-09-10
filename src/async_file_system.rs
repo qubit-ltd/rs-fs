@@ -27,6 +27,8 @@ use crate::error::FsError;
 use crate::error::FsErrorKind;
 use crate::error::FsOperation;
 use crate::error::FsResult;
+use crate::error::OpenFailure;
+use crate::error::OpenFailureStage;
 use crate::facade::facade_core::FacadeCore;
 use crate::metadata::FileMetadata;
 use crate::metadata::FileSystemCapability;
@@ -56,10 +58,12 @@ use crate::spi::StatRequest;
 use crate::temp::AsyncTempDirectory;
 use crate::temp::AsyncTempFile;
 use crate::temp::PersistOptions;
+use crate::temp::RejectedAsyncTempResource;
 use crate::temp::TempOptions;
 use crate::write::AsyncFileWriter;
 use crate::write::AsyncWriteAllOperation;
 use crate::write::AsyncWriteAllOperationFailure;
+use crate::write::RejectedAsyncWriter;
 use crate::write::WriteOptions;
 
 /// Application-facing asynchronous filesystem facade.
@@ -197,17 +201,42 @@ impl AsyncFileSystem {
     }
 
     /// Asynchronously opens a validated writer and verifies its identity.
-    pub async fn open_writer(&self, path: &Path, options: WriteOptions) -> FsResult<AsyncFileWriter> {
-        self.core.validate_write_request(path, &options)?;
+    pub async fn open_writer(
+        &self,
+        path: &Path,
+        options: WriteOptions,
+    ) -> Result<AsyncFileWriter, OpenFailure<RejectedAsyncWriter>> {
+        self.core
+            .validate_write_request(path, &options)
+            .map_err(|error| OpenFailure::new(error, OpenFailureStage::Preflight, None))?;
         let atomicity = options.atomicity();
         let durability = options.durability();
         let opened = self
             .spi
             .open_writer(OpenWriterRequest::new(path, ResolvedWriteOptions::new(options)))
             .await
-            .map_err(|error| self.enrich(error, path, FsOperation::OpenWriter))?;
-        self.validate_opened_info(opened.info(), path)?;
-        Ok(opened.into_writer(
+            .map_err(|error| {
+                OpenFailure::new(
+                    self.enrich(error, path, FsOperation::OpenWriter),
+                    OpenFailureStage::ProviderOpen,
+                    None,
+                )
+            })?;
+        let (info, session) = opened.into_parts();
+        if let Err(error) = self.validate_opened_info(&info, path) {
+            return Err(OpenFailure::new(
+                error,
+                OpenFailureStage::OutcomeValidation,
+                Some(RejectedAsyncWriter::new(
+                    session,
+                    self.properties().info().provider_id(),
+                    Some(path.clone()),
+                )),
+            ));
+        }
+        Ok(AsyncFileWriter::new(
+            info,
+            session,
             atomicity,
             durability,
             self.properties().info().provider_id(),
@@ -327,31 +356,50 @@ impl AsyncFileSystem {
 
     /// Asynchronously creates a temporary file and validates its provider
     /// identity.
-    pub async fn create_temp_file(&self, options: TempOptions) -> FsResult<AsyncTempFile> {
+    pub async fn create_temp_file(
+        &self,
+        options: TempOptions,
+    ) -> Result<AsyncTempFile, OpenFailure<RejectedAsyncTempResource>> {
         let parent = options.parent().cloned();
-        self.core.validate_temp_parent(parent.as_ref())?;
         self.core
-            .require(FileSystemCapability::TempFile, FsOperation::CreateTemp, parent.as_ref())?;
+            .validate_temp_parent(parent.as_ref())
+            .map_err(|error| OpenFailure::new(error, OpenFailureStage::Preflight, None))?;
+        self.core
+            .require(FileSystemCapability::TempFile, FsOperation::CreateTemp, parent.as_ref())
+            .map_err(|error| OpenFailure::new(error, OpenFailureStage::Preflight, None))?;
         let opened = self
             .spi
             .create_temp_file(crate::spi::CreateTempFileRequest::new(options))
             .await
-            .map_err(|error| self.core.enrich(error, parent.as_ref(), FsOperation::CreateTemp))?;
-        let (info, session) = opened.into_parts();
-        if let Err(error) = self.validate_temp_info(&info, crate::metadata::FileKind::File) {
-            let path = error.path().cloned().unwrap_or_else(Path::root);
-            let mut session = Box::into_pin(session);
-            return Err(match session.as_mut().cleanup().await {
-                Ok(()) => error,
-                Err(cleanup) => FsError::with_source(
-                    FsErrorKind::ProviderContractViolation,
-                    FsOperation::ValidateProviderOutcome,
-                    "provider returned an invalid temporary identity and cleanup failed",
-                    cleanup,
+            .map_err(|error| {
+                OpenFailure::new(
+                    self.core.enrich(error, parent.as_ref(), FsOperation::CreateTemp),
+                    OpenFailureStage::ProviderOpen,
+                    None,
                 )
-                .with_path(path)
-                .with_provider(self.properties().info().provider_id()),
-            });
+            })?;
+        let (info, session) = opened.into_parts();
+        if let Err(cause) = self.validate_temp_info(&info, crate::metadata::FileKind::File) {
+            let error = FsError::with_source(
+                FsErrorKind::ProviderContractViolation,
+                FsOperation::ValidateProviderOutcome,
+                "provider returned an invalid temporary identity",
+                cause,
+            )
+            .with_provider(self.properties().info().provider_id());
+            let error = match parent.as_ref() {
+                Some(path) => error.with_path(path.clone()),
+                None => error,
+            };
+            return Err(OpenFailure::new(
+                error,
+                OpenFailureStage::OutcomeValidation,
+                Some(RejectedAsyncTempResource::new(
+                    session,
+                    self.properties().info().provider_id(),
+                    parent,
+                )),
+            ));
         }
         Ok(AsyncTempFile::new(
             self.clone(),
@@ -362,33 +410,54 @@ impl AsyncFileSystem {
     }
 
     /// Asynchronously creates a temporary directory and validates its identity.
-    pub async fn create_temp_directory(&self, options: TempOptions) -> FsResult<AsyncTempDirectory> {
+    pub async fn create_temp_directory(
+        &self,
+        options: TempOptions,
+    ) -> Result<AsyncTempDirectory, OpenFailure<RejectedAsyncTempResource>> {
         let parent = options.parent().cloned();
-        self.core.validate_temp_parent(parent.as_ref())?;
-        self.core.require(
-            FileSystemCapability::TempDirectory,
-            FsOperation::CreateTemp,
-            parent.as_ref(),
-        )?;
+        self.core
+            .validate_temp_parent(parent.as_ref())
+            .map_err(|error| OpenFailure::new(error, OpenFailureStage::Preflight, None))?;
+        self.core
+            .require(
+                FileSystemCapability::TempDirectory,
+                FsOperation::CreateTemp,
+                parent.as_ref(),
+            )
+            .map_err(|error| OpenFailure::new(error, OpenFailureStage::Preflight, None))?;
         let opened = self
             .spi
             .create_temp_directory(crate::spi::CreateTempDirectoryRequest::new(options))
             .await
-            .map_err(|error| self.core.enrich(error, parent.as_ref(), FsOperation::CreateTemp))?;
-        let (info, session) = opened.into_parts();
-        if let Err(error) = self.validate_temp_info(&info, crate::metadata::FileKind::Directory) {
-            let mut session = Box::into_pin(session);
-            return Err(match session.as_mut().cleanup().await {
-                Ok(()) => error,
-                Err(cleanup) => FsError::with_source(
-                    FsErrorKind::ProviderContractViolation,
-                    FsOperation::ValidateProviderOutcome,
-                    "provider returned an invalid temporary identity and cleanup failed",
-                    cleanup,
+            .map_err(|error| {
+                OpenFailure::new(
+                    self.core.enrich(error, parent.as_ref(), FsOperation::CreateTemp),
+                    OpenFailureStage::ProviderOpen,
+                    None,
                 )
-                .with_path(error.path().cloned().unwrap_or_else(Path::root))
-                .with_provider(self.properties().info().provider_id()),
-            });
+            })?;
+        let (info, session) = opened.into_parts();
+        if let Err(cause) = self.validate_temp_info(&info, crate::metadata::FileKind::Directory) {
+            let error = FsError::with_source(
+                FsErrorKind::ProviderContractViolation,
+                FsOperation::ValidateProviderOutcome,
+                "provider returned an invalid temporary identity",
+                cause,
+            )
+            .with_provider(self.properties().info().provider_id());
+            let error = match parent.as_ref() {
+                Some(path) => error.with_path(path.clone()),
+                None => error,
+            };
+            return Err(OpenFailure::new(
+                error,
+                OpenFailureStage::OutcomeValidation,
+                Some(RejectedAsyncTempResource::new(
+                    session,
+                    self.properties().info().provider_id(),
+                    parent,
+                )),
+            ));
         }
         Ok(AsyncTempDirectory::new(self.clone(), info.path().clone(), session))
     }

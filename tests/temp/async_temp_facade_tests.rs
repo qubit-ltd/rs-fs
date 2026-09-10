@@ -7,7 +7,6 @@
 // =============================================================================
 //! External SPI-bound temporary resource behavior tests.
 
-use std::error::Error;
 use std::pin::Pin;
 
 use qubit_fs::FsResult;
@@ -68,10 +67,12 @@ fn test_async_temp_creation_rejects_mismatched_provider_identity() {
         invalid_temp_identity: true,
         ..AsyncRecordingConfig::default()
     });
-    let Err(error) = ready(file_system.create_temp_file(TempOptions::default())) else {
+    let Err(mut error) = ready(file_system.create_temp_file(TempOptions::default())) else {
         panic!("mismatched temporary identity must be rejected");
     };
-    assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
+    assert_eq!(FsErrorKind::ProviderContractViolation, error.error().kind());
+    assert_eq!(vec!["create_temp_file"], probe.calls());
+    ready(error.recovery_mut().expect("isolated session").cleanup_async()).expect("explicit cleanup");
     assert_eq!(vec!["create_temp_file", "cleanup"], probe.calls());
 }
 
@@ -91,9 +92,9 @@ fn test_async_temp_creation_validates_parent_before_provider_call() {
         Ok(_) => panic!("invalid temporary parent must fail in the facade"),
         Err(error) => error,
     };
-    assert_eq!(FsErrorKind::InvalidPath, error.kind());
-    assert_eq!(FsOperation::CreateTemp, error.operation());
-    assert_eq!(Some(&parent), error.path());
+    assert_eq!(FsErrorKind::InvalidPath, error.error().kind());
+    assert_eq!(FsOperation::CreateTemp, error.error().operation());
+    assert_eq!(Some(&parent), error.error().path());
     assert!(probe.calls().is_empty(), "provider creation must not be called");
 }
 
@@ -108,13 +109,13 @@ fn test_async_temp_creation_keeps_provider_error_pathless() {
         Ok(_) => panic!("provider creation failure should propagate"),
         Err(error) => error,
     };
-    assert_eq!(FsOperation::CreateTemp, error.operation());
-    assert_eq!(None, error.path());
-    assert_eq!(Some("async-recording"), error.provider());
+    assert_eq!(FsOperation::CreateTemp, error.error().operation());
+    assert_eq!(None, error.error().path());
+    assert_eq!(Some("async-recording"), error.error().provider());
     assert_eq!(vec!["create_temp_file"], probe.calls());
 }
 
-/// Applies the same identity and compensating-cleanup contract to temporary
+/// Applies the same identity and explicit-cleanup contract to temporary
 /// directories as it does to temporary files.
 #[test]
 fn test_async_temp_directory_rejects_mismatched_provider_identity() {
@@ -122,28 +123,32 @@ fn test_async_temp_directory_rejects_mismatched_provider_identity() {
         invalid_temp_identity: true,
         ..AsyncRecordingConfig::default()
     });
-    let Err(error) = ready(file_system.create_temp_directory(TempOptions::default())) else {
+    let Err(mut error) = ready(file_system.create_temp_directory(TempOptions::default())) else {
         panic!("mismatched temporary directory identity must be rejected");
     };
-    assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
+    assert_eq!(FsErrorKind::ProviderContractViolation, error.error().kind());
+    assert_eq!(vec!["create_temp_directory"], probe.calls());
+    ready(error.recovery_mut().expect("isolated session").cleanup_async()).expect("explicit cleanup");
     assert_eq!(vec!["create_temp_directory", "cleanup"], probe.calls());
 }
 
-/// Verifies failed invalid-session cleanup remains the inspectable source of
-/// the facade contract failure.
+/// Explicit cleanup failure is retained separately from the opening failure.
 #[test]
-fn test_async_invalid_temp_identity_preserves_cleanup_error_source() {
+fn test_async_invalid_temp_identity_preserves_primary_and_cleanup_errors() {
     let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
         invalid_temp_identity: true,
         temp_cleanup_failure: true,
         ..AsyncRecordingConfig::default()
     });
-    let Err(error) = ready(file_system.create_temp_file(TempOptions::default())) else {
+    let Err(mut error) = ready(file_system.create_temp_file(TempOptions::default())) else {
         panic!("invalid temporary identity must fail");
     };
-    let cleanup = error.source().expect("cleanup error should be retained");
+    let original = error.error().to_string();
+    let cleanup =
+        ready(error.recovery_mut().expect("isolated session").cleanup_async()).expect_err("injected cleanup failure");
     assert!(cleanup.to_string().contains("injected cleanup failure"));
-    assert!(cleanup.source().is_some());
+    assert_eq!(error.error().to_string(), original);
+    assert!(error.recovery().is_some());
 }
 
 /// Rejects an asynchronous temporary-file envelope whose metadata claims a
@@ -154,11 +159,13 @@ fn test_async_temp_creation_rejects_wrong_kind() {
         invalid_temp_kind: true,
         ..AsyncRecordingConfig::default()
     });
-    let error = match ready(file_system.create_temp_file(TempOptions::default())) {
+    let mut error = match ready(file_system.create_temp_file(TempOptions::default())) {
         Ok(_) => panic!("temporary-file kind must be validated"),
         Err(error) => error,
     };
-    assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
+    assert_eq!(FsErrorKind::ProviderContractViolation, error.error().kind());
+    assert_eq!(vec!["create_temp_file"], probe.calls());
+    ready(error.recovery_mut().expect("isolated session").cleanup_async()).expect("explicit cleanup");
     assert_eq!(vec!["create_temp_file", "cleanup"], probe.calls());
 }
 

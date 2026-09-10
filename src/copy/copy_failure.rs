@@ -19,7 +19,7 @@ use crate::copy::CopyFailureState;
 use crate::copy::CopyStats;
 use crate::copy::internal::CopyFailureParts;
 use crate::error::FsError;
-use crate::write::FileWriter;
+use crate::write::WriterRecovery;
 
 /// A copy error with publication state, partial statistics, and optional writer
 /// recovery.
@@ -42,7 +42,7 @@ use crate::write::FileWriter;
 /// ).expect_err("the fixture has no source");
 /// assert_eq!(CopyFailureState::Unchanged, failure.state());
 /// assert_eq!(0, failure.partial_stats().bytes);
-/// assert!(!failure.has_writer());
+/// assert!(!failure.has_recovery());
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub struct CopyFailure {
@@ -55,9 +55,8 @@ impl CopyFailure {
         error: FsError,
         state: CopyFailureState,
         partial_stats: CopyStats,
-        writer: Option<FileWriter>,
+        writer: Option<WriterRecovery>,
     ) -> Self {
-        let writer = writer.map(Box::new);
         Self {
             parts: Box::new(CopyFailureParts {
                 error,
@@ -88,43 +87,38 @@ impl CopyFailure {
     /// Returns whether a writer is available for recovery.
     #[inline(always)]
     #[must_use]
-    pub const fn has_writer(&self) -> bool {
+    pub const fn has_recovery(&self) -> bool {
         self.parts.writer.is_some()
     }
 
     /// Returns the recovery writer if retained.
     #[inline(always)]
     #[must_use]
-    pub fn writer(&self) -> Option<&FileWriter> {
-        self.parts.writer.as_deref()
+    pub fn recovery(&self) -> Option<&WriterRecovery> {
+        self.parts.writer.as_ref()
     }
 
     /// Returns a mutable recovery writer if retained.
     #[inline(always)]
     #[must_use]
-    pub fn writer_mut(&mut self) -> Option<&mut FileWriter> {
-        self.parts.writer.as_deref_mut()
+    pub fn recovery_mut(&mut self) -> Option<&mut WriterRecovery> {
+        self.parts.writer.as_mut()
     }
 
     /// Takes ownership of the recovery writer when recovery responsibility
     /// remains with the caller.
     #[inline(always)]
     #[must_use]
-    pub fn take_writer(&mut self) -> Option<FileWriter> {
-        self.parts.writer.take().map(|writer| *writer)
+    pub fn take_recovery(&mut self) -> Option<WriterRecovery> {
+        self.parts.writer.take()
     }
 
     /// Splits the failure into error, state, statistics, and writer recovery.
     #[inline(always)]
     #[must_use]
-    pub fn into_parts(self) -> (FsError, CopyFailureState, CopyStats, Option<FileWriter>) {
+    pub fn into_parts(self) -> (FsError, CopyFailureState, CopyStats, Option<WriterRecovery>) {
         let mut parts = self.parts;
-        (
-            parts.error,
-            parts.state,
-            parts.partial_stats,
-            parts.writer.take().map(|writer| *writer),
-        )
+        (parts.error, parts.state, parts.partial_stats, parts.writer.take())
     }
 }
 impl Debug for CopyFailure {
@@ -136,7 +130,7 @@ impl Debug for CopyFailure {
             .field("error", &self.parts.error)
             .field("state", &self.parts.state)
             .field("partial_stats", &self.parts.partial_stats)
-            .field("has_writer", &self.parts.writer.is_some())
+            .field("has_recovery", &self.parts.writer.is_some())
             .finish()
     }
 }

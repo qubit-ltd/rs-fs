@@ -14,10 +14,14 @@ use qubit_io::Output;
 use crate::FileSystem;
 use crate::error::FsError;
 use crate::error::FsOperation;
+use crate::error::OpenFailureStage;
 use crate::metadata::WriteOutcome;
 use crate::path::Path;
 use crate::write::WriteAllFailure;
+use crate::write::WriteFailureState;
 use crate::write::WriteOptions;
+use crate::write::WriterRecovery;
+use crate::write::internal::open_failure_state;
 
 /// Executes aggregate synchronous write operations for one facade.
 pub(crate) struct WriteOperation<'a> {
@@ -47,23 +51,43 @@ impl<'a> WriteOperation<'a> {
         {
             return Err(WriteAllFailure::new(
                 self.filesystem.core().enrich(error, Some(path), FsOperation::Write),
+                WriteFailureState::NotPublished,
+                0,
                 None,
             ));
         }
-        let mut writer = self
-            .filesystem
-            .open_writer(path, options)
-            .map_err(|error| WriteAllFailure::new(error, None))?;
+        let mut writer = self.filesystem.open_writer(path, options).map_err(|failure| {
+            let (error, stage, recovery) = failure.into_parts();
+            let state = match stage {
+                OpenFailureStage::Preflight => WriteFailureState::NotPublished,
+                OpenFailureStage::ProviderOpen => open_failure_state(&error),
+                OpenFailureStage::OutcomeValidation => WriteFailureState::Indeterminate,
+            };
+            WriteAllFailure::new(error, state, 0, recovery.map(WriterRecovery::Rejected))
+        })?;
         if let Err(error) = Output::write_fully(&mut writer, bytes).and_then(|_| Output::flush(&mut writer)) {
+            let error = FsError::from_stream_io(error, FsOperation::Write, path)
+                .with_provider(self.filesystem.properties().info().provider_id());
+            let state = if error.has_indeterminate_effect() {
+                WriteFailureState::Indeterminate
+            } else {
+                writer.state().publication_failure_state()
+            };
             return Err(WriteAllFailure::new(
-                FsError::from_stream_io(error, FsOperation::Write, path)
-                    .with_provider(self.filesystem.properties().info().provider_id()),
-                Some(writer),
+                error,
+                state,
+                writer.written_bytes(),
+                Some(WriterRecovery::Opened(Box::new(writer))),
             ));
         }
         writer.commit().map_err(|failure| {
-            let (error, _) = failure.into_parts();
-            WriteAllFailure::new(error, Some(writer))
+            let (error, state) = failure.into_parts();
+            WriteAllFailure::new(
+                error,
+                state,
+                writer.written_bytes(),
+                Some(WriterRecovery::Opened(Box::new(writer))),
+            )
         })
     }
 }

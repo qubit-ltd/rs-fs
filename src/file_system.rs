@@ -25,6 +25,8 @@ use crate::error::FsError;
 use crate::error::FsErrorKind;
 use crate::error::FsOperation;
 use crate::error::FsResult;
+use crate::error::OpenFailure;
+use crate::error::OpenFailureStage;
 use crate::facade::facade_core::FacadeCore;
 use crate::metadata::FileMetadata;
 use crate::metadata::FileSystemCapability;
@@ -39,8 +41,6 @@ use crate::rename::RenameOptions;
 use crate::rename::RenameOutcome;
 use crate::rename::validate_rename_outcome;
 use crate::spi::CreateDirectoryRequest;
-use crate::spi::CreateTempDirectoryRequest;
-use crate::spi::CreateTempFileRequest;
 use crate::spi::DeleteDirectoryRequest;
 use crate::spi::DeleteFileRequest;
 use crate::spi::FileSystemSpi;
@@ -53,10 +53,12 @@ use crate::spi::ResolvedReadOptions;
 use crate::spi::ResolvedRenameOptions;
 use crate::spi::ResolvedWriteOptions;
 use crate::spi::StatRequest;
+use crate::temp::RejectedTempResource;
 use crate::temp::TempDirectory;
 use crate::temp::TempFile;
 use crate::temp::TempOptions;
 use crate::write::FileWriter;
+use crate::write::RejectedWriter;
 use crate::write::WriteAllFailure;
 use crate::write::WriteOperation;
 use crate::write::WriteOptions;
@@ -233,87 +235,140 @@ impl FileSystem {
     }
 
     /// Opens a provider writer after local option validation.
-    pub fn open_writer(&self, path: &Path, options: WriteOptions) -> FsResult<FileWriter> {
-        self.core.validate_write_request(path, &options)?;
+    pub fn open_writer(&self, path: &Path, options: WriteOptions) -> Result<FileWriter, OpenFailure<RejectedWriter>> {
+        self.core
+            .validate_write_request(path, &options)
+            .map_err(|error| OpenFailure::new(error, OpenFailureStage::Preflight, None))?;
         let atomicity = options.atomicity();
         let durability = options.durability();
-        self.spi
+        let opened = self
+            .spi
             .open_writer(OpenWriterRequest::new(path, ResolvedWriteOptions::new(options)))
-            .and_then(|opened| {
-                let (info, writer) = opened.into_parts();
-                self.validate_opened_info(&info, path)?;
-                Ok(FileWriter::new(
-                    info,
-                    writer,
-                    atomicity,
-                    durability,
+            .map_err(|error| {
+                OpenFailure::new(
+                    self.enrich(error, path, FsOperation::OpenWriter),
+                    OpenFailureStage::ProviderOpen,
+                    None,
+                )
+            })?;
+        let (info, session) = opened.into_parts();
+        if let Err(error) = self.validate_opened_info(&info, path) {
+            return Err(OpenFailure::new(
+                error,
+                OpenFailureStage::OutcomeValidation,
+                Some(RejectedWriter::new(
+                    session,
                     self.properties().info().provider_id(),
-                    self.properties().limits().max_write_bytes().maximum(),
-                ))
-            })
-            .map_err(|error| self.enrich(error, path, FsOperation::OpenWriter))
+                    Some(path.clone()),
+                )),
+            ));
+        }
+        Ok(FileWriter::new(
+            info,
+            session,
+            atomicity,
+            durability,
+            self.properties().info().provider_id(),
+            self.properties().limits().max_write_bytes().maximum(),
+        ))
     }
 
     /// Creates a temporary file and binds its provider session to this facade.
-    pub fn create_temp_file(&self, options: TempOptions) -> FsResult<TempFile> {
+    pub fn create_temp_file(&self, options: TempOptions) -> Result<TempFile, OpenFailure<RejectedTempResource>> {
         let parent = options.parent().cloned();
-        self.core.validate_temp_parent(parent.as_ref())?;
         self.core
-            .require(FileSystemCapability::TempFile, FsOperation::CreateTemp, parent.as_ref())?;
-        self.spi
-            .create_temp_file(CreateTempFileRequest::new(options))
-            .and_then(|opened| {
-                let (info, mut session) = opened.into_parts();
-                if let Err(error) = self.validate_temp_info(&info, crate::metadata::FileKind::File) {
-                    let path = error.path().cloned().unwrap_or_else(Path::root);
-                    return Err(match session.cleanup() {
-                        Ok(()) => error,
-                        Err(cleanup) => FsError::with_source(
-                            FsErrorKind::ProviderContractViolation,
-                            FsOperation::ValidateProviderOutcome,
-                            "provider returned an invalid temporary identity and cleanup failed",
-                            cleanup,
-                        )
-                        .with_path(path.clone())
-                        .with_provider(self.properties().info().provider_id()),
-                    });
-                }
-                Ok(TempFile::new(self.clone(), info.path().clone(), session))
-            })
-            .map_err(|error| self.core.enrich(error, parent.as_ref(), FsOperation::CreateTemp))
+            .validate_temp_parent(parent.as_ref())
+            .map_err(|error| OpenFailure::new(error, OpenFailureStage::Preflight, None))?;
+        self.core
+            .require(FileSystemCapability::TempFile, FsOperation::CreateTemp, parent.as_ref())
+            .map_err(|error| OpenFailure::new(error, OpenFailureStage::Preflight, None))?;
+        let opened = self
+            .spi
+            .create_temp_file(crate::spi::CreateTempFileRequest::new(options))
+            .map_err(|error| {
+                OpenFailure::new(
+                    self.core.enrich(error, parent.as_ref(), FsOperation::CreateTemp),
+                    OpenFailureStage::ProviderOpen,
+                    None,
+                )
+            })?;
+        let (info, session) = opened.into_parts();
+        if let Err(cause) = self.validate_temp_info(&info, crate::metadata::FileKind::File) {
+            let error = FsError::with_source(
+                FsErrorKind::ProviderContractViolation,
+                FsOperation::ValidateProviderOutcome,
+                "provider returned an invalid temporary identity",
+                cause,
+            )
+            .with_provider(self.properties().info().provider_id());
+            let error = match parent.as_ref() {
+                Some(path) => error.with_path(path.clone()),
+                None => error,
+            };
+            return Err(OpenFailure::new(
+                error,
+                OpenFailureStage::OutcomeValidation,
+                Some(RejectedTempResource::new(
+                    session,
+                    self.properties().info().provider_id(),
+                    parent,
+                )),
+            ));
+        }
+        Ok(TempFile::new(self.clone(), info.path().clone(), session))
     }
 
     /// Creates a temporary directory and binds its provider session to this
     /// facade.
-    pub fn create_temp_directory(&self, options: TempOptions) -> FsResult<TempDirectory> {
+    pub fn create_temp_directory(
+        &self,
+        options: TempOptions,
+    ) -> Result<TempDirectory, OpenFailure<RejectedTempResource>> {
         let parent = options.parent().cloned();
-        self.core.validate_temp_parent(parent.as_ref())?;
-        self.core.require(
-            FileSystemCapability::TempDirectory,
-            FsOperation::CreateTemp,
-            parent.as_ref(),
-        )?;
-        self.spi
-            .create_temp_directory(CreateTempDirectoryRequest::new(options))
-            .and_then(|opened| {
-                let (info, mut session) = opened.into_parts();
-                if let Err(error) = self.validate_temp_info(&info, crate::metadata::FileKind::Directory) {
-                    let path = error.path().cloned().unwrap_or_else(Path::root);
-                    return Err(match session.cleanup() {
-                        Ok(()) => error,
-                        Err(cleanup) => FsError::with_source(
-                            FsErrorKind::ProviderContractViolation,
-                            FsOperation::ValidateProviderOutcome,
-                            "provider returned an invalid temporary identity and cleanup failed",
-                            cleanup,
-                        )
-                        .with_path(path.clone())
-                        .with_provider(self.properties().info().provider_id()),
-                    });
-                }
-                Ok(TempDirectory::new(self.clone(), info.path().clone(), session))
-            })
-            .map_err(|error| self.core.enrich(error, parent.as_ref(), FsOperation::CreateTemp))
+        self.core
+            .validate_temp_parent(parent.as_ref())
+            .map_err(|error| OpenFailure::new(error, OpenFailureStage::Preflight, None))?;
+        self.core
+            .require(
+                FileSystemCapability::TempDirectory,
+                FsOperation::CreateTemp,
+                parent.as_ref(),
+            )
+            .map_err(|error| OpenFailure::new(error, OpenFailureStage::Preflight, None))?;
+        let opened = self
+            .spi
+            .create_temp_directory(crate::spi::CreateTempDirectoryRequest::new(options))
+            .map_err(|error| {
+                OpenFailure::new(
+                    self.core.enrich(error, parent.as_ref(), FsOperation::CreateTemp),
+                    OpenFailureStage::ProviderOpen,
+                    None,
+                )
+            })?;
+        let (info, session) = opened.into_parts();
+        if let Err(cause) = self.validate_temp_info(&info, crate::metadata::FileKind::Directory) {
+            let error = FsError::with_source(
+                FsErrorKind::ProviderContractViolation,
+                FsOperation::ValidateProviderOutcome,
+                "provider returned an invalid temporary identity",
+                cause,
+            )
+            .with_provider(self.properties().info().provider_id());
+            let error = match parent.as_ref() {
+                Some(path) => error.with_path(path.clone()),
+                None => error,
+            };
+            return Err(OpenFailure::new(
+                error,
+                OpenFailureStage::OutcomeValidation,
+                Some(RejectedTempResource::new(
+                    session,
+                    self.properties().info().provider_id(),
+                    parent,
+                )),
+            ));
+        }
+        Ok(TempDirectory::new(self.clone(), info.path().clone(), session))
     }
 
     /// Creates a directory after local path validation.

@@ -161,5 +161,5 @@ fn test_dropping_polled_execute_future_marks_operation_indeterminate() {
         operation.state(),
         AsyncCopyOperationState::Failed(CopyFailureState::Indeterminate)
     );
-    assert!(!operation.has_recovery_writer());
+    assert!(!operation.has_recovery());
 }

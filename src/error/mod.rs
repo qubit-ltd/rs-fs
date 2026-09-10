@@ -18,3 +18,12 @@ pub use fs_error::FsError;
 pub use fs_error_kind::FsErrorKind;
 pub use fs_operation::FsOperation;
 pub use fs_result::FsResult;
+
+mod open_failure;
+pub use open_failure::OpenFailure;
+
+mod open_failure_stage;
+pub use open_failure_stage::OpenFailureStage;
+
+mod recovery_cleanup_state;
+pub use recovery_cleanup_state::RecoveryCleanupState;

@@ -80,6 +80,7 @@ use qubit_fs::spi::StatResponse;
 use qubit_fs::write::WriteAbortOutcome;
 use qubit_fs::write::WriteFailureState;
 use qubit_fs::write::WriteOptions;
+use qubit_fs::write::WriterRecovery;
 use qubit_fs::write::WriterState;
 use qubit_io::Input;
 use qubit_io::Output;
@@ -846,7 +847,10 @@ fn test_copy_declined_preserves_stream_and_writer_recovery_states() {
         let (_, _, _, writer) = failure.into_parts();
         assert_eq!(
             writer_state,
-            writer.expect("post-open fallback failure retains its writer").state()
+            match writer.expect("post-open fallback failure retains its writer") {
+                WriterRecovery::Opened(writer) => writer.state(),
+                WriterRecovery::Rejected(_) => panic!("validated writer required"),
+            }
         );
     }
 
@@ -862,7 +866,11 @@ fn test_copy_declined_preserves_stream_and_writer_recovery_states() {
             .copy(&path("/source"), &path("/target"), CopyOptions::default())
             .expect_err("fallback writer failure should preserve recovery");
         assert_eq!(expected, failure.state());
-        assert!(!failure.has_writer());
+        if expected == CopyFailureState::Indeterminate {
+            assert!(matches!(failure.recovery(), Some(WriterRecovery::Rejected(_))));
+        } else {
+            assert!(!failure.has_recovery());
+        }
     }
 }
 
@@ -897,7 +905,14 @@ fn test_copy_stream_fallback_reports_each_sync_io_stage_state() {
         assert_eq!(expected, failure.state());
         assert_eq!(
             writer_state,
-            failure.writer().expect("opened writer is retained").state()
+            failure
+                .recovery()
+                .map(|recovery| match recovery {
+                    WriterRecovery::Opened(writer) => writer,
+                    WriterRecovery::Rejected(_) => panic!("fixture must return a validated writer"),
+                })
+                .expect("opened writer is retained")
+                .state()
         );
     }
 }
@@ -938,7 +953,15 @@ fn test_write_all_wraps_writer_open_failure() {
         .write_all(&target, b"bytes", WriteOptions::default())
         .expect_err("writer-open failure should use the write-all failure type");
     assert_eq!(FsErrorKind::Io, failure.error().kind());
-    assert!(failure.writer().is_none());
+    assert!(
+        failure
+            .recovery()
+            .map(|recovery| match recovery {
+                WriterRecovery::Opened(writer) => writer,
+                WriterRecovery::Rejected(_) => panic!("fixture must return a validated writer"),
+            })
+            .is_none()
+    );
 }
 
 /// Includes provider context when the synchronous write-all limit is hit.
@@ -1210,7 +1233,7 @@ fn test_copy_fallback_flush_failure_is_indeterminate_with_stats_and_writer() {
         .expect_err("flush failure should be recoverable");
     assert_eq!(CopyFailureState::Indeterminate, failure.state());
     assert_eq!(5, failure.partial_stats().bytes);
-    assert!(failure.has_writer());
+    assert!(failure.has_recovery());
     assert!(!format!("{failure}").is_empty());
     assert!(format!("{failure:?}").contains("CopyFailure"));
     assert_eq!(
@@ -1223,25 +1246,37 @@ fn test_copy_fallback_flush_failure_is_indeterminate_with_stats_and_writer() {
     assert_eq!(
         WriterState::Indeterminate,
         failure
-            .writer()
+            .recovery()
+            .map(|recovery| match recovery {
+                WriterRecovery::Opened(writer) => writer,
+                WriterRecovery::Rejected(_) => panic!("fixture must return a validated writer"),
+            })
             .expect("post-open fallback failure retains its writer")
             .state()
     );
     assert_eq!(
         WriterState::Indeterminate,
         failure
-            .writer_mut()
+            .recovery_mut()
+            .map(|recovery| match recovery {
+                WriterRecovery::Opened(writer) => writer,
+                WriterRecovery::Rejected(_) => panic!("fixture must return a validated writer"),
+            })
             .expect("fallback writer should still be recoverable")
             .state()
     );
     assert_eq!(
         WriterState::Indeterminate,
         failure
-            .take_writer()
+            .take_recovery()
+            .map(|recovery| match recovery {
+                WriterRecovery::Opened(writer) => writer,
+                WriterRecovery::Rejected(_) => panic!("fixture must return a validated writer"),
+            })
             .expect("take_writer should move the recovery writer")
             .state()
     );
-    assert!(!failure.has_writer());
+    assert!(!failure.has_recovery());
 
     let (error, state, stats, writer) = failure.into_parts();
     assert_eq!(FsErrorKind::Io, error.kind());

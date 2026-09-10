@@ -134,7 +134,7 @@ fn test_sync_copy_open_failure_requires_explicit_evidence() {
             .expect_err("open fails");
         assert_eq!(expected, failure.state(), "kind={kind:?} effect={effect:?}");
         assert_eq!(effect, failure.error().effect_state());
-        assert!(!failure.has_writer());
+        assert!(!failure.has_recovery());
     }
 }
 
@@ -184,7 +184,7 @@ fn test_async_copy_open_failure_matches_sync_contract() {
             .expect("preflight");
         let failure = ready(op.execute()).expect_err("open fails");
         assert_eq!(expected, failure.state(), "kind={kind:?} effect={effect:?}");
-        assert!(!op.has_recovery_writer());
+        assert!(!op.has_recovery());
     }
 }
 

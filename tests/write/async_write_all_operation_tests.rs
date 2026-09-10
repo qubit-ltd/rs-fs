@@ -11,6 +11,7 @@ use qubit_fs::Path;
 use qubit_fs::error::FsEffectState;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::write::AsyncWriteAllOperationState;
+use qubit_fs::write::AsyncWriterRecovery;
 use qubit_fs::write::WriteFailureState;
 use qubit_fs::write::WriteOptions;
 
@@ -65,7 +66,7 @@ fn test_open_failure_requires_explicit_unchanged_evidence() {
         let failure = ready(operation.execute()).expect_err("provider open fails");
         assert_eq!(expected, failure.state(), "kind={kind:?}, effect={effect:?}");
         assert_eq!(effect, failure.error().effect_state());
-        assert!(!operation.has_recovery_writer());
+        assert!(!operation.has_recovery());
         assert_eq!(vec!["open_writer"], probe.calls());
     }
 }
@@ -83,7 +84,7 @@ fn test_success_snapshots_bytes_and_releases_completed_writer() {
     ready(operation.execute()).expect("write succeeds");
     assert_eq!(5, operation.written_bytes(), "success retains confirmed byte count");
     assert!(
-        !operation.has_recovery_writer(),
+        !operation.has_recovery(),
         "committed writer has no recovery responsibility"
     );
 }
@@ -127,7 +128,7 @@ fn test_unpolled_execute_preserves_ready_request() {
     assert!(probe.calls().is_empty());
     ready(operation.execute()).unwrap();
     assert_eq!(0, operation.written_bytes());
-    assert!(!operation.has_recovery_writer());
+    assert!(!operation.has_recovery());
 }
 
 #[test]
@@ -156,15 +157,18 @@ fn test_cancellation_preserves_confirmed_progress_and_recovery_ownership() {
         let state = AsyncWriteAllOperationState::Failed(WriteFailureState::Indeterminate);
         assert_eq!(state, operation.state(), "{stage:?}");
         assert_eq!(expected_bytes, operation.written_bytes(), "{stage:?}");
-        assert_eq!(has_writer, operation.has_recovery_writer());
+        assert_eq!(has_writer, operation.has_recovery());
         let calls = probe.calls();
         let failure = ready(operation.execute()).unwrap_err();
         assert_eq!(FsErrorKind::InvalidState, failure.error().kind());
         assert_eq!(expected_bytes, failure.written_bytes());
         assert_eq!(calls, probe.calls());
-        let writer = operation.take_recovery_writer();
+        let writer = operation.take_recovery().map(|recovery| match recovery {
+            AsyncWriterRecovery::Opened(writer) => writer,
+            AsyncWriterRecovery::Rejected(_) => panic!("fixture must return a validated writer"),
+        });
         assert_eq!(has_writer, writer.is_some());
-        assert!(!operation.has_recovery_writer());
+        assert!(!operation.has_recovery());
         assert_eq!(state, operation.state());
         assert_eq!(expected_bytes, operation.written_bytes());
     }
@@ -186,7 +190,7 @@ fn test_short_writes_count_all_confirmed_bytes() {
             .unwrap();
         ready(operation.execute()).unwrap();
         assert_eq!(5, operation.written_bytes());
-        assert!(!operation.has_recovery_writer());
+        assert!(!operation.has_recovery());
     }
 }
 
@@ -216,9 +220,15 @@ fn test_partial_write_failure_and_cancellation_count_only_acknowledged_bytes() {
             assert_eq!(WriteFailureState::Indeterminate, failure.state());
         }
         assert_eq!(3, operation.written_bytes());
-        assert!(operation.has_recovery_writer());
+        assert!(operation.has_recovery());
         let snapshot = operation.state();
-        let mut writer = operation.take_recovery_writer().unwrap();
+        let mut writer = operation
+            .take_recovery()
+            .map(|recovery| match recovery {
+                AsyncWriterRecovery::Opened(writer) => writer,
+                AsyncWriterRecovery::Rejected(_) => panic!("fixture must return a validated writer"),
+            })
+            .unwrap();
         let _outcome = ready(writer.abort_async()).unwrap();
         assert_eq!(snapshot, operation.state());
         assert_eq!(3, operation.written_bytes());
@@ -247,9 +257,21 @@ fn test_flush_and_commit_failures_preserve_progress_and_abort_failure_retains_wr
         let failure = ready(operation.execute()).unwrap_err();
         assert_eq!(state, failure.state());
         assert_eq!(5, failure.written_bytes());
-        let cleanup_error = ready(operation.recovery_writer().unwrap().abort_async()).unwrap_err();
+        let cleanup_error = ready(
+            operation
+                .recovery()
+                .map(|recovery| match recovery {
+                    AsyncWriterRecovery::Opened(writer) => writer,
+                    AsyncWriterRecovery::Rejected(_) => {
+                        panic!("fixture must return a validated writer")
+                    }
+                })
+                .unwrap()
+                .abort_async(),
+        )
+        .unwrap_err();
         assert_eq!(FsErrorKind::Io, cleanup_error.kind());
-        assert!(operation.has_recovery_writer());
+        assert!(operation.has_recovery());
         assert_eq!(state, failure.state());
         assert_eq!(5, operation.written_bytes());
     }
@@ -266,7 +288,7 @@ fn test_flush_and_commit_failures_preserve_progress_and_abort_failure_retains_wr
         .unwrap();
     let failure = ready(operation.execute()).unwrap_err();
     assert_eq!(5, failure.written_bytes());
-    assert!(operation.has_recovery_writer());
+    assert!(operation.has_recovery());
 }
 
 #[test]
@@ -285,12 +307,22 @@ fn test_debug_omits_payload_and_consumed_failure_does_not_release_recovery() {
     assert!(!format!("{operation:?}").contains("private-report-payload"));
     let error = ready(operation.execute()).unwrap_err().into_error();
     assert_eq!(FsErrorKind::Io, error.kind());
-    assert!(operation.has_recovery_writer());
+    assert!(operation.has_recovery());
     assert_eq!(
         AsyncWriteAllOperationState::Failed(WriteFailureState::RetryableNotPublished),
         operation.state()
     );
     assert_eq!(0, probe.writer_cancellations());
     assert!(!format!("{operation:?}").contains("private-report-payload"));
-    let _outcome = ready(operation.recovery_writer().unwrap().abort_async()).unwrap();
+    let _outcome = ready(
+        operation
+            .recovery()
+            .map(|recovery| match recovery {
+                AsyncWriterRecovery::Opened(writer) => writer,
+                AsyncWriterRecovery::Rejected(_) => panic!("fixture must return a validated writer"),
+            })
+            .unwrap()
+            .abort_async(),
+    )
+    .unwrap();
 }

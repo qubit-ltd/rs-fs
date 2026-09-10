@@ -33,7 +33,7 @@ fn test_async_write_all_operation_failure_exposes_recovery_and_formatting() {
     let failure = ready(operation.execute()).expect_err("commit failure should retain an async writer");
 
     assert_eq!(FsErrorKind::Io, failure.error().kind());
-    assert!(operation.has_recovery_writer());
+    assert!(operation.has_recovery());
     assert!(failure.to_string().contains("commit failure"));
     assert!(format!("{failure:?}").contains("written_bytes"));
     assert!(Error::source(&failure).is_some());

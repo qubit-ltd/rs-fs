@@ -12,6 +12,7 @@ use qubit_fs::Path;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::metadata::AchievedAtomicity;
 use qubit_fs::write::WriteOptions;
+use qubit_fs::write::WriterRecovery;
 use qubit_io::Output;
 
 #[test]
@@ -39,7 +40,7 @@ fn test_write_all_does_not_format_stream_error_message() {
             WriteOptions::default(),
         )
         .expect_err("the injected stream write should fail");
-    let (error, _) = failure.into_parts();
+    let (error, _state, _bytes, _recovery) = failure.into_parts();
     assert!(!error.to_string().contains("top-secret"));
     assert!(error.source().is_some());
 }
@@ -55,7 +56,7 @@ fn test_write_all_rejects_bytes_over_finite_write_limit() {
             WriteOptions::default(),
         )
         .expect_err("the finite write limit should reject all bytes");
-    let (error, writer) = failure.into_parts();
+    let (error, _state, _bytes, writer) = failure.into_parts();
     assert_eq!(FsErrorKind::ResourceLimitExceeded, error.kind());
     assert!(writer.is_none());
 }
@@ -88,12 +89,28 @@ fn test_write_all_failure_exposes_recovery_accessors_and_formatting() {
         )
         .expect_err("commit failure should retain a writer");
     assert_eq!(FsErrorKind::Io, failure.error().kind());
-    assert!(failure.writer().is_some());
-    assert!(failure.writer_mut().is_some());
+    assert!(
+        failure
+            .recovery()
+            .map(|recovery| match recovery {
+                WriterRecovery::Opened(writer) => writer,
+                WriterRecovery::Rejected(_) => panic!("fixture must return a validated writer"),
+            })
+            .is_some()
+    );
+    assert!(
+        failure
+            .recovery_mut()
+            .map(|recovery| match recovery {
+                WriterRecovery::Opened(writer) => writer,
+                WriterRecovery::Rejected(_) => panic!("fixture must return a validated writer"),
+            })
+            .is_some()
+    );
     assert!(failure.to_string().contains("commit failure"));
-    assert!(format!("{failure:?}").contains("has_writer"));
+    assert!(format!("{failure:?}").contains("has_recovery"));
     assert!(Error::source(&failure).is_some());
-    let (error, writer) = failure.into_parts();
+    let (error, _state, _bytes, writer) = failure.into_parts();
     assert_eq!(FsErrorKind::Io, error.kind());
     assert!(writer.is_some());
 }

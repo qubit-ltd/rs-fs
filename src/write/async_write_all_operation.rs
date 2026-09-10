@@ -17,11 +17,12 @@ use crate::AsyncFileSystem;
 use crate::error::FsError;
 use crate::error::FsErrorKind;
 use crate::error::FsOperation;
+use crate::error::OpenFailureStage;
 use crate::metadata::WriteOutcome;
 use crate::path::Path;
-use crate::write::AsyncFileWriter;
 use crate::write::AsyncWriteAllOperationFailure;
 use crate::write::AsyncWriteAllOperationState;
+use crate::write::AsyncWriterRecovery;
 use crate::write::WriteFailureState;
 use crate::write::WriteOptions;
 use crate::write::WriterState;
@@ -50,7 +51,7 @@ use crate::write::internal::open_failure_state;
 /// operation.execute().await?;
 /// assert_eq!(AsyncWriteAllOperationState::Completed, operation.state());
 /// assert_eq!(5, operation.written_bytes());
-/// assert!(!operation.has_recovery_writer());
+/// assert!(!operation.has_recovery());
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// # }).unwrap();
 /// ```
@@ -67,7 +68,7 @@ pub struct AsyncWriteAllOperation {
     /// Historical execution state.
     state: AsyncWriteAllOperationState,
     /// Opened writer retained while recovery may be required.
-    writer: Option<AsyncFileWriter>,
+    writer: Option<AsyncWriterRecovery>,
     /// Frozen publication and confirmed-progress snapshot.
     recovery: WriteAllRecoverySnapshot,
 }
@@ -105,13 +106,13 @@ impl AsyncWriteAllOperation {
     /// Reports whether an opened writer is retained for recovery.
     #[inline]
     #[must_use]
-    pub const fn has_recovery_writer(&self) -> bool {
+    pub const fn has_recovery(&self) -> bool {
         self.writer.is_some()
     }
     /// Returns mutable access to the retained recovery writer.
     #[inline]
     #[must_use]
-    pub fn recovery_writer(&mut self) -> Option<&mut AsyncFileWriter> {
+    pub fn recovery(&mut self) -> Option<&mut AsyncWriterRecovery> {
         self.writer.as_mut()
     }
     /// Transfers recovery responsibility to the caller.
@@ -120,7 +121,7 @@ impl AsyncWriteAllOperation {
     /// publication state or byte count.
     #[inline]
     #[must_use]
-    pub fn take_recovery_writer(&mut self) -> Option<AsyncFileWriter> {
+    pub fn take_recovery(&mut self) -> Option<AsyncWriterRecovery> {
         self.writer.take()
     }
     /// Returns the frozen count of bytes confirmed before execution stopped.
@@ -179,15 +180,27 @@ async fn execute_write(
     path: &Path,
     bytes: &[u8],
     options: &WriteOptions,
-    slot: &mut Option<AsyncFileWriter>,
+    slot: &mut Option<AsyncWriterRecovery>,
 ) -> Result<WriteOutcome, AsyncWriteAllOperationFailure> {
     if slot.is_none() {
-        *slot = Some(filesystem.open_writer(path, options.clone()).await.map_err(|error| {
-            let state = open_failure_state(&error);
-            AsyncWriteAllOperationFailure::new(error, state, 0)
-        })?);
+        match filesystem.open_writer(path, options.clone()).await {
+            Ok(writer) => *slot = Some(AsyncWriterRecovery::Opened(Box::new(writer))),
+            Err(failure) => {
+                let (error, stage, recovery) = failure.into_parts();
+                *slot = recovery.map(AsyncWriterRecovery::Rejected);
+                let state = match stage {
+                    OpenFailureStage::Preflight => WriteFailureState::NotPublished,
+                    OpenFailureStage::ProviderOpen => open_failure_state(&error),
+                    OpenFailureStage::OutcomeValidation => WriteFailureState::Indeterminate,
+                };
+                return Err(AsyncWriteAllOperationFailure::new(error, state, 0));
+            }
+        }
     }
-    let writer = slot.as_mut().expect("writer is retained after open");
+    let writer = slot
+        .as_mut()
+        .and_then(AsyncWriterRecovery::opened_mut)
+        .expect("writer is retained after open");
     if let Err(error) = writer.write_fully_async(bytes).await {
         let error = contextual(filesystem, error, path);
         let state = state_for(error.has_indeterminate_effect(), writer.state());
@@ -241,7 +254,7 @@ impl Debug for AsyncWriteAllOperation {
             .field("path", &self.path)
             .field("state", &self.state)
             .field("written_bytes", &self.recovery.written_bytes)
-            .field("has_recovery_writer", &self.writer.is_some())
+            .field("has_recovery", &self.writer.is_some())
             .finish()
     }
 }

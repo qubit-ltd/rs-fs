@@ -59,7 +59,7 @@ fn test_temp_file_rejects_provider_path_outside_facade_constraints() {
     let error = crate::handle_support::invalid_temp_path_filesystem()
         .create_temp_file(TempOptions::default())
         .expect_err("relative provider temporary path must be rejected");
-    assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
+    assert_eq!(FsErrorKind::ProviderContractViolation, error.error().kind());
 }
 
 /// Verifies a preferred-atomicity persist accepts a non-atomic provider result
