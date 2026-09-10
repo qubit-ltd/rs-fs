@@ -39,7 +39,7 @@ fn async_example_retains_failure_and_failed_cleanup() {
         recovery.primary.as_ref().unwrap().state()
     );
     assert!(recovery.cleanup_error.is_some());
-    assert!(recovery.operation.has_recovery_writer());
+    assert!(recovery.operation.has_recovery());
 }
 
 #[test]
@@ -58,7 +58,7 @@ fn async_example_cancellation_keeps_operation_without_writer() {
         panic!("expected recovery");
     };
     assert!(recovery.primary.is_none());
-    assert!(!recovery.operation.has_recovery_writer());
+    assert!(!recovery.operation.has_recovery());
     assert_eq!(
         AsyncWriteAllOperationState::Failed(WriteFailureState::Indeterminate),
         recovery.operation.state()

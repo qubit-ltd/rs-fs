@@ -11,6 +11,7 @@ use qubit_fs::directory::ListScope;
 use qubit_fs::error::FsError;
 use qubit_fs::metadata::WriteOutcome;
 use qubit_fs::write::AsyncWriteAllOperation;
+use qubit_fs::write::AsyncWriterRecovery;
 use qubit_fs::write::AsyncWriteAllOperationFailure;
 use qubit_fs::write::WriteOptions;
 
@@ -56,8 +57,9 @@ pub async fn write_report(
         Some(Err(failure)) => Some(failure),
         None => None, // The operation now records cancellation facts.
     };
-    let cleanup_error = match operation.recovery_writer() {
-        Some(writer) => writer.abort_async().await.err(),
+    let cleanup_error = match operation.recovery() {
+        Some(AsyncWriterRecovery::Opened(writer)) => writer.abort_async().await.err(),
+        Some(AsyncWriterRecovery::Rejected(writer)) => writer.abort_async().await.err(),
         None => None,
     };
     // Published means do not resend. Indeterminate requires reconciliation,
