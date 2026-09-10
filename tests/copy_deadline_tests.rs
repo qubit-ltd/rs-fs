@@ -56,7 +56,7 @@ fn test_deadline_checked_after_flush_retains_unpublished_writer() {
         .expect_err("slow flush should exceed the cumulative deadline");
 
     assert_eq!(CopyFailureState::Unchanged, failure.state());
-    assert!(failure.has_writer());
+    assert!(failure.has_recovery());
 }
 
 #[test]
@@ -75,7 +75,7 @@ fn test_deadline_checked_after_commit_reports_published_without_writer() {
         .expect_err("slow commit should exceed the cumulative deadline");
 
     assert_eq!(CopyFailureState::Published, failure.state());
-    assert!(!failure.has_writer());
+    assert!(!failure.has_recovery());
 }
 
 #[test]
@@ -91,5 +91,5 @@ fn test_indeterminate_commit_retains_writer_for_recovery() {
         .expect_err("indeterminate provider commit should fail");
 
     assert_eq!(CopyFailureState::Indeterminate, failure.state());
-    assert!(failure.has_writer());
+    assert!(failure.has_recovery());
 }

@@ -215,6 +215,26 @@ impl FsError {
         self
     }
 
+    /// Replaces untrusted session locations with a known cleanup request.
+    ///
+    /// Used only for quarantined sessions whose opening identity was invalid.
+    /// Diagnostic entry and target paths cannot be trusted in this case. The
+    /// original category, effect evidence, message, and source remain intact.
+    pub(crate) fn with_trusted_cleanup_context(
+        mut self,
+        operation: FsOperation,
+        path: Option<&Path>,
+        provider: &str,
+    ) -> Self {
+        self.operation = operation;
+        self.path = path.cloned().map(Box::new);
+        self.target = None;
+        self.failure_path = None;
+        self.failure_target = None;
+        self.provider = Some(provider.into());
+        self
+    }
+
     /// Adds missing path, target, and provider context without overwriting
     /// provider-supplied details.
     ///

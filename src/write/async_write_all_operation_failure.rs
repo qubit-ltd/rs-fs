@@ -28,6 +28,7 @@ use crate::write::WriteFailureState;
 /// # poll_support::ready(async {
 /// use qubit_fs::Path;
 /// use qubit_fs::write::WriteOptions;
+/// use qubit_fs::write::AsyncWriterRecovery;
 /// use qubit_fs::write::WriteFailureState;
 /// let mut operation = filesystem.begin_write_all(
 ///     Path::parse("/report")?, b"bytes".to_vec(), WriteOptions::default(),
@@ -35,8 +36,11 @@ use crate::write::WriteFailureState;
 /// let failure = operation.execute().await.expect_err("fixture commit failure");
 /// assert_eq!(WriteFailureState::NotPublished, failure.state());
 /// assert_eq!(5, failure.written_bytes());
-/// assert!(operation.has_recovery_writer());
-/// let cleanup = operation.recovery_writer().unwrap().abort_async().await;
+/// assert!(operation.has_recovery());
+/// let cleanup = match operation.recovery().expect("retained session") {
+///     AsyncWriterRecovery::Opened(writer) => writer.abort_async().await,
+///     AsyncWriterRecovery::Rejected(writer) => writer.abort_async().await,
+/// };
 /// assert!(cleanup.is_ok());
 /// // Application error handling can retain `failure`, `cleanup`, and `operation`.
 /// # Ok::<(), Box<dyn std::error::Error>>(())

@@ -10,10 +10,7 @@
 //! Provider-opened asynchronous writer envelope.
 
 use super::AsyncFileWriteSession;
-use crate::metadata::AtomicityRequirement;
-use crate::metadata::DurabilityRequirement;
 use crate::metadata::OpenedFileInfo;
-use crate::write::AsyncFileWriter;
 
 /// An already-open asynchronous writer bound to provider identity.
 pub struct OpenedAsyncWriter {
@@ -48,32 +45,8 @@ impl OpenedAsyncWriter {
         &self.info
     }
 
-    /// Transfers the validated writer into the facade handle.
-    ///
-    /// # Parameters
-    /// - `atomicity`: Publication atomicity requested by the caller.
-    /// - `durability`: Publication durability requested by the caller.
-    /// - `provider`: Stable provider identifier used in generated errors.
-    /// - `max_write_bytes`: Optional provider write-size limit.
-    ///
-    /// # Returns
-    /// A facade-owned asynchronous writer.
-    #[inline]
-    #[must_use]
-    pub(crate) fn into_writer(
-        self,
-        atomicity: AtomicityRequirement,
-        durability: DurabilityRequirement,
-        provider: &str,
-        max_write_bytes: Option<u64>,
-    ) -> AsyncFileWriter {
-        AsyncFileWriter::new(
-            self.info,
-            self.session,
-            atomicity,
-            durability,
-            provider,
-            max_write_bytes,
-        )
+    /// Transfers the unvalidated identity and owned session to the facade.
+    pub(crate) fn into_parts(self) -> (OpenedFileInfo, Box<dyn AsyncFileWriteSession>) {
+        (self.info, self.session)
     }
 }

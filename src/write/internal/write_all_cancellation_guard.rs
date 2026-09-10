@@ -7,9 +7,9 @@
 // =============================================================================
 //! Cancellation guard for async whole-file writes.
 use crate::metadata::WriteOutcome;
-use crate::write::AsyncFileWriter;
 use crate::write::AsyncWriteAllOperationFailure;
 use crate::write::AsyncWriteAllOperationState;
+use crate::write::AsyncWriterRecovery;
 use crate::write::WriteFailureState;
 use crate::write::internal::WriteAllRecoverySnapshot;
 /// Keeps operation facts outside the borrowed execution future.
@@ -17,7 +17,7 @@ pub(crate) struct WriteAllCancellationGuard<'a> {
     /// Owning operation state updated on completion or cancellation.
     state: &'a mut AsyncWriteAllOperationState,
     /// Recovery slot that survives cancellation of the execution future.
-    writer: &'a mut Option<AsyncFileWriter>,
+    writer: &'a mut Option<AsyncWriterRecovery>,
     /// Historical publication and acknowledged-progress snapshot.
     recovery: &'a mut WriteAllRecoverySnapshot,
     /// Whether an explicit result has already been recorded.
@@ -27,7 +27,7 @@ impl<'a> WriteAllCancellationGuard<'a> {
     /// Arms cancellation tracking before the first provider await.
     pub(crate) fn start(
         state: &'a mut AsyncWriteAllOperationState,
-        writer: &'a mut Option<AsyncFileWriter>,
+        writer: &'a mut Option<AsyncWriterRecovery>,
         recovery: &'a mut WriteAllRecoverySnapshot,
     ) -> Self {
         *state = AsyncWriteAllOperationState::Running;
@@ -40,7 +40,7 @@ impl<'a> WriteAllCancellationGuard<'a> {
     }
     /// Borrows the retained writer slot for provider execution.
     #[inline]
-    pub(crate) fn writer_mut(&mut self) -> &mut Option<AsyncFileWriter> {
+    pub(crate) fn writer_mut(&mut self) -> &mut Option<AsyncWriterRecovery> {
         self.writer
     }
     /// Records a terminal result and releases a successfully committed writer.
@@ -54,6 +54,7 @@ impl<'a> WriteAllCancellationGuard<'a> {
                 self.recovery.written_bytes = self
                     .writer
                     .as_ref()
+                    .and_then(AsyncWriterRecovery::opened)
                     .expect("successful write retains writer")
                     .written_bytes();
                 self.recovery.state = WriteFailureState::Published;
@@ -74,7 +75,7 @@ impl Drop for WriteAllCancellationGuard<'_> {
     fn drop(&mut self) {
         if !self.finished && *self.state == AsyncWriteAllOperationState::Running {
             *self.state = AsyncWriteAllOperationState::Failed(WriteFailureState::Indeterminate);
-            if let Some(writer) = self.writer.as_mut() {
+            if let Some(writer) = self.writer.as_mut().and_then(AsyncWriterRecovery::opened_mut) {
                 self.recovery.written_bytes = writer.written_bytes();
                 writer.mark_indeterminate();
             }

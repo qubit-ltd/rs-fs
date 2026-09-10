@@ -35,3 +35,11 @@ pub use temp_directory::TempDirectory;
 pub use temp_file::TempFile;
 pub use temp_options::TempOptions;
 pub use temp_resource_state::TempResourceState;
+
+mod rejected_temp_resource;
+pub use rejected_temp_resource::RejectedTempResource;
+
+#[cfg(feature = "async")]
+mod rejected_async_temp_resource;
+#[cfg(feature = "async")]
+pub use rejected_async_temp_resource::RejectedAsyncTempResource;

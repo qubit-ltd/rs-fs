@@ -34,6 +34,7 @@ use qubit_fs::directory::ListScope;
 use qubit_fs::error::FsEffectState;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::error::FsOperation;
+use qubit_fs::error::OpenFailureStage;
 use qubit_fs::metadata::AchievedAtomicity;
 use qubit_fs::metadata::AtomicityRequirement;
 use qubit_fs::metadata::DurabilityRequirement;
@@ -136,7 +137,7 @@ fn test_async_write_all_commit_failure_retains_writer() {
         .expect("write preflight should succeed");
     let failure = ready(operation.execute()).expect_err("injected commit failure should retain writer");
     assert_eq!(FsErrorKind::Io, failure.error().kind());
-    assert!(operation.has_recovery_writer());
+    assert!(operation.has_recovery());
 }
 
 /// Includes provider context when the asynchronous write-all limit is hit.
@@ -410,9 +411,12 @@ fn test_async_facade_stat_and_open_pending_and_error() {
                 error
             }
             AsyncCopyStage::OpenWriter => {
-                let Err(error) = ready(fs.open_writer(&path("/file"), WriteOptions::default())) else {
+                let Err(failure) = ready(fs.open_writer(&path("/file"), WriteOptions::default())) else {
                     panic!("provider failure expected");
                 };
+                let (error, stage, recovery) = failure.into_parts();
+                assert_eq!(stage, OpenFailureStage::ProviderOpen);
+                assert!(recovery.is_none());
                 error
             }
             _ => unreachable!(),
@@ -550,7 +554,7 @@ fn test_async_facade_rejects_contract_and_fallback_boundary_failures() {
         panic!("invalid temporary directory identity must be rejected");
     };
     for error in [file, directory] {
-        assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
+        assert_eq!(FsErrorKind::ProviderContractViolation, error.error().kind());
     }
 
     let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
@@ -560,7 +564,7 @@ fn test_async_facade_rejects_contract_and_fallback_boundary_failures() {
     let Err(invalid_path) = ready(file_system.create_temp_file(TempOptions::default())) else {
         panic!("relative temporary path must be rejected");
     };
-    assert_eq!(FsErrorKind::ProviderContractViolation, invalid_path.kind());
+    assert_eq!(FsErrorKind::ProviderContractViolation, invalid_path.error().kind());
 
     let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
         completed_copy: Some(AchievedAtomicity::Atomic),
@@ -644,7 +648,7 @@ fn test_async_facade_rejects_unsupported_capabilities_and_path_semantics() {
     });
     let error = ready(file_system.open_writer(&target, WriteOptions::default()))
         .expect_err("write capability must be required");
-    assert_eq!(FsErrorKind::UnsupportedCapability, error.kind());
+    assert_eq!(FsErrorKind::UnsupportedCapability, error.error().kind());
 
     let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
         omitted_capability: Some(FileSystemCapability::CreateDirectory),
@@ -661,7 +665,7 @@ fn test_async_facade_rejects_unsupported_capabilities_and_path_semantics() {
     let Err(error) = ready(file_system.create_temp_file(TempOptions::default())) else {
         panic!("temporary-file capability must be required");
     };
-    assert_eq!(FsErrorKind::UnsupportedCapability, error.kind());
+    assert_eq!(FsErrorKind::UnsupportedCapability, error.error().kind());
 
     let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
         omitted_capability: Some(FileSystemCapability::TempDirectory),
@@ -670,7 +674,7 @@ fn test_async_facade_rejects_unsupported_capabilities_and_path_semantics() {
     let Err(error) = ready(file_system.create_temp_directory(TempOptions::default())) else {
         panic!("temporary-directory capability must be required");
     };
-    assert_eq!(FsErrorKind::UnsupportedCapability, error.kind());
+    assert_eq!(FsErrorKind::UnsupportedCapability, error.error().kind());
 
     let (file_system, _) = async_recording_file_system(AsyncRecordingConfig::default());
     let error = ready(file_system.rename(&source, &target, RenameOptions::default()))

@@ -9,7 +9,7 @@
 use crate::copy::CopyFailureState;
 use crate::copy::CopyStats;
 use crate::error::FsError;
-use crate::write::FileWriter;
+use crate::write::WriterRecovery;
 /// Heap-owned error and writer storage behind the public failure.
 pub(in crate::copy) struct CopyFailureParts {
     /// Contextual primary error.
@@ -19,5 +19,5 @@ pub(in crate::copy) struct CopyFailureParts {
     /// Confirmed progress before the operation stopped.
     pub(in crate::copy) partial_stats: CopyStats,
     /// Destination session retained for explicit recovery.
-    pub(in crate::copy) writer: Option<Box<FileWriter>>,
+    pub(in crate::copy) writer: Option<WriterRecovery>,
 }

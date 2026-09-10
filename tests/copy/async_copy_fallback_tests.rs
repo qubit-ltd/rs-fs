@@ -22,6 +22,7 @@ use qubit_fs::metadata::AtomicityRequirement;
 use qubit_fs::metadata::DurabilityRequirement;
 use qubit_fs::metadata::FileSystemCapability;
 use qubit_fs::metadata::SymlinkPolicy;
+use qubit_fs::write::AsyncWriterRecovery;
 use qubit_fs::write::WriteFailureState;
 use qubit_fs::write::WriterState;
 
@@ -71,12 +72,16 @@ fn test_async_stream_fallback_failures_retain_recovery_writer() {
         let failure = ready(operation.execute()).expect_err("injected stage should fail");
         assert_eq!(expected, failure.state());
         assert_eq!(FsErrorKind::Io, failure.error().kind());
-        assert!(operation.has_recovery_writer(), "{stage:?} should retain writer");
+        assert!(operation.has_recovery(), "{stage:?} should retain writer");
         assert_eq!(AsyncCopyOperationState::Failed(expected), operation.state());
         assert_eq!(
             writer_state,
             operation
-                .recovery_writer()
+                .recovery()
+                .map(|recovery| match recovery {
+                    AsyncWriterRecovery::Opened(writer) => writer,
+                    AsyncWriterRecovery::Rejected(_) => panic!("fixture must return a validated writer"),
+                })
                 .expect("failed fallback retains its writer")
                 .state()
         );
@@ -121,7 +126,11 @@ fn test_async_stream_fallback_commit_failure_preserves_certainty() {
         assert_eq!(
             writer_state,
             operation
-                .recovery_writer()
+                .recovery()
+                .map(|recovery| match recovery {
+                    AsyncWriterRecovery::Opened(writer) => writer,
+                    AsyncWriterRecovery::Rejected(_) => panic!("fixture must return a validated writer"),
+                })
                 .expect("failed commit retains its writer")
                 .state()
         );
@@ -166,7 +175,7 @@ fn test_async_stream_fallback_rejects_known_length_over_limits_before_opening_ha
         let failure = ready(operation.execute()).expect_err("known source length over a stream limit must fail");
         assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
         assert_eq!(CopyFailureState::Unchanged, failure.state());
-        assert!(!operation.has_recovery_writer());
+        assert!(!operation.has_recovery());
         assert_eq!(vec!["try_copy", "stat"], probe.calls());
     }
 }
@@ -185,7 +194,7 @@ fn test_async_stream_fallback_enforces_caller_budgets_before_opening_handles() {
         let failure = ready(operation.execute()).expect_err("caller budget must reject the fallback");
         assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
         assert_eq!(CopyFailureState::Unchanged, failure.state());
-        assert!(!operation.has_recovery_writer());
+        assert!(!operation.has_recovery());
         if must_precede_provider {
             assert!(
                 probe.calls().is_empty(),
@@ -353,11 +362,15 @@ fn test_async_stream_fallback_cancellation_is_indeterminate_with_recovery() {
             AsyncCopyOperationState::Failed(CopyFailureState::Indeterminate),
             operation.state()
         );
-        assert!(operation.has_recovery_writer(), "{stage:?} should retain writer");
+        assert!(operation.has_recovery(), "{stage:?} should retain writer");
         assert_eq!(
             WriterState::Indeterminate,
             operation
-                .recovery_writer()
+                .recovery()
+                .map(|recovery| match recovery {
+                    AsyncWriterRecovery::Opened(writer) => writer,
+                    AsyncWriterRecovery::Rejected(_) => panic!("fixture must return a validated writer"),
+                })
                 .expect("cancelled fallback should retain its writer")
                 .state(),
             "{stage:?} may have started writer I/O"
@@ -385,7 +398,7 @@ fn test_async_native_copy_cancellation_is_indeterminate_without_recovery_writer(
         AsyncCopyOperationState::Failed(CopyFailureState::Indeterminate),
         operation.state()
     );
-    assert!(!operation.has_recovery_writer());
+    assert!(!operation.has_recovery());
     drop(operation);
     assert_eq!(calls_before_drop, probe.calls());
 }
@@ -568,7 +581,13 @@ fn test_async_indeterminate_recovery_writer_drop_skips_cancellation() {
         .begin_copy(path("/source"), path("/target"), CopyOptions::default())
         .expect("preflight should succeed");
     let _ = ready(operation.execute()).expect_err("flush should fail");
-    let writer = operation.take_recovery_writer().expect("writer should be retained");
+    let writer = operation
+        .take_recovery()
+        .map(|recovery| match recovery {
+            AsyncWriterRecovery::Opened(writer) => writer,
+            AsyncWriterRecovery::Rejected(_) => panic!("fixture must return a validated writer"),
+        })
+        .expect("writer should be retained");
     drop(writer);
     assert_eq!(0, probe.writer_cancellations());
 }

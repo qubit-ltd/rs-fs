@@ -15,7 +15,7 @@ use crate::copy::CopyFailureState;
 use crate::copy::CopyOutcome;
 use crate::copy::CopyStats;
 use crate::copy::internal::CopyRecoverySnapshot;
-use crate::write::AsyncFileWriter;
+use crate::write::AsyncWriterRecovery;
 
 /// Marks a polled operation indeterminate if cancellation interrupts provider
 /// I/O.
@@ -23,7 +23,7 @@ pub(in crate::copy) struct CopyCancellationGuard<'a> {
     /// Borrowed operation state updated when execution finishes or is dropped.
     state: &'a mut AsyncCopyOperationState,
     /// Borrowed slot retaining an opened destination writer.
-    writer: &'a mut Option<Box<AsyncFileWriter>>,
+    writer: &'a mut Option<AsyncWriterRecovery>,
     recovery: &'a mut CopyRecoverySnapshot,
     /// Whether normal completion disarmed cancellation handling.
     finished: bool,
@@ -42,7 +42,7 @@ impl<'a> CopyCancellationGuard<'a> {
     #[inline]
     pub(in crate::copy) fn start(
         state: &'a mut AsyncCopyOperationState,
-        writer: &'a mut Option<Box<AsyncFileWriter>>,
+        writer: &'a mut Option<AsyncWriterRecovery>,
         recovery: &'a mut CopyRecoverySnapshot,
     ) -> Self {
         *state = AsyncCopyOperationState::Running;
@@ -59,7 +59,7 @@ impl<'a> CopyCancellationGuard<'a> {
     /// # Returns
     /// The mutable slot used to retain an opened recovery writer.
     #[inline(always)]
-    pub(in crate::copy) fn writer_mut(&mut self) -> &mut Option<Box<AsyncFileWriter>> {
+    pub(in crate::copy) fn writer_mut(&mut self) -> &mut Option<AsyncWriterRecovery> {
         self.writer
     }
 
@@ -94,10 +94,14 @@ impl Drop for CopyCancellationGuard<'_> {
         if !self.finished && *self.state == AsyncCopyOperationState::Running {
             *self.state = AsyncCopyOperationState::Failed(CopyFailureState::Indeterminate);
             self.recovery.state = CopyFailureState::Indeterminate;
-            self.recovery.stats = self.writer.as_ref().map_or(CopyStats::default(), |writer| {
-                crate::copy::internal::fallback_failure_stats(writer.written_bytes())
-            });
-            if let Some(writer) = self.writer.as_mut() {
+            self.recovery.stats = self
+                .writer
+                .as_ref()
+                .and_then(AsyncWriterRecovery::opened)
+                .map_or(CopyStats::default(), |writer| {
+                    crate::copy::internal::fallback_failure_stats(writer.written_bytes())
+                });
+            if let Some(writer) = self.writer.as_mut().and_then(AsyncWriterRecovery::opened_mut) {
                 writer.mark_indeterminate();
             }
         }

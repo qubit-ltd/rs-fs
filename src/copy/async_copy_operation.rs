@@ -32,6 +32,7 @@ use crate::copy::internal::from_write_failure_state;
 use crate::error::FsError;
 use crate::error::FsErrorKind;
 use crate::error::FsOperation;
+use crate::error::OpenFailureStage;
 use crate::metadata::FileSystemCapability;
 use crate::metadata::SymlinkPolicy;
 use crate::path::Path;
@@ -41,7 +42,7 @@ use crate::spi::CopyRequest;
 use crate::spi::ProviderOperation;
 use crate::spi::ResolvedCopyOptions;
 use crate::spi::SpiFuture;
-use crate::write::AsyncFileWriter;
+use crate::write::AsyncWriterRecovery;
 use crate::write::internal::is_unchanged_open_failure;
 use crate::write::internal::open_failure_state;
 
@@ -80,7 +81,7 @@ pub struct AsyncCopyOperation {
     /// Observable lifecycle state.
     state: AsyncCopyOperationState,
     /// Destination writer retained when recovery remains possible.
-    writer: Option<Box<AsyncFileWriter>>,
+    writer: Option<AsyncWriterRecovery>,
     /// Monotonic start used to enforce caller elapsed-time budgets.
     deadline: CopyDeadline,
     recovery: CopyRecoverySnapshot,
@@ -134,20 +135,20 @@ impl AsyncCopyOperation {
     /// Returns whether a recovery writer is retained by this operation.
     #[inline(always)]
     #[must_use]
-    pub const fn has_recovery_writer(&self) -> bool {
+    pub const fn has_recovery(&self) -> bool {
         self.writer.is_some()
     }
 
     /// Borrows the retained recovery writer, if one exists.
     #[inline(always)]
-    pub fn recovery_writer(&mut self) -> Option<&mut AsyncFileWriter> {
-        self.writer.as_deref_mut()
+    pub fn recovery(&mut self) -> Option<&mut AsyncWriterRecovery> {
+        self.writer.as_mut()
     }
 
     /// Takes ownership of the retained recovery writer, if one exists.
     #[inline(always)]
-    pub fn take_recovery_writer(&mut self) -> Option<AsyncFileWriter> {
-        self.writer.take().map(|writer| *writer)
+    pub fn take_recovery(&mut self) -> Option<AsyncWriterRecovery> {
+        self.writer.take()
     }
 
     /// Executes the operation exactly once.
@@ -192,7 +193,7 @@ async fn execute_copy(
     target: &Path,
     options: &ResolvedCopyOptions,
     deadline: CopyDeadline,
-    writer: &mut Option<Box<crate::write::AsyncFileWriter>>,
+    writer: &mut Option<AsyncWriterRecovery>,
 ) -> Result<CopyOutcome, AsyncCopyFailure> {
     let caller_options = options.options();
     if caller_options.max_entries() == Some(0) {
@@ -252,7 +253,7 @@ fn stream_copy_fallback<'a>(
     target: &'a Path,
     options: &'a ResolvedCopyOptions,
     deadline: CopyDeadline,
-    writer_slot: &'a mut Option<Box<crate::write::AsyncFileWriter>>,
+    writer_slot: &'a mut Option<AsyncWriterRecovery>,
 ) -> SpiFuture<'a, Result<CopyOutcome, AsyncCopyFailure>> {
     Box::pin(async move {
         let options = options.options();
@@ -370,10 +371,12 @@ fn stream_copy_fallback<'a>(
         }
         let writer_options = fallback_write_options(options);
         match filesystem.open_writer(target, writer_options).await {
-            Ok(writer) => *writer_slot = Some(Box::new(writer)),
+            Ok(writer) => *writer_slot = Some(AsyncWriterRecovery::Opened(Box::new(writer))),
             Err(error)
-                if error.kind() == FsErrorKind::AlreadyExists
-                    && is_unchanged_open_failure(&error)
+                if error.stage() == OpenFailureStage::ProviderOpen
+                    && error.recovery().is_none()
+                    && error.error().kind() == FsErrorKind::AlreadyExists
+                    && is_unchanged_open_failure(error.error())
                     && options.conflict() == CopyConflictPolicy::Skip =>
             {
                 return Ok(CopyOutcome::streamed_fallback(
@@ -386,12 +389,21 @@ fn stream_copy_fallback<'a>(
                 ));
             }
             Err(error) => {
-                let state = from_write_failure_state(open_failure_state(&error));
+                let (error, stage, recovery) = error.into_parts();
+                *writer_slot = recovery.map(AsyncWriterRecovery::Rejected);
+                let state = match stage {
+                    OpenFailureStage::Preflight => CopyFailureState::Unchanged,
+                    OpenFailureStage::ProviderOpen => from_write_failure_state(open_failure_state(&error)),
+                    OpenFailureStage::OutcomeValidation => CopyFailureState::Indeterminate,
+                };
                 return Err(filesystem.contextual_copy_failure(error, state, CopyStats::default(), source, target));
             }
         }
         if deadline.expired() {
-            let writer = writer_slot.as_ref().expect("writer is retained before transfer");
+            let writer = writer_slot
+                .as_ref()
+                .and_then(AsyncWriterRecovery::opened)
+                .expect("writer is retained before transfer");
             return Err(filesystem.contextual_copy_failure(
                 budget_error(source, target, "copy deadline was exceeded"),
                 from_writer_state(writer.state()),
@@ -404,7 +416,10 @@ fn stream_copy_fallback<'a>(
         let mut buffer = [0_u8; 8192];
         loop {
             if deadline.expired() {
-                let writer = writer_slot.as_ref().expect("writer is retained before transfer");
+                let writer = writer_slot
+                    .as_ref()
+                    .and_then(AsyncWriterRecovery::opened)
+                    .expect("writer is retained before transfer");
                 return Err(filesystem.contextual_copy_failure(
                     budget_error(source, target, "copy deadline was exceeded"),
                     from_writer_state(writer.state()),
@@ -419,12 +434,14 @@ fn stream_copy_fallback<'a>(
                     from_writer_state(
                         writer_slot
                             .as_ref()
+                            .and_then(AsyncWriterRecovery::opened)
                             .expect("writer is retained before transfer")
                             .state(),
                     ),
                     fallback_failure_stats(
                         writer_slot
                             .as_ref()
+                            .and_then(AsyncWriterRecovery::opened)
                             .expect("writer is retained before transfer")
                             .written_bytes(),
                     ),
@@ -433,7 +450,10 @@ fn stream_copy_fallback<'a>(
                 )
             })?;
             if deadline.expired() {
-                let writer = writer_slot.as_ref().expect("writer is retained before transfer");
+                let writer = writer_slot
+                    .as_ref()
+                    .and_then(AsyncWriterRecovery::opened)
+                    .expect("writer is retained before transfer");
                 return Err(filesystem.contextual_copy_failure(
                     budget_error(source, target, "copy deadline was exceeded"),
                     from_writer_state(writer.state()),
@@ -445,7 +465,10 @@ fn stream_copy_fallback<'a>(
             if read == 0 {
                 break;
             }
-            let writer = writer_slot.as_mut().expect("writer is retained before transfer");
+            let writer = writer_slot
+                .as_mut()
+                .and_then(AsyncWriterRecovery::opened_mut)
+                .expect("writer is retained before transfer");
             let next_bytes = filesystem.add_copied_bytes(bytes, read, source).map_err(|error| {
                 filesystem.contextual_copy_failure(
                     error,
@@ -484,7 +507,10 @@ fn stream_copy_fallback<'a>(
             }
             bytes = next_bytes;
         }
-        let writer = writer_slot.as_mut().expect("writer is retained before flush");
+        let writer = writer_slot
+            .as_mut()
+            .and_then(AsyncWriterRecovery::opened_mut)
+            .expect("writer is retained before flush");
         if deadline.expired() {
             return Err(filesystem.contextual_copy_failure(
                 budget_error(source, target, "copy deadline was exceeded"),
@@ -512,7 +538,10 @@ fn stream_copy_fallback<'a>(
                 target,
             ));
         }
-        let writer = writer_slot.as_mut().expect("writer is retained before commit");
+        let writer = writer_slot
+            .as_mut()
+            .and_then(AsyncWriterRecovery::opened_mut)
+            .expect("writer is retained before commit");
         let write_outcome = match writer.commit_async().await {
             Ok(outcome) => outcome,
             Err(failure)

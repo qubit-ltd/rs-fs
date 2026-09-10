@@ -316,8 +316,8 @@ fn test_async_spi_default_operations_report_unsupported() {
 
     let error = ready(file_system.open_writer(&path, WriteOptions::default()))
         .expect_err("default writer implementation must reject the request");
-    assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
-    assert_eq!(FsOperation::OpenWriter, error.operation());
+    assert_eq!(FsErrorKind::UnsupportedOperation, error.error().kind());
+    assert_eq!(FsOperation::OpenWriter, error.error().operation());
 
     let error = ready(file_system.create_directory(&path, CreateDirectoryOptions::default()))
         .expect_err("default directory implementation must reject the request");
@@ -349,13 +349,13 @@ fn test_async_spi_default_operations_report_unsupported() {
         Ok(_) => panic!("default temporary-file implementation must reject the request"),
         Err(error) => error,
     };
-    assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
-    assert_eq!(FsOperation::CreateTemp, error.operation());
+    assert_eq!(FsErrorKind::UnsupportedOperation, error.error().kind());
+    assert_eq!(FsOperation::CreateTemp, error.error().operation());
 
     let error = match ready(file_system.create_temp_directory(TempOptions::default())) {
         Ok(_) => panic!("default temporary-directory implementation must reject the request"),
         Err(error) => error,
     };
-    assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
-    assert_eq!(FsOperation::CreateTemp, error.operation());
+    assert_eq!(FsErrorKind::UnsupportedOperation, error.error().kind());
+    assert_eq!(FsOperation::CreateTemp, error.error().operation());
 }

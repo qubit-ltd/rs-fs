@@ -45,3 +45,18 @@ pub(crate) use write_operation::WriteOperation;
 pub use write_options::WriteOptions;
 pub use write_precondition::WritePrecondition;
 pub use writer_state::WriterState;
+
+mod rejected_writer;
+pub use rejected_writer::RejectedWriter;
+
+#[cfg(feature = "async")]
+mod rejected_async_writer;
+#[cfg(feature = "async")]
+pub use rejected_async_writer::RejectedAsyncWriter;
+
+mod writer_recovery;
+pub use writer_recovery::WriterRecovery;
+#[cfg(feature = "async")]
+mod async_writer_recovery;
+#[cfg(feature = "async")]
+pub use async_writer_recovery::AsyncWriterRecovery;
