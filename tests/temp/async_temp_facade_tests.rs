@@ -24,6 +24,7 @@ use qubit_fs::spi::PersistRequest;
 use qubit_fs::spi::SpiFuture;
 use qubit_fs::spi::SpiPersistFailure;
 use qubit_fs::temp::AsyncTempDirectory;
+use qubit_fs::temp::PersistFailure;
 use qubit_fs::temp::PersistFailureState;
 use qubit_fs::temp::PersistOptions;
 use qubit_fs::temp::PersistOutcome;
@@ -198,14 +199,13 @@ fn test_async_temp_directory_forwarding_methods_are_callable_directly() {
     let descendant: fn(&AsyncTempDirectory, &RelativePath) -> Path = black_box(AsyncTempDirectory::descendant);
     let cleanup: for<'a> fn(&'a mut AsyncTempDirectory) -> SpiFuture<'a, FsResult<()>> =
         black_box(AsyncTempDirectory::cleanup);
-    let keep: for<'a> fn(
-        &'a mut AsyncTempDirectory,
-    ) -> SpiFuture<'a, Result<PersistOutcome, qubit_fs::temp::PersistFailure>> = black_box(AsyncTempDirectory::keep);
+    let keep: for<'a> fn(&'a mut AsyncTempDirectory) -> SpiFuture<'a, Result<PersistOutcome, PersistFailure>> =
+        black_box(AsyncTempDirectory::keep);
     let persist: for<'a> fn(
         &'a mut AsyncTempDirectory,
         &'a Path,
         PersistOptions,
-    ) -> SpiFuture<'a, Result<PersistOutcome, qubit_fs::temp::PersistFailure>> = black_box(AsyncTempDirectory::persist);
+    ) -> SpiFuture<'a, Result<PersistOutcome, PersistFailure>> = black_box(AsyncTempDirectory::persist);
 
     let component = PathComponent::parse("child").expect("component should parse");
     let relative = RelativePath::parse("nested/item").expect("relative path should parse");
