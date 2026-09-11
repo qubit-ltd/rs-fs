@@ -68,7 +68,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 完成后再调用 `persist`。这样最终报告名称不会提前暴露未完成内容。发布失败时，应结合保留的
 发布事实、源资格和 `publication_target()`，在重试、cleanup 与只读核查之间作出选择。
 
-## 门面明确表达的语义
+## 为什么需要这个项目，以及门面明确表达的语义
 
 - `Path` 是一个已配置 filesystem 内的逻辑名称。`Uri` 是不含 secret 的规范
   地址；`ConnectionUri` 是配置入口，可以接受凭据，但在 `Display` 和 `Debug` 中会
@@ -82,8 +82,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   I/O 失败仍会作为错误返回。
 - `DirectoryStream` 按条目增量读取。应在有界循环中消费它，不应把目录假定为已加载的
   集合。
-
-- 列举范围由 `ListScope::Path` 或平面命名空间 `ListScope::Namespace` 明确指定；前缀读取仅在 `RangeRead` 为 Guaranteed 时自动添加范围。
+- 列举范围由 `ListScope::Path` 或平面命名空间 `ListScope::Namespace` 明确指定；前缀读取
+  仅在 `RangeRead` 为 Guaranteed 时自动添加范围。
 
 ## 从这里开始
 
