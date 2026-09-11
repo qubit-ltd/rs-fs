@@ -65,3 +65,26 @@ impl SpiWriteFailure {
         (self.error, self.state)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::SpiWriteFailure;
+    use crate::error::FsError;
+    use crate::error::FsErrorKind;
+    use crate::error::FsOperation;
+    use crate::write::WriteFailureState;
+
+    #[test]
+    fn failure_facts_are_executed_at_runtime() {
+        let failure = SpiWriteFailure::new(
+            FsError::new(FsErrorKind::Io, FsOperation::CommitWriter, "commit failed"),
+            WriteFailureState::Published,
+        );
+        assert_eq!(failure.error().kind(), FsErrorKind::Io);
+        assert_eq!(failure.state(), WriteFailureState::Published);
+
+        let (error, state) = failure.into_parts();
+        assert_eq!(error.kind(), FsErrorKind::Io);
+        assert_eq!(state, WriteFailureState::Published);
+    }
+}

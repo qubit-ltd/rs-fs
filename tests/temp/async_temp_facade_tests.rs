@@ -7,6 +7,7 @@
 // =============================================================================
 //! External SPI-bound temporary resource behavior tests.
 
+use std::hint::black_box;
 use std::pin::Pin;
 
 use qubit_fs::FsResult;
@@ -22,6 +23,7 @@ use qubit_fs::spi::AsyncTempResourceSpi;
 use qubit_fs::spi::PersistRequest;
 use qubit_fs::spi::SpiFuture;
 use qubit_fs::spi::SpiPersistFailure;
+use qubit_fs::temp::AsyncTempDirectory;
 use qubit_fs::temp::PersistFailureState;
 use qubit_fs::temp::PersistOptions;
 use qubit_fs::temp::PersistOutcome;
@@ -182,6 +184,40 @@ fn test_async_temp_directory_builds_child_and_descendant_paths() {
     let descendant = RelativePath::parse("nested/item").expect("relative path parses");
     assert_eq!("/tmp/recording/child", directory.child(&component).as_str());
     assert_eq!("/tmp/recording/nested/item", directory.descendant(&descendant).as_str());
+}
+
+/// Verifies the directory handle's forwarding methods through opaque calls.
+#[test]
+fn test_async_temp_directory_forwarding_methods_are_callable_directly() {
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig::default());
+    let mut directory =
+        ready(file_system.create_temp_directory(TempOptions::default())).expect("directory should open");
+    let path_accessor: for<'a> fn(&'a AsyncTempDirectory) -> &'a Path = black_box(AsyncTempDirectory::path);
+    let state_accessor: fn(&AsyncTempDirectory) -> TempResourceState = black_box(AsyncTempDirectory::state);
+    let child: fn(&AsyncTempDirectory, &PathComponent) -> Path = black_box(AsyncTempDirectory::child);
+    let descendant: fn(&AsyncTempDirectory, &RelativePath) -> Path = black_box(AsyncTempDirectory::descendant);
+    let cleanup: for<'a> fn(&'a mut AsyncTempDirectory) -> SpiFuture<'a, FsResult<()>> =
+        black_box(AsyncTempDirectory::cleanup);
+    let keep: for<'a> fn(
+        &'a mut AsyncTempDirectory,
+    ) -> SpiFuture<'a, Result<PersistOutcome, qubit_fs::temp::PersistFailure>> = black_box(AsyncTempDirectory::keep);
+    let persist: for<'a> fn(
+        &'a mut AsyncTempDirectory,
+        &'a Path,
+        PersistOptions,
+    ) -> SpiFuture<'a, Result<PersistOutcome, qubit_fs::temp::PersistFailure>> = black_box(AsyncTempDirectory::persist);
+
+    let component = PathComponent::parse("child").expect("component should parse");
+    let relative = RelativePath::parse("nested/item").expect("relative path should parse");
+    assert_eq!("/tmp/recording", path_accessor(&directory).as_str());
+    assert_eq!(TempResourceState::Owned, state_accessor(&directory));
+    assert_eq!("/tmp/recording/child", child(&directory, &component).as_str());
+    assert_eq!("/tmp/recording/nested/item", descendant(&directory, &relative).as_str());
+
+    ready(cleanup(&mut directory)).expect("cleanup should succeed");
+    assert_eq!(TempResourceState::Cleaned, state_accessor(&directory));
+    assert!(ready(keep(&mut directory)).is_err());
+    assert!(ready(persist(&mut directory, &path("/final"), PersistOptions::default())).is_err());
 }
 
 /// Verifies persistence preflight fails before calling a temporary session.

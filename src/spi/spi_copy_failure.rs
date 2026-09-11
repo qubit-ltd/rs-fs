@@ -73,3 +73,32 @@ impl SpiCopyFailure {
         (*self.error, self.state, self.partial_stats)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::SpiCopyFailure;
+    use crate::copy::CopyFailureState;
+    use crate::copy::CopyStats;
+    use crate::error::FsError;
+    use crate::error::FsErrorKind;
+    use crate::error::FsOperation;
+
+    #[test]
+    fn failure_facts_are_executed_at_runtime() {
+        let failure = SpiCopyFailure::new(
+            FsError::new(FsErrorKind::NotFound, FsOperation::Copy, "missing source"),
+            CopyFailureState::PartiallyPublished,
+            CopyStats {
+                bytes: 4,
+                ..CopyStats::default()
+            },
+        );
+        assert_eq!(failure.error().kind(), FsErrorKind::NotFound);
+        assert_eq!(failure.state(), CopyFailureState::PartiallyPublished);
+
+        let (error, state, stats) = failure.into_parts();
+        assert_eq!(error.kind(), FsErrorKind::NotFound);
+        assert_eq!(state, CopyFailureState::PartiallyPublished);
+        assert_eq!(stats.bytes, 4);
+    }
+}
