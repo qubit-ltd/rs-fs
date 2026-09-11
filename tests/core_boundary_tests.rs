@@ -45,6 +45,7 @@ use qubit_fs::read::ChecksumPolicy;
 use qubit_fs::read::ReadOptions;
 use qubit_fs::temp::PersistCleanupState;
 use qubit_fs::temp::PersistOutcome;
+use qubit_fs::temp::TempOptions;
 use qubit_fs::write::WriteOptions;
 
 /// Asserts that a facade can be cloned without requiring it to be copyable.
@@ -67,6 +68,12 @@ fn test_file_system_info_stores_provider_as_text() {
         PathSemantics::Hierarchical,
     );
     assert_eq!("local", info.provider_id());
+    let remote = FileSystemInfo::new(
+        FileSystemId::new("remote-instance").expect("the filesystem ID should validate"),
+        String::from("remote"),
+        PathSemantics::Hierarchical,
+    );
+    assert_eq!("remote", remote.provider_id());
 }
 
 /// Verifies provider-neutral metadata is an ordered string map.
@@ -101,6 +108,11 @@ fn test_public_value_accessors_preserve_core_contracts() {
     assert_eq!(Some("en"), safe_get(&safe, "content-language"));
     assert!(safe_contains(&safe, "content-language"));
     assert_eq!("v1", version_text(&version));
+    assert_eq!("v2", ResourceVersion::new(String::from("v2")).as_str());
+    let _ = TempOptions::new()
+        .with_prefix(String::from("prefix"))
+        .with_suffix(String::from("suffix"));
+    let _ = Path::from_components(true, vec![String::from("reports")]).expect("valid components");
 }
 
 /// Keeps accessor coverage from depending on compiler inlining decisions.
