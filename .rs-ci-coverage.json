@@ -1,38 +1,5 @@
 {
   "threshold_exempt_files": {
-    "qubit-fs": [
-      "src/async_file_system.rs",
-      "src/copy/async_copy_operation.rs",
-      "src/copy/copy_failure.rs",
-      "src/write/async_file_writer.rs",
-      "src/write/file_writer.rs",
-      "src/write/write_all_failure.rs",
-      "src/metadata/non_sensitive_metadata.rs",
-      "src/metadata/user_metadata.rs",
-      "src/metadata/write_outcome.rs",
-      "src/copy/copy_outcome.rs",
-      "src/copy/copy_operation.rs",
-      "src/copy/internal/fallback_failure_state.rs",
-      "src/directory/create_directory_options.rs",
-      "src/directory/create_directory_outcome.rs",
-      "src/directory/delete_outcome.rs",
-      "src/read/read_options.rs",
-      "src/write/write_options.rs",
-      "src/path/path.rs",
-      "src/spi/resolved_copy_options.rs",
-      "src/spi/resolved_list_options.rs",
-      "src/temp/async_temp_directory.rs",
-      "src/temp/persist_outcome.rs",
-      "src/temp/temp_directory.rs",
-      "src/temp/temp_options.rs",
-      "src/temp/temp_file.rs",
-      "src/uri/uri.rs",
-      "src/directory/list_options.rs",
-      "src/error/fs_error.rs",
-      "src/facade/facade_core.rs",
-      "src/file_system.rs",
-      "src/temp/async_temp_file.rs",
-      "src/path_constraints.rs"
-    ]
+    "qubit-fs": []
   }
 }
