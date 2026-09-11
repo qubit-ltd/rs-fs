@@ -94,8 +94,11 @@ impl<'a> StreamCopyPlan<'a> {
 
     /// Adds a read count and enforces the caller byte budget.
     pub(crate) fn next_bytes(&self, total: u64, count: usize) -> Result<u64, FsError> {
-        let count = u64::try_from(count).map_err(|_| self.byte_count_error())?;
-        let next = total.checked_add(count).ok_or_else(|| self.byte_count_error())?;
+        let count = u64::try_from(count)
+            .map_err(|_| self.budget_error("copy byte count exceeds the filesystem API reporting range"))?;
+        let next = total
+            .checked_add(count)
+            .ok_or_else(|| self.budget_error("copy byte count exceeds the filesystem API reporting range"))?;
         if self.options.max_bytes().is_some_and(|maximum| next > maximum) {
             return Err(self.budget_error("copy byte limit was exceeded"));
         }
@@ -123,16 +126,6 @@ impl<'a> StreamCopyPlan<'a> {
         FsError::new(FsErrorKind::ResourceLimitExceeded, FsOperation::Copy, message)
             .with_path(self.source.clone())
             .with_target(self.target.clone())
-    }
-
-    fn byte_count_error(&self) -> FsError {
-        FsError::new(
-            FsErrorKind::ResourceLimitExceeded,
-            FsOperation::Copy,
-            "copy byte count exceeds the filesystem API reporting range",
-        )
-        .with_path(self.source.clone())
-        .with_target(self.target.clone())
     }
 }
 
@@ -226,7 +219,6 @@ mod tests {
             budget.next_bytes(u64::MAX, 1).unwrap_err().kind(),
             FsErrorKind::ResourceLimitExceeded
         );
-        assert_eq!(budget.byte_count_error().kind(), FsErrorKind::ResourceLimitExceeded);
 
         let object = plan(
             CopyOptions::default(),
