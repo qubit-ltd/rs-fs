@@ -249,6 +249,14 @@ impl AsRef<str> for Path {
     }
 }
 
+/// Builds the shared logical path validation failure.
+fn invalid_path() -> FsError {
+    FsError::invalid_path(
+        FsOperation::ParsePath,
+        "path must be non-empty, NUL-free, and remain within its root",
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use std::hint::black_box;
@@ -292,18 +300,7 @@ mod tests {
             "/reports/archive",
             as_str(&child(&Path::parse("/reports").unwrap(), &component))
         );
-        assert_eq!(
-            "reports/daily.csv",
-            components(&built).map(|item| item).collect::<Vec<_>>().join("/")
-        );
+        assert_eq!("reports/daily.csv", components(&built).collect::<Vec<_>>().join("/"));
         assert_eq!(as_str(&built), as_ref(&built));
     }
-}
-
-/// Builds the shared logical path validation failure.
-fn invalid_path() -> FsError {
-    FsError::invalid_path(
-        FsOperation::ParsePath,
-        "path must be non-empty, NUL-free, and remain within its root",
-    )
 }
