@@ -23,3 +23,13 @@ fn test_delete_outcome_reports_deleted_entries() {
 
     assert_eq!(Some(4), outcome.deleted_entries());
 }
+
+#[test]
+fn test_delete_outcome_accessors_are_callable_directly() {
+    let outcome = DeleteOutcome::new(true).with_deleted_entries(2);
+    let already_missing: fn(DeleteOutcome) -> bool = DeleteOutcome::already_missing;
+    let deleted_entries: fn(DeleteOutcome) -> Option<u64> = DeleteOutcome::deleted_entries;
+
+    assert!(already_missing(outcome));
+    assert_eq!(Some(2), deleted_entries(outcome));
+}

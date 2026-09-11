@@ -23,3 +23,13 @@ fn test_create_directory_outcome_reports_created_ancestors() {
 
     assert_eq!(Some(3), outcome.created_ancestors());
 }
+
+#[test]
+fn test_create_directory_outcome_accessors_are_callable_directly() {
+    let outcome = CreateDirectoryOutcome::new(true).with_created_ancestors(2);
+    let already_existed: fn(CreateDirectoryOutcome) -> bool = CreateDirectoryOutcome::already_existed;
+    let created_ancestors: fn(CreateDirectoryOutcome) -> Option<u64> = CreateDirectoryOutcome::created_ancestors;
+
+    assert!(already_existed(outcome));
+    assert_eq!(Some(2), created_ancestors(outcome));
+}

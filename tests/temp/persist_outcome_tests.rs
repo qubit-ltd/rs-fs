@@ -41,3 +41,20 @@ fn test_persist_outcome_preserves_publication_details_and_diagnostics() {
         residual.cleanup_state()
     );
 }
+
+#[test]
+fn persist_outcome_accessors_are_callable_directly() {
+    let target = Path::parse("published/report.txt").expect("path should parse");
+    let outcome = PersistOutcome::new(target.clone(), AchievedAtomicity::Atomic, PublicationMethod::Direct);
+    let target_accessor: fn(&PersistOutcome) -> &Path = PersistOutcome::target;
+    let atomicity: fn(&PersistOutcome) -> AchievedAtomicity = PersistOutcome::atomicity;
+    let method: fn(&PersistOutcome) -> PublicationMethod = PersistOutcome::method;
+    let diagnostics: fn(&PersistOutcome) -> &_ = PersistOutcome::diagnostics;
+    let cleanup_state: fn(&PersistOutcome) -> PersistCleanupState = PersistOutcome::cleanup_state;
+
+    assert_eq!(&target, target_accessor(&outcome));
+    assert_eq!(AchievedAtomicity::Atomic, atomicity(&outcome));
+    assert_eq!(PublicationMethod::Direct, method(&outcome));
+    assert!(diagnostics(&outcome).is_empty());
+    assert_eq!(PersistCleanupState::Complete, cleanup_state(&outcome));
+}

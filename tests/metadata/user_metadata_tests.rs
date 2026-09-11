@@ -31,3 +31,18 @@ fn test_user_metadata_accepts_keys_with_uri_delimiters() {
     assert!(metadata.contains_key("password=like"));
     assert!(UserMetadata::new().with("password", "secret").is_err());
 }
+
+#[test]
+fn test_user_metadata_accessors_are_callable_directly() {
+    let metadata = UserMetadata::new()
+        .with("region", "private-region")
+        .expect("safe key should be accepted");
+    let get: for<'a> fn(&'a UserMetadata, &str) -> Option<&'a str> = UserMetadata::get;
+    let is_empty: fn(&UserMetadata) -> bool = UserMetadata::is_empty;
+    let contains_key: fn(&UserMetadata, &str) -> bool = UserMetadata::contains_key;
+
+    assert_eq!(Some("private-region"), get(&metadata, "region"));
+    assert!(!is_empty(&metadata));
+    assert!(contains_key(&metadata, "region"));
+    assert_eq!(vec![("region", "private-region")], metadata.iter().collect::<Vec<_>>());
+}
