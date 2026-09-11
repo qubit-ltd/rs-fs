@@ -135,3 +135,89 @@ impl<'a> StreamCopyPlan<'a> {
         .with_target(self.target.clone())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::StreamCopyPlan;
+    use crate::copy::CopyConflictPolicy;
+    use crate::copy::CopyFailureState;
+    use crate::copy::CopyOptions;
+    use crate::error::FsErrorKind;
+    use crate::metadata::FileKind;
+    use crate::metadata::FileMetadata;
+    use crate::metadata::FileSystemLimit;
+    use crate::metadata::FileSystemLimits;
+    use crate::metadata::SymlinkPolicy;
+    use crate::path::Path;
+
+    fn plan(options: CopyOptions, limits: FileSystemLimits) -> StreamCopyPlan<'static> {
+        let options = Box::leak(Box::new(options));
+        let limits = Box::leak(Box::new(limits));
+        let source = Box::leak(Box::new(Path::parse("/source").unwrap()));
+        let target = Box::leak(Box::new(Path::parse("/target").unwrap()));
+        StreamCopyPlan::new(options, limits, source, target)
+    }
+
+    #[test]
+    fn validates_options_metadata_and_progress() {
+        let plan = plan(CopyOptions::default(), FileSystemLimits::unknown());
+        assert!(plan.validate_options(SymlinkPolicy::Reject).is_ok());
+        assert!(plan.validate_metadata(&FileMetadata::new(FileKind::File)).is_ok());
+        assert_eq!(plan.next_bytes(2, 3).unwrap(), 5);
+        assert_eq!(StreamCopyPlan::completed_stats(5).bytes, 5);
+        assert!(!plan.may_skip_conflict(CopyFailureState::Unchanged));
+        let _ = plan.writer_options();
+    }
+
+    #[test]
+    fn rejects_unsupported_options_and_limits() {
+        let tree = plan(CopyOptions::tree(), FileSystemLimits::unknown());
+        assert_eq!(
+            tree.validate_options(SymlinkPolicy::Reject).unwrap_err().kind(),
+            FsErrorKind::RequirementNotMet
+        );
+
+        let zero = plan(
+            CopyOptions::default().with_max_entries(Some(0)),
+            FileSystemLimits::unknown(),
+        );
+        assert_eq!(
+            zero.validate_options(SymlinkPolicy::Reject).unwrap_err().kind(),
+            FsErrorKind::ResourceLimitExceeded
+        );
+
+        let metadata = plan(CopyOptions::default(), FileSystemLimits::unknown());
+        assert_eq!(
+            metadata
+                .validate_metadata(&FileMetadata::new(FileKind::Directory))
+                .unwrap_err()
+                .kind(),
+            FsErrorKind::InvalidOptions
+        );
+        let limited = plan(
+            CopyOptions::default(),
+            FileSystemLimits::unknown().with_max_write_bytes(FileSystemLimit::Maximum(4)),
+        );
+        assert_eq!(
+            limited
+                .validate_metadata(&FileMetadata::new(FileKind::File).with_len(Some(5)))
+                .unwrap_err()
+                .kind(),
+            FsErrorKind::ResourceLimitExceeded
+        );
+        let budget = plan(
+            CopyOptions::default().with_max_bytes(Some(4)),
+            FileSystemLimits::unknown(),
+        );
+        assert_eq!(
+            budget.next_bytes(3, 2).unwrap_err().kind(),
+            FsErrorKind::ResourceLimitExceeded
+        );
+
+        let skip = plan(
+            CopyOptions::default().with_conflict(CopyConflictPolicy::Skip),
+            FileSystemLimits::unknown(),
+        );
+        assert!(skip.may_skip_conflict(CopyFailureState::Unchanged));
+    }
+}
