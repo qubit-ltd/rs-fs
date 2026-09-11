@@ -160,13 +160,22 @@ mod tests {
 
     #[test]
     fn validates_options_metadata_and_progress() {
-        let plan = plan(CopyOptions::default(), FileSystemLimits::unknown());
-        assert!(plan.validate_options(SymlinkPolicy::Reject).is_ok());
-        assert!(plan.validate_metadata(&FileMetadata::new(FileKind::File)).is_ok());
-        assert_eq!(plan.next_bytes(2, 3).unwrap(), 5);
+        let default_plan = plan(CopyOptions::default(), FileSystemLimits::unknown());
+        assert!(default_plan.validate_options(SymlinkPolicy::Reject).is_ok());
+        let symlink = plan(
+            CopyOptions::default().with_symlink_policy(SymlinkPolicy::Reject),
+            FileSystemLimits::unknown(),
+        );
+        assert!(symlink.validate_options(SymlinkPolicy::FollowWithinFileSystem).is_err());
+        assert!(
+            default_plan
+                .validate_metadata(&FileMetadata::new(FileKind::File))
+                .is_ok()
+        );
+        assert_eq!(default_plan.next_bytes(2, 3).unwrap(), 5);
         assert_eq!(StreamCopyPlan::completed_stats(5).bytes, 5);
-        assert!(!plan.may_skip_conflict(CopyFailureState::Unchanged));
-        let _ = plan.writer_options();
+        assert!(!default_plan.may_skip_conflict(CopyFailureState::Unchanged));
+        let _ = default_plan.writer_options();
     }
 
     #[test]
@@ -212,6 +221,20 @@ mod tests {
         assert_eq!(
             budget.next_bytes(3, 2).unwrap_err().kind(),
             FsErrorKind::ResourceLimitExceeded
+        );
+        assert_eq!(
+            budget.next_bytes(u64::MAX, 1).unwrap_err().kind(),
+            FsErrorKind::ResourceLimitExceeded
+        );
+
+        let object = plan(
+            CopyOptions::default(),
+            FileSystemLimits::unknown().with_max_write_bytes(FileSystemLimit::Maximum(5)),
+        );
+        assert!(
+            object
+                .validate_metadata(&FileMetadata::new(FileKind::Object).with_len(Some(5)))
+                .is_ok()
         );
 
         let skip = plan(
