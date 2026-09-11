@@ -9,6 +9,17 @@
 //! Filesystem error categories.
 
 /// Provider-neutral filesystem error category.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_fs::error::FsError;
+/// use qubit_fs::error::FsErrorKind;
+/// use qubit_fs::error::FsOperation;
+///
+/// let error = FsError::new(FsErrorKind::NotFound, FsOperation::Stat, "missing object");
+/// assert_eq!(FsErrorKind::NotFound, error.kind());
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum FsErrorKind {
