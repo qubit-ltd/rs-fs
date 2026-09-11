@@ -22,6 +22,15 @@ DOCUMENTS = {
     'doc/provider_guide.zh_CN.md': {'provider-minimal'},
 }
 PATTERN = re.compile(r'<!-- example: ([a-z-]+) -->\n```rust\n(.*?)\n```', re.S)
+RUST_FILE_HEADER = re.compile(
+    r'^// =============================================================================\n'
+    r'//    Copyright \(c\) [0-9]{4}(?: - [0-9]{4})? Haixing Hu\.\n'
+    r'//\n'
+    r'//    SPDX-License-Identifier: Apache-2\.0\n'
+    r'//\n'
+    r'//    Licensed under the Apache License, Version 2\.0\.\n'
+    r'// =============================================================================\n\n'
+)
 
 
 def check_examples():
@@ -32,7 +41,8 @@ def check_examples():
         assert {name for name, _ in matches} == expected, f'{relative}: missing or unexpected example IDs'
         assert len(matches) == len(expected), f'{relative}: duplicated example IDs'
         for name, code in matches:
-            assert code + '\n' == SOURCES[name].read_text(), f'{relative}: {name} differs from compiled fixture'
+            source = RUST_FILE_HEADER.sub('', SOURCES[name].read_text(), count=1)
+            assert code + '\n' == source, f'{relative}: {name} differs from compiled fixture'
 
 
 def check_package_links():
