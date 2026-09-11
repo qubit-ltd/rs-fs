@@ -8,6 +8,15 @@
 //! Provider-neutral operation effect state.
 
 /// Strongest known effect that a failed filesystem operation had on storage.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_fs::error::FsEffectState;
+///
+/// let unchanged = FsEffectState::Unchanged;
+/// assert!(matches!(unchanged, FsEffectState::Unchanged));
+/// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[non_exhaustive]
 #[must_use]
