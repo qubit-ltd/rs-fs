@@ -94,8 +94,7 @@ impl<'a> StreamCopyPlan<'a> {
 
     /// Adds a read count and enforces the caller byte budget.
     pub(crate) fn next_bytes(&self, total: u64, count: usize) -> Result<u64, FsError> {
-        let count = u64::try_from(count)
-            .map_err(|_| self.budget_error("copy byte count exceeds the filesystem API reporting range"))?;
+        let count = count as u64;
         let next = total
             .checked_add(count)
             .ok_or_else(|| self.budget_error("copy byte count exceeds the filesystem API reporting range"))?;
