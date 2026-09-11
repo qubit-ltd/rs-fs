@@ -29,6 +29,16 @@ use crate::error::FsResult;
 /// policy may classify additional provider-specific fields, but cannot make a
 /// standard sensitive component safe. Providers remain responsible for
 /// clearing credentials that neither policy recognizes.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_fs::path::ConnectionUri;
+///
+/// let uri = ConnectionUri::parse("s3://reports-bucket/daily.csv")?;
+/// assert_eq!("s3", uri.scheme());
+/// # Ok::<(), qubit_fs::FsError>(())
+/// ```
 #[derive(Clone, Eq, PartialEq)]
 pub struct ConnectionUri {
     /// RFC 3986 parser-owned raw connection URI representation.

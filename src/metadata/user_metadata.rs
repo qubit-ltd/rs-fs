@@ -17,6 +17,16 @@ use crate::error::FsErrorKind;
 use crate::error::FsOperation;
 
 /// An ordered string-to-string metadata map with safe structural formatting.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_fs::metadata::UserMetadata;
+///
+/// let metadata = UserMetadata::new().with("content-language", "en")?;
+/// assert_eq!(Some("en"), metadata.get("content-language"));
+/// # Ok::<(), qubit_fs::FsError>(())
+/// ```
 #[derive(Clone, Default, Eq, PartialEq)]
 pub struct UserMetadata(
     /// Ordered metadata pairs retained without automatic value formatting.

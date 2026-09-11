@@ -38,10 +38,10 @@ impl SpiRenameFailure {
         }
     }
 
-    /// Returns the error.
+    /// Returns the provider failure with filesystem context.
     ///
     /// # Returns
-    /// The provider failure with filesystem context.
+    /// A borrowed view of the contextual [`FsError`].
     #[inline(always)]
     #[must_use]
     pub fn error(&self) -> &FsError {

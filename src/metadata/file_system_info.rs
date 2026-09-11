@@ -17,6 +17,22 @@ use crate::path::PathSemantics;
 use crate::path::Uri;
 
 /// Construction-time local snapshot describing one filesystem object.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_fs::metadata::FileSystemId;
+/// use qubit_fs::metadata::FileSystemInfo;
+/// use qubit_fs::path::PathSemantics;
+///
+/// let info = FileSystemInfo::new(
+///     FileSystemId::new("local-instance")?,
+///     "local",
+///     PathSemantics::Hierarchical,
+/// );
+/// assert_eq!("local", info.provider_id());
+/// # Ok::<(), qubit_fs::FsError>(())
+/// ```
 #[derive(Clone, Debug, PartialEq)]
 pub struct FileSystemInfo {
     /// Stable identity of the configured filesystem.
