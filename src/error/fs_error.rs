@@ -29,6 +29,22 @@ use crate::path::Path;
 /// reports only whether a source exists; explicit diagnostic code may inspect
 /// it through [`Error::source`]. The message supplied by constructors must
 /// already be scrubbed of secret material.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_fs::Path;
+/// use qubit_fs::error::FsError;
+/// use qubit_fs::error::FsErrorKind;
+/// use qubit_fs::error::FsOperation;
+///
+/// let path = Path::parse("/reports/latest.csv")?;
+/// let error = FsError::new(FsErrorKind::NotFound, FsOperation::Stat, "object missing")
+///     .with_path(path.clone());
+/// assert_eq!(FsErrorKind::NotFound, error.kind());
+/// assert_eq!(Some(&path), error.path());
+/// # Ok::<(), qubit_fs::FsError>(())
+/// ```
 pub struct FsError {
     /// Error category.
     kind: FsErrorKind,
@@ -352,7 +368,7 @@ impl FsError {
         }
     }
 
-    /// Gets the error kind.
+    /// Returns the provider-neutral error category.
     ///
     /// # Returns
     /// Error category.
@@ -362,7 +378,7 @@ impl FsError {
         self.kind
     }
 
-    /// Gets the operation that produced this error.
+    /// Returns the operation that produced this error.
     ///
     /// # Returns
     /// The provider-neutral operation identifier.
@@ -372,7 +388,7 @@ impl FsError {
         self.operation
     }
 
-    /// Gets the primary path associated with this error.
+    /// Returns the primary path associated with this error.
     ///
     /// # Returns
     /// The path when one was attached.
@@ -382,7 +398,7 @@ impl FsError {
         self.path.as_deref()
     }
 
-    /// Gets the secondary target path associated with this error.
+    /// Returns the secondary target path associated with this error.
     ///
     /// # Returns
     /// The target path when one was attached.
@@ -392,21 +408,29 @@ impl FsError {
         self.target.as_deref()
     }
 
-    /// Gets the concrete source entry where the operation failed.
+    /// Returns the concrete source entry where the operation failed.
+    ///
+    /// # Returns
+    /// The structured source path when one was attached for copy, rename, or
+    /// similar multi-path operations.
     #[inline(always)]
     #[must_use]
     pub fn failure_path(&self) -> Option<&Path> {
         self.failure_path.as_deref()
     }
 
-    /// Gets the concrete destination entry where the operation failed.
+    /// Returns the concrete destination entry where the operation failed.
+    ///
+    /// # Returns
+    /// The structured destination path when one was attached for copy, rename,
+    /// or similar multi-path operations.
     #[inline(always)]
     #[must_use]
     pub fn failure_target(&self) -> Option<&Path> {
         self.failure_target.as_deref()
     }
 
-    /// Gets the provider associated with this error.
+    /// Returns the provider associated with this error.
     ///
     /// # Returns
     /// The canonical provider id when one was attached.
@@ -416,7 +440,7 @@ impl FsError {
         self.provider.as_deref()
     }
 
-    /// Gets the required capability associated with this error.
+    /// Returns the required capability associated with this error.
     ///
     /// # Returns
     /// The capability when the error describes unsupported functionality or
@@ -427,7 +451,7 @@ impl FsError {
         self.required_capability
     }
 
-    /// Gets the strongest known external effect of the failed operation.
+    /// Returns the strongest known external effect of the failed operation.
     ///
     /// # Returns
     ///
