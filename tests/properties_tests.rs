@@ -91,6 +91,18 @@ fn test_path_constraints_accept_matching_forms() {
     assert!(PathConstraints::either().validate(&absolute).is_ok());
 }
 
+#[test]
+fn path_constraints_accessors_are_callable_directly() {
+    let absolute = PathConstraints::absolute();
+    let relative = PathConstraints::relative();
+    let either = PathConstraints::either();
+    let form: fn(&PathConstraints) -> PathForm = PathConstraints::form;
+
+    assert_eq!(PathForm::Absolute, form(&absolute));
+    assert_eq!(PathForm::Relative, form(&relative));
+    assert_eq!(PathForm::Either, form(&either));
+}
+
 /// Verifies stream fallback does not overstate a provider copy capability.
 #[test]
 fn test_file_system_properties_does_not_derive_copy_from_read_and_write() {

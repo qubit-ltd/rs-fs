@@ -36,3 +36,15 @@ fn test_create_directory_options_with_user_metadata_replaces_metadata() {
 
     assert_eq!(options.user_metadata().get("owner"), Some("storage"));
 }
+
+#[test]
+fn test_create_directory_options_accessors_are_callable_directly() {
+    let options = CreateDirectoryOptions::default();
+    let recursive: fn(&CreateDirectoryOptions) -> bool = CreateDirectoryOptions::recursive;
+    let exists_ok: fn(&CreateDirectoryOptions) -> bool = CreateDirectoryOptions::exists_ok;
+    let user_metadata: fn(&CreateDirectoryOptions) -> &_ = CreateDirectoryOptions::user_metadata;
+
+    assert!(!recursive(&options));
+    assert!(!exists_ok(&options));
+    assert!(user_metadata(&options).is_empty());
+}

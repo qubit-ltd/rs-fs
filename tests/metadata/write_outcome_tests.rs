@@ -41,3 +41,21 @@ fn write_outcome_validates_and_safely_formats_diagnostics() {
     assert!(outcome.diagnostics().contains_key("request_id"));
     assert!(!format!("{outcome:?}").contains("private-request-id"));
 }
+
+#[test]
+fn write_outcome_accessors_are_callable_directly() {
+    let outcome = WriteOutcome::new(AchievedAtomicity::Atomic, PublicationMethod::Direct);
+    let bytes_written: fn(&WriteOutcome) -> Option<u64> = WriteOutcome::bytes_written;
+    let version: fn(&WriteOutcome) -> Option<&ResourceVersion> = WriteOutcome::version;
+    let atomicity: fn(&WriteOutcome) -> AchievedAtomicity = WriteOutcome::atomicity;
+    let method: fn(&WriteOutcome) -> PublicationMethod = WriteOutcome::method;
+    let durable: fn(&WriteOutcome) -> bool = WriteOutcome::durable;
+    let diagnostics: fn(&WriteOutcome) -> &_ = WriteOutcome::diagnostics;
+
+    assert_eq!(None, bytes_written(&outcome));
+    assert_eq!(None, version(&outcome));
+    assert_eq!(AchievedAtomicity::Atomic, atomicity(&outcome));
+    assert_eq!(PublicationMethod::Direct, method(&outcome));
+    assert!(!durable(&outcome));
+    assert!(diagnostics(&outcome).is_empty());
+}
