@@ -7,6 +7,8 @@
 // =============================================================================
 //! Shared, I/O-free planning for stream-copy fallback execution.
 
+use super::stream_copy_policy::fallback_options_supported;
+use super::stream_copy_policy::fallback_write_options;
 use crate::copy::CopyConflictPolicy;
 use crate::copy::CopyFailureState;
 use crate::copy::CopyOptions;
@@ -20,9 +22,6 @@ use crate::metadata::FileSystemLimits;
 use crate::metadata::SymlinkPolicy;
 use crate::path::Path;
 use crate::write::WriteOptions;
-
-use super::stream_copy_policy::fallback_options_supported;
-use super::stream_copy_policy::fallback_write_options;
 
 /// Immutable policy and progress decisions shared by sync and async fallback.
 pub(crate) struct StreamCopyPlan<'a> {

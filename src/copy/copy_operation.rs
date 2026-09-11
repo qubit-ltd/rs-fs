@@ -22,8 +22,8 @@ use super::fallback_failure_stats;
 use super::from_write_failure_state;
 use super::from_writer_state;
 use super::internal::CopyDeadline;
-use super::internal::from_completed_stats;
 use super::internal::StreamCopyPlan;
+use super::internal::from_completed_stats;
 use crate::FileSystem;
 use crate::error::FsError;
 use crate::error::FsErrorKind;
@@ -351,9 +351,7 @@ impl<'a> CopyOperation<'a> {
             Err(failure) => {
                 let (error, state) = failure.into_parts();
                 let state = from_write_failure_state(state);
-                if error.kind() == FsErrorKind::AlreadyExists
-                    && plan.may_skip_conflict(state)
-                {
+                if error.kind() == FsErrorKind::AlreadyExists && plan.may_skip_conflict(state) {
                     if let Err(cleanup_error) = writer.abort() {
                         return Err(self.failure(
                             cleanup_error,
@@ -449,9 +447,9 @@ impl<'a> CopyOperation<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::copy::internal::StreamCopyPlan;
     use crate::FileSystem;
     use crate::copy::CopyOptions;
+    use crate::copy::internal::StreamCopyPlan;
     use crate::error::FsOperation;
     use crate::error::FsResult;
     use crate::metadata::FileSystemCapabilities;
@@ -509,21 +507,16 @@ mod tests {
         let source = Path::parse("/source").expect("valid source path");
         let target = Path::parse("/target").expect("valid target path");
         let options = CopyOptions::default();
-        let plan = StreamCopyPlan::new(
-            &options,
-            filesystem.properties().limits(),
-            &source,
-            &target,
-        );
+        let plan = StreamCopyPlan::new(&options, filesystem.properties().limits(), &source, &target);
 
         assert_eq!(plan.next_bytes(4, 3).expect("value fits"), 7);
-        let error = plan
-            .next_bytes(u64::MAX, 1)
-            .expect_err("overflow must be rejected");
+        let error = plan.next_bytes(u64::MAX, 1).expect_err("overflow must be rejected");
         assert_eq!(error.kind(), crate::error::FsErrorKind::ResourceLimitExceeded);
         assert_eq!(error.operation(), FsOperation::Copy);
         assert_eq!(
-            plan.next_bytes(u64::MAX, 1).expect_err("overflow must be rejected").kind(),
+            plan.next_bytes(u64::MAX, 1)
+                .expect_err("overflow must be rejected")
+                .kind(),
             crate::error::FsErrorKind::ResourceLimitExceeded
         );
     }
