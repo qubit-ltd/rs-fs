@@ -24,6 +24,7 @@ pub(in crate::copy) struct CopyCancellationGuard<'a> {
     state: &'a mut AsyncCopyOperationState,
     /// Borrowed slot retaining an opened destination writer.
     writer: &'a mut Option<AsyncWriterRecovery>,
+    /// Borrowed snapshot retaining publication state and progress.
     recovery: &'a mut CopyRecoverySnapshot,
     /// Whether normal completion disarmed cancellation handling.
     finished: bool,

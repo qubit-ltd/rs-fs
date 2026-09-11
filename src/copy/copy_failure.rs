@@ -46,6 +46,7 @@ use crate::write::WriterRecovery;
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub struct CopyFailure {
+    /// Heap-owned error, publication state, progress, and recovery writer.
     parts: Box<CopyFailureParts>,
 }
 impl CopyFailure {

@@ -262,6 +262,8 @@ impl ListOptions {
         self.validate_common()?;
         self.validate_filter(semantics)
     }
+
+    /// Validates options that do not depend on path semantics.
     fn validate_common(&self) -> FsResult<()> {
         if self.page_size == Some(0) {
             return Err(FsError::new(
@@ -282,6 +284,8 @@ impl ListOptions {
         }
         Ok(())
     }
+
+    /// Validates the selected filter against provider path semantics.
     fn validate_filter(&self, semantics: PathSemantics) -> FsResult<()> {
         match (semantics, self.filter.as_ref()) {
             (PathSemantics::Hierarchical, Some(ListFilter::Subtree(prefix))) => {
