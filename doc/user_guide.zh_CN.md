@@ -1,11 +1,23 @@
-# Qubit FS 用户指南
+# Qubit FS 用户手册
 
-[English guide](user_guide.md) · [README](../README.zh_CN.md)
+[English](user_guide.md) | 简体中文
 
-本指南适用于 `qubit-fs` 0.7、Rust 1.94 及以上版本，面向通过已配置文件系统发布报告的应用。
-重点说明正常读写流程，以及写入、复制或取消未正常结束时，如何保留恢复所需的信息和资源。
+本手册针对 `qubit-fs` `0.7`、Rust 1.94 及以上版本。读者是通过已配置文件系统发布报告，
+并需要在写入、复制或取消未正常完成时保留恢复信息的 Rust 应用开发者。
 
-## 概念与配置
+## 手册目标与读者
+
+适合阅读本手册的场景包括：
+
+1. 业务逻辑只通过 `FileSystem` 或 `AsyncFileSystem` 读写，而不嵌入 provider SDK 细节；
+2. 读取、列举和复制都使用明确的选项与资源上限；
+3. 部分写入、复制或取消后，需要保留类型化的发布与清理事实；以及
+4. 根据这些事实选择重试、cleanup 或只读核查，而不是仅凭错误种类推断安全性。
+
+本手册覆盖 `qubit_fs` 公共 API 及面向应用的恢复模式，不替代 provider 指南，也不对
+公共 API 与测试无法证明的行为作出承诺。
+
+## 概念模型
 
 `FileSystem` 和 `AsyncFileSystem` 是应用使用的具体门面。存储提供者通过 `qubit_fs::spi`
 实现后端；发现、配置和凭据接入由 `qubit-fs-registry` 负责。核心库不附带后端，也不依赖异步
@@ -23,10 +35,24 @@
 | 清理 | 暂存或源资源是否已经释放；清理完成不代表目标已回滚。 |
 | 恢复句柄 | 仍需处理的会话所有权；没有句柄不代表没有副作用。 |
 
+## 实战场景：写入并读取本地报告
+
+假设批处理任务向已配置的存储写入状态报告，在字节上限内读回，并通过列举确认条目可见。
+成功标准包括：
+
+- 业务逻辑只使用公共门面与逻辑路径；
+- 读取遵守显式字节上限，而不是按整对象无界分配；
+- 列举以增量方式观察到已发布条目；以及
+- 若后续发布失败，应用可以先检查保留的事实，再决定重试或 cleanup。
+
+下文从最小安装与配置开始，依次说明本地报告路径、复制与异步恢复、错误决策和运行限制。
+
+## 安装与最小配置
+
 默认 feature 集为空，只提供同步 API。异步应用显式配置
 `qubit-fs = { version = "0.7", features = ["async"] }`，并使用自己已有的执行器；库不要求 Tokio。
 
-运行下方本地示例需要：
+运行本手册中的本地示例需要：
 
 ```toml
 [dependencies]
@@ -35,7 +61,9 @@ qubit-fs-local = "0.8"
 tempfile = "3"
 ```
 
-## 列举范围与有界读取
+## 核心工作流
+
+### 列举范围与有界读取
 
 列举层级目录或平面键前缀时，传入 `ListScope::Path(path)`；列举整个已配置的平面
 命名空间时，传入 `ListScope::Namespace`。层级文件系统拒绝 Namespace，列举其根目录
@@ -59,8 +87,7 @@ Conditional 或不支持范围读取的 provider 仍可顺序读取前缀。Best
 保留原请求；Required checksum 会返回 `RequirementNotMet`，因为仅读取前缀不能确认
 完整校验。需要该保证时使用完整的 `read_all`。返回和消费上限不等于网络预取量保证。
 
-
-## 写入并读取一份报告
+### 写入并读取一份报告
 
 把以下代码保存到 `src/main.rs`，执行 `cargo run`。它在独立的临时根目录内写入报告，读取时
 最多接收 1024 字节，最后输出 `report ready`。`tempfile` 仅用于示例目录；实际应用应使用
@@ -100,7 +127,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 范围读取按选中范围而非完整 metadata 长度计算；`read_prefix` 限制返回的前缀。
 writer 必须显式提交，flush 成功本身不代表已经发布。
 
-## 复制报告并保留恢复责任
+## 进阶用法
+
+### 复制报告并保留恢复责任
 
 下面的应用辅助函数复制一份已完成的报告。失败时返回原始 `CopyFailure`，保留发布状态、
 部分统计和可能存在的 writer；abort 失败另存为 `cleanup_error`。调用方应持续持有恢复对象，
@@ -147,7 +176,7 @@ pub fn copy_report(filesystem: &FileSystem, source: &Path, target: &Path) -> Res
 `ListOptions::object_keys().with_filter(ListFilter::LiteralPrefix(...))` 按原始文本匹配，
 不解码或规范化键，且要求根非空。提供者无法忠实表达该请求时可以拒绝。
 
-## 异步写入与取消
+### 异步写入与取消
 
 `begin_write_all` 消费 `Vec<u8>`，返回持有文件系统 clone、路径、选项和数据的 operation。
 借用数据需显式 `to_vec()`；需要分块传输时，直接管理 `AsyncFileWriter` 生命周期。
@@ -265,7 +294,9 @@ abort 失败后，返回对象同时保留 `cleanup_error` 和 writer。没有 w
 `begin_copy` 对异步流式复制采用相同的所有权原则。取消时持续持有 operation。
 `Drop` 不创建执行器，也不承担必须确认完成的异步清理；需要确认时显式 await。
 
-## 保证与错误决策
+## 错误与诊断
+
+### 保证与错误决策
 
 打开 writer 失败时，只有提供者明确报告 `FsEffectState::Unchanged` 且没有不确定错误，
 才能证明没有副作用。缺少 effect、`Applied`、`PartiallyApplied` 或不确定证据，都让整次
@@ -308,20 +339,7 @@ write/copy 归为 `Indeterminate`。打开步骤已生效不代表整文件已�
 选择重试、cleanup 或只读核查前，应同时查看 `failure.state()`、
 `failure.publication_target()` 和句柄的 `TempResourceState`。
 
-## 排障与运行限制
-
-- 找不到文件系统：配置后端或通过 registry 取得门面，核心库不会自行选择提供者。
-- 保证不受支持：核对有效能力和请求选项，再由应用决定更换提供者或调整要求。
-- 列举中途失败：保存已处理进度，并考虑后端一致性，不要假定快照语义。
-- 写入或复制结果不确定：持续持有 operation 和错误，先判断发布事实，再核查，避免隐式重试。
-- URI 被拒绝：凭据留在配置边界；`expose_unredacted` 仅用于受控消费，不能用于日志或缓存键。
-- 存在私有敏感字段：传入显式脱敏策略，标准策略仍是不可移除的底线；提供者应在构造规范 `Uri` 前移除未识别的私有凭据。
-- 内存和资源：`Vec` 所有权使整文件内存成本可见。为读取、列举、复制和临时资源设置适当限制；声明的限制不是并发请求的总配额。
-
-可移植契约不会把对象键变成层级路径，不保证所有后端支持全部能力，也不实现跨文件系统 move。
-平台行为和根目录权限边界由具体后端提供。
-
-## 打开失败与恢复协议
+### 打开失败与恢复协议
 
 同步、异步门面的 `open_writer`、`create_temp_file` 和 `create_temp_directory`
 均返回 `OpenFailure<R>`。`Preflight` 和 `ProviderOpen` 阶段没有可交回的会话；
@@ -350,7 +368,22 @@ persist 或原始 session。应用应保留错误，或用 `take_recovery` 接�
 provider 尚未交回的会话无法由核心接管。打开失败或取消之前在 provider 内部创建的资源，
 仍由 provider 负责保留和回收。
 
-## 读取窗口与分配上限
+## 排障
+
+- 找不到文件系统：配置后端或通过 registry 取得门面，核心库不会自行选择提供者。
+- 保证不受支持：核对有效能力和请求选项，再由应用决定更换提供者或调整要求。
+- 列举中途失败：保存已处理进度，并考虑后端一致性，不要假定快照语义。
+- 写入或复制结果不确定：持续持有 operation 和错误，先判断发布事实，再核查，避免隐式重试。
+- URI 被拒绝：凭据留在配置边界；`expose_unredacted` 仅用于受控消费，不能用于日志或缓存键。
+- 存在私有敏感字段：传入显式脱敏策略，标准策略仍是不可移除的底线；提供者应在构造规范 `Uri` 前移除未识别的私有凭据。
+- 内存和资源：`Vec` 所有权使整文件内存成本可见。为读取、列举、复制和临时资源设置适当限制；声明的限制不是并发请求的总配额。
+
+## 限制与最佳实践
+
+可移植契约不会把对象键变成层级路径，不保证所有后端支持全部能力，也不实现跨文件系统 move。
+平台行为和根目录权限边界由具体后端提供。
+
+### 读取窗口与分配上限
 
 `ReadOptions::validate()` 在能力检查、前缀优化和 provider I/O 之前拒绝显式
  offset + length 溢出，错误为 `InvalidOptions`；未提供 offset 时按零计算。
@@ -366,5 +399,9 @@ Guaranteed `RangeRead` 的 provider 生效。
 
 ## 延伸阅读
 
+- [README](../README.zh_CN.md)
+- [English user guide](user_guide.md)
 - [架构设计](file_system_design.zh_CN.md)
-- [API 文档](https://docs.rs/qubit-fs)
+- [English architecture](file_system_design.md)
+- [docs.rs API 文档](https://docs.rs/qubit-fs)
+- [仓库地址](https://github.com/qubit-ltd/rs-fs)

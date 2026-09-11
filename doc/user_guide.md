@@ -1,12 +1,29 @@
 # Qubit FS User Guide
 
-[中文指南](user_guide.zh_CN.md) · [README](../README.md)
+[简体中文](user_guide.zh_CN.md) | English
 
-This guide covers `qubit-fs` 0.7 for Rust 1.94 and later. It is for applications
-that publish reports through a configured filesystem and need to retain recovery
-facts when a write, copy, or cancellation does not complete normally.
+This guide describes `qubit-fs` `0.7` for Rust 1.94 and later. It is for
+applications that publish reports through a configured filesystem and need to
+retain recovery facts when a write, copy, or cancellation does not complete
+normally.
 
-## Model and setup
+## Purpose and Audience
+
+Use this guide when an application must:
+
+1. read and write through `FileSystem` or `AsyncFileSystem` without embedding
+   provider SDK details in business logic;
+2. bound reads, listings, and copies with explicit options and resource limits;
+3. retain typed publication and cleanup facts after partial writes, copies, or
+   cancellation; and
+4. choose retry, cleanup, or read-only reconciliation from those facts instead
+   of inferring safety from error kinds alone.
+
+The guide covers the public `qubit_fs` API and application-facing recovery
+patterns. It does not replace the provider guide or promise behavior that is not
+stated by the public API and tests.
+
+## Conceptual Model
 
 `FileSystem` and `AsyncFileSystem` are concrete application facades. Providers
 implement `qubit_fs::spi`; registry discovery, configuration, and credentials
@@ -27,11 +44,28 @@ prove that a resource exists or that future I/O will succeed.
 | Cleanup | Whether staging/source resources have been released; this does not prove target rollback. |
 | Recovery handle | Ownership of a session still needing a decision; its absence does not prove no side effects. |
 
+## Scenario: Publish and Read a Local Report
+
+Suppose a batch job writes a status report to configured storage, reads it back
+with a byte limit, and lists the directory to confirm visibility. Success means:
+
+- business logic uses only the public facade and logical paths;
+- the read respects an explicit byte limit rather than whole-object allocation;
+- listing observes the published entry incrementally; and
+- if publication fails later, the application can inspect retained facts before
+  retrying or cleaning up.
+
+The sections below start from minimal installation, walk through the local report
+path, then cover copy and async recovery, error decisions, and operational
+limits.
+
+## Installation and Minimal Configuration
+
 The default feature set is empty and provides synchronous APIs. Enable
 `qubit-fs = { version = "0.7", features = ["async"] }` for asynchronous APIs.
 The application chooses its executor; the library does not require Tokio.
 
-For the runnable local example, use:
+For the runnable local example in this guide, use:
 
 ```toml
 [dependencies]
@@ -40,7 +74,9 @@ qubit-fs-local = "0.8"
 tempfile = "3"
 ```
 
-## Listing scopes and bounded reads
+## Core Workflow
+
+### Listing scopes and bounded reads
 
 Pass `ListScope::Path(path)` to list a hierarchical directory or a raw flat-key
 prefix. Use `ListScope::Namespace` to list the entire configured flat namespace;
@@ -70,8 +106,7 @@ preserves the original request; Required checksum is rejected with
 Use a complete `read_all` when that guarantee is needed. Return and consumption
 bounds do not promise an identical bound on provider network prefetch.
 
-
-## Publish and read a report
+### Publish and read a report
 
 Put the following in `src/main.rs` and run `cargo run`. The example isolates its
 files in a temporary rooted filesystem, writes a report, reads at most 1024 bytes,
@@ -114,7 +149,9 @@ For larger data, use `open_reader` or `open_writer` and bounded chunks.
 than the entire metadata length. `read_prefix` bounds the returned prefix.
 Commit a writer explicitly; flushing alone does not confirm publication.
 
-## Copy and retain recovery responsibility
+## Advanced Usage
+
+### Copy and retain recovery responsibility
 
 A completed report can be copied using the following application helper. On
 failure it returns the original `CopyFailure`, its publication state, partial
@@ -166,7 +203,7 @@ Use `ListFilter::Subtree` for hierarchical subtrees. For flat object keys,
 raw prefix matching without decoding or normalizing keys. A nonempty root is
 required; providers can reject requests they cannot represent faithfully.
 
-## Async writing and cancellation
+### Async writing and cancellation
 
 `begin_write_all` consumes a `Vec<u8>` and returns an operation that owns a
 filesystem clone, path, options, and payload. Borrowed input must be explicitly
@@ -291,7 +328,9 @@ completion guarantees.
 Retain its operation across cancellation. `Drop` does not start an executor or
 perform required asynchronous cleanup; await cleanup when confirmation matters.
 
-## Guarantees and error decisions
+## Errors and Diagnostics
+
+### Guarantees and error decisions
 
 Writer opening only proves no side effects when the provider explicitly reports
 `FsEffectState::Unchanged` without an indeterminate error. Missing effect,
@@ -347,21 +386,7 @@ option error cannot make it owned again. Inspect `failure.state()`,
 `failure.publication_target()`, and the handle's `TempResourceState` before
 choosing retry, cleanup, or read-only reconciliation.
 
-## Diagnosis and operational limits
-
-- Missing backend: configure a provider or registry resolution; the core does not select one.
-- Unsupported requirement: inspect effective capabilities and request options; changing providers or requirements is an application decision.
-- Partial listing: preserve processed-entry progress and account for provider consistency; do not assume a snapshot.
-- Uncertain write/copy: retain operation and errors, inspect publication facts, then reconcile without implicit retry.
-- URI rejection: keep credentials at the configuration boundary. `expose_unredacted` is for controlled provider consumption, never logging or cache keys.
-- Custom secret names: use an explicit redaction policy. The standard policy remains a mandatory floor; providers must remove unrecognized private credentials before creating a canonical `Uri`.
-- Resource usage: `Vec` ownership makes whole-file memory cost explicit. Choose limits for reads, listings, copies and temporary resources; advertised limits are not aggregate quotas across concurrent requests.
-
-No portable contract turns object keys into hierarchical paths, guarantees every
-provider capability, or implements cross-filesystem move. Platform behavior and
-rooted authority are provided by the backend.
-
-## Opening failures and recovery
+### Opening failures and recovery
 
 `open_writer`, `create_temp_file`, and `create_temp_directory` return
 `OpenFailure<R>` in both facades. `Preflight` and `ProviderOpen` failures have no
@@ -396,7 +421,23 @@ indeterminate failures.
 The core cannot retain a session a provider has not returned. Providers remain
 responsible for resources created internally during failed or cancelled opening.
 
-## Read windows and allocation limits
+## Troubleshooting
+
+- Missing backend: configure a provider or registry resolution; the core does not select one.
+- Unsupported requirement: inspect effective capabilities and request options; changing providers or requirements is an application decision.
+- Partial listing: preserve processed-entry progress and account for provider consistency; do not assume a snapshot.
+- Uncertain write/copy: retain operation and errors, inspect publication facts, then reconcile without implicit retry.
+- URI rejection: keep credentials at the configuration boundary. `expose_unredacted` is for controlled provider consumption, never logging or cache keys.
+- Custom secret names: use an explicit redaction policy. The standard policy remains a mandatory floor; providers must remove unrecognized private credentials before creating a canonical `Uri`.
+- Resource usage: `Vec` ownership makes whole-file memory cost explicit. Choose limits for reads, listings, copies and temporary resources; advertised limits are not aggregate quotas across concurrent requests.
+
+## Limitations and Best Practices
+
+No portable contract turns object keys into hierarchical paths, guarantees every
+provider capability, or implements cross-filesystem move. Platform behavior and
+rooted authority are provided by the backend.
+
+### Read windows and allocation limits
 
 `ReadOptions::validate()` rejects explicit offset + length overflow as
 `InvalidOptions` before capability checks, prefix optimization, or provider I/O.
@@ -415,7 +456,11 @@ limits on provider/network prefetch. The local provider advertises conditional
 range support, so automatic prefix narrowing still requires a provider advertising
 `RangeRead` as Guaranteed.
 
-## Further reading
+## Further Reading
 
+- [README](../README.md)
+- [中文用户手册](user_guide.zh_CN.md)
 - [Architecture design](file_system_design.md)
-- [API reference](https://docs.rs/qubit-fs)
+- [中文架构设计](file_system_design.zh_CN.md)
+- [API documentation on docs.rs](https://docs.rs/qubit-fs)
+- [Repository](https://github.com/qubit-ltd/rs-fs)
