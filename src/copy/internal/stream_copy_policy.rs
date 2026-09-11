@@ -57,6 +57,7 @@ pub(crate) fn validate_stream_copy_length_limits(
     Ok(())
 }
 
+/// Returns whether the kind can be copied through a byte stream.
 #[inline]
 pub(crate) fn is_file_kind_supported(kind: FileKind) -> bool {
     matches!(kind, FileKind::File | FileKind::Object)

@@ -84,6 +84,7 @@ pub struct AsyncCopyOperation {
     writer: Option<AsyncWriterRecovery>,
     /// Monotonic start used to enforce caller elapsed-time budgets.
     deadline: CopyDeadline,
+    /// Publication state and progress retained for cancellation recovery.
     recovery: CopyRecoverySnapshot,
 }
 

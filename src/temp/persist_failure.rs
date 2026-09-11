@@ -23,6 +23,7 @@ pub struct PersistFailure {
     error: FsError,
     /// Provider-confirmed source and destination progress.
     state: PersistFailureState,
+    /// Destination path retained when publication reached a known target.
     publication_target: Option<Path>,
 }
 
@@ -44,6 +45,8 @@ impl PersistFailure {
             publication_target: None,
         }
     }
+
+    /// Retains the destination associated with a known publication attempt.
     pub(crate) fn with_publication_target(mut self, target: Option<&Path>) -> Self {
         self.publication_target = target.cloned();
         self
