@@ -361,12 +361,7 @@ No portable contract turns object keys into hierarchical paths, guarantees every
 provider capability, or implements cross-filesystem move. Platform behavior and
 rooted authority are provided by the backend.
 
-## Further reading
-
-- [Architecture design](file_system_design.md)
-- [API reference](https://docs.rs/qubit-fs)
-
-## Opening failures and recovery in 0.6
+## Opening failures and recovery
 
 `open_writer`, `create_temp_file`, and `create_temp_directory` return
 `OpenFailure<R>` in both facades. `Preflight` and `ProviderOpen` failures have no
@@ -419,3 +414,8 @@ These are returned-length and consumption bounds, not process RSS bounds or
 limits on provider/network prefetch. The local provider advertises conditional
 range support, so automatic prefix narrowing still requires a provider advertising
 `RangeRead` as Guaranteed.
+
+## Further reading
+
+- [Architecture design](file_system_design.md)
+- [API reference](https://docs.rs/qubit-fs)

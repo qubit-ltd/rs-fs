@@ -76,7 +76,7 @@ incomplete output. If publication fails, use the retained publication fact,
 source qualification, and `publication_target()` to decide between retry,
 cleanup, and read-only reconciliation.
 
-## What the facade makes explicit
+## Why this project exists and what the facade makes explicit
 
 - `Path` is a logical name inside one configured filesystem. `Uri` is the
   secret-free canonical addressing form, while `ConnectionUri` is configuration
@@ -94,8 +94,8 @@ cleanup, and read-only reconciliation.
   authentication, timeout, and I/O failures remain errors.
 - `DirectoryStream` reads entries incrementally. Consume it in a bounded loop
   instead of assuming that a directory is a preloaded collection.
-
-- Listing uses explicit `ListScope::Path` or flat `ListScope::Namespace`; prefix reads add a byte range only when `RangeRead` is Guaranteed.
+- Listing uses explicit `ListScope::Path` or flat `ListScope::Namespace`; prefix
+  reads add a byte range only when `RangeRead` is Guaranteed.
 
 ## Start here
 

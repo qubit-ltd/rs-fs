@@ -321,12 +321,7 @@ write/copy 归为 `Indeterminate`。打开步骤已生效不代表整文件已�
 可移植契约不会把对象键变成层级路径，不保证所有后端支持全部能力，也不实现跨文件系统 move。
 平台行为和根目录权限边界由具体后端提供。
 
-## 延伸阅读
-
-- [架构设计](file_system_design.zh_CN.md)
-- [API 文档](https://docs.rs/qubit-fs)
-
-## 0.6 的打开失败与恢复协议
+## 打开失败与恢复协议
 
 同步、异步门面的 `open_writer`、`create_temp_file` 和 `create_temp_directory`
 均返回 `OpenFailure<R>`。`Preflight` 和 `ProviderOpen` 阶段没有可交回的会话；
@@ -368,3 +363,8 @@ provider 尚未交回的会话无法由核心接管。打开失败或取消之�
 上限以外的探测字节。这些上限约束返回长度和消费量，不等于进程 RSS 或 provider／网络
 预取上限。本地 provider 的范围能力为 Conditional，自动缩小前缀请求仍只对声明
 Guaranteed `RangeRead` 的 provider 生效。
+
+## 延伸阅读
+
+- [架构设计](file_system_design.zh_CN.md)
+- [API 文档](https://docs.rs/qubit-fs)
