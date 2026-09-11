@@ -16,6 +16,16 @@ use crate::metadata::ResourceVersion;
 use crate::read::ChecksumPolicy;
 
 /// Options controlling a read operation.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_fs::read::ReadOptions;
+///
+/// let options = ReadOptions::default().with_length(Some(1_024));
+/// assert_eq!(Some(1_024), options.length());
+/// assert!(options.validate().is_ok());
+/// ```
 #[non_exhaustive]
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ReadOptions {
