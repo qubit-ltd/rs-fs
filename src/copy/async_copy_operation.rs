@@ -11,15 +11,12 @@ use qubit_io::AsyncInput;
 use qubit_io::AsyncOutput;
 
 use super::fallback_failure_stats;
-use super::fallback_options_supported;
 use super::from_writer_state;
 use super::internal::CopyCancellationGuard;
 use super::internal::CopyDeadline;
 use super::internal::CopyRecoverySnapshot;
-use super::internal::fallback_write_options;
 use super::internal::from_completed_stats;
-use super::is_file_kind_supported;
-use super::validate_stream_copy_length_limits;
+use super::internal::StreamCopyPlan;
 use crate::AsyncFileSystem;
 use crate::copy::AsyncCopyFailure;
 use crate::copy::AsyncCopyOperationState;
@@ -258,22 +255,10 @@ fn stream_copy_fallback<'a>(
 ) -> SpiFuture<'a, Result<CopyOutcome, AsyncCopyFailure>> {
     Box::pin(async move {
         let options = options.options();
-        if !fallback_options_supported(options, filesystem.properties().symlink_policy()) {
+        let plan = StreamCopyPlan::new(options, filesystem.properties().limits(), source, target);
+        if let Err(error) = plan.validate_options(filesystem.properties().symlink_policy()) {
             return Err(filesystem.contextual_copy_failure(
-                FsError::new(
-                    FsErrorKind::RequirementNotMet,
-                    FsOperation::Copy,
-                    "declined copy cannot use the stream fallback for these options",
-                ),
-                CopyFailureState::Unchanged,
-                CopyStats::default(),
-                source,
-                target,
-            ));
-        }
-        if options.max_entries() == Some(0) {
-            return Err(filesystem.contextual_copy_failure(
-                budget_error(source, target, "copy entry limit was exceeded"),
+                error,
                 CopyFailureState::Unchanged,
                 CopyStats::default(),
                 source,
@@ -313,36 +298,9 @@ fn stream_copy_fallback<'a>(
                 target,
             ));
         }
-        if !is_file_kind_supported(metadata.kind().clone()) {
-            return Err(filesystem.contextual_copy_failure(
-                FsError::new(
-                    FsErrorKind::InvalidOptions,
-                    FsOperation::Copy,
-                    "stream fallback only supports regular files and objects",
-                ),
-                CopyFailureState::Unchanged,
-                CopyStats::default(),
-                source,
-                target,
-            ));
-        }
-        if let Some(length) = metadata.len()
-            && let Err(error) =
-                validate_stream_copy_length_limits(filesystem.properties().limits(), source, target, length)
-        {
+        if let Err(error) = plan.validate_metadata(&metadata) {
             return Err(filesystem.contextual_copy_failure(
                 error,
-                CopyFailureState::Unchanged,
-                CopyStats::default(),
-                source,
-                target,
-            ));
-        }
-        if let Some(length) = metadata.len()
-            && options.max_bytes().is_some_and(|maximum| length > maximum)
-        {
-            return Err(filesystem.contextual_copy_failure(
-                budget_error(source, target, "copy byte limit was exceeded"),
                 CopyFailureState::Unchanged,
                 CopyStats::default(),
                 source,
@@ -370,7 +328,7 @@ fn stream_copy_fallback<'a>(
                 target,
             ));
         }
-        let writer_options = fallback_write_options(options);
+        let writer_options = plan.writer_options();
         match filesystem.open_writer(target, writer_options).await {
             Ok(writer) => *writer_slot = Some(AsyncWriterRecovery::Opened(Box::new(writer))),
             Err(error)
@@ -470,7 +428,7 @@ fn stream_copy_fallback<'a>(
                 .as_mut()
                 .and_then(AsyncWriterRecovery::opened_mut)
                 .expect("writer is retained before transfer");
-            let next_bytes = filesystem.add_copied_bytes(bytes, read, source).map_err(|error| {
+            let next_bytes = plan.next_bytes(bytes, read).map_err(|error| {
                 filesystem.contextual_copy_failure(
                     error,
                     from_writer_state(writer.state()),
@@ -479,15 +437,6 @@ fn stream_copy_fallback<'a>(
                     target,
                 )
             })?;
-            if options.max_bytes().is_some_and(|maximum| next_bytes > maximum) {
-                return Err(filesystem.contextual_copy_failure(
-                    budget_error(source, target, "copy byte limit was exceeded"),
-                    from_writer_state(writer.state()),
-                    fallback_failure_stats(writer.written_bytes()),
-                    source,
-                    target,
-                ));
-            }
             writer.write_fully_async(&buffer[..read]).await.map_err(|error| {
                 filesystem.contextual_copy_failure(
                     FsError::from_stream_io(error, FsOperation::Write, target),
@@ -547,8 +496,7 @@ fn stream_copy_fallback<'a>(
             Ok(outcome) => outcome,
             Err(failure)
                 if failure.error().kind() == FsErrorKind::AlreadyExists
-                    && options.conflict() == CopyConflictPolicy::Skip
-                    && from_writer_state(writer.state()) == CopyFailureState::Unchanged =>
+                    && plan.may_skip_conflict(from_writer_state(writer.state())) =>
             {
                 if let Err(cleanup_error) = writer.abort_async().await {
                     return Err(filesystem.contextual_copy_failure(
@@ -584,22 +532,14 @@ fn stream_copy_fallback<'a>(
             return Err(filesystem.contextual_copy_failure(
                 budget_error(source, target, "copy deadline was exceeded"),
                 CopyFailureState::Published,
-                CopyStats {
-                    files: 1,
-                    bytes,
-                    ..CopyStats::default()
-                },
+                StreamCopyPlan::completed_stats(bytes),
                 source,
                 target,
             ));
         }
         let _ = writer_slot.take();
         Ok(CopyOutcome::streamed_fallback(
-            CopyStats {
-                files: 1,
-                bytes,
-                ..CopyStats::default()
-            },
+            StreamCopyPlan::completed_stats(bytes),
             write_outcome.atomicity(),
             write_outcome.durable(),
         ))
