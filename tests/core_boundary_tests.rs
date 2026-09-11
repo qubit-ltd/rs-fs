@@ -117,12 +117,14 @@ fn test_public_value_accessors_preserve_core_contracts() {
         .with_prefix(String::from("prefix"))
         .with_suffix(String::from("suffix"));
     let _ = Path::from_components(true, vec![String::from("reports")]).expect("valid components");
+    assert!(Path::from_components(false, Vec::<String>::new()).is_err());
     let error = FsError::new(FsErrorKind::InvalidOptions, FsOperation::Copy, "test")
         .with_failure_path(Path::root())
         .with_failure_target(Path::root());
     assert_eq!(Some(&Path::root()), error.failure_path());
     let uri = ConnectionUri::parse("s3://bucket/key").expect("valid URI");
     assert_eq!("s3://bucket/key", uri.expose_unredacted(str::to_owned));
+    assert_eq!(15, uri.expose_unredacted(|text| text.len()));
 }
 
 /// Keeps accessor coverage from depending on compiler inlining decisions.
