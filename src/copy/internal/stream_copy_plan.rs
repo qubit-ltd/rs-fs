@@ -226,6 +226,7 @@ mod tests {
             budget.next_bytes(u64::MAX, 1).unwrap_err().kind(),
             FsErrorKind::ResourceLimitExceeded
         );
+        assert_eq!(budget.byte_count_error().kind(), FsErrorKind::ResourceLimitExceeded);
 
         let object = plan(
             CopyOptions::default(),
