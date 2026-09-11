@@ -33,6 +33,8 @@ use qubit_fs::copy::MetadataPreservePolicy;
 use qubit_fs::directory::CreateDirectoryOptions;
 use qubit_fs::directory::CreateDirectoryOutcome;
 use qubit_fs::directory::DeleteOutcome;
+use qubit_fs::directory::ListFilter;
+use qubit_fs::directory::ListOptions;
 use qubit_fs::error::FsError;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::error::FsOperation;
@@ -122,9 +124,28 @@ fn test_public_value_accessors_preserve_core_contracts() {
         .with_failure_path(Path::root())
         .with_failure_target(Path::root());
     assert_eq!(Some(&Path::root()), error.failure_path());
+    let sourced = FsError::with_source(
+        FsErrorKind::InvalidOptions,
+        FsOperation::Copy,
+        "test",
+        std::io::Error::other("cause"),
+    );
+    assert!(std::error::Error::source(&sourced).is_some());
     let uri = ConnectionUri::parse("s3://bucket/key").expect("valid URI");
     assert_eq!("s3://bucket/key", uri.expose_unredacted(str::to_owned));
     assert_eq!(15, uri.expose_unredacted(|text| text.len()));
+    assert!(
+        ListOptions::default()
+            .with_filter(Some(ListFilter::Subtree("nested/item".to_owned())))
+            .validate_for(PathSemantics::Hierarchical)
+            .is_ok()
+    );
+    assert!(
+        ListOptions::default()
+            .with_filter(Some(ListFilter::LiteralPrefix("item".to_owned())))
+            .validate_for(PathSemantics::Hierarchical)
+            .is_err()
+    );
 }
 
 /// Keeps accessor coverage from depending on compiler inlining decisions.
