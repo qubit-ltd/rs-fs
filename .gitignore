@@ -64,3 +64,6 @@ external/
 *.tar.gz
 *.rar
 *.7z
+
+# Local worktrees
+.worktrees/
