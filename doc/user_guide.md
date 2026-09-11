@@ -456,7 +456,7 @@ limits on provider/network prefetch. The local provider advertises conditional
 range support, so automatic prefix narrowing still requires a provider advertising
 `RangeRead` as Guaranteed.
 
-## Further Reading
+## Further reading
 
 - [README](../README.md)
 - [中文用户手册](user_guide.zh_CN.md)
