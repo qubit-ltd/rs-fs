@@ -68,3 +68,26 @@ impl SpiRenameFailure {
         (*self.error, self.state)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::SpiRenameFailure;
+    use crate::error::FsError;
+    use crate::error::FsErrorKind;
+    use crate::error::FsOperation;
+    use crate::rename::RenameFailureState;
+
+    #[test]
+    fn failure_facts_are_executed_at_runtime() {
+        let failure = SpiRenameFailure::new(
+            FsError::new(FsErrorKind::NotFound, FsOperation::Rename, "missing source"),
+            RenameFailureState::Indeterminate,
+        );
+        assert_eq!(failure.error().kind(), FsErrorKind::NotFound);
+        assert_eq!(failure.state(), RenameFailureState::Indeterminate);
+
+        let (error, state) = failure.into_parts();
+        assert_eq!(error.kind(), FsErrorKind::NotFound);
+        assert_eq!(state, RenameFailureState::Indeterminate);
+    }
+}

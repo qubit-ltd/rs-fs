@@ -521,3 +521,79 @@ impl<'a> CopyOperation<'a> {
             .with_provider(self.filesystem.properties().info().provider_id())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::CopyOperation;
+    use crate::FileSystem;
+    use crate::copy::CopyOptions;
+    use crate::error::FsOperation;
+    use crate::error::FsResult;
+    use crate::metadata::FileSystemCapabilities;
+    use crate::metadata::FileSystemId;
+    use crate::metadata::FileSystemInfo;
+    use crate::metadata::FileSystemLimits;
+    use crate::metadata::SymlinkPolicy;
+    use crate::path::Path;
+    use crate::path::PathConstraints;
+    use crate::path::PathSemantics;
+    use crate::spi::FileSystemSpi;
+    use crate::spi::ProviderOperations;
+    use crate::spi::ProviderProperties;
+    use crate::spi::StatRequest;
+    use crate::spi::StatResponse;
+
+    struct TestSpi {
+        properties: ProviderProperties,
+    }
+
+    impl FileSystemSpi for TestSpi {
+        fn properties(&self) -> ProviderProperties {
+            self.properties.clone()
+        }
+
+        fn stat(&self, _: StatRequest<'_>) -> FsResult<StatResponse> {
+            Err(crate::error::FsError::new(
+                crate::error::FsErrorKind::UnsupportedOperation,
+                FsOperation::Stat,
+                "unused test operation",
+            ))
+        }
+    }
+
+    fn test_filesystem() -> FileSystem {
+        let properties = ProviderProperties::new(
+            FileSystemInfo::new(
+                FileSystemId::new("copy-operation-test").expect("valid id"),
+                "test",
+                PathSemantics::Hierarchical,
+            ),
+            ProviderOperations::new(),
+            FileSystemCapabilities::new(),
+            FileSystemLimits::unknown(),
+            PathConstraints::absolute(),
+            SymlinkPolicy::Reject,
+        )
+        .expect("valid properties");
+        FileSystem::from_spi(TestSpi { properties }).expect("valid filesystem")
+    }
+
+    #[test]
+    fn copied_byte_accounting_is_executed_at_runtime() {
+        let filesystem = test_filesystem();
+        let source = Path::parse("/source").expect("valid source path");
+        let target = Path::parse("/target").expect("valid target path");
+        let operation = CopyOperation::new(&filesystem, &source, &target, CopyOptions::default());
+
+        assert_eq!(operation.add_copied_bytes(4, 3).expect("value fits"), 7);
+        let error = operation
+            .add_copied_bytes(u64::MAX, 1)
+            .expect_err("overflow must be rejected");
+        assert_eq!(error.kind(), crate::error::FsErrorKind::ResourceLimitExceeded);
+        assert_eq!(error.operation(), FsOperation::Copy);
+        assert_eq!(
+            operation.copy_byte_count_error().kind(),
+            crate::error::FsErrorKind::ResourceLimitExceeded
+        );
+    }
+}

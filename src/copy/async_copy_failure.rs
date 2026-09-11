@@ -96,3 +96,30 @@ impl Error for AsyncCopyFailure {
         Some(self.error())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::AsyncCopyFailure;
+    use crate::copy::CopyFailureState;
+    use crate::copy::CopyStats;
+    use crate::error::FsError;
+    use crate::error::FsErrorKind;
+    use crate::error::FsOperation;
+
+    #[test]
+    fn owned_parts_are_executed_at_runtime() {
+        let failure = AsyncCopyFailure::new(
+            FsError::new(FsErrorKind::NotFound, FsOperation::Copy, "missing source"),
+            CopyFailureState::Unchanged,
+            CopyStats {
+                files: 1,
+                ..CopyStats::default()
+            },
+        );
+
+        let (error, state, stats) = failure.into_parts();
+        assert_eq!(error.kind(), FsErrorKind::NotFound);
+        assert_eq!(state, CopyFailureState::Unchanged);
+        assert_eq!(stats.files, 1);
+    }
+}
