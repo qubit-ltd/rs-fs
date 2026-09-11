@@ -14,6 +14,7 @@ mod copy_failure_parts;
 #[cfg(feature = "async")]
 mod copy_recovery_snapshot;
 mod fallback_failure_state;
+mod stream_copy_plan;
 mod stream_copy_policy;
 
 #[cfg(feature = "async")]
@@ -26,7 +27,4 @@ pub(crate) use fallback_failure_state::fallback_failure_stats;
 pub(crate) use fallback_failure_state::from_completed_stats;
 pub(crate) use fallback_failure_state::from_write_failure_state;
 pub(crate) use fallback_failure_state::from_writer_state;
-pub(crate) use stream_copy_policy::fallback_options_supported;
-pub(crate) use stream_copy_policy::fallback_write_options;
-pub(crate) use stream_copy_policy::is_file_kind_supported;
-pub(crate) use stream_copy_policy::validate_stream_copy_length_limits;
+pub(crate) use stream_copy_plan::StreamCopyPlan;

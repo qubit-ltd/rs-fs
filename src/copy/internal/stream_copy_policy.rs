@@ -14,7 +14,6 @@ use crate::copy::ServerSidePreference;
 use crate::error::FsError;
 use crate::metadata::AtomicityRequirement;
 use crate::metadata::DurabilityRequirement;
-use crate::metadata::FileKind;
 use crate::metadata::FileSystemLimits;
 use crate::metadata::SymlinkPolicy;
 use crate::path::Path;
@@ -55,12 +54,6 @@ pub(crate) fn validate_stream_copy_length_limits(
 ) -> Result<(), FsError> {
     limits.validate_write_size_u64(target, length)?;
     Ok(())
-}
-
-/// Returns whether the kind can be copied through a byte stream.
-#[inline]
-pub(crate) fn is_file_kind_supported(kind: FileKind) -> bool {
-    matches!(kind, FileKind::File | FileKind::Object)
 }
 
 #[cfg(test)]

@@ -19,14 +19,11 @@ use super::CopyOptions;
 use super::CopyOutcome;
 use super::CopyStats;
 use super::fallback_failure_stats;
-use super::fallback_options_supported;
 use super::from_write_failure_state;
 use super::from_writer_state;
 use super::internal::CopyDeadline;
-use super::internal::fallback_write_options;
 use super::internal::from_completed_stats;
-use super::is_file_kind_supported;
-use super::validate_stream_copy_length_limits;
+use super::internal::StreamCopyPlan;
 use crate::FileSystem;
 use crate::error::FsError;
 use crate::error::FsErrorKind;
@@ -185,28 +182,16 @@ impl<'a> CopyOperation<'a> {
     /// Streams a copy through facade-owned handles when the provider declines.
     #[allow(clippy::result_large_err)]
     fn execute_stream_fallback(&self) -> Result<CopyOutcome, CopyFailure> {
-        if !fallback_options_supported(&self.options, self.filesystem.properties().symlink_policy()) {
-            return Err(self.failure(
-                FsError::new(
-                    FsErrorKind::RequirementNotMet,
-                    FsOperation::Copy,
-                    "declined copy cannot use the stream fallback for these options",
-                ),
-                CopyFailureState::Unchanged,
-                CopyStats::default(),
-                None,
-            ));
-        }
+        let plan = StreamCopyPlan::new(
+            &self.options,
+            self.filesystem.properties().limits(),
+            self.source,
+            self.target,
+        );
+        plan.validate_options(self.filesystem.properties().symlink_policy())
+            .map_err(|error| self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None))?;
         if let Some(error) = self.deadline_error() {
             return Err(self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None));
-        }
-        if self.options.max_entries() == Some(0) {
-            return Err(self.failure(
-                self.budget_error("copy entry limit was exceeded"),
-                CopyFailureState::Unchanged,
-                CopyStats::default(),
-                None,
-            ));
         }
         self.filesystem
             .core()
@@ -224,24 +209,8 @@ impl<'a> CopyOperation<'a> {
         if let Some(error) = self.deadline_error() {
             return Err(self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None));
         }
-        if !is_file_kind_supported(metadata.kind().clone()) {
-            return Err(self.failure(
-                FsError::new(
-                    FsErrorKind::InvalidOptions,
-                    FsOperation::Copy,
-                    "stream fallback only supports regular files and objects",
-                )
-                .with_path(self.source.clone()),
-                CopyFailureState::Unchanged,
-                CopyStats::default(),
-                None,
-            ));
-        }
-        if let Some(length) = metadata.len()
-            && let Err(error) = self.validate_fallback_length(length)
-        {
-            return Err(self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None));
-        }
+        plan.validate_metadata(&metadata)
+            .map_err(|error| self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None))?;
         let mut reader = self
             .filesystem
             .open_reader(self.source, ReadOptions::default())
@@ -249,7 +218,7 @@ impl<'a> CopyOperation<'a> {
         if let Some(error) = self.deadline_error() {
             return Err(self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None));
         }
-        let writer_options = fallback_write_options(&self.options);
+        let writer_options = plan.writer_options();
         let mut writer = match self.filesystem.open_writer(self.target, writer_options) {
             Ok(writer) => writer,
             Err(error)
@@ -324,7 +293,7 @@ impl<'a> CopyOperation<'a> {
             if read == 0 {
                 break;
             }
-            let next_bytes = match self.add_copied_bytes(bytes, read) {
+            let next_bytes = match plan.next_bytes(bytes, read) {
                 Ok(next_bytes) => next_bytes,
                 Err(error) => {
                     return Err(self.failure(
@@ -335,14 +304,6 @@ impl<'a> CopyOperation<'a> {
                     ));
                 }
             };
-            if self.options.max_bytes().is_some_and(|maximum| next_bytes > maximum) {
-                return Err(self.failure(
-                    self.budget_error("copy byte limit was exceeded"),
-                    from_writer_state(writer.state()),
-                    fallback_failure_stats(writer.written_bytes()),
-                    Some(writer),
-                ));
-            }
             if let Err(error) = Output::write_fully(&mut writer, &buffer[..read]) {
                 return Err(self.failure(
                     self.io_error(self.target, FsOperation::Write, error),
@@ -391,8 +352,7 @@ impl<'a> CopyOperation<'a> {
                 let (error, state) = failure.into_parts();
                 let state = from_write_failure_state(state);
                 if error.kind() == FsErrorKind::AlreadyExists
-                    && self.options.conflict() == CopyConflictPolicy::Skip
-                    && state == CopyFailureState::Unchanged
+                    && plan.may_skip_conflict(state)
                 {
                     if let Err(cleanup_error) = writer.abort() {
                         return Err(self.failure(
@@ -423,20 +383,12 @@ impl<'a> CopyOperation<'a> {
             return Err(self.failure(
                 error,
                 CopyFailureState::Published,
-                CopyStats {
-                    files: 1,
-                    bytes,
-                    ..CopyStats::default()
-                },
+                StreamCopyPlan::completed_stats(bytes),
                 None,
             ));
         }
         Ok(CopyOutcome::streamed_fallback(
-            CopyStats {
-                files: 1,
-                bytes,
-                ..CopyStats::default()
-            },
+            StreamCopyPlan::completed_stats(bytes),
             write_outcome.atomicity(),
             write_outcome.durable(),
         ))
@@ -478,33 +430,6 @@ impl<'a> CopyOperation<'a> {
         FsError::from_stream_io(error, operation, path).with_provider(self.filesystem.properties().info().provider_id())
     }
 
-    /// Adds a native read count to the public copy-statistics total.
-    fn add_copied_bytes(&self, total: u64, count: usize) -> FsResult<u64> {
-        let count = u64::try_from(count).map_err(|_| self.copy_byte_count_error())?;
-        total.checked_add(count).ok_or_else(|| self.copy_byte_count_error())
-    }
-
-    /// Builds the error for an unrepresentable copy byte count.
-    fn copy_byte_count_error(&self) -> FsError {
-        FsError::new(
-            FsErrorKind::ResourceLimitExceeded,
-            FsOperation::Copy,
-            "copy byte count exceeds the filesystem API reporting range",
-        )
-        .with_path(self.source.clone())
-        .with_provider(self.filesystem.properties().info().provider_id())
-    }
-
-    /// Validates provider and caller size limits before opening fallback
-    /// streams.
-    fn validate_fallback_length(&self, length: u64) -> FsResult<()> {
-        validate_stream_copy_length_limits(self.filesystem.properties().limits(), self.source, self.target, length)?;
-        if self.options.max_bytes().is_some_and(|maximum| length > maximum) {
-            return Err(self.budget_error("copy byte limit was exceeded"));
-        }
-        Ok(())
-    }
-
     /// Returns a caller-budget error when the elapsed-time limit expired.
     fn deadline_error(&self) -> Option<FsError> {
         if self.deadline.expired() {
@@ -524,7 +449,7 @@ impl<'a> CopyOperation<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::CopyOperation;
+    use crate::copy::internal::StreamCopyPlan;
     use crate::FileSystem;
     use crate::copy::CopyOptions;
     use crate::error::FsOperation;
@@ -583,16 +508,22 @@ mod tests {
         let filesystem = test_filesystem();
         let source = Path::parse("/source").expect("valid source path");
         let target = Path::parse("/target").expect("valid target path");
-        let operation = CopyOperation::new(&filesystem, &source, &target, CopyOptions::default());
+        let options = CopyOptions::default();
+        let plan = StreamCopyPlan::new(
+            &options,
+            filesystem.properties().limits(),
+            &source,
+            &target,
+        );
 
-        assert_eq!(operation.add_copied_bytes(4, 3).expect("value fits"), 7);
-        let error = operation
-            .add_copied_bytes(u64::MAX, 1)
+        assert_eq!(plan.next_bytes(4, 3).expect("value fits"), 7);
+        let error = plan
+            .next_bytes(u64::MAX, 1)
             .expect_err("overflow must be rejected");
         assert_eq!(error.kind(), crate::error::FsErrorKind::ResourceLimitExceeded);
         assert_eq!(error.operation(), FsOperation::Copy);
         assert_eq!(
-            operation.copy_byte_count_error().kind(),
+            plan.next_bytes(u64::MAX, 1).expect_err("overflow must be rejected").kind(),
             crate::error::FsErrorKind::ResourceLimitExceeded
         );
     }

@@ -651,30 +651,6 @@ impl AsyncFileSystem {
             .contract_error(path, FsOperation::ValidateProviderOutcome, message)
     }
 
-    /// Adds a native read count to the public `u64` copy-statistics total.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`FsErrorKind::ResourceLimitExceeded`] when the native count or
-    /// accumulated total cannot be represented by [`CopyStats`].
-    pub(crate) fn add_copied_bytes(&self, total: u64, count: usize, source: &Path) -> FsResult<u64> {
-        let count = u64::try_from(count).map_err(|_| self.copy_byte_count_error(source))?;
-        total
-            .checked_add(count)
-            .ok_or_else(|| self.copy_byte_count_error(source))
-    }
-
-    /// Builds the copy-statistics error for an unrepresentable byte count.
-    fn copy_byte_count_error(&self, source: &Path) -> FsError {
-        FsError::new(
-            FsErrorKind::ResourceLimitExceeded,
-            FsOperation::Copy,
-            "copy byte count exceeds the filesystem API reporting range",
-        )
-        .with_path(source.clone())
-        .with_provider(self.properties().info().provider_id())
-    }
-
     /// Validates a provider-opened handle identity before exposing it to
     /// callers.
     fn validate_opened_info(&self, info: &crate::metadata::OpenedFileInfo, path: &Path) -> FsResult<()> {
