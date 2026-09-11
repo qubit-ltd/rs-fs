@@ -26,7 +26,7 @@ impl ResourceVersion {
     ///
     /// # Returns
     /// A resource version preserving `value` exactly.
-    #[inline]
+    #[inline(always)]
     #[must_use]
     pub fn new(value: impl Into<String>) -> Self {
         Self(value.into())

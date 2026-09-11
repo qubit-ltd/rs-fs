@@ -37,7 +37,7 @@ impl TempOptions {
     }
 
     /// Returns the optional parent directory or prefix.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn parent(&self) -> Option<&Path> {
         self.parent.as_ref()
@@ -65,7 +65,7 @@ impl TempOptions {
     }
 
     /// Replaces the optional parent directory or prefix.
-    #[inline]
+    #[inline(always)]
     #[must_use]
     pub fn with_parent(mut self, parent: Option<Path>) -> Self {
         self.parent = parent;
@@ -73,7 +73,7 @@ impl TempOptions {
     }
 
     /// Replaces the generated resource name prefix.
-    #[inline]
+    #[inline(always)]
     #[must_use]
     pub fn with_prefix(mut self, prefix: impl Into<String>) -> Self {
         self.prefix = prefix.into();
@@ -81,7 +81,7 @@ impl TempOptions {
     }
 
     /// Replaces the generated resource name suffix.
-    #[inline]
+    #[inline(always)]
     #[must_use]
     pub fn with_suffix(mut self, suffix: impl Into<String>) -> Self {
         self.suffix = suffix.into();

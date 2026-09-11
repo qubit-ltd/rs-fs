@@ -62,6 +62,7 @@ impl Path {
     /// Each item is validated as one component without reparsing a joined path
     /// string. An empty absolute sequence produces the root; an empty relative
     /// sequence returns an invalid-path error.
+    #[inline(always)]
     pub fn from_components<I, S>(absolute: bool, components: I) -> FsResult<Self>
     where
         I: IntoIterator<Item = S>,
