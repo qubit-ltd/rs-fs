@@ -245,7 +245,7 @@ async fn execute_copy(
 
 /// Streams a declined asynchronous copy while retaining any recovery writer
 /// in `writer_slot` until publication or cleanup completes.
-#[cfg_attr(coverage, coverage(off))]
+#[inline(always)]
 fn stream_copy_fallback<'a>(
     filesystem: &'a AsyncFileSystem,
     source: &'a Path,
