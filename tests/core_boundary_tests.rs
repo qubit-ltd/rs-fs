@@ -33,6 +33,9 @@ use qubit_fs::copy::MetadataPreservePolicy;
 use qubit_fs::directory::CreateDirectoryOptions;
 use qubit_fs::directory::CreateDirectoryOutcome;
 use qubit_fs::directory::DeleteOutcome;
+use qubit_fs::error::FsError;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
 use qubit_fs::metadata::AchievedAtomicity;
 use qubit_fs::metadata::FileSystemId;
 use qubit_fs::metadata::FileSystemInfo;
@@ -40,6 +43,7 @@ use qubit_fs::metadata::NonSensitiveMetadata;
 use qubit_fs::metadata::PublicationMethod;
 use qubit_fs::metadata::ResourceVersion;
 use qubit_fs::metadata::UserMetadata;
+use qubit_fs::path::ConnectionUri;
 use qubit_fs::path::PathSemantics;
 use qubit_fs::read::ChecksumPolicy;
 use qubit_fs::read::ReadOptions;
@@ -113,6 +117,12 @@ fn test_public_value_accessors_preserve_core_contracts() {
         .with_prefix(String::from("prefix"))
         .with_suffix(String::from("suffix"));
     let _ = Path::from_components(true, vec![String::from("reports")]).expect("valid components");
+    let error = FsError::new(FsErrorKind::InvalidOptions, FsOperation::Copy, "test")
+        .with_failure_path(Path::root())
+        .with_failure_target(Path::root());
+    assert_eq!(Some(&Path::root()), error.failure_path());
+    let uri = ConnectionUri::parse("s3://bucket/key").expect("valid URI");
+    assert_eq!("s3://bucket/key", uri.expose_unredacted(str::to_owned));
 }
 
 /// Keeps accessor coverage from depending on compiler inlining decisions.
