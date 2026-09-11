@@ -52,3 +52,24 @@ impl CreateDirectoryOutcome {
         self.created_ancestors
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::hint::black_box;
+
+    use super::CreateDirectoryOutcome;
+
+    #[test]
+    fn outcome_accessors_are_executed_at_runtime() {
+        let constructor: fn(bool) -> CreateDirectoryOutcome = black_box(CreateDirectoryOutcome::new);
+        let with_ancestors: fn(CreateDirectoryOutcome, u64) -> CreateDirectoryOutcome =
+            black_box(CreateDirectoryOutcome::with_created_ancestors);
+        let already_existed: fn(CreateDirectoryOutcome) -> bool = black_box(CreateDirectoryOutcome::already_existed);
+        let created_ancestors: fn(CreateDirectoryOutcome) -> Option<u64> =
+            black_box(CreateDirectoryOutcome::created_ancestors);
+
+        let outcome = with_ancestors(constructor(true), 2);
+        assert!(already_existed(outcome));
+        assert_eq!(Some(2), created_ancestors(outcome));
+    }
+}

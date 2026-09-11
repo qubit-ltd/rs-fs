@@ -104,3 +104,24 @@ impl Default for TempOptions {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::TempOptions;
+    use crate::path::Path;
+
+    #[test]
+    fn option_accessors_are_executed_at_runtime() {
+        let parent = Path::parse("/tmp").expect("valid parent path");
+        let options = TempOptions::new()
+            .with_parent(Some(parent.clone()))
+            .with_prefix("prefix")
+            .with_suffix("suffix")
+            .with_create_parent(true);
+
+        assert_eq!(options.parent(), Some(&parent));
+        assert_eq!(options.prefix(), "prefix");
+        assert_eq!(options.suffix(), "suffix");
+        assert!(options.creates_parent());
+    }
+}

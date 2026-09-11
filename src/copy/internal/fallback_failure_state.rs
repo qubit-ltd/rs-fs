@@ -101,3 +101,41 @@ pub(crate) const fn fallback_failure_stats(bytes: u64) -> CopyStats {
         failed: 1,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::hint::black_box;
+
+    use super::from_completed_stats;
+    use crate::copy::CopyFailureState;
+    use crate::copy::CopyStats;
+
+    #[test]
+    fn completed_statistics_map_to_publication_states() {
+        let mapper: fn(&CopyStats) -> CopyFailureState = black_box(from_completed_stats);
+
+        assert_eq!(
+            CopyFailureState::Published,
+            mapper(&CopyStats {
+                files: 1,
+                ..CopyStats::default()
+            })
+        );
+        assert_eq!(
+            CopyFailureState::PartiallyPublished,
+            mapper(&CopyStats {
+                files: 1,
+                failed: 1,
+                ..CopyStats::default()
+            }),
+        );
+        assert_eq!(
+            CopyFailureState::Unchanged,
+            mapper(&CopyStats {
+                skipped: 1,
+                ..CopyStats::default()
+            }),
+        );
+        assert_eq!(CopyFailureState::Indeterminate, mapper(&CopyStats::default()));
+    }
+}

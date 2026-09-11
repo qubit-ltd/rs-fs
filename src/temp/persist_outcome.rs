@@ -104,3 +104,27 @@ impl PersistOutcome {
         self
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::PersistOutcome;
+    use crate::metadata::AchievedAtomicity;
+    use crate::metadata::PublicationMethod;
+    use crate::metadata::UserMetadata;
+    use crate::path::Path;
+    use crate::temp::PersistCleanupState;
+
+    #[test]
+    fn outcome_accessors_are_executed_at_runtime() {
+        let target = Path::parse("/target").expect("valid target path");
+        let outcome = PersistOutcome::new(target.clone(), AchievedAtomicity::Atomic, PublicationMethod::Direct)
+            .with_cleanup_state(PersistCleanupState::ResidualTemporaryContainer)
+            .with_diagnostics(UserMetadata::new());
+
+        assert_eq!(outcome.target(), &target);
+        assert_eq!(outcome.atomicity(), AchievedAtomicity::Atomic);
+        assert_eq!(outcome.method(), PublicationMethod::Direct);
+        assert_eq!(outcome.cleanup_state(), PersistCleanupState::ResidualTemporaryContainer);
+        assert!(outcome.diagnostics().is_empty());
+    }
+}

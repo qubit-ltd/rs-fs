@@ -115,3 +115,30 @@ impl Error for WriteAllFailure {
         Some(self.error.as_ref())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::hint::black_box;
+
+    use super::WriteAllFailure;
+    use crate::error::FsError;
+    use crate::error::FsErrorKind;
+    use crate::error::FsOperation;
+    use crate::write::WriteFailureState;
+
+    #[test]
+    fn failure_accessors_are_executed_at_runtime() {
+        let error: fn(&WriteAllFailure) -> &FsError = black_box(WriteAllFailure::error);
+        let recovery: fn(&WriteAllFailure) -> Option<&crate::write::WriterRecovery> =
+            black_box(WriteAllFailure::recovery);
+        let failure = WriteAllFailure::new(
+            FsError::new(FsErrorKind::NotFound, FsOperation::OpenWriter, "missing target"),
+            WriteFailureState::NotPublished,
+            4,
+            None,
+        );
+
+        assert_eq!(FsErrorKind::NotFound, error(&failure).kind());
+        assert!(recovery(&failure).is_none());
+    }
+}

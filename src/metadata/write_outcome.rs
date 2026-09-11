@@ -128,3 +128,23 @@ impl WriteOutcome {
         self
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::hint::black_box;
+
+    use super::WriteOutcome;
+    use crate::metadata::AchievedAtomicity;
+    use crate::metadata::NonSensitiveMetadata;
+    use crate::metadata::PublicationMethod;
+
+    #[test]
+    fn outcome_accessors_are_executed_at_runtime() {
+        let method: fn(&WriteOutcome) -> PublicationMethod = black_box(WriteOutcome::method);
+        let diagnostics: fn(&WriteOutcome) -> &NonSensitiveMetadata = black_box(WriteOutcome::diagnostics);
+        let outcome = WriteOutcome::new(AchievedAtomicity::Atomic, PublicationMethod::Direct);
+
+        assert_eq!(PublicationMethod::Direct, method(&outcome));
+        assert!(diagnostics(&outcome).is_empty());
+    }
+}

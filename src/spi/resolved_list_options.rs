@@ -49,3 +49,23 @@ impl ResolvedListOptions {
         self.symlink_policy
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::hint::black_box;
+
+    use super::ResolvedListOptions;
+    use crate::directory::ListOptions;
+    use crate::metadata::SymlinkPolicy;
+
+    #[test]
+    fn resolved_options_expose_their_values() {
+        let options = ListOptions::default().with_recursive(true);
+        let resolved = ResolvedListOptions::new(options.clone(), SymlinkPolicy::FollowWithinFileSystem);
+        let options_accessor: fn(&ResolvedListOptions) -> &ListOptions = black_box(ResolvedListOptions::options);
+        let policy_accessor: fn(&ResolvedListOptions) -> SymlinkPolicy = black_box(ResolvedListOptions::symlink_policy);
+
+        assert_eq!(&options, options_accessor(&resolved));
+        assert_eq!(SymlinkPolicy::FollowWithinFileSystem, policy_accessor(&resolved));
+    }
+}

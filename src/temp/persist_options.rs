@@ -121,3 +121,24 @@ impl Default for PersistOptions {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::PersistOptions;
+    use crate::copy::MetadataPreservePolicy;
+    use crate::metadata::AtomicityRequirement;
+
+    #[test]
+    fn option_accessors_are_executed_at_runtime() {
+        let options = PersistOptions::default()
+            .with_overwrite(true)
+            .with_atomicity(AtomicityRequirement::NotRequired)
+            .with_preserve_metadata(MetadataPreservePolicy::All)
+            .with_create_parent();
+
+        assert!(options.overwrite());
+        assert_eq!(options.atomicity(), AtomicityRequirement::NotRequired);
+        assert_eq!(options.preserve_metadata(), MetadataPreservePolicy::All);
+        assert!(options.creates_parent());
+    }
+}
