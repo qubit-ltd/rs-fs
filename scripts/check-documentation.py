@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 import os
 import subprocess
+import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / 'tests/fixtures/documentation_examples/src'
@@ -31,6 +32,32 @@ RUST_FILE_HEADER = re.compile(
     r'//    Licensed under the Apache License, Version 2\.0\.\n'
     r'// =============================================================================\n\n'
 )
+
+
+def markdown_documents():
+    """Return every Markdown document shipped by this crate."""
+    return sorted((ROOT / 'doc').glob('*.md')) + [ROOT / 'README.md', ROOT / 'README.zh_CN.md']
+
+
+def check_versions_and_structure():
+    """Keep shipped docs on the manifest version and stable navigation shape."""
+    manifest = tomllib.loads((ROOT / 'Cargo.toml').read_text())
+    version = manifest['package']['version']
+    major_minor = '.'.join(version.split('.')[:2])
+    stale = re.compile(r'(?<![0-9])0\.6(?:\.0)?(?![0-9])')
+    for path in markdown_documents():
+        content = path.read_text()
+        relative = path.relative_to(ROOT)
+        assert not stale.search(content), f'{relative}: contains stale 0.6 version text'
+        assert major_minor in content, f'{relative}: missing current package version {major_minor}'
+    for relative, heading in (
+        ('doc/provider_guide.md', '## 12. Further reading'),
+        ('doc/provider_guide.zh_CN.md', '## 12. 延伸阅读'),
+        ('doc/user_guide.md', '## Further reading'),
+        ('doc/user_guide.zh_CN.md', '## 延伸阅读'),
+    ):
+        headings = [line for line in (ROOT / relative).read_text().splitlines() if line.startswith('## ')]
+        assert headings and headings[-1] == heading, f'{relative}: further-reading section must be last'
 
 
 def check_examples():
@@ -67,6 +94,7 @@ def check_package_links():
 
 
 if __name__ == '__main__':
+    check_versions_and_structure()
     check_examples()
     check_package_links()
     print('Bilingual examples match compiled sources; package links resolve.')

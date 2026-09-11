@@ -192,7 +192,7 @@ authentication, timeout, and I/O errors must remain errors.
   documentation checker.
 - Review publication, cleanup, cancellation, and error-state behavior.
 
-## 12. Further reading
+## Related links
 
 - [User guide](user_guide.md) · [中文用户指南](user_guide.zh_CN.md)
 - [File-system design](file_system_design.md) ·
@@ -229,7 +229,7 @@ preserves the original request; Required checksum is rejected with
 Use a complete `read_all` when that guarantee is needed. Return and consumption
 bounds do not promise an identical bound on provider network prefetch.
 
-## Opening failures and recovery in 0.6
+## Opening failures and recovery in 0.7
 
 `open_writer`, `create_temp_file`, and `create_temp_directory` return
 `OpenFailure<R>` in both facades. `Preflight` and `ProviderOpen` failures have no
@@ -282,3 +282,10 @@ These are returned-length and consumption bounds, not process RSS bounds or
 limits on provider/network prefetch. The local provider advertises conditional
 range support, so automatic prefix narrowing still requires a provider advertising
 `RangeRead` as Guaranteed.
+
+## 12. Further reading
+
+- [User guide](user_guide.md) · [中文用户指南](user_guide.zh_CN.md)
+- [File-system design](file_system_design.md) ·
+  [中文设计文档](file_system_design.zh_CN.md)
+- [API reference](https://docs.rs/qubit-fs)

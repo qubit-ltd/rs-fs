@@ -215,7 +215,7 @@ Conditional 或不支持范围读取的 provider 仍可顺序读取前缀。Best
 保留原请求；Required checksum 会返回 `RequirementNotMet`，因为仅读取前缀不能确认
 完整校验。需要该保证时使用完整的 `read_all`。返回和消费上限不等于网络预取量保证。
 
-## 0.6 的打开失败与恢复协议
+## 0.7 的打开失败与恢复协议
 
 同步、异步门面的 `open_writer`、`create_temp_file` 和 `create_temp_directory`
 均返回 `OpenFailure<R>`。`Preflight` 和 `ProviderOpen` 阶段没有可交回的会话；

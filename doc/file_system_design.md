@@ -268,7 +268,7 @@ preserves the original request; Required checksum is rejected with
 Use a complete `read_all` when that guarantee is needed. Return and consumption
 bounds do not promise an identical bound on provider network prefetch.
 
-## Opening failures and recovery in 0.6
+## Opening failures and recovery in 0.7
 
 `open_writer`, `create_temp_file`, and `create_temp_directory` return
 `OpenFailure<R>` in both facades. `Preflight` and `ProviderOpen` failures have no

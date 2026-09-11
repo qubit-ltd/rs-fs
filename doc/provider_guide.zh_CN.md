@@ -172,7 +172,7 @@ writer 和临时资源实现必须分别报告发布、清理和恢复失败。�
 - 运行 `cargo test --locked --all-features`、doctest、clippy、rustdoc 和文档校验器。
 - 审查发布、清理、取消和错误状态的行为。
 
-## 12. 延伸阅读
+## 相关链接
 
 - [English user guide](user_guide.md) · [中文用户指南](user_guide.zh_CN.md)
 - [English design](file_system_design.md) · [中文设计文档](file_system_design.zh_CN.md)
@@ -202,7 +202,7 @@ Conditional 或不支持范围读取的 provider 仍可顺序读取前缀。Best
 保留原请求；Required checksum 会返回 `RequirementNotMet`，因为仅读取前缀不能确认
 完整校验。需要该保证时使用完整的 `read_all`。返回和消费上限不等于网络预取量保证。
 
-## 0.6 的打开失败与恢复协议
+## 0.7 的打开失败与恢复协议
 
 同步、异步门面的 `open_writer`、`create_temp_file` 和 `create_temp_directory`
 均返回 `OpenFailure<R>`。`Preflight` 和 `ProviderOpen` 阶段没有可交回的会话；
@@ -244,3 +244,9 @@ provider 尚未交回的会话无法由核心接管。打开失败或取消之�
 上限以外的探测字节。这些上限约束返回长度和消费量，不等于进程 RSS 或 provider／网络
 预取上限。本地 provider 的范围能力为 Conditional，自动缩小前缀请求仍只对声明
 Guaranteed `RangeRead` 的 provider 生效。
+
+## 12. 延伸阅读
+
+- [English user guide](user_guide.md) · [中文用户指南](user_guide.zh_CN.md)
+- [English design](file_system_design.md) · [中文设计文档](file_system_design.zh_CN.md)
+- [API 文档](https://docs.rs/qubit-fs)
