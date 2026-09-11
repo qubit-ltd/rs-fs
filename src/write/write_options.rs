@@ -268,3 +268,35 @@ impl WriteOptions {
 fn missing_requirement(capability: FileSystemCapability, message: &str) -> FsError {
     FsError::new(FsErrorKind::RequirementNotMet, FsOperation::OpenWriter, message).with_required_capability(capability)
 }
+
+#[cfg(test)]
+mod tests {
+    use std::hint::black_box;
+
+    use super::WriteOptions;
+    use crate::metadata::Checksum;
+    use crate::metadata::ChecksumAlgorithm;
+    use crate::metadata::NonSensitiveMetadata;
+    use crate::write::WriteDisposition;
+    use crate::write::WritePrecondition;
+
+    #[test]
+    fn option_accessors_are_executed_at_runtime() {
+        let disposition: fn(&WriteOptions) -> WriteDisposition = black_box(WriteOptions::disposition);
+        let precondition: for<'a> fn(&'a WriteOptions) -> &'a WritePrecondition = black_box(WriteOptions::precondition);
+        let create_parent: fn(&WriteOptions) -> bool = black_box(WriteOptions::create_parent);
+        let user_metadata: fn(&WriteOptions) -> &NonSensitiveMetadata = black_box(WriteOptions::user_metadata);
+        let checksum: for<'a> fn(&'a WriteOptions) -> Option<&'a Checksum> = black_box(WriteOptions::checksum);
+
+        let options = WriteOptions::default()
+            .with_create_parent(true)
+            .with_disposition(WriteDisposition::CreateOrReplace)
+            .with_checksum(Some(Checksum::new(ChecksumAlgorithm::Sha256, "abc")));
+
+        assert_eq!(WriteDisposition::CreateOrReplace, disposition(&options));
+        assert!(matches!(precondition(&options), WritePrecondition::None));
+        assert!(create_parent(&options));
+        assert!(user_metadata(&options).is_empty());
+        assert!(checksum(&options).is_some());
+    }
+}

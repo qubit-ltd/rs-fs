@@ -117,3 +117,33 @@ impl RenameOutcome {
         &self.diagnostics
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::RenameOutcome;
+    use crate::metadata::AchievedAtomicity;
+    use crate::metadata::PublicationMethod;
+    use crate::metadata::UserMetadata;
+    use crate::path::Path;
+
+    #[test]
+    fn outcome_accessors_are_executed_at_runtime() {
+        let source = Path::parse("/source").expect("valid source path");
+        let target = Path::parse("/target").expect("valid target path");
+        let outcome = RenameOutcome::new(
+            source.clone(),
+            target.clone(),
+            AchievedAtomicity::Atomic,
+            PublicationMethod::AtomicRename,
+        )
+        .with_durable(true)
+        .with_diagnostics(UserMetadata::new());
+
+        assert_eq!(outcome.source(), &source);
+        assert_eq!(outcome.target(), &target);
+        assert_eq!(outcome.atomicity(), AchievedAtomicity::Atomic);
+        assert_eq!(outcome.method(), PublicationMethod::AtomicRename);
+        assert!(outcome.durable());
+        assert!(outcome.diagnostics().is_empty());
+    }
+}

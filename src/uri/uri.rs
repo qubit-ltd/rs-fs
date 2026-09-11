@@ -143,3 +143,30 @@ pub(crate) fn reject_secrets(parsed: &FluentUri<String>, policy: &RedactionPolic
 pub(crate) fn query_pair_is_sensitive(key: &str) -> bool {
     RedactionPolicy::standard().sensitivity_for(key).is_some()
 }
+
+#[cfg(test)]
+mod tests {
+    use std::hint::black_box;
+
+    use super::Uri;
+
+    #[test]
+    fn uri_accessors_are_executed_at_runtime() {
+        let parse: fn(&str) -> crate::error::FsResult<Uri> = black_box(Uri::parse);
+        let scheme: for<'a> fn(&'a Uri) -> &'a str = black_box(Uri::scheme);
+        let authority: for<'a> fn(&'a Uri) -> Option<&'a str> = black_box(Uri::authority);
+        let has_authority: fn(&Uri) -> bool = black_box(Uri::has_authority);
+        let path: for<'a> fn(&'a Uri) -> &'a str = black_box(Uri::path);
+        let query: for<'a> fn(&'a Uri) -> Option<&'a str> = black_box(Uri::query);
+        let as_str: for<'a> fn(&'a Uri) -> &'a str = black_box(Uri::as_str);
+
+        let uri = parse("HTTPS://example.test/path?query=value").expect("URI should parse");
+        assert_eq!("https", scheme(&uri));
+        assert_eq!(Some("example.test"), authority(&uri));
+        assert!(has_authority(&uri));
+        assert_eq!("/path", path(&uri));
+        assert_eq!(Some("query=value"), query(&uri));
+        assert_eq!("https://example.test/path?query=value", as_str(&uri));
+        assert_eq!(as_str(&uri), format!("{uri}"));
+    }
+}

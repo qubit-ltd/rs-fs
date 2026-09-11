@@ -221,3 +221,72 @@ impl CopyOutcome {
         None
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::hint::black_box;
+
+    use super::CopyOutcome;
+    use crate::copy::CopyMethod;
+    use crate::copy::CopyOptions;
+    use crate::copy::CopyStats;
+    use crate::copy::MetadataPreservePolicy;
+    use crate::metadata::AchievedAtomicity;
+    use crate::metadata::NonSensitiveMetadata;
+    use crate::metadata::ResourceVersion;
+
+    #[test]
+    fn outcome_accessors_are_executed_at_runtime() {
+        let constructor: fn(CopyStats, CopyMethod, AchievedAtomicity) -> CopyOutcome = black_box(CopyOutcome::new);
+        let metadata: fn(&CopyOutcome) -> MetadataPreservePolicy = black_box(CopyOutcome::metadata);
+        let target_version: for<'a> fn(&'a CopyOutcome) -> Option<&'a ResourceVersion> =
+            black_box(CopyOutcome::target_version);
+        let diagnostics: fn(&CopyOutcome) -> &NonSensitiveMetadata = black_box(CopyOutcome::diagnostics);
+        let with_target_version: fn(CopyOutcome, ResourceVersion) -> CopyOutcome =
+            black_box(CopyOutcome::with_target_version);
+        let with_diagnostics: fn(CopyOutcome, crate::metadata::UserMetadata) -> CopyOutcome =
+            black_box(CopyOutcome::with_diagnostics);
+
+        let outcome = with_diagnostics(
+            with_target_version(
+                constructor(CopyStats::default(), CopyMethod::Native, AchievedAtomicity::Atomic),
+                ResourceVersion::new("generation-7"),
+            ),
+            crate::metadata::UserMetadata::new(),
+        );
+        assert_eq!(MetadataPreservePolicy::None, metadata(&outcome));
+        assert_eq!(
+            Some("generation-7"),
+            target_version(&outcome).map(ResourceVersion::as_str)
+        );
+        assert!(diagnostics(&outcome).is_empty());
+
+        let bytes_exceeded = CopyOutcome::new(
+            CopyStats {
+                bytes: 11,
+                ..CopyStats::default()
+            },
+            CopyMethod::Native,
+            AchievedAtomicity::Atomic,
+        );
+        assert!(
+            bytes_exceeded
+                .contract_violation(&CopyOptions::default().with_max_bytes(Some(10)))
+                .is_some()
+        );
+
+        let entries_exceeded = CopyOutcome::new(
+            CopyStats {
+                files: 2,
+                ..CopyStats::default()
+            },
+            CopyMethod::Native,
+            AchievedAtomicity::Atomic,
+        );
+        assert!(
+            entries_exceeded
+                .contract_violation(&CopyOptions::tree().with_max_entries(Some(1)))
+                .is_some()
+        );
+    }
+}

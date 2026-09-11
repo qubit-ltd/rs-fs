@@ -192,3 +192,19 @@ impl FacadeCore {
         maximum.saturating_sub(accumulated).min(Self::PREFIX_BUFFER_SIZE)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::FacadeCore;
+    use crate::error::FsOperation;
+    use crate::path::Path;
+
+    #[test]
+    fn quantity_conversion_is_executed_at_runtime() {
+        let path = Path::parse("/facade-core").expect("valid path");
+        assert_eq!(
+            FacadeCore::quantity_from_usize(7, FsOperation::Read, &path, "test").expect("value fits"),
+            7,
+        );
+    }
+}

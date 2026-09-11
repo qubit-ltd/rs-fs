@@ -151,3 +151,36 @@ impl Error for CopyFailure {
         Some(self.error())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::hint::black_box;
+
+    use super::CopyFailure;
+    use crate::copy::CopyFailureState;
+    use crate::copy::CopyStats;
+    use crate::error::FsError;
+    use crate::error::FsErrorKind;
+    use crate::error::FsOperation;
+    use crate::write::WriterRecovery;
+
+    #[test]
+    fn recovery_accessors_are_executed_at_runtime() {
+        let has_recovery: fn(&CopyFailure) -> bool = black_box(CopyFailure::has_recovery);
+        let recovery: fn(&CopyFailure) -> Option<&WriterRecovery> = black_box(CopyFailure::recovery);
+        let recovery_mut: for<'a> fn(&'a mut CopyFailure) -> Option<&'a mut WriterRecovery> =
+            black_box(CopyFailure::recovery_mut);
+        let take_recovery: fn(&mut CopyFailure) -> Option<WriterRecovery> = black_box(CopyFailure::take_recovery);
+        let mut failure = CopyFailure::new(
+            FsError::new(FsErrorKind::NotFound, FsOperation::Copy, "missing source"),
+            CopyFailureState::Unchanged,
+            CopyStats::default(),
+            None,
+        );
+
+        assert!(!has_recovery(&failure));
+        assert!(recovery(&failure).is_none());
+        assert!(recovery_mut(&mut failure).is_none());
+        assert!(take_recovery(&mut failure).is_none());
+    }
+}

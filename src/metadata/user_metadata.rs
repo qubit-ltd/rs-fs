@@ -85,3 +85,19 @@ impl Debug for UserMetadata {
             .finish()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::UserMetadata;
+
+    #[test]
+    fn metadata_debug_and_iteration_are_executed_at_runtime() {
+        let metadata = UserMetadata::new()
+            .with("provider", "test")
+            .expect("ordinary metadata key should be accepted");
+        assert_eq!(metadata.get("provider"), Some("test"));
+        assert!(metadata.contains_key("provider"));
+        assert_eq!(metadata.iter().collect::<Vec<_>>(), vec![("provider", "test")]);
+        assert!(format!("{metadata:?}").contains("UserMetadata"));
+    }
+}

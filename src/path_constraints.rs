@@ -91,3 +91,20 @@ impl PathConstraints {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::hint::black_box;
+
+    use super::PathConstraints;
+    use crate::path::PathForm;
+
+    #[test]
+    fn relative_constructor_is_executed_at_runtime() {
+        let constructor: fn() -> PathConstraints = black_box(PathConstraints::relative);
+        let either_constructor: fn() -> PathConstraints = black_box(PathConstraints::either);
+
+        assert_eq!(PathForm::Relative, constructor().form());
+        assert_eq!(PathForm::Either, either_constructor().form());
+    }
+}

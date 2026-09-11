@@ -105,3 +105,26 @@ impl FileSystemInfo {
         &self.provider_metadata
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::FileSystemInfo;
+    use crate::metadata::FileSystemId;
+    use crate::metadata::UserMetadata;
+    use crate::path::PathSemantics;
+
+    #[test]
+    fn runtime_contract_covers_snapshot_accessors() {
+        let id = FileSystemId::new("file-system-info-test").expect("valid id");
+        let info = FileSystemInfo::new(id.clone(), "provider", PathSemantics::Hierarchical)
+            .with_scheme("file")
+            .expect("valid scheme")
+            .with_provider_metadata(UserMetadata::new());
+
+        assert_eq!(info.id(), &id);
+        assert_eq!(info.provider_id(), "provider");
+        assert_eq!(info.schemes(), &["file".to_owned()]);
+        assert_eq!(info.path_semantics(), PathSemantics::Hierarchical);
+        assert!(info.provider_metadata().is_empty());
+    }
+}

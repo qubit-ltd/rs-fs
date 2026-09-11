@@ -82,3 +82,33 @@ impl CreateDirectoryOptions {
         self
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::hint::black_box;
+
+    use super::CreateDirectoryOptions;
+    use crate::metadata::UserMetadata;
+
+    #[test]
+    fn option_accessors_are_executed_at_runtime() {
+        let constructor: fn() -> CreateDirectoryOptions = black_box(Default::default);
+        let recursive: fn(&CreateDirectoryOptions) -> bool = black_box(CreateDirectoryOptions::recursive);
+        let exists_ok: fn(&CreateDirectoryOptions) -> bool = black_box(CreateDirectoryOptions::exists_ok);
+        let user_metadata: fn(&CreateDirectoryOptions) -> &_ = black_box(CreateDirectoryOptions::user_metadata);
+        let with_recursive: fn(CreateDirectoryOptions, bool) -> CreateDirectoryOptions =
+            black_box(CreateDirectoryOptions::with_recursive);
+        let with_exists_ok: fn(CreateDirectoryOptions, bool) -> CreateDirectoryOptions =
+            black_box(CreateDirectoryOptions::with_exists_ok);
+        let with_user_metadata: fn(CreateDirectoryOptions, UserMetadata) -> CreateDirectoryOptions =
+            black_box(CreateDirectoryOptions::with_user_metadata);
+
+        let options = with_user_metadata(
+            with_exists_ok(with_recursive(constructor(), true), true),
+            UserMetadata::new(),
+        );
+        assert!(recursive(&options));
+        assert!(exists_ok(&options));
+        assert!(user_metadata(&options).is_empty());
+    }
+}
