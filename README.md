@@ -7,15 +7,12 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![中文文档](https://img.shields.io/badge/文档-中文版-blue.svg)](README.zh_CN.md)
 
-`qubit-fs` 0.7.0 is a provider-neutral, synchronous and asynchronous filesystem
+`qubit-fs` is a provider-neutral, synchronous and asynchronous filesystem
 abstraction for Rust 1.94 or later. It supplies application-facing concrete
 facades—`FileSystem` and `AsyncFileSystem`—instead of choosing a storage backend
 or an async runtime for you.
 
-The crate has no built-in backend. Providers implement extension contracts under
-`qubit_fs::spi`; provider discovery, configuration, and credential handling are
-the responsibility of `qubit-fs-registry`. This keeps application code on the
-public facade while allowing providers to be selected outside the core crate.
+## Installation
 
 ```toml
 [dependencies]
@@ -29,7 +26,7 @@ explicitly when it is needed:
 qubit-fs = { version = "0.7", features = ["async"] }
 ```
 
-## Try a local report workflow
+## Quick Start
 
 A report job can keep its reads and writes on `FileSystem` while provider setup
 chooses the storage authority. This executable demo creates an isolated local
@@ -76,7 +73,28 @@ incomplete output. If publication fails, use the retained publication fact,
 source qualification, and `publication_target()` to decide between retry,
 cleanup, and read-only reconciliation.
 
-## Why this project exists and what the facade makes explicit
+## Why This Project Exists
+
+Application code often needs the same read, write, copy, and listing workflow
+across local disks, object stores, and hosted filesystems, but provider SDKs
+expose different path models, error shapes, and recovery behavior. Scattering
+provider details through business logic makes retries, cleanup, and cancellation
+hard to reason about after a partial failure.
+
+`qubit-fs` keeps applications on concrete `FileSystem` and `AsyncFileSystem`
+facades while providers implement extension contracts under `qubit_fs::spi`.
+Provider discovery, configuration, and credential handling stay in
+`qubit-fs-registry`, so the core crate does not embed a backend or async runtime.
+
+## What It Provides—and What It Does Not
+
+The stable application surface is the public facade API, typed paths and URIs,
+explicit listing scopes, bounded reads, and recovery objects that retain
+publication facts across failed writes, copies, and cancellations. Detailed
+workflows, error tables, and operational limits are in the user guide; provider
+integration is documented separately.
+
+The facade makes these semantics explicit:
 
 - `Path` is a logical name inside one configured filesystem. `Uri` is the
   secret-free canonical addressing form, while `ConnectionUri` is configuration
@@ -97,15 +115,22 @@ cleanup, and read-only reconciliation.
 - Listing uses explicit `ListScope::Path` or flat `ListScope::Namespace`; prefix
   reads add a byte range only when `RangeRead` is Guaranteed.
 
-## Start here
+The core crate has no built-in backend and does not select an async runtime.
+It does not implement cross-filesystem move, guarantee every provider capability,
+or turn object keys into hierarchical paths without provider-specific rules.
+Platform roots and authority boundaries come from the configured provider.
+
+## Learn More
 
 - [English user guide](doc/user_guide.md)
+- [中文用户手册](doc/user_guide.zh_CN.md)
 - [English provider guide](doc/provider_guide.md)
-- [中文用户指南](doc/user_guide.zh_CN.md)
 - [中文 provider 指南](doc/provider_guide.zh_CN.md)
 - [Architecture design](doc/file_system_design.md)
 - [中文架构设计](doc/file_system_design.zh_CN.md)
-- [API reference](https://docs.rs/qubit-fs)
+- [API documentation on docs.rs](https://docs.rs/qubit-fs)
+- [中文 README](README.zh_CN.md)
+- [Repository](https://github.com/qubit-ltd/rs-fs)
 
 ## Testing
 

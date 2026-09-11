@@ -7,13 +7,11 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![English Document](https://img.shields.io/badge/Document-English-blue.svg)](README.md)
 
-`qubit-fs` 0.7.0 是 Rust 1.94 及以上版本可用的、与具体 provider 无关的文件系统抽象，
+`qubit-fs` 是 Rust 1.94 及以上版本可用的、与具体 provider 无关的文件系统抽象，
 同时提供同步和异步 API。它向应用提供具体门面 `FileSystem` 与
 `AsyncFileSystem`，但不会替应用选择存储后端或异步运行时。
 
-核心 crate 不含内置后端。provider 在 `qubit_fs::spi` 下实现扩展契约；provider 的
-发现、配置和凭据处理由 `qubit-fs-registry` 负责。因此应用代码只依赖公共门面，
-而 provider 的选择留在核心 crate 之外。
+## 安装
 
 ```toml
 [dependencies]
@@ -26,7 +24,7 @@ qubit-fs = "0.7"
 qubit-fs = { version = "0.7", features = ["async"] }
 ```
 
-## 运行一个本地报告示例
+## 快速开始
 
 报告任务通过 `FileSystem` 完成读写，由初始化代码选择存储位置。下面的完整示例创建独立的
 本地临时目录，写入报告，再以 1 KiB 上限读取，输出 `report ready`。退出时清理临时目录。
@@ -68,7 +66,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 完成后再调用 `persist`。这样最终报告名称不会提前暴露未完成内容。发布失败时，应结合保留的
 发布事实、源资格和 `publication_target()`，在重试、cleanup 与只读核查之间作出选择。
 
-## 为什么需要这个项目，以及门面明确表达的语义
+## 为什么需要这个项目
+
+业务代码往往需要在本地磁盘、对象存储和托管文件系统之间复用同一套读写、复制和
+列举流程，但各 provider SDK 的路径模型、错误形态和部分失败后的恢复方式并不一致。
+如果把 provider 细节散落到业务逻辑里，重试、cleanup 和取消后的状态就很难判断。
+
+`qubit-fs` 让应用只依赖具体的 `FileSystem` 与 `AsyncFileSystem` 门面，provider 在
+`qubit_fs::spi` 下实现扩展契约；发现、配置和凭据接入由 `qubit-fs-registry` 负责，
+核心 crate 不内置后端，也不绑定异步运行时。
+
+## 提供什么，以及不提供什么
+
+稳定的应用侧能力包括公共门面 API、类型化路径与 URI、明确的列举范围、有界读取，
+以及在写入、复制或取消未正常完成时保留发布事实的恢复对象。完整工作流、错误表和
+运行限制见用户手册；provider 集成见 provider 指南。
+
+门面对下列语义做了显式约定：
 
 - `Path` 是一个已配置 filesystem 内的逻辑名称。`Uri` 是不含 secret 的规范
   地址；`ConnectionUri` 是配置入口，可以接受凭据，但在 `Display` 和 `Debug` 中会
@@ -85,15 +99,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 - 列举范围由 `ListScope::Path` 或平面命名空间 `ListScope::Namespace` 明确指定；前缀读取
   仅在 `RangeRead` 为 Guaranteed 时自动添加范围。
 
-## 从这里开始
+核心 crate 不含内置后端，也不会替应用选择异步运行时。它不提供跨文件系统 move，
+不保证所有 provider 都支持全部能力，也不会在无 provider 规则的情况下把对象键自动
+变成层级路径。平台根目录和权限边界由所配置的 provider 决定。
+
+## 延伸阅读
 
 - [English user guide](doc/user_guide.md)
+- [中文用户手册](doc/user_guide.zh_CN.md)
 - [English provider guide](doc/provider_guide.md)
-- [中文用户指南](doc/user_guide.zh_CN.md)
 - [中文 provider 指南](doc/provider_guide.zh_CN.md)
 - [English architecture](doc/file_system_design.md)
 - [中文架构设计](doc/file_system_design.zh_CN.md)
-- [API 文档](https://docs.rs/qubit-fs)
+- [docs.rs API 文档](https://docs.rs/qubit-fs)
+- [English README](README.md)
+- [仓库地址](https://github.com/qubit-ltd/rs-fs)
 
 ## 测试
 
@@ -121,7 +141,7 @@ Copyright (c) 2025 - 2026. Haixing Hu. All rights reserved.
 ## 贡献
 
 欢迎贡献。请遵循 Rust API 指南，及时更新公共 API 文档与测试，并在提交
-Pull Request 前运行 `./align-ci.sh`格式化代码，运行`./ci-check.sh`对齐CI要求。
+Pull Request 前运行 `./align-ci.sh` 格式化代码，运行 `./ci-check.sh` 对齐 CI 要求。
 
 ## 作者
 
