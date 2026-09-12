@@ -2,7 +2,7 @@
 
 [中文设计](file_system_design.zh_CN.md) · [User guide](user_guide.md)
 
-This document describes the 0.7 design. It separates application policy,
+This document describes the 0.8 design. It separates application policy,
 provider capabilities, publication facts, and resource ownership. Rust 1.94,
 edition 2024, an empty default feature set, and opt-in `async` remain the baseline.
 
@@ -268,7 +268,7 @@ preserves the original request; Required checksum is rejected with
 Use a complete `read_all` when that guarantee is needed. Return and consumption
 bounds do not promise an identical bound on provider network prefetch.
 
-## Opening failures and recovery in 0.7
+## Opening failures and recovery in 0.8
 
 `open_writer`, `create_temp_file`, and `create_temp_directory` return
 `OpenFailure<R>` in both facades. `Preflight` and `ProviderOpen` failures have no
