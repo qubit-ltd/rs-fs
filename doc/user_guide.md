@@ -2,7 +2,7 @@
 
 [简体中文](user_guide.zh_CN.md) | English
 
-This guide describes `qubit-fs` `0.7` for Rust 1.94 and later. It is for
+This guide describes `qubit-fs` `0.8` for Rust 1.94 and later. It is for
 applications that publish reports through a configured filesystem and need to
 retain recovery facts when a write, copy, or cancellation does not complete
 normally.
@@ -62,14 +62,14 @@ limits.
 ## Installation and Minimal Configuration
 
 The default feature set is empty and provides synchronous APIs. Enable
-`qubit-fs = { version = "0.7", features = ["async"] }` for asynchronous APIs.
+`qubit-fs = { version = "0.8", features = ["async"] }` for asynchronous APIs.
 The application chooses its executor; the library does not require Tokio.
 
 For the runnable local example in this guide, use:
 
 ```toml
 [dependencies]
-qubit-fs = "0.7"
+qubit-fs = "0.8"
 qubit-fs-local = "0.8"
 tempfile = "3"
 ```

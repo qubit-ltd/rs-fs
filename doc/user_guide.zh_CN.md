@@ -2,7 +2,7 @@
 
 [English](user_guide.md) | 简体中文
 
-本手册针对 `qubit-fs` `0.7`、Rust 1.94 及以上版本。读者是通过已配置文件系统发布报告，
+本手册针对 `qubit-fs` `0.8`、Rust 1.94 及以上版本。读者是通过已配置文件系统发布报告，
 并需要在写入、复制或取消未正常完成时保留恢复信息的 Rust 应用开发者。
 
 ## 手册目标与读者
@@ -50,13 +50,13 @@
 ## 安装与最小配置
 
 默认 feature 集为空，只提供同步 API。异步应用显式配置
-`qubit-fs = { version = "0.7", features = ["async"] }`，并使用自己已有的执行器；库不要求 Tokio。
+`qubit-fs = { version = "0.8", features = ["async"] }`，并使用自己已有的执行器；库不要求 Tokio。
 
 运行本手册中的本地示例需要：
 
 ```toml
 [dependencies]
-qubit-fs = "0.7"
+qubit-fs = "0.8"
 qubit-fs-local = "0.8"
 tempfile = "3"
 ```
@@ -318,7 +318,7 @@ write/copy 归为 `Indeterminate`。打开步骤已生效不代表整文件已�
 符号链接策略的请求不能使用该 fallback。`CopyOptions::deadline` 是从 operation 构造时开始
 累计的协作式预算，在阶段边界检查，不是能打断任意 Pending future 的定时器。提供者错误仍是主错误。
 
-临时文件和目录有独立的所有权生命周期，提供 `cleanup`、`keep` 和 `persist`。0.7 的
+临时文件和目录有独立的所有权生命周期，提供 `cleanup`、`keep` 和 `persist`。0.8 的
 恢复快照包含两个相互独立的维度：保留的目标发布事实，以及当前源资格。
 
 | `PersistFailureState` | 保留的目标事实 | 源资格 | 安全的下一步 |

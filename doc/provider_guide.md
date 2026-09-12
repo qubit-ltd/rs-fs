@@ -2,7 +2,7 @@
 
 [中文版本](provider_guide.zh_CN.md)
 
-This guide targets `qubit-fs` 0.7 provider authors. It explains the smallest
+This guide targets `qubit-fs` 0.8 provider authors. It explains the smallest
 provider that can be trusted by the `FileSystem` facade, and the checks to run
 before publishing an adapter. It is not a backend tutorial, a credential
 manager, or a promise that every backend supports every operation.
@@ -229,7 +229,7 @@ preserves the original request; Required checksum is rejected with
 Use a complete `read_all` when that guarantee is needed. Return and consumption
 bounds do not promise an identical bound on provider network prefetch.
 
-## Opening failures and recovery in 0.7
+## Opening failures and recovery in 0.8
 
 `open_writer`, `create_temp_file`, and `create_temp_directory` return
 `OpenFailure<R>` in both facades. `Preflight` and `ProviderOpen` failures have no

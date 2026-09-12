@@ -2,7 +2,7 @@
 
 [English design](file_system_design.md) · [用户指南](user_guide.zh_CN.md)
 
-本文描述 0.7 的设计，明确区分应用策略、提供者能力、发布事实和资源所有权。
+本文描述 0.8 的设计，明确区分应用策略、提供者能力、发布事实和资源所有权。
 基线为 Rust 1.94、edition 2024；默认 feature 集为空，异步 API 通过 `async` 显式启用。
 
 ## 分层与所有权
@@ -215,7 +215,7 @@ Conditional 或不支持范围读取的 provider 仍可顺序读取前缀。Best
 保留原请求；Required checksum 会返回 `RequirementNotMet`，因为仅读取前缀不能确认
 完整校验。需要该保证时使用完整的 `read_all`。返回和消费上限不等于网络预取量保证。
 
-## 0.7 的打开失败与恢复协议
+## 0.8 的打开失败与恢复协议
 
 同步、异步门面的 `open_writer`、`create_temp_file` 和 `create_temp_directory`
 均返回 `OpenFailure<R>`。`Preflight` 和 `ProviderOpen` 阶段没有可交回的会话；
