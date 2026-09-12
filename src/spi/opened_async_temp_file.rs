@@ -13,6 +13,37 @@ use super::AsyncTempResourceSpi;
 use crate::metadata::OpenedFileInfo;
 
 /// An already-created asynchronous temporary-file handle.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::metadata::{FileKind, FileMetadata, FileSystemId, OpenedFileInfo};
+/// use qubit_fs::path::Path;
+/// use qubit_fs::spi::{AsyncTempResourceSpi, OpenedAsyncTempFile, PersistRequest, SpiFuture};
+/// use std::pin::Pin;
+///
+/// struct Session;
+/// impl AsyncTempResourceSpi for Session {
+///     fn cleanup<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, qubit_fs::error::FsResult<()>> {
+///         Box::pin(async { Ok(()) })
+///     }
+///     fn keep<'a>(
+///         self: Pin<&'a mut Self>,
+///     ) -> SpiFuture<'a, Result<qubit_fs::temp::PersistOutcome, qubit_fs::spi::SpiPersistFailure>> {
+///         Box::pin(async { unreachable!() })
+///     }
+///     fn persist<'a>(
+///         self: Pin<&'a mut Self>,
+///         _: PersistRequest<'a>,
+///     ) -> SpiFuture<'a, Result<qubit_fs::temp::PersistOutcome, qubit_fs::spi::SpiPersistFailure>> {
+///         Box::pin(async { unreachable!() })
+///     }
+/// }
+/// let info = OpenedFileInfo::new(FileSystemId::new("doc")?, Path::parse("/scratch")?)
+///     .with_metadata(FileMetadata::new(FileKind::File));
+/// let _opened = OpenedAsyncTempFile::new(info, Box::new(Session));
+/// # Ok::<(), qubit_fs::FsError>(())
+/// ```
 pub struct OpenedAsyncTempFile {
     /// Temporary-file identity claimed by the provider.
     info: OpenedFileInfo,

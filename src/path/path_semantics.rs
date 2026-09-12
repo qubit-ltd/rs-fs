@@ -8,6 +8,14 @@
 //! Path semantics exposed by filesystem implementations.
 
 /// Provider path semantics.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::path::PathSemantics;
+///
+/// assert_eq!(PathSemantics::Hierarchical, PathSemantics::default());
+/// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum PathSemantics {
     /// Hierarchical directory semantics.

@@ -13,6 +13,20 @@ use crate::error::FsError;
 use crate::write::WriteFailureState;
 
 /// Typed provider write failure preserving recovery state.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::error::{FsError, FsErrorKind, FsOperation};
+/// use qubit_fs::spi::SpiWriteFailure;
+/// use qubit_fs::write::WriteFailureState;
+///
+/// let failure = SpiWriteFailure::new(
+///     FsError::new(FsErrorKind::Io, FsOperation::Write, "failed"),
+///     WriteFailureState::NotPublished,
+/// );
+/// assert_eq!(WriteFailureState::NotPublished, failure.state());
+/// ```
 pub struct SpiWriteFailure {
     /// Provider failure with filesystem context.
     error: FsError,

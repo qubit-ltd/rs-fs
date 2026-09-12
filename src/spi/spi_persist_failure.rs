@@ -13,6 +13,20 @@ use crate::error::FsError;
 use crate::temp::PersistFailureState;
 
 /// Typed provider persist failure preserving partial publication state.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::error::{FsError, FsErrorKind, FsOperation};
+/// use qubit_fs::spi::SpiPersistFailure;
+/// use qubit_fs::temp::PersistFailureState;
+///
+/// let failure = SpiPersistFailure::new(
+///     FsError::new(FsErrorKind::Io, FsOperation::PersistTemp, "failed"),
+///     PersistFailureState::NotPublished,
+/// );
+/// assert_eq!(PersistFailureState::NotPublished, failure.state());
+/// ```
 pub struct SpiPersistFailure {
     /// Provider failure with filesystem context.
     error: FsError,

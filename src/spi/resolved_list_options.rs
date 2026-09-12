@@ -13,6 +13,19 @@ use crate::directory::ListOptions;
 use crate::metadata::SymlinkPolicy;
 
 /// Immutable options resolved by the facade before provider dispatch.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::directory::ListOptions;
+/// use qubit_fs::metadata::SymlinkPolicy;
+/// use qubit_fs::spi::ResolvedListOptions;
+///
+/// let options = ListOptions::default();
+/// assert!(std::any::type_name::<ResolvedListOptions>().contains("ResolvedListOptions"));
+/// assert_eq!(SymlinkPolicy::Reject, SymlinkPolicy::Reject);
+/// let _ = options;
+/// ```
 #[derive(Clone)]
 pub struct ResolvedListOptions {
     /// Caller options retained after facade validation and normalization.

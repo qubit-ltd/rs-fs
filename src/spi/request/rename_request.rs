@@ -13,6 +13,21 @@ use crate::path::Path;
 use crate::spi::ResolvedRenameOptions;
 
 /// A facade-created rename request.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::path::Path;
+/// use qubit_fs::rename::RenameOptions;
+/// use qubit_fs::spi::RenameRequest;
+///
+/// let source = Path::parse("/old")?;
+/// let target = Path::parse("/new")?;
+/// assert!(std::any::type_name::<RenameRequest<'_>>().contains("RenameRequest"));
+/// assert_ne!(source.as_str(), target.as_str());
+/// let _ = RenameOptions::default();
+/// # Ok::<(), qubit_fs::FsError>(())
+/// ```
 pub struct RenameRequest<'a> {
     /// Validated source path.
     source: &'a Path,

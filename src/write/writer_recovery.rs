@@ -20,6 +20,14 @@ use crate::write::RejectedWriter;
 /// Matching the variant is required before performing recovery. A rejected
 /// session cannot write or publish data. This value does not describe the
 /// historical publication state; use the failure snapshot for that fact.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::write::WriterRecovery;
+///
+/// fn observe(_recovery: WriterRecovery) {}
+/// ```
 #[must_use]
 pub enum WriterRecovery {
     /// A validated writer retained for explicit recovery.

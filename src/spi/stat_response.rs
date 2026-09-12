@@ -13,6 +13,21 @@ use crate::metadata::FileMetadata;
 use crate::path::Path;
 
 /// Provider metadata response bound to the path it describes.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::metadata::{FileKind, FileMetadata};
+/// use qubit_fs::path::Path;
+/// use qubit_fs::spi::StatResponse;
+///
+/// let response = StatResponse::new(
+///     Path::parse("/object")?,
+///     FileMetadata::new(FileKind::File),
+/// );
+/// assert_eq!("/object", response.path().as_str());
+/// # Ok::<(), qubit_fs::FsError>(())
+/// ```
 pub struct StatResponse {
     /// Logical path described by the response.
     path: Path,

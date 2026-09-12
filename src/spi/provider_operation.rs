@@ -10,6 +10,14 @@
 //! Provider entry-point identifiers used for facade dispatch.
 
 /// A concrete operation entry point implemented by a filesystem provider.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::spi::ProviderOperation;
+///
+/// assert!(matches!(ProviderOperation::Stat, ProviderOperation::Stat));
+/// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[repr(u8)]
 #[non_exhaustive]

@@ -13,6 +13,19 @@ use crate::copy::CopyOptions;
 use crate::metadata::SymlinkPolicy;
 
 /// Immutable options resolved by the facade before provider dispatch.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::copy::CopyOptions;
+/// use qubit_fs::metadata::SymlinkPolicy;
+/// use qubit_fs::spi::ResolvedCopyOptions;
+///
+/// let options = CopyOptions::default();
+/// assert!(std::any::type_name::<ResolvedCopyOptions>().contains("ResolvedCopyOptions"));
+/// assert_eq!(SymlinkPolicy::Reject, SymlinkPolicy::Reject);
+/// let _ = options;
+/// ```
 #[derive(Clone)]
 pub struct ResolvedCopyOptions {
     /// Caller options retained after facade validation and normalization.

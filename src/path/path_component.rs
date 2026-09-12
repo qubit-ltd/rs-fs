@@ -17,6 +17,16 @@ use crate::error::FsOperation;
 use crate::error::FsResult;
 
 /// A non-empty logical component that cannot express hierarchy or traversal.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::path::PathComponent;
+///
+/// let component = PathComponent::parse("reports")?;
+/// assert_eq!("reports", component.as_str());
+/// # Ok::<(), qubit_fs::FsError>(())
+/// ```
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct PathComponent(
     /// Validated component text containing no hierarchy or traversal marker.

@@ -8,6 +8,14 @@
 //! Atomicity requirement used by write, rename, and persist operations.
 
 /// Atomicity contract requested by an operation.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::metadata::AtomicityRequirement;
+///
+/// assert_eq!(AtomicityRequirement::Preferred, AtomicityRequirement::default());
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AtomicityRequirement {
     /// Success must be atomic; unsupported guarantees fail before side effects.

@@ -9,6 +9,14 @@
 //! Atomicity actually achieved by a completed operation.
 
 /// Atomicity guarantee actually achieved by a successful operation.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::metadata::AchievedAtomicity;
+///
+/// assert!(matches!(AchievedAtomicity::Atomic, AchievedAtomicity::Atomic));
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AchievedAtomicity {
     /// The externally visible state transition was atomic.

@@ -12,6 +12,16 @@
 use crate::temp::TempOptions;
 
 /// A facade-created temporary-directory request.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::spi::CreateTempDirectoryRequest;
+/// use qubit_fs::temp::TempOptions;
+///
+/// assert!(std::any::type_name::<CreateTempDirectoryRequest>().contains("CreateTempDirectoryRequest"));
+/// assert_eq!(TempOptions::default(), TempOptions::new());
+/// ```
 pub struct CreateTempDirectoryRequest {
     /// Validated temporary-directory creation options.
     options: TempOptions,

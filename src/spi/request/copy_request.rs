@@ -13,6 +13,21 @@ use crate::path::Path;
 use crate::spi::ResolvedCopyOptions;
 
 /// A facade-created copy request.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::copy::CopyOptions;
+/// use qubit_fs::path::Path;
+/// use qubit_fs::spi::CopyRequest;
+///
+/// let source = Path::parse("/source")?;
+/// let target = Path::parse("/target")?;
+/// assert!(std::any::type_name::<CopyRequest<'_>>().contains("CopyRequest"));
+/// assert_ne!(source.as_str(), target.as_str());
+/// let _ = CopyOptions::default();
+/// # Ok::<(), qubit_fs::FsError>(())
+/// ```
 pub struct CopyRequest<'a> {
     /// Validated source path.
     source: &'a Path,

@@ -11,6 +11,14 @@
 
 /// Stable copy state for recovery decisions; error text is not a state
 /// protocol.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::copy::CopyFailureState;
+///
+/// assert_eq!(CopyFailureState::Unchanged, CopyFailureState::Unchanged);
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CopyFailureState {
     /// No destination effect was published.

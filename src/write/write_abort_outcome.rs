@@ -9,6 +9,14 @@
 //! Publication certainty after writer cancellation.
 
 /// Provider-confirmed destination state after writer cleanup completes.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::write::WriteAbortOutcome;
+///
+/// assert!(matches!(WriteAbortOutcome::NotPublished, WriteAbortOutcome::NotPublished));
+/// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[must_use]
 pub enum WriteAbortOutcome {

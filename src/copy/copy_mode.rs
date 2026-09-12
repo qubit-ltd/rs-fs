@@ -8,6 +8,14 @@
 //! Copy source interpretation mode.
 
 /// Copy source interpretation mode.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::copy::CopyMode;
+///
+/// assert_eq!(CopyMode::Auto, CopyMode::default());
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CopyMode {
     /// Copy a single file, object, or resource.

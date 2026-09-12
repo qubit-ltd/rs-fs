@@ -10,6 +10,15 @@
 //! Deletion outcome.
 
 /// Result returned after a deletion request.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::directory::DeleteOutcome;
+///
+/// let outcome = DeleteOutcome::new(true);
+/// assert!(outcome.already_missing());
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DeleteOutcome {
     /// Whether an already-missing target satisfied the request.

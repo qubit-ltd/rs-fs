@@ -18,6 +18,19 @@ use crate::error::FsError;
 use crate::write::WriteFailureState;
 
 /// Write error paired with provider-confirmed publication progress.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::error::{FsError, FsErrorKind, FsOperation};
+/// use qubit_fs::write::{WriteFailure, WriteFailureState};
+///
+/// let failure = WriteFailure::new(
+///     FsError::new(FsErrorKind::Io, FsOperation::Write, "failed"),
+///     WriteFailureState::NotPublished,
+/// );
+/// assert_eq!(WriteFailureState::NotPublished, failure.state());
+/// ```
 #[derive(Debug)]
 pub struct WriteFailure {
     /// Contextual filesystem error returned by the write attempt.

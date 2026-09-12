@@ -16,6 +16,15 @@ use crate::metadata::ResourceVersion;
 use crate::metadata::UserMetadata;
 
 /// Stable and extensible metadata for one filesystem resource.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::metadata::{FileKind, FileMetadata};
+///
+/// let metadata = FileMetadata::new(FileKind::File).with_len(Some(42));
+/// assert_eq!(Some(42), metadata.len());
+/// ```
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub struct FileMetadata {

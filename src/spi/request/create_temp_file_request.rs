@@ -12,6 +12,16 @@
 use crate::temp::TempOptions;
 
 /// A facade-created temporary-file request.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::spi::CreateTempFileRequest;
+/// use qubit_fs::temp::TempOptions;
+///
+/// assert!(std::any::type_name::<CreateTempFileRequest>().contains("CreateTempFileRequest"));
+/// assert_eq!(TempOptions::default(), TempOptions::new());
+/// ```
 pub struct CreateTempFileRequest {
     /// Validated temporary-file creation options.
     options: TempOptions,

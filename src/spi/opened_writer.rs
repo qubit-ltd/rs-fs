@@ -13,6 +13,42 @@ use super::FileWriterSpi;
 use crate::metadata::OpenedFileInfo;
 
 /// An already-open provider writer.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::error::FsResult;
+/// use qubit_fs::metadata::{AchievedAtomicity, FileKind, FileMetadata, FileSystemId, OpenedFileInfo, PublicationMethod, WriteOutcome};
+/// use qubit_fs::path::Path;
+/// use qubit_fs::spi::{FileWriterSpi, SpiWriteFailure};
+/// use qubit_fs::spi::OpenedWriter;
+/// use qubit_fs::write::WriteAbortOutcome;
+/// use qubit_io::Output;
+/// use std::io::Result as IoResult;
+///
+/// struct Writer;
+/// impl Output for Writer {
+///     type Item = u8;
+///     unsafe fn write_unchecked(&mut self, _: &[u8], _: usize, count: usize) -> IoResult<usize> {
+///         Ok(count)
+///     }
+///     fn flush(&mut self) -> IoResult<()> {
+///         Ok(())
+///     }
+/// }
+/// impl FileWriterSpi for Writer {
+///     fn commit(&mut self) -> Result<WriteOutcome, SpiWriteFailure> {
+///         Ok(WriteOutcome::new(AchievedAtomicity::NonAtomic, PublicationMethod::Direct))
+///     }
+///     fn abort(&mut self) -> FsResult<WriteAbortOutcome> {
+///         Ok(WriteAbortOutcome::NotPublished)
+///     }
+/// }
+/// let info = OpenedFileInfo::new(FileSystemId::new("doc")?, Path::parse("/draft")?)
+///     .with_metadata(FileMetadata::new(FileKind::File));
+/// let _writer = OpenedWriter::new(info, Box::new(Writer));
+/// # Ok::<(), qubit_fs::FsError>(())
+/// ```
 pub struct OpenedWriter {
     /// Resource identity claimed by the provider.
     info: OpenedFileInfo,

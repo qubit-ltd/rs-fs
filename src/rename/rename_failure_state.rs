@@ -11,6 +11,14 @@
 
 /// Stable rename state for recovery decisions; error text is not a state
 /// protocol.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::rename::RenameFailureState;
+///
+/// assert!(matches!(RenameFailureState::Unchanged, RenameFailureState::Unchanged));
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RenameFailureState {
     /// Source and target were not changed.

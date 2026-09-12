@@ -13,6 +13,37 @@ use super::TempResourceSpi;
 use crate::metadata::OpenedFileInfo;
 
 /// An already-created provider temporary-directory session.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::error::FsResult;
+/// use qubit_fs::metadata::{FileKind, FileMetadata, FileSystemId, OpenedFileInfo};
+/// use qubit_fs::path::Path;
+/// use qubit_fs::spi::{OpenedTempDirectory, TempResourceSpi};
+///
+/// struct EmptyTemp;
+/// impl TempResourceSpi for EmptyTemp {
+///     fn persist(
+///         &mut self,
+///         _: qubit_fs::spi::PersistRequest<'_>,
+///     ) -> Result<qubit_fs::temp::PersistOutcome, qubit_fs::spi::SpiPersistFailure> {
+///         unreachable!()
+///     }
+///     fn keep(
+///         &mut self,
+///     ) -> Result<qubit_fs::temp::PersistOutcome, qubit_fs::spi::SpiPersistFailure> {
+///         unreachable!()
+///     }
+///     fn cleanup(&mut self) -> FsResult<()> {
+///         Ok(())
+///     }
+/// }
+/// let info = OpenedFileInfo::new(FileSystemId::new("doc")?, Path::parse("/tmp")?)
+///     .with_metadata(FileMetadata::new(FileKind::Directory));
+/// let _opened = OpenedTempDirectory::new(info, Box::new(EmptyTemp));
+/// # Ok::<(), qubit_fs::FsError>(())
+/// ```
 pub struct OpenedTempDirectory {
     /// Temporary-directory identity claimed by the provider.
     info: OpenedFileInfo,

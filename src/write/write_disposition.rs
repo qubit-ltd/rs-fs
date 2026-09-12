@@ -9,6 +9,14 @@
 //! Destination disposition for write operations.
 
 /// How opening a writer treats an existing destination.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::write::WriteDisposition;
+///
+/// assert_eq!(WriteDisposition::CreateOrReplace, WriteDisposition::default());
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WriteDisposition {
     /// Create a new destination and fail if one already exists.

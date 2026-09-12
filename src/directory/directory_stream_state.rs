@@ -9,6 +9,14 @@
 //! Directory stream lifecycle states.
 
 /// Lifecycle state of a directory enumeration handle.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::directory::DirectoryStreamState;
+///
+/// assert!(matches!(DirectoryStreamState::Open, DirectoryStreamState::Open));
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[must_use]
 pub enum DirectoryStreamState {

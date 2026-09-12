@@ -17,6 +17,15 @@ use crate::path::Path;
 use crate::path::PathSemantics;
 
 /// Stable limits declared by a configured filesystem provider.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::metadata::{FileSystemLimit, FileSystemLimits};
+///
+/// let limits = FileSystemLimits::unknown();
+/// assert_eq!(FileSystemLimit::Unknown, limits.max_path_text_bytes());
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct FileSystemLimits {
     /// Maximum encoded bytes accepted for a complete logical path.

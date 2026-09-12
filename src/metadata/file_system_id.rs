@@ -18,6 +18,16 @@ use crate::error::FsOperation;
 use crate::error::FsResult;
 
 /// Stable identity of one configured filesystem object.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::metadata::FileSystemId;
+///
+/// let id = FileSystemId::new("local-instance")?;
+/// assert_eq!("local-instance", id.as_str());
+/// # Ok::<(), qubit_fs::FsError>(())
+/// ```
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct FileSystemId(
     /// Validated provider-supplied identity text.

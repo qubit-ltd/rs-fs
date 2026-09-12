@@ -32,6 +32,16 @@ use crate::spi::SpiFuture;
 ///     recovery.keep();
 /// }
 /// ```
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::error::RecoveryCleanupState;
+/// use qubit_fs::temp::RejectedAsyncTempResource;
+///
+/// assert!(std::any::type_name::<RejectedAsyncTempResource>().contains("RejectedAsyncTempResource"));
+/// assert_eq!(RecoveryCleanupState::Pending, RecoveryCleanupState::Pending);
+/// ```
 #[must_use = "explicitly clean or retain the isolated recovery session"]
 pub struct RejectedAsyncTempResource {
     /// The actual provider session, retained independently of cleanup futures.

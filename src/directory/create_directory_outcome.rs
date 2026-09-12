@@ -10,6 +10,15 @@
 //! Directory creation outcome.
 
 /// Result returned after a directory creation request.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::directory::CreateDirectoryOutcome;
+///
+/// let outcome = CreateDirectoryOutcome::new(false);
+/// assert!(!outcome.already_existed());
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CreateDirectoryOutcome {
     /// Whether an existing directory satisfied the request.

@@ -20,6 +20,16 @@ use crate::metadata::ResourceVersion;
 use crate::metadata::UserMetadata;
 
 /// Outcome returned by copy operations.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::copy::{CopyMethod, CopyOutcome, CopyStats};
+/// use qubit_fs::metadata::AchievedAtomicity;
+///
+/// let outcome = CopyOutcome::new(CopyStats::default(), CopyMethod::Streamed, AchievedAtomicity::Atomic);
+/// assert_eq!(CopyMethod::Streamed, outcome.method());
+/// ```
 #[derive(Clone, Debug, PartialEq)]
 pub struct CopyOutcome {
     /// Aggregate counts and bytes reported for the completed copy.

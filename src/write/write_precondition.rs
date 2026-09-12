@@ -11,6 +11,14 @@
 use crate::metadata::ResourceVersion;
 
 /// Version precondition applied to a write operation.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::write::WritePrecondition;
+///
+/// assert!(matches!(WritePrecondition::None, WritePrecondition::None));
+/// ```
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum WritePrecondition {
     /// Do not require a version precondition.

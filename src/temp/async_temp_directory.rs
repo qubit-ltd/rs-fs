@@ -23,6 +23,22 @@ use crate::temp::PersistOutcome;
 use crate::temp::TempResourceState;
 
 /// A facade-owned asynchronous temporary directory.
+///
+/// # Examples
+///
+/// ```rust
+/// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
+/// # use support::*;
+/// # let (filesystem, _) = async_recording_spi::async_recording_file_system(Default::default());
+/// # poll_support::ready(async {
+/// use qubit_fs::temp::{TempOptions, TempResourceState};
+///
+/// let mut temporary = filesystem.create_temp_directory(TempOptions::default()).await?;
+/// temporary.cleanup().await?;
+/// assert_eq!(TempResourceState::Cleaned, temporary.state());
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// # }).unwrap();
+/// ```
 pub struct AsyncTempDirectory(
     /// Shared asynchronous temporary-resource lifecycle implementation.
     AsyncTempFile,

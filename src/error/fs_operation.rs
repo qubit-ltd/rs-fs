@@ -9,6 +9,15 @@
 //! Filesystem operation identifiers used in errors.
 
 /// Filesystem operation that produced an error.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::error::{FsError, FsErrorKind, FsOperation};
+///
+/// let error = FsError::new(FsErrorKind::NotFound, FsOperation::Stat, "missing");
+/// assert_eq!(FsOperation::Stat, error.operation());
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum FsOperation {

@@ -10,6 +10,14 @@
 //! A single configured filesystem limit.
 
 /// A provider-declared limit for one filesystem property.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::metadata::FileSystemLimit;
+///
+/// assert!(matches!(FileSystemLimit::Unknown, FileSystemLimit::Unknown));
+/// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum FileSystemLimit {
     /// The provider cannot report a stable limit at construction time.

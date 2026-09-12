@@ -17,6 +17,18 @@ use crate::metadata::UserMetadata;
 ///
 /// The inner [`UserMetadata`] is not mutably exposed, so every value of this
 /// type retains the wrapper invariant after construction.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::metadata::{NonSensitiveMetadata, UserMetadata};
+///
+/// let safe = NonSensitiveMetadata::from(
+///     UserMetadata::new().with("content-language", "en")?,
+/// );
+/// assert_eq!(Some("en"), safe.get("content-language"));
+/// # Ok::<(), qubit_fs::FsError>(())
+/// ```
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct NonSensitiveMetadata(
     /// Validated metadata whose keys do not resemble credential material.

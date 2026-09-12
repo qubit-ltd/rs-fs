@@ -9,6 +9,14 @@
 //! Temporary resource lifecycle states.
 
 /// Observable lifecycle and recovery state of a temporary resource handle.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::temp::TempResourceState;
+///
+/// assert!(matches!(TempResourceState::Owned, TempResourceState::Owned));
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TempResourceState {
     /// The handle owns cleanup responsibility for an unpublished source.

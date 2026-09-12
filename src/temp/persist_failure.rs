@@ -17,6 +17,19 @@ use crate::path::Path;
 use crate::temp::PersistFailureState;
 
 /// Persistence error paired with provider-confirmed partial progress.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::error::{FsError, FsErrorKind, FsOperation};
+/// use qubit_fs::temp::{PersistFailure, PersistFailureState};
+///
+/// let failure = PersistFailure::new(
+///     FsError::new(FsErrorKind::Io, FsOperation::PersistTemp, "failed"),
+///     PersistFailureState::NotPublished,
+/// );
+/// assert_eq!(PersistFailureState::NotPublished, failure.state());
+/// ```
 #[derive(Debug)]
 pub struct PersistFailure {
     /// Contextual filesystem error that interrupted persistence.

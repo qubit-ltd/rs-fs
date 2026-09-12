@@ -17,6 +17,16 @@ use crate::error::FsOperation;
 use crate::error::FsResult;
 
 /// A non-empty normalized relative path that cannot escape its base.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::path::RelativePath;
+///
+/// let relative = RelativePath::parse("reports/2026")?;
+/// assert_eq!("reports/2026", relative.as_str());
+/// # Ok::<(), qubit_fs::FsError>(())
+/// ```
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct RelativePath(
     /// Normalized descendant path text.

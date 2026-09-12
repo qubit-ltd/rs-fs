@@ -12,6 +12,22 @@
 use super::DirectoryStreamSpi;
 
 /// An already-open provider directory stream.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::error::FsResult;
+/// use qubit_fs::metadata::DirEntry;
+/// use qubit_fs::spi::{DirectoryStreamSpi, OpenedDirectoryStream};
+///
+/// struct EmptyStream;
+/// impl DirectoryStreamSpi for EmptyStream {
+///     fn next_entry(&mut self) -> FsResult<Option<DirEntry>> {
+///         Ok(None)
+///     }
+/// }
+/// let _stream = OpenedDirectoryStream::new(Box::new(EmptyStream));
+/// ```
 pub struct OpenedDirectoryStream {
     /// Provider enumeration session awaiting facade validation.
     stream: Box<dyn DirectoryStreamSpi>,

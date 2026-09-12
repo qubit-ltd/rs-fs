@@ -10,6 +10,14 @@
 use crate::path::Path;
 
 /// Options shared by temporary file and temporary directory creation.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::temp::TempOptions;
+///
+/// assert_eq!(TempOptions::default(), TempOptions::new());
+/// ```
 #[non_exhaustive]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TempOptions {

@@ -12,6 +12,15 @@
 use super::ProviderOperation;
 
 /// Immutable set of concrete operation entry points implemented by a provider.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::spi::{ProviderOperation, ProviderOperations};
+///
+/// let ops = ProviderOperations::new().with(ProviderOperation::Stat);
+/// assert!(ops.supports(ProviderOperation::Stat));
+/// ```
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct ProviderOperations {
     /// Bit flags indexed by [`ProviderOperation`] discriminants.

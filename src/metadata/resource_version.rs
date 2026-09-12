@@ -12,6 +12,15 @@ use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
 
 /// Opaque version, generation, or ETag reported by a provider.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::metadata::ResourceVersion;
+///
+/// let version = ResourceVersion::new("v1");
+/// assert_eq!("v1", version.as_str());
+/// ```
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ResourceVersion(
     /// Provider-defined opaque version text.
