@@ -63,6 +63,7 @@ struct Calls {
     cleanups: AtomicUsize,
     drops: AtomicUsize,
     fail: AtomicBool,
+    #[cfg(feature = "async")]
     pending: AtomicBool,
 }
 struct Provider(Arc<Calls>);
