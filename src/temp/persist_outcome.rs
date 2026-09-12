@@ -70,35 +70,35 @@ impl PersistOutcome {
     }
 
     /// Returns the final provider-local target path.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn target(&self) -> &Path {
         &self.target
     }
 
     /// Returns the atomicity actually achieved by publication.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn atomicity(&self) -> AchievedAtomicity {
         self.atomicity
     }
 
     /// Returns the concrete publication method used.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn method(&self) -> PublicationMethod {
         self.method
     }
 
     /// Returns provider-native non-sensitive diagnostics.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn diagnostics(&self) -> &NonSensitiveMetadata {
         &self.diagnostics
     }
 
     /// Returns the state of the private temporary container after publication.
-    #[inline(always)]
+    #[inline]
     pub const fn cleanup_state(&self) -> PersistCleanupState {
         self.cleanup_state
     }

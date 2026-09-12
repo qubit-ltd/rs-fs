@@ -46,21 +46,21 @@ impl Default for CreateDirectoryOptions {
 
 impl CreateDirectoryOptions {
     /// Returns whether missing parent directories should be created.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn recursive(&self) -> bool {
         self.recursive
     }
 
     /// Returns whether an existing directory should be accepted.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn exists_ok(&self) -> bool {
         self.exists_ok
     }
 
     /// Returns validated user-defined metadata.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn user_metadata(&self) -> &NonSensitiveMetadata {
         &self.user_metadata
@@ -83,7 +83,7 @@ impl CreateDirectoryOptions {
     }
 
     /// Replaces user-defined metadata that has already passed key validation.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn with_user_metadata(mut self, metadata: UserMetadata) -> Self {
         self.user_metadata = NonSensitiveMetadata::from(metadata);

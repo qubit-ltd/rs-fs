@@ -53,13 +53,13 @@ impl FacadeCore {
     }
 
     /// Returns the cached effective application-facing properties.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn properties(&self) -> &FileSystemProperties {
         &self.properties
     }
 
     /// Reports whether the captured provider exposes a concrete operation.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn provider_supports(&self, operation: ProviderOperation) -> bool {
         self.provider_operations.supports(operation)
     }
@@ -187,7 +187,7 @@ impl FacadeCore {
     }
 
     /// Returns the next bounded read length for an accumulated prefix.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn next_prefix_read_len(accumulated: usize, maximum: usize) -> usize {
         maximum.saturating_sub(accumulated).min(Self::PREFIX_BUFFER_SIZE)
     }

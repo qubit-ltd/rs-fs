@@ -49,7 +49,7 @@ impl PathComponent {
     }
 
     /// Returns the validated logical component text.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0

@@ -52,7 +52,7 @@ impl<'a> PersistRequest<'a> {
     ///
     /// # Returns
     /// The validated persistence destination.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn target(&self) -> &'a Path {
         self.target
@@ -62,7 +62,7 @@ impl<'a> PersistRequest<'a> {
     ///
     /// # Returns
     /// The immutable persistence requirements.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn options(&self) -> &PersistOptions {
         &self.options

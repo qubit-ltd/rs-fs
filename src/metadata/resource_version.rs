@@ -35,7 +35,7 @@ impl ResourceVersion {
     ///
     /// # Returns
     /// A resource version preserving `value` exactly.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn new(value: impl Into<String>) -> Self {
         Self(value.into())
@@ -60,7 +60,7 @@ impl Display for ResourceVersion {
 }
 
 impl AsRef<str> for ResourceVersion {
-    #[inline(always)]
+    #[inline]
     fn as_ref(&self) -> &str {
         self.as_str()
     }

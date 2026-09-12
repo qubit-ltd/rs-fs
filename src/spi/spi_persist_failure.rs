@@ -53,7 +53,7 @@ impl SpiPersistFailure {
     ///
     /// # Returns
     /// The provider failure with filesystem context.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn error(&self) -> &FsError {
         &self.error
@@ -63,7 +63,7 @@ impl SpiPersistFailure {
     ///
     /// # Returns
     /// The provider-confirmed persistence state.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn state(&self) -> PersistFailureState {
         self.state
@@ -73,7 +73,7 @@ impl SpiPersistFailure {
     ///
     /// # Returns
     /// The provider error and confirmed persistence state.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn into_parts(self) -> (FsError, PersistFailureState) {
         (self.error, self.state)

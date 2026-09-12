@@ -32,7 +32,7 @@ impl ProviderOperations {
     ///
     /// # Returns
     /// A set containing no provider operation entry points.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn new() -> Self {
         Self { bits: 0 }
@@ -45,7 +45,7 @@ impl ProviderOperations {
     ///
     /// # Returns
     /// The updated immutable operation set.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn with(mut self, operation: ProviderOperation) -> Self {
         self.bits |= 1_u128 << operation as u8;
@@ -59,7 +59,7 @@ impl ProviderOperations {
     ///
     /// # Returns
     /// `true` when the operation is present in this snapshot.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn supports(&self, operation: ProviderOperation) -> bool {
         self.bits & (1_u128 << operation as u8) != 0

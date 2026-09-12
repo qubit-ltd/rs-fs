@@ -56,7 +56,7 @@ impl WriteAllFailure {
         }
     }
     /// Returns the causal filesystem error.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn error(&self) -> &FsError {
         &self.error
@@ -79,19 +79,19 @@ impl WriteAllFailure {
         self.writer.take()
     }
     /// Returns the retained writer, if opening had completed.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn recovery(&self) -> Option<&WriterRecovery> {
         self.writer.as_ref()
     }
     /// Returns a mutable retained writer for explicit recovery.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn recovery_mut(&mut self) -> Option<&mut WriterRecovery> {
         self.writer.as_mut()
     }
     /// Returns the causal error and optional writer.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn into_parts(self) -> (FsError, WriteFailureState, u64, Option<WriterRecovery>) {
         (*self.error, self.state, self.written_bytes, self.writer)

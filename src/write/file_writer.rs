@@ -114,7 +114,7 @@ impl FileWriter {
     ///
     /// # Returns
     /// Information captured when the writer was opened.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn info(&self) -> &OpenedFileInfo {
         &self.info
@@ -124,14 +124,14 @@ impl FileWriter {
     ///
     /// # Returns
     /// Current writer state.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn state(&self) -> WriterState {
         self.state
     }
 
     /// Returns the bytes accepted by the underlying write session.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) const fn written_bytes(&self) -> u64 {
         self.written_bytes
@@ -358,7 +358,7 @@ impl FileWriter {
 impl Output for FileWriter {
     type Item = u8;
 
-    #[inline(always)]
+    #[inline]
     fn is_buffered(&self) -> bool {
         self.session.is_buffered()
     }

@@ -71,7 +71,7 @@ impl OpenedTempFile {
     ///
     /// # Returns
     /// The claimed identity and provider lifecycle session.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) fn into_parts(self) -> (OpenedFileInfo, Box<dyn TempResourceSpi>) {
         (self.info, self.session)

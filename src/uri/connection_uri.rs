@@ -76,7 +76,7 @@ impl ConnectionUri {
     /// Returns the normalized URI scheme without exposing credential-bearing
     /// components.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn scheme(&self) -> &str {
         self.parsed.scheme().as_str()
     }
@@ -109,7 +109,7 @@ impl ConnectionUri {
     ///
     /// Returns an invalid-URI error when the connection URI contains sensitive
     /// components that cannot appear in [`Uri`].
-    #[inline(always)]
+    #[inline]
     pub fn try_to_uri(&self) -> FsResult<Uri> {
         Uri::parse_with_policy(self.parsed.as_str(), &self.redaction_policy)
     }
@@ -118,7 +118,7 @@ impl ConnectionUri {
     ///
     /// The callback result is returned unchanged; callers must not use it to
     /// expose secret data through ordinary formatting or serialization.
-    #[inline(always)]
+    #[inline]
     pub fn expose_unredacted<R>(&self, inspect: impl FnOnce(&str) -> R) -> R {
         inspect(self.parsed.as_str())
     }

@@ -92,7 +92,7 @@ impl AsyncTempFile {
     ///
     /// # Returns
     /// The validated path supplied by the provider.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn path(&self) -> &Path {
         &self.path
@@ -102,21 +102,21 @@ impl AsyncTempFile {
     ///
     /// # Returns
     /// The handle's current cleanup and publication state.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn state(&self) -> TempResourceState {
         self.lifecycle.state()
     }
 
     /// Returns one lexically safe child path.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn child(&self, component: &PathComponent) -> Path {
         self.path.child(component)
     }
 
     /// Returns one lexically safe descendant path.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn descendant(&self, relative: &crate::path::RelativePath) -> Path {
         self.path.join(relative)

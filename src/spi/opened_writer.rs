@@ -75,7 +75,7 @@ impl OpenedWriter {
     ///
     /// # Returns
     /// The claimed resource identity and provider writer session.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) fn into_parts(self) -> (OpenedFileInfo, Box<dyn FileWriterSpi>) {
         (self.info, self.writer)

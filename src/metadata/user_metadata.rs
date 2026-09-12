@@ -36,7 +36,7 @@ pub struct UserMetadata(
 impl UserMetadata {
     /// Creates empty metadata.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub const fn new() -> Self {
         Self(BTreeMap::new())
     }
@@ -60,27 +60,27 @@ impl UserMetadata {
 
     /// Returns the value associated with a key.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn get(&self, key: &str) -> Option<&str> {
         self.0.get(key).map(String::as_str)
     }
 
     /// Returns whether the map contains no metadata pairs.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
     /// Returns whether a metadata key is present.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn contains_key(&self, key: &str) -> bool {
         self.0.contains_key(key)
     }
 
     /// Returns an iterator over metadata pairs.
-    #[inline(always)]
+    #[inline]
     pub fn iter(&self) -> impl Iterator<Item = (&str, &str)> {
         self.0.iter().map(|(key, value)| (key.as_str(), value.as_str()))
     }

@@ -53,28 +53,28 @@ impl AsyncCopyFailure {
     }
 
     /// Returns the contextual filesystem error.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn error(&self) -> &FsError {
         &self.error
     }
 
     /// Returns the confirmed publication state.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn state(&self) -> CopyFailureState {
         self.state
     }
 
     /// Returns partial transfer statistics.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn partial_stats(&self) -> &CopyStats {
         &self.partial_stats
     }
 
     /// Splits the failure into owned error, state, and progress facts.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn into_parts(self) -> (FsError, CopyFailureState, CopyStats) {
         (self.error, self.state, self.partial_stats)

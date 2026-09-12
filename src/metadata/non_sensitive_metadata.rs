@@ -44,7 +44,7 @@ impl NonSensitiveMetadata {
     }
 
     /// Returns the validated metadata without mutable access.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn as_metadata(&self) -> &UserMetadata {
         &self.0
@@ -59,21 +59,21 @@ impl NonSensitiveMetadata {
 
     /// Returns whether the wrapped map contains no metadata pairs.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
     /// Returns whether a metadata key is present.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn contains_key(&self, key: &str) -> bool {
         self.0.contains_key(key)
     }
 
     /// Returns the value associated with a metadata key.
     #[must_use]
-    #[inline(always)]
+    #[inline]
     pub fn get(&self, key: &str) -> Option<&str> {
         self.0.get(key)
     }

@@ -66,25 +66,25 @@ impl TempDirectory {
         }
     }
     /// Returns the logical temporary directory path.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn path(&self) -> &Path {
         &self.path
     }
     /// Returns the resource lifecycle state.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn state(&self) -> TempResourceState {
         self.lifecycle.state()
     }
     /// Returns one lexically safe child path.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn child(&self, component: &PathComponent) -> Path {
         self.path.child(component)
     }
     /// Returns one lexically safe descendant path.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn descendant(&self, relative: &RelativePath) -> Path {
         self.path.join(relative)

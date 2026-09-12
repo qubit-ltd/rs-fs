@@ -62,42 +62,42 @@ impl WriteOutcome {
     }
 
     /// Returns the number of bytes accepted by the write session, when known.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn bytes_written(&self) -> Option<u64> {
         self.bytes_written
     }
 
     /// Returns the provider version, generation, or ETag when known.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn version(&self) -> Option<&ResourceVersion> {
         self.version.as_ref()
     }
 
     /// Returns the atomicity actually achieved by publication.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn atomicity(&self) -> AchievedAtomicity {
         self.atomicity
     }
 
     /// Returns the concrete method that published the resource.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn method(&self) -> PublicationMethod {
         self.method
     }
 
     /// Returns whether the provider confirmed durable publication.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn durable(&self) -> bool {
         self.durable
     }
 
     /// Returns provider-native non-sensitive diagnostics.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn diagnostics(&self) -> &NonSensitiveMetadata {
         &self.diagnostics

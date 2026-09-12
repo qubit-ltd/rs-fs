@@ -45,7 +45,7 @@ impl CreateTempFileRequest {
     ///
     /// # Returns
     /// The immutable temporary-file creation options.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn options(&self) -> &TempOptions {
         &self.options

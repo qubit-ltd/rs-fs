@@ -51,7 +51,7 @@ impl OpenedDirectoryStream {
     ///
     /// # Returns
     /// The provider enumeration session.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) fn into_stream(self) -> Box<dyn DirectoryStreamSpi> {
         self.stream

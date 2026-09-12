@@ -61,7 +61,7 @@ impl RelativePath {
     }
 
     /// Returns the normalized logical path text.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0

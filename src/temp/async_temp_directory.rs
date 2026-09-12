@@ -54,7 +54,7 @@ impl AsyncTempDirectory {
     ///
     /// # Returns
     /// An owned asynchronous temporary-directory handle.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn new(file_system: AsyncFileSystem, path: Path, session: Box<dyn AsyncTempResourceSpi>) -> Self {
         Self(AsyncTempFile::new(file_system, path, session, "temporary directory"))
     }
@@ -63,7 +63,7 @@ impl AsyncTempDirectory {
     ///
     /// # Returns
     /// The validated path supplied by the provider.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn path(&self) -> &Path {
         self.0.path()
@@ -73,21 +73,21 @@ impl AsyncTempDirectory {
     ///
     /// # Returns
     /// The handle's current cleanup and publication state.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn state(&self) -> TempResourceState {
         self.0.state()
     }
 
     /// Returns one lexically safe child path.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn child(&self, component: &PathComponent) -> Path {
         self.0.child(component)
     }
 
     /// Returns one lexically safe descendant path.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn descendant(&self, relative: &RelativePath) -> Path {
         self.0.descendant(relative)
@@ -101,7 +101,7 @@ impl AsyncTempDirectory {
     /// # Errors
     /// Resolves to an invalid-state error when cleanup is no longer legal, or
     /// to the provider cleanup failure.
-    #[inline(always)]
+    #[inline]
     pub fn cleanup(&mut self) -> SpiFuture<'_, FsResult<()>> {
         self.0.cleanup()
     }
@@ -114,7 +114,7 @@ impl AsyncTempDirectory {
     /// # Errors
     /// Resolves to an invalid-state error when the directory is no longer
     /// owned, or to the provider ownership-transfer failure.
-    #[inline(always)]
+    #[inline]
     pub fn keep(&mut self) -> SpiFuture<'_, Result<PersistOutcome, PersistFailure>> {
         self.0.keep()
     }
@@ -131,7 +131,7 @@ impl AsyncTempDirectory {
     /// # Errors
     /// Resolves to a typed failure for invalid lifecycle state, failed local
     /// preflight, provider failure, or provider contract violation.
-    #[inline(always)]
+    #[inline]
     pub fn persist<'a>(
         &'a mut self,
         target: &'a Path,

@@ -118,20 +118,20 @@ impl AsyncFileSystem {
     }
 
     /// Returns the immutable property snapshot without provider I/O.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn properties(&self) -> &FileSystemProperties {
         self.core.properties()
     }
 
     /// Returns shared deterministic facade policy to operation objects.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn core(&self) -> &FacadeCore {
         &self.core
     }
 
     /// Returns the asynchronous provider implementation to operation objects.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn spi(&self) -> &dyn AsyncFileSystemSpi {
         self.spi.as_ref()
     }

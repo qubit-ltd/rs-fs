@@ -145,7 +145,7 @@ impl FileSystemProperties {
     ///
     /// # Returns
     /// The immutable provider information snapshot.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn info(&self) -> &FileSystemInfo {
         &self.info
@@ -158,7 +158,7 @@ impl FileSystemProperties {
     ///
     /// # Returns
     /// Capabilities available to callers of the facade.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn capabilities(&self) -> FileSystemCapabilities {
         self.capabilities
@@ -168,7 +168,7 @@ impl FileSystemProperties {
     ///
     /// # Returns
     /// The immutable provider limit snapshot.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn limits(&self) -> &FileSystemLimits {
         &self.limits
@@ -178,14 +178,14 @@ impl FileSystemProperties {
     ///
     /// # Returns
     /// The accepted logical path forms.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn path_constraints(&self) -> &PathConstraints {
         &self.path_constraints
     }
 
     /// Returns the provider-declared symbolic-link traversal policy.
-    #[inline(always)]
+    #[inline]
     #[must_use = "the filesystem symbolic-link policy must be used"]
     pub const fn symlink_policy(&self) -> SymlinkPolicy {
         self.symlink_policy

@@ -121,7 +121,7 @@ impl AsyncFileWriter {
     ///
     /// # Returns
     /// Information captured when the writer was opened.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn info(&self) -> &OpenedFileInfo {
         &self.info
@@ -131,21 +131,21 @@ impl AsyncFileWriter {
     ///
     /// # Returns
     /// Current writer state.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn state(&self) -> WriterState {
         self.state
     }
 
     /// Returns the bytes accepted by the underlying write session.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) const fn written_bytes(&self) -> u64 {
         self.written_bytes
     }
 
     /// Records that cancellation interrupted an operation using this writer.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn mark_indeterminate(&mut self) {
         self.state = WriterState::Indeterminate;
     }
@@ -374,7 +374,7 @@ impl AsyncFileWriter {
 impl AsyncOutput for AsyncFileWriter {
     type Item = u8;
 
-    #[inline(always)]
+    #[inline]
     fn is_buffered(&self) -> bool {
         self.session.is_buffered()
     }

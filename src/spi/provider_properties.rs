@@ -111,7 +111,7 @@ impl ProviderProperties {
     ///
     /// # Returns
     /// The immutable provider information snapshot.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn info(&self) -> &FileSystemInfo {
         &self.info
@@ -121,7 +121,7 @@ impl ProviderProperties {
     ///
     /// # Returns
     /// Provider entry points available for facade dispatch.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn operations(&self) -> ProviderOperations {
         self.operations
@@ -131,7 +131,7 @@ impl ProviderProperties {
     ///
     /// # Returns
     /// The provider guarantee snapshot before facade derivation.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn declared_capabilities(&self) -> FileSystemCapabilities {
         self.declared_capabilities
@@ -141,7 +141,7 @@ impl ProviderProperties {
     ///
     /// # Returns
     /// The immutable provider limit snapshot.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn limits(&self) -> &FileSystemLimits {
         &self.limits
@@ -151,7 +151,7 @@ impl ProviderProperties {
     ///
     /// # Returns
     /// The accepted logical path forms.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn path_constraints(&self) -> &PathConstraints {
         &self.path_constraints
@@ -161,7 +161,7 @@ impl ProviderProperties {
     ///
     /// # Returns
     /// The immutable symbolic-link policy.
-    #[inline(always)]
+    #[inline]
     #[must_use = "the provider symbolic-link policy must be used"]
     pub const fn symlink_policy(&self) -> SymlinkPolicy {
         self.symlink_policy

@@ -84,7 +84,7 @@ impl OpenedAsyncWriter {
     ///
     /// # Returns
     /// The identity claimed by the provider.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn info(&self) -> &OpenedFileInfo {
         &self.info
