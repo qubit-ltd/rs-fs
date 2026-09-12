@@ -39,7 +39,9 @@ impl OpenedFileInfo {
     /// Creates opened-file information without an extra metadata lookup.
     ///
     /// # Parameters
-    /// - `location`: File identity captured by the provider.
+    /// - `filesystem_id`: Stable identity of the filesystem that opened the
+    ///   handle.
+    /// - `path`: Logical resource path fixed at open time.
     ///
     /// # Returns
     /// Opened-file information with no metadata snapshot.
