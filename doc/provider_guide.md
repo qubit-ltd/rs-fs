@@ -192,13 +192,6 @@ authentication, timeout, and I/O errors must remain errors.
   documentation checker.
 - Review publication, cleanup, cancellation, and error-state behavior.
 
-## Related links
-
-- [User guide](user_guide.md) · [中文用户指南](user_guide.zh_CN.md)
-- [File-system design](file_system_design.md) ·
-  [中文设计文档](file_system_design.zh_CN.md)
-- [API reference](https://docs.rs/qubit-fs)
-
 ## Listing scopes and bounded reads
 
 Pass `ListScope::Path(path)` to list a hierarchical directory or a raw flat-key

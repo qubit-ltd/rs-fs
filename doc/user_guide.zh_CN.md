@@ -57,7 +57,7 @@
 ```toml
 [dependencies]
 qubit-fs = "0.8"
-qubit-fs-local = "0.8"
+qubit-fs-local = "0.9"
 tempfile = "3"
 ```
 
@@ -87,6 +87,10 @@ Conditional 或不支持范围读取的 provider 仍可顺序读取前缀。Best
 保留原请求；Required checksum 会返回 `RequirementNotMet`，因为仅读取前缀不能确认
 完整校验。需要该保证时使用完整的 `read_all`。返回和消费上限不等于网络预取量保证。
 
+返回值是 `PrefixReadOutcome`：用 `bytes()` 借用数据，或用 `into_bytes()` 接管数据；
+并可检查 `info()`、`options()`、`max_bytes()` 和 `termination()`。`LimitReached` 只表示
+已消费上限且没有继续探测，不证明流已结束；只有 `StreamEnded` 表示在上限前观察到 EOF。
+
 ### 写入并读取一份报告
 
 把以下代码保存到 `src/main.rs`，执行 `cargo run`。它在独立的临时根目录内写入报告，读取时
@@ -96,8 +100,11 @@ Conditional 或不支持范围读取的 provider 仍可顺序读取前缀。Best
 <!-- example: quick-start -->
 ```rust
 use qubit_fs::Path;
+use qubit_fs::copy::CopyExecutionRoute;
+use qubit_fs::copy::CopyOptions;
 use qubit_fs::directory::ListScope;
 use qubit_fs::read::ReadOptions;
+use qubit_fs::read::PrefixReadTermination;
 use qubit_fs::write::WriteOptions;
 use qubit_fs_local::LocalFileSystems;
 use qubit_fs_local::LocalResourcePolicy;
@@ -110,6 +117,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     filesystem.write_all(&path, b"report ready", WriteOptions::default())?;
     let bytes = filesystem.read_all(&path, ReadOptions::default(), 1024)?;
     assert_eq!(b"report ready", bytes.as_slice());
+    let prefix = filesystem.read_prefix(&path, ReadOptions::default(), 6)?;
+    assert_eq!(prefix.bytes(), b"report");
+    assert_eq!(prefix.termination(), PrefixReadTermination::LimitReached);
+    let target = Path::parse("/report-copy.txt")?;
+    let assessment = filesystem.assess_copy(&path, &target, &CopyOptions::default())?;
+    assert_eq!(assessment.route(), CopyExecutionRoute::ProviderThenStream);
+    assert_eq!(assessment.fallback_rejection(), None);
     let scope = ListScope::Path(Path::root());
     let mut entries = filesystem.list(&scope, Default::default())?;
     assert_eq!(entries.next_entry()?.expect("published report").path, path);
@@ -130,6 +144,10 @@ writer 必须显式提交，flush 成功本身不代表已经发布。
 ## 进阶用法
 
 ### 复制报告并保留恢复责任
+
+执行复制前可调用 `assess_copy` 查看基于 provider 快照、不会产生 I/O 的路由判断。返回路由
+可能是 `ProviderThenStream`、`ProviderOnly` 或 `StreamOnly`，并在流式 fallback 不适用时
+给出第一个 `FallbackRejection`。后续真正复制仍可能失败或进入不确定状态。
 
 下面的应用辅助函数复制一份已完成的报告。失败时返回原始 `CopyFailure`，保留发布状态、
 部分统计和可能存在的 writer；abort 失败另存为 `cleanup_error`。调用方应持续持有恢复对象，

@@ -172,12 +172,6 @@ writer 和临时资源实现必须分别报告发布、清理和恢复失败。�
 - 运行 `cargo test --locked --all-features`、doctest、clippy、rustdoc 和文档校验器。
 - 审查发布、清理、取消和错误状态的行为。
 
-## 相关链接
-
-- [English user guide](user_guide.md) · [中文用户指南](user_guide.zh_CN.md)
-- [English design](file_system_design.md) · [中文设计文档](file_system_design.zh_CN.md)
-- [API 文档](https://docs.rs/qubit-fs)
-
 ## 列举范围与有界读取
 
 列举层级目录或平面键前缀时，传入 `ListScope::Path(path)`；列举整个已配置的平面

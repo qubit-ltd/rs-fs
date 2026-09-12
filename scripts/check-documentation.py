@@ -44,12 +44,28 @@ def check_versions_and_structure():
     manifest = tomllib.loads((ROOT / 'Cargo.toml').read_text())
     version = manifest['package']['version']
     major_minor = '.'.join(version.split('.')[:2])
+    fixture_manifest = tomllib.loads((ROOT / 'tests/fixtures/documentation_examples/Cargo.toml').read_text())
+    local_version = fixture_manifest['dependencies']['qubit-fs-local']['version']
     stale = re.compile(r'(?<![0-9])0\.6(?:\.0)?(?![0-9])')
     for path in markdown_documents():
         content = path.read_text()
         relative = path.relative_to(ROOT)
         assert not stale.search(content), f'{relative}: contains stale 0.6 version text'
         assert major_minor in content, f'{relative}: missing current package version {major_minor}'
+    install_headings = {
+        'README.md': 'Quick Start',
+        'README.zh_CN.md': '快速开始',
+        'doc/user_guide.md': 'Installation and Minimal Configuration',
+        'doc/user_guide.zh_CN.md': '安装与最小配置',
+    }
+    for relative, heading in install_headings.items():
+        content = (ROOT / relative).read_text()
+        section = content.split(f'## {heading}\n', 1)[1].split('\n## ', 1)[0]
+        match = re.search(r'```toml\n(.*?)\n```', section, re.S)
+        assert match, f'{relative}: installation dependency block is missing'
+        block = match.group(1)
+        assert block.count(f'qubit-fs = "{major_minor}"') == 1, f'{relative}: core version is stale'
+        assert block.count(f'qubit-fs-local = "{local_version}"') == 1, f'{relative}: local version is stale'
     for relative, heading in (
         ('doc/provider_guide.md', '## 12. Further reading'),
         ('doc/provider_guide.zh_CN.md', '## 12. 延伸阅读'),
