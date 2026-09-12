@@ -114,6 +114,10 @@ impl CopyFailure {
     }
 
     /// Splits the failure into error, state, statistics, and writer recovery.
+    ///
+    /// # Returns
+    /// The filesystem error, confirmed publication state, partial statistics,
+    /// and optional writer retained for recovery.
     #[inline]
     #[must_use]
     pub fn into_parts(self) -> (FsError, CopyFailureState, CopyStats, Option<WriterRecovery>) {

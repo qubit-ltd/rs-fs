@@ -189,6 +189,7 @@ impl AsyncTempFile {
     /// # Parameters
     /// - `target`: Validated destination path.
     /// - `options`: Persistence atomicity and publication requirements.
+    /// - `options`: Persistence atomicity and publication requirements.
     ///
     /// # Returns
     /// A future resolving to the confirmed persistence outcome.

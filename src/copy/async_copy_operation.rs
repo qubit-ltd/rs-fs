@@ -157,6 +157,14 @@ impl AsyncCopyOperation {
     /// includes time spent waiting before execution and is cooperative: a
     /// pending provider future is not forcibly woken by this operation, and
     /// external cancellation does not roll back provider publication.
+    ///
+    /// # Returns
+    /// The provider-confirmed copy outcome.
+    ///
+    /// # Errors
+    /// Returns [`AsyncCopyFailure`] with the confirmed copy state and any
+    /// retained writer when preflight, provider execution, fallback, or
+    /// outcome validation fails.
     pub async fn execute(&mut self) -> Result<CopyOutcome, AsyncCopyFailure> {
         if self.state != AsyncCopyOperationState::Ready {
             return Err(invalid_state_failure(

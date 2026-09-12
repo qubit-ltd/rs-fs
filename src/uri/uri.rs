@@ -41,6 +41,14 @@ impl Uri {
     ///
     /// Returns an invalid-URI error for malformed syntax, fragments, or URI
     /// components classified as sensitive by the fixed standard policy.
+    ///
+    /// # Parameters
+    /// - `text`: URI text to parse.
+    /// - `policy`: Redaction policy used to reject sensitive components.
+    ///
+    /// # Errors
+    /// Returns an invalid-URI error for malformed syntax, fragments, or
+    /// sensitive components rejected by `policy`.
     #[inline]
     pub fn parse(text: &str) -> FsResult<Self> {
         Self::parse_with_policy(text, &RedactionPolicy::standard())

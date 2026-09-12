@@ -91,6 +91,10 @@ impl WriteAllFailure {
         self.writer.as_mut()
     }
     /// Returns the causal error and optional writer.
+    ///
+    /// # Returns
+    /// The original error, publication state, confirmed byte count, and
+    /// optional retained writer.
     #[inline]
     #[must_use]
     pub fn into_parts(self) -> (FsError, WriteFailureState, u64, Option<WriterRecovery>) {

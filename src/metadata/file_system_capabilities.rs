@@ -184,6 +184,10 @@ impl FileSystemCapabilities {
     /// `None` means that every advertised derived capability has its required
     /// base capability. The returned pair contains the derived capability
     /// followed by the missing base capability.
+    ///
+    /// # Returns
+    /// `Some` with the first derived capability and missing base capability,
+    /// or `None` when no advertised dependency is missing.
     #[inline]
     #[must_use]
     pub fn missing_dependency(&self) -> Option<(FileSystemCapability, FileSystemCapability)> {

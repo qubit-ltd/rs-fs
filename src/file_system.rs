@@ -130,6 +130,10 @@ impl FileSystem {
     }
 
     /// Reads metadata after all local validation succeeds.
+    ///
+    /// # Errors
+    /// Returns the provider or validation error when `path` is invalid, the
+    /// provider cannot stat it, or the provider returns a mismatched path.
     pub fn stat(&self, path: &Path) -> FsResult<FileMetadata> {
         self.validate_path(path, FsOperation::Stat)?;
         let response = self
@@ -147,6 +151,10 @@ impl FileSystem {
     }
 
     /// Returns `false` only for an explicit not-found response.
+    ///
+    /// # Errors
+    /// Returns the original filesystem error for validation, provider, or
+    /// provider-contract failures other than `NotFound`.
     pub fn exists(&self, path: &Path) -> FsResult<bool> {
         match self.stat(path) {
             Ok(_) => Ok(true),
@@ -208,11 +216,19 @@ impl FileSystem {
     }
 
     /// Opens a provider directory stream after local option validation.
+    ///
+    /// # Errors
+    /// Returns an invalid-options, missing-capability, or provider error when
+    /// the scope or options cannot be served.
     pub fn list(&self, scope: &ListScope, options: ListOptions) -> FsResult<DirectoryStream> {
         DirectoryOperation::new(self).list(scope, options)
     }
 
     /// Opens a provider reader after local option validation.
+    ///
+    /// # Errors
+    /// Returns an invalid-path, unsupported-capability, provider, or
+    /// provider-contract error when the reader cannot be opened safely.
     pub fn open_reader(&self, path: &Path, options: ReadOptions) -> FsResult<FileReader> {
         self.validate_path(path, FsOperation::OpenReader)?;
         options
@@ -234,6 +250,11 @@ impl FileSystem {
     }
 
     /// Opens a provider writer after local option validation.
+    ///
+    /// # Errors
+    /// Returns [`OpenFailure`] identifying preflight, provider-open, or
+    /// provider-contract failure; a retained rejected writer is available when
+    /// provider cleanup is required.
     pub fn open_writer(&self, path: &Path, options: WriteOptions) -> Result<FileWriter, OpenFailure<RejectedWriter>> {
         self.core
             .validate_write_request(path, &options)
@@ -273,6 +294,10 @@ impl FileSystem {
     }
 
     /// Creates a temporary file and binds its provider session to this facade.
+    ///
+    /// # Errors
+    /// Returns [`OpenFailure`] when preflight, provider creation, or temporary
+    /// identity validation fails; the recovery value may retain cleanup work.
     pub fn create_temp_file(&self, options: TempOptions) -> Result<TempFile, OpenFailure<RejectedTempResource>> {
         let parent = options.parent().cloned();
         self.core
@@ -319,6 +344,10 @@ impl FileSystem {
 
     /// Creates a temporary directory and binds its provider session to this
     /// facade.
+    ///
+    /// # Errors
+    /// Returns [`OpenFailure`] when preflight, provider creation, or temporary
+    /// identity validation fails; the recovery value may retain cleanup work.
     pub fn create_temp_directory(
         &self,
         options: TempOptions,
@@ -371,6 +400,10 @@ impl FileSystem {
     }
 
     /// Creates a directory after local path validation.
+    ///
+    /// # Errors
+    /// Returns an invalid-path, missing-capability, provider, or provider-
+    /// contract error when the directory cannot be created as requested.
     pub fn create_directory(&self, path: &Path, options: CreateDirectoryOptions) -> FsResult<CreateDirectoryOutcome> {
         self.validate_path(path, FsOperation::CreateDir)?;
         self.require(FileSystemCapability::CreateDirectory, FsOperation::CreateDir, path)?;
@@ -393,12 +426,20 @@ impl FileSystem {
     }
 
     /// Deletes a file after local option validation.
+    ///
+    /// # Errors
+    /// Returns an invalid-options, missing-capability, provider, or
+    /// provider-contract error when deletion cannot be confirmed.
     #[inline]
     pub fn delete_file(&self, path: &Path, options: DeleteOptions) -> FsResult<DeleteOutcome> {
         self.delete(path, options, false)
     }
 
     /// Deletes a directory after local option validation.
+    ///
+    /// # Errors
+    /// Returns an invalid-options, missing-capability, provider, or
+    /// provider-contract error when deletion cannot be confirmed.
     #[inline]
     pub fn delete_directory(&self, path: &Path, options: DeleteOptions) -> FsResult<DeleteOutcome> {
         self.delete(path, options, true)
@@ -558,16 +599,28 @@ impl FileSystem {
     }
 
     /// Reads one file into memory up to `max_bytes` after opening a reader.
+    ///
+    /// # Errors
+    /// Returns the reader or read error when validation, opening, or bounded
+    /// reading fails.
     pub fn read_all(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
         ReadOperation::new(self).read_all(path, options, max_bytes)
     }
 
     /// Reads at most max_bytes from a file without requiring a complete read.
+    ///
+    /// # Errors
+    /// Returns the reader or read error when validation, opening, or bounded
+    /// reading fails.
     pub fn read_prefix(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
         ReadOperation::new(self).read_prefix(path, options, max_bytes)
     }
 
     /// Writes all bytes and retains the writer if transfer or commit fails.
+    ///
+    /// # Errors
+    /// Returns [`WriteAllFailure`] with the confirmed byte count and retained
+    /// writer when validation, transfer, or publication fails.
     pub fn write_all(
         &self,
         path: &Path,
