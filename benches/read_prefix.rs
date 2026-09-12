@@ -150,10 +150,11 @@ fn read_prefix(c: &mut Criterion) {
             .expect("benchmark facade");
             for maximum in [8192, 65536] {
                 consumed.store(0, Ordering::Relaxed);
-                let bytes = filesystem
+                let outcome = filesystem
                     .read_prefix(&path, Default::default(), maximum)
                     .expect("benchmark probe");
-                assert_eq!(bytes.len(), maximum);
+                assert_eq!(outcome.bytes().len(), maximum);
+                let bytes = outcome.into_bytes();
                 assert_eq!(consumed.swap(0, Ordering::Relaxed), maximum);
                 assert_eq!(
                     requested.load(Ordering::Relaxed),
@@ -174,7 +175,7 @@ fn read_prefix(c: &mut Criterion) {
                             let bytes = filesystem
                                 .read_prefix(black_box(&path), Default::default(), maximum)
                                 .expect("benchmark prefix");
-                            black_box(bytes);
+                            black_box(bytes.into_bytes());
                         });
                     },
                 );

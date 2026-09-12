@@ -197,6 +197,7 @@ fn test_unknown_and_low_metadata_enforce_actual_bytes() {
         assert_eq!(
             fs.read_prefix(&path, ReadOptions::default(), 19_999)
                 .expect("prefix")
+                .bytes()
                 .len(),
             19_999
         );

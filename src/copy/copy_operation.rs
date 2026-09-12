@@ -9,7 +9,6 @@
 // copy fallback tests.
 //! Synchronous copy operation implementation.
 
-use qubit_io::Input;
 use qubit_io::Output;
 
 use super::CopyConflictPolicy;
@@ -271,17 +270,21 @@ impl<'a> CopyOperation<'a> {
                     Some(writer),
                 ));
             }
-            let read = match Input::read(&mut reader, &mut buffer) {
-                Ok(read) => read,
-                Err(error) => {
-                    return Err(self.failure(
-                        self.io_error(self.source, FsOperation::Read, error),
-                        from_writer_state(writer.state()),
-                        fallback_failure_stats(writer.written_bytes()),
-                        Some(writer),
-                    ));
-                }
-            };
+            let read =
+                match crate::read::read_retry_interrupted(&mut reader, &mut buffer, || match self.deadline_error() {
+                    Some(error) => Err(error.into_io_error()),
+                    None => Ok(()),
+                }) {
+                    Ok(read) => read,
+                    Err(error) => {
+                        return Err(self.failure(
+                            self.io_error(self.source, FsOperation::Read, error),
+                            from_writer_state(writer.state()),
+                            fallback_failure_stats(writer.written_bytes()),
+                            Some(writer),
+                        ));
+                    }
+                };
             if let Some(error) = self.deadline_error() {
                 return Err(self.failure(
                     error,

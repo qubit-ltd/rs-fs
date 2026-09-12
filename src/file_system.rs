@@ -9,6 +9,7 @@
 
 use std::sync::Arc;
 
+use crate::copy::CopyAssessment;
 use crate::copy::CopyFailure;
 use crate::copy::CopyOperation;
 use crate::copy::CopyOptions;
@@ -78,7 +79,7 @@ use crate::write::WriteOptions;
 ///
 /// let path = Path::parse("/report")?;
 /// let bytes = filesystem.read_prefix(&path, ReadOptions::default(), 3)?;
-/// assert_eq!(b"rep", bytes.as_slice());
+/// assert_eq!(b"rep", bytes.bytes());
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 #[derive(Clone)]
@@ -115,6 +116,16 @@ impl FileSystem {
     #[must_use]
     pub fn properties(&self) -> &FileSystemProperties {
         self.core.properties()
+    }
+
+    /// Validates a write request without opening a provider session.
+    pub fn validate_write(&self, path: &Path, options: &WriteOptions) -> FsResult<()> {
+        self.core.validate_write_request(path, options)
+    }
+
+    /// Assesses copy routes without performing provider I/O.
+    pub fn assess_copy(&self, source: &Path, target: &Path, options: &CopyOptions) -> FsResult<CopyAssessment> {
+        self.core.assess_copy(source, target, options)
     }
 
     /// Returns shared deterministic facade policy to operation objects.
@@ -230,6 +241,12 @@ impl FileSystem {
     /// Returns an invalid-path, unsupported-capability, provider, or
     /// provider-contract error when the reader cannot be opened safely.
     pub fn open_reader(&self, path: &Path, options: ReadOptions) -> FsResult<FileReader> {
+        self.open_reader_resolved(path, ResolvedReadOptions::new(options))
+    }
+
+    /// Opens a facade-validated reader with an internal resolved option hint.
+    pub(crate) fn open_reader_resolved(&self, path: &Path, resolved: ResolvedReadOptions) -> FsResult<FileReader> {
+        let options = resolved.options().clone();
         self.validate_path(path, FsOperation::OpenReader)?;
         options
             .validate_against(self.properties().capabilities())
@@ -240,7 +257,7 @@ impl FileSystem {
             .map_err(|error| self.enrich(error, path, FsOperation::OpenReader))?;
         self.require(FileSystemCapability::Read, FsOperation::OpenReader, path)?;
         self.spi
-            .open_reader(OpenReaderRequest::new(path, ResolvedReadOptions::new(options)))
+            .open_reader(OpenReaderRequest::new(path, resolved))
             .and_then(|opened| {
                 let (info, reader) = opened.into_parts();
                 self.validate_opened_info(&info, path)?;
@@ -612,7 +629,12 @@ impl FileSystem {
     /// # Errors
     /// Returns the reader or read error when validation, opening, or bounded
     /// reading fails.
-    pub fn read_prefix(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
+    pub fn read_prefix(
+        &self,
+        path: &Path,
+        options: ReadOptions,
+        max_bytes: usize,
+    ) -> FsResult<crate::read::PrefixReadOutcome> {
         ReadOperation::new(self).read_prefix(path, options, max_bytes)
     }
 

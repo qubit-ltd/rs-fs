@@ -9,6 +9,7 @@
 
 use crate::copy::CopyConflictPolicy;
 use crate::copy::CopyOptions;
+use crate::copy::FallbackRejection;
 use crate::copy::MetadataPreservePolicy;
 use crate::copy::ServerSidePreference;
 use crate::error::FsError;
@@ -23,17 +24,45 @@ use crate::write::WriteOptions;
 /// Returns true when copy options remain within the fallback policy allowlist.
 #[inline]
 pub(crate) fn fallback_options_supported(options: &CopyOptions, filesystem_symlink_policy: SymlinkPolicy) -> bool {
-    !matches!(options.mode(), crate::copy::CopyMode::Tree)
-        && options
-            .symlink_policy_override()
-            .is_none_or(|policy| policy == filesystem_symlink_policy)
-        && !options.continue_on_error()
-        && options.preserve_metadata() == MetadataPreservePolicy::None
-        && options.server_side() != ServerSidePreference::Require
-        && !options.create_parent()
-        && options.durability() != DurabilityRequirement::Required
-        && !(options.conflict() == CopyConflictPolicy::Skip && options.atomicity() == AtomicityRequirement::Required)
-        && matches!(options.conflict(), CopyConflictPolicy::Fail | CopyConflictPolicy::Skip)
+    fallback_rejection(options, filesystem_symlink_policy).is_none()
+}
+
+/// Returns the first static reason the stream fallback is unavailable.
+pub(crate) fn fallback_rejection(
+    options: &CopyOptions,
+    filesystem_symlink_policy: SymlinkPolicy,
+) -> Option<FallbackRejection> {
+    if matches!(options.mode(), crate::copy::CopyMode::Tree) {
+        return Some(FallbackRejection::TreeMode);
+    }
+    if options
+        .symlink_policy_override()
+        .is_some_and(|policy| policy != filesystem_symlink_policy)
+    {
+        return Some(FallbackRejection::SymlinkPolicyOverride);
+    }
+    if options.continue_on_error() {
+        return Some(FallbackRejection::ContinueOnError);
+    }
+    if options.preserve_metadata() != MetadataPreservePolicy::None {
+        return Some(FallbackRejection::MetadataPreservation);
+    }
+    if options.server_side() == ServerSidePreference::Require {
+        return Some(FallbackRejection::ServerSideRequired);
+    }
+    if options.create_parent() {
+        return Some(FallbackRejection::CreateParent);
+    }
+    if options.durability() == DurabilityRequirement::Required {
+        return Some(FallbackRejection::DurabilityRequired);
+    }
+    if options.conflict() == CopyConflictPolicy::Skip && options.atomicity() == AtomicityRequirement::Required {
+        return Some(FallbackRejection::AtomicSkip);
+    }
+    if !matches!(options.conflict(), CopyConflictPolicy::Fail | CopyConflictPolicy::Skip) {
+        return Some(FallbackRejection::ConflictPolicy);
+    }
+    None
 }
 
 /// Builds the writer request used by a streamed copy fallback.

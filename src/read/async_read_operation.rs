@@ -18,6 +18,8 @@ use crate::error::FsResult;
 use crate::facade::facade_core::FacadeCore;
 use crate::facade::internal::FileSystemResource;
 use crate::path::Path;
+use crate::read::PrefixReadOutcome;
+use crate::read::PrefixReadTermination;
 use crate::read::ReadOptions;
 use crate::read::internal::ReadBuffer;
 use crate::read::prefix_read_plan::PrefixReadPlan;
@@ -97,14 +99,28 @@ impl<'a> AsyncReadOperation<'a> {
     }
 
     /// Reads at most `max_bytes` from a file asynchronously.
-    pub(crate) async fn read_prefix(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
+    pub(crate) async fn read_prefix(
+        &self,
+        path: &Path,
+        options: ReadOptions,
+        max_bytes: usize,
+    ) -> FsResult<PrefixReadOutcome> {
+        let original_options = options.clone();
         let plan = PrefixReadPlan::new(self.filesystem.properties(), path, options, max_bytes)?;
-        let mut reader = self.filesystem.open_reader(path, plan.into_options()).await?;
+        let mut reader = self.filesystem.open_reader_resolved(path, plan.into_options()).await?;
+        let info = reader.info().clone();
         if max_bytes == 0 {
-            return Ok(Vec::new());
+            return Ok(PrefixReadOutcome::new(
+                Vec::new(),
+                info,
+                original_options,
+                max_bytes,
+                PrefixReadTermination::LimitReached,
+            ));
         }
         let mut bytes = ReadBuffer::new(max_bytes);
         let mut buffer = [0_u8; FacadeCore::PREFIX_BUFFER_SIZE];
+        let mut termination = PrefixReadTermination::LimitReached;
         while bytes.len() < max_bytes {
             let read_len = FacadeCore::next_prefix_read_len(bytes.len(), max_bytes);
             let read = reader.read_async(&mut buffer[..read_len]).await.map_err(|error| {
@@ -115,12 +131,19 @@ impl<'a> AsyncReadOperation<'a> {
                 )
             })?;
             if read == 0 {
+                termination = PrefixReadTermination::StreamEnded;
                 break;
             }
             bytes
                 .try_append(&buffer[..read])
                 .map_err(|error| self.filesystem.core().enrich(error, Some(path), FsOperation::Read))?;
         }
-        Ok(bytes.into_vec())
+        Ok(PrefixReadOutcome::new(
+            bytes.into_vec(),
+            info,
+            original_options,
+            max_bytes,
+            termination,
+        ))
     }
 }

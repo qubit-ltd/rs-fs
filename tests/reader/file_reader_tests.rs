@@ -202,13 +202,14 @@ fn test_read_prefix_returns_bounded_bytes() {
         file_system
             .read_prefix(&requested, Default::default(), 3)
             .expect("prefix should read")
-            .as_slice()
+            .bytes()
     );
     read_requests.lock().expect("requests lock").clear();
     assert!(
         file_system
             .read_prefix(&requested, Default::default(), 0)
             .expect("zero prefix should open")
+            .bytes()
             .is_empty()
     );
     assert!(

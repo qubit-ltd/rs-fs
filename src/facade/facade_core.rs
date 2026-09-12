@@ -12,6 +12,10 @@ use std::sync::Arc;
 use qubit_budget::InsufficientBudgetError;
 use qubit_budget::ResourceBudget;
 
+use crate::copy::CopyAssessment;
+use crate::copy::CopyExecutionRoute;
+use crate::copy::CopyOptions;
+use crate::copy::FallbackRejection;
 use crate::error::FsError;
 use crate::error::FsErrorKind;
 use crate::error::FsOperation;
@@ -89,6 +93,58 @@ impl FacadeCore {
             .validate_against(self.properties.capabilities())
             .map_err(|error| self.enrich(error, Some(path), FsOperation::OpenWriter))?;
         self.require(FileSystemCapability::Write, FsOperation::OpenWriter, Some(path))
+    }
+
+    pub(crate) fn assess_copy(&self, source: &Path, target: &Path, options: &CopyOptions) -> FsResult<CopyAssessment> {
+        self.validate_path(source, FsOperation::Copy)?;
+        self.validate_path(target, FsOperation::Copy)?;
+        if source == target {
+            return Err(FsError::new(
+                FsErrorKind::InvalidOptions,
+                FsOperation::Copy,
+                "copy source and target must differ",
+            )
+            .with_path(source.clone())
+            .with_target(target.clone()));
+        }
+        options
+            .validate_against(self.properties.capabilities())
+            .map_err(|error| {
+                self.enrich(error, Some(source), FsOperation::Copy)
+                    .with_target(target.clone())
+            })?;
+        if options.max_entries() == Some(0) {
+            return Err(FsError::new(
+                FsErrorKind::RequirementNotMet,
+                FsOperation::Copy,
+                "copy entry limit must be greater than zero",
+            ));
+        }
+        let mut rejection = crate::copy::fallback_rejection(options, self.properties.symlink_policy());
+        if rejection.is_none() {
+            if !self.properties.capabilities().supports(FileSystemCapability::Read)
+                || !self.provider_operations.supports(ProviderOperation::OpenReader)
+            {
+                rejection = Some(FallbackRejection::MissingRead);
+            } else if !self.properties.capabilities().supports(FileSystemCapability::Write)
+                || !self.provider_operations.supports(ProviderOperation::OpenWriter)
+            {
+                rejection = Some(FallbackRejection::MissingWrite);
+            } else if !self.provider_operations.supports(ProviderOperation::Stat) {
+                rejection = Some(FallbackRejection::MissingStat);
+            }
+        }
+        let provider_copy = self.provider_operations.supports(ProviderOperation::TryCopy);
+        match (provider_copy, rejection) {
+            (true, reason @ None) => Ok(CopyAssessment::new(CopyExecutionRoute::ProviderThenStream, reason)),
+            (true, reason @ Some(_)) => Ok(CopyAssessment::new(CopyExecutionRoute::ProviderOnly, reason)),
+            (false, None) => Ok(CopyAssessment::new(CopyExecutionRoute::StreamOnly, None)),
+            (false, Some(_)) => Err(FsError::new(
+                FsErrorKind::RequirementNotMet,
+                FsOperation::Copy,
+                "copy has no available provider or stream execution path",
+            )),
+        }
     }
 
     /// Requires one capability before an operation can create provider I/O.

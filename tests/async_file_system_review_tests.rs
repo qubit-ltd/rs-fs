@@ -455,17 +455,17 @@ fn test_async_facade_convenience_operations_enforce_contracts() {
         b"bytes".to_vec(),
         ready(file_system.read_all(&path("/file"), ReadOptions::default(), 5,))
             .expect("reader bytes should be collected")
-            .as_slice()
     );
     assert_eq!(
         b"byt",
         ready(file_system.read_prefix(&path("/file"), ReadOptions::default(), 3,))
             .expect("reader prefix should be collected")
-            .as_slice()
+            .bytes()
     );
     assert!(
         ready(file_system.read_prefix(&path("/file"), ReadOptions::default(), 0,))
             .expect("zero prefix should open")
+            .bytes()
             .is_empty()
     );
     let limit_error = ready(file_system.read_all(&path("/file"), ReadOptions::default(), 4))

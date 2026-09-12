@@ -18,11 +18,14 @@ use crate::metadata::FileSystemProperties;
 use crate::path::Path;
 use crate::read::ChecksumPolicy;
 use crate::read::ReadOptions;
+use crate::spi::PrefixReadHint;
+use crate::spi::ResolvedReadOptions;
 
 /// Validated read options with an optional guaranteed provider-side bound.
 pub(crate) struct PrefixReadPlan {
     /// Original options or a safely narrowed byte range.
     options: ReadOptions,
+    hint: Option<PrefixReadHint>,
 }
 
 impl PrefixReadPlan {
@@ -82,12 +85,18 @@ impl PrefixReadPlan {
                 options = options.with_length(Some(length));
             }
         }
-        Ok(Self { options })
+        let hint = (max_bytes > 0 && options.checksum() == ChecksumPolicy::None && u64::try_from(max_bytes).is_ok())
+            .then(|| PrefixReadHint::new(u64::try_from(max_bytes).expect("checked above")));
+        Ok(Self { options, hint })
     }
 
     /// Transfers the validated provider request options to the reader open.
     #[inline]
-    pub(crate) fn into_options(self) -> ReadOptions {
-        self.options
+    pub(crate) fn into_options(self) -> ResolvedReadOptions {
+        let resolved = ResolvedReadOptions::new(self.options);
+        match self.hint {
+            Some(hint) => resolved.with_prefix_hint(hint),
+            None => resolved,
+        }
     }
 }
