@@ -48,6 +48,14 @@ use crate::rename::RenameOutcome;
 /// pending future cancels local polling but does not imply that remote work was
 /// rolled back; mutation failures must preserve confirmed progress in their
 /// typed failure state.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_fs::spi::AsyncFileSystemSpi;
+///
+/// fn accepts_provider<T: AsyncFileSystemSpi>() {}
+/// ```
 pub trait AsyncFileSystemSpi: Send + Sync {
     /// Returns one immutable provider property snapshot without asynchronous
     /// I/O.

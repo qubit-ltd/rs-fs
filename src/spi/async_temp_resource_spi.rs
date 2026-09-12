@@ -18,6 +18,14 @@ use crate::error::FsResult;
 use crate::temp::PersistOutcome;
 
 /// Provider-side asynchronous temporary-resource lifecycle session.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_fs::spi::AsyncTempResourceSpi;
+///
+/// fn accepts_session<T: AsyncTempResourceSpi>() {}
+/// ```
 pub trait AsyncTempResourceSpi: Send {
     /// Performs provider-local cancellation when the facade handle is dropped.
     ///

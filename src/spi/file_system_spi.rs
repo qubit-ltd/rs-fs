@@ -40,6 +40,14 @@ use crate::rename::RenameFailureState;
 use crate::rename::RenameOutcome;
 
 /// Synchronous provider implementation contract.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_fs::spi::FileSystemSpi;
+///
+/// fn accepts_provider<T: FileSystemSpi>() {}
+/// ```
 pub trait FileSystemSpi: Send + Sync {
     /// Returns one immutable property snapshot.
     ///

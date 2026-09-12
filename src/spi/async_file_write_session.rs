@@ -20,6 +20,14 @@ use crate::write::WriteFailure;
 
 /// Provider session underlying a concrete [`crate::write::AsyncFileWriter`]
 /// handle.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_fs::spi::AsyncFileWriteSession;
+///
+/// fn accepts_session<T: AsyncFileWriteSession>() {}
+/// ```
 pub trait AsyncFileWriteSession: AsyncOutput<Item = u8> + Send {
     /// Asynchronously publishes bytes accepted by the session.
     ///

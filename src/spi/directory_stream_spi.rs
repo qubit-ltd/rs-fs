@@ -13,6 +13,14 @@ use crate::error::FsResult;
 use crate::metadata::DirEntry;
 
 /// Provider directory enumeration session.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_fs::spi::DirectoryStreamSpi;
+///
+/// fn accepts_session<T: DirectoryStreamSpi>() {}
+/// ```
 pub trait DirectoryStreamSpi: Send {
     /// Returns the next lazy directory entry.
     ///
