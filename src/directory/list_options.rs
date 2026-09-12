@@ -136,6 +136,10 @@ impl ListOptions {
     }
 
     /// Returns the optional lexical prefix.
+    ///
+    /// # Returns
+    /// `Some` with the configured subtree prefix, or `None` when no subtree
+    /// prefix filter is configured.
     #[inline]
     #[must_use]
     pub fn prefix(&self) -> Option<&str> {
@@ -153,6 +157,9 @@ impl ListOptions {
     }
 
     /// Returns the explicit listing filter.
+    ///
+    /// # Returns
+    /// `Some` with the configured filter, or `None` when listing is unfiltered.
     #[must_use]
     pub fn filter(&self) -> Option<&ListFilter> {
         self.filter.as_ref()
@@ -258,6 +265,13 @@ impl ListOptions {
     }
 
     /// Validates options against the filesystem path semantics.
+    ///
+    /// # Parameters
+    /// - `semantics`: Provider path semantics used to validate the filter.
+    ///
+    /// # Errors
+    /// Returns an invalid-options error when the configured filter is not
+    /// representable under `semantics`.
     pub fn validate_for(&self, semantics: PathSemantics) -> FsResult<()> {
         self.validate_common()?;
         self.validate_filter(semantics)

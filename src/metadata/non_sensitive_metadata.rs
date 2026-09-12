@@ -72,6 +72,9 @@ impl NonSensitiveMetadata {
     }
 
     /// Returns the value associated with a metadata key.
+    ///
+    /// # Returns
+    /// `Some` with the value when `key` is present, or `None` otherwise.
     #[must_use]
     #[inline]
     pub fn get(&self, key: &str) -> Option<&str> {

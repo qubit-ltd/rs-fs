@@ -141,6 +141,10 @@ impl AsyncFileSystem {
     /// Local validation happens before this future reaches the provider. A
     /// provider response is checked again after awaiting to bind the returned
     /// metadata to the requested logical path.
+    ///
+    /// # Errors
+    /// Returns a validation, provider, or provider-contract error when the
+    /// path cannot be read or the response identifies another path.
     pub async fn stat(&self, path: &Path) -> FsResult<FileMetadata> {
         self.validate_path(path, FsOperation::Stat)?;
         let response = self
@@ -155,6 +159,10 @@ impl AsyncFileSystem {
     }
 
     /// Asynchronously reports whether the path exists.
+    ///
+    /// # Errors
+    /// Returns the original filesystem error for failures other than an
+    /// explicit `NotFound` response.
     pub async fn exists(&self, path: &Path) -> FsResult<bool> {
         match self.stat(path).await {
             Ok(_) => Ok(true),
@@ -164,11 +172,19 @@ impl AsyncFileSystem {
     }
 
     /// Asynchronously opens a validated directory stream.
+    ///
+    /// # Errors
+    /// Returns an invalid-options, missing-capability, or provider error when
+    /// the scope or options cannot be served.
     pub async fn list(&self, scope: &ListScope, options: ListOptions) -> FsResult<AsyncDirectoryStream> {
         AsyncDirectoryOperation::new(self).list(scope, options).await
     }
 
     /// Asynchronously opens a validated reader and verifies its identity.
+    ///
+    /// # Errors
+    /// Returns a validation, capability, provider, or provider-contract error
+    /// when the reader cannot be opened safely.
     pub async fn open_reader(&self, path: &Path, options: ReadOptions) -> FsResult<AsyncFileReader> {
         self.validate_path(path, FsOperation::OpenReader)?;
         options
@@ -189,11 +205,19 @@ impl AsyncFileSystem {
     }
 
     /// Asynchronously reads an entire file while enforcing a strict byte cap.
+    ///
+    /// # Errors
+    /// Returns the reader or read error when validation, opening, or bounded
+    /// reading fails.
     pub async fn read_all(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
         AsyncReadOperation::new(self).read_all(path, options, max_bytes).await
     }
 
     /// Asynchronously reads at most max_bytes from a file.
+    ///
+    /// # Errors
+    /// Returns the reader or read error when validation, opening, or bounded
+    /// reading fails.
     pub async fn read_prefix(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
         AsyncReadOperation::new(self)
             .read_prefix(path, options, max_bytes)
@@ -285,6 +309,10 @@ impl AsyncFileSystem {
     }
 
     /// Asynchronously creates a directory after local validation.
+    ///
+    /// # Errors
+    /// Returns a validation, capability, provider, or provider-contract error
+    /// when the directory cannot be created as requested.
     pub async fn create_directory(
         &self,
         path: &Path,
@@ -308,18 +336,30 @@ impl AsyncFileSystem {
     }
 
     /// Asynchronously deletes a file after local validation.
+    ///
+    /// # Errors
+    /// Returns a validation, capability, provider, or provider-contract error
+    /// when deletion cannot be confirmed.
     #[inline]
     pub async fn delete_file(&self, path: &Path, options: DeleteOptions) -> FsResult<DeleteOutcome> {
         self.delete(path, options, false).await
     }
 
     /// Asynchronously deletes a directory after local validation.
+    ///
+    /// # Errors
+    /// Returns a validation, capability, provider, or provider-contract error
+    /// when deletion cannot be confirmed.
     #[inline]
     pub async fn delete_directory(&self, path: &Path, options: DeleteOptions) -> FsResult<DeleteOutcome> {
         self.delete(path, options, true).await
     }
 
     /// Renames one resource through the single asynchronous provider primitive.
+    ///
+    /// # Errors
+    /// Returns [`RenameFailure`] with the confirmed transition state when
+    /// validation, provider execution, or outcome validation fails.
     pub async fn rename(
         &self,
         source: &Path,
@@ -356,6 +396,10 @@ impl AsyncFileSystem {
 
     /// Asynchronously creates a temporary file and validates its provider
     /// identity.
+    ///
+    /// # Errors
+    /// Returns [`OpenFailure`] when preflight, provider creation, or temporary
+    /// identity validation fails.
     pub async fn create_temp_file(
         &self,
         options: TempOptions,
@@ -410,6 +454,10 @@ impl AsyncFileSystem {
     }
 
     /// Asynchronously creates a temporary directory and validates its identity.
+    ///
+    /// # Errors
+    /// Returns [`OpenFailure`] when preflight, provider creation, or temporary
+    /// identity validation fails.
     pub async fn create_temp_directory(
         &self,
         options: TempOptions,
@@ -466,6 +514,9 @@ impl AsyncFileSystem {
     ///
     /// This method performs no provider I/O. Provider work begins only when
     /// [`AsyncCopyOperation::execute`] is polled.
+    ///
+    /// # Errors
+    /// Returns [`AsyncCopyFailure`] when local preflight rejects the request.
     #[allow(clippy::result_large_err)]
     pub fn begin_copy(
         &self,

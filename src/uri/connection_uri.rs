@@ -51,6 +51,13 @@ impl ConnectionUri {
     /// Parses a connection URI with optional credentials but no fragment.
     ///
     /// Returns an invalid-URI error for malformed syntax or a fragment.
+    ///
+    /// # Parameters
+    /// - `text`: Connection URI text to parse.
+    /// - `policy`: Redaction policy used when producing redacted views.
+    ///
+    /// # Errors
+    /// Returns an invalid-URI error for malformed syntax or a fragment.
     pub fn parse(text: &str) -> FsResult<Self> {
         Self::parse_with_policy(text, &RedactionPolicy::standard())
     }

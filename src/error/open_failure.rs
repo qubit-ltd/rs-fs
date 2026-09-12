@@ -74,6 +74,10 @@ impl<R> OpenFailure<R> {
         self.recovery.take()
     }
     /// Returns all failure facts and transfers any recovery ownership.
+    ///
+    /// # Returns
+    /// The original error, opening stage, and optional retained recovery
+    /// session.
     pub fn into_parts(self) -> (FsError, OpenFailureStage, Option<R>) {
         (*self.error, self.stage, self.recovery)
     }

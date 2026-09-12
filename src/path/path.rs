@@ -62,6 +62,14 @@ impl Path {
     /// Each item is validated as one component without reparsing a joined path
     /// string. An empty absolute sequence produces the root; an empty relative
     /// sequence returns an invalid-path error.
+    ///
+    /// # Parameters
+    /// - `absolute`: Whether the resulting path is rooted at the provider root.
+    /// - `components`: Validated path-component text to join in order.
+    ///
+    /// # Errors
+    /// Returns an invalid-path error when a component is empty, contains a
+    /// separator or traversal marker, or when a relative sequence is empty.
     #[inline]
     pub fn from_components<I, S>(absolute: bool, components: I) -> FsResult<Self>
     where
@@ -99,6 +107,10 @@ impl Path {
     /// Parses a hierarchical logical path using normalized semantics.
     ///
     /// Returns an invalid-path error for empty input, NUL, or root escape.
+    ///
+    /// # Errors
+    /// Returns [`FsError`] with an invalid-path kind when `text` is empty,
+    /// contains NUL, or escapes above the hierarchical root.
     #[inline]
     pub fn parse(text: &str) -> FsResult<Self> {
         Self::parse_with_semantics(text, PathSemantics::Hierarchical)
@@ -107,6 +119,10 @@ impl Path {
     /// Parses a provider-literal path without interpreting separators or dots.
     ///
     /// Returns an invalid-path error for empty input or NUL.
+    ///
+    /// # Errors
+    /// Returns [`FsError`] with an invalid-path kind when `text` is empty or
+    /// contains NUL.
     #[inline]
     pub fn parse_literal(text: &str) -> FsResult<Self> {
         Self::parse_with_semantics(text, PathSemantics::ObjectKey)
@@ -116,6 +132,14 @@ impl Path {
     ///
     /// Hierarchical values normalize empty and dot components and reject root
     /// escapes. Object-key and provider-specific values preserve their text.
+    ///
+    /// # Parameters
+    /// - `text`: Provider path text to validate and normalize.
+    /// - `semantics`: Path semantics controlling normalization and root rules.
+    ///
+    /// # Errors
+    /// Returns an invalid-path error when `text` is empty, contains NUL, or
+    /// escapes above the hierarchical root.
     pub fn parse_with_semantics(text: &str, semantics: PathSemantics) -> FsResult<Self> {
         if text.is_empty() || text.contains('\0') {
             return Err(invalid_path());
@@ -173,6 +197,10 @@ impl Path {
     /// A root path and a literal path ending in a separator have no file
     /// name. Hierarchical paths are canonicalized during parsing, so their
     /// final component is always non-empty.
+    ///
+    /// # Returns
+    /// `Some` with the final non-empty component, or `None` for a root or a
+    /// literal path ending in a separator.
     #[inline]
     #[must_use]
     pub fn file_name(&self) -> Option<&str> {

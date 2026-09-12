@@ -38,6 +38,13 @@ impl RelativePath {
     ///
     /// Returns an invalid-path error for empty or absolute input, NUL, or a
     /// traversal sequence that escapes above the relative root.
+    ///
+    /// # Parameters
+    /// - `text`: Relative path text to normalize and validate.
+    ///
+    /// # Errors
+    /// Returns an invalid-path error when `text` is empty, absolute, contains
+    /// NUL, or escapes above the relative root.
     pub fn parse(text: &str) -> FsResult<Self> {
         if text.is_empty() || text.starts_with('/') || text.contains('\0') {
             return Err(invalid_relative());

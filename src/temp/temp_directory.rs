@@ -90,6 +90,17 @@ impl TempDirectory {
         self.path.join(relative)
     }
     /// Persists this directory.
+    ///
+    /// # Parameters
+    /// - `target`: Destination path validated by the owning filesystem.
+    /// - `options`: Atomicity and publication requirements.
+    ///
+    /// # Returns
+    /// The provider-confirmed publication outcome.
+    ///
+    /// # Errors
+    /// Returns a typed failure for invalid lifecycle state, failed preflight,
+    /// provider failure, or a provider contract violation.
     #[allow(clippy::result_large_err)]
     pub fn persist(&mut self, target: &Path, options: PersistOptions) -> Result<PersistOutcome, PersistFailure> {
         if self.lifecycle.state() != TempResourceState::Owned {
@@ -145,6 +156,13 @@ impl TempDirectory {
         }
     }
     /// Publishes this temporary directory to the provider-generated target.
+    ///
+    /// # Returns
+    /// The provider-confirmed publication outcome and generated target.
+    ///
+    /// # Errors
+    /// Returns a typed failure when ownership is unavailable, provider
+    /// publication fails, or the provider returns an invalid target.
     #[allow(clippy::result_large_err)]
     pub fn keep(&mut self) -> Result<PersistOutcome, PersistFailure> {
         if let Err(error) = self.ensure_owned(FsOperation::KeepTemp) {
@@ -169,6 +187,10 @@ impl TempDirectory {
         }
     }
     /// Cleans the temporary directory.
+    ///
+    /// # Errors
+    /// Returns an invalid-state error when cleanup is no longer legal, or the
+    /// provider cleanup error when cleanup cannot be confirmed.
     pub fn cleanup(&mut self) -> FsResult<()> {
         if !matches!(
             self.lifecycle.state(),

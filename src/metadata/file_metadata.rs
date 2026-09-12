@@ -125,6 +125,10 @@ impl FileMetadata {
     }
 
     /// Returns the content type, if known.
+    ///
+    /// # Returns
+    /// `Some` with the content type borrowed from this snapshot, or `None` when
+    /// the provider did not report one.
     #[inline]
     #[must_use]
     pub fn content_type(&self) -> Option<&str> {
