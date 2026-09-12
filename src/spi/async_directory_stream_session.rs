@@ -14,6 +14,14 @@ use crate::metadata::DirEntry;
 
 /// Provider session underlying a concrete
 /// [`crate::directory::AsyncDirectoryStream`].
+///
+/// # Examples
+///
+/// ```
+/// use qubit_fs::spi::AsyncDirectoryStreamSession;
+///
+/// fn accepts_session<T: AsyncDirectoryStreamSession>() {}
+/// ```
 pub trait AsyncDirectoryStreamSession: Send {
     /// Asynchronously reads the next directory entry or provider page.
     ///

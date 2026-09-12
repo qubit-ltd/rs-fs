@@ -15,6 +15,14 @@ use crate::error::FsResult;
 use crate::temp::PersistOutcome;
 
 /// Provider temporary-resource lifecycle session.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_fs::spi::TempResourceSpi;
+///
+/// fn accepts_session<T: TempResourceSpi>() {}
+/// ```
 pub trait TempResourceSpi: Send {
     /// Persists a temporary resource.
     ///

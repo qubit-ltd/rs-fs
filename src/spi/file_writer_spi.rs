@@ -17,6 +17,16 @@ use crate::metadata::WriteOutcome;
 use crate::write::WriteAbortOutcome;
 
 /// Provider writer session.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_fs::spi::FileWriterSpi;
+/// use qubit_io::Output;
+///
+/// fn accepts_writer<T: FileWriterSpi>() {}
+/// fn accepts_output<T: Output<Item = u8>>() {}
+/// ```
 pub trait FileWriterSpi: Output<Item = u8> + Send {
     /// Publishes accepted bytes.
     ///
