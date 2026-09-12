@@ -33,6 +33,18 @@ use crate::temp::internal::TempLifecycle;
 
 /// Temporary directory retaining the provider session until lifecycle
 /// completion.
+///
+/// # Examples
+///
+/// ```rust
+/// # use qubit_fs::rustdoc_provider;
+/// # let filesystem = qubit_fs::rustdoc_provider::filesystem();
+/// use qubit_fs::temp::{TempOptions, TempResourceState};
+///
+/// let mut temporary = filesystem.create_temp_directory(TempOptions::default())?;
+/// assert_eq!(TempResourceState::Owned, temporary.state());
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 pub struct TempDirectory {
     /// Facade that owns validation and persistence policy.
     filesystem: FileSystem,

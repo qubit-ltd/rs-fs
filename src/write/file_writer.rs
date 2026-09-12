@@ -42,9 +42,8 @@ use crate::write::WriterState;
 /// This example uses an isolated in-memory provider fixture.
 ///
 /// ```rust
-/// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
-/// # use support::*;
-/// # let filesystem = rustdoc_provider::filesystem();
+/// # use qubit_fs::rustdoc_provider;
+/// # let filesystem = qubit_fs::rustdoc_provider::filesystem();
 /// use qubit_fs::Path;
 /// use qubit_fs::write::WriteOptions;
 /// use qubit_fs::write::WriterState;

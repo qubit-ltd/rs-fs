@@ -82,3 +82,12 @@ pub use error::FsError;
 pub use error::FsResult;
 pub use file_system::FileSystem;
 pub use path::Path;
+
+/// In-memory provider fixture for doctests and integration tests.
+#[doc(hidden)]
+pub mod rustdoc_provider {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/common/rustdoc_provider_impl.rs"
+    ));
+}

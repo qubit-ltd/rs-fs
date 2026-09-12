@@ -24,9 +24,8 @@ use crate::metadata::OpenedFileInfo;
 /// their configured facade from a provider or registry integration.
 ///
 /// ```rust
-/// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
-/// # use support::*;
-/// # let filesystem = rustdoc_provider::filesystem();
+/// # use qubit_fs::rustdoc_provider;
+/// # let filesystem = qubit_fs::rustdoc_provider::filesystem();
 /// use qubit_fs::Path;
 /// use qubit_fs::read::ReadOptions;
 /// use qubit_io::Input;
