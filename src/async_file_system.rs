@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 use crate::copy::AsyncCopyFailure;
 use crate::copy::AsyncCopyOperation;
+use crate::copy::CopyAssessment;
 use crate::copy::CopyFailureState;
 use crate::copy::CopyOptions;
 use crate::copy::CopyOutcome;
@@ -85,7 +86,7 @@ use crate::write::WriteOptions;
 /// use qubit_fs::read::ReadOptions;
 ///
 /// let bytes = filesystem.read_prefix(&Path::parse("/report")?, ReadOptions::default(), 3).await?;
-/// assert_eq!(b"byt", bytes.as_slice());
+/// assert_eq!(b"byt", bytes.bytes());
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// # }).unwrap();
 /// ```
@@ -122,6 +123,16 @@ impl AsyncFileSystem {
     #[must_use]
     pub fn properties(&self) -> &FileSystemProperties {
         self.core.properties()
+    }
+
+    /// Validates a write request without opening a provider session.
+    pub fn validate_write(&self, path: &Path, options: &WriteOptions) -> FsResult<()> {
+        self.core.validate_write_request(path, options)
+    }
+
+    /// Assesses copy routes without performing provider I/O.
+    pub fn assess_copy(&self, source: &Path, target: &Path, options: &CopyOptions) -> FsResult<CopyAssessment> {
+        self.core.assess_copy(source, target, options)
     }
 
     /// Returns shared deterministic facade policy to operation objects.
@@ -186,6 +197,16 @@ impl AsyncFileSystem {
     /// Returns a validation, capability, provider, or provider-contract error
     /// when the reader cannot be opened safely.
     pub async fn open_reader(&self, path: &Path, options: ReadOptions) -> FsResult<AsyncFileReader> {
+        self.open_reader_resolved(path, ResolvedReadOptions::new(options)).await
+    }
+
+    /// Opens a facade-validated asynchronous reader with an internal hint.
+    pub(crate) async fn open_reader_resolved(
+        &self,
+        path: &Path,
+        resolved: ResolvedReadOptions,
+    ) -> FsResult<AsyncFileReader> {
+        let options = resolved.options().clone();
         self.validate_path(path, FsOperation::OpenReader)?;
         options
             .validate_against(self.properties().capabilities())
@@ -197,7 +218,7 @@ impl AsyncFileSystem {
         self.require(FileSystemCapability::Read, FsOperation::OpenReader, path)?;
         let opened = self
             .spi
-            .open_reader(OpenReaderRequest::new(path, ResolvedReadOptions::new(options)))
+            .open_reader(OpenReaderRequest::new(path, resolved))
             .await
             .map_err(|error| self.enrich(error, path, FsOperation::OpenReader))?;
         self.validate_opened_info(opened.info(), path)?;
@@ -218,7 +239,12 @@ impl AsyncFileSystem {
     /// # Errors
     /// Returns the reader or read error when validation, opening, or bounded
     /// reading fails.
-    pub async fn read_prefix(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
+    pub async fn read_prefix(
+        &self,
+        path: &Path,
+        options: ReadOptions,
+        max_bytes: usize,
+    ) -> FsResult<crate::read::PrefixReadOutcome> {
         AsyncReadOperation::new(self)
             .read_prefix(path, options, max_bytes)
             .await

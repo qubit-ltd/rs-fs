@@ -17,5 +17,5 @@ fn test_read_prefix_stops_at_requested_maximum() {
     let bytes = file_system
         .read_prefix(&path, ReadOptions::default(), 3)
         .expect("bounded prefix read should succeed");
-    assert_eq!(b"byt", bytes.as_slice());
+    assert_eq!(b"byt", bytes.bytes());
 }

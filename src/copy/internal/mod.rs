@@ -28,3 +28,4 @@ pub(crate) use fallback_failure_state::from_completed_stats;
 pub(crate) use fallback_failure_state::from_write_failure_state;
 pub(crate) use fallback_failure_state::from_writer_state;
 pub(crate) use stream_copy_plan::StreamCopyPlan;
+pub(crate) use stream_copy_policy::fallback_rejection;

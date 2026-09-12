@@ -63,7 +63,7 @@ fn assert_prefix(async_mode: bool) {
             .read_prefix(&path, ReadOptions::default(), 3)
     }
     .unwrap();
-    assert_eq!(result, b"abc");
+    assert_eq!(result.bytes(), b"abc");
     assert_eq!(observations.opens.load(Ordering::SeqCst), 1);
     assert_eq!(observations.stats.load(Ordering::SeqCst), 0);
     assert_eq!(observations.read_bytes.load(Ordering::SeqCst), 3);
@@ -126,7 +126,7 @@ fn check_case(
         assert_eq!(observations.stats.load(Ordering::SeqCst), 0);
         match &expected {
             Ok((seen, bytes)) => {
-                assert_eq!(result.unwrap(), *bytes);
+                assert_eq!(result.unwrap().bytes(), *bytes);
                 assert_eq!(observations.opens.load(Ordering::SeqCst), 1);
                 assert_eq!(observations.seen.lock().unwrap().as_slice(), std::slice::from_ref(seen));
                 assert_eq!(observations.read_bytes.load(Ordering::SeqCst), bytes.len());

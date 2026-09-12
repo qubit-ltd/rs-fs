@@ -122,7 +122,7 @@ fn test_fs_error_into_io_error_maps_categories() {
         (FsErrorKind::UnsupportedCapability, io::ErrorKind::Unsupported),
         (FsErrorKind::Timeout, io::ErrorKind::TimedOut),
         (FsErrorKind::Interrupted, io::ErrorKind::Interrupted),
-        (FsErrorKind::Cancelled, io::ErrorKind::Interrupted),
+        (FsErrorKind::Cancelled, io::ErrorKind::Other),
         (FsErrorKind::QuotaExceeded, io::ErrorKind::StorageFull),
         (FsErrorKind::DataCorruption, io::ErrorKind::InvalidData),
         (FsErrorKind::Conflict, io::ErrorKind::Other),

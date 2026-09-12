@@ -9,8 +9,6 @@
 // facade tests.
 //! Synchronous read operation implementation.
 
-use qubit_io::Input;
-
 use crate::FileSystem;
 use crate::error::FsError;
 use crate::error::FsOperation;
@@ -18,8 +16,11 @@ use crate::error::FsResult;
 use crate::facade::facade_core::FacadeCore;
 use crate::facade::internal::FileSystemResource;
 use crate::path::Path;
+use crate::read::PrefixReadOutcome;
+use crate::read::PrefixReadTermination;
 use crate::read::ReadOptions;
 use crate::read::internal::ReadBuffer;
+use crate::read::internal::read_retry_interrupted;
 use crate::read::prefix_read_plan::PrefixReadPlan;
 
 /// Executes aggregate synchronous read operations for one facade.
@@ -65,7 +66,7 @@ impl<'a> ReadOperation<'a> {
             let remaining = read_budget.remaining();
             let read_len =
                 usize::try_from(remaining.saturating_add(1)).map_or(buffer.len(), |value| value.min(buffer.len()));
-            let read = Input::read(&mut reader, &mut buffer[..read_len]).map_err(|error| {
+            let read = read_retry_interrupted(&mut reader, &mut buffer[..read_len], || Ok(())).map_err(|error| {
                 FsError::from_stream_io(error, FsOperation::Read, path)
                     .with_provider(self.filesystem.properties().info().provider_id())
             })?;
@@ -94,27 +95,48 @@ impl<'a> ReadOperation<'a> {
     }
 
     /// Reads at most `max_bytes` from a file without requiring a complete read.
-    pub(crate) fn read_prefix(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
+    pub(crate) fn read_prefix(
+        &self,
+        path: &Path,
+        options: ReadOptions,
+        max_bytes: usize,
+    ) -> FsResult<PrefixReadOutcome> {
+        let original_options = options.clone();
         let plan = PrefixReadPlan::new(self.filesystem.properties(), path, options, max_bytes)?;
-        let mut reader = self.filesystem.open_reader(path, plan.into_options())?;
+        let mut reader = self.filesystem.open_reader_resolved(path, plan.into_options())?;
+        let info = reader.info().clone();
         if max_bytes == 0 {
-            return Ok(Vec::new());
+            return Ok(PrefixReadOutcome::new(
+                Vec::new(),
+                info,
+                original_options,
+                max_bytes,
+                PrefixReadTermination::LimitReached,
+            ));
         }
         let mut result = ReadBuffer::new(max_bytes);
         let mut buffer = [0_u8; FacadeCore::PREFIX_BUFFER_SIZE];
+        let mut termination = PrefixReadTermination::LimitReached;
         while result.len() < max_bytes {
             let read_len = FacadeCore::next_prefix_read_len(result.len(), max_bytes);
-            let read = Input::read(&mut reader, &mut buffer[..read_len]).map_err(|error| {
+            let read = read_retry_interrupted(&mut reader, &mut buffer[..read_len], || Ok(())).map_err(|error| {
                 FsError::from_stream_io(error, FsOperation::Read, path)
                     .with_provider(self.filesystem.properties().info().provider_id())
             })?;
             if read == 0 {
+                termination = PrefixReadTermination::StreamEnded;
                 break;
             }
             result
                 .try_append(&buffer[..read])
                 .map_err(|error| self.filesystem.core().enrich(error, Some(path), FsOperation::Read))?;
         }
-        Ok(result.into_vec())
+        Ok(PrefixReadOutcome::new(
+            result.into_vec(),
+            info,
+            original_options,
+            max_bytes,
+            termination,
+        ))
     }
 }
