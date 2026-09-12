@@ -20,6 +20,17 @@ use super::OpenFailureStage;
 /// recovery session before reporting failure. Dropping the error does not
 /// confirm cleanup. There is deliberately no conversion into `FsError` that
 /// discards recovery.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::error::{FsError, FsErrorKind, FsOperation, OpenFailure, OpenFailureStage};
+///
+/// assert!(std::any::type_name::<OpenFailure<()>>().contains("OpenFailure"));
+/// let error = FsError::new(FsErrorKind::NotFound, FsOperation::OpenReader, "missing");
+/// assert_eq!(FsOperation::OpenReader, error.operation());
+/// assert_eq!(OpenFailureStage::Preflight, OpenFailureStage::Preflight);
+/// ```
 #[must_use = "inspect and retain recovery ownership before abandoning an open failure"]
 pub struct OpenFailure<R> {
     /// Original contextual failure, unchanged by later recovery.

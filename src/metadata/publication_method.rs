@@ -9,6 +9,14 @@
 //! Methods used to publish filesystem changes.
 
 /// Concrete method used to publish a successful filesystem change.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::metadata::PublicationMethod;
+///
+/// assert!(matches!(PublicationMethod::Direct, PublicationMethod::Direct));
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PublicationMethod {
     /// Bytes were written directly to the destination.

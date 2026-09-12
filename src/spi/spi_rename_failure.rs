@@ -13,6 +13,20 @@ use crate::error::FsError;
 use crate::rename::RenameFailureState;
 
 /// Typed provider rename failure reserved for rename orchestration.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::error::{FsError, FsErrorKind, FsOperation};
+/// use qubit_fs::rename::RenameFailureState;
+/// use qubit_fs::spi::SpiRenameFailure;
+///
+/// let failure = SpiRenameFailure::new(
+///     FsError::new(FsErrorKind::NotFound, FsOperation::Rename, "missing"),
+///     RenameFailureState::Unchanged,
+/// );
+/// assert_eq!(RenameFailureState::Unchanged, failure.state());
+/// ```
 pub struct SpiRenameFailure {
     /// Provider failure with filesystem context.
     error: Box<FsError>,

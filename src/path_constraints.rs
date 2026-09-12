@@ -16,6 +16,15 @@ use crate::path::Path;
 use crate::path::PathForm;
 
 /// Immutable path form constraints attached to one filesystem snapshot.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::path::{PathConstraints, PathForm};
+///
+/// let constraints = PathConstraints::absolute();
+/// assert_eq!(PathForm::Absolute, constraints.form());
+/// ```
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PathConstraints {
     /// Accepted absolute-versus-relative path policy.

@@ -16,6 +16,14 @@ use crate::metadata::FileSystemCapabilities;
 use crate::metadata::FileSystemCapability;
 
 /// Options controlling rename operations.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::rename::RenameOptions;
+///
+/// assert!(!RenameOptions::default().overwrite());
+/// ```
 #[non_exhaustive]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RenameOptions {

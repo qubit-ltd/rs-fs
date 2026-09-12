@@ -13,6 +13,15 @@ use crate::error::FsOperation;
 use crate::error::FsResult;
 
 /// Statistics collected during copy operations.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::copy::CopyStats;
+///
+/// let stats = CopyStats { files: 3, ..CopyStats::default() };
+/// assert_eq!(3, stats.files);
+/// ```
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct CopyStats {
     /// Number of regular files copied.

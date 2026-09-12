@@ -8,6 +8,14 @@
 //! Checksum policy for read operations.
 
 /// Checksum behavior requested by a read operation.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::read::ChecksumPolicy;
+///
+/// assert_eq!(ChecksumPolicy::None, ChecksumPolicy::default());
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ChecksumPolicy {
     /// Do not require checksum validation.

@@ -9,6 +9,14 @@
 //! Checksum algorithm model.
 
 /// Checksum algorithm.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::metadata::ChecksumAlgorithm;
+///
+/// assert!(matches!(ChecksumAlgorithm::Sha256, ChecksumAlgorithm::Sha256));
+/// ```
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ChecksumAlgorithm {
     /// MD5 checksum.

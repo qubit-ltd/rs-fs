@@ -14,6 +14,15 @@ use crate::metadata::ResourceVersion;
 use crate::metadata::UserMetadata;
 
 /// Outcome returned when a writer is committed.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::metadata::{AchievedAtomicity, PublicationMethod, WriteOutcome};
+///
+/// let outcome = WriteOutcome::new(AchievedAtomicity::Atomic, PublicationMethod::Direct);
+/// assert_eq!(AchievedAtomicity::Atomic, outcome.atomicity());
+/// ```
 #[derive(Clone, Debug, PartialEq)]
 pub struct WriteOutcome {
     /// Number of bytes written when known.

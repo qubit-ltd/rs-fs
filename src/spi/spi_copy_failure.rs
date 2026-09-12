@@ -14,6 +14,22 @@ use crate::copy::CopyStats;
 use crate::error::FsError;
 
 /// Typed provider copy failure reserved for copy orchestration.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::copy::CopyFailureState;
+/// use qubit_fs::copy::CopyStats;
+/// use qubit_fs::error::{FsError, FsErrorKind, FsOperation};
+/// use qubit_fs::spi::SpiCopyFailure;
+///
+/// let failure = SpiCopyFailure::new(
+///     FsError::new(FsErrorKind::Io, FsOperation::Copy, "failed"),
+///     CopyFailureState::Unchanged,
+///     CopyStats::default(),
+/// );
+/// assert_eq!(CopyFailureState::Unchanged, failure.state());
+/// ```
 pub struct SpiCopyFailure {
     /// Provider failure with filesystem context.
     error: Box<FsError>,

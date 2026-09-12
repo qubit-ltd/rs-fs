@@ -13,6 +13,51 @@ use super::AsyncFileWriteSession;
 use crate::metadata::OpenedFileInfo;
 
 /// An already-open asynchronous writer bound to provider identity.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::metadata::{FileKind, FileMetadata, FileSystemId, OpenedFileInfo};
+/// use qubit_fs::path::Path;
+/// use qubit_fs::spi::{AsyncFileWriteSession, OpenedAsyncWriter, SpiFuture};
+/// use qubit_fs::write::{WriteAbortOutcome, WriteFailure};
+/// use qubit_io::AsyncOutput;
+/// use std::io::Result as IoResult;
+/// use std::pin::Pin;
+/// use std::task::{Context, Poll};
+///
+/// struct Session;
+/// impl AsyncOutput for Session {
+///     type Item = u8;
+///     unsafe fn poll_write_unchecked(
+///         self: Pin<&mut Self>,
+///         _: &mut Context<'_>,
+///         _: &[u8],
+///         _: usize,
+///         count: usize,
+///     ) -> Poll<IoResult<usize>> {
+///         Poll::Ready(Ok(count))
+///     }
+///     fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<IoResult<()>> {
+///         Poll::Ready(Ok(()))
+///     }
+/// }
+/// impl AsyncFileWriteSession for Session {
+///     fn commit_async<'a>(
+///         self: Pin<&'a mut Self>,
+///     ) -> SpiFuture<'a, Result<qubit_fs::metadata::WriteOutcome, WriteFailure>> {
+///         Box::pin(async { unreachable!() })
+///     }
+///     fn abort_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, qubit_fs::error::FsResult<WriteAbortOutcome>> {
+///         Box::pin(async { Ok(WriteAbortOutcome::NotPublished) })
+///     }
+/// }
+/// let info = OpenedFileInfo::new(FileSystemId::new("doc")?, Path::parse("/draft")?)
+///     .with_metadata(FileMetadata::new(FileKind::File));
+/// let writer = OpenedAsyncWriter::new(info, Box::new(Session));
+/// assert_eq!("/draft", writer.info().path().as_str());
+/// # Ok::<(), qubit_fs::FsError>(())
+/// ```
 pub struct OpenedAsyncWriter {
     /// Resource identity claimed by the provider.
     info: OpenedFileInfo,

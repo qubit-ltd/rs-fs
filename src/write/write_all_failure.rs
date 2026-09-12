@@ -17,6 +17,18 @@ use crate::write::WriteFailureState;
 use crate::write::WriterRecovery;
 
 /// A whole-file write failure retaining the recoverable writer when available.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::error::{FsError, FsErrorKind, FsOperation};
+/// use qubit_fs::write::{WriteAllFailure, WriteFailureState};
+///
+/// assert!(std::any::type_name::<WriteAllFailure>().contains("WriteAllFailure"));
+/// let error = FsError::new(FsErrorKind::Io, FsOperation::Write, "failed");
+/// assert_eq!(WriteFailureState::NotPublished, WriteFailureState::NotPublished);
+/// assert_eq!(FsOperation::Write, error.operation());
+/// ```
 pub struct WriteAllFailure {
     /// Contextual filesystem error that interrupted the whole-file write.
     error: Box<FsError>,

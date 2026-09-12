@@ -11,6 +11,17 @@
 //! Iteration over lexical logical path components.
 
 /// Iterator over the path's lexical component boundaries.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::path::{Path, PathComponents};
+///
+/// let path = Path::parse("/a/b")?;
+/// let components: PathComponents<'_> = path.components();
+/// assert_eq!(2, components.count());
+/// # Ok::<(), qubit_fs::FsError>(())
+/// ```
 #[derive(Clone, Debug)]
 pub struct PathComponents<'a> {
     /// Remaining lexical text with an absolute leading separator removed.

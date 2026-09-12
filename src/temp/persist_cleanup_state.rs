@@ -8,6 +8,14 @@
 //! Cleanup state reported after temporary-resource persistence.
 
 /// State of the private temporary container after publication succeeds.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::temp::PersistCleanupState;
+///
+/// assert!(matches!(PersistCleanupState::Complete, PersistCleanupState::Complete));
+/// ```
 #[must_use]
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

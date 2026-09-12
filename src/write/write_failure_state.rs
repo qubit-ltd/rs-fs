@@ -9,6 +9,14 @@
 //! Recovery states for failed synchronous writes.
 
 /// Provider-confirmed recovery state when a write commit fails.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::write::WriteFailureState;
+///
+/// assert!(matches!(WriteFailureState::NotPublished, WriteFailureState::NotPublished));
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WriteFailureState {
     /// Publication can be retried using the retained session.

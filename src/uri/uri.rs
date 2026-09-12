@@ -20,6 +20,16 @@ use super::invalid_uri;
 use crate::error::FsResult;
 
 /// A validated URI that cannot contain sensitive credentials or a fragment.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::path::Uri;
+///
+/// let uri = Uri::parse("file:///tmp/report.txt")?;
+/// assert_eq!("file", uri.scheme());
+/// # Ok::<(), qubit_fs::FsError>(())
+/// ```
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Uri {
     /// RFC 3986 parser-owned lexical URI representation.

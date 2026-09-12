@@ -8,6 +8,14 @@
 //! Metadata preservation policy.
 
 /// Metadata preservation policy for copy operations.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::copy::MetadataPreservePolicy;
+///
+/// assert_eq!(MetadataPreservePolicy::Portable, MetadataPreservePolicy::default());
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MetadataPreservePolicy {
     /// Do not preserve metadata.

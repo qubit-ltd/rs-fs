@@ -20,6 +20,19 @@ use crate::copy::CopyStats;
 use crate::error::FsError;
 
 /// Copy failure facts retained after an asynchronous copy operation.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::copy::{AsyncCopyFailure, CopyFailureState, CopyStats};
+/// use qubit_fs::error::{FsError, FsErrorKind, FsOperation};
+///
+/// assert!(std::any::type_name::<AsyncCopyFailure>().contains("AsyncCopyFailure"));
+/// let error = FsError::new(FsErrorKind::Io, FsOperation::Copy, "interrupted");
+/// assert_eq!(CopyFailureState::Unchanged, CopyFailureState::Unchanged);
+/// assert_eq!(0, CopyStats::default().bytes);
+/// assert_eq!(FsOperation::Copy, error.operation());
+/// ```
 pub struct AsyncCopyFailure {
     /// Contextual filesystem error that caused the copy to fail.
     error: FsError,

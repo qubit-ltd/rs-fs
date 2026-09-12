@@ -6,6 +6,14 @@
 //! Cleanup facts for an isolated provider session.
 
 /// Cleanup progress, independent of the failed operation's publication facts.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::error::RecoveryCleanupState;
+///
+/// assert!(matches!(RecoveryCleanupState::Pending, RecoveryCleanupState::Pending));
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RecoveryCleanupState {
     /// Explicit cleanup has not started.

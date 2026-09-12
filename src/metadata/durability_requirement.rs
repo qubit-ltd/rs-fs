@@ -10,6 +10,14 @@
 //! Durability requirements for completed filesystem operations.
 
 /// Required storage synchronization strength for an operation outcome.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::metadata::DurabilityRequirement;
+///
+/// assert!(matches!(DurabilityRequirement::NotRequired, DurabilityRequirement::NotRequired));
+/// ```
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum DurabilityRequirement {
     /// The operation must confirm durable data and namespace publication.

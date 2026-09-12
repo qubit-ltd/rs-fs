@@ -13,6 +13,14 @@ use crate::metadata::NonSensitiveMetadata;
 use crate::metadata::UserMetadata;
 
 /// Options controlling directory or collection creation.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::directory::CreateDirectoryOptions;
+///
+/// assert!(!CreateDirectoryOptions::default().recursive());
+/// ```
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub struct CreateDirectoryOptions {

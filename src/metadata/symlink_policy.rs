@@ -10,6 +10,14 @@
 
 /// Controls whether a filesystem may resolve symbolic links while operating
 /// within its configured namespace.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::metadata::SymlinkPolicy;
+///
+/// assert!(matches!(SymlinkPolicy::Reject, SymlinkPolicy::Reject));
+/// ```
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 #[must_use]
 #[non_exhaustive]

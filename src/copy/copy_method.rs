@@ -8,6 +8,14 @@
 //! Copy method model.
 
 /// Method used to complete a copy operation.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::copy::CopyMethod;
+///
+/// assert_eq!(CopyMethod::Streamed, CopyMethod::Streamed);
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CopyMethod {
     /// Provider-native copy.

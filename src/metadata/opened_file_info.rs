@@ -13,6 +13,18 @@ use crate::metadata::FileSystemId;
 use crate::path::Path;
 
 /// Stable file identity plus an optional metadata snapshot captured at open.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::metadata::{FileKind, FileMetadata, FileSystemId, OpenedFileInfo};
+/// use qubit_fs::path::Path;
+///
+/// let info = OpenedFileInfo::new(FileSystemId::new("doc")?, Path::parse("/report")?)
+///     .with_metadata(FileMetadata::new(FileKind::File));
+/// assert_eq!("/report", info.path().as_str());
+/// # Ok::<(), qubit_fs::FsError>(())
+/// ```
 #[derive(Clone, Debug, PartialEq)]
 pub struct OpenedFileInfo {
     /// Stable identity of the filesystem that opened the handle.

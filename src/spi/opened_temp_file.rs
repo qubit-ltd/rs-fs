@@ -13,6 +13,38 @@ use super::TempResourceSpi;
 use crate::metadata::OpenedFileInfo;
 
 /// An already-created provider temporary-file session.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::error::FsResult;
+/// use qubit_fs::metadata::{FileKind, FileMetadata, FileSystemId, OpenedFileInfo};
+/// use qubit_fs::path::Path;
+/// use qubit_fs::spi::TempResourceSpi;
+/// use qubit_fs::spi::OpenedTempFile;
+///
+/// struct EmptyTemp;
+/// impl TempResourceSpi for EmptyTemp {
+///     fn persist(
+///         &mut self,
+///         _: qubit_fs::spi::PersistRequest<'_>,
+///     ) -> Result<qubit_fs::temp::PersistOutcome, qubit_fs::spi::SpiPersistFailure> {
+///         unreachable!()
+///     }
+///     fn keep(
+///         &mut self,
+///     ) -> Result<qubit_fs::temp::PersistOutcome, qubit_fs::spi::SpiPersistFailure> {
+///         unreachable!()
+///     }
+///     fn cleanup(&mut self) -> FsResult<()> {
+///         Ok(())
+///     }
+/// }
+/// let info = OpenedFileInfo::new(FileSystemId::new("doc")?, Path::parse("/scratch")?)
+///     .with_metadata(FileMetadata::new(FileKind::File));
+/// let _opened = OpenedTempFile::new(info, Box::new(EmptyTemp));
+/// # Ok::<(), qubit_fs::FsError>(())
+/// ```
 pub struct OpenedTempFile {
     /// Temporary-file identity claimed by the provider.
     info: OpenedFileInfo,

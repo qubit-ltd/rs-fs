@@ -8,6 +8,14 @@
 //! Copy conflict policy.
 
 /// Conflict policy for existing destination entries.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::copy::CopyConflictPolicy;
+///
+/// assert_eq!(CopyConflictPolicy::Fail, CopyConflictPolicy::default());
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CopyConflictPolicy {
     /// Fail when a destination entry exists.

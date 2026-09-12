@@ -6,6 +6,14 @@
 //! Stages at which an owned resource could not be opened safely.
 
 /// Distinguishes local rejection from provider effects and invalid envelopes.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::error::OpenFailureStage;
+///
+/// assert!(matches!(OpenFailureStage::Preflight, OpenFailureStage::Preflight));
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum OpenFailureStage {
     /// Validation failed before dispatch; no provider I/O occurred.

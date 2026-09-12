@@ -8,6 +8,14 @@
 //! File kind model.
 
 /// Provider-neutral resource kind.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::metadata::FileKind;
+///
+/// assert!(matches!(FileKind::File, FileKind::File));
+/// ```
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum FileKind {
     /// Regular file.

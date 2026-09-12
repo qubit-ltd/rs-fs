@@ -31,6 +31,16 @@ use crate::write::WriteAbortOutcome;
 ///     recovery.commit();
 /// }
 /// ```
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::error::RecoveryCleanupState;
+/// use qubit_fs::write::RejectedWriter;
+///
+/// assert!(std::any::type_name::<RejectedWriter>().contains("RejectedWriter"));
+/// assert_eq!(RecoveryCleanupState::Pending, RecoveryCleanupState::Pending);
+/// ```
 #[must_use = "explicitly clean or retain the isolated recovery session"]
 pub struct RejectedWriter {
     /// The actual provider session, retained independently of cleanup futures.

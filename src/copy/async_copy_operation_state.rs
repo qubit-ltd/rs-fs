@@ -12,6 +12,14 @@
 use crate::copy::CopyFailureState;
 
 /// Stable lifecycle state for [`crate::copy::AsyncCopyOperation`].
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::copy::AsyncCopyOperationState;
+///
+/// assert!(matches!(AsyncCopyOperationState::Ready, AsyncCopyOperationState::Ready));
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AsyncCopyOperationState {
     /// The operation passed synchronous preflight and has not been polled.

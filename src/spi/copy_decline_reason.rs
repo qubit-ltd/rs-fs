@@ -10,6 +10,14 @@
 //! Provider copy-decline reasons.
 
 /// Reason a provider declined its optional copy fast path.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::spi::CopyDeclineReason;
+///
+/// assert!(matches!(CopyDeclineReason::NotImplemented, CopyDeclineReason::NotImplemented));
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum CopyDeclineReason {

@@ -15,6 +15,20 @@ use crate::metadata::OpenedFileInfo;
 use crate::read::AsyncFileReader;
 
 /// An already-open asynchronous reader bound to provider identity.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::metadata::{FileKind, FileMetadata, FileSystemId, OpenedFileInfo};
+/// use qubit_fs::path::Path;
+/// use qubit_fs::spi::OpenedAsyncReader;
+///
+/// let info = OpenedFileInfo::new(FileSystemId::new("doc")?, Path::parse("/x")?)
+///     .with_metadata(FileMetadata::new(FileKind::File));
+/// assert!(std::any::type_name::<OpenedAsyncReader>().contains("OpenedAsyncReader"));
+/// assert_eq!("/x", info.path().as_str());
+/// # Ok::<(), qubit_fs::FsError>(())
+/// ```
 pub struct OpenedAsyncReader {
     /// Resource identity claimed by the provider.
     info: OpenedFileInfo,

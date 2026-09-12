@@ -16,6 +16,14 @@ use crate::metadata::FileSystemCapabilities;
 use crate::metadata::FileSystemCapability;
 
 /// Options controlling temporary resource persistence.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::temp::PersistOptions;
+///
+/// assert!(!PersistOptions::default().overwrite());
+/// ```
 #[non_exhaustive]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PersistOptions {

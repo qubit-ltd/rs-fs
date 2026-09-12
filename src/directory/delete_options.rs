@@ -15,6 +15,14 @@ use crate::metadata::FileSystemCapability;
 use crate::metadata::ResourceVersion;
 
 /// Options controlling delete operations.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::directory::DeleteOptions;
+///
+/// assert!(!DeleteOptions::default().recursive());
+/// ```
 #[non_exhaustive]
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct DeleteOptions {

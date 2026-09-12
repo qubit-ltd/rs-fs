@@ -9,6 +9,14 @@
 //! Typed filesystem capability identifiers.
 
 /// A stable operation or semantic guarantee advertised by a filesystem.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::metadata::FileSystemCapability;
+///
+/// assert!(matches!(FileSystemCapability::Read, FileSystemCapability::Read));
+/// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[repr(u8)]
 #[non_exhaustive]

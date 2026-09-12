@@ -9,6 +9,14 @@
 //! Partial-progress states for failed temporary persistence.
 
 /// Provider-confirmed progress when a persist call does not fully complete.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::temp::PersistFailureState;
+///
+/// assert!(matches!(PersistFailureState::NotPublished, PersistFailureState::NotPublished));
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PersistFailureState {
     /// The target was not published and the handle still owns the source.

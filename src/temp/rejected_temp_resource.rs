@@ -30,6 +30,16 @@ use crate::spi::TempResourceSpi;
 ///     recovery.keep();
 /// }
 /// ```
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::error::RecoveryCleanupState;
+/// use qubit_fs::temp::RejectedTempResource;
+///
+/// assert!(std::any::type_name::<RejectedTempResource>().contains("RejectedTempResource"));
+/// assert_eq!(RecoveryCleanupState::Pending, RecoveryCleanupState::Pending);
+/// ```
 #[must_use = "explicitly clean or retain the isolated recovery session"]
 pub struct RejectedTempResource {
     /// The actual provider session, retained independently of cleanup futures.

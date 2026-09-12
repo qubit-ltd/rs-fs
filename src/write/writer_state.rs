@@ -11,6 +11,14 @@
 use super::WriteFailureState;
 
 /// Observable lifecycle state of a synchronous or asynchronous file writer.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::write::WriterState;
+///
+/// assert!(matches!(WriterState::Open, WriterState::Open));
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WriterState {
     /// The session accepts bytes and may be committed or aborted.

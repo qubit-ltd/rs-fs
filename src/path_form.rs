@@ -10,6 +10,14 @@
 //! Permitted path forms for filesystem property snapshots.
 
 /// Permitted absolute or relative form for paths accepted by a filesystem.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::path::PathForm;
+///
+/// assert!(matches!(PathForm::Absolute, PathForm::Absolute));
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PathForm {
     /// Only absolute paths are accepted.

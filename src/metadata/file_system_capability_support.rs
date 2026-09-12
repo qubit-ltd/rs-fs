@@ -8,6 +8,14 @@
 //! Support status for one filesystem capability.
 
 /// Describes how a filesystem provider can satisfy a capability.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::metadata::FileSystemCapabilitySupport;
+///
+/// assert!(matches!(FileSystemCapabilitySupport::Unsupported, FileSystemCapabilitySupport::Unsupported));
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[must_use]
 pub enum FileSystemCapabilitySupport {

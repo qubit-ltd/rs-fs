@@ -14,6 +14,20 @@ use qubit_io::Input;
 use crate::metadata::OpenedFileInfo;
 
 /// An already-open provider reader.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::metadata::{FileKind, FileMetadata, FileSystemId, OpenedFileInfo};
+/// use qubit_fs::path::Path;
+/// use qubit_fs::spi::OpenedReader;
+/// use std::io::Cursor;
+///
+/// let info = OpenedFileInfo::new(FileSystemId::new("doc")?, Path::parse("/report")?)
+///     .with_metadata(FileMetadata::new(FileKind::File));
+/// let _reader = OpenedReader::new(info, Box::new(Cursor::new(b"report".to_vec())));
+/// # Ok::<(), qubit_fs::FsError>(())
+/// ```
 pub struct OpenedReader {
     /// Resource identity claimed by the provider.
     info: OpenedFileInfo,

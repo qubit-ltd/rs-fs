@@ -13,6 +13,23 @@ use super::CopyDeclineReason;
 use crate::copy::CopyOutcome;
 
 /// Optional provider copy result.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::copy::{CopyMethod, CopyOutcome, CopyStats};
+/// use qubit_fs::metadata::AchievedAtomicity;
+/// use qubit_fs::spi::{CopyAttempt, CopyDeclineReason};
+///
+/// let attempt = CopyAttempt::Completed(CopyOutcome::new(
+///     CopyStats::default(),
+///     CopyMethod::Native,
+///     AchievedAtomicity::Atomic,
+/// ));
+/// assert!(matches!(attempt, CopyAttempt::Completed(_)));
+/// let declined = CopyAttempt::Declined(CopyDeclineReason::NotApplicable);
+/// assert!(matches!(declined, CopyAttempt::Declined(_)));
+/// ```
 #[non_exhaustive]
 pub enum CopyAttempt {
     /// A provider completed the copy.

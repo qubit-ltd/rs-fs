@@ -13,6 +13,20 @@ use crate::path::Path;
 use crate::temp::PersistOptions;
 
 /// A facade-created request to persist a temporary resource.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::path::Path;
+/// use qubit_fs::spi::PersistRequest;
+/// use qubit_fs::temp::PersistOptions;
+///
+/// let target = Path::parse("/final")?;
+/// assert!(std::any::type_name::<PersistRequest<'_>>().contains("PersistRequest"));
+/// assert_eq!("/final", target.as_str());
+/// let _ = PersistOptions::default();
+/// # Ok::<(), qubit_fs::FsError>(())
+/// ```
 pub struct PersistRequest<'a> {
     /// Validated persistence destination.
     target: &'a Path,

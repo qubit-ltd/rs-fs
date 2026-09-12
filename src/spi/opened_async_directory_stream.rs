@@ -17,6 +17,22 @@ use crate::metadata::FileSystemLimits;
 use crate::path::PathSemantics;
 
 /// An already-open asynchronous directory stream.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::error::FsResult;
+/// use qubit_fs::metadata::DirEntry;
+/// use qubit_fs::spi::{AsyncDirectoryStreamSession, OpenedAsyncDirectoryStream, SpiFuture};
+///
+/// struct EmptyStream;
+/// impl AsyncDirectoryStreamSession for EmptyStream {
+///     fn next_entry_async(&mut self) -> SpiFuture<'_, FsResult<Option<DirEntry>>> {
+///         Box::pin(async { Ok(None) })
+///     }
+/// }
+/// let _stream = OpenedAsyncDirectoryStream::new(Box::new(EmptyStream));
+/// ```
 pub struct OpenedAsyncDirectoryStream {
     /// Provider enumeration session awaiting facade validation.
     session: Box<dyn AsyncDirectoryStreamSession>,

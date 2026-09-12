@@ -17,6 +17,22 @@ use crate::metadata::UserMetadata;
 use crate::path::Path;
 
 /// Confirmed result of publishing a temporary source to its final target.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::metadata::{AchievedAtomicity, PublicationMethod};
+/// use qubit_fs::path::Path;
+/// use qubit_fs::temp::PersistOutcome;
+///
+/// let outcome = PersistOutcome::new(
+///     Path::parse("/published")?,
+///     AchievedAtomicity::Atomic,
+///     PublicationMethod::Direct,
+/// );
+/// assert_eq!("/published", outcome.target().as_str());
+/// # Ok::<(), qubit_fs::FsError>(())
+/// ```
 #[derive(Clone, Debug, PartialEq)]
 pub struct PersistOutcome {
     /// Final provider-local target path.

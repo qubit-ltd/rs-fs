@@ -13,6 +13,20 @@ use crate::directory::ListScope;
 use crate::spi::ResolvedListOptions;
 
 /// Validated listing scope and immutable provider-facing options.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::directory::ListOptions;
+/// use qubit_fs::path::Path;
+/// use qubit_fs::spi::ListRequest;
+///
+/// let path = Path::parse("/dir")?;
+/// assert!(std::any::type_name::<ListRequest<'_>>().contains("ListRequest"));
+/// assert_eq!("/dir", path.as_str());
+/// let _ = ListOptions::default();
+/// # Ok::<(), qubit_fs::FsError>(())
+/// ```
 pub struct ListRequest<'a> {
     /// Caller-selected prefix or configured namespace.
     scope: &'a ListScope,

@@ -10,6 +10,15 @@
 use crate::metadata::ChecksumAlgorithm;
 
 /// Content checksum.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::metadata::{Checksum, ChecksumAlgorithm};
+///
+/// let checksum = Checksum::new(ChecksumAlgorithm::Sha256, "deadbeef");
+/// assert_eq!(ChecksumAlgorithm::Sha256, checksum.algorithm);
+/// ```
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Checksum {
     /// Algorithm used to compute the checksum.

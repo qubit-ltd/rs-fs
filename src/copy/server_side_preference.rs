@@ -8,6 +8,14 @@
 //! Server-side copy preference.
 
 /// Preference for provider-native server-side copy.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::copy::ServerSidePreference;
+///
+/// assert_eq!(ServerSidePreference::Disable, ServerSidePreference::default());
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ServerSidePreference {
     /// Prefer server-side copy and allow fallback.

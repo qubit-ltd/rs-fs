@@ -8,6 +8,14 @@
 //! State for an owning asynchronous whole-file write.
 use crate::write::WriteFailureState;
 /// Lifecycle state of an owning asynchronous whole-file write.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::write::AsyncWriteAllOperationState;
+///
+/// assert!(matches!(AsyncWriteAllOperationState::Ready, AsyncWriteAllOperationState::Ready));
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[must_use]
 pub enum AsyncWriteAllOperationState {

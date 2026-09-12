@@ -14,6 +14,17 @@ use crate::metadata::FileMetadata;
 use crate::path::Path;
 
 /// One entry returned by directory listing.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::metadata::{DirEntry, FileKind};
+/// use qubit_fs::path::Path;
+///
+/// let entry = DirEntry::new(Path::parse("/a")?, FileKind::File);
+/// assert_eq!("/a", entry.path.as_str());
+/// # Ok::<(), qubit_fs::FsError>(())
+/// ```
 #[derive(Clone, Debug, PartialEq)]
 pub struct DirEntry {
     /// Provider-local path of the entry.

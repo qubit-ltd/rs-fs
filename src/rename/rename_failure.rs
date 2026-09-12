@@ -19,6 +19,18 @@ use crate::error::FsError;
 use crate::rename::RenameFailureState;
 
 /// A rename failure that preserves the provider's publication-state fact.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::error::{FsError, FsErrorKind, FsOperation};
+/// use qubit_fs::rename::{RenameFailure, RenameFailureState};
+///
+/// assert!(std::any::type_name::<RenameFailure>().contains("RenameFailure"));
+/// let error = FsError::new(FsErrorKind::NotFound, FsOperation::Rename, "missing");
+/// assert_eq!(RenameFailureState::Unchanged, RenameFailureState::Unchanged);
+/// assert_eq!(FsOperation::Rename, error.operation());
+/// ```
 pub struct RenameFailure {
     /// Contextual filesystem error that interrupted the rename.
     error: FsError,

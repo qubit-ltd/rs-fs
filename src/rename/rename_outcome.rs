@@ -14,6 +14,23 @@ use crate::metadata::UserMetadata;
 use crate::path::Path;
 
 /// Outcome of a rename, move, or provider-equivalent publication.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::metadata::{AchievedAtomicity, PublicationMethod};
+/// use qubit_fs::path::Path;
+/// use qubit_fs::rename::RenameOutcome;
+///
+/// let outcome = RenameOutcome::new(
+///     Path::parse("/src")?,
+///     Path::parse("/dest")?,
+///     AchievedAtomicity::Atomic,
+///     PublicationMethod::Direct,
+/// );
+/// assert_eq!("/dest", outcome.target().as_str());
+/// # Ok::<(), qubit_fs::FsError>(())
+/// ```
 #[derive(Clone, Debug, PartialEq)]
 pub struct RenameOutcome {
     /// Atomicity achieved while publishing the destination.
