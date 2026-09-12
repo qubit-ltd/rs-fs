@@ -23,6 +23,7 @@ use qubit_fs::FsError;
 use qubit_fs::FsResult;
 use qubit_fs::Path;
 use qubit_fs::copy::CopyConflictPolicy;
+use qubit_fs::copy::CopyExecutionRoute;
 use qubit_fs::copy::CopyFailureState;
 use qubit_fs::copy::CopyOptions;
 use qubit_fs::directory::CreateDirectoryOptions;
@@ -118,6 +119,17 @@ fn test_async_write_all_publishes_complete_bytes() {
     let outcome = ready(operation.execute()).expect("async write-all should commit");
     assert_eq!(AchievedAtomicity::Atomic, outcome.atomicity());
     assert_eq!(vec!["open_writer"], probe.calls(),);
+}
+
+#[test]
+fn test_assess_copy_async_matches_sync_preflight() {
+    let (filesystem, probe) = async_recording_file_system(AsyncRecordingConfig::default());
+    let assessment = filesystem
+        .assess_copy(&path("/source"), &path("/target"), &CopyOptions::default())
+        .expect("copy assessment should succeed");
+    assert_eq!(assessment.route(), CopyExecutionRoute::ProviderThenStream);
+    assert_eq!(assessment.fallback_rejection(), None);
+    assert!(probe.calls().is_empty());
 }
 
 /// Verifies a failed asynchronous commit retains the writer for recovery.

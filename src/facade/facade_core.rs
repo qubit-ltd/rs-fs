@@ -95,6 +95,11 @@ impl FacadeCore {
         self.require(FileSystemCapability::Write, FsOperation::OpenWriter, Some(path))
     }
 
+    /// Assesses copy routes from the immutable provider snapshot without I/O.
+    ///
+    /// # Errors
+    /// Returns an invalid-options or requirement error when the paths or copy
+    /// options cannot be served by either the provider or the stream fallback.
     pub(crate) fn assess_copy(&self, source: &Path, target: &Path, options: &CopyOptions) -> FsResult<CopyAssessment> {
         self.validate_path(source, FsOperation::Copy)?;
         self.validate_path(target, FsOperation::Copy)?;
