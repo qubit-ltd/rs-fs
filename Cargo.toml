@@ -18,9 +18,9 @@ include = [
     "/README.md",
     "/README.zh_CN.md",
     "/benches/**",
-    "/doc/*.md",
+    "/doc/**",
     "/src/**",
-    "/tests/common/rustdoc_support.rs",
+    "/tests/**",
 ]
 
 [lib]
