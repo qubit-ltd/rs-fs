@@ -131,6 +131,10 @@ impl AsyncFileSystem {
     }
 
     /// Assesses copy routes without performing provider I/O.
+    ///
+    /// # Errors
+    /// Returns an invalid-options or requirement error when no provider or
+    /// stream execution route can satisfy the request.
     pub fn assess_copy(&self, source: &Path, target: &Path, options: &CopyOptions) -> FsResult<CopyAssessment> {
         self.core.assess_copy(source, target, options)
     }

@@ -11,6 +11,24 @@ use crate::read::PrefixReadTermination;
 use crate::read::ReadOptions;
 
 /// Bytes read from one opened resource together with bounded-read facts.
+///
+/// `LimitReached` means the requested bound was consumed without probing for
+/// another byte; it does not prove that the stream has ended.
+///
+/// # Examples
+///
+/// ```rust
+/// # fn main() -> Result<(), qubit_fs::FsError> {
+/// use qubit_fs::Path;
+/// use qubit_fs::read::PrefixReadTermination;
+/// use qubit_fs::read::ReadOptions;
+/// let fs = qubit_fs::rustdoc_provider::filesystem();
+/// let outcome = fs.read_prefix(&Path::parse("/report")?, ReadOptions::default(), 3)?;
+/// assert_eq!(outcome.bytes(), b"rep");
+/// assert_eq!(outcome.termination(), PrefixReadTermination::LimitReached);
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug)]
 pub struct PrefixReadOutcome {
     bytes: Vec<u8>,

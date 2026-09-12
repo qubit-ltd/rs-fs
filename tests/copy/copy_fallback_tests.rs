@@ -18,11 +18,13 @@ use qubit_fs::FsError;
 use qubit_fs::FsResult;
 use qubit_fs::Path;
 use qubit_fs::copy::CopyConflictPolicy;
+use qubit_fs::copy::CopyExecutionRoute;
 use qubit_fs::copy::CopyFailureState;
 use qubit_fs::copy::CopyMethod;
 use qubit_fs::copy::CopyOptions;
 use qubit_fs::copy::CopyOutcome;
 use qubit_fs::copy::CopyStats;
+use qubit_fs::copy::FallbackRejection;
 use qubit_fs::copy::MetadataPreservePolicy;
 use qubit_fs::copy::ServerSidePreference;
 use qubit_fs::directory::CreateDirectoryOutcome;
@@ -565,6 +567,49 @@ impl FileWriterSpi for RecordingWriter {
     fn abort(&mut self) -> FsResult<WriteAbortOutcome> {
         Ok(WriteAbortOutcome::NotPublished)
     }
+}
+
+#[test]
+fn test_assess_copy_provider_then_stream_has_no_io() {
+    let (filesystem, calls, _) = recording_filesystem(CopyResponse::Declined);
+    let assessment = filesystem
+        .assess_copy(&path("/source"), &path("/target"), &CopyOptions::default())
+        .expect("copy assessment should succeed");
+    assert_eq!(assessment.route(), CopyExecutionRoute::ProviderThenStream);
+    assert_eq!(assessment.fallback_rejection(), None);
+    assert!(calls.lock().expect("calls lock should succeed").is_empty());
+}
+
+#[test]
+fn test_assess_copy_stream_only_has_no_io() {
+    let (filesystem, calls, _) = recording_filesystem_without_copy(CopyResponse::Declined);
+    let assessment = filesystem
+        .assess_copy(&path("/source"), &path("/target"), &CopyOptions::default())
+        .expect("copy assessment should succeed");
+    assert_eq!(assessment.route(), CopyExecutionRoute::StreamOnly);
+    assert_eq!(assessment.fallback_rejection(), None);
+    assert!(calls.lock().expect("calls lock should succeed").is_empty());
+}
+
+#[test]
+fn test_assess_copy_tree_is_provider_only() {
+    let (filesystem, calls, _) = recording_filesystem(CopyResponse::Declined);
+    let assessment = filesystem
+        .assess_copy(&path("/source"), &path("/target"), &CopyOptions::tree())
+        .expect("provider copy should satisfy tree mode");
+    assert_eq!(assessment.route(), CopyExecutionRoute::ProviderOnly);
+    assert_eq!(assessment.fallback_rejection(), Some(FallbackRejection::TreeMode));
+    assert!(calls.lock().expect("calls lock should succeed").is_empty());
+}
+
+#[test]
+fn test_assess_copy_rejects_same_path_without_io() {
+    let (filesystem, calls, _) = recording_filesystem(CopyResponse::Declined);
+    let error = filesystem
+        .assess_copy(&path("/same"), &path("/same"), &CopyOptions::default())
+        .expect_err("same source and target must be rejected");
+    assert_eq!(error.kind(), FsErrorKind::InvalidOptions);
+    assert!(calls.lock().expect("calls lock should succeed").is_empty());
 }
 
 #[test]

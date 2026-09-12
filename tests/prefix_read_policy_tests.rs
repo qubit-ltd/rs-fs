@@ -30,6 +30,7 @@ use qubit_fs::metadata::FileSystemLimit;
 use qubit_fs::metadata::FileSystemLimits;
 use qubit_fs::metadata::ResourceVersion;
 use qubit_fs::read::ChecksumPolicy;
+use qubit_fs::read::PrefixReadTermination;
 use qubit_fs::read::ReadOptions;
 
 /// Exercises dispatch and byte accounting for both facade implementations.
@@ -74,6 +75,67 @@ fn assert_prefix(async_mode: bool) {
 #[test]
 fn guaranteed_range_bounds_sync_request() {
     assert_prefix(false);
+}
+
+#[test]
+fn test_prefix_outcome_limit_preserves_request_facts() {
+    let observations = Arc::new(Observations::default());
+    let provider = RecordingProvider {
+        capabilities: ranged(),
+        limits: FileSystemLimits::unknown(),
+        observations,
+        fault: Fault::None,
+    };
+    let filesystem = FileSystem::from_spi(provider).unwrap();
+    let path = Path::parse("/payload").unwrap();
+    let options = ReadOptions::default();
+    let outcome = filesystem.read_prefix(&path, options.clone(), 3).unwrap();
+    assert_eq!(outcome.bytes(), b"abc");
+    assert_eq!(outcome.info().path(), &path);
+    assert_eq!(outcome.options(), &options);
+    assert_eq!(outcome.max_bytes(), 3);
+    assert_eq!(outcome.termination(), PrefixReadTermination::LimitReached);
+    assert_eq!(outcome.into_bytes(), b"abc");
+}
+
+#[test]
+fn test_prefix_outcome_eof_and_zero_limit() {
+    let observations = Arc::new(Observations::default());
+    let provider = RecordingProvider {
+        capabilities: sequential(),
+        limits: FileSystemLimits::unknown(),
+        observations: Arc::clone(&observations),
+        fault: Fault::None,
+    };
+    let filesystem = FileSystem::from_spi(provider).unwrap();
+    let path = Path::parse("/payload").unwrap();
+    let outcome = filesystem.read_prefix(&path, ReadOptions::default(), 32).unwrap();
+    assert_eq!(outcome.termination(), PrefixReadTermination::StreamEnded);
+    let zero = filesystem.read_prefix(&path, ReadOptions::default(), 0).unwrap();
+    assert!(zero.bytes().is_empty());
+    assert_eq!(zero.termination(), PrefixReadTermination::LimitReached);
+    assert_eq!(observations.opens.load(Ordering::SeqCst), 2);
+}
+
+#[cfg(feature = "async")]
+#[test]
+fn test_prefix_outcome_async_exposes_termination() {
+    let observations = Arc::new(Observations::default());
+    let provider = RecordingProvider {
+        capabilities: sequential(),
+        limits: FileSystemLimits::unknown(),
+        observations,
+        fault: Fault::None,
+    };
+    let path = Path::parse("/payload").unwrap();
+    let outcome = poll_support::ready(AsyncFileSystem::from_spi(provider).unwrap().read_prefix(
+        &path,
+        ReadOptions::default(),
+        32,
+    ))
+    .unwrap();
+    assert_eq!(outcome.bytes(), b"abcdefghijklmnop");
+    assert_eq!(outcome.termination(), PrefixReadTermination::StreamEnded);
 }
 
 /// Asynchronous dispatch follows the same bounded request contract.
