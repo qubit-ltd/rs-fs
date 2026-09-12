@@ -55,7 +55,7 @@ impl OpenedAsyncReader {
     ///
     /// # Returns
     /// The identity claimed by the provider.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn info(&self) -> &OpenedFileInfo {
         &self.info
@@ -65,7 +65,7 @@ impl OpenedAsyncReader {
     ///
     /// # Returns
     /// A facade-owned asynchronous reader.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) fn into_reader(self) -> AsyncFileReader {
         AsyncFileReader::new(self.info, self.reader)

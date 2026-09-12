@@ -54,7 +54,7 @@ impl StatResponse {
     ///
     /// # Returns
     /// The response path.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn path(&self) -> &Path {
         &self.path
@@ -64,7 +64,7 @@ impl StatResponse {
     ///
     /// # Returns
     /// The provider metadata snapshot.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn metadata(&self) -> &FileMetadata {
         &self.metadata
@@ -74,7 +74,7 @@ impl StatResponse {
     ///
     /// # Returns
     /// The owned provider metadata snapshot.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) fn into_metadata(self) -> FileMetadata {
         self.metadata

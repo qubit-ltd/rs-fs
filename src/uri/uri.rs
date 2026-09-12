@@ -69,14 +69,14 @@ impl Uri {
     }
 
     /// Returns the normalized lowercase scheme.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn scheme(&self) -> &str {
         self.parsed.scheme().as_str()
     }
 
     /// Returns the raw RFC 3986 authority when it is syntactically present.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn authority(&self) -> Option<&str> {
         self.parsed.authority().map(|authority| authority.as_str())
@@ -84,28 +84,28 @@ impl Uri {
 
     /// Returns whether an authority delimiter was present, including empty
     /// authority.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn has_authority(&self) -> bool {
         self.parsed.has_authority()
     }
 
     /// Returns the raw percent-encoded path without decoding separators.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn path(&self) -> &str {
         self.parsed.path().as_str()
     }
 
     /// Returns the raw ordered query text when a query delimiter was present.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn query(&self) -> Option<&str> {
         self.parsed.query().map(|query| query.as_str())
     }
 
     /// Returns the complete validated canonical URI spelling.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn as_str(&self) -> &str {
         self.parsed.as_str()

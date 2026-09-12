@@ -49,14 +49,14 @@ impl ResolvedCopyOptions {
     }
 
     /// Returns the resolved options.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn options(&self) -> &CopyOptions {
         &self.options
     }
 
     /// Returns the effective symbolic-link policy.
-    #[inline(always)]
+    #[inline]
     #[must_use = "the resolved symbolic-link policy must be used"]
     pub const fn symlink_policy(&self) -> SymlinkPolicy {
         self.symlink_policy

@@ -372,7 +372,7 @@ impl FsError {
     ///
     /// # Returns
     /// Error category.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn kind(&self) -> FsErrorKind {
         self.kind
@@ -382,7 +382,7 @@ impl FsError {
     ///
     /// # Returns
     /// The provider-neutral operation identifier.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn operation(&self) -> FsOperation {
         self.operation
@@ -392,7 +392,7 @@ impl FsError {
     ///
     /// # Returns
     /// The path when one was attached.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn path(&self) -> Option<&Path> {
         self.path.as_deref()
@@ -402,7 +402,7 @@ impl FsError {
     ///
     /// # Returns
     /// The target path when one was attached.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn target(&self) -> Option<&Path> {
         self.target.as_deref()
@@ -413,7 +413,7 @@ impl FsError {
     /// # Returns
     /// The structured source path when one was attached for copy, rename, or
     /// similar multi-path operations.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn failure_path(&self) -> Option<&Path> {
         self.failure_path.as_deref()
@@ -424,7 +424,7 @@ impl FsError {
     /// # Returns
     /// The structured destination path when one was attached for copy, rename,
     /// or similar multi-path operations.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn failure_target(&self) -> Option<&Path> {
         self.failure_target.as_deref()
@@ -434,7 +434,7 @@ impl FsError {
     ///
     /// # Returns
     /// The canonical provider id when one was attached.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn provider(&self) -> Option<&str> {
         self.provider.as_deref()
@@ -445,7 +445,7 @@ impl FsError {
     /// # Returns
     /// The capability when the error describes unsupported functionality or
     /// an unmet semantic requirement.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn required_capability(&self) -> Option<FileSystemCapability> {
         self.required_capability
@@ -457,7 +457,7 @@ impl FsError {
     ///
     /// `Some` when a provider proved an effect state, or `None` when the error
     /// carries no effect-state claim.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn effect_state(&self) -> Option<FsEffectState> {
         self.effect_state

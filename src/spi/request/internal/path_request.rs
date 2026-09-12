@@ -38,7 +38,7 @@ macro_rules! path_request {
             ///
             /// # Returns
             /// The request path validated by the facade.
-            #[inline(always)]
+            #[inline]
             #[must_use]
             pub const fn path(&self) -> &'a crate::path::Path {
                 self.path
@@ -48,7 +48,7 @@ macro_rules! path_request {
             ///
             /// # Returns
             /// The immutable facade-resolved options.
-            #[inline(always)]
+            #[inline]
             #[must_use]
             pub const fn options(&self) -> &$options {
                 &self.options

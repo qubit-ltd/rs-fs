@@ -103,7 +103,7 @@ impl PersistFailure {
     }
 
     /// Splits this facade failure into its causal error and state.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn into_parts(self) -> (FsError, PersistFailureState) {
         (self.error, self.state)

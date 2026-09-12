@@ -38,7 +38,7 @@ macro_rules! resolved_options {
             ///
             /// # Returns
             /// The validated options retained by this envelope.
-            #[inline(always)]
+            #[inline]
             #[must_use]
             pub const fn options(&self) -> &$options {
                 &self.options

@@ -165,7 +165,7 @@ pub trait FileSystemSpi: Send + Sync {
     ///
     /// # Errors
     /// Returns a typed failure preserving confirmed publication progress.
-    #[inline(always)]
+    #[inline]
     fn try_copy(&self, _request: CopyRequest<'_>) -> Result<CopyAttempt, SpiCopyFailure> {
         Ok(CopyAttempt::Declined(CopyDeclineReason::NotImplemented))
     }

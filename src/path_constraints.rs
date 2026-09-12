@@ -36,7 +36,7 @@ impl PathConstraints {
     ///
     /// # Returns
     /// Constraints rejecting every relative path.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn absolute() -> Self {
         Self {
@@ -48,7 +48,7 @@ impl PathConstraints {
     ///
     /// # Returns
     /// Constraints rejecting every absolute path.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn relative() -> Self {
         Self {
@@ -60,7 +60,7 @@ impl PathConstraints {
     ///
     /// # Returns
     /// Constraints accepting absolute and relative paths.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn either() -> Self {
         Self { form: PathForm::Either }
@@ -70,7 +70,7 @@ impl PathConstraints {
     ///
     /// # Returns
     /// The immutable accepted path-form policy.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn form(&self) -> PathForm {
         self.form

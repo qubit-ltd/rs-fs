@@ -70,7 +70,7 @@ impl OpenedAsyncTempFile {
     ///
     /// # Returns
     /// The identity claimed by the provider.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn info(&self) -> &OpenedFileInfo {
         &self.info
@@ -80,7 +80,7 @@ impl OpenedAsyncTempFile {
     ///
     /// # Returns
     /// The claimed identity and provider lifecycle session.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) fn into_parts(self) -> (OpenedFileInfo, Box<dyn AsyncTempResourceSpi>) {
         (self.info, self.session)

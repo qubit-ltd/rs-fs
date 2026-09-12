@@ -61,7 +61,7 @@ impl<'a> CopyRequest<'a> {
     ///
     /// # Returns
     /// The validated source path.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn source(&self) -> &'a Path {
         self.source
@@ -71,7 +71,7 @@ impl<'a> CopyRequest<'a> {
     ///
     /// # Returns
     /// The validated destination path.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn target(&self) -> &'a Path {
         self.target
@@ -81,7 +81,7 @@ impl<'a> CopyRequest<'a> {
     ///
     /// # Returns
     /// The immutable facade-resolved copy options.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn options(&self) -> &ResolvedCopyOptions {
         &self.options

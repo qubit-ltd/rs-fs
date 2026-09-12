@@ -62,7 +62,7 @@ impl Path {
     /// Each item is validated as one component without reparsing a joined path
     /// string. An empty absolute sequence produces the root; an empty relative
     /// sequence returns an invalid-path error.
-    #[inline(always)]
+    #[inline]
     pub fn from_components<I, S>(absolute: bool, components: I) -> FsResult<Self>
     where
         I: IntoIterator<Item = S>,
@@ -162,7 +162,7 @@ impl Path {
     }
 
     /// Returns the validated logical path text.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.text
@@ -173,7 +173,7 @@ impl Path {
     /// A root path and a literal path ending in a separator have no file
     /// name. Hierarchical paths are canonicalized during parsing, so their
     /// final component is always non-empty.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn file_name(&self) -> Option<&str> {
         if self.text == "/" || (self.literal && self.text.ends_with('/')) {
@@ -183,28 +183,28 @@ impl Path {
     }
 
     /// Returns whether this path is absolute.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn is_absolute(&self) -> bool {
         self.absolute
     }
 
     /// Returns the semantics used to validate this logical path.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn semantics(&self) -> PathSemantics {
         self.semantics
     }
 
     /// Iterates lexical component boundaries without using an empty root value.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn components(&self) -> PathComponents<'_> {
         PathComponents::new(&self.text, self.absolute, self.literal)
     }
 
     /// Appends one validated component without re-parsing provider text.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn child(&self, component: &PathComponent) -> Self {
         self.append(component.as_str())
@@ -212,7 +212,7 @@ impl Path {
 
     /// Appends a safe normalized relative path without re-parsing provider
     /// text.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn join(&self, relative: &RelativePath) -> Self {
         self.append(relative.as_str())
@@ -244,7 +244,7 @@ impl Display for Path {
 
 impl AsRef<str> for Path {
     /// Returns the logical path text for generic text consumers.
-    #[inline(always)]
+    #[inline]
     fn as_ref(&self) -> &str {
         self.as_str()
     }

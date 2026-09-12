@@ -52,28 +52,28 @@ impl TempOptions {
     }
 
     /// Returns the generated resource name prefix.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn prefix(&self) -> &str {
         &self.prefix
     }
 
     /// Returns the generated resource name suffix.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn suffix(&self) -> &str {
         &self.suffix
     }
 
     /// Returns whether missing parent directories are created.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn creates_parent(&self) -> bool {
         self.create_parent
     }
 
     /// Replaces the optional parent directory or prefix.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn with_parent(mut self, parent: Option<Path>) -> Self {
         self.parent = parent;
@@ -81,7 +81,7 @@ impl TempOptions {
     }
 
     /// Replaces the generated resource name prefix.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn with_prefix(mut self, prefix: impl Into<String>) -> Self {
         self.prefix = prefix.into();
@@ -89,7 +89,7 @@ impl TempOptions {
     }
 
     /// Replaces the generated resource name suffix.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn with_suffix(mut self, suffix: impl Into<String>) -> Self {
         self.suffix = suffix.into();

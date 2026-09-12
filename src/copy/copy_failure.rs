@@ -67,39 +67,39 @@ impl CopyFailure {
         }
     }
     /// Returns the contextual filesystem error.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn error(&self) -> &FsError {
         &self.parts.error
     }
     /// Returns the publication state at failure.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn state(&self) -> CopyFailureState {
         self.parts.state
     }
     /// Returns statistics accumulated before failure.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn partial_stats(&self) -> &CopyStats {
         &self.parts.partial_stats
     }
     /// Returns whether a writer is available for recovery.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn has_recovery(&self) -> bool {
         self.parts.writer.is_some()
     }
 
     /// Returns the recovery writer if retained.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn recovery(&self) -> Option<&WriterRecovery> {
         self.parts.writer.as_ref()
     }
 
     /// Returns a mutable recovery writer if retained.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn recovery_mut(&mut self) -> Option<&mut WriterRecovery> {
         self.parts.writer.as_mut()
@@ -107,14 +107,14 @@ impl CopyFailure {
 
     /// Takes ownership of the recovery writer when recovery responsibility
     /// remains with the caller.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn take_recovery(&mut self) -> Option<WriterRecovery> {
         self.parts.writer.take()
     }
 
     /// Splits the failure into error, state, statistics, and writer recovery.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn into_parts(self) -> (FsError, CopyFailureState, CopyStats, Option<WriterRecovery>) {
         let mut parts = self.parts;

@@ -102,19 +102,19 @@ impl RenameOutcome {
         &self.source
     }
     /// Returns the target identity.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn target(&self) -> &Path {
         &self.target
     }
     /// Returns actual publication atomicity.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn atomicity(&self) -> AchievedAtomicity {
         self.atomicity
     }
     /// Returns the provider's publication method.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn method(&self) -> PublicationMethod {
         self.method
@@ -122,13 +122,13 @@ impl RenameOutcome {
 
     /// Returns whether the provider synchronized durable destination
     /// publication.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn durable(&self) -> bool {
         self.durable
     }
     /// Returns provider diagnostics that are safe to expose.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn diagnostics(&self) -> &NonSensitiveMetadata {
         &self.diagnostics

@@ -28,7 +28,7 @@ use crate::write::WriterState;
 /// # Returns
 ///
 /// The copy recovery state implied by the writer publication certainty.
-#[inline(always)]
+#[inline]
 pub(crate) const fn from_writer_state(state: WriterState) -> CopyFailureState {
     match state {
         WriterState::Open | WriterState::NotPublished | WriterState::Aborted => CopyFailureState::Unchanged,
@@ -46,7 +46,7 @@ pub(crate) const fn from_writer_state(state: WriterState) -> CopyFailureState {
 /// # Returns
 ///
 /// The equivalent recovery state for the enclosing copy operation.
-#[inline(always)]
+#[inline]
 pub(crate) const fn from_write_failure_state(state: WriteFailureState) -> CopyFailureState {
     match state {
         WriteFailureState::RetryableNotPublished | WriteFailureState::NotPublished => CopyFailureState::Unchanged,
@@ -87,7 +87,7 @@ pub(crate) const fn from_completed_stats(stats: &CopyStats) -> CopyFailureState 
 /// # Returns
 ///
 /// Failure statistics retaining the observed byte count.
-#[inline(always)]
+#[inline]
 pub(crate) const fn fallback_failure_stats(bytes: u64) -> CopyStats {
     CopyStats {
         files: 0,

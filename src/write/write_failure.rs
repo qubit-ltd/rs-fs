@@ -85,7 +85,7 @@ impl WriteFailure {
     }
 
     /// Splits this facade failure into its causal error and state.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn into_parts(self) -> (FsError, WriteFailureState) {
         (self.error, self.state)

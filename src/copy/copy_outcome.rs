@@ -85,31 +85,31 @@ impl CopyOutcome {
     }
 
     /// Returns the completed copy statistics.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn stats(&self) -> &CopyStats {
         &self.stats
     }
     /// Returns the actual method used by the completed operation.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn method(&self) -> CopyMethod {
         self.method
     }
     /// Returns the atomicity actually achieved while publishing the target.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn atomicity(&self) -> AchievedAtomicity {
         self.atomicity
     }
     /// Returns whether provider-confirmed durability synchronization completed.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn durable(&self) -> bool {
         self.durable
     }
     /// Replaces the provider-reported durability completion fact.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn with_durable(mut self, durable: bool) -> Self {
         self.durable = durable;
@@ -118,7 +118,7 @@ impl CopyOutcome {
 
     /// Records the metadata preservation policy actually achieved by the
     /// provider.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn with_metadata(mut self, metadata: MetadataPreservePolicy) -> Self {
         self.metadata = metadata;
@@ -133,26 +133,26 @@ impl CopyOutcome {
         self
     }
     /// Returns the metadata preservation result represented by this outcome.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn metadata(&self) -> MetadataPreservePolicy {
         self.metadata
     }
     /// Returns the target version when the provider reported one.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn target_version(&self) -> Option<&ResourceVersion> {
         self.target_version.as_ref()
     }
     /// Returns whether the facade streamed after the provider declined its fast
     /// path.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn used_fallback(&self) -> bool {
         self.used_fallback
     }
     /// Returns provider diagnostics that are safe to expose.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn diagnostics(&self) -> &NonSensitiveMetadata {
         &self.diagnostics

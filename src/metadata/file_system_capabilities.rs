@@ -88,7 +88,7 @@ impl FileSystemCapabilities {
     }
 
     /// Returns a copy with one additional guaranteed capability.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn with_guaranteed(self, capability: FileSystemCapability) -> Self {
         self.set_support(capability, FileSystemCapabilitySupport::Guaranteed)
@@ -114,7 +114,7 @@ impl FileSystemCapabilities {
     }
 
     /// Returns the support status of `capability`.
-    #[inline(always)]
+    #[inline]
     pub const fn support(&self, capability: FileSystemCapability) -> FileSystemCapabilitySupport {
         let bit = capability.bit();
         if self.guaranteed & bit != 0 {
@@ -127,14 +127,14 @@ impl FileSystemCapabilities {
     }
 
     /// Returns whether the provider can attempt `capability`.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn supports(&self, capability: FileSystemCapability) -> bool {
         !matches!(self.support(capability), FileSystemCapabilitySupport::Unsupported)
     }
 
     /// Returns whether `capability` is guaranteed in this filesystem scope.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn guarantees(&self, capability: FileSystemCapability) -> bool {
         matches!(self.support(capability), FileSystemCapabilitySupport::Guaranteed)
@@ -144,7 +144,7 @@ impl FileSystemCapabilities {
     ///
     /// # Returns
     /// Number of set capability flags.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn len(&self) -> usize {
         (self.conditional | self.guaranteed).count_ones() as usize
@@ -154,7 +154,7 @@ impl FileSystemCapabilities {
     ///
     /// # Returns
     /// `true` when the set contains no capability.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.conditional == 0 && self.guaranteed == 0

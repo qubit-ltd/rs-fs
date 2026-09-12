@@ -110,41 +110,41 @@ impl AsyncCopyOperation {
     ///
     /// # Returns
     /// The source path captured when the operation was created.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn source(&self) -> &Path {
         &self.source
     }
 
     /// Returns the immutable destination path.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn target(&self) -> &Path {
         &self.target
     }
 
     /// Returns the current operation lifecycle state.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn state(&self) -> AsyncCopyOperationState {
         self.state
     }
 
     /// Returns whether a recovery writer is retained by this operation.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn has_recovery(&self) -> bool {
         self.writer.is_some()
     }
 
     /// Borrows the retained recovery writer, if one exists.
-    #[inline(always)]
+    #[inline]
     pub fn recovery(&mut self) -> Option<&mut AsyncWriterRecovery> {
         self.writer.as_mut()
     }
 
     /// Takes ownership of the retained recovery writer, if one exists.
-    #[inline(always)]
+    #[inline]
     pub fn take_recovery(&mut self) -> Option<AsyncWriterRecovery> {
         self.writer.take()
     }
@@ -245,7 +245,7 @@ async fn execute_copy(
 
 /// Streams a declined asynchronous copy while retaining any recovery writer
 /// in `writer_slot` until publication or cleanup completes.
-#[inline(always)]
+#[inline]
 fn stream_copy_fallback<'a>(
     filesystem: &'a AsyncFileSystem,
     source: &'a Path,

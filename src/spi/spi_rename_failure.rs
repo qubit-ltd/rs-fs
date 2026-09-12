@@ -56,7 +56,7 @@ impl SpiRenameFailure {
     ///
     /// # Returns
     /// A borrowed view of the contextual [`FsError`].
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn error(&self) -> &FsError {
         &self.error
@@ -66,7 +66,7 @@ impl SpiRenameFailure {
     ///
     /// # Returns
     /// The provider-confirmed rename state.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn state(&self) -> RenameFailureState {
         self.state
@@ -76,7 +76,7 @@ impl SpiRenameFailure {
     ///
     /// # Returns
     /// The provider error and confirmed rename state.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn into_parts(self) -> (FsError, RenameFailureState) {
         (*self.error, self.state)

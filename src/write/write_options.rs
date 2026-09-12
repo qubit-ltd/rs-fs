@@ -77,7 +77,7 @@ impl WriteOptions {
     }
 
     /// Returns whether missing parent directories are created.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn create_parent(&self) -> bool {
         self.create_parent
@@ -92,7 +92,7 @@ impl WriteOptions {
     }
 
     /// Returns the destination disposition.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn disposition(&self) -> WriteDisposition {
         self.disposition
@@ -107,7 +107,7 @@ impl WriteOptions {
     }
 
     /// Returns the atomicity requirement.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn atomicity(&self) -> AtomicityRequirement {
         self.atomicity
@@ -122,7 +122,7 @@ impl WriteOptions {
     }
 
     /// Returns the completed-publication durability requirement.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn durability(&self) -> DurabilityRequirement {
         self.durability
@@ -137,7 +137,7 @@ impl WriteOptions {
     }
 
     /// Returns the version precondition.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn precondition(&self) -> &WritePrecondition {
         &self.precondition
@@ -152,14 +152,14 @@ impl WriteOptions {
     }
 
     /// Returns the optional content type.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn content_type(&self) -> Option<&str> {
         self.content_type.as_deref()
     }
 
     /// Returns the user metadata attached to this write.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn user_metadata(&self) -> &NonSensitiveMetadata {
         &self.user_metadata
@@ -174,7 +174,7 @@ impl WriteOptions {
     }
 
     /// Returns the optional expected checksum.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn checksum(&self) -> Option<&Checksum> {
         self.checksum.as_ref()

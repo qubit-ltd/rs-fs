@@ -36,21 +36,21 @@ pub struct DeleteOptions {
 
 impl DeleteOptions {
     /// Returns whether container resources should be removed recursively.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn recursive(&self) -> bool {
         self.recursive
     }
 
     /// Returns whether a missing target should be treated as success.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn missing_ok(&self) -> bool {
         self.missing_ok
     }
 
     /// Returns the optional required ETag or provider version.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn if_match(&self) -> Option<&ResourceVersion> {
         self.if_match.as_ref()

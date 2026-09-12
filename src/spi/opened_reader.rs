@@ -54,7 +54,7 @@ impl OpenedReader {
     ///
     /// # Returns
     /// The claimed resource identity and provider reader session.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub(crate) fn into_parts(self) -> (OpenedFileInfo, Box<dyn Input<Item = u8> + Send>) {
         (self.info, self.reader)

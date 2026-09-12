@@ -97,35 +97,35 @@ impl FileSystemLimits {
 
     /// Returns the maximum canonical [`crate::path::Path`] text length in UTF-8
     /// bytes.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn max_path_text_bytes(&self) -> FileSystemLimit {
         self.max_path_text_bytes
     }
 
     /// Returns the maximum path-component text length in UTF-8 bytes.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn max_component_text_bytes(&self) -> FileSystemLimit {
         self.max_component_text_bytes
     }
 
     /// Returns the maximum byte count accepted by one logical range read.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn max_read_range_bytes(&self) -> FileSystemLimit {
         self.max_read_range_bytes
     }
 
     /// Returns the maximum total byte count accepted by one write session.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn max_write_bytes(&self) -> FileSystemLimit {
         self.max_write_bytes
     }
 
     /// Returns the maximum entry count in one provider-native list page.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn max_list_page_entries(&self) -> FileSystemLimit {
         self.max_list_page_entries

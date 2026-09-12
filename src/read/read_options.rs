@@ -63,7 +63,7 @@ impl ReadOptions {
     }
 
     /// Returns the optional byte offset.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn offset(&self) -> Option<u64> {
         self.offset
@@ -78,7 +78,7 @@ impl ReadOptions {
     }
 
     /// Returns the optional byte length.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn length(&self) -> Option<u64> {
         self.length
@@ -93,7 +93,7 @@ impl ReadOptions {
     }
 
     /// Returns the optional positive version precondition.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn if_match(&self) -> Option<&ResourceVersion> {
         self.if_match.as_ref()
@@ -108,7 +108,7 @@ impl ReadOptions {
     }
 
     /// Returns the optional negative version precondition.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn if_none_match(&self) -> Option<&ResourceVersion> {
         self.if_none_match.as_ref()
@@ -123,7 +123,7 @@ impl ReadOptions {
     }
 
     /// Returns the checksum policy.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn checksum(&self) -> ChecksumPolicy {
         self.checksum

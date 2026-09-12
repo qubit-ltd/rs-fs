@@ -114,7 +114,7 @@ impl FileSystemCapability {
     ];
 
     /// Returns the bit representing this capability in a capability set.
-    #[inline(always)]
+    #[inline]
     pub(crate) const fn bit(self) -> u128 {
         1_u128 << (self as u8)
     }

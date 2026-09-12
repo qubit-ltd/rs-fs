@@ -48,21 +48,21 @@ impl Default for RenameOptions {
 
 impl RenameOptions {
     /// Returns whether the destination may be overwritten.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn overwrite(&self) -> bool {
         self.overwrite
     }
 
     /// Returns the required atomicity level.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn atomicity(&self) -> AtomicityRequirement {
         self.atomicity
     }
 
     /// Returns the required destination durability level.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn durability(&self) -> DurabilityRequirement {
         self.durability

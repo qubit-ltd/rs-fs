@@ -40,14 +40,14 @@ impl DeleteOutcome {
     }
 
     /// Returns whether a missing target satisfied the request.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn already_missing(self) -> bool {
         self.already_missing
     }
 
     /// Attaches the number of deleted entries, when known.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn with_deleted_entries(mut self, count: u64) -> Self {
         self.deleted_entries = Some(count);
@@ -55,7 +55,7 @@ impl DeleteOutcome {
     }
 
     /// Returns the number of deleted entries, when reported.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn deleted_entries(self) -> Option<u64> {
         self.deleted_entries

@@ -39,28 +39,28 @@ pub struct PersistOptions {
 
 impl PersistOptions {
     /// Returns whether the destination may be overwritten.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn overwrite(&self) -> bool {
         self.overwrite
     }
 
     /// Returns the required atomicity level.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn atomicity(&self) -> AtomicityRequirement {
         self.atomicity
     }
 
     /// Returns the metadata preservation policy.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn preserve_metadata(&self) -> MetadataPreservePolicy {
         self.preserve_metadata
     }
 
     /// Returns whether missing destination parents are created.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn creates_parent(&self) -> bool {
         self.create_parent

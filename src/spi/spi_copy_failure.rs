@@ -63,7 +63,7 @@ impl SpiCopyFailure {
     ///
     /// # Returns
     /// The provider failure with filesystem context.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn error(&self) -> &FsError {
         &self.error
@@ -73,7 +73,7 @@ impl SpiCopyFailure {
     ///
     /// # Returns
     /// The provider-confirmed publication state.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn state(&self) -> CopyFailureState {
         self.state
@@ -83,7 +83,7 @@ impl SpiCopyFailure {
     ///
     /// # Returns
     /// The provider error, publication state, and partial transfer statistics.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn into_parts(self) -> (FsError, CopyFailureState, CopyStats) {
         (*self.error, self.state, self.partial_stats)

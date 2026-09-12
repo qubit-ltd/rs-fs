@@ -69,13 +69,13 @@ impl TempFile {
         }
     }
     /// Returns the temporary logical path.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn path(&self) -> &Path {
         &self.path
     }
     /// Returns the resource lifecycle state.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn state(&self) -> TempResourceState {
         self.lifecycle.state()

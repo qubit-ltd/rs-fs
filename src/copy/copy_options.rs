@@ -82,7 +82,7 @@ impl CopyOptions {
     }
 
     /// Returns the source interpretation mode.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn mode(&self) -> CopyMode {
         self.mode
@@ -97,7 +97,7 @@ impl CopyOptions {
     }
 
     /// Returns the destination conflict policy.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn conflict(&self) -> CopyConflictPolicy {
         self.conflict
@@ -112,7 +112,7 @@ impl CopyOptions {
     }
 
     /// Returns the metadata preservation policy.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn preserve_metadata(&self) -> MetadataPreservePolicy {
         self.preserve_metadata
@@ -127,7 +127,7 @@ impl CopyOptions {
     }
 
     /// Returns the server-side preference.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn server_side(&self) -> ServerSidePreference {
         self.server_side
@@ -142,7 +142,7 @@ impl CopyOptions {
     }
 
     /// Returns the optional symbolic-link policy override.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn symlink_policy_override(&self) -> Option<SymlinkPolicy> {
         self.symlink_policy
@@ -157,7 +157,7 @@ impl CopyOptions {
     }
 
     /// Returns whether missing destination parents are created.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn create_parent(&self) -> bool {
         self.create_parent
@@ -172,7 +172,7 @@ impl CopyOptions {
     }
 
     /// Returns whether tree copy continues after per-entry failures.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn continue_on_error(&self) -> bool {
         self.continue_on_error
@@ -187,7 +187,7 @@ impl CopyOptions {
     }
 
     /// Returns the atomicity requirement.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn atomicity(&self) -> AtomicityRequirement {
         self.atomicity
@@ -202,7 +202,7 @@ impl CopyOptions {
     }
 
     /// Returns the durability requirement.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn durability(&self) -> DurabilityRequirement {
         self.durability
@@ -217,7 +217,7 @@ impl CopyOptions {
     }
 
     /// Returns the optional maximum tree depth.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn max_depth(&self) -> Option<usize> {
         self.max_depth
@@ -241,7 +241,7 @@ impl CopyOptions {
     /// source resource represented in the completed
     /// [`CopyOutcome`](crate::copy::CopyOutcome) statistics, including
     /// directories and prefixes.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn max_entries(&self) -> Option<usize> {
         self.max_entries
@@ -256,7 +256,7 @@ impl CopyOptions {
     }
 
     /// Returns the optional maximum copied byte count.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn max_bytes(&self) -> Option<u64> {
         self.max_bytes
@@ -271,7 +271,7 @@ impl CopyOptions {
     }
 
     /// Returns the optional maximum elapsed duration.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn deadline(&self) -> Option<Duration> {
         self.deadline

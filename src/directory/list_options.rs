@@ -76,7 +76,7 @@ impl ListOptions {
     }
 
     /// Returns whether traversal recurses into child containers.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn recursive(&self) -> bool {
         self.recursive
@@ -91,7 +91,7 @@ impl ListOptions {
     }
 
     /// Returns the optional symbolic-link policy override.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn symlink_policy_override(&self) -> Option<SymlinkPolicy> {
         self.symlink_policy
@@ -106,7 +106,7 @@ impl ListOptions {
     }
 
     /// Returns whether metadata is requested for entries.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn include_metadata(&self) -> bool {
         self.include_metadata
@@ -121,7 +121,7 @@ impl ListOptions {
     }
 
     /// Returns the optional page-size hint.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn page_size(&self) -> Option<usize> {
         self.page_size
@@ -136,7 +136,7 @@ impl ListOptions {
     }
 
     /// Returns the optional lexical prefix.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub fn prefix(&self) -> Option<&str> {
         match self.filter.as_ref() {
@@ -177,7 +177,7 @@ impl ListOptions {
     }
 
     /// Returns the optional maximum descendant depth.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn max_depth(&self) -> Option<usize> {
         self.max_depth
@@ -192,7 +192,7 @@ impl ListOptions {
     }
 
     /// Returns the optional maximum returned entry count.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn max_entries(&self) -> Option<usize> {
         self.max_entries
@@ -207,7 +207,7 @@ impl ListOptions {
     }
 
     /// Returns the optional maximum elapsed duration from stream creation.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn deadline(&self) -> Option<Duration> {
         self.deadline

@@ -45,7 +45,7 @@ impl CreateTempDirectoryRequest {
     ///
     /// # Returns
     /// The immutable temporary-directory creation options.
-    #[inline(always)]
+    #[inline]
     #[must_use]
     pub const fn options(&self) -> &TempOptions {
         &self.options
