@@ -70,7 +70,7 @@ For the runnable local example in this guide, use:
 ```toml
 [dependencies]
 qubit-fs = "0.8"
-qubit-fs-local = "0.8"
+qubit-fs-local = "0.9"
 tempfile = "3"
 ```
 
@@ -106,6 +106,11 @@ preserves the original request; Required checksum is rejected with
 Use a complete `read_all` when that guarantee is needed. Return and consumption
 bounds do not promise an identical bound on provider network prefetch.
 
+The result is a `PrefixReadOutcome`: use `bytes()` to borrow or `into_bytes()`
+to take the data, and inspect `info()`, `options()`, `max_bytes()`, and
+`termination()`. `LimitReached` means the bound was consumed without probing
+another byte; only `StreamEnded` confirms EOF was observed before the bound.
+
 ### Publish and read a report
 
 Put the following in `src/main.rs` and run `cargo run`. The example isolates its
@@ -117,8 +122,11 @@ choose explicit resource budgets for the workload.
 <!-- example: quick-start -->
 ```rust
 use qubit_fs::Path;
+use qubit_fs::copy::CopyExecutionRoute;
+use qubit_fs::copy::CopyOptions;
 use qubit_fs::directory::ListScope;
 use qubit_fs::read::ReadOptions;
+use qubit_fs::read::PrefixReadTermination;
 use qubit_fs::write::WriteOptions;
 use qubit_fs_local::LocalFileSystems;
 use qubit_fs_local::LocalResourcePolicy;
@@ -131,6 +139,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     filesystem.write_all(&path, b"report ready", WriteOptions::default())?;
     let bytes = filesystem.read_all(&path, ReadOptions::default(), 1024)?;
     assert_eq!(b"report ready", bytes.as_slice());
+    let prefix = filesystem.read_prefix(&path, ReadOptions::default(), 6)?;
+    assert_eq!(prefix.bytes(), b"report");
+    assert_eq!(prefix.termination(), PrefixReadTermination::LimitReached);
+    let target = Path::parse("/report-copy.txt")?;
+    let assessment = filesystem.assess_copy(&path, &target, &CopyOptions::default())?;
+    assert_eq!(assessment.route(), CopyExecutionRoute::ProviderThenStream);
+    assert_eq!(assessment.fallback_rejection(), None);
     let scope = ListScope::Path(Path::root());
     let mut entries = filesystem.list(&scope, Default::default())?;
     assert_eq!(entries.next_entry()?.expect("published report").path, path);
@@ -152,6 +167,11 @@ Commit a writer explicitly; flushing alone does not confirm publication.
 ## Advanced Usage
 
 ### Copy and retain recovery responsibility
+
+Call `assess_copy` before execution to inspect the no-I/O route selected from
+the provider snapshot. It returns `ProviderThenStream`, `ProviderOnly`, or
+`StreamOnly`, plus the first `FallbackRejection` when the stream fallback is
+ineligible. The later copy can still fail or return an indeterminate outcome.
 
 A completed report can be copied using the following application helper. On
 failure it returns the original `CopyFailure`, its publication state, partial
@@ -361,7 +381,7 @@ construction. It is checked around stages; it is not a timer that interrupts
 an arbitrary pending provider future. Provider failures remain the primary error.
 
 Temporary files and directories retain explicit lifecycle ownership. Their
-`cleanup`, `keep`, and `persist` methods report what happened. In 0.7, the
+`cleanup`, `keep`, and `persist` methods report what happened. In 0.8, the
 recovery snapshot has two separate axes: the retained target-publication fact
 and the source's current qualification.
 
