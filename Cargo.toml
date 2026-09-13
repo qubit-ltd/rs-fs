@@ -32,10 +32,10 @@ default = []
 async = []
 
 [dependencies]
-qubit-budget = "0.5"
+qubit-budget = "0.7"
 fluent-uri = "0.4.1"
 qubit-io = "0.17"
-qubit-redact = { version = "0.8", features = ["uri"] }
+qubit-redact = { version = "0.9", features = ["uri"] }
 
 [dev-dependencies]
 criterion = "0.5"
