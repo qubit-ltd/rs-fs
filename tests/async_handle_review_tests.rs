@@ -585,6 +585,31 @@ fn test_async_writer_commit_failures_preserve_recovery_state() {
     }
 }
 
+/// Distinguishes an unpolled commit from publication that may have begun.
+#[test]
+fn test_async_writer_commit_cancellation_preserves_recovery_authority() {
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
+        pending_stage: Some(AsyncCopyStage::WriterCommit),
+        ..AsyncRecordingConfig::default()
+    });
+    let mut writer =
+        ready(file_system.open_writer(&path("/target"), WriteOptions::default())).expect("writer should open");
+
+    drop(writer.commit_async());
+    assert_eq!(WriterState::Open, writer.state());
+
+    let mut commit = writer.commit_async();
+    poll_support::assert_pending(commit.as_mut());
+    drop(commit);
+    assert_eq!(WriterState::Indeterminate, writer.state());
+
+    assert_eq!(
+        WriteAbortOutcome::NotPublished,
+        ready(writer.abort_async()).expect("indeterminate writer should remain abortable"),
+    );
+    assert_eq!(WriterState::Aborted, writer.state());
+}
+
 /// Restores the original state after a definite abort failure while retaining
 /// an indeterminate abort failure as an indeterminate session.
 #[test]
