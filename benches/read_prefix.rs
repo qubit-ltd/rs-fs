@@ -7,6 +7,7 @@
 // =============================================================================
 //! Public facade prefix-read benchmark with a deterministic provider stream.
 
+use std::hint::black_box;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::AtomicUsize;
@@ -15,7 +16,6 @@ use std::sync::atomic::Ordering;
 use criterion::BenchmarkId;
 use criterion::Criterion;
 use criterion::Throughput;
-use criterion::black_box;
 use criterion::criterion_group;
 use criterion::criterion_main;
 use qubit_fs::FileSystem;
