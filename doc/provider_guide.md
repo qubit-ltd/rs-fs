@@ -134,6 +134,99 @@ pub fn read_health() -> FsResult<Vec<u8>> {
 }
 ```
 
+### Minimal asynchronous provider
+
+This metadata-only provider shows the runtime-neutral `AsyncFileSystemSpi` boundary. It advertises only `Stat`; the boxed future does not perform provider work until polled. The documentation fixture compiles and executes this exact example.
+
+<!-- example: provider-minimal-async -->
+```rust
+use qubit_fs::AsyncFileSystem;
+use qubit_fs::FsError;
+use qubit_fs::FsResult;
+use qubit_fs::Path;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
+use qubit_fs::metadata::FileKind;
+use qubit_fs::metadata::FileMetadata;
+use qubit_fs::metadata::FileSystemCapabilities;
+use qubit_fs::metadata::FileSystemId;
+use qubit_fs::metadata::FileSystemInfo;
+use qubit_fs::metadata::FileSystemLimits;
+use qubit_fs::metadata::SymlinkPolicy;
+use qubit_fs::path::PathConstraints;
+use qubit_fs::path::PathSemantics;
+use qubit_fs::spi::AsyncFileSystemSpi;
+use qubit_fs::spi::ProviderOperation;
+use qubit_fs::spi::ProviderOperations;
+use qubit_fs::spi::ProviderProperties;
+use qubit_fs::spi::SpiFuture;
+use qubit_fs::spi::StatRequest;
+use qubit_fs::spi::StatResponse;
+
+/// Provides metadata for one health resource without selecting a runtime.
+pub struct AsyncHealthProvider {
+    /// Immutable declaration returned at the SPI boundary.
+    properties: ProviderProperties,
+}
+
+impl AsyncHealthProvider {
+    /// Creates a provider that advertises only the implemented stat operation.
+    ///
+    /// # Errors
+    /// Returns an invalid-properties error if the static declaration is invalid.
+    pub fn new() -> FsResult<Self> {
+        let properties = ProviderProperties::new(
+            FileSystemInfo::new(
+                FileSystemId::new("docs-async-health")?,
+                "docs-async-health",
+                PathSemantics::Hierarchical,
+            ),
+            ProviderOperations::new().with(ProviderOperation::Stat),
+            FileSystemCapabilities::new(),
+            FileSystemLimits::unknown(),
+            PathConstraints::absolute(),
+            SymlinkPolicy::Reject,
+        )?;
+        Ok(Self { properties })
+    }
+}
+
+impl AsyncFileSystemSpi for AsyncHealthProvider {
+    /// Returns the cached declaration without provider I/O.
+    fn properties(&self) -> ProviderProperties {
+        self.properties.clone()
+    }
+
+    /// Returns metadata when polled, or a contextual not-found error.
+    fn stat<'a>(&'a self, request: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
+        Box::pin(async move {
+            let path = request.path();
+            if path.as_str() != "/health" {
+                return Err(FsError::new(
+                    FsErrorKind::NotFound,
+                    FsOperation::Stat,
+                    "health resource not found",
+                )
+                .with_path(path.clone()));
+            }
+            Ok(StatResponse::new(
+                path.clone(),
+                FileMetadata::new(FileKind::File).with_len(Some(2)),
+            ))
+        })
+    }
+}
+
+/// Queries the health resource through the public asynchronous facade.
+///
+/// # Errors
+/// Returns a path, provider, or facade-contract error if metadata is unavailable.
+pub async fn stat_health() -> FsResult<FileMetadata> {
+    let filesystem = AsyncFileSystem::from_spi(AsyncHealthProvider::new()?)?;
+    filesystem.stat(&Path::parse("/health")?).await
+}
+```
+
 ## 6. Errors and context
 
 Return `FsError` with the operation and path that failed. The facade preserves
@@ -183,16 +276,7 @@ metadata agrees with operation results, and that every error has path and
 operation context. A `NotFound` result may make `exists` false; permission,
 authentication, timeout, and I/O errors must remain errors.
 
-## 11. Release checklist
-
-- Construct and validate one cached `ProviderProperties` snapshot.
-- Add only implemented operations and justified capability strengths.
-- Run the shared testkit contract suite and provider-specific recovery tests.
-- Run `cargo test --locked --all-features`, doctests, clippy, rustdoc, and the
-  documentation checker.
-- Review publication, cleanup, cancellation, and error-state behavior.
-
-## Listing scopes and bounded reads
+## 11. Listing scopes and bounded reads
 
 Pass `ListScope::Path(path)` to list a hierarchical directory or a raw flat-key
 prefix. Use `ListScope::Namespace` to list the entire configured flat namespace;
@@ -222,7 +306,7 @@ preserves the original request; Required checksum is rejected with
 Use a complete `read_all` when that guarantee is needed. Return and consumption
 bounds do not promise an identical bound on provider network prefetch.
 
-## Opening failures and recovery in 0.8
+## 12. Opening failures and recovery in 0.8
 
 `open_writer`, `create_temp_file`, and `create_temp_directory` return
 `OpenFailure<R>` in both facades. `Preflight` and `ProviderOpen` failures have no
@@ -257,7 +341,7 @@ indeterminate failures.
 The core cannot retain a session a provider has not returned. Providers remain
 responsible for resources created internally during failed or cancelled opening.
 
-## Read windows and allocation limits
+## 13. Read windows and allocation limits
 
 `ReadOptions::validate()` rejects explicit offset + length overflow as
 `InvalidOptions` before capability checks, prefix optimization, or provider I/O.
@@ -276,7 +360,16 @@ limits on provider/network prefetch. The local provider advertises conditional
 range support, so automatic prefix narrowing still requires a provider advertising
 `RangeRead` as Guaranteed.
 
-## 12. Further reading
+## 14. Release checklist
+
+- Construct and validate one cached `ProviderProperties` snapshot.
+- Add only implemented operations and justified capability strengths.
+- Run the shared testkit contract suite and provider-specific recovery tests.
+- Run `cargo test --locked --all-features`, doctests, clippy, rustdoc, and the
+  documentation checker.
+- Review publication, cleanup, cancellation, and error-state behavior.
+
+## 15. Further reading
 
 - [User guide](user_guide.md) · [中文用户指南](user_guide.zh_CN.md)
 - [File-system design](file_system_design.md) ·

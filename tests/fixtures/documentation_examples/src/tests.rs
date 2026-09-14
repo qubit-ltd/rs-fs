@@ -26,6 +26,13 @@ fn provider_guide_example_reads_health_resource() {
     );
 }
 
+/// The async provider example resolves through the facade without a runtime.
+#[test]
+fn provider_guide_async_example_reads_health_metadata() {
+    let metadata = ready(super::provider_minimal_async::stat_health()).expect("health metadata must resolve");
+    assert_eq!(Some(2), metadata.len());
+}
+
 #[test]
 fn async_example_retains_failure_and_failed_cleanup() {
     let (filesystem, _) = async_recording_file_system(AsyncRecordingConfig {
