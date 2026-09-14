@@ -352,7 +352,8 @@ Returned metadata describes the full resource, not the window or a snapshot.
 
 Both sync and async `read_all` and `read_prefix` use fallible geometric buffer
 growth. Metadata is a hint, not an allocation instruction: an enormous hint does
-not reserve the whole object. Reservation failures return `ResourceLimitExceeded`
+not reserve the whole object or reject a short stream before reading it.
+Reservation failures return `ResourceLimitExceeded`
 with the allocation error as source. `read_all` may consume one extra byte to
 prove the limit was exceeded; `read_prefix` never probes past its prefix limit.
 These are returned-length and consumption bounds, not process RSS bounds or

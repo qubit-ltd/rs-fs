@@ -177,6 +177,40 @@ fn test_async_read_all_does_not_preallocate_entire_metadata_length() {
     assert_eq!(bytes, [7; 3]);
 }
 
+/// A stale overestimate cannot reject a stream that fits the caller's limit.
+#[test]
+fn test_read_all_accepts_short_stream_despite_overestimated_metadata() {
+    let fs = FileSystem::from_spi(MetadataProvider {
+        hint: Some(20),
+        length: 3,
+    })
+    .expect("filesystem");
+    let path = Path::parse("/payload").expect("path");
+
+    assert_eq!(
+        fs.read_all(&path, ReadOptions::default(), 5)
+            .expect("actual stream fits"),
+        [7; 3]
+    );
+}
+
+/// Asynchronous reads apply the limit to consumed bytes as well.
+#[cfg(feature = "async")]
+#[test]
+fn test_async_read_all_accepts_short_stream_despite_overestimated_metadata() {
+    let fs = AsyncFileSystem::from_spi(MetadataProvider {
+        hint: Some(20),
+        length: 3,
+    })
+    .expect("filesystem");
+    let path = Path::parse("/payload").expect("path");
+
+    assert_eq!(
+        poll_support::ready(fs.read_all(&path, ReadOptions::default(), 5)).expect("actual stream fits"),
+        [7; 3]
+    );
+}
+
 /// Unknown and underestimated lengths still enforce the actual byte limit.
 #[test]
 fn test_unknown_and_low_metadata_enforce_actual_bytes() {

@@ -38,7 +38,7 @@ impl<'a> ReadOperation<'a> {
 
     /// Reads one file into memory up to `max_bytes` after opening a reader.
     pub(crate) fn read_all(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
-        let mut reader = self.filesystem.open_reader(path, options.clone())?;
+        let mut reader = self.filesystem.open_reader(path, options)?;
         let mut result = ReadBuffer::new(max_bytes);
         let maximum = FacadeCore::quantity_from_usize(
             max_bytes,
@@ -47,20 +47,6 @@ impl<'a> ReadOperation<'a> {
             self.filesystem.properties().info().provider_id(),
         )?;
         let mut read_budget = FacadeCore::byte_budget(FileSystemResource::ReadBytes, maximum);
-        if let Some(metadata) = reader.info().metadata()
-            && let Some(length) = metadata.len()
-        {
-            let selected = options.selected_length(length);
-            read_budget.check_available(selected).map_err(|error| {
-                FacadeCore::budget_error(
-                    error,
-                    FsOperation::Read,
-                    path,
-                    self.filesystem.properties().info().provider_id(),
-                    "read exceeds maximum byte count",
-                )
-            })?;
-        }
         let mut buffer = [0_u8; 8192];
         loop {
             let remaining = read_budget.remaining();

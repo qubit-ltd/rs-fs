@@ -621,6 +621,9 @@ impl FileSystem {
 
     /// Reads one file into memory up to `max_bytes` after opening a reader.
     ///
+    /// The byte cap applies to bytes actually read, even when opened metadata
+    /// overestimates the resource length.
+    ///
     /// # Errors
     /// Returns the reader or read error when validation, opening, or bounded
     /// reading fails.

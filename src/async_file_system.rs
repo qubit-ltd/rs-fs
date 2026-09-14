@@ -231,6 +231,9 @@ impl AsyncFileSystem {
 
     /// Asynchronously reads an entire file while enforcing a strict byte cap.
     ///
+    /// The cap applies to bytes actually read, even when opened metadata
+    /// overestimates the resource length.
+    ///
     /// # Errors
     /// Returns the reader or read error when validation, opening, or bounded
     /// reading fails.
