@@ -5,6 +5,8 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+use std::hint::black_box;
+
 use qubit_fs::metadata::AchievedAtomicity;
 use qubit_fs::metadata::PublicationMethod;
 use qubit_fs::metadata::ResourceVersion;
@@ -48,9 +50,9 @@ fn write_outcome_accessors_are_callable_directly() {
     let bytes_written: fn(&WriteOutcome) -> Option<u64> = WriteOutcome::bytes_written;
     let version: fn(&WriteOutcome) -> Option<&ResourceVersion> = WriteOutcome::version;
     let atomicity: fn(&WriteOutcome) -> AchievedAtomicity = WriteOutcome::atomicity;
-    let method: fn(&WriteOutcome) -> PublicationMethod = WriteOutcome::method;
+    let method: fn(&WriteOutcome) -> PublicationMethod = black_box(WriteOutcome::method);
     let durable: fn(&WriteOutcome) -> bool = WriteOutcome::durable;
-    let diagnostics: fn(&WriteOutcome) -> &_ = WriteOutcome::diagnostics;
+    let diagnostics: fn(&WriteOutcome) -> &_ = black_box(WriteOutcome::diagnostics);
 
     assert_eq!(None, bytes_written(&outcome));
     assert_eq!(None, version(&outcome));
