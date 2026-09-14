@@ -36,8 +36,8 @@ use crate::temp::internal::TempLifecycle;
 /// This example uses an isolated in-memory provider fixture.
 ///
 /// ```rust
-/// # use qubit_fs::rustdoc_provider;
-/// # let filesystem = qubit_fs::rustdoc_provider::filesystem();
+/// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
+/// # let filesystem = support::rustdoc_provider::filesystem();
 /// use qubit_fs::temp::TempOptions;
 /// use qubit_fs::temp::TempResourceState;
 ///
