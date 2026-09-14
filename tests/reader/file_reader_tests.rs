@@ -163,7 +163,7 @@ fn test_open_reader_reads_bytes_and_exposes_identity() {
 }
 
 /// Reads a complete file through the facade convenience API and applies its
-/// caller-supplied memory bound before extending the result buffer.
+/// caller-supplied memory bound while probing one byte past the limit.
 #[test]
 fn test_read_all_returns_bytes_and_enforces_maximum() {
     let read_requests = Arc::new(Mutex::new(Vec::new()));
@@ -183,7 +183,7 @@ fn test_read_all_returns_bytes_and_enforces_maximum() {
         .read_all(&requested, Default::default(), 4)
         .expect_err("a too-small maximum must reject the complete chunk");
     assert_eq!(FsErrorKind::ResourceLimitExceeded, error.kind());
-    assert!(read_requests.lock().expect("requests lock").is_empty());
+    assert_eq!(*read_requests.lock().expect("requests lock"), vec![5]);
 }
 
 /// Reads at most the requested prefix while allowing a larger source file.

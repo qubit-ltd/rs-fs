@@ -318,7 +318,8 @@ provider 尚未交回的会话无法由核心接管。打开失败或取消之�
 跨越 EOF 时返回可读取的后缀。metadata 描述完整资源，不表示窗口大小，也不承诺快照。
 
 同步、异步 `read_all` 和 `read_prefix` 共用可失败的几何扩容缓冲。metadata 只是提示，
-即使长度极大也不会据此预分配整份对象。分配失败返回 `ResourceLimitExceeded`，并保留
+即使长度极大也不会据此预分配整份对象，或在读取前拒绝实际很短的流。分配失败返回
+`ResourceLimitExceeded`，并保留
 底层分配错误 source。`read_all` 可以多读一个字节确认超限；`read_prefix` 不读取前缀
 上限以外的探测字节。这些上限约束返回长度和消费量，不等于进程 RSS 或 provider／网络
 预取上限。本地 provider 的范围能力为 Conditional，自动缩小前缀请求仍只对声明
