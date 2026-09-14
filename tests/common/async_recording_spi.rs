@@ -106,6 +106,7 @@ pub(crate) struct AsyncRecordingConfig {
     pub(crate) omitted_capability: Option<FileSystemCapability>,
     pub(crate) omit_read_and_write: bool,
     pub(crate) pending_stage: Option<AsyncCopyStage>,
+    pub(crate) yield_once_stage: Option<AsyncCopyStage>,
     pub(crate) failing_stage: Option<AsyncCopyStage>,
     pub(crate) invalid_temp_identity: bool,
     pub(crate) invalid_temp_path: bool,
@@ -427,6 +428,7 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
                 info,
                 Box::new(RecordingWriter {
                     confirmed: 0,
+                    flush_yielded: false,
                     config,
                     cancellations: Arc::clone(&self.cancellations),
                 }),
@@ -640,6 +642,7 @@ impl AsyncInput for RecordingInput {
 /// Supplies fallback destination I/O and publication behavior.
 struct RecordingWriter {
     confirmed: usize,
+    flush_yielded: bool,
     config: AsyncRecordingConfig,
     cancellations: Arc<Mutex<usize>>,
 }
@@ -673,7 +676,12 @@ impl AsyncOutput for RecordingWriter {
     }
 
     fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<IoResult<()>> {
-        let config = self.get_mut().config.clone();
+        let this = self.get_mut();
+        if this.config.yield_once_stage == Some(AsyncCopyStage::WriterFlush) && !this.flush_yielded {
+            this.flush_yielded = true;
+            return Poll::Pending;
+        }
+        let config = &this.config;
         if config.pending_stage == Some(AsyncCopyStage::WriterFlush) {
             Poll::Pending
         } else if config.failing_stage == Some(AsyncCopyStage::WriterFlush) {
@@ -690,6 +698,18 @@ impl AsyncFileWriteSession for RecordingWriter {
             return Box::pin(std::future::pending());
         }
         Box::pin(async move {
+            if config.yield_once_stage == Some(AsyncCopyStage::WriterCommit) {
+                let mut yielded = false;
+                std::future::poll_fn(move |_| {
+                    if yielded {
+                        Poll::Ready(())
+                    } else {
+                        yielded = true;
+                        Poll::Pending
+                    }
+                })
+                .await;
+            }
             if let Some(state) = config.writer_commit_failure {
                 return Err(WriteFailure::new(
                     FsError::new(FsErrorKind::Io, FsOperation::CommitWriter, "injected commit failure"),
