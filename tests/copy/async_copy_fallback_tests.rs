@@ -7,9 +7,15 @@
 // =============================================================================
 //! External fallback failures and cancellation behavior for asynchronous copy.
 
+use std::future::Future;
+use std::task::Context;
+use std::task::Poll;
+use std::task::Waker;
 use std::time::Duration;
 
 use qubit_fs::Path;
+use qubit_fs::copy::AsyncCopyFailure;
+use qubit_fs::copy::AsyncCopyOperation;
 use qubit_fs::copy::AsyncCopyOperationState;
 use qubit_fs::copy::CopyConflictPolicy;
 use qubit_fs::copy::CopyFailureState;
@@ -35,6 +41,74 @@ use crate::poll_support::ready;
 /// Returns a stable absolute path for copy scenarios.
 fn path(value: &str) -> Path {
     Path::parse(value).expect("test path should parse")
+}
+
+/// Polls until the configured provider stage suspends, then lets the deadline
+/// expire before resuming that same operation.
+fn expire_at_pending_stage(operation: &mut AsyncCopyOperation) -> AsyncCopyFailure {
+    let mut context = Context::from_waker(Waker::noop());
+    let mut future = std::pin::pin!(operation.execute());
+    assert!(
+        future.as_mut().poll(&mut context).is_pending(),
+        "configured stage must suspend"
+    );
+    std::thread::sleep(Duration::from_millis(150));
+    match future.as_mut().poll(&mut context) {
+        Poll::Ready(result) => result.expect_err("elapsed deadline must reject the completed stage"),
+        Poll::Pending => panic!("configured stage must resume on its second poll"),
+    }
+}
+
+/// A deadline expiring during flush retains an unpublished writer for cleanup.
+#[test]
+fn test_async_copy_deadline_after_flush_retains_writer() {
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
+        yield_once_stage: Some(AsyncCopyStage::WriterFlush),
+        ..AsyncRecordingConfig::default()
+    });
+    let mut operation = file_system
+        .begin_copy(
+            path("/source"),
+            path("/target"),
+            CopyOptions::file().with_deadline(Some(Duration::from_millis(100))),
+        )
+        .expect("copy preflight");
+
+    let failure = expire_at_pending_stage(&mut operation);
+    assert_eq!(failure.error().kind(), FsErrorKind::ResourceLimitExceeded);
+    assert_eq!(failure.state(), CopyFailureState::Unchanged);
+    assert_eq!(failure.partial_stats().bytes, 5);
+    assert!(operation.has_recovery());
+    assert_eq!(
+        operation.state(),
+        AsyncCopyOperationState::Failed(CopyFailureState::Unchanged)
+    );
+}
+
+/// A deadline expiring after a successful commit preserves publication facts.
+#[test]
+fn test_async_copy_deadline_after_commit_reports_published() {
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
+        yield_once_stage: Some(AsyncCopyStage::WriterCommit),
+        ..AsyncRecordingConfig::default()
+    });
+    let mut operation = file_system
+        .begin_copy(
+            path("/source"),
+            path("/target"),
+            CopyOptions::file().with_deadline(Some(Duration::from_millis(100))),
+        )
+        .expect("copy preflight");
+
+    let failure = expire_at_pending_stage(&mut operation);
+    assert_eq!(failure.error().kind(), FsErrorKind::ResourceLimitExceeded);
+    assert_eq!(failure.state(), CopyFailureState::Published);
+    assert_eq!(failure.partial_stats().bytes, 5);
+    assert!(!operation.has_recovery());
+    assert_eq!(
+        operation.state(),
+        AsyncCopyOperationState::Failed(CopyFailureState::Published)
+    );
 }
 
 /// Covers every failed streamed I/O stage while retaining the recovery writer.
