@@ -10,6 +10,7 @@
 //! dependencies.
 pub mod async_recovery;
 pub mod provider_minimal;
+pub mod provider_minimal_async;
 pub mod sync_recovery;
 
 #[cfg(test)]

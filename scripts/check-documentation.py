@@ -13,14 +13,15 @@ SOURCES = {
     'sync-recovery': FIXTURE / 'sync_recovery.rs',
     'async-recovery': FIXTURE / 'async_recovery.rs',
     'provider-minimal': FIXTURE / 'provider_minimal.rs',
+    'provider-minimal-async': FIXTURE / 'provider_minimal_async.rs',
 }
 DOCUMENTS = {
     'README.md': {'quick-start'},
     'README.zh_CN.md': {'quick-start'},
     'doc/user_guide.md': {'quick-start', 'sync-recovery', 'async-recovery'},
     'doc/user_guide.zh_CN.md': {'quick-start', 'sync-recovery', 'async-recovery'},
-    'doc/provider_guide.md': {'provider-minimal'},
-    'doc/provider_guide.zh_CN.md': {'provider-minimal'},
+    'doc/provider_guide.md': {'provider-minimal', 'provider-minimal-async'},
+    'doc/provider_guide.zh_CN.md': {'provider-minimal', 'provider-minimal-async'},
 }
 PATTERN = re.compile(r'<!-- example: ([a-z-]+) -->\n```rust\n(.*?)\n```', re.S)
 RUST_FILE_HEADER = re.compile(
@@ -67,8 +68,8 @@ def check_versions_and_structure():
         assert block.count(f'qubit-fs = "{major_minor}"') == 1, f'{relative}: core version is stale'
         assert block.count(f'qubit-fs-local = "{local_version}"') == 1, f'{relative}: local version is stale'
     for relative, heading in (
-        ('doc/provider_guide.md', '## 12. Further reading'),
-        ('doc/provider_guide.zh_CN.md', '## 12. 延伸阅读'),
+        ('doc/provider_guide.md', '## 15. Further reading'),
+        ('doc/provider_guide.zh_CN.md', '## 15. 延伸阅读'),
         ('doc/user_guide.md', '## Further reading'),
         ('doc/user_guide.zh_CN.md', '## 延伸阅读'),
     ):

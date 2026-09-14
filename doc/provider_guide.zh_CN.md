@@ -128,6 +128,99 @@ pub fn read_health() -> FsResult<Vec<u8>> {
 }
 ```
 
+### 最小异步 provider
+
+这个只提供 metadata 的示例展示与运行时无关的 `AsyncFileSystemSpi` 边界。它只声明 `Stat`；返回的 boxed future 在被轮询前不执行 provider 工作。文档 fixture 会编译并执行这段完整代码。
+
+<!-- example: provider-minimal-async -->
+```rust
+use qubit_fs::AsyncFileSystem;
+use qubit_fs::FsError;
+use qubit_fs::FsResult;
+use qubit_fs::Path;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
+use qubit_fs::metadata::FileKind;
+use qubit_fs::metadata::FileMetadata;
+use qubit_fs::metadata::FileSystemCapabilities;
+use qubit_fs::metadata::FileSystemId;
+use qubit_fs::metadata::FileSystemInfo;
+use qubit_fs::metadata::FileSystemLimits;
+use qubit_fs::metadata::SymlinkPolicy;
+use qubit_fs::path::PathConstraints;
+use qubit_fs::path::PathSemantics;
+use qubit_fs::spi::AsyncFileSystemSpi;
+use qubit_fs::spi::ProviderOperation;
+use qubit_fs::spi::ProviderOperations;
+use qubit_fs::spi::ProviderProperties;
+use qubit_fs::spi::SpiFuture;
+use qubit_fs::spi::StatRequest;
+use qubit_fs::spi::StatResponse;
+
+/// Provides metadata for one health resource without selecting a runtime.
+pub struct AsyncHealthProvider {
+    /// Immutable declaration returned at the SPI boundary.
+    properties: ProviderProperties,
+}
+
+impl AsyncHealthProvider {
+    /// Creates a provider that advertises only the implemented stat operation.
+    ///
+    /// # Errors
+    /// Returns an invalid-properties error if the static declaration is invalid.
+    pub fn new() -> FsResult<Self> {
+        let properties = ProviderProperties::new(
+            FileSystemInfo::new(
+                FileSystemId::new("docs-async-health")?,
+                "docs-async-health",
+                PathSemantics::Hierarchical,
+            ),
+            ProviderOperations::new().with(ProviderOperation::Stat),
+            FileSystemCapabilities::new(),
+            FileSystemLimits::unknown(),
+            PathConstraints::absolute(),
+            SymlinkPolicy::Reject,
+        )?;
+        Ok(Self { properties })
+    }
+}
+
+impl AsyncFileSystemSpi for AsyncHealthProvider {
+    /// Returns the cached declaration without provider I/O.
+    fn properties(&self) -> ProviderProperties {
+        self.properties.clone()
+    }
+
+    /// Returns metadata when polled, or a contextual not-found error.
+    fn stat<'a>(&'a self, request: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
+        Box::pin(async move {
+            let path = request.path();
+            if path.as_str() != "/health" {
+                return Err(FsError::new(
+                    FsErrorKind::NotFound,
+                    FsOperation::Stat,
+                    "health resource not found",
+                )
+                .with_path(path.clone()));
+            }
+            Ok(StatResponse::new(
+                path.clone(),
+                FileMetadata::new(FileKind::File).with_len(Some(2)),
+            ))
+        })
+    }
+}
+
+/// Queries the health resource through the public asynchronous facade.
+///
+/// # Errors
+/// Returns a path, provider, or facade-contract error if metadata is unavailable.
+pub async fn stat_health() -> FsResult<FileMetadata> {
+    let filesystem = AsyncFileSystem::from_spi(AsyncHealthProvider::new()?)?;
+    filesystem.stat(&Path::parse("/health")?).await
+}
+```
+
 ## 6. 错误与上下文
 
 返回 `FsError` 时带上失败的操作和路径。门面会保留操作的 `FsEffectState`（例如发布
@@ -164,15 +257,7 @@ writer 和临时资源实现必须分别报告发布、清理和恢复失败。�
 上下文。只有 `stat` 明确返回 `NotFound` 时，`exists` 才会返回 false；权限、认证、
 超时和 I/O 错误必须继续作为错误返回。
 
-## 11. 发布前检查清单
-
-- 构造并校验一份缓存的 `ProviderProperties` 快照。
-- 只添加已经实现且有理由的 operation 和 capability 强度。
-- 运行共享 testkit 契约套件及 provider 专属恢复测试。
-- 运行 `cargo test --locked --all-features`、doctest、clippy、rustdoc 和文档校验器。
-- 审查发布、清理、取消和错误状态的行为。
-
-## 列举范围与有界读取
+## 11. 列举范围与有界读取
 
 列举层级目录或平面键前缀时，传入 `ListScope::Path(path)`；列举整个已配置的平面
 命名空间时，传入 `ListScope::Namespace`。层级文件系统拒绝 Namespace，列举其根目录
@@ -196,7 +281,7 @@ Conditional 或不支持范围读取的 provider 仍可顺序读取前缀。Best
 保留原请求；Required checksum 会返回 `RequirementNotMet`，因为仅读取前缀不能确认
 完整校验。需要该保证时使用完整的 `read_all`。返回和消费上限不等于网络预取量保证。
 
-## 0.8 的打开失败与恢复协议
+## 12. 0.8 的打开失败与恢复协议
 
 同步、异步门面的 `open_writer`、`create_temp_file` 和 `create_temp_directory`
 均返回 `OpenFailure<R>`。`Preflight` 和 `ProviderOpen` 阶段没有可交回的会话；
@@ -225,7 +310,7 @@ persist 或原始 session。应用应保留错误，或用 `take_recovery` 接�
 provider 尚未交回的会话无法由核心接管。打开失败或取消之前在 provider 内部创建的资源，
 仍由 provider 负责保留和回收。
 
-## 读取窗口与分配上限
+## 13. 读取窗口与分配上限
 
 `ReadOptions::validate()` 在能力检查、前缀优化和 provider I/O 之前拒绝显式
  offset + length 溢出，错误为 `InvalidOptions`；未提供 offset 时按零计算。
@@ -239,7 +324,15 @@ provider 尚未交回的会话无法由核心接管。打开失败或取消之�
 预取上限。本地 provider 的范围能力为 Conditional，自动缩小前缀请求仍只对声明
 Guaranteed `RangeRead` 的 provider 生效。
 
-## 12. 延伸阅读
+## 14. 发布前检查清单
+
+- 构造并校验一份缓存的 `ProviderProperties` 快照。
+- 只添加已经实现且有理由的 operation 和 capability 强度。
+- 运行共享 testkit 契约套件及 provider 专属恢复测试。
+- 运行 `cargo test --locked --all-features`、doctest、clippy、rustdoc 和文档校验器。
+- 审查发布、清理、取消和错误状态的行为。
+
+## 15. 延伸阅读
 
 - [English user guide](user_guide.md) · [中文用户指南](user_guide.zh_CN.md)
 - [English design](file_system_design.md) · [中文设计文档](file_system_design.zh_CN.md)
