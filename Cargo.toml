@@ -33,12 +33,12 @@ async = []
 
 [dependencies]
 qubit-budget = "0.7"
-fluent-uri = "0.4.1"
+fluent-uri = "^0.4"
 qubit-io = "0.17"
 qubit-redact = { version = "0.9", features = ["uri"] }
 
 [dev-dependencies]
-criterion = "0.5"
+criterion = "^0.8"
 
 [[bench]]
 name = "read_prefix"
