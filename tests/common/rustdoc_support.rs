@@ -5,7 +5,13 @@
 // =============================================================================
 // Deterministic in-memory provider used only by executable Rustdoc examples.
 
-pub use qubit_fs::rustdoc_provider;
+/// Isolated in-memory provider shared by executable Rustdoc examples.
+pub mod rustdoc_provider {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/common/rustdoc_provider_impl.rs"
+    ));
+}
 
 #[cfg(feature = "async")]
 #[path = "async_recording_spi.rs"]

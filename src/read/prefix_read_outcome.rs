@@ -22,7 +22,8 @@ use crate::read::ReadOptions;
 /// use qubit_fs::Path;
 /// use qubit_fs::read::PrefixReadTermination;
 /// use qubit_fs::read::ReadOptions;
-/// let fs = qubit_fs::rustdoc_provider::filesystem();
+/// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
+/// let fs = support::rustdoc_provider::filesystem();
 /// let outcome = fs.read_prefix(&Path::parse("/report")?, ReadOptions::default(), 3)?;
 /// assert_eq!(outcome.bytes(), b"rep");
 /// assert_eq!(outcome.termination(), PrefixReadTermination::LimitReached);

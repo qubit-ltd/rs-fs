@@ -21,7 +21,8 @@ use super::FallbackRejection;
 /// use qubit_fs::Path;
 /// use qubit_fs::copy::CopyExecutionRoute;
 /// use qubit_fs::copy::CopyOptions;
-/// let fs = qubit_fs::rustdoc_provider::filesystem();
+/// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
+/// let fs = support::rustdoc_provider::filesystem();
 /// let assessment = fs.assess_copy(&Path::parse("/report")?, &Path::parse("/copy")?, &CopyOptions::default())?;
 /// assert_eq!(assessment.route(), CopyExecutionRoute::StreamOnly);
 /// assert_eq!(assessment.fallback_rejection(), None);

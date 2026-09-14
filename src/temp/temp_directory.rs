@@ -37,8 +37,8 @@ use crate::temp::internal::TempLifecycle;
 /// # Examples
 ///
 /// ```rust
-/// # use qubit_fs::rustdoc_provider;
-/// # let filesystem = qubit_fs::rustdoc_provider::filesystem();
+/// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
+/// # let filesystem = support::rustdoc_provider::filesystem();
 /// use qubit_fs::temp::{TempOptions, TempResourceState};
 ///
 /// let mut temporary = filesystem.create_temp_directory(TempOptions::default())?;
