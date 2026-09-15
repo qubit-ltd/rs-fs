@@ -67,3 +67,6 @@ external/
 
 # Local worktrees
 .worktrees/
+
+# Locally installed pinned rs-infra tools
+.infra/tools/bin/
