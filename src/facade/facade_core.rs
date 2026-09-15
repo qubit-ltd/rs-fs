@@ -83,16 +83,26 @@ impl FacadeCore {
     /// Returns an enriched path-validation error when `parent` is present and
     /// does not satisfy the cached filesystem rules.
     pub(crate) fn validate_temp_parent(&self, parent: Option<&Path>) -> FsResult<()> {
-        parent.map_or(Ok(()), |path| self.validate_path(path, FsOperation::CreateTemp))
+        parent.map_or(Ok(()), |path| {
+            self.validate_path(path, FsOperation::CreateTemp)
+        })
     }
 
     /// Validates a writer path, options, and required write capability.
-    pub(crate) fn validate_write_request(&self, path: &Path, options: &WriteOptions) -> FsResult<()> {
+    pub(crate) fn validate_write_request(
+        &self,
+        path: &Path,
+        options: &WriteOptions,
+    ) -> FsResult<()> {
         self.validate_path(path, FsOperation::OpenWriter)?;
         options
             .validate_against(self.properties.capabilities())
             .map_err(|error| self.enrich(error, Some(path), FsOperation::OpenWriter))?;
-        self.require(FileSystemCapability::Write, FsOperation::OpenWriter, Some(path))
+        self.require(
+            FileSystemCapability::Write,
+            FsOperation::OpenWriter,
+            Some(path),
+        )
     }
 
     /// Assesses copy routes from the immutable provider snapshot without I/O.
@@ -100,7 +110,12 @@ impl FacadeCore {
     /// # Errors
     /// Returns an invalid-options or requirement error when the paths or copy
     /// options cannot be served by either the provider or the stream fallback.
-    pub(crate) fn assess_copy(&self, source: &Path, target: &Path, options: &CopyOptions) -> FsResult<CopyAssessment> {
+    pub(crate) fn assess_copy(
+        &self,
+        source: &Path,
+        target: &Path,
+        options: &CopyOptions,
+    ) -> FsResult<CopyAssessment> {
         self.validate_path(source, FsOperation::Copy)?;
         self.validate_path(target, FsOperation::Copy)?;
         if source == target {
@@ -125,24 +140,43 @@ impl FacadeCore {
                 "copy entry limit must be greater than zero",
             ));
         }
-        let mut rejection = crate::copy::fallback_rejection(options, self.properties.symlink_policy());
+        let mut rejection =
+            crate::copy::fallback_rejection(options, self.properties.symlink_policy());
         if rejection.is_none() {
-            if !self.properties.capabilities().supports(FileSystemCapability::Read)
-                || !self.provider_operations.supports(ProviderOperation::OpenReader)
+            if !self
+                .properties
+                .capabilities()
+                .supports(FileSystemCapability::Read)
+                || !self
+                    .provider_operations
+                    .supports(ProviderOperation::OpenReader)
             {
                 rejection = Some(FallbackRejection::MissingRead);
-            } else if !self.properties.capabilities().supports(FileSystemCapability::Write)
-                || !self.provider_operations.supports(ProviderOperation::OpenWriter)
+            } else if !self
+                .properties
+                .capabilities()
+                .supports(FileSystemCapability::Write)
+                || !self
+                    .provider_operations
+                    .supports(ProviderOperation::OpenWriter)
             {
                 rejection = Some(FallbackRejection::MissingWrite);
             } else if !self.provider_operations.supports(ProviderOperation::Stat) {
                 rejection = Some(FallbackRejection::MissingStat);
             }
         }
-        let provider_copy = self.provider_operations.supports(ProviderOperation::TryCopy);
+        let provider_copy = self
+            .provider_operations
+            .supports(ProviderOperation::TryCopy);
         match (provider_copy, rejection) {
-            (true, reason @ None) => Ok(CopyAssessment::new(CopyExecutionRoute::ProviderThenStream, reason)),
-            (true, reason @ Some(_)) => Ok(CopyAssessment::new(CopyExecutionRoute::ProviderOnly, reason)),
+            (true, reason @ None) => Ok(CopyAssessment::new(
+                CopyExecutionRoute::ProviderThenStream,
+                reason,
+            )),
+            (true, reason @ Some(_)) => Ok(CopyAssessment::new(
+                CopyExecutionRoute::ProviderOnly,
+                reason,
+            )),
             (false, None) => Ok(CopyAssessment::new(CopyExecutionRoute::StreamOnly, None)),
             (false, Some(_)) => Err(FsError::new(
                 FsErrorKind::RequirementNotMet,
@@ -186,18 +220,30 @@ impl FacadeCore {
     ///
     /// Existing provider-supplied context is preserved. `None` does not invent
     /// a path for pathless operations.
-    pub(crate) fn enrich(&self, error: FsError, path: Option<&Path>, operation: FsOperation) -> FsError {
+    pub(crate) fn enrich(
+        &self,
+        error: FsError,
+        path: Option<&Path>,
+        operation: FsOperation,
+    ) -> FsError {
         let error = error
             .with_operation(operation)
             .with_missing_provider(self.properties.info().provider_id());
         match path {
-            Some(path) => error.with_missing_context(path, None, self.properties.info().provider_id()),
+            Some(path) => {
+                error.with_missing_context(path, None, self.properties.info().provider_id())
+            }
             None => error,
         }
     }
 
     /// Builds a provider-contract error bound to a requested path.
-    pub(crate) fn contract_error(&self, path: &Path, operation: FsOperation, message: &str) -> FsError {
+    pub(crate) fn contract_error(
+        &self,
+        path: &Path,
+        operation: FsOperation,
+        message: &str,
+    ) -> FsError {
         FsError::new(FsErrorKind::ProviderContractViolation, operation, message)
             .with_path(path.clone())
             .with_provider(self.properties.info().provider_id())
@@ -242,15 +288,22 @@ impl FacadeCore {
         provider: &str,
         message: &'static str,
     ) -> FsError {
-        FsError::with_source(FsErrorKind::ResourceLimitExceeded, operation, message, error)
-            .with_path(path.clone())
-            .with_provider(provider)
+        FsError::with_source(
+            FsErrorKind::ResourceLimitExceeded,
+            operation,
+            message,
+            error,
+        )
+        .with_path(path.clone())
+        .with_provider(provider)
     }
 
     /// Returns the next bounded read length for an accumulated prefix.
     #[inline]
     pub(crate) fn next_prefix_read_len(accumulated: usize, maximum: usize) -> usize {
-        maximum.saturating_sub(accumulated).min(Self::PREFIX_BUFFER_SIZE)
+        maximum
+            .saturating_sub(accumulated)
+            .min(Self::PREFIX_BUFFER_SIZE)
     }
 }
 
@@ -264,7 +317,8 @@ mod tests {
     fn quantity_conversion_is_executed_at_runtime() {
         let path = Path::parse("/facade-core").expect("valid path");
         assert_eq!(
-            FacadeCore::quantity_from_usize(7, FsOperation::Read, &path, "test").expect("value fits"),
+            FacadeCore::quantity_from_usize(7, FsOperation::Read, &path, "test")
+                .expect("value fits"),
             7,
         );
     }

@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow source-test-pair -- public prefix_read_policy_tests cover
 // synchronous and asynchronous dispatch through this private policy.
 //! Conservative provider request planning for bounded prefix reads.
 
@@ -54,7 +53,10 @@ impl PrefixReadPlan {
             .limits()
             .validate_read_range(path, options.length())
             .map_err(contextualize)?;
-        if !properties.capabilities().supports(FileSystemCapability::Read) {
+        if !properties
+            .capabilities()
+            .supports(FileSystemCapability::Read)
+        {
             return Err(contextualize(
                 FsError::new(
                     FsErrorKind::UnsupportedCapability,
@@ -75,18 +77,25 @@ impl PrefixReadPlan {
         }
         if max_bytes > 0
             && options.checksum() == ChecksumPolicy::None
-            && properties.capabilities().guarantees(FileSystemCapability::RangeRead)
+            && properties
+                .capabilities()
+                .guarantees(FileSystemCapability::RangeRead)
             && let Ok(maximum) = u64::try_from(max_bytes)
         {
             let length = options.length().map_or(maximum, |value| value.min(maximum));
             let representable = options.offset().unwrap_or(0).checked_add(length).is_some();
-            let allowed = !properties.limits().max_read_range_bytes().is_exceeded_by(length);
+            let allowed = !properties
+                .limits()
+                .max_read_range_bytes()
+                .is_exceeded_by(length);
             if representable && allowed {
                 options = options.with_length(Some(length));
             }
         }
-        let hint = (max_bytes > 0 && options.checksum() == ChecksumPolicy::None && u64::try_from(max_bytes).is_ok())
-            .then(|| PrefixReadHint::new(u64::try_from(max_bytes).expect("checked above")));
+        let hint = (max_bytes > 0
+            && options.checksum() == ChecksumPolicy::None
+            && u64::try_from(max_bytes).is_ok())
+        .then(|| PrefixReadHint::new(u64::try_from(max_bytes).expect("checked above")));
         Ok(Self { options, hint })
     }
 

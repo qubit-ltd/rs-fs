@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow source-test-pair -- behavior is covered through public
 // facade tests.
 //! Deletion outcome.
 
@@ -71,9 +70,11 @@ mod tests {
     #[test]
     fn outcome_accessors_are_executed_at_runtime() {
         let constructor: fn(bool) -> DeleteOutcome = black_box(DeleteOutcome::new);
-        let with_entries: fn(DeleteOutcome, u64) -> DeleteOutcome = black_box(DeleteOutcome::with_deleted_entries);
+        let with_entries: fn(DeleteOutcome, u64) -> DeleteOutcome =
+            black_box(DeleteOutcome::with_deleted_entries);
         let already_missing: fn(DeleteOutcome) -> bool = black_box(DeleteOutcome::already_missing);
-        let deleted_entries: fn(DeleteOutcome) -> Option<u64> = black_box(DeleteOutcome::deleted_entries);
+        let deleted_entries: fn(DeleteOutcome) -> Option<u64> =
+            black_box(DeleteOutcome::deleted_entries);
 
         let outcome = with_entries(constructor(true), 2);
         assert!(already_missing(outcome));

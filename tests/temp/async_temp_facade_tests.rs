@@ -51,7 +51,9 @@ impl AsyncTempResourceSpi for DefaultTempResource {
     }
 
     /// This test session never transfers cleanup responsibility.
-    fn keep<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<PersistOutcome, SpiPersistFailure>> {
+    fn keep<'a>(
+        self: Pin<&'a mut Self>,
+    ) -> SpiFuture<'a, Result<PersistOutcome, SpiPersistFailure>> {
         unimplemented!("keep is outside this default-hook test")
     }
 
@@ -78,7 +80,13 @@ fn test_async_temp_creation_rejects_mismatched_provider_identity() {
     };
     assert_eq!(FsErrorKind::ProviderContractViolation, error.error().kind());
     assert_eq!(vec!["create_temp_file"], probe.calls());
-    ready(error.recovery_mut().expect("isolated session").cleanup_async()).expect("explicit cleanup");
+    ready(
+        error
+            .recovery_mut()
+            .expect("isolated session")
+            .cleanup_async(),
+    )
+    .expect("explicit cleanup");
     assert_eq!(vec!["create_temp_file", "cleanup"], probe.calls());
 }
 
@@ -94,14 +102,19 @@ fn test_async_temp_resource_default_cancel_on_drop_is_noop() {
 fn test_async_temp_creation_validates_parent_before_provider_call() {
     let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig::default());
     let parent = path("relative");
-    let error = match ready(file_system.create_temp_file(TempOptions::default().with_parent(Some(parent.clone())))) {
+    let error = match ready(
+        file_system.create_temp_file(TempOptions::default().with_parent(Some(parent.clone()))),
+    ) {
         Ok(_) => panic!("invalid temporary parent must fail in the facade"),
         Err(error) => error,
     };
     assert_eq!(FsErrorKind::InvalidPath, error.error().kind());
     assert_eq!(FsOperation::CreateTemp, error.error().operation());
     assert_eq!(Some(&parent), error.error().path());
-    assert!(probe.calls().is_empty(), "provider creation must not be called");
+    assert!(
+        probe.calls().is_empty(),
+        "provider creation must not be called"
+    );
 }
 
 /// Verifies async pathless provider failures omit fabricated root context.
@@ -134,7 +147,13 @@ fn test_async_temp_directory_rejects_mismatched_provider_identity() {
     };
     assert_eq!(FsErrorKind::ProviderContractViolation, error.error().kind());
     assert_eq!(vec!["create_temp_directory"], probe.calls());
-    ready(error.recovery_mut().expect("isolated session").cleanup_async()).expect("explicit cleanup");
+    ready(
+        error
+            .recovery_mut()
+            .expect("isolated session")
+            .cleanup_async(),
+    )
+    .expect("explicit cleanup");
     assert_eq!(vec!["create_temp_directory", "cleanup"], probe.calls());
 }
 
@@ -150,8 +169,13 @@ fn test_async_invalid_temp_identity_preserves_primary_and_cleanup_errors() {
         panic!("invalid temporary identity must fail");
     };
     let original = error.error().to_string();
-    let cleanup =
-        ready(error.recovery_mut().expect("isolated session").cleanup_async()).expect_err("injected cleanup failure");
+    let cleanup = ready(
+        error
+            .recovery_mut()
+            .expect("isolated session")
+            .cleanup_async(),
+    )
+    .expect_err("injected cleanup failure");
     assert!(cleanup.to_string().contains("injected cleanup failure"));
     assert_eq!(error.error().to_string(), original);
     assert!(error.recovery().is_some());
@@ -171,7 +195,13 @@ fn test_async_temp_creation_rejects_wrong_kind() {
     };
     assert_eq!(FsErrorKind::ProviderContractViolation, error.error().kind());
     assert_eq!(vec!["create_temp_file"], probe.calls());
-    ready(error.recovery_mut().expect("isolated session").cleanup_async()).expect("explicit cleanup");
+    ready(
+        error
+            .recovery_mut()
+            .expect("isolated session")
+            .cleanup_async(),
+    )
+    .expect("explicit cleanup");
     assert_eq!(vec!["create_temp_file", "cleanup"], probe.calls());
 }
 
@@ -179,52 +209,76 @@ fn test_async_temp_creation_rejects_wrong_kind() {
 #[test]
 fn test_async_temp_directory_builds_child_and_descendant_paths() {
     let (file_system, _) = async_recording_file_system(AsyncRecordingConfig::default());
-    let directory =
-        ready(file_system.create_temp_directory(TempOptions::default())).expect("temporary directory should open");
+    let directory = ready(file_system.create_temp_directory(TempOptions::default()))
+        .expect("temporary directory should open");
     let component = PathComponent::parse("child").expect("component parses");
     let descendant = RelativePath::parse("nested/item").expect("relative path parses");
     assert_eq!("/tmp/recording/child", directory.child(&component).as_str());
-    assert_eq!("/tmp/recording/nested/item", directory.descendant(&descendant).as_str());
+    assert_eq!(
+        "/tmp/recording/nested/item",
+        directory.descendant(&descendant).as_str()
+    );
 }
 
 /// Verifies the directory handle's forwarding methods through opaque calls.
 #[test]
 fn test_async_temp_directory_forwarding_methods_are_callable_directly() {
     let (file_system, _) = async_recording_file_system(AsyncRecordingConfig::default());
-    let mut directory =
-        ready(file_system.create_temp_directory(TempOptions::default())).expect("directory should open");
-    let path_accessor: for<'a> fn(&'a AsyncTempDirectory) -> &'a Path = black_box(AsyncTempDirectory::path);
-    let state_accessor: fn(&AsyncTempDirectory) -> TempResourceState = black_box(AsyncTempDirectory::state);
-    let child: fn(&AsyncTempDirectory, &PathComponent) -> Path = black_box(AsyncTempDirectory::child);
-    let descendant: fn(&AsyncTempDirectory, &RelativePath) -> Path = black_box(AsyncTempDirectory::descendant);
+    let mut directory = ready(file_system.create_temp_directory(TempOptions::default()))
+        .expect("directory should open");
+    let path_accessor: for<'a> fn(&'a AsyncTempDirectory) -> &'a Path =
+        black_box(AsyncTempDirectory::path);
+    let state_accessor: fn(&AsyncTempDirectory) -> TempResourceState =
+        black_box(AsyncTempDirectory::state);
+    let child: fn(&AsyncTempDirectory, &PathComponent) -> Path =
+        black_box(AsyncTempDirectory::child);
+    let descendant: fn(&AsyncTempDirectory, &RelativePath) -> Path =
+        black_box(AsyncTempDirectory::descendant);
     let cleanup: for<'a> fn(&'a mut AsyncTempDirectory) -> SpiFuture<'a, FsResult<()>> =
         black_box(AsyncTempDirectory::cleanup);
-    let keep: for<'a> fn(&'a mut AsyncTempDirectory) -> SpiFuture<'a, Result<PersistOutcome, PersistFailure>> =
+    let keep: for<'a> fn(
+        &'a mut AsyncTempDirectory,
+    ) -> SpiFuture<'a, Result<PersistOutcome, PersistFailure>> =
         black_box(AsyncTempDirectory::keep);
     let persist: for<'a> fn(
         &'a mut AsyncTempDirectory,
         &'a Path,
         PersistOptions,
-    ) -> SpiFuture<'a, Result<PersistOutcome, PersistFailure>> = black_box(AsyncTempDirectory::persist);
+    ) -> SpiFuture<'a, Result<PersistOutcome, PersistFailure>> =
+        black_box(AsyncTempDirectory::persist);
 
     let component = PathComponent::parse("child").expect("component should parse");
     let relative = RelativePath::parse("nested/item").expect("relative path should parse");
     assert_eq!("/tmp/recording", path_accessor(&directory).as_str());
     assert_eq!(TempResourceState::Owned, state_accessor(&directory));
-    assert_eq!("/tmp/recording/child", child(&directory, &component).as_str());
-    assert_eq!("/tmp/recording/nested/item", descendant(&directory, &relative).as_str());
+    assert_eq!(
+        "/tmp/recording/child",
+        child(&directory, &component).as_str()
+    );
+    assert_eq!(
+        "/tmp/recording/nested/item",
+        descendant(&directory, &relative).as_str()
+    );
 
     ready(cleanup(&mut directory)).expect("cleanup should succeed");
     assert_eq!(TempResourceState::Cleaned, state_accessor(&directory));
     assert!(ready(keep(&mut directory)).is_err());
-    assert!(ready(persist(&mut directory, &path("/final"), PersistOptions::default())).is_err());
+    assert!(
+        ready(persist(
+            &mut directory,
+            &path("/final"),
+            PersistOptions::default()
+        ))
+        .is_err()
+    );
 }
 
 /// Verifies persistence preflight fails before calling a temporary session.
 #[test]
 fn test_async_temp_persist_preflight_has_no_session_call() {
     let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig::default());
-    let mut temp = ready(file_system.create_temp_file(TempOptions::default())).expect("temporary file should open");
+    let mut temp = ready(file_system.create_temp_file(TempOptions::default()))
+        .expect("temporary file should open");
     let failure = ready(temp.persist(
         &path("/final"),
         PersistOptions::default().with_atomicity(AtomicityRequirement::Required),
@@ -242,8 +296,10 @@ fn test_async_temp_file_persist_delegates_after_preflight() {
         atomic_temp_persist: true,
         ..AsyncRecordingConfig::default()
     });
-    let mut temp = ready(file_system.create_temp_file(TempOptions::default())).expect("temporary file should open");
-    let outcome = ready(temp.persist(&path("/final"), PersistOptions::default())).expect("persistence should succeed");
+    let mut temp = ready(file_system.create_temp_file(TempOptions::default()))
+        .expect("temporary file should open");
+    let outcome = ready(temp.persist(&path("/final"), PersistOptions::default()))
+        .expect("persistence should succeed");
     assert_eq!(&path("/final"), outcome.target());
     assert_eq!(TempResourceState::Persisted, temp.state());
     assert_eq!(vec!["create_temp_file", "persist"], probe.calls());
@@ -256,12 +312,16 @@ fn test_async_temp_file_rejects_mismatched_persist_target() {
         atomic_temp_persist: true,
         ..AsyncRecordingConfig::default()
     });
-    let mut temp = ready(file_system.create_temp_file(TempOptions::default())).expect("temporary file should open");
+    let mut temp = ready(file_system.create_temp_file(TempOptions::default()))
+        .expect("temporary file should open");
 
     let failure = ready(temp.persist(&path("/wrong-persist-target"), PersistOptions::default()))
         .expect_err("mismatched target should violate the provider contract");
 
-    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
     assert_eq!(PersistFailureState::Indeterminate, failure.state());
     assert_eq!(TempResourceState::Indeterminate, temp.state());
 }
@@ -270,15 +330,21 @@ fn test_async_temp_file_rejects_mismatched_persist_target() {
 #[test]
 fn test_async_temp_cleanup_and_keep_delegate_to_spi_sessions() {
     let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig::default());
-    let mut file = ready(file_system.create_temp_file(TempOptions::default())).expect("temporary file should open");
+    let mut file = ready(file_system.create_temp_file(TempOptions::default()))
+        .expect("temporary file should open");
     ready(file.cleanup()).expect("cleanup should succeed");
     assert_eq!(TempResourceState::Cleaned, file.state());
-    let mut directory =
-        ready(file_system.create_temp_directory(TempOptions::default())).expect("temporary directory should open");
+    let mut directory = ready(file_system.create_temp_directory(TempOptions::default()))
+        .expect("temporary directory should open");
     ready(directory.keep()).expect("keep should succeed");
     assert_eq!(TempResourceState::Kept, directory.state());
     assert_eq!(
-        vec!["create_temp_file", "cleanup", "create_temp_directory", "keep"],
+        vec![
+            "create_temp_file",
+            "cleanup",
+            "create_temp_directory",
+            "keep"
+        ],
         probe.calls()
     );
 }
@@ -291,7 +357,8 @@ fn test_async_temp_persist_indeterminate_is_preserved() {
         temp_persist_indeterminate: true,
         ..AsyncRecordingConfig::default()
     });
-    let mut temp = ready(file_system.create_temp_file(TempOptions::default())).expect("temporary file should open");
+    let mut temp = ready(file_system.create_temp_file(TempOptions::default()))
+        .expect("temporary file should open");
     let error = ready(temp.persist(&path("/final"), PersistOptions::default()))
         .expect_err("persistence should be indeterminate");
     assert_eq!(FsErrorKind::Indeterminate, error.error().kind());
@@ -309,7 +376,8 @@ fn test_async_temp_lifecycle_failures_preserve_expected_states() {
         temp_keep_failure: true,
         ..AsyncRecordingConfig::default()
     });
-    let mut file = ready(file_system.create_temp_file(TempOptions::default())).expect("temporary file should open");
+    let mut file = ready(file_system.create_temp_file(TempOptions::default()))
+        .expect("temporary file should open");
     let keep = ready(file.keep()).expect_err("configured keep failure should propagate");
     assert_eq!(FsErrorKind::Io, keep.error().kind());
     assert_eq!(FsOperation::KeepTemp, keep.error().operation());
@@ -321,9 +389,10 @@ fn test_async_temp_lifecycle_failures_preserve_expected_states() {
         temp_cleanup_failure: true,
         ..AsyncRecordingConfig::default()
     });
-    let mut directory =
-        ready(file_system.create_temp_directory(TempOptions::default())).expect("temporary directory should open");
-    let cleanup = ready(directory.cleanup()).expect_err("configured cleanup failure should propagate");
+    let mut directory = ready(file_system.create_temp_directory(TempOptions::default()))
+        .expect("temporary directory should open");
+    let cleanup =
+        ready(directory.cleanup()).expect_err("configured cleanup failure should propagate");
     assert_eq!(FsErrorKind::Io, cleanup.kind());
     assert_eq!(FsOperation::CleanupTemp, cleanup.operation());
     assert_eq!(Some(&path("/tmp/recording")), cleanup.path());
@@ -339,8 +408,8 @@ fn test_async_temp_directory_persists_and_rejects_later_lifecycle_calls() {
         atomic_temp_persist: true,
         ..AsyncRecordingConfig::default()
     });
-    let mut directory =
-        ready(file_system.create_temp_directory(TempOptions::default())).expect("temporary directory should open");
+    let mut directory = ready(file_system.create_temp_directory(TempOptions::default()))
+        .expect("temporary directory should open");
     assert_eq!(&path("/tmp/recording"), directory.path());
     let outcome = ready(directory.persist(&path("/final"), PersistOptions::default()))
         .expect("temporary directory should persist");
@@ -350,7 +419,8 @@ fn test_async_temp_directory_persists_and_rejects_later_lifecycle_calls() {
         .expect_err("persisted directory must reject a second persist");
     assert_eq!(FsErrorKind::InvalidState, persist.error().kind());
     assert!(persist.error().to_string().contains("temporary directory"));
-    let cleanup = ready(directory.cleanup()).expect_err("persisted directory must reject later cleanup");
+    let cleanup =
+        ready(directory.cleanup()).expect_err("persisted directory must reject later cleanup");
     assert_eq!(FsErrorKind::InvalidState, cleanup.kind());
     assert!(cleanup.to_string().contains("temporary directory"));
 }
@@ -361,7 +431,8 @@ fn test_async_temp_directory_persists_and_rejects_later_lifecycle_calls() {
 fn test_async_temp_drop_notifies_provider_for_cleanup_owned_states() {
     let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig::default());
     {
-        let _file = ready(file_system.create_temp_file(TempOptions::default())).expect("temporary file should open");
+        let _file = ready(file_system.create_temp_file(TempOptions::default()))
+            .expect("temporary file should open");
     }
     assert_eq!(1, probe.temp_cancellations());
 
@@ -371,11 +442,14 @@ fn test_async_temp_drop_notifies_provider_for_cleanup_owned_states() {
         ..AsyncRecordingConfig::default()
     });
     {
-        let mut directory =
-            ready(file_system.create_temp_directory(TempOptions::default())).expect("temporary directory should open");
+        let mut directory = ready(file_system.create_temp_directory(TempOptions::default()))
+            .expect("temporary directory should open");
         let failure = ready(directory.persist(&path("/final"), PersistOptions::default()))
             .expect_err("configured persistence failure should propagate");
-        assert_eq!(PersistFailureState::PublishedSourceRetained, failure.state());
+        assert_eq!(
+            PersistFailureState::PublishedSourceRetained,
+            failure.state()
+        );
         assert_eq!(TempResourceState::CleanupRequired, directory.state());
     }
     assert_eq!(1, probe.temp_cancellations());
@@ -397,7 +471,8 @@ fn test_async_temp_persist_failure_states_drive_lifecycle() {
             temp_persist_failure: Some(failure_state),
             ..AsyncRecordingConfig::default()
         });
-        let mut file = ready(file_system.create_temp_file(TempOptions::default())).expect("temporary file should open");
+        let mut file = ready(file_system.create_temp_file(TempOptions::default()))
+            .expect("temporary file should open");
         let failure = ready(file.persist(&path("/final"), PersistOptions::default()))
             .expect_err("configured persist failure should propagate");
         assert_eq!(failure_state, failure.state());
@@ -417,9 +492,12 @@ fn test_async_temp_file_repeat_preserves_publication_target() {
     assert_eq!(keep.error().kind(), FsErrorKind::InvalidState);
     assert_eq!(keep.state(), PersistFailureState::PublishedSourceReleased);
     assert_eq!(keep.publication_target(), Some(outcome.target()));
-    let persist =
-        ready(file.persist(&path("/other"), PersistOptions::default())).expect_err("kept file must reject persist");
-    assert_eq!(persist.state(), PersistFailureState::PublishedSourceReleased);
+    let persist = ready(file.persist(&path("/other"), PersistOptions::default()))
+        .expect_err("kept file must reject persist");
+    assert_eq!(
+        persist.state(),
+        PersistFailureState::PublishedSourceReleased
+    );
     assert_eq!(persist.publication_target(), Some(outcome.target()));
     assert_eq!(file.state(), TempResourceState::Kept);
     assert_eq!(probe.calls(), calls, "repeat must not call the provider");
@@ -433,8 +511,10 @@ fn test_async_temp_directory_repeat_preserves_publication_target() {
         atomic_temp_persist: true,
         ..AsyncRecordingConfig::default()
     });
-    let mut directory = ready(filesystem.create_temp_directory(TempOptions::default())).expect("create directory");
-    let outcome = ready(directory.persist(&path("/published"), PersistOptions::default())).expect("persist directory");
+    let mut directory =
+        ready(filesystem.create_temp_directory(TempOptions::default())).expect("create directory");
+    let outcome = ready(directory.persist(&path("/published"), PersistOptions::default()))
+        .expect("persist directory");
     let calls = probe.calls();
     let keep = ready(directory.keep()).expect_err("persisted directory must reject keep");
     assert_eq!(keep.error().kind(), FsErrorKind::InvalidState);
@@ -442,7 +522,10 @@ fn test_async_temp_directory_repeat_preserves_publication_target() {
     assert_eq!(keep.publication_target(), Some(outcome.target()));
     let persist = ready(directory.persist(&path("/other"), PersistOptions::default()))
         .expect_err("directory must reject repeat persist");
-    assert_eq!(persist.state(), PersistFailureState::PublishedSourceReleased);
+    assert_eq!(
+        persist.state(),
+        PersistFailureState::PublishedSourceReleased
+    );
     assert_eq!(persist.publication_target(), Some(outcome.target()));
     assert_eq!(directory.state(), TempResourceState::Persisted);
     assert_eq!(probe.calls(), calls, "repeat must not call the provider");
@@ -460,12 +543,14 @@ fn test_async_temp_cleanup_preserves_published_history() {
         });
         let mut file = ready(filesystem.create_temp_file(TempOptions::default())).expect("file");
         let target = path("/published");
-        let failure = ready(file.persist(&target, PersistOptions::default())).expect_err("partial publish");
+        let failure =
+            ready(file.persist(&target, PersistOptions::default())).expect_err("partial publish");
         assert_eq!(Some(&target), failure.publication_target());
         let result = ready(file.cleanup());
         assert_eq!(cleanup_failure, result.is_err());
         let calls = probe.calls();
-        let retry = ready(file.persist(&path("relative"), PersistOptions::default())).expect_err("not owned");
+        let retry = ready(file.persist(&path("relative"), PersistOptions::default()))
+            .expect_err("not owned");
         assert_eq!(FsErrorKind::InvalidState, retry.error().kind());
         assert_eq!(Some(&target), retry.publication_target());
         assert_eq!(
@@ -505,14 +590,17 @@ fn test_async_temp_file_source_failure_states_are_sticky() {
             temp_persist_failure: Some(state),
             ..AsyncRecordingConfig::default()
         });
-        let mut temporary = ready(filesystem.create_temp_file(TempOptions::default())).expect("resource");
+        let mut temporary =
+            ready(filesystem.create_temp_file(TempOptions::default())).expect("resource");
         let target = path("/published");
-        let failure = ready(temporary.persist(&target, PersistOptions::default())).expect_err("injected failure");
+        let failure = ready(temporary.persist(&target, PersistOptions::default()))
+            .expect_err("injected failure");
         assert_eq!(state, failure.state());
         assert_eq!(expected, temporary.state());
         assert_eq!(published.then_some(&target), failure.publication_target());
         let calls = probe.calls();
-        let retry = ready(temporary.persist(&path("relative"), PersistOptions::default())).expect_err("not owned");
+        let retry = ready(temporary.persist(&path("relative"), PersistOptions::default()))
+            .expect_err("not owned");
         assert_eq!(FsErrorKind::InvalidState, retry.error().kind());
         assert_eq!(state, retry.state());
         assert_eq!(published.then_some(&target), retry.publication_target());
@@ -523,14 +611,19 @@ fn test_async_temp_file_source_failure_states_are_sticky() {
         if expected == TempResourceState::Indeterminate {
             assert_eq!(
                 FsErrorKind::InvalidState,
-                ready(temporary.cleanup()).expect_err("uncertain source").kind()
+                ready(temporary.cleanup())
+                    .expect_err("uncertain source")
+                    .kind()
             );
             assert_eq!(expected, temporary.state());
             assert_eq!(calls, probe.calls());
         } else {
             ready(temporary.cleanup()).expect("sandbox cleanup");
             let retry = ready(temporary.keep()).expect_err("cleaned");
-            assert_eq!(PersistFailureState::NotPublishedSourceReleased, retry.state());
+            assert_eq!(
+                PersistFailureState::NotPublishedSourceReleased,
+                retry.state()
+            );
             assert_eq!(None, retry.publication_target());
         }
         drop(temporary);
@@ -564,14 +657,17 @@ fn test_async_temp_directory_source_failure_states_are_sticky() {
             temp_persist_failure: Some(state),
             ..AsyncRecordingConfig::default()
         });
-        let mut temporary = ready(filesystem.create_temp_directory(TempOptions::default())).expect("resource");
+        let mut temporary =
+            ready(filesystem.create_temp_directory(TempOptions::default())).expect("resource");
         let target = path("/published");
-        let failure = ready(temporary.persist(&target, PersistOptions::default())).expect_err("injected failure");
+        let failure = ready(temporary.persist(&target, PersistOptions::default()))
+            .expect_err("injected failure");
         assert_eq!(state, failure.state());
         assert_eq!(expected, temporary.state());
         assert_eq!(published.then_some(&target), failure.publication_target());
         let calls = probe.calls();
-        let retry = ready(temporary.persist(&path("relative"), PersistOptions::default())).expect_err("not owned");
+        let retry = ready(temporary.persist(&path("relative"), PersistOptions::default()))
+            .expect_err("not owned");
         assert_eq!(FsErrorKind::InvalidState, retry.error().kind());
         assert_eq!(state, retry.state());
         assert_eq!(published.then_some(&target), retry.publication_target());
@@ -582,14 +678,19 @@ fn test_async_temp_directory_source_failure_states_are_sticky() {
         if expected == TempResourceState::Indeterminate {
             assert_eq!(
                 FsErrorKind::InvalidState,
-                ready(temporary.cleanup()).expect_err("uncertain source").kind()
+                ready(temporary.cleanup())
+                    .expect_err("uncertain source")
+                    .kind()
             );
             assert_eq!(expected, temporary.state());
             assert_eq!(calls, probe.calls());
         } else {
             ready(temporary.cleanup()).expect("sandbox cleanup");
             let retry = ready(temporary.keep()).expect_err("cleaned");
-            assert_eq!(PersistFailureState::NotPublishedSourceReleased, retry.state());
+            assert_eq!(
+                PersistFailureState::NotPublishedSourceReleased,
+                retry.state()
+            );
             assert_eq!(None, retry.publication_target());
         }
         drop(temporary);
@@ -609,7 +710,8 @@ fn test_async_temp_file_keep_failure_retains_generated_target() {
             temp_persist_failure: Some(state),
             ..AsyncRecordingConfig::default()
         });
-        let mut temporary = ready(filesystem.create_temp_file(TempOptions::default())).expect("resource");
+        let mut temporary =
+            ready(filesystem.create_temp_file(TempOptions::default())).expect("resource");
         let target = path("/kept-resource");
         let failure = ready(temporary.keep()).expect_err("injected keep failure");
         assert_eq!(Some(&target), failure.publication_target());
@@ -642,7 +744,8 @@ fn test_async_temp_directory_keep_failure_retains_generated_target() {
             temp_persist_failure: Some(state),
             ..AsyncRecordingConfig::default()
         });
-        let mut temporary = ready(filesystem.create_temp_directory(TempOptions::default())).expect("resource");
+        let mut temporary =
+            ready(filesystem.create_temp_directory(TempOptions::default())).expect("resource");
         let target = path("/kept-resource");
         let failure = ready(temporary.keep()).expect_err("injected keep failure");
         assert_eq!(Some(&target), failure.publication_target());
@@ -678,10 +781,12 @@ fn test_async_temp_file_cancellation_retains_uncertainty() {
                 .then_some(PersistFailureState::PublishedSourceRetained),
             ..AsyncRecordingConfig::default()
         });
-        let mut temporary = ready(filesystem.create_temp_file(TempOptions::default())).expect("resource");
+        let mut temporary =
+            ready(filesystem.create_temp_file(TempOptions::default())).expect("resource");
         let target = path("/published");
         if operation == FsOperation::CleanupTemp {
-            ready(temporary.persist(&target, PersistOptions::default())).expect_err("partial publish");
+            ready(temporary.persist(&target, PersistOptions::default()))
+                .expect_err("partial publish");
             drop(temporary.cleanup());
             assert_eq!(TempResourceState::CleanupRequired, temporary.state());
             let mut pending = temporary.cleanup();
@@ -699,7 +804,8 @@ fn test_async_temp_file_cancellation_retains_uncertainty() {
         }
         assert_eq!(TempResourceState::Indeterminate, temporary.state());
         let calls = probe.calls();
-        let retry = ready(temporary.persist(&path("relative"), PersistOptions::default())).expect_err("cancelled");
+        let retry = ready(temporary.persist(&path("relative"), PersistOptions::default()))
+            .expect_err("cancelled");
         assert_eq!(FsErrorKind::InvalidState, retry.error().kind());
         assert_eq!(PersistFailureState::Indeterminate, retry.state());
         assert_eq!(
@@ -731,10 +837,12 @@ fn test_async_temp_directory_cancellation_retains_uncertainty() {
                 .then_some(PersistFailureState::PublishedSourceRetained),
             ..AsyncRecordingConfig::default()
         });
-        let mut temporary = ready(filesystem.create_temp_directory(TempOptions::default())).expect("resource");
+        let mut temporary =
+            ready(filesystem.create_temp_directory(TempOptions::default())).expect("resource");
         let target = path("/published");
         if operation == FsOperation::CleanupTemp {
-            ready(temporary.persist(&target, PersistOptions::default())).expect_err("partial publish");
+            ready(temporary.persist(&target, PersistOptions::default()))
+                .expect_err("partial publish");
             drop(temporary.cleanup());
             assert_eq!(TempResourceState::CleanupRequired, temporary.state());
             let mut pending = temporary.cleanup();
@@ -752,7 +860,8 @@ fn test_async_temp_directory_cancellation_retains_uncertainty() {
         }
         assert_eq!(TempResourceState::Indeterminate, temporary.state());
         let calls = probe.calls();
-        let retry = ready(temporary.persist(&path("relative"), PersistOptions::default())).expect_err("cancelled");
+        let retry = ready(temporary.persist(&path("relative"), PersistOptions::default()))
+            .expect_err("cancelled");
         assert_eq!(FsErrorKind::InvalidState, retry.error().kind());
         assert_eq!(PersistFailureState::Indeterminate, retry.state());
         assert_eq!(
@@ -779,8 +888,12 @@ fn test_async_temp_atomicity_violation_retains_publication_target() {
     });
     let mut file = ready(filesystem.create_temp_file(TempOptions::default())).expect("file");
     let target = path("/published");
-    let failure = ready(file.persist(&target, PersistOptions::default())).expect_err("atomicity violation");
-    assert_eq!(PersistFailureState::PublishedSourceRetained, failure.state());
+    let failure =
+        ready(file.persist(&target, PersistOptions::default())).expect_err("atomicity violation");
+    assert_eq!(
+        PersistFailureState::PublishedSourceRetained,
+        failure.state()
+    );
     assert_eq!(Some(&target), failure.publication_target());
 }
 
@@ -794,10 +907,15 @@ fn test_async_temp_file_published_cleanup_becomes_source_indeterminate() {
         temp_cleanup_effect: Some(FsEffectState::Indeterminate),
         ..AsyncRecordingConfig::default()
     });
-    let mut temporary = ready(filesystem.create_temp_file(TempOptions::default())).expect("resource");
+    let mut temporary =
+        ready(filesystem.create_temp_file(TempOptions::default())).expect("resource");
     let target = path("/published");
-    let failure = ready(temporary.persist(&target, PersistOptions::default())).expect_err("partial publication");
-    assert_eq!(PersistFailureState::PublishedSourceRetained, failure.state());
+    let failure = ready(temporary.persist(&target, PersistOptions::default()))
+        .expect_err("partial publication");
+    assert_eq!(
+        PersistFailureState::PublishedSourceRetained,
+        failure.state()
+    );
     assert_eq!(TempResourceState::CleanupRequired, temporary.state());
     assert_eq!(Some(&target), failure.publication_target());
     let cleanup = ready(temporary.cleanup()).expect_err("uncertain cleanup");
@@ -806,16 +924,25 @@ fn test_async_temp_file_published_cleanup_becomes_source_indeterminate() {
     assert_eq!(TempResourceState::Indeterminate, temporary.state());
     let calls = probe.calls();
     assert_eq!(vec!["create_temp_file", "persist", "cleanup"], calls);
-    let retry = ready(temporary.persist(&path("relative"), PersistOptions::default())).expect_err("uncertain source");
+    let retry = ready(temporary.persist(&path("relative"), PersistOptions::default()))
+        .expect_err("uncertain source");
     assert_eq!(FsErrorKind::InvalidState, retry.error().kind());
-    assert_eq!(PersistFailureState::PublishedSourceIndeterminate, retry.state());
+    assert_eq!(
+        PersistFailureState::PublishedSourceIndeterminate,
+        retry.state()
+    );
     assert_eq!(Some(&target), retry.publication_target());
     let keep = ready(temporary.keep()).expect_err("uncertain source");
-    assert_eq!(PersistFailureState::PublishedSourceIndeterminate, keep.state());
+    assert_eq!(
+        PersistFailureState::PublishedSourceIndeterminate,
+        keep.state()
+    );
     assert_eq!(Some(&target), keep.publication_target());
     assert_eq!(
         FsErrorKind::InvalidState,
-        ready(temporary.cleanup()).expect_err("no cleanup retry").kind()
+        ready(temporary.cleanup())
+            .expect_err("no cleanup retry")
+            .kind()
     );
     assert_eq!(TempResourceState::Indeterminate, temporary.state());
     drop(temporary);
@@ -833,10 +960,15 @@ fn test_async_temp_directory_published_cleanup_becomes_source_indeterminate() {
         temp_cleanup_effect: Some(FsEffectState::Indeterminate),
         ..AsyncRecordingConfig::default()
     });
-    let mut temporary = ready(filesystem.create_temp_directory(TempOptions::default())).expect("resource");
+    let mut temporary =
+        ready(filesystem.create_temp_directory(TempOptions::default())).expect("resource");
     let target = path("/published");
-    let failure = ready(temporary.persist(&target, PersistOptions::default())).expect_err("partial publication");
-    assert_eq!(PersistFailureState::PublishedSourceRetained, failure.state());
+    let failure = ready(temporary.persist(&target, PersistOptions::default()))
+        .expect_err("partial publication");
+    assert_eq!(
+        PersistFailureState::PublishedSourceRetained,
+        failure.state()
+    );
     assert_eq!(TempResourceState::CleanupRequired, temporary.state());
     assert_eq!(Some(&target), failure.publication_target());
     let cleanup = ready(temporary.cleanup()).expect_err("uncertain cleanup");
@@ -845,16 +977,25 @@ fn test_async_temp_directory_published_cleanup_becomes_source_indeterminate() {
     assert_eq!(TempResourceState::Indeterminate, temporary.state());
     let calls = probe.calls();
     assert_eq!(vec!["create_temp_directory", "persist", "cleanup"], calls);
-    let retry = ready(temporary.persist(&path("relative"), PersistOptions::default())).expect_err("uncertain source");
+    let retry = ready(temporary.persist(&path("relative"), PersistOptions::default()))
+        .expect_err("uncertain source");
     assert_eq!(FsErrorKind::InvalidState, retry.error().kind());
-    assert_eq!(PersistFailureState::PublishedSourceIndeterminate, retry.state());
+    assert_eq!(
+        PersistFailureState::PublishedSourceIndeterminate,
+        retry.state()
+    );
     assert_eq!(Some(&target), retry.publication_target());
     let keep = ready(temporary.keep()).expect_err("uncertain source");
-    assert_eq!(PersistFailureState::PublishedSourceIndeterminate, keep.state());
+    assert_eq!(
+        PersistFailureState::PublishedSourceIndeterminate,
+        keep.state()
+    );
     assert_eq!(Some(&target), keep.publication_target());
     assert_eq!(
         FsErrorKind::InvalidState,
-        ready(temporary.cleanup()).expect_err("no cleanup retry").kind()
+        ready(temporary.cleanup())
+            .expect_err("no cleanup retry")
+            .kind()
     );
     assert_eq!(TempResourceState::Indeterminate, temporary.state());
     drop(temporary);

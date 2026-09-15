@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow source-test-pair
 //! Recovery states for failed synchronous writes.
 
 /// Provider-confirmed recovery state when a write commit fails.

@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow source-test-pair -- behavior is covered through the public
 // facade.
 //! Facade-resolved listing options.
 
@@ -74,11 +73,17 @@ mod tests {
     #[test]
     fn resolved_options_expose_their_values() {
         let options = ListOptions::default().with_recursive(true);
-        let resolved = ResolvedListOptions::new(options.clone(), SymlinkPolicy::FollowWithinFileSystem);
-        let options_accessor: fn(&ResolvedListOptions) -> &ListOptions = black_box(ResolvedListOptions::options);
-        let policy_accessor: fn(&ResolvedListOptions) -> SymlinkPolicy = black_box(ResolvedListOptions::symlink_policy);
+        let resolved =
+            ResolvedListOptions::new(options.clone(), SymlinkPolicy::FollowWithinFileSystem);
+        let options_accessor: fn(&ResolvedListOptions) -> &ListOptions =
+            black_box(ResolvedListOptions::options);
+        let policy_accessor: fn(&ResolvedListOptions) -> SymlinkPolicy =
+            black_box(ResolvedListOptions::symlink_policy);
 
         assert_eq!(&options, options_accessor(&resolved));
-        assert_eq!(SymlinkPolicy::FollowWithinFileSystem, policy_accessor(&resolved));
+        assert_eq!(
+            SymlinkPolicy::FollowWithinFileSystem,
+            policy_accessor(&resolved)
+        );
     }
 }

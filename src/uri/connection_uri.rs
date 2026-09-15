@@ -148,13 +148,16 @@ impl ConnectionUri {
     #[inline]
     #[must_use]
     fn redacted_text(&self) -> String {
-        let redaction = UriRedactionBoundary::new(&self.redaction_policy).redact_uri(self.parsed.as_str());
+        let redaction =
+            UriRedactionBoundary::new(&self.redaction_policy).redact_uri(self.parsed.as_str());
         match redaction.summary().completion() {
             RedactionCompletion::Complete => redaction
                 .into_complete_text()
                 .expect("complete redaction must retain text")
                 .into_string(),
-            RedactionCompletion::Truncated | RedactionCompletion::Exhausted => "<truncated>".to_owned(),
+            RedactionCompletion::Truncated | RedactionCompletion::Exhausted => {
+                "<truncated>".to_owned()
+            }
         }
     }
 }
@@ -172,6 +175,9 @@ impl Debug for ConnectionUri {
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         let redacted = self.redacted_text();
-        formatter.debug_tuple("ConnectionUri").field(&redacted).finish()
+        formatter
+            .debug_tuple("ConnectionUri")
+            .field(&redacted)
+            .finish()
     }
 }

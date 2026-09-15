@@ -100,7 +100,10 @@ fn check_listing(
                 result.unwrap();
                 assert_eq!(
                     actual,
-                    entries.iter().map(|entry| entry.path.clone()).collect::<Vec<_>>()
+                    entries
+                        .iter()
+                        .map(|entry| entry.path.clone())
+                        .collect::<Vec<_>>()
                 );
                 assert_eq!(observations.list_calls.load(Ordering::SeqCst), 1);
                 assert_eq!(observations.requests.lock().unwrap()[0].0, scope);
@@ -112,7 +115,10 @@ fn check_listing(
                 if !opened {
                     assert_eq!(error.path(), scope.path());
                 }
-                assert_eq!(observations.list_calls.load(Ordering::SeqCst), usize::from(opened));
+                assert_eq!(
+                    observations.list_calls.load(Ordering::SeqCst),
+                    usize::from(opened)
+                );
             }
         }
     }
@@ -152,7 +158,8 @@ fn raw_prefix_and_relative_filter_preserve_exact_text() {
         keys(&["folder/a", "folderish"]),
         Ok(()),
     );
-    let options = ListOptions::object_keys().with_filter(Some(ListFilter::LiteralPrefix("a".into())));
+    let options =
+        ListOptions::object_keys().with_filter(Some(ListFilter::LiteralPrefix("a".into())));
     check_listing(
         ListScope::Path(Path::parse_literal("folder/").unwrap()),
         options.clone(),
@@ -219,7 +226,8 @@ fn namespace_preflight_rejects_hierarchical_and_unsupported_listing() {
 #[test]
 fn query_and_entry_limits_are_distinct() {
     let limits = FileSystemLimits::unknown().with_max_path_text_bytes(FileSystemLimit::Maximum(4));
-    let options = ListOptions::object_keys().with_filter(Some(ListFilter::LiteralPrefix("abcde".into())));
+    let options =
+        ListOptions::object_keys().with_filter(Some(ListFilter::LiteralPrefix("abcde".into())));
     check_listing(
         ListScope::Namespace,
         options,
@@ -229,7 +237,8 @@ fn query_and_entry_limits_are_distinct() {
         vec![],
         Err((FsErrorKind::ResourceLimitExceeded, false)),
     );
-    let options = ListOptions::object_keys().with_filter(Some(ListFilter::LiteralPrefix("cde".into())));
+    let options =
+        ListOptions::object_keys().with_filter(Some(ListFilter::LiteralPrefix("cde".into())));
     check_listing(
         ListScope::Path(Path::parse_literal("ab").unwrap()),
         options,

@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow source-test-pair
 //! File information captured as part of opening a stream.
 
 use crate::metadata::FileMetadata;

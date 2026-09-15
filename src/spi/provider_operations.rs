@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow source-test-pair -- exercised through the public provider
 // property contract tests.
 //! Compact immutable sets of provider operation entry points.
 

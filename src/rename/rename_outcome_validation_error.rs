@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow source-test-pair -- covered through the public rename
 // facade validation tests.
 //! Provider rename outcome validation error details.
 

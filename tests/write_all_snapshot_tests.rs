@@ -117,9 +117,16 @@ fn test_partial_write_and_flush_failures_preserve_confirmed_bytes() {
     }
     impl Output for Writer {
         type Item = u8;
-        unsafe fn write_unchecked(&mut self, _: &[u8], _: usize, count: usize) -> std::io::Result<usize> {
+        unsafe fn write_unchecked(
+            &mut self,
+            _: &[u8],
+            _: usize,
+            count: usize,
+        ) -> std::io::Result<usize> {
             if self.accepted == 5 {
-                return Err(std::io::Error::other("write failed after two acknowledgements"));
+                return Err(std::io::Error::other(
+                    "write failed after two acknowledgements",
+                ));
             }
             let accepted = count.min(if self.accepted == 0 { 2 } else { 3 });
             self.accepted += accepted;
@@ -166,7 +173,10 @@ fn test_partial_write_and_flush_failures_preserve_confirmed_bytes() {
         }
         fn open_writer(&self, request: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
             Ok(OpenedWriter::new(
-                OpenedFileInfo::new(self.properties().info().id().clone(), request.path().clone()),
+                OpenedFileInfo::new(
+                    self.properties().info().id().clone(),
+                    request.path().clone(),
+                ),
                 Box::new(Writer {
                     accepted: 0,
                     flush_failure: self.flush_failure,
@@ -178,7 +188,11 @@ fn test_partial_write_and_flush_failures_preserve_confirmed_bytes() {
         let filesystem = FileSystem::from_spi(Provider { flush_failure }).expect("facade");
         let payload: &[u8] = if flush_failure { b"12345" } else { b"1234567" };
         let mut failure = filesystem
-            .write_all(&Path::parse("/target").expect("path"), payload, WriteOptions::default())
+            .write_all(
+                &Path::parse("/target").expect("path"),
+                payload,
+                WriteOptions::default(),
+            )
             .expect_err("stream failure");
         assert_eq!(failure.state(), WriteFailureState::Indeterminate);
         assert_eq!(failure.written_bytes(), 5);

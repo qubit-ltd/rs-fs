@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow source-test-pair
 //! Portable symbolic-link resolution policies.
 
 /// Controls whether a filesystem may resolve symbolic links while operating

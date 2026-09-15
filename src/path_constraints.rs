@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow source-test-pair -- behavior is covered through the public
 // facade.
 //! Immutable path constraints used by filesystem property snapshots.
 
@@ -63,7 +62,9 @@ impl PathConstraints {
     #[inline]
     #[must_use]
     pub const fn either() -> Self {
-        Self { form: PathForm::Either }
+        Self {
+            form: PathForm::Either,
+        }
     }
 
     /// Returns the configured accepted path form.

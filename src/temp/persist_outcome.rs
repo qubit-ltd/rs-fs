@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow source-test-pair -- behavior is covered through public
 // facade tests.
 //! Successful temporary resource persistence outcome.
 
@@ -133,14 +132,21 @@ mod tests {
     #[test]
     fn outcome_accessors_are_executed_at_runtime() {
         let target = Path::parse("/target").expect("valid target path");
-        let outcome = PersistOutcome::new(target.clone(), AchievedAtomicity::Atomic, PublicationMethod::Direct)
-            .with_cleanup_state(PersistCleanupState::ResidualTemporaryContainer)
-            .with_diagnostics(UserMetadata::new());
+        let outcome = PersistOutcome::new(
+            target.clone(),
+            AchievedAtomicity::Atomic,
+            PublicationMethod::Direct,
+        )
+        .with_cleanup_state(PersistCleanupState::ResidualTemporaryContainer)
+        .with_diagnostics(UserMetadata::new());
 
         assert_eq!(outcome.target(), &target);
         assert_eq!(outcome.atomicity(), AchievedAtomicity::Atomic);
         assert_eq!(outcome.method(), PublicationMethod::Direct);
-        assert_eq!(outcome.cleanup_state(), PersistCleanupState::ResidualTemporaryContainer);
+        assert_eq!(
+            outcome.cleanup_state(),
+            PersistCleanupState::ResidualTemporaryContainer
+        );
         assert!(outcome.diagnostics().is_empty());
     }
 }

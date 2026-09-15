@@ -114,7 +114,8 @@ pub trait FileSystemSpi: Send + Sync {
     /// # Errors
     /// Returns the provider open failure with filesystem context.
     fn open_writer(&self, request: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
-        Err(unsupported(FsOperation::OpenWriter, request.path()).with_effect_state(FsEffectState::Unchanged))
+        Err(unsupported(FsOperation::OpenWriter, request.path())
+            .with_effect_state(FsEffectState::Unchanged))
     }
     /// Creates a directory.
     ///
@@ -126,7 +127,10 @@ pub trait FileSystemSpi: Send + Sync {
     ///
     /// # Errors
     /// Returns the provider creation failure with filesystem context.
-    fn create_directory(&self, request: CreateDirectoryRequest<'_>) -> FsResult<CreateDirectoryOutcome> {
+    fn create_directory(
+        &self,
+        request: CreateDirectoryRequest<'_>,
+    ) -> FsResult<CreateDirectoryOutcome> {
         Err(unsupported(FsOperation::CreateDir, request.path()))
     }
     /// Deletes a file.
@@ -181,7 +185,8 @@ pub trait FileSystemSpi: Send + Sync {
     /// Returns a typed failure preserving confirmed rename progress.
     fn rename(&self, request: RenameRequest<'_>) -> Result<RenameOutcome, SpiRenameFailure> {
         Err(SpiRenameFailure::new(
-            unsupported(FsOperation::Rename, request.source()).with_target(request.target().clone()),
+            unsupported(FsOperation::Rename, request.source())
+                .with_target(request.target().clone()),
             RenameFailureState::Unchanged,
         ))
     }
@@ -212,7 +217,10 @@ pub trait FileSystemSpi: Send + Sync {
     ///
     /// # Errors
     /// Returns the provider creation failure with filesystem context.
-    fn create_temp_directory(&self, _request: CreateTempDirectoryRequest) -> FsResult<OpenedTempDirectory> {
+    fn create_temp_directory(
+        &self,
+        _request: CreateTempDirectoryRequest,
+    ) -> FsResult<OpenedTempDirectory> {
         Err(FsError::new(
             FsErrorKind::UnsupportedOperation,
             FsOperation::CreateTemp,

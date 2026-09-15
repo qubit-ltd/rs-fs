@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow source-test-pair -- behavior is covered through the public
 // facade.
 //! Validated copy request.
 
@@ -49,7 +48,11 @@ impl<'a> CopyRequest<'a> {
     /// A provider copy request borrowing both paths.
     #[allow(dead_code)]
     #[inline]
-    pub(crate) const fn new(source: &'a Path, target: &'a Path, options: ResolvedCopyOptions) -> Self {
+    pub(crate) const fn new(
+        source: &'a Path,
+        target: &'a Path,
+        options: ResolvedCopyOptions,
+    ) -> Self {
         Self {
             source,
             target,

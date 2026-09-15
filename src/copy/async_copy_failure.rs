@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow source-test-pair -- behavior is covered through public
 // facade tests.
 //! Recoverable failure returned by an asynchronous copy operation.
 

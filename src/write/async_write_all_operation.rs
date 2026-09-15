@@ -74,7 +74,12 @@ pub struct AsyncWriteAllOperation {
 }
 impl AsyncWriteAllOperation {
     /// Creates an operation after facade preflight has succeeded.
-    pub(crate) fn new(filesystem: AsyncFileSystem, path: Path, bytes: Vec<u8>, options: WriteOptions) -> Self {
+    pub(crate) fn new(
+        filesystem: AsyncFileSystem,
+        path: Path,
+        bytes: Vec<u8>,
+        options: WriteOptions,
+    ) -> Self {
         Self {
             filesystem,
             path,
@@ -204,18 +209,30 @@ async fn execute_write(
     if let Err(error) = writer.write_fully_async(bytes).await {
         let error = contextual(filesystem, error, path);
         let state = state_for(error.has_indeterminate_effect(), writer.state());
-        return Err(AsyncWriteAllOperationFailure::new(error, state, writer.written_bytes()));
+        return Err(AsyncWriteAllOperationFailure::new(
+            error,
+            state,
+            writer.written_bytes(),
+        ));
     }
     if let Err(error) = writer.flush_async().await {
         let error = contextual(filesystem, error, path);
         let state = state_for(error.has_indeterminate_effect(), writer.state());
-        return Err(AsyncWriteAllOperationFailure::new(error, state, writer.written_bytes()));
+        return Err(AsyncWriteAllOperationFailure::new(
+            error,
+            state,
+            writer.written_bytes(),
+        ));
     }
     match writer.commit_async().await {
         Ok(outcome) => Ok(outcome),
         Err(failure) => {
             let (error, state) = failure.into_parts();
-            Err(AsyncWriteAllOperationFailure::new(error, state, writer.written_bytes()))
+            Err(AsyncWriteAllOperationFailure::new(
+                error,
+                state,
+                writer.written_bytes(),
+            ))
         }
     }
 }

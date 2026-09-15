@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow source-test-pair
 //! Concrete synchronous directory stream handle.
 
 use std::fmt::Debug;
@@ -67,7 +66,14 @@ impl DirectoryStream {
         path_semantics: crate::path::PathSemantics,
         limits: FileSystemLimits,
     ) -> FsResult<Self> {
-        let policy = ListStreamPolicy::new(scope, options, provider, path_semantics, limits, Instant::now())?;
+        let policy = ListStreamPolicy::new(
+            scope,
+            options,
+            provider,
+            path_semantics,
+            limits,
+            Instant::now(),
+        )?;
         Ok(Self { session, policy })
     }
 
@@ -96,6 +102,8 @@ impl DirectoryStream {
 impl Debug for DirectoryStream {
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
-        formatter.debug_struct("DirectoryStream").finish_non_exhaustive()
+        formatter
+            .debug_struct("DirectoryStream")
+            .finish_non_exhaustive()
     }
 }
