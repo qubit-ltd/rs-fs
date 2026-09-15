@@ -1,0 +1,76 @@
+format = 1
+
+[[exceptions]]
+rule = "test-file-name"
+path = "tests/fixtures/documentation_examples/src/tests.rs"
+reason = "This module is the unit-test module of the standalone documentation-example fixture crate."
+
+[[exceptions]]
+rule = "test-file-name"
+path = "tests/handle_support/implementation.rs"
+reason = "This helper implementation is shared by the handle-support test module via a path attribute."
+
+[[exceptions]]
+rule = "test-redirect"
+path = "tests/async_file_system_review_tests.rs"
+reason = "This async contract suite composes its shared recording provider through a path module."
+
+[[exceptions]]
+rule = "test-redirect"
+path = "tests/async_handle_review_tests.rs"
+reason = "This review suite reuses a shared async handle fixture through a path module."
+
+[[exceptions]]
+rule = "test-redirect"
+path = "tests/common/rustdoc_support.rs"
+reason = "Executable documentation tests include the shared provider implementation into a fixture module."
+
+[[exceptions]]
+rule = "test-redirect"
+path = "tests/copy_deadline_tests.rs"
+reason = "This integration suite imports its shared deadline fixture with a path module."
+
+[[exceptions]]
+rule = "test-redirect"
+path = "tests/fixtures/documentation_examples/src/lib.rs"
+reason = "The standalone documentation fixture includes its example modules as part of a separate crate."
+
+[[exceptions]]
+rule = "test-redirect"
+path = "tests/lib_tests.rs"
+reason = "This integration-test root declares focused test modules using explicit path attributes."
+
+[[exceptions]]
+rule = "test-redirect"
+path = "tests/list_deadline_tests.rs"
+reason = "The deadline suite imports its shared listing support module by path."
+
+[[exceptions]]
+rule = "test-redirect"
+path = "tests/list_scope_tests.rs"
+reason = "This listing contract suite uses explicit path modules for shared support code."
+
+[[exceptions]]
+rule = "test-redirect"
+path = "tests/open_recovery_tests.rs"
+reason = "This recovery suite imports focused test support modules through path attributes."
+
+[[exceptions]]
+rule = "test-redirect"
+path = "tests/prefix_read_policy_tests.rs"
+reason = "The prefix-read suite imports shared polling and provider support by path."
+
+[[exceptions]]
+rule = "test-redirect"
+path = "tests/read_buffer_tests.rs"
+reason = "The read-buffer suite imports its common reader fixture with path modules."
+
+[[exceptions]]
+rule = "test-redirect"
+path = "tests/read_range_contract_tests.rs"
+reason = "The range-contract suite imports dedicated prefix-read support modules by path."
+
+[[exceptions]]
+rule = "test-redirect"
+path = "tests/writer_recovery_tests.rs"
+reason = "The writer recovery suite imports shared lifecycle fixtures through path modules."
