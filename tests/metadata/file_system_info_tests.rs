@@ -13,7 +13,8 @@ use qubit_fs::path::PathSemantics;
 
 #[test]
 fn file_system_info_is_a_validated_local_snapshot() {
-    let id = FileSystemId::new("mock-instance").expect("valid filesystem identity must be accepted");
+    let id =
+        FileSystemId::new("mock-instance").expect("valid filesystem identity must be accepted");
     let provider_id = "mock";
     let info = FileSystemInfo::new(id.clone(), provider_id, PathSemantics::ObjectKey)
         .with_scheme("mock")
@@ -52,7 +53,11 @@ fn file_system_info_rejects_secret_bearing_provider_metadata() {
 
 #[test]
 fn file_system_info_rejects_sensitive_provider_metadata_keys() {
-    assert!(UserMetadata::new().with("x-amz-signature", "plaintext").is_err());
+    assert!(
+        UserMetadata::new()
+            .with("x-amz-signature", "plaintext")
+            .is_err()
+    );
 }
 
 #[test]

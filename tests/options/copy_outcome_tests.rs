@@ -32,12 +32,16 @@ fn test_copy_outcome_new_stores_stats_and_method() {
 
 #[test]
 fn copy_outcome_preserves_validated_diagnostics() {
-    let outcome = CopyOutcome::new(CopyStats::default(), CopyMethod::Streamed, AchievedAtomicity::NonAtomic)
-        .with_diagnostics(
-            UserMetadata::new()
-                .with("request_id", "private-copy-id")
-                .expect("ordinary copy diagnostic key must be accepted"),
-        );
+    let outcome = CopyOutcome::new(
+        CopyStats::default(),
+        CopyMethod::Streamed,
+        AchievedAtomicity::NonAtomic,
+    )
+    .with_diagnostics(
+        UserMetadata::new()
+            .with("request_id", "private-copy-id")
+            .expect("ordinary copy diagnostic key must be accepted"),
+    );
     assert!(outcome.diagnostics().contains_key("request_id"));
     assert!(!format!("{outcome:?}").contains("private-copy-id"));
 }
@@ -46,8 +50,12 @@ fn copy_outcome_preserves_validated_diagnostics() {
 /// synchronization.
 #[test]
 fn test_copy_outcome_with_durable_reports_true() {
-    let outcome =
-        CopyOutcome::new(CopyStats::default(), CopyMethod::Native, AchievedAtomicity::Atomic).with_durable(true);
+    let outcome = CopyOutcome::new(
+        CopyStats::default(),
+        CopyMethod::Native,
+        AchievedAtomicity::Atomic,
+    )
+    .with_durable(true);
     assert!(outcome.durable());
 }
 
@@ -55,9 +63,13 @@ fn test_copy_outcome_with_durable_reports_true() {
 /// version needed by facade contract checks.
 #[test]
 fn test_copy_outcome_reports_metadata_and_target_version() {
-    let outcome = CopyOutcome::new(CopyStats::default(), CopyMethod::Native, AchievedAtomicity::Atomic)
-        .with_metadata(MetadataPreservePolicy::Portable)
-        .with_target_version(ResourceVersion::new("generation-7"));
+    let outcome = CopyOutcome::new(
+        CopyStats::default(),
+        CopyMethod::Native,
+        AchievedAtomicity::Atomic,
+    )
+    .with_metadata(MetadataPreservePolicy::Portable)
+    .with_target_version(ResourceVersion::new("generation-7"));
     assert_eq!(MetadataPreservePolicy::Portable, outcome.metadata());
     assert_eq!(
         Some("generation-7"),

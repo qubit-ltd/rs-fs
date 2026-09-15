@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow source-test-pair -- behavior is covered through public
 // facade tests.
 //! Recoverable facade copy failure.
 
@@ -122,7 +121,12 @@ impl CopyFailure {
     #[must_use]
     pub fn into_parts(self) -> (FsError, CopyFailureState, CopyStats, Option<WriterRecovery>) {
         let mut parts = self.parts;
-        (parts.error, parts.state, parts.partial_stats, parts.writer.take())
+        (
+            parts.error,
+            parts.state,
+            parts.partial_stats,
+            parts.writer.take(),
+        )
     }
 }
 impl Debug for CopyFailure {
@@ -171,10 +175,12 @@ mod tests {
     #[test]
     fn recovery_accessors_are_executed_at_runtime() {
         let has_recovery: fn(&CopyFailure) -> bool = black_box(CopyFailure::has_recovery);
-        let recovery: fn(&CopyFailure) -> Option<&WriterRecovery> = black_box(CopyFailure::recovery);
+        let recovery: fn(&CopyFailure) -> Option<&WriterRecovery> =
+            black_box(CopyFailure::recovery);
         let recovery_mut: for<'a> fn(&'a mut CopyFailure) -> Option<&'a mut WriterRecovery> =
             black_box(CopyFailure::recovery_mut);
-        let take_recovery: fn(&mut CopyFailure) -> Option<WriterRecovery> = black_box(CopyFailure::take_recovery);
+        let take_recovery: fn(&mut CopyFailure) -> Option<WriterRecovery> =
+            black_box(CopyFailure::take_recovery);
         let mut failure = CopyFailure::new(
             FsError::new(FsErrorKind::NotFound, FsOperation::Copy, "missing source"),
             CopyFailureState::Unchanged,

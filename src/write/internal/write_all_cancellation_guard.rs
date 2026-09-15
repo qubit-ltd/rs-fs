@@ -75,7 +75,11 @@ impl Drop for WriteAllCancellationGuard<'_> {
     fn drop(&mut self) {
         if !self.finished && *self.state == AsyncWriteAllOperationState::Running {
             *self.state = AsyncWriteAllOperationState::Failed(WriteFailureState::Indeterminate);
-            if let Some(writer) = self.writer.as_mut().and_then(AsyncWriterRecovery::opened_mut) {
+            if let Some(writer) = self
+                .writer
+                .as_mut()
+                .and_then(AsyncWriterRecovery::opened_mut)
+            {
                 self.recovery.written_bytes = writer.written_bytes();
                 writer.mark_indeterminate();
             }

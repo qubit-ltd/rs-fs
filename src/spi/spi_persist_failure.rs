@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow source-test-pair -- behavior is covered through the public
 // facade.
 //! Provider persistence failure facts.
 
@@ -91,7 +90,11 @@ mod tests {
     #[test]
     fn failure_facts_are_executed_at_runtime() {
         let failure = SpiPersistFailure::new(
-            FsError::new(FsErrorKind::AlreadyExists, FsOperation::PersistTemp, "target exists"),
+            FsError::new(
+                FsErrorKind::AlreadyExists,
+                FsOperation::PersistTemp,
+                "target exists",
+            ),
             PersistFailureState::NotPublished,
         );
         assert_eq!(failure.error().kind(), FsErrorKind::AlreadyExists);

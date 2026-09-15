@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow source-test-pair
 //! Publication certainty after writer cancellation.
 
 /// Provider-confirmed destination state after writer cleanup completes.

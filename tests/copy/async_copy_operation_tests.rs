@@ -86,13 +86,22 @@ impl AsyncFileSystemSpi for CopySpi {
     fn stat<'a>(&'a self, _: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
         Box::pin(async { Err(unused()) })
     }
-    fn list<'a>(&'a self, _: ListRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncDirectoryStream>> {
+    fn list<'a>(
+        &'a self,
+        _: ListRequest<'a>,
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncDirectoryStream>> {
         Box::pin(async { Err(unused()) })
     }
-    fn open_reader<'a>(&'a self, _: OpenReaderRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
+    fn open_reader<'a>(
+        &'a self,
+        _: OpenReaderRequest<'a>,
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
         Box::pin(async { Err(unused()) })
     }
-    fn open_writer<'a>(&'a self, _: OpenWriterRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
+    fn open_writer<'a>(
+        &'a self,
+        _: OpenWriterRequest<'a>,
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
         Box::pin(async { Err(unused()) })
     }
     fn create_directory<'a>(
@@ -101,16 +110,33 @@ impl AsyncFileSystemSpi for CopySpi {
     ) -> SpiFuture<'a, FsResult<CreateDirectoryOutcome>> {
         Box::pin(async { Err(unused()) })
     }
-    fn delete_file<'a>(&'a self, _: DeleteFileRequest<'a>) -> SpiFuture<'a, FsResult<DeleteOutcome>> {
+    fn delete_file<'a>(
+        &'a self,
+        _: DeleteFileRequest<'a>,
+    ) -> SpiFuture<'a, FsResult<DeleteOutcome>> {
         Box::pin(async { Err(unused()) })
     }
-    fn delete_directory<'a>(&'a self, _: DeleteDirectoryRequest<'a>) -> SpiFuture<'a, FsResult<DeleteOutcome>> {
+    fn delete_directory<'a>(
+        &'a self,
+        _: DeleteDirectoryRequest<'a>,
+    ) -> SpiFuture<'a, FsResult<DeleteOutcome>> {
         Box::pin(async { Err(unused()) })
     }
-    fn rename<'a>(&'a self, _: RenameRequest<'a>) -> SpiFuture<'a, Result<RenameOutcome, SpiRenameFailure>> {
-        Box::pin(async { Err(SpiRenameFailure::new(unused(), RenameFailureState::Unchanged)) })
+    fn rename<'a>(
+        &'a self,
+        _: RenameRequest<'a>,
+    ) -> SpiFuture<'a, Result<RenameOutcome, SpiRenameFailure>> {
+        Box::pin(async {
+            Err(SpiRenameFailure::new(
+                unused(),
+                RenameFailureState::Unchanged,
+            ))
+        })
     }
-    fn create_temp_file<'a>(&'a self, _: CreateTempFileRequest) -> SpiFuture<'a, FsResult<OpenedAsyncTempFile>> {
+    fn create_temp_file<'a>(
+        &'a self,
+        _: CreateTempFileRequest,
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncTempFile>> {
         Box::pin(async { Err(unused()) })
     }
     fn create_temp_directory<'a>(
@@ -120,13 +146,20 @@ impl AsyncFileSystemSpi for CopySpi {
         Box::pin(async { Err(unused()) })
     }
 
-    fn try_copy<'a>(&'a self, _: CopyRequest<'a>) -> SpiFuture<'a, Result<CopyAttempt, SpiCopyFailure>> {
+    fn try_copy<'a>(
+        &'a self,
+        _: CopyRequest<'a>,
+    ) -> SpiFuture<'a, Result<CopyAttempt, SpiCopyFailure>> {
         Box::pin(pending())
     }
 }
 
 fn unused() -> FsError {
-    FsError::new(FsErrorKind::UnsupportedOperation, FsOperation::Other, "unused")
+    FsError::new(
+        FsErrorKind::UnsupportedOperation,
+        FsOperation::Other,
+        "unused",
+    )
 }
 
 #[test]

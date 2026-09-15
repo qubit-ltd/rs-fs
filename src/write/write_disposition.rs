@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow source-test-pair
 //! Destination disposition for write operations.
 
 /// How opening a writer treats an existing destination.

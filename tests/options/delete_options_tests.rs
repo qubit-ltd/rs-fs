@@ -28,7 +28,10 @@ fn delete_requirements_are_checked_against_typed_capabilities() {
     let error = recursive
         .validate_against(FileSystemCapabilities::default())
         .unwrap_err();
-    assert_eq!(Some(FileSystemCapability::RecursiveDelete), error.required_capability(),);
+    assert_eq!(
+        Some(FileSystemCapability::RecursiveDelete),
+        error.required_capability(),
+    );
 
     let conditional = DeleteOptions::default().with_if_match(Some(ResourceVersion::from("v1")));
     let error = conditional

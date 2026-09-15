@@ -53,7 +53,11 @@ pub struct RejectedTempResource {
 }
 impl RejectedTempResource {
     /// Takes ownership of a rejected session and trusted request context.
-    pub(crate) fn new(session: Box<dyn TempResourceSpi>, provider: &str, path: Option<Path>) -> Self {
+    pub(crate) fn new(
+        session: Box<dyn TempResourceSpi>,
+        provider: &str,
+        path: Option<Path>,
+    ) -> Self {
         Self {
             session,
             state: RecoveryCleanupState::Pending,
@@ -91,7 +95,11 @@ impl RejectedTempResource {
     }
     /// Adds only trusted request context to a cleanup error.
     fn contextual_error(&self, error: FsError) -> FsError {
-        error.with_trusted_cleanup_context(FsOperation::CleanupTemp, self.path.as_ref(), &self.provider)
+        error.with_trusted_cleanup_context(
+            FsOperation::CleanupTemp,
+            self.path.as_ref(),
+            &self.provider,
+        )
     }
 }
 impl Debug for RejectedTempResource {

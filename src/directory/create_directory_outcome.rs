@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow source-test-pair -- behavior is covered through public
 // facade tests.
 //! Directory creation outcome.
 
@@ -70,10 +69,12 @@ mod tests {
 
     #[test]
     fn outcome_accessors_are_executed_at_runtime() {
-        let constructor: fn(bool) -> CreateDirectoryOutcome = black_box(CreateDirectoryOutcome::new);
+        let constructor: fn(bool) -> CreateDirectoryOutcome =
+            black_box(CreateDirectoryOutcome::new);
         let with_ancestors: fn(CreateDirectoryOutcome, u64) -> CreateDirectoryOutcome =
             black_box(CreateDirectoryOutcome::with_created_ancestors);
-        let already_existed: fn(CreateDirectoryOutcome) -> bool = black_box(CreateDirectoryOutcome::already_existed);
+        let already_existed: fn(CreateDirectoryOutcome) -> bool =
+            black_box(CreateDirectoryOutcome::already_existed);
         let created_ancestors: fn(CreateDirectoryOutcome) -> Option<u64> =
             black_box(CreateDirectoryOutcome::created_ancestors);
 

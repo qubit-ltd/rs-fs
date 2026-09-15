@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow source-test-pair -- behavior is covered through the public
 // facade.
 //! Cancellation guard for an owning asynchronous copy operation.
 
@@ -102,7 +101,11 @@ impl Drop for CopyCancellationGuard<'_> {
                 .map_or(CopyStats::default(), |writer| {
                     crate::copy::internal::fallback_failure_stats(writer.written_bytes())
                 });
-            if let Some(writer) = self.writer.as_mut().and_then(AsyncWriterRecovery::opened_mut) {
+            if let Some(writer) = self
+                .writer
+                .as_mut()
+                .and_then(AsyncWriterRecovery::opened_mut)
+            {
                 writer.mark_indeterminate();
             }
         }

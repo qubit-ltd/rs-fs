@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow source-test-pair
 //! Methods used to publish filesystem changes.
 
 /// Concrete method used to publish a successful filesystem change.

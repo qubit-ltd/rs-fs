@@ -6,7 +6,6 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-// qubit-style: allow test-file-name -- this module is included by
 // handle_support/mod.rs.
 use std::io::Cursor;
 use std::io::Result as IoResult;
@@ -90,7 +89,9 @@ static WRITER_COMMIT_DELAY_MS: AtomicU64 = AtomicU64::new(0);
 static WRITER_DELAY_LOCK: Mutex<()> = Mutex::new(());
 
 pub(crate) fn writer_delay_guard() -> std::sync::MutexGuard<'static, ()> {
-    WRITER_DELAY_LOCK.lock().expect("writer delay lock should succeed")
+    WRITER_DELAY_LOCK
+        .lock()
+        .expect("writer delay lock should succeed")
 }
 
 pub(crate) fn set_writer_delays(flush: Duration, commit: Duration) {
@@ -410,7 +411,10 @@ pub(crate) fn non_atomic_temp_directory_filesystem() -> FileSystem {
 fn test_handle_support_constructs_file_system() {
     let (file_system, _, _) = filesystem(false, Vec::new());
 
-    assert_eq!("handles-test", file_system.properties().info().id().as_str());
+    assert_eq!(
+        "handles-test",
+        file_system.properties().info().id().as_str()
+    );
 }
 
 /// Exercises synchronous facade dispatch for directory creation and both
@@ -453,7 +457,12 @@ fn test_handle_support_dispatches_successful_facade_operations() {
     let mut directory = file_system
         .list(&ListScope::Path((source).clone()), ListOptions::default())
         .expect("list should succeed");
-    assert!(directory.next_entry().expect("stream should succeed").is_none());
+    assert!(
+        directory
+            .next_entry()
+            .expect("stream should succeed")
+            .is_none()
+    );
 
     let mut reader = file_system
         .open_reader(&source, ReadOptions::default())
@@ -473,11 +482,15 @@ fn test_handle_support_dispatches_successful_facade_operations() {
     let mut temporary_file = file_system
         .create_temp_file(TempOptions::default())
         .expect("temporary file should open");
-    temporary_file.keep().expect("temporary file should be kept");
+    temporary_file
+        .keep()
+        .expect("temporary file should be kept");
     let mut temporary_directory = file_system
         .create_temp_directory(TempOptions::default())
         .expect("temporary directory should open");
-    temporary_directory.keep().expect("temporary directory should be kept");
+    temporary_directory
+        .keep()
+        .expect("temporary directory should be kept");
 }
 
 /// Invokes the synchronous SPI's optional default copy method and completes
@@ -591,13 +604,20 @@ fn test_handle_support_rejects_invalid_temp_identities_with_cleanup_failure() {
             .expect_err("foreign temporary directory identity must be rejected"),
     ] {
         assert_eq!(FsErrorKind::ProviderContractViolation, error.error().kind());
-        assert_eq!(FsOperation::ValidateProviderOutcome, error.error().operation());
+        assert_eq!(
+            FsOperation::ValidateProviderOutcome,
+            error.error().operation()
+        );
         let cleanup = error
             .recovery_mut()
             .expect("isolated session")
             .cleanup()
             .expect_err("cleanup injection");
-        assert!(cleanup.to_string().contains("injected temporary cleanup failure"));
+        assert!(
+            cleanup
+                .to_string()
+                .contains("injected temporary cleanup failure")
+        );
         assert_eq!(FsErrorKind::ProviderContractViolation, error.error().kind());
     }
 }
@@ -699,9 +719,9 @@ impl FileSystemSpi for BehaviorSpi {
         if self.provider_open_error {
             return Err(Self::unsupported());
         }
-        Ok(OpenedDirectoryStream::new(Box::new(Entries(std::mem::take(
-            &mut *self.entries.lock().expect("entries lock should succeed"),
-        )))))
+        Ok(OpenedDirectoryStream::new(Box::new(Entries(
+            std::mem::take(&mut *self.entries.lock().expect("entries lock should succeed")),
+        ))))
     }
     fn open_reader(&self, request: OpenReaderRequest<'_>) -> FsResult<OpenedReader> {
         if self.provider_open_error {
@@ -737,7 +757,10 @@ impl FileSystemSpi for BehaviorSpi {
             }),
         ))
     }
-    fn create_directory(&self, request: CreateDirectoryRequest<'_>) -> FsResult<CreateDirectoryOutcome> {
+    fn create_directory(
+        &self,
+        request: CreateDirectoryRequest<'_>,
+    ) -> FsResult<CreateDirectoryOutcome> {
         let _ = request.path();
         let _ = request.options();
         Ok(CreateDirectoryOutcome::new(false))
@@ -782,7 +805,10 @@ impl FileSystemSpi for BehaviorSpi {
             }),
         ))
     }
-    fn create_temp_directory(&self, request: CreateTempDirectoryRequest) -> FsResult<OpenedTempDirectory> {
+    fn create_temp_directory(
+        &self,
+        request: CreateTempDirectoryRequest,
+    ) -> FsResult<OpenedTempDirectory> {
         let _ = request.options();
         if self.provider_open_error {
             return Err(Self::unsupported());
@@ -835,16 +861,27 @@ impl FileWriterSpi for Writer {
         if delay != 0 {
             std::thread::sleep(Duration::from_millis(delay));
         }
-        *self.commit_calls.lock().expect("commit counter lock should succeed") += 1;
+        *self
+            .commit_calls
+            .lock()
+            .expect("commit counter lock should succeed") += 1;
         if let Some(state) = self.commit_failure {
             return Err(SpiWriteFailure::new(
-                FsError::new(FsErrorKind::Io, FsOperation::CommitWriter, "injected commit failure"),
+                FsError::new(
+                    FsErrorKind::Io,
+                    FsOperation::CommitWriter,
+                    "injected commit failure",
+                ),
                 state,
             ));
         }
         if self.fail_commit {
             Err(SpiWriteFailure::new(
-                FsError::new(FsErrorKind::Io, FsOperation::CommitWriter, "injected commit failure"),
+                FsError::new(
+                    FsErrorKind::Io,
+                    FsOperation::CommitWriter,
+                    "injected commit failure",
+                ),
                 WriteFailureState::RetryableNotPublished,
             ))
         } else {
@@ -859,15 +896,22 @@ impl FileWriterSpi for Writer {
         }
     }
     fn abort(&mut self) -> FsResult<WriteAbortOutcome> {
-        *self.abort_calls.lock().expect("abort counter lock should succeed") += 1;
+        *self
+            .abort_calls
+            .lock()
+            .expect("abort counter lock should succeed") += 1;
         match self.abort_failure {
-            Some(kind) => Err(FsError::new(kind, FsOperation::AbortWriter, "injected abort failure")),
+            Some(kind) => Err(FsError::new(
+                kind,
+                FsOperation::AbortWriter,
+                "injected abort failure",
+            )),
             None => Ok(match self.commit_failure {
                 Some(WriteFailureState::Published) => WriteAbortOutcome::Published,
                 Some(WriteFailureState::Indeterminate) => WriteAbortOutcome::Indeterminate,
-                Some(WriteFailureState::RetryableNotPublished) | Some(WriteFailureState::NotPublished) | None => {
-                    WriteAbortOutcome::NotPublished
-                }
+                Some(WriteFailureState::RetryableNotPublished)
+                | Some(WriteFailureState::NotPublished)
+                | None => WriteAbortOutcome::NotPublished,
             }),
         }
     }
@@ -887,8 +931,14 @@ struct Temp {
     cleanup_error: Option<FsErrorKind>,
 }
 impl TempResourceSpi for Temp {
-    fn persist(&mut self, request: PersistRequest<'_>) -> Result<PersistOutcome, SpiPersistFailure> {
-        *self.persist_calls.lock().expect("persist lock should succeed") += 1;
+    fn persist(
+        &mut self,
+        request: PersistRequest<'_>,
+    ) -> Result<PersistOutcome, SpiPersistFailure> {
+        *self
+            .persist_calls
+            .lock()
+            .expect("persist lock should succeed") += 1;
         if let Some(state) = self.failure {
             return Err(SpiPersistFailure::new(
                 FsError::new(
@@ -917,8 +967,12 @@ impl TempResourceSpi for Temp {
     fn keep(&mut self) -> Result<PersistOutcome, SpiPersistFailure> {
         if let Some(state) = self.failure {
             return Err(SpiPersistFailure::new(
-                FsError::new(FsErrorKind::Io, FsOperation::KeepTemp, "injected keep failure")
-                    .with_target(Path::parse("/kept-resource").expect("generated target")),
+                FsError::new(
+                    FsErrorKind::Io,
+                    FsOperation::KeepTemp,
+                    "injected keep failure",
+                )
+                .with_target(Path::parse("/kept-resource").expect("generated target")),
                 state,
             ));
         }
@@ -933,7 +987,11 @@ impl TempResourceSpi for Temp {
             },
             |kind| {
                 Err(SpiPersistFailure::new(
-                    FsError::new(kind, FsOperation::KeepTemp, "injected temporary keep failure"),
+                    FsError::new(
+                        kind,
+                        FsOperation::KeepTemp,
+                        "injected temporary keep failure",
+                    ),
                     if kind == FsErrorKind::Indeterminate {
                         PersistFailureState::Indeterminate
                     } else {
@@ -944,7 +1002,10 @@ impl TempResourceSpi for Temp {
         )
     }
     fn cleanup(&mut self) -> FsResult<()> {
-        *self.cleanup_calls.lock().expect("cleanup lock should succeed") += 1;
+        *self
+            .cleanup_calls
+            .lock()
+            .expect("cleanup lock should succeed") += 1;
         self.cleanup_error.map_or(Ok(()), |kind| {
             Err(FsError::new(
                 kind,

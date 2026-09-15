@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow source-test-pair -- behavior is covered through the public
 // facade.
 //! Provider-side asynchronous temporary-resource sessions.
 
@@ -62,7 +61,9 @@ pub trait AsyncTempResourceSpi: Send {
     /// # Errors
     /// Resolves to the provider-confirmed failure and recovery state when
     /// publication cannot be completed.
-    fn keep<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<PersistOutcome, SpiPersistFailure>>;
+    fn keep<'a>(
+        self: Pin<&'a mut Self>,
+    ) -> SpiFuture<'a, Result<PersistOutcome, SpiPersistFailure>>;
 
     /// Asynchronously persists this resource to a validated target.
     ///

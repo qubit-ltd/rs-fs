@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow source-test-pair
 //! Provider-side asynchronous file write sessions.
 
 use std::pin::Pin;
@@ -37,7 +36,9 @@ pub trait AsyncFileWriteSession: AsyncOutput<Item = u8> + Send {
     ///
     /// # Errors
     /// Resolves to a typed write failure when publication cannot be confirmed.
-    fn commit_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>>;
+    fn commit_async<'a>(
+        self: Pin<&'a mut Self>,
+    ) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>>;
 
     /// Asynchronously cancels and cleans up this write session.
     ///

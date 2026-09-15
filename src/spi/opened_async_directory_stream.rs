@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// qubit-style: allow source-test-pair -- behavior is covered through the public
 // facade.
 //! Provider-opened asynchronous directory stream envelope.
 
@@ -70,6 +69,13 @@ impl OpenedAsyncDirectoryStream {
         path_semantics: PathSemantics,
         limits: FileSystemLimits,
     ) -> crate::error::FsResult<AsyncDirectoryStream> {
-        AsyncDirectoryStream::new(scope, self.session, options, provider, path_semantics, limits)
+        AsyncDirectoryStream::new(
+            scope,
+            self.session,
+            options,
+            provider,
+            path_semantics,
+            limits,
+        )
     }
 }
