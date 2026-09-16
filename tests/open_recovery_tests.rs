@@ -106,11 +106,8 @@ fn properties() -> ProviderProperties {
 }
 /// The provider incorrectly attaches another filesystem's identity.
 fn wrong_info(path: &Path, kind: FileKind) -> OpenedFileInfo {
-    OpenedFileInfo::new(
-        FileSystemId::new("untrusted-identity").expect("id"),
-        path.clone(),
-    )
-    .with_metadata(FileMetadata::new(kind))
+    OpenedFileInfo::new(FileSystemId::new("untrusted-identity").expect("id"), path.clone())
+        .with_metadata(FileMetadata::new(kind))
 }
 impl Session {
     /// Explicit cleanup records attempts and allows a controlled failure.
@@ -142,8 +139,7 @@ impl FileWriterSpi for Session {
         panic!("isolated session must not commit")
     }
     fn abort(&mut self) -> FsResult<WriteAbortOutcome> {
-        self.cleanup_owned()
-            .map(|()| WriteAbortOutcome::NotPublished)
+        self.cleanup_owned().map(|()| WriteAbortOutcome::NotPublished)
     }
 }
 impl TempResourceSpi for Session {
@@ -151,10 +147,7 @@ impl TempResourceSpi for Session {
         self.cleanup_owned()
     }
     fn persist(&mut self, _: PersistRequest<'_>) -> Result<PersistOutcome, SpiPersistFailure> {
-        Err(SpiPersistFailure::new(
-            failure(),
-            PersistFailureState::NotPublished,
-        ))
+        Err(SpiPersistFailure::new(failure(), PersistFailureState::NotPublished))
     }
     fn keep(&mut self) -> Result<PersistOutcome, SpiPersistFailure> {
         panic!("isolated session must not publish")
@@ -180,10 +173,7 @@ impl FileSystemSpi for Provider {
             Box::new(Session(Arc::clone(&self.0))),
         ))
     }
-    fn create_temp_directory(
-        &self,
-        _: CreateTempDirectoryRequest,
-    ) -> FsResult<OpenedTempDirectory> {
+    fn create_temp_directory(&self, _: CreateTempDirectoryRequest) -> FsResult<OpenedTempDirectory> {
         Ok(OpenedTempDirectory::new(
             wrong_info(&Path::parse("/tmp/dir").expect("path"), FileKind::Directory),
             Box::new(Session(Arc::clone(&self.0))),
@@ -197,16 +187,10 @@ fn test_rejected_writer_can_retry_cleanup_without_publishing() {
     let calls = Arc::new(Calls::default());
     let fs = FileSystem::from_spi(Provider(Arc::clone(&calls))).expect("filesystem");
     let mut failed = fs
-        .open_writer(
-            &Path::parse("/target").expect("path"),
-            WriteOptions::default(),
-        )
+        .open_writer(&Path::parse("/target").expect("path"), WriteOptions::default())
         .expect_err("identity mismatch");
     assert_eq!(failed.stage(), OpenFailureStage::OutcomeValidation);
-    assert_eq!(
-        failed.error().kind(),
-        FsErrorKind::ProviderContractViolation
-    );
+    assert_eq!(failed.error().kind(), FsErrorKind::ProviderContractViolation);
     assert!(!format!("{failed:?}").contains("untrusted-identity"));
     assert_eq!(calls.drops.load(Ordering::SeqCst), 0);
     assert_eq!(calls.cleanups.load(Ordering::SeqCst), 0);
@@ -215,15 +199,9 @@ fn test_rejected_writer_can_retry_cleanup_without_publishing() {
     calls.fail.store(true, Ordering::SeqCst);
     let error = recovery.abort().expect_err("injected cleanup error");
     assert_cleanup_context(&error, Some("/target"));
-    assert_eq!(
-        recovery.cleanup_state(),
-        RecoveryCleanupState::Indeterminate
-    );
+    assert_eq!(recovery.cleanup_state(), RecoveryCleanupState::Indeterminate);
     calls.fail.store(false, Ordering::SeqCst);
-    assert_eq!(
-        recovery.abort().expect("cleanup"),
-        WriteAbortOutcome::NotPublished
-    );
+    assert_eq!(recovery.abort().expect("cleanup"), WriteAbortOutcome::NotPublished);
     assert_eq!(recovery.cleanup_state(), RecoveryCleanupState::Completed);
     assert_eq!(
         recovery.abort().expect_err("repeated cleanup").kind(),
@@ -241,11 +219,9 @@ fn test_rejected_temp_resources_keep_explicit_cleanup_ownership() {
         let calls = Arc::new(Calls::default());
         let fs = FileSystem::from_spi(Provider(Arc::clone(&calls))).expect("filesystem");
         let mut failed = if directory {
-            fs.create_temp_directory(TempOptions::default())
-                .expect_err("identity")
+            fs.create_temp_directory(TempOptions::default()).expect_err("identity")
         } else {
-            fs.create_temp_file(TempOptions::default())
-                .expect_err("identity")
+            fs.create_temp_file(TempOptions::default()).expect_err("identity")
         };
         assert_eq!(failed.stage(), OpenFailureStage::OutcomeValidation);
         assert_eq!(calls.cleanups.load(Ordering::SeqCst), 0);
@@ -264,9 +240,7 @@ fn test_rejected_temp_resources_keep_explicit_cleanup_ownership() {
         let diagnostic = format!("{recovery:?}");
         assert!(diagnostic.contains("Completed"));
         assert!(!diagnostic.contains("untrusted"));
-        let repeated = recovery
-            .cleanup()
-            .expect_err("completed recovery cannot clean again");
+        let repeated = recovery.cleanup().expect_err("completed recovery cannot clean again");
         assert_eq!(FsErrorKind::InvalidState, repeated.kind());
         assert_eq!(FsOperation::CleanupTemp, repeated.operation());
         assert_eq!(Some("test"), repeated.provider());
@@ -283,10 +257,7 @@ fn test_rejected_temp_resources_keep_explicit_cleanup_ownership() {
 fn test_rejected_drop_does_not_call_cleanup() {
     let calls = Arc::new(Calls::default());
     let fs = FileSystem::from_spi(Provider(Arc::clone(&calls))).expect("filesystem");
-    drop(
-        fs.create_temp_file(TempOptions::default())
-            .expect_err("identity"),
-    );
+    drop(fs.create_temp_file(TempOptions::default()).expect_err("identity"));
     assert_eq!(calls.cleanups.load(Ordering::SeqCst), 0);
     assert_eq!(calls.drops.load(Ordering::SeqCst), 1);
 }
@@ -383,9 +354,7 @@ mod asynchronous {
         }
     }
     impl AsyncFileWriteSession for Session {
-        fn commit_async<'a>(
-            self: Pin<&'a mut Self>,
-        ) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
+        fn commit_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
             panic!("rejected session cannot commit")
         }
         fn abort_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<WriteAbortOutcome>> {
@@ -410,9 +379,7 @@ mod asynchronous {
         ) -> SpiFuture<'a, Result<PersistOutcome, SpiPersistFailure>> {
             panic!("rejected session cannot persist")
         }
-        fn keep<'a>(
-            self: Pin<&'a mut Self>,
-        ) -> SpiFuture<'a, Result<PersistOutcome, SpiPersistFailure>> {
+        fn keep<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<PersistOutcome, SpiPersistFailure>> {
             panic!("rejected session cannot keep")
         }
         fn cancel_on_drop(self: Pin<&mut Self>) {
@@ -426,10 +393,7 @@ mod asynchronous {
         fn stat<'a>(&'a self, _: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
             Box::pin(async { Err(failure()) })
         }
-        fn open_writer<'a>(
-            &'a self,
-            request: OpenWriterRequest<'a>,
-        ) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
+        fn open_writer<'a>(&'a self, request: OpenWriterRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
             Box::pin(async move {
                 self.0.opens.fetch_add(1, Ordering::SeqCst);
                 Ok(OpenedAsyncWriter::new(
@@ -438,10 +402,7 @@ mod asynchronous {
                 ))
             })
         }
-        fn create_temp_file<'a>(
-            &'a self,
-            _: CreateTempFileRequest,
-        ) -> SpiFuture<'a, FsResult<OpenedAsyncTempFile>> {
+        fn create_temp_file<'a>(&'a self, _: CreateTempFileRequest) -> SpiFuture<'a, FsResult<OpenedAsyncTempFile>> {
             Box::pin(async move {
                 Ok(OpenedAsyncTempFile::new(
                     wrong_info(&Path::parse("/tmp/file").expect("path"), FileKind::File),
@@ -468,8 +429,7 @@ mod asynchronous {
         let calls = Arc::new(Calls::default());
         let fs = AsyncFileSystem::from_spi(Provider(Arc::clone(&calls))).expect("filesystem");
         let path = Path::parse("/target").expect("path");
-        let mut failed =
-            ready(fs.open_writer(&path, WriteOptions::default())).expect_err("identity");
+        let mut failed = ready(fs.open_writer(&path, WriteOptions::default())).expect_err("identity");
         assert_eq!(failed.stage(), OpenFailureStage::OutcomeValidation);
         let recovery = failed.recovery_mut().expect("recovery");
         drop(recovery.abort_async());
@@ -479,10 +439,7 @@ mod asynchronous {
         let mut future = recovery.abort_async();
         assert_pending(future.as_mut());
         drop(future);
-        assert_eq!(
-            recovery.cleanup_state(),
-            RecoveryCleanupState::Indeterminate
-        );
+        assert_eq!(recovery.cleanup_state(), RecoveryCleanupState::Indeterminate);
         assert_eq!(calls.drops.load(Ordering::SeqCst), 0);
         calls.pending.store(false, Ordering::SeqCst);
         calls.fail.store(true, Ordering::SeqCst);
@@ -528,25 +485,18 @@ mod asynchronous {
             let mut future = recovery.cleanup_async();
             assert_pending(future.as_mut());
             drop(future);
-            assert_eq!(
-                recovery.cleanup_state(),
-                RecoveryCleanupState::Indeterminate
-            );
+            assert_eq!(recovery.cleanup_state(), RecoveryCleanupState::Indeterminate);
             assert_eq!(calls.drops.load(Ordering::SeqCst), 0);
             calls.pending.store(false, Ordering::SeqCst);
             calls.fail.store(true, Ordering::SeqCst);
-            assert_cleanup_context(
-                &ready(recovery.cleanup_async()).expect_err("cleanup error"),
-                None,
-            );
+            assert_cleanup_context(&ready(recovery.cleanup_async()).expect_err("cleanup error"), None);
             calls.fail.store(false, Ordering::SeqCst);
             ready(recovery.cleanup_async()).expect("cleanup");
             assert_eq!(recovery.cleanup_state(), RecoveryCleanupState::Completed);
             let diagnostic = format!("{recovery:?}");
             assert!(diagnostic.contains("Completed"));
             assert!(!diagnostic.contains("untrusted"));
-            let repeated =
-                ready(recovery.cleanup_async()).expect_err("completed recovery cannot clean again");
+            let repeated = ready(recovery.cleanup_async()).expect_err("completed recovery cannot clean again");
             assert_eq!(FsErrorKind::InvalidState, repeated.kind());
             assert_eq!(FsOperation::CleanupTemp, repeated.operation());
             assert_eq!(Some("test"), repeated.provider());

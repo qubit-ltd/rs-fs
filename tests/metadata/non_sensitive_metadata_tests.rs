@@ -37,14 +37,10 @@ fn non_sensitive_metadata_accessors_are_callable_directly() {
     let as_metadata: fn(&NonSensitiveMetadata) -> &UserMetadata = NonSensitiveMetadata::as_metadata;
     let is_empty: fn(&NonSensitiveMetadata) -> bool = NonSensitiveMetadata::is_empty;
     let contains_key: fn(&NonSensitiveMetadata, &str) -> bool = NonSensitiveMetadata::contains_key;
-    let get: for<'a> fn(&'a NonSensitiveMetadata, &str) -> Option<&'a str> =
-        NonSensitiveMetadata::get;
+    let get: for<'a> fn(&'a NonSensitiveMetadata, &str) -> Option<&'a str> = NonSensitiveMetadata::get;
 
     assert_eq!(Some("private-value"), get(&metadata, "endpoint"));
     assert!(contains_key(&metadata, "endpoint"));
     assert!(!is_empty(&metadata));
-    assert_eq!(
-        "private-value",
-        as_metadata(&metadata).get("endpoint").unwrap()
-    );
+    assert_eq!("private-value", as_metadata(&metadata).get("endpoint").unwrap());
 }

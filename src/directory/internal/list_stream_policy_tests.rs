@@ -52,17 +52,11 @@ fn deadline_boundary_is_inclusive() {
     );
     stream.before_next(now + Duration::from_millis(9)).unwrap();
     assert_eq!(
-        stream
-            .before_next(now + Duration::from_millis(10))
-            .unwrap_err()
-            .kind(),
+        stream.before_next(now + Duration::from_millis(10)).unwrap_err().kind(),
         FsErrorKind::ResourceLimitExceeded
     );
     assert_eq!(stream.state(), DirectoryStreamState::Failed);
-    assert_eq!(
-        stream.before_next(now).unwrap_err().kind(),
-        FsErrorKind::InvalidState
-    );
+    assert_eq!(stream.before_next(now).unwrap_err().kind(), FsErrorKind::InvalidState);
 }
 
 /// Neither an entry nor EOF can conceal time spent in a provider call.
@@ -123,17 +117,11 @@ fn empty_list_and_entry_overrun_are_distinct() {
     empty.before_next(now).unwrap();
     assert!(empty.finish_next(Ok(None), now).unwrap().is_none());
     assert_eq!(empty.state(), DirectoryStreamState::Exhausted);
-    assert_eq!(
-        empty.before_next(now).unwrap_err().kind(),
-        FsErrorKind::InvalidState
-    );
+    assert_eq!(empty.before_next(now).unwrap_err().kind(), FsErrorKind::InvalidState);
     let mut nonempty = policy(now, options);
     nonempty.before_next(now).unwrap();
     assert_eq!(
-        nonempty
-            .finish_next(Ok(Some(entry())), now)
-            .unwrap_err()
-            .kind(),
+        nonempty.finish_next(Ok(Some(entry())), now).unwrap_err().kind(),
         FsErrorKind::ResourceLimitExceeded
     );
 }
@@ -144,18 +132,10 @@ fn entry_limit_requires_an_explicit_overrun_probe() {
     let now = Instant::now();
     let mut stream = policy(now, ListOptions::object_keys().with_max_entries(Some(1)));
     stream.before_next(now).unwrap();
-    assert!(
-        stream
-            .finish_next(Ok(Some(entry())), now)
-            .unwrap()
-            .is_some()
-    );
+    assert!(stream.finish_next(Ok(Some(entry())), now).unwrap().is_some());
     stream.before_next(now).unwrap();
     assert_eq!(
-        stream
-            .finish_next(Ok(Some(entry())), now)
-            .unwrap_err()
-            .kind(),
+        stream.finish_next(Ok(Some(entry())), now).unwrap_err().kind(),
         FsErrorKind::ResourceLimitExceeded
     );
 }

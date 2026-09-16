@@ -131,11 +131,9 @@ impl AsyncTempFile {
     /// to the provider cleanup failure.
     #[inline]
     pub fn cleanup(&mut self) -> SpiFuture<'_, FsResult<()>> {
-        self.lifecycle(
-            "cannot be cleaned now",
-            FsOperation::CleanupTemp,
-            |session| session.cleanup(),
-        )
+        self.lifecycle("cannot be cleaned now", FsOperation::CleanupTemp, |session| {
+            session.cleanup()
+        })
     }
 
     /// Asynchronously publishes this temporary resource to a generated target.
@@ -160,33 +158,23 @@ impl AsyncTempFile {
             self.lifecycle.begin_pending();
             match self.session.as_mut().keep().await {
                 Ok(outcome) => {
-                    if let Err(error) = self
-                        .file_system
-                        .validate_temp_keep_target(&self.path, outcome.target())
-                    {
-                        return Err(PersistFailure::new(
-                            error,
-                            PersistFailureState::Indeterminate,
-                        ));
+                    if let Err(error) = self.file_system.validate_temp_keep_target(&self.path, outcome.target()) {
+                        return Err(PersistFailure::new(error, PersistFailureState::Indeterminate));
                     }
                     self.path = outcome.target().clone();
-                    self.lifecycle
-                        .record_success(true, outcome.target().clone());
+                    self.lifecycle.record_success(true, outcome.target().clone());
                     Ok(outcome)
                 }
                 Err(failure) => {
                     let (error, state) = failure.into_parts();
-                    self.lifecycle
-                        .record_failure(state, error.target().cloned(), true);
+                    self.lifecycle.record_failure(state, error.target().cloned(), true);
                     let target = self.path.clone();
                     Err(PersistFailure::new(
-                        error
-                            .with_operation(FsOperation::KeepTemp)
-                            .with_missing_context(
-                                &self.path,
-                                Some(&target),
-                                self.file_system.properties().info().provider_id(),
-                            ),
+                        error.with_operation(FsOperation::KeepTemp).with_missing_context(
+                            &self.path,
+                            Some(&target),
+                            self.file_system.properties().info().provider_id(),
+                        ),
                         state,
                     )
                     .with_publication_target(self.lifecycle.publication_target()))
@@ -221,16 +209,8 @@ impl AsyncTempFile {
                     .with_publication_target(self.lifecycle.publication_target()))
             });
         }
-        if let Err(error) = self
-            .file_system
-            .preflight_temp_persist(&self.path, target, &options)
-        {
-            return Box::pin(async move {
-                Err(PersistFailure::new(
-                    error,
-                    PersistFailureState::NotPublished,
-                ))
-            });
+        if let Err(error) = self.file_system.preflight_temp_persist(&self.path, target, &options) {
+            return Box::pin(async move { Err(PersistFailure::new(error, PersistFailureState::NotPublished)) });
         }
         Box::pin(async move {
             self.lifecycle.begin_pending();
@@ -246,25 +226,20 @@ impl AsyncTempFile {
                         && !(atomicity == AtomicityRequirement::Required
                             && outcome.atomicity() != AchievedAtomicity::Atomic) =>
                 {
-                    self.lifecycle
-                        .record_success(false, outcome.target().clone());
+                    self.lifecycle.record_success(false, outcome.target().clone());
                 }
                 Ok(outcome) if outcome.target() != target => {
-                    self.lifecycle.record_failure(
-                        PersistFailureState::Indeterminate,
-                        Some(target.clone()),
-                        false,
-                    );
+                    self.lifecycle
+                        .record_failure(PersistFailureState::Indeterminate, Some(target.clone()), false);
                 }
                 Ok(_) => self.lifecycle.record_failure(
                     PersistFailureState::PublishedSourceRetained,
                     Some(target.clone()),
                     false,
                 ),
-                Err(failure) => {
-                    self.lifecycle
-                        .record_failure(failure.state(), Some(target.clone()), false)
-                }
+                Err(failure) => self
+                    .lifecycle
+                    .record_failure(failure.state(), Some(target.clone()), false),
             }
             match result {
                 Ok(outcome) if outcome.target() != target => Err(PersistFailure::new(
@@ -295,10 +270,8 @@ impl AsyncTempFile {
                 }
                 Err(failure) => {
                     let (error, state) = failure.into_parts();
-                    Err(
-                        PersistFailure::new(self.contextual_persist_error(error, target), state)
-                            .with_publication_target(self.lifecycle.publication_target()),
-                    )
+                    Err(PersistFailure::new(self.contextual_persist_error(error, target), state)
+                        .with_publication_target(self.lifecycle.publication_target()))
                 }
                 Ok(outcome) => Ok(outcome),
             }
@@ -380,13 +353,11 @@ impl AsyncTempFile {
     /// The error enriched with missing operation, path, target, and provider
     /// context.
     fn contextual_persist_error(&self, error: FsError, target: &Path) -> FsError {
-        error
-            .with_operation(FsOperation::PersistTemp)
-            .with_missing_context(
-                &self.path,
-                Some(target),
-                self.file_system.properties().info().provider_id(),
-            )
+        error.with_operation(FsOperation::PersistTemp).with_missing_context(
+            &self.path,
+            Some(target),
+            self.file_system.properties().info().provider_id(),
+        )
     }
 }
 

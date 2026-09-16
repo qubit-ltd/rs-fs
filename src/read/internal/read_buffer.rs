@@ -102,9 +102,7 @@ mod tests {
     fn test_initial_reserve_failure_preserves_source_and_bytes() {
         let mut buffer = ReadBuffer::new(20_000);
         let error = buffer
-            .try_append_with(b"payload", |_, _| {
-                Vec::<u8>::new().try_reserve_exact(usize::MAX)
-            })
+            .try_append_with(b"payload", |_, _| Vec::<u8>::new().try_reserve_exact(usize::MAX))
             .expect_err("deterministic capacity overflow");
         assert_eq!(error.kind(), FsErrorKind::ResourceLimitExceeded);
         assert_eq!(error.operation(), FsOperation::Read);
@@ -120,9 +118,7 @@ mod tests {
         buffer.try_append(b"saved").expect("initial reserve");
         let chunk = vec![9; buffer.bytes.capacity()];
         let error = buffer
-            .try_append_with(&chunk, |_, _| {
-                Vec::<u8>::new().try_reserve_exact(usize::MAX)
-            })
+            .try_append_with(&chunk, |_, _| Vec::<u8>::new().try_reserve_exact(usize::MAX))
             .expect_err("growth fails");
         assert!(error.source().is_some());
         assert_eq!(buffer.into_vec(), b"saved");
@@ -142,10 +138,7 @@ mod tests {
                 })
                 .expect("append within limit");
         }
-        assert!(
-            reservations <= 5,
-            "growth must not reallocate for each chunk"
-        );
+        assert!(reservations <= 5, "growth must not reallocate for each chunk");
         assert_eq!(buffer.len(), 100_000);
         assert_eq!(
             buffer.try_append(b"x").expect_err("over limit").kind(),

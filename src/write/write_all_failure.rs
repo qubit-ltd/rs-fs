@@ -148,11 +148,7 @@ mod tests {
         let recovery: fn(&WriteAllFailure) -> Option<&crate::write::WriterRecovery> =
             black_box(WriteAllFailure::recovery);
         let failure = WriteAllFailure::new(
-            FsError::new(
-                FsErrorKind::NotFound,
-                FsOperation::OpenWriter,
-                "missing target",
-            ),
+            FsError::new(FsErrorKind::NotFound, FsOperation::OpenWriter, "missing target"),
             WriteFailureState::NotPublished,
             4,
             None,

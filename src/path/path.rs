@@ -207,9 +207,7 @@ impl Path {
         if self.text == "/" || (self.literal && self.text.ends_with('/')) {
             return None;
         }
-        self.text
-            .rsplit('/')
-            .find(|component| !component.is_empty())
+        self.text.rsplit('/').find(|component| !component.is_empty())
     }
 
     /// Returns whether this path is absolute.
@@ -300,8 +298,7 @@ mod tests {
     #[test]
     fn path_accessors_and_constructors_are_executed_at_runtime() {
         let root: fn() -> Path = black_box(Path::root);
-        let parse_literal: fn(&str) -> crate::error::FsResult<Path> =
-            black_box(Path::parse_literal);
+        let parse_literal: fn(&str) -> crate::error::FsResult<Path> = black_box(Path::parse_literal);
         let parse_with_semantics: fn(&str, PathSemantics) -> crate::error::FsResult<Path> =
             black_box(Path::parse_with_semantics);
         let as_str: for<'a> fn(&'a Path) -> &'a str = black_box(Path::as_str);
@@ -313,8 +310,7 @@ mod tests {
         let join: fn(&Path, &RelativePath) -> Path = black_box(Path::join);
         let as_ref: for<'a> fn(&'a Path) -> &'a str = black_box(<Path as AsRef<str>>::as_ref);
 
-        let built = Path::from_components(true, vec!["reports", "daily.csv"])
-            .expect("components should form a path");
+        let built = Path::from_components(true, vec!["reports", "daily.csv"]).expect("components should form a path");
         assert!(Path::from_components(false, Vec::<&str>::new()).is_err());
         let literal = parse_literal("bucket/key").expect("literal path should parse");
         let provider = parse_with_semantics("bucket/key", PathSemantics::ProviderSpecific)
@@ -333,10 +329,7 @@ mod tests {
             "/reports/archive",
             as_str(&child(&Path::parse("/reports").unwrap(), &component))
         );
-        assert_eq!(
-            "reports/daily.csv",
-            components(&built).collect::<Vec<_>>().join("/")
-        );
+        assert_eq!("reports/daily.csv", components(&built).collect::<Vec<_>>().join("/"));
         assert_eq!(as_str(&built), as_ref(&built));
     }
 }

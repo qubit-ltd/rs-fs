@@ -197,8 +197,7 @@ impl WriteOptions {
     #[inline]
     pub fn validate(&self) -> Result<(), FsError> {
         if self.disposition == WriteDisposition::Append
-            && (self.atomicity == AtomicityRequirement::Required
-                || self.precondition != WritePrecondition::None)
+            && (self.atomicity == AtomicityRequirement::Required || self.precondition != WritePrecondition::None)
         {
             return Err(FsError::new(
                 FsErrorKind::InvalidOptions,
@@ -231,9 +230,7 @@ impl WriteOptions {
     /// or required-atomic writes.
     pub fn validate_against(&self, capabilities: FileSystemCapabilities) -> Result<(), FsError> {
         self.validate()?;
-        if self.disposition == WriteDisposition::Append
-            && !capabilities.supports(FileSystemCapability::Append)
-        {
+        if self.disposition == WriteDisposition::Append && !capabilities.supports(FileSystemCapability::Append) {
             return Err(missing_requirement(
                 FileSystemCapability::Append,
                 "append writes are required but not supported",
@@ -269,12 +266,7 @@ impl WriteOptions {
 
 /// Builds a typed unmet write requirement.
 fn missing_requirement(capability: FileSystemCapability, message: &str) -> FsError {
-    FsError::new(
-        FsErrorKind::RequirementNotMet,
-        FsOperation::OpenWriter,
-        message,
-    )
-    .with_required_capability(capability)
+    FsError::new(FsErrorKind::RequirementNotMet, FsOperation::OpenWriter, message).with_required_capability(capability)
 }
 
 #[cfg(test)]
@@ -290,15 +282,11 @@ mod tests {
 
     #[test]
     fn option_accessors_are_executed_at_runtime() {
-        let disposition: fn(&WriteOptions) -> WriteDisposition =
-            black_box(WriteOptions::disposition);
-        let precondition: for<'a> fn(&'a WriteOptions) -> &'a WritePrecondition =
-            black_box(WriteOptions::precondition);
+        let disposition: fn(&WriteOptions) -> WriteDisposition = black_box(WriteOptions::disposition);
+        let precondition: for<'a> fn(&'a WriteOptions) -> &'a WritePrecondition = black_box(WriteOptions::precondition);
         let create_parent: fn(&WriteOptions) -> bool = black_box(WriteOptions::create_parent);
-        let user_metadata: fn(&WriteOptions) -> &NonSensitiveMetadata =
-            black_box(WriteOptions::user_metadata);
-        let checksum: for<'a> fn(&'a WriteOptions) -> Option<&'a Checksum> =
-            black_box(WriteOptions::checksum);
+        let user_metadata: fn(&WriteOptions) -> &NonSensitiveMetadata = black_box(WriteOptions::user_metadata);
+        let checksum: for<'a> fn(&'a WriteOptions) -> Option<&'a Checksum> = black_box(WriteOptions::checksum);
 
         let options = WriteOptions::default()
             .with_create_parent(true)

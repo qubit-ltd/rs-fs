@@ -24,10 +24,7 @@ fn test_read_options_full_configuration_is_usable() {
     assert_eq!(Some(1), options.offset());
     assert_eq!(Some(2), options.length());
     assert_eq!(Some("a"), options.if_match().map(ResourceVersion::as_str),);
-    assert_eq!(
-        Some("b"),
-        options.if_none_match().map(ResourceVersion::as_str),
-    );
+    assert_eq!(Some("b"), options.if_none_match().map(ResourceVersion::as_str),);
     assert_eq!(ChecksumPolicy::Required, options.checksum());
 }
 
@@ -56,22 +53,14 @@ fn read_requirements_are_checked_against_typed_capabilities() {
     );
 
     let range = ReadOptions::default().with_offset(Some(1));
-    let error = range
-        .validate_against(FileSystemCapabilities::default())
-        .unwrap_err();
-    assert_eq!(
-        Some(FileSystemCapability::RangeRead),
-        error.required_capability()
-    );
+    let error = range.validate_against(FileSystemCapabilities::default()).unwrap_err();
+    assert_eq!(Some(FileSystemCapability::RangeRead), error.required_capability());
 
     let conditional = ReadOptions::default().with_if_match(Some(ResourceVersion::from("v1")));
     let error = conditional
         .validate_against(FileSystemCapabilities::default())
         .unwrap_err();
-    assert_eq!(
-        Some(FileSystemCapability::ConditionalRead),
-        error.required_capability(),
-    );
+    assert_eq!(Some(FileSystemCapability::ConditionalRead), error.required_capability(),);
 
     let checksummed = ReadOptions::default().with_checksum(ChecksumPolicy::Required);
     let error = checksummed
@@ -113,21 +102,13 @@ fn read_options_accessors_are_callable_directly() {
 
     assert_eq!(Some(3), offset(&options));
     assert_eq!(Some(4), length(&options));
-    assert_eq!(
-        Some("match"),
-        if_match(&options).map(ResourceVersion::as_str)
-    );
+    assert_eq!(Some("match"), if_match(&options).map(ResourceVersion::as_str));
     assert_eq!(None, if_none_match(&options));
     assert_eq!(ChecksumPolicy::Required, checksum(&options));
 }
 
 #[test]
 fn read_options_rejects_ranges_past_u64_maximum() {
-    let options = ReadOptions::default()
-        .with_offset(Some(u64::MAX))
-        .with_length(Some(1));
-    assert_eq!(
-        FsErrorKind::InvalidOptions,
-        options.validate().unwrap_err().kind()
-    );
+    let options = ReadOptions::default().with_offset(Some(u64::MAX)).with_length(Some(1));
+    assert_eq!(FsErrorKind::InvalidOptions, options.validate().unwrap_err().kind());
 }

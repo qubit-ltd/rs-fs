@@ -69,13 +69,6 @@ impl OpenedAsyncDirectoryStream {
         path_semantics: PathSemantics,
         limits: FileSystemLimits,
     ) -> crate::error::FsResult<AsyncDirectoryStream> {
-        AsyncDirectoryStream::new(
-            scope,
-            self.session,
-            options,
-            provider,
-            path_semantics,
-            limits,
-        )
+        AsyncDirectoryStream::new(scope, self.session, options, provider, path_semantics, limits)
     }
 }

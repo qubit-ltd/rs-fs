@@ -82,9 +82,7 @@ impl UserMetadata {
     /// Returns an iterator over metadata pairs.
     #[inline]
     pub fn iter(&self) -> impl Iterator<Item = (&str, &str)> {
-        self.0
-            .iter()
-            .map(|(key, value)| (key.as_str(), value.as_str()))
+        self.0.iter().map(|(key, value)| (key.as_str(), value.as_str()))
     }
 }
 
@@ -109,10 +107,7 @@ mod tests {
             .expect("ordinary metadata key should be accepted");
         assert_eq!(metadata.get("provider"), Some("test"));
         assert!(metadata.contains_key("provider"));
-        assert_eq!(
-            metadata.iter().collect::<Vec<_>>(),
-            vec![("provider", "test")]
-        );
+        assert_eq!(metadata.iter().collect::<Vec<_>>(), vec![("provider", "test")]);
         assert!(format!("{metadata:?}").contains("UserMetadata"));
     }
 }

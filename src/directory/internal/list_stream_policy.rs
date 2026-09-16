@@ -110,28 +110,17 @@ impl ListStreamPolicy {
         self.check_deadline(now)?;
         match entry {
             Some(entry) => {
-                if let Err(error) = directory_entry_validation::validate_entry(
-                    &entry,
-                    &self.scope,
-                    self.path_semantics,
-                    self.limits,
-                ) {
+                if let Err(error) =
+                    directory_entry_validation::validate_entry(&entry, &self.scope, self.path_semantics, self.limits)
+                {
                     self.state = DirectoryStreamState::Failed;
                     return Err(self.contextual_error(error));
                 }
-                if let Err(message) = crate::directory::internal::select(
-                    &entry,
-                    &self.scope,
-                    &self.options,
-                    self.path_semantics,
-                ) {
+                if let Err(message) =
+                    crate::directory::internal::select(&entry, &self.scope, &self.options, self.path_semantics)
+                {
                     self.state = DirectoryStreamState::Failed;
-                    return Err(
-                        self.contextual_error(directory_entry_validation::option_error(
-                            &self.scope,
-                            message,
-                        )),
-                    );
+                    return Err(self.contextual_error(directory_entry_validation::option_error(&self.scope, message)));
                 }
                 if self.options.max_depth().is_some_and(|maximum| {
                     self.scope
@@ -140,9 +129,7 @@ impl ListStreamPolicy {
                         .is_some_and(|depth| depth > maximum)
                 }) {
                     self.state = DirectoryStreamState::Failed;
-                    return Err(
-                        self.resource_limit_error("directory listing depth limit was exceeded")
-                    );
+                    return Err(self.resource_limit_error("directory listing depth limit was exceeded"));
                 }
                 if self
                     .options
@@ -150,15 +137,11 @@ impl ListStreamPolicy {
                     .is_some_and(|maximum| self.returned_entries >= maximum)
                 {
                     self.state = DirectoryStreamState::Failed;
-                    return Err(
-                        self.resource_limit_error("directory listing entry limit was exceeded")
-                    );
+                    return Err(self.resource_limit_error("directory listing entry limit was exceeded"));
                 }
                 self.returned_entries = self.returned_entries.checked_add(1).ok_or_else(|| {
                     self.state = DirectoryStreamState::Failed;
-                    self.resource_limit_error(
-                        "directory listing entry count exceeded the API range",
-                    )
+                    self.resource_limit_error("directory listing entry count exceeded the API range")
                 })?;
                 Ok(Some(entry))
             }

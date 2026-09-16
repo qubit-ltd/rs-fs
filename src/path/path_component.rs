@@ -46,11 +46,7 @@ impl PathComponent {
     /// Returns an invalid-path error when `text` is empty, contains a
     /// separator, is a traversal marker, or contains NUL.
     pub fn parse(text: &str) -> FsResult<Self> {
-        if text.is_empty()
-            || matches!(text, "." | "..")
-            || text.contains('/')
-            || text.contains('\0')
-        {
+        if text.is_empty() || matches!(text, "." | "..") || text.contains('/') || text.contains('\0') {
             return Err(FsError::invalid_path(
                 FsOperation::ParsePath,
                 "path component must be a non-empty non-traversal component",

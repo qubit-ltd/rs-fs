@@ -114,13 +114,10 @@ mod tests {
     #[test]
     fn metadata_wrapper_contract_is_executed_at_runtime() {
         let constructor: fn() -> NonSensitiveMetadata = black_box(NonSensitiveMetadata::new);
-        let as_metadata: fn(&NonSensitiveMetadata) -> &UserMetadata =
-            black_box(NonSensitiveMetadata::as_metadata);
-        let into_metadata: fn(NonSensitiveMetadata) -> UserMetadata =
-            black_box(NonSensitiveMetadata::into_metadata);
+        let as_metadata: fn(&NonSensitiveMetadata) -> &UserMetadata = black_box(NonSensitiveMetadata::as_metadata);
+        let into_metadata: fn(NonSensitiveMetadata) -> UserMetadata = black_box(NonSensitiveMetadata::into_metadata);
         let is_empty: fn(&NonSensitiveMetadata) -> bool = black_box(NonSensitiveMetadata::is_empty);
-        let contains_key: fn(&NonSensitiveMetadata, &str) -> bool =
-            black_box(NonSensitiveMetadata::contains_key);
+        let contains_key: fn(&NonSensitiveMetadata, &str) -> bool = black_box(NonSensitiveMetadata::contains_key);
         let get: for<'a, 'b> fn(&'a NonSensitiveMetadata, &'b str) -> Option<&'a str> =
             black_box(NonSensitiveMetadata::get);
 

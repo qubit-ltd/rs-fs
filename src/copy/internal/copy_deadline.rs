@@ -32,7 +32,6 @@ impl CopyDeadline {
     /// Returns whether the cumulative budget has expired.
     #[inline]
     pub(crate) fn expired(self) -> bool {
-        self.maximum
-            .is_some_and(|maximum| self.started_at.elapsed() >= maximum)
+        self.maximum.is_some_and(|maximum| self.started_at.elapsed() >= maximum)
     }
 }
