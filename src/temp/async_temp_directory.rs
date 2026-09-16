@@ -54,17 +54,8 @@ impl AsyncTempDirectory {
     /// # Returns
     /// An owned asynchronous temporary-directory handle.
     #[inline]
-    pub(crate) fn new(
-        file_system: AsyncFileSystem,
-        path: Path,
-        session: Box<dyn AsyncTempResourceSpi>,
-    ) -> Self {
-        Self(AsyncTempFile::new(
-            file_system,
-            path,
-            session,
-            "temporary directory",
-        ))
+    pub(crate) fn new(file_system: AsyncFileSystem, path: Path, session: Box<dyn AsyncTempResourceSpi>) -> Self {
+        Self(AsyncTempFile::new(file_system, path, session, "temporary directory"))
     }
 
     /// Returns the provider-local temporary path.
@@ -187,9 +178,7 @@ mod tests {
             Box::pin(async { panic!("test future is not polled") })
         }
 
-        fn keep<'a>(
-            self: Pin<&'a mut Self>,
-        ) -> SpiFuture<'a, Result<PersistOutcome, SpiPersistFailure>> {
+        fn keep<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<PersistOutcome, SpiPersistFailure>> {
             Box::pin(async { panic!("test future is not polled") })
         }
 
@@ -227,8 +216,7 @@ mod tests {
                 "test",
                 PathSemantics::Hierarchical,
             ),
-            crate::spi::ProviderOperations::new()
-                .with(crate::spi::ProviderOperation::CreateTempDirectory),
+            crate::spi::ProviderOperations::new().with(crate::spi::ProviderOperation::CreateTempDirectory),
             FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::TempDirectory),
             FileSystemLimits::unknown(),
             PathConstraints::absolute(),
@@ -252,15 +240,9 @@ mod tests {
         assert_eq!(directory.path().as_str(), "/tmp/recording");
         assert_eq!(directory.state(), TempResourceState::Owned);
         assert_eq!(directory.child(&component).as_str(), "/tmp/recording/child");
-        assert_eq!(
-            directory.descendant(&relative).as_str(),
-            "/tmp/recording/nested/item"
-        );
+        assert_eq!(directory.descendant(&relative).as_str(), "/tmp/recording/nested/item");
         drop(directory.cleanup());
         drop(directory.keep());
-        drop(directory.persist(
-            &Path::parse("/target").expect("valid path"),
-            PersistOptions::default(),
-        ));
+        drop(directory.persist(&Path::parse("/target").expect("valid path"), PersistOptions::default()));
     }
 }

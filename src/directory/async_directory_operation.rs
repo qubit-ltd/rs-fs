@@ -32,26 +32,12 @@ impl<'a> AsyncDirectoryOperation<'a> {
     }
 
     /// Opens a validated asynchronous provider directory stream.
-    pub(crate) async fn list(
-        &self,
-        scope: &ListScope,
-        options: ListOptions,
-    ) -> FsResult<AsyncDirectoryStream> {
-        crate::directory::internal::list_preflight::validate(
-            self.filesystem.properties(),
-            scope,
-            &options,
-        )
-        .map_err(|error| {
-            self.filesystem
-                .core()
-                .enrich(error, scope.path(), FsOperation::List)
-        })?;
-        self.filesystem.core().require(
-            FileSystemCapability::List,
-            FsOperation::List,
-            scope.path(),
-        )?;
+    pub(crate) async fn list(&self, scope: &ListScope, options: ListOptions) -> FsResult<AsyncDirectoryStream> {
+        crate::directory::internal::list_preflight::validate(self.filesystem.properties(), scope, &options)
+            .map_err(|error| self.filesystem.core().enrich(error, scope.path(), FsOperation::List))?;
+        self.filesystem
+            .core()
+            .require(FileSystemCapability::List, FsOperation::List, scope.path())?;
         let page_size = self
             .filesystem
             .properties()
@@ -71,11 +57,7 @@ impl<'a> AsyncDirectoryOperation<'a> {
                 ),
             ))
             .await
-            .map_err(|error| {
-                self.filesystem
-                    .core()
-                    .enrich(error, scope.path(), FsOperation::List)
-            })?;
+            .map_err(|error| self.filesystem.core().enrich(error, scope.path(), FsOperation::List))?;
         opened.into_stream(
             scope.clone(),
             options,

@@ -95,11 +95,7 @@ impl RejectedWriter {
     }
     /// Adds only trusted request context to a cleanup error.
     fn contextual_error(&self, error: FsError) -> FsError {
-        error.with_trusted_cleanup_context(
-            FsOperation::AbortWriter,
-            self.path.as_ref(),
-            &self.provider,
-        )
+        error.with_trusted_cleanup_context(FsOperation::AbortWriter, self.path.as_ref(), &self.provider)
     }
 }
 impl Debug for RejectedWriter {

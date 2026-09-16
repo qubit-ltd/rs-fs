@@ -14,10 +14,7 @@ use qubit_fs::path::PathComponent;
 #[test]
 fn test_path_component_rejects_hierarchy_and_traversal() {
     for invalid in ["", "/", ".", "..", "a/b", "nul\0byte"] {
-        assert!(
-            PathComponent::parse(invalid).is_err(),
-            "{invalid:?} must fail"
-        );
+        assert!(PathComponent::parse(invalid).is_err(), "{invalid:?} must fail");
     }
 }
 

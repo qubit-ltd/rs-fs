@@ -159,9 +159,7 @@ impl ReadOptions {
     /// missing capability for range, conditional, or required-checksum reads.
     pub fn validate_against(&self, capabilities: FileSystemCapabilities) -> Result<(), FsError> {
         self.validate()?;
-        if (self.offset.is_some() || self.length.is_some())
-            && !capabilities.supports(FileSystemCapability::RangeRead)
-        {
+        if (self.offset.is_some() || self.length.is_some()) && !capabilities.supports(FileSystemCapability::RangeRead) {
             return Err(missing_requirement(
                 FileSystemCapability::RangeRead,
                 "byte-range reads are required but not supported",
@@ -175,8 +173,7 @@ impl ReadOptions {
                 "conditional reads are required but not supported",
             ));
         }
-        if self.checksum == ChecksumPolicy::Required
-            && !capabilities.supports(FileSystemCapability::ChecksumValidation)
+        if self.checksum == ChecksumPolicy::Required && !capabilities.supports(FileSystemCapability::ChecksumValidation)
         {
             return Err(missing_requirement(
                 FileSystemCapability::ChecksumValidation,
@@ -189,12 +186,7 @@ impl ReadOptions {
 
 /// Builds a typed unmet read requirement.
 fn missing_requirement(capability: FileSystemCapability, message: &str) -> FsError {
-    FsError::new(
-        FsErrorKind::RequirementNotMet,
-        FsOperation::OpenReader,
-        message,
-    )
-    .with_required_capability(capability)
+    FsError::new(FsErrorKind::RequirementNotMet, FsOperation::OpenReader, message).with_required_capability(capability)
 }
 
 #[cfg(test)]
@@ -206,8 +198,7 @@ mod tests {
 
     #[test]
     fn version_accessor_is_executed_at_runtime() {
-        let if_match: for<'a> fn(&'a ReadOptions) -> Option<&'a ResourceVersion> =
-            black_box(ReadOptions::if_match);
+        let if_match: for<'a> fn(&'a ReadOptions) -> Option<&'a ResourceVersion> = black_box(ReadOptions::if_match);
         let options = ReadOptions::default().with_if_match(Some(ResourceVersion::new("v1")));
 
         assert_eq!(Some("v1"), if_match(&options).map(ResourceVersion::as_str));

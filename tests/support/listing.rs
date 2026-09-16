@@ -71,11 +71,7 @@ impl ListingProvider {
             FileSystemCapabilities::new()
         };
         ProviderProperties::new(
-            FileSystemInfo::new(
-                FileSystemId::new("scope-test").unwrap(),
-                "scope-test",
-                self.semantics,
-            ),
+            FileSystemInfo::new(FileSystemId::new("scope-test").unwrap(), "scope-test", self.semantics),
             ProviderOperations::new()
                 .with(ProviderOperation::Stat)
                 .with(ProviderOperation::List),
@@ -142,15 +138,8 @@ impl AsyncFileSystemSpi for ListingProvider {
     }
 
     /// Records opening only when the provider future executes.
-    fn list<'a>(
-        &'a self,
-        request: ListRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<OpenedAsyncDirectoryStream>> {
-        Box::pin(async move {
-            Ok(OpenedAsyncDirectoryStream::new(Box::new(
-                self.open(request),
-            )))
-        })
+    fn list<'a>(&'a self, request: ListRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncDirectoryStream>> {
+        Box::pin(async move { Ok(OpenedAsyncDirectoryStream::new(Box::new(self.open(request)))) })
     }
 }
 

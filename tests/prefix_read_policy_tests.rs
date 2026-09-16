@@ -109,13 +109,9 @@ fn test_prefix_outcome_eof_and_zero_limit() {
     };
     let filesystem = FileSystem::from_spi(provider).unwrap();
     let path = Path::parse("/payload").unwrap();
-    let outcome = filesystem
-        .read_prefix(&path, ReadOptions::default(), 32)
-        .unwrap();
+    let outcome = filesystem.read_prefix(&path, ReadOptions::default(), 32).unwrap();
     assert_eq!(outcome.termination(), PrefixReadTermination::StreamEnded);
-    let zero = filesystem
-        .read_prefix(&path, ReadOptions::default(), 0)
-        .unwrap();
+    let zero = filesystem.read_prefix(&path, ReadOptions::default(), 0).unwrap();
     assert!(zero.bytes().is_empty());
     assert_eq!(zero.termination(), PrefixReadTermination::LimitReached);
     assert_eq!(observations.opens.load(Ordering::SeqCst), 2);
@@ -194,10 +190,7 @@ fn check_case(
             Ok((seen, bytes)) => {
                 assert_eq!(result.unwrap().bytes(), *bytes);
                 assert_eq!(observations.opens.load(Ordering::SeqCst), 1);
-                assert_eq!(
-                    observations.seen.lock().unwrap().as_slice(),
-                    std::slice::from_ref(seen)
-                );
+                assert_eq!(observations.seen.lock().unwrap().as_slice(), std::slice::from_ref(seen));
                 assert_eq!(observations.read_bytes.load(Ordering::SeqCst), bytes.len());
             }
             Err(kind) => {
@@ -224,9 +217,7 @@ fn ranged() -> FileSystemCapabilities {
 /// Explicit windows are narrowed without moving the offset or expanding length.
 #[test]
 fn explicit_range_is_only_narrowed() {
-    let options = ReadOptions::default()
-        .with_offset(Some(2))
-        .with_length(Some(10));
+    let options = ReadOptions::default().with_offset(Some(2)).with_length(Some(10));
     check_case(
         ranged(),
         FileSystemLimits::unknown(),
@@ -397,11 +388,9 @@ fn provider_failures_preserve_sources_and_do_not_retry() {
                     unreachable!("async feature required")
                 }
             } else {
-                FileSystem::from_spi(provider).unwrap().read_prefix(
-                    &path,
-                    ReadOptions::default(),
-                    3,
-                )
+                FileSystem::from_spi(provider)
+                    .unwrap()
+                    .read_prefix(&path, ReadOptions::default(), 3)
             };
             let error = result.unwrap_err();
             assert_eq!(error.kind(), FsErrorKind::PermissionDenied);

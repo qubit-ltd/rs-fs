@@ -90,11 +90,7 @@ mod tests {
     #[test]
     fn failure_facts_are_executed_at_runtime() {
         let failure = SpiPersistFailure::new(
-            FsError::new(
-                FsErrorKind::AlreadyExists,
-                FsOperation::PersistTemp,
-                "target exists",
-            ),
+            FsError::new(FsErrorKind::AlreadyExists, FsOperation::PersistTemp, "target exists"),
             PersistFailureState::NotPublished,
         );
         assert_eq!(failure.error().kind(), FsErrorKind::AlreadyExists);

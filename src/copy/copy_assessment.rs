@@ -38,10 +38,7 @@ pub struct CopyAssessment {
 impl CopyAssessment {
     /// Creates an assessment inside the facade.
     #[inline]
-    pub(crate) const fn new(
-        route: CopyExecutionRoute,
-        fallback_rejection: Option<FallbackRejection>,
-    ) -> Self {
+    pub(crate) const fn new(route: CopyExecutionRoute, fallback_rejection: Option<FallbackRejection>) -> Self {
         Self {
             route,
             fallback_rejection,

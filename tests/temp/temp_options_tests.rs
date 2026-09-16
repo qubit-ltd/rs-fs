@@ -48,9 +48,5 @@ fn temp_options_accessors_are_callable_directly() {
 #[test]
 fn persist_options_expose_parent_creation_policy() {
     assert!(!PersistOptions::default().creates_parent());
-    assert!(
-        PersistOptions::default()
-            .with_create_parent()
-            .creates_parent()
-    );
+    assert!(PersistOptions::default().with_create_parent().creates_parent());
 }

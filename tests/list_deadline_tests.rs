@@ -58,9 +58,7 @@ fn dropping_unpolled_next_has_no_side_effects() {
     assert_eq!(stream.state(), DirectoryStreamState::Failed);
     assert_eq!(observations.next_calls.load(Ordering::SeqCst), 0);
     assert_eq!(
-        poll_support::ready(stream.next_entry_async())
-            .unwrap_err()
-            .kind(),
+        poll_support::ready(stream.next_entry_async()).unwrap_err().kind(),
         FsErrorKind::InvalidState
     );
 }
@@ -81,24 +79,16 @@ fn ready_next_consumes_exactly_one_entry() {
         observations: Arc::clone(&observations),
     };
     let filesystem = AsyncFileSystem::from_spi(provider).unwrap();
-    let mut stream =
-        poll_support::ready(filesystem.list(&ListScope::Namespace, ListOptions::object_keys()))
-            .unwrap();
+    let mut stream = poll_support::ready(filesystem.list(&ListScope::Namespace, ListOptions::object_keys())).unwrap();
     for (index, expected) in ["a", "b"].into_iter().enumerate() {
         drop(stream.next_entry_async());
         assert_eq!(observations.next_calls.load(Ordering::SeqCst), index);
-        let entry = poll_support::ready(stream.next_entry_async())
-            .unwrap()
-            .unwrap();
+        let entry = poll_support::ready(stream.next_entry_async()).unwrap().unwrap();
         assert_eq!(entry.path.as_str(), expected);
         assert_eq!(observations.next_calls.load(Ordering::SeqCst), index + 1);
         assert_eq!(stream.state(), DirectoryStreamState::Open);
     }
-    assert!(
-        poll_support::ready(stream.next_entry_async())
-            .unwrap()
-            .is_none()
-    );
+    assert!(poll_support::ready(stream.next_entry_async()).unwrap().is_none());
     assert_eq!(observations.next_calls.load(Ordering::SeqCst), 3);
     assert_eq!(stream.state(), DirectoryStreamState::Exhausted);
 }

@@ -117,8 +117,7 @@ where
 #[test]
 fn test_sync_and_async_facades_reject_path_before_spi() {
     let synchronous = RecordingSpi::new();
-    let filesystem =
-        FileSystem::from_spi(synchronous.clone()).expect("synchronous facade should construct");
+    let filesystem = FileSystem::from_spi(synchronous.clone()).expect("synchronous facade should construct");
     let wrong = Path::parse_literal("object-key").expect("test literal path should parse");
     let error = filesystem
         .stat(&wrong)
@@ -127,10 +126,8 @@ fn test_sync_and_async_facades_reject_path_before_spi() {
     assert_eq!(0, synchronous.call_count());
 
     let asynchronous = RecordingSpi::new();
-    let filesystem = AsyncFileSystem::from_spi(asynchronous.clone())
-        .expect("asynchronous facade should construct");
-    let error =
-        ready(filesystem.stat(&wrong)).expect_err("mismatched path semantics should be rejected");
+    let filesystem = AsyncFileSystem::from_spi(asynchronous.clone()).expect("asynchronous facade should construct");
+    let error = ready(filesystem.stat(&wrong)).expect_err("mismatched path semantics should be rejected");
     assert_eq!(FsErrorKind::InvalidPath, error.kind());
     assert_eq!(0, asynchronous.call_count());
 }

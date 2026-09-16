@@ -64,11 +64,7 @@ fn test_open_failure_requires_explicit_unchanged_evidence() {
             )
             .expect("preflight succeeds");
         let failure = ready(operation.execute()).expect_err("provider open fails");
-        assert_eq!(
-            expected,
-            failure.state(),
-            "kind={kind:?}, effect={effect:?}"
-        );
+        assert_eq!(expected, failure.state(), "kind={kind:?}, effect={effect:?}");
         assert_eq!(effect, failure.error().effect_state());
         assert!(!operation.has_recovery());
         assert_eq!(vec!["open_writer"], probe.calls());
@@ -86,11 +82,7 @@ fn test_success_snapshots_bytes_and_releases_completed_writer() {
         )
         .expect("preflight succeeds");
     ready(operation.execute()).expect("write succeeds");
-    assert_eq!(
-        5,
-        operation.written_bytes(),
-        "success retains confirmed byte count"
-    );
+    assert_eq!(5, operation.written_bytes(), "success retains confirmed byte count");
     assert!(
         !operation.has_recovery(),
         "committed writer has no recovery responsibility"
@@ -104,11 +96,7 @@ fn test_operation_owns_request_and_repeated_success_preserves_snapshot() {
         let bytes = b"owned".to_vec();
         (
             filesystem
-                .begin_write_all(
-                    Path::parse("/owned").unwrap(),
-                    bytes,
-                    WriteOptions::default(),
-                )
+                .begin_write_all(Path::parse("/owned").unwrap(), bytes, WriteOptions::default())
                 .unwrap(),
             probe,
         )
@@ -133,11 +121,7 @@ fn test_operation_owns_request_and_repeated_success_preserves_snapshot() {
 fn test_unpolled_execute_preserves_ready_request() {
     let (filesystem, probe) = async_recording_file_system(Default::default());
     let mut operation = filesystem
-        .begin_write_all(
-            Path::parse("/empty").unwrap(),
-            Vec::new(),
-            WriteOptions::default(),
-        )
+        .begin_write_all(Path::parse("/empty").unwrap(), Vec::new(), WriteOptions::default())
         .unwrap();
     drop(operation.execute());
     assert_eq!(AsyncWriteAllOperationState::Ready, operation.state());

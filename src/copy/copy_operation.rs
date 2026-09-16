@@ -58,12 +58,7 @@ pub(crate) struct CopyOperation<'a> {
 impl<'a> CopyOperation<'a> {
     /// Creates a pending synchronous copy operation.
     #[inline]
-    pub(crate) fn new(
-        filesystem: &'a FileSystem,
-        source: &'a Path,
-        target: &'a Path,
-        options: CopyOptions,
-    ) -> Self {
+    pub(crate) fn new(filesystem: &'a FileSystem, source: &'a Path, target: &'a Path, options: CopyOptions) -> Self {
         let deadline = CopyDeadline::new(options.deadline());
         Self {
             filesystem,
@@ -101,11 +96,7 @@ impl<'a> CopyOperation<'a> {
                 None,
             )));
         }
-        if self
-            .filesystem
-            .core()
-            .provider_supports(ProviderOperation::TryCopy)
-        {
+        if self.filesystem.core().provider_supports(ProviderOperation::TryCopy) {
             self.execute_provider_attempt()
         } else {
             self.execute_stream_fallback()
@@ -153,11 +144,7 @@ impl<'a> CopyOperation<'a> {
     fn verify_completed_copy(&self, outcome: CopyOutcome) -> Result<CopyOutcome, CopyFailure> {
         if let Some(message) = outcome.contract_violation(&self.options) {
             return Err(self.contextualize_failure(self.failure(
-                FsError::new(
-                    FsErrorKind::ProviderContractViolation,
-                    FsOperation::Copy,
-                    message,
-                ),
+                FsError::new(FsErrorKind::ProviderContractViolation, FsOperation::Copy, message),
                 CopyFailureState::Published,
                 *outcome.stats(),
                 None,
@@ -168,12 +155,8 @@ impl<'a> CopyOperation<'a> {
 
     /// Performs no-I/O validation before selecting a copy implementation.
     fn copy_preflight(&self) -> FsResult<()> {
-        self.filesystem
-            .core()
-            .validate_path(self.source, FsOperation::Copy)?;
-        self.filesystem
-            .core()
-            .validate_path(self.target, FsOperation::Copy)?;
+        self.filesystem.core().validate_path(self.source, FsOperation::Copy)?;
+        self.filesystem.core().validate_path(self.target, FsOperation::Copy)?;
         self.options
             .validate_against(self.filesystem.properties().capabilities())
             .map_err(|error| {
@@ -204,86 +187,34 @@ impl<'a> CopyOperation<'a> {
             self.target,
         );
         plan.validate_options(self.filesystem.properties().symlink_policy())
-            .map_err(|error| {
-                self.failure(
-                    error,
-                    CopyFailureState::Unchanged,
-                    CopyStats::default(),
-                    None,
-                )
-            })?;
+            .map_err(|error| self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None))?;
         if let Some(error) = self.deadline_error() {
-            return Err(self.failure(
-                error,
-                CopyFailureState::Unchanged,
-                CopyStats::default(),
-                None,
-            ));
+            return Err(self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None));
         }
         self.filesystem
             .core()
-            .require(
-                FileSystemCapability::Read,
-                FsOperation::Copy,
-                Some(self.source),
-            )
+            .require(FileSystemCapability::Read, FsOperation::Copy, Some(self.source))
             .and_then(|_| {
-                self.filesystem.core().require(
-                    FileSystemCapability::Write,
-                    FsOperation::Copy,
-                    Some(self.target),
-                )
+                self.filesystem
+                    .core()
+                    .require(FileSystemCapability::Write, FsOperation::Copy, Some(self.target))
             })
-            .map_err(|error| {
-                self.failure(
-                    error,
-                    CopyFailureState::Unchanged,
-                    CopyStats::default(),
-                    None,
-                )
-            })?;
-        let metadata = self.filesystem.stat(self.source).map_err(|error| {
-            self.failure(
-                error,
-                CopyFailureState::Unchanged,
-                CopyStats::default(),
-                None,
-            )
-        })?;
+            .map_err(|error| self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None))?;
+        let metadata = self
+            .filesystem
+            .stat(self.source)
+            .map_err(|error| self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None))?;
         if let Some(error) = self.deadline_error() {
-            return Err(self.failure(
-                error,
-                CopyFailureState::Unchanged,
-                CopyStats::default(),
-                None,
-            ));
+            return Err(self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None));
         }
-        plan.validate_metadata(&metadata).map_err(|error| {
-            self.failure(
-                error,
-                CopyFailureState::Unchanged,
-                CopyStats::default(),
-                None,
-            )
-        })?;
+        plan.validate_metadata(&metadata)
+            .map_err(|error| self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None))?;
         let mut reader = self
             .filesystem
             .open_reader(self.source, ReadOptions::default())
-            .map_err(|error| {
-                self.failure(
-                    error,
-                    CopyFailureState::Unchanged,
-                    CopyStats::default(),
-                    None,
-                )
-            })?;
+            .map_err(|error| self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None))?;
         if let Some(error) = self.deadline_error() {
-            return Err(self.failure(
-                error,
-                CopyFailureState::Unchanged,
-                CopyStats::default(),
-                None,
-            ));
+            return Err(self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None));
         }
         let writer_options = plan.writer_options();
         let mut writer = match self.filesystem.open_writer(self.target, writer_options) {
@@ -308,9 +239,7 @@ impl<'a> CopyOperation<'a> {
                 let (error, stage, recovery) = error.into_parts();
                 let state = match stage {
                     OpenFailureStage::Preflight => CopyFailureState::Unchanged,
-                    OpenFailureStage::ProviderOpen => {
-                        from_write_failure_state(open_failure_state(&error))
-                    }
+                    OpenFailureStage::ProviderOpen => from_write_failure_state(open_failure_state(&error)),
                     OpenFailureStage::OutcomeValidation => CopyFailureState::Indeterminate,
                 };
                 return Err(CopyFailure::new(
@@ -340,22 +269,21 @@ impl<'a> CopyOperation<'a> {
                     Some(writer),
                 ));
             }
-            let read = match crate::read::read_retry_interrupted(&mut reader, &mut buffer, || {
-                match self.deadline_error() {
+            let read =
+                match crate::read::read_retry_interrupted(&mut reader, &mut buffer, || match self.deadline_error() {
                     Some(error) => Err(error.into_io_error()),
                     None => Ok(()),
-                }
-            }) {
-                Ok(read) => read,
-                Err(error) => {
-                    return Err(self.failure(
-                        self.io_error(self.source, FsOperation::Read, error),
-                        from_writer_state(writer.state()),
-                        fallback_failure_stats(writer.written_bytes()),
-                        Some(writer),
-                    ));
-                }
-            };
+                }) {
+                    Ok(read) => read,
+                    Err(error) => {
+                        return Err(self.failure(
+                            self.io_error(self.source, FsOperation::Read, error),
+                            from_writer_state(writer.state()),
+                            fallback_failure_stats(writer.written_bytes()),
+                            Some(writer),
+                        ));
+                    }
+                };
             if let Some(error) = self.deadline_error() {
                 return Err(self.failure(
                     error,
@@ -499,8 +427,7 @@ impl<'a> CopyOperation<'a> {
 
     /// Creates a contextual stream I/O error.
     fn io_error(&self, path: &Path, operation: FsOperation, error: std::io::Error) -> FsError {
-        FsError::from_stream_io(error, operation, path)
-            .with_provider(self.filesystem.properties().info().provider_id())
+        FsError::from_stream_io(error, operation, path).with_provider(self.filesystem.properties().info().provider_id())
     }
 
     /// Returns a caller-budget error when the elapsed-time limit expired.
@@ -513,14 +440,10 @@ impl<'a> CopyOperation<'a> {
 
     /// Builds a caller-budget error with stable copy context.
     fn budget_error(&self, message: &str) -> FsError {
-        FsError::new(
-            FsErrorKind::ResourceLimitExceeded,
-            FsOperation::Copy,
-            message,
-        )
-        .with_path(self.source.clone())
-        .with_target(self.target.clone())
-        .with_provider(self.filesystem.properties().info().provider_id())
+        FsError::new(FsErrorKind::ResourceLimitExceeded, FsOperation::Copy, message)
+            .with_path(self.source.clone())
+            .with_target(self.target.clone())
+            .with_provider(self.filesystem.properties().info().provider_id())
     }
 }
 
@@ -586,17 +509,11 @@ mod tests {
         let source = Path::parse("/source").expect("valid source path");
         let target = Path::parse("/target").expect("valid target path");
         let options = CopyOptions::default();
-        let plan =
-            StreamCopyPlan::new(&options, filesystem.properties().limits(), &source, &target);
+        let plan = StreamCopyPlan::new(&options, filesystem.properties().limits(), &source, &target);
 
         assert_eq!(plan.next_bytes(4, 3).expect("value fits"), 7);
-        let error = plan
-            .next_bytes(u64::MAX, 1)
-            .expect_err("overflow must be rejected");
-        assert_eq!(
-            error.kind(),
-            crate::error::FsErrorKind::ResourceLimitExceeded
-        );
+        let error = plan.next_bytes(u64::MAX, 1).expect_err("overflow must be rejected");
+        assert_eq!(error.kind(), crate::error::FsErrorKind::ResourceLimitExceeded);
         assert_eq!(error.operation(), FsOperation::Copy);
         assert_eq!(
             plan.next_bytes(u64::MAX, 1)

@@ -32,26 +32,12 @@ impl<'a> DirectoryOperation<'a> {
     }
 
     /// Opens a provider directory stream after local option validation.
-    pub(crate) fn list(
-        &self,
-        scope: &ListScope,
-        options: ListOptions,
-    ) -> FsResult<DirectoryStream> {
-        crate::directory::internal::list_preflight::validate(
-            self.filesystem.properties(),
-            scope,
-            &options,
-        )
-        .map_err(|error| {
-            self.filesystem
-                .core()
-                .enrich(error, scope.path(), FsOperation::List)
-        })?;
-        self.filesystem.core().require(
-            FileSystemCapability::List,
-            FsOperation::List,
-            scope.path(),
-        )?;
+    pub(crate) fn list(&self, scope: &ListScope, options: ListOptions) -> FsResult<DirectoryStream> {
+        crate::directory::internal::list_preflight::validate(self.filesystem.properties(), scope, &options)
+            .map_err(|error| self.filesystem.core().enrich(error, scope.path(), FsOperation::List))?;
+        self.filesystem
+            .core()
+            .require(FileSystemCapability::List, FsOperation::List, scope.path())?;
         let page_size = self
             .filesystem
             .properties()
@@ -79,10 +65,6 @@ impl<'a> DirectoryOperation<'a> {
                     *self.filesystem.properties().limits(),
                 )
             })
-            .map_err(|error| {
-                self.filesystem
-                    .core()
-                    .enrich(error, scope.path(), FsOperation::List)
-            })
+            .map_err(|error| self.filesystem.core().enrich(error, scope.path(), FsOperation::List))
     }
 }

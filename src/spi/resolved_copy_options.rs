@@ -73,17 +73,11 @@ mod tests {
     #[test]
     fn resolved_options_expose_their_values() {
         let options = CopyOptions::default();
-        let resolved =
-            ResolvedCopyOptions::new(options.clone(), SymlinkPolicy::FollowWithinFileSystem);
-        let options_accessor: fn(&ResolvedCopyOptions) -> &CopyOptions =
-            black_box(ResolvedCopyOptions::options);
-        let policy_accessor: fn(&ResolvedCopyOptions) -> SymlinkPolicy =
-            black_box(ResolvedCopyOptions::symlink_policy);
+        let resolved = ResolvedCopyOptions::new(options.clone(), SymlinkPolicy::FollowWithinFileSystem);
+        let options_accessor: fn(&ResolvedCopyOptions) -> &CopyOptions = black_box(ResolvedCopyOptions::options);
+        let policy_accessor: fn(&ResolvedCopyOptions) -> SymlinkPolicy = black_box(ResolvedCopyOptions::symlink_policy);
 
         assert_eq!(&options, options_accessor(&resolved));
-        assert_eq!(
-            SymlinkPolicy::FollowWithinFileSystem,
-            policy_accessor(&resolved)
-        );
+        assert_eq!(SymlinkPolicy::FollowWithinFileSystem, policy_accessor(&resolved));
     }
 }

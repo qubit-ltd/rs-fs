@@ -185,15 +185,7 @@ impl AsyncCopyOperation {
             recovery,
         } = self;
         let mut guard = CopyCancellationGuard::start(state, writer, recovery);
-        let result = execute_copy(
-            file_system,
-            source,
-            target,
-            options,
-            *deadline,
-            guard.writer_mut(),
-        )
-        .await;
+        let result = execute_copy(file_system, source, target, options, *deadline, guard.writer_mut()).await;
         guard.finish(&result);
         result
     }
@@ -228,10 +220,7 @@ async fn execute_copy(
             target,
         ));
     }
-    if !filesystem
-        .core()
-        .provider_supports(ProviderOperation::TryCopy)
-    {
+    if !filesystem.core().provider_supports(ProviderOperation::TryCopy) {
         return stream_copy_fallback(filesystem, source, target, options, deadline, writer).await;
     }
     match filesystem
@@ -240,8 +229,7 @@ async fn execute_copy(
         .await
     {
         Ok(CopyAttempt::Completed(outcome)) => {
-            let outcome =
-                filesystem.verify_completed_copy(outcome, options.options(), source, target)?;
+            let outcome = filesystem.verify_completed_copy(outcome, options.options(), source, target)?;
             if deadline.expired() {
                 return Err(filesystem.contextual_copy_failure(
                     budget_error(source, target, "copy deadline was exceeded"),
@@ -297,9 +285,7 @@ fn stream_copy_fallback<'a>(
         }
         filesystem
             .require(FileSystemCapability::Read, FsOperation::Copy, source)
-            .and_then(|_| {
-                filesystem.require(FileSystemCapability::Write, FsOperation::Copy, target)
-            })
+            .and_then(|_| filesystem.require(FileSystemCapability::Write, FsOperation::Copy, target))
             .map_err(|error| {
                 filesystem.contextual_copy_failure(
                     error,
@@ -310,13 +296,7 @@ fn stream_copy_fallback<'a>(
                 )
             })?;
         let metadata = filesystem.stat(source).await.map_err(|error| {
-            filesystem.contextual_copy_failure(
-                error,
-                CopyFailureState::Unchanged,
-                CopyStats::default(),
-                source,
-                target,
-            )
+            filesystem.contextual_copy_failure(error, CopyFailureState::Unchanged, CopyStats::default(), source, target)
         })?;
         if deadline.expired() {
             return Err(filesystem.contextual_copy_failure(
@@ -381,18 +361,10 @@ fn stream_copy_fallback<'a>(
                 *writer_slot = recovery.map(AsyncWriterRecovery::Rejected);
                 let state = match stage {
                     OpenFailureStage::Preflight => CopyFailureState::Unchanged,
-                    OpenFailureStage::ProviderOpen => {
-                        from_write_failure_state(open_failure_state(&error))
-                    }
+                    OpenFailureStage::ProviderOpen => from_write_failure_state(open_failure_state(&error)),
                     OpenFailureStage::OutcomeValidation => CopyFailureState::Indeterminate,
                 };
-                return Err(filesystem.contextual_copy_failure(
-                    error,
-                    state,
-                    CopyStats::default(),
-                    source,
-                    target,
-                ));
+                return Err(filesystem.contextual_copy_failure(error, state, CopyStats::default(), source, target));
             }
         }
         if deadline.expired() {
@@ -474,18 +446,15 @@ fn stream_copy_fallback<'a>(
                     target,
                 )
             })?;
-            writer
-                .write_fully_async(&buffer[..read])
-                .await
-                .map_err(|error| {
-                    filesystem.contextual_copy_failure(
-                        FsError::from_stream_io(error, FsOperation::Write, target),
-                        from_writer_state(writer.state()),
-                        fallback_failure_stats(writer.written_bytes()),
-                        source,
-                        target,
-                    )
-                })?;
+            writer.write_fully_async(&buffer[..read]).await.map_err(|error| {
+                filesystem.contextual_copy_failure(
+                    FsError::from_stream_io(error, FsOperation::Write, target),
+                    from_writer_state(writer.state()),
+                    fallback_failure_stats(writer.written_bytes()),
+                    source,
+                    target,
+                )
+            })?;
             if deadline.expired() {
                 return Err(filesystem.contextual_copy_failure(
                     budget_error(source, target, "copy deadline was exceeded"),
@@ -588,13 +557,9 @@ fn stream_copy_fallback<'a>(
 
 /// Builds a caller-budget error for an asynchronous copy.
 fn budget_error(source: &Path, target: &Path, message: &str) -> FsError {
-    FsError::new(
-        FsErrorKind::ResourceLimitExceeded,
-        FsOperation::Copy,
-        message,
-    )
-    .with_path(source.clone())
-    .with_target(target.clone())
+    FsError::new(FsErrorKind::ResourceLimitExceeded, FsOperation::Copy, message)
+        .with_path(source.clone())
+        .with_target(target.clone())
 }
 
 /// Builds the stable failure used for an invalid execute retry.

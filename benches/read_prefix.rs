@@ -50,14 +50,8 @@ struct BenchmarkSpi {
 }
 
 impl BenchmarkSpi {
-    fn new(
-        payload: Vec<u8>,
-        ranged: bool,
-        consumed: Arc<AtomicUsize>,
-        requested_length: Arc<AtomicU64>,
-    ) -> Self {
-        let mut capabilities =
-            FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::Read);
+    fn new(payload: Vec<u8>, ranged: bool, consumed: Arc<AtomicUsize>, requested_length: Arc<AtomicU64>) -> Self {
+        let mut capabilities = FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::Read);
         if ranged {
             capabilities = capabilities.with_guaranteed(FileSystemCapability::RangeRead);
         }
@@ -131,15 +125,9 @@ struct BenchmarkReader {
 impl Input for BenchmarkReader {
     type Item = u8;
     /// Copies at most the provider-selected window into the validated slice.
-    unsafe fn read_unchecked(
-        &mut self,
-        output: &mut [u8],
-        index: usize,
-        count: usize,
-    ) -> std::io::Result<usize> {
+    unsafe fn read_unchecked(&mut self, output: &mut [u8], index: usize, count: usize) -> std::io::Result<usize> {
         let length = count.min(self.end - self.offset);
-        output[index..index + length]
-            .copy_from_slice(&self.payload[self.offset..self.offset + length]);
+        output[index..index + length].copy_from_slice(&self.payload[self.offset..self.offset + length]);
         self.offset += length;
         self.consumed.fetch_add(length, Ordering::Relaxed);
         Ok(length)
