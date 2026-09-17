@@ -186,9 +186,10 @@ pub fn copy_report(filesystem: &FileSystem, source: &Path, target: &Path) -> Res
 }
 ```
 
-复制成功后，可通过 `filesystem.list(&ListScope::Path(path.clone()), ListOptions::default())` 获取目录流，并在有界
-循环内调用 `next_entry()`；`ListOptions` 从 `qubit_fs::directory` 导入。条目逐步返回，
-后续读取可能失败，应先记录当前条目的处理进度。目录流不是原子快照。
+复制成功后，可通过 `filesystem.list(&ListScope::Path(Path::root()), ListOptions::default())`
+获取包含该文件的目录流，并在有界循环内调用 `next_entry()`；`ListOptions` 从
+`qubit_fs::directory` 导入。条目逐步返回，后续读取可能失败，应先记录当前条目的处理进度。
+目录流不是原子快照。
 
 层级子树过滤使用 `ListFilter::Subtree`。平面对象键使用
 `ListOptions::object_keys().with_filter(ListFilter::LiteralPrefix(...))` 按原始文本匹配，

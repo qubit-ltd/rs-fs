@@ -212,11 +212,12 @@ pub fn copy_report(filesystem: &FileSystem, source: &Path, target: &Path) -> Res
 }
 ```
 
-After success, enumerate the release path with `filesystem.list(&ListScope::Path(path.clone()),
-ListOptions::default())` and call `next_entry()` in a bounded loop. Import
-`ListOptions` from `qubit_fs::directory`. Entries arrive incrementally and errors
-can occur after earlier entries were processed. Record progress before fetching
-the next entry; a listing is not an atomic snapshot.
+After success, enumerate the containing directory with
+`filesystem.list(&ListScope::Path(Path::root()), ListOptions::default())` and
+call `next_entry()` in a bounded loop. Import `ListOptions` from
+`qubit_fs::directory`. Entries arrive incrementally and errors can occur after
+earlier entries were processed. Record progress before fetching the next entry;
+a listing is not an atomic snapshot.
 
 Use `ListFilter::Subtree` for hierarchical subtrees. For flat object keys,
 `ListOptions::object_keys().with_filter(ListFilter::LiteralPrefix(...))` performs
