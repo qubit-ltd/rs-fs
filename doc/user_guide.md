@@ -2,7 +2,7 @@
 
 [简体中文](user_guide.zh_CN.md) | English
 
-This guide describes `qubit-fs` `0.8` for Rust 1.94 and later. It is for
+This guide describes `qubit-fs` `0.2` for Rust 1.94 and later. It is for
 applications that publish reports through a configured filesystem and need to
 retain recovery facts when a write, copy, or cancellation does not complete
 normally.
@@ -62,14 +62,14 @@ limits.
 ## Installation and Minimal Configuration
 
 The default feature set is empty and provides synchronous APIs. Enable
-`qubit-fs = { version = "0.8", features = ["async"] }` for asynchronous APIs.
+`qubit-fs = { version = "0.2", features = ["async"] }` for asynchronous APIs.
 The application chooses its executor; the library does not require Tokio.
 
 For the runnable local example in this guide, use:
 
 ```toml
 [dependencies]
-qubit-fs = "0.8"
+qubit-fs = "0.2"
 qubit-fs-local = "0.9"
 tempfile = "3"
 ```
@@ -382,7 +382,7 @@ construction. It is checked around stages; it is not a timer that interrupts
 an arbitrary pending provider future. Provider failures remain the primary error.
 
 Temporary files and directories retain explicit lifecycle ownership. Their
-`cleanup`, `keep`, and `persist` methods report what happened. In 0.8, the
+`cleanup`, `keep`, and `persist` methods report what happened. In 0.2, the
 recovery snapshot has two separate axes: the retained target-publication fact
 and the source's current qualification.
 
