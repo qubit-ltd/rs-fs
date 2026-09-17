@@ -6,7 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-// handle_support/mod.rs.
+// handle_support/implementation_tests.rs.
 use std::io::Cursor;
 use std::io::Result as IoResult;
 use std::sync::Arc;
