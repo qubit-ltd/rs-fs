@@ -9,17 +9,13 @@
 
 #![cfg(feature = "async")]
 
-#[path = "support/listing.rs"]
-mod list_scope_support;
-#[path = "common/poll_support.rs"]
-mod poll_support;
+mod common;
+mod support;
 
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use list_scope_support::ListingProvider;
-use list_scope_support::Observations;
 #[cfg(feature = "async")]
 use qubit_fs::AsyncFileSystem;
 use qubit_fs::Path;
@@ -31,6 +27,8 @@ use qubit_fs::metadata::DirEntry;
 use qubit_fs::metadata::FileKind;
 use qubit_fs::metadata::FileSystemLimits;
 use qubit_fs::path::PathSemantics;
+use support::listing::ListingProvider;
+use support::listing::Observations;
 
 /// Merely constructing an expired future must not change stream state.
 #[test]
@@ -44,7 +42,7 @@ fn dropping_unpolled_next_has_no_side_effects() {
         observations: Arc::clone(&observations),
     };
     let filesystem = AsyncFileSystem::from_spi(provider).unwrap();
-    let mut stream = poll_support::ready(filesystem.list(
+    let mut stream = common::poll_support::ready(filesystem.list(
         &ListScope::Namespace,
         ListOptions::object_keys().with_deadline(Some(Duration::ZERO)),
     ))
@@ -52,13 +50,15 @@ fn dropping_unpolled_next_has_no_side_effects() {
     drop(stream.next_entry_async());
     assert_eq!(stream.state(), DirectoryStreamState::Open);
     assert_eq!(observations.next_calls.load(Ordering::SeqCst), 0);
-    let error = poll_support::ready(stream.next_entry_async()).unwrap_err();
+    let error = common::poll_support::ready(stream.next_entry_async()).unwrap_err();
     assert_eq!(error.kind(), FsErrorKind::ResourceLimitExceeded);
     assert_eq!(error.path(), None);
     assert_eq!(stream.state(), DirectoryStreamState::Failed);
     assert_eq!(observations.next_calls.load(Ordering::SeqCst), 0);
     assert_eq!(
-        poll_support::ready(stream.next_entry_async()).unwrap_err().kind(),
+        common::poll_support::ready(stream.next_entry_async())
+            .unwrap_err()
+            .kind(),
         FsErrorKind::InvalidState
     );
 }
@@ -79,16 +79,21 @@ fn ready_next_consumes_exactly_one_entry() {
         observations: Arc::clone(&observations),
     };
     let filesystem = AsyncFileSystem::from_spi(provider).unwrap();
-    let mut stream = poll_support::ready(filesystem.list(&ListScope::Namespace, ListOptions::object_keys())).unwrap();
+    let mut stream =
+        common::poll_support::ready(filesystem.list(&ListScope::Namespace, ListOptions::object_keys())).unwrap();
     for (index, expected) in ["a", "b"].into_iter().enumerate() {
         drop(stream.next_entry_async());
         assert_eq!(observations.next_calls.load(Ordering::SeqCst), index);
-        let entry = poll_support::ready(stream.next_entry_async()).unwrap().unwrap();
+        let entry = common::poll_support::ready(stream.next_entry_async()).unwrap().unwrap();
         assert_eq!(entry.path.as_str(), expected);
         assert_eq!(observations.next_calls.load(Ordering::SeqCst), index + 1);
         assert_eq!(stream.state(), DirectoryStreamState::Open);
     }
-    assert!(poll_support::ready(stream.next_entry_async()).unwrap().is_none());
+    assert!(
+        common::poll_support::ready(stream.next_entry_async())
+            .unwrap()
+            .is_none()
+    );
     assert_eq!(observations.next_calls.load(Ordering::SeqCst), 3);
     assert_eq!(stream.state(), DirectoryStreamState::Exhausted);
 }

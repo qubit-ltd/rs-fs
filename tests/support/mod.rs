@@ -6,8 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-#[cfg(feature = "async")]
 #[allow(dead_code)]
-pub(crate) mod async_recording_spi;
+pub(crate) mod listing;
 #[allow(dead_code)]
-pub(crate) mod poll_support;
+pub(crate) mod prefix_read;

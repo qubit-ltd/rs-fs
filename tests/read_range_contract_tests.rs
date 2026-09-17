@@ -6,18 +6,12 @@
 //! Range validation must precede provider dispatch and prefix optimization.
 
 #[cfg(feature = "async")]
-#[path = "common/poll_support.rs"]
-mod poll_support;
-#[allow(dead_code)] // This suite uses range behaviors, not the support fixture's stream failures.
-#[path = "support/prefix_read.rs"]
-mod prefix_read_support;
+mod common;
+mod support;
 
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
-use prefix_read_support::Fault;
-use prefix_read_support::Observations;
-use prefix_read_support::RecordingProvider;
 #[cfg(feature = "async")]
 use qubit_fs::AsyncFileSystem;
 use qubit_fs::FileSystem;
@@ -28,6 +22,9 @@ use qubit_fs::metadata::FileSystemCapabilities;
 use qubit_fs::metadata::FileSystemCapability;
 use qubit_fs::metadata::FileSystemLimits;
 use qubit_fs::read::ReadOptions;
+use support::prefix_read::Fault;
+use support::prefix_read::Observations;
+use support::prefix_read::RecordingProvider;
 
 /// Creates a recording provider with optional range support.
 fn provider(observations: &Arc<Observations>, ranged: bool) -> RecordingProvider {
@@ -74,9 +71,9 @@ fn test_range_overflow_precedes_async_dispatch() {
     let fs = AsyncFileSystem::from_spi(provider(&observations, true)).expect("filesystem");
     let path = Path::parse("/payload").expect("path");
     let options = ReadOptions::default().with_offset(Some(u64::MAX)).with_length(Some(1));
-    let error = poll_support::ready(fs.open_reader(&path, options.clone())).expect_err("overflow");
+    let error = common::poll_support::ready(fs.open_reader(&path, options.clone())).expect_err("overflow");
     assert_eq!(error.kind(), FsErrorKind::InvalidOptions);
-    let error = poll_support::ready(fs.read_prefix(&path, options, 0)).expect_err("overflow");
+    let error = common::poll_support::ready(fs.read_prefix(&path, options, 0)).expect_err("overflow");
     assert_eq!(error.kind(), FsErrorKind::InvalidOptions);
     assert_eq!(observations.opens.load(Ordering::SeqCst), 0);
 }

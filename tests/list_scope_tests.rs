@@ -26,13 +26,11 @@ use qubit_fs::metadata::FileSystemLimit;
 use qubit_fs::metadata::FileSystemLimits;
 use qubit_fs::path::PathSemantics;
 
-#[path = "support/listing.rs"]
-mod list_scope_support;
-use list_scope_support::ListingProvider;
-use list_scope_support::Observations;
+mod support;
+use support::listing::ListingProvider;
+use support::listing::Observations;
 #[cfg(feature = "async")]
-#[path = "common/poll_support.rs"]
-mod poll_support;
+mod common;
 
 /// An entire namespace is a query scope rather than an empty resource path.
 #[test]
@@ -72,7 +70,7 @@ fn check_listing(
         let result = if asynchronous {
             #[cfg(feature = "async")]
             {
-                poll_support::ready(async {
+                common::poll_support::ready(async {
                     let filesystem = AsyncFileSystem::from_spi(provider).unwrap();
                     let mut stream = filesystem.list(&scope, options.clone()).await?;
                     while let Some(entry) = stream.next_entry_async().await? {

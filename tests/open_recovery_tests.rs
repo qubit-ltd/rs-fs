@@ -263,8 +263,7 @@ fn test_rejected_drop_does_not_call_cleanup() {
 }
 
 #[cfg(feature = "async")]
-#[path = "common/poll_support.rs"]
-mod poll_support;
+mod common;
 
 #[cfg(feature = "async")]
 mod asynchronous {
@@ -312,9 +311,9 @@ mod asynchronous {
     use super::Session;
     use super::assert_cleanup_context;
     use super::assert_temp_open_failure_reporting;
+    use super::common::poll_support::assert_pending;
+    use super::common::poll_support::ready;
     use super::failure;
-    use super::poll_support::assert_pending;
-    use super::poll_support::ready;
     use super::properties;
     use super::wrong_info;
 

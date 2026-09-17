@@ -9,10 +9,7 @@
 
 #![cfg(feature = "async")]
 
-#[path = "common/async_recording_spi.rs"]
-mod async_recording_spi;
-#[path = "common/poll_support.rs"]
-mod poll_support;
+mod common;
 
 use std::io::Result as IoResult;
 use std::pin::Pin;
@@ -93,11 +90,11 @@ use qubit_fs::write::WriterState;
 use qubit_io::AsyncInput;
 use qubit_io::AsyncOutput;
 
-use crate::async_recording_spi::AsyncCopyStage;
-use crate::async_recording_spi::AsyncRecordingConfig;
-use crate::async_recording_spi::async_recording_file_system;
-use crate::poll_support::assert_pending;
-use crate::poll_support::ready;
+use crate::common::async_recording_spi::AsyncCopyStage;
+use crate::common::async_recording_spi::AsyncRecordingConfig;
+use crate::common::async_recording_spi::async_recording_file_system;
+use crate::common::poll_support::assert_pending;
+use crate::common::poll_support::ready;
 
 /// Parses one stable test path.
 fn path(value: &str) -> Path {
