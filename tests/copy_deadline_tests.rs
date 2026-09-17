@@ -14,7 +14,6 @@ use qubit_fs::copy::CopyFailureState;
 use qubit_fs::copy::CopyOptions;
 use qubit_fs::write::WriteFailureState;
 
-#[path = "handle_support/mod.rs"]
 mod handle_support;
 
 struct DelayReset;

@@ -8,17 +8,12 @@
 //! Public synchronous and asynchronous prefix-read contract regression tests.
 
 #[cfg(feature = "async")]
-#[path = "common/poll_support.rs"]
-mod poll_support;
-#[path = "support/prefix_read.rs"]
-mod prefix_read_support;
+mod common;
+mod support;
 
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
-use prefix_read_support::Fault;
-use prefix_read_support::Observations;
-use prefix_read_support::RecordingProvider;
 #[cfg(feature = "async")]
 use qubit_fs::AsyncFileSystem;
 use qubit_fs::FileSystem;
@@ -32,6 +27,9 @@ use qubit_fs::metadata::ResourceVersion;
 use qubit_fs::read::ChecksumPolicy;
 use qubit_fs::read::PrefixReadTermination;
 use qubit_fs::read::ReadOptions;
+use support::prefix_read::Fault;
+use support::prefix_read::Observations;
+use support::prefix_read::RecordingProvider;
 
 /// Exercises dispatch and byte accounting for both facade implementations.
 fn assert_prefix(async_mode: bool) {
@@ -48,7 +46,7 @@ fn assert_prefix(async_mode: bool) {
     let result = if async_mode {
         #[cfg(feature = "async")]
         {
-            poll_support::ready(AsyncFileSystem::from_spi(provider).unwrap().read_prefix(
+            common::poll_support::ready(AsyncFileSystem::from_spi(provider).unwrap().read_prefix(
                 &path,
                 ReadOptions::default(),
                 3,
@@ -128,7 +126,7 @@ fn test_prefix_outcome_async_exposes_termination() {
         fault: Fault::None,
     };
     let path = Path::parse("/payload").unwrap();
-    let outcome = poll_support::ready(AsyncFileSystem::from_spi(provider).unwrap().read_prefix(
+    let outcome = common::poll_support::ready(AsyncFileSystem::from_spi(provider).unwrap().read_prefix(
         &path,
         ReadOptions::default(),
         32,
@@ -170,7 +168,7 @@ fn check_case(
         let result = if async_mode {
             #[cfg(feature = "async")]
             {
-                poll_support::ready(AsyncFileSystem::from_spi(provider).unwrap().read_prefix(
+                common::poll_support::ready(AsyncFileSystem::from_spi(provider).unwrap().read_prefix(
                     &path,
                     options.clone(),
                     maximum,
@@ -377,7 +375,7 @@ fn provider_failures_preserve_sources_and_do_not_retry() {
             let result = if asynchronous {
                 #[cfg(feature = "async")]
                 {
-                    poll_support::ready(AsyncFileSystem::from_spi(provider).unwrap().read_prefix(
+                    common::poll_support::ready(AsyncFileSystem::from_spi(provider).unwrap().read_prefix(
                         &path,
                         ReadOptions::default(),
                         3,

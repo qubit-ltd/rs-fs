@@ -15,7 +15,6 @@ use qubit_fs::write::WriteFailureState;
 use qubit_fs::write::WriteOptions;
 use qubit_fs::write::WriterState;
 
-#[path = "handle_support/mod.rs"]
 mod handle_support;
 
 fn opened_writer(commit_failure: Option<WriteFailureState>) -> FileWriter {
@@ -110,18 +109,14 @@ fn repeated_commit_after_sync_abort_reports_not_published() {
 }
 
 #[cfg(feature = "async")]
-#[path = "common/async_recording_spi.rs"]
-mod async_recording_spi;
-#[cfg(feature = "async")]
-#[path = "common/poll_support.rs"]
-mod poll_support;
+mod common;
 
 #[cfg(feature = "async")]
 #[test]
 fn repeated_commit_preserves_async_publication_state() {
-    use async_recording_spi::AsyncRecordingConfig;
-    use async_recording_spi::async_recording_file_system;
-    use poll_support::ready;
+    use common::async_recording_spi::AsyncRecordingConfig;
+    use common::async_recording_spi::async_recording_file_system;
+    use common::poll_support::ready;
 
     let (filesystem, _) = async_recording_file_system(AsyncRecordingConfig::default());
     let target = Path::parse("/target").expect("path should parse");
@@ -137,9 +132,9 @@ fn repeated_commit_preserves_async_publication_state() {
 #[cfg(feature = "async")]
 #[test]
 fn retryable_async_commit_remains_retryable() {
-    use async_recording_spi::AsyncRecordingConfig;
-    use async_recording_spi::async_recording_file_system;
-    use poll_support::ready;
+    use common::async_recording_spi::AsyncRecordingConfig;
+    use common::async_recording_spi::async_recording_file_system;
+    use common::poll_support::ready;
 
     let (filesystem, _) = async_recording_file_system(AsyncRecordingConfig {
         writer_commit_failure: Some(WriteFailureState::RetryableNotPublished),
@@ -161,9 +156,9 @@ fn retryable_async_commit_remains_retryable() {
 #[cfg(feature = "async")]
 #[test]
 fn repeated_commit_preserves_async_failed_publication_states() {
-    use async_recording_spi::AsyncRecordingConfig;
-    use async_recording_spi::async_recording_file_system;
-    use poll_support::ready;
+    use common::async_recording_spi::AsyncRecordingConfig;
+    use common::async_recording_spi::async_recording_file_system;
+    use common::poll_support::ready;
 
     for (provider_state, expected_writer_state) in [
         (WriteFailureState::NotPublished, WriterState::NotPublished),

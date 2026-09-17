@@ -6,9 +6,10 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-#[path = "common/async_recording_spi.rs"]
+mod common;
 #[cfg(feature = "async")]
-mod async_recording_spi;
+pub(crate) use common::async_recording_spi;
+pub(crate) use common::poll_support;
 mod copy;
 mod directory;
 mod error;
@@ -17,8 +18,6 @@ mod internal;
 mod metadata;
 mod options;
 mod path;
-#[path = "common/poll_support.rs"]
-mod poll_support;
 mod reader;
 mod rename;
 mod spi;

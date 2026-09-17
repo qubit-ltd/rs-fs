@@ -20,7 +20,7 @@ mod async_recording_spi;
 #[path = "../../../common/poll_support.rs"]
 mod poll_support;
 #[cfg(test)]
-mod tests;
+mod tests_tests;
 
 #[cfg(test)]
 mod sync_tests;
