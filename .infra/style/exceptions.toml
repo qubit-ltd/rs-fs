@@ -7,7 +7,7 @@ reason = "This module is the unit-test module of the standalone documentation-ex
 
 [[exceptions]]
 rule = "test-file-name"
-path = "tests/handle_support/implementation.rs"
+path = "tests/handle_support/implementation_tests.rs"
 reason = "This helper implementation is shared by the handle-support test module via a path attribute."
 
 [[exceptions]]
