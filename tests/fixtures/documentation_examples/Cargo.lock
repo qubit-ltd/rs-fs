@@ -118,9 +118,9 @@ dependencies = [
 
 [[package]]
 name = "qubit-fs-local"
-version = "0.9.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fee4856f27ba728002b67d36e0138cf8eee7985f134680c59420c52faa24e77b"
+checksum = "d838ed6b62c0c8c2252447e5509e897c3ddd20f70fac307e17b7c6ca283e5283"
 dependencies = [
  "qubit-fs",
  "qubit-io",
