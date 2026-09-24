@@ -13,6 +13,6 @@ async = []
 
 [dependencies]
 qubit-fs = { version = "0.2", features = ["async"] }
-qubit-fs-local = "0.9"
+qubit-fs-local = "0.10"
 qubit-io = "0.17"
 tempfile = "3"
