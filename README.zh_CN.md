@@ -32,7 +32,7 @@ qubit-fs = { version = "0.2", features = ["async"] }
 ```toml
 [dependencies]
 qubit-fs = "0.2"
-qubit-fs-local = "0.9"
+qubit-fs-local = "0.10"
 tempfile = "3"
 ```
 
