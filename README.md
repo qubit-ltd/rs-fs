@@ -36,7 +36,7 @@ The temporary directory is removed when the demo ends.
 ```toml
 [dependencies]
 qubit-fs = "0.2"
-qubit-fs-local = "0.9"
+qubit-fs-local = "0.10"
 tempfile = "3"
 ```
 
