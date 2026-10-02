@@ -5,6 +5,8 @@ edition = "2024"
 rust-version = "1.94"
 publish = false
 
+[workspace]
+
 [package.metadata]
 cargo-fuzz = true
 
