@@ -23,6 +23,9 @@ include = [
     "/tests/**",
 ]
 
+[workspace]
+resolver = "3"
+
 [lib]
 name = "qubit_fs"
 doctest = true
