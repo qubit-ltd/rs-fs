@@ -2,8 +2,7 @@ name: Rust CI
 
 on:
   push:
-    branches:
-      - main
+    branches: [main, dev, dev-starfish]
   pull_request:
   workflow_dispatch:
 
@@ -19,9 +18,4 @@ concurrency:
 
 jobs:
   rust-ci:
-    permissions:
-      contents: read
-      pull-requests: write
-      pages: write
-      id-token: write
-    uses: qubit-ltd/rs-infra-ci/.github/workflows/github-ci.yml@4a79b9abc80c5528a4f42318038bab756a1edca2
+    uses: qubit-ltd/rs-infra-ci/.github/workflows/github-ci.yml@main
