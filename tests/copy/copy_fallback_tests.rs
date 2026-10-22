@@ -701,6 +701,24 @@ fn test_copy_stream_fallback_enforces_byte_and_entry_budgets() {
     assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
     assert_eq!(CopyFailureState::Unchanged, failure.state());
     assert!(bytes.lock().expect("bytes lock should succeed").is_empty());
+    assert!(
+        failure.error().to_string().contains("copy byte limit was exceeded")
+    );
+    assert_eq!(Some(&path("/source")), failure.error().path());
+
+    let (filesystem, _, bytes) = recording_filesystem(CopyResponse::Declined);
+    let outcome = filesystem
+        .copy(
+            &path("/source"),
+            &path("/target"),
+            CopyOptions::default().with_max_bytes(Some(5)),
+        )
+        .expect("a five-byte budget must accept the complete five-byte copy");
+    assert_eq!(5, outcome.stats().bytes);
+    assert_eq!(
+        b"bytes",
+        bytes.lock().expect("bytes lock should succeed").as_slice()
+    );
 
     let (filesystem, calls, _) = recording_filesystem(CopyResponse::Declined);
     let failure = filesystem
