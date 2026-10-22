@@ -13,6 +13,3 @@ pub(crate) use list_selection::select;
 
 mod list_stream_policy;
 pub(crate) use list_stream_policy::ListStreamPolicy;
-
-#[cfg(test)]
-mod list_stream_policy_tests;

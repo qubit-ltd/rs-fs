@@ -16,7 +16,14 @@
 /// ```rust
 /// use qubit_fs::copy::CopyFailureState;
 ///
-/// assert_eq!(CopyFailureState::Unchanged, CopyFailureState::Unchanged);
+/// let state = CopyFailureState::PartiallyPublished;
+/// let destination_may_have_changed = match state {
+///     CopyFailureState::Unchanged => false,
+///     CopyFailureState::PartiallyPublished
+///     | CopyFailureState::Published
+///     | CopyFailureState::Indeterminate => true,
+/// };
+/// assert!(destination_may_have_changed);
 /// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CopyFailureState {

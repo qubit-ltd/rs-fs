@@ -29,6 +29,7 @@ use crate::copy::CopyOutcome;
 /// let declined = CopyAttempt::Declined(CopyDeclineReason::NotApplicable);
 /// assert!(matches!(declined, CopyAttempt::Declined(_)));
 /// ```
+#[must_use]
 #[non_exhaustive]
 pub enum CopyAttempt {
     /// A provider completed the copy.

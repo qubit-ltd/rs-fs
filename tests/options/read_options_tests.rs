@@ -40,7 +40,7 @@ fn test_read_options_empty_optional_values_are_exposed() {
 }
 
 #[test]
-fn read_requirements_are_checked_against_typed_capabilities() {
+fn test_read_requirements_are_checked_against_typed_capabilities() {
     let conflicting = ReadOptions::default()
         .with_if_match(Some(ResourceVersion::from("v1")))
         .with_if_none_match(Some(ResourceVersion::from("v2")));
@@ -87,7 +87,7 @@ fn read_requirements_are_checked_against_typed_capabilities() {
 }
 
 #[test]
-fn read_options_accessors_are_callable_directly() {
+fn test_read_options_accessors_are_callable_directly() {
     let options = ReadOptions::default()
         .with_offset(Some(3))
         .with_length(Some(4))
@@ -108,7 +108,7 @@ fn read_options_accessors_are_callable_directly() {
 }
 
 #[test]
-fn read_options_rejects_ranges_past_u64_maximum() {
+fn test_read_options_rejects_ranges_past_u64_maximum() {
     let options = ReadOptions::default().with_offset(Some(u64::MAX)).with_length(Some(1));
     assert_eq!(FsErrorKind::InvalidOptions, options.validate().unwrap_err().kind());
 }

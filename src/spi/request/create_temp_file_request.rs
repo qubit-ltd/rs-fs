@@ -18,8 +18,11 @@ use crate::temp::TempOptions;
 /// use qubit_fs::spi::CreateTempFileRequest;
 /// use qubit_fs::temp::TempOptions;
 ///
-/// assert!(std::any::type_name::<CreateTempFileRequest>().contains("CreateTempFileRequest"));
-/// assert_eq!(TempOptions::default(), TempOptions::new());
+/// fn inspect_temp_file_request(request: &CreateTempFileRequest) -> &TempOptions {
+///     request.options()
+/// }
+///
+/// let _ = inspect_temp_file_request;
 /// ```
 pub struct CreateTempFileRequest {
     /// Validated temporary-file creation options.
@@ -35,6 +38,7 @@ impl CreateTempFileRequest {
     /// # Returns
     /// A provider temporary-file request.
     #[allow(dead_code)]
+    #[must_use]
     #[inline]
     pub(crate) const fn new(options: TempOptions) -> Self {
         Self { options }

@@ -7,10 +7,13 @@
 // =============================================================================
 
 use std::error::Error;
+use std::hint::black_box;
 
 use qubit_fs::Path;
+use qubit_fs::error::FsError;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::metadata::AchievedAtomicity;
+use qubit_fs::write::WriteAllFailure;
 use qubit_fs::write::WriteOptions;
 use qubit_fs::write::WriterRecovery;
 use qubit_io::Output;
@@ -113,4 +116,21 @@ fn test_write_all_failure_exposes_recovery_accessors_and_formatting() {
     let (error, _state, _bytes, writer) = failure.into_parts();
     assert_eq!(FsErrorKind::Io, error.kind());
     assert!(writer.is_some());
+}
+
+#[test]
+fn test_write_all_failure_accessors_are_executed_at_runtime() {
+    let error: fn(&WriteAllFailure) -> &FsError = black_box(WriteAllFailure::error);
+    let recovery: fn(&WriteAllFailure) -> Option<&WriterRecovery> = black_box(WriteAllFailure::recovery);
+    let (filesystem, _, _) = crate::handle_support::filesystem(true, Vec::new());
+    let failure = filesystem
+        .write_all(
+            &Path::parse("/target").expect("path should parse"),
+            b"bytes",
+            WriteOptions::default(),
+        )
+        .expect_err("commit failure should retain a writer");
+
+    assert_eq!(FsErrorKind::Io, error(&failure).kind());
+    assert!(recovery(&failure).is_some());
 }

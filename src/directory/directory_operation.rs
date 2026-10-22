@@ -31,7 +31,18 @@ impl<'a> DirectoryOperation<'a> {
         Self { filesystem }
     }
 
-    /// Opens a provider directory stream after local option validation.
+    /// Opens a provider directory stream after validating the requested scope
+    /// and options.
+    ///
+    /// The requested page size is clamped to the filesystem limit before
+    /// dispatch. The stream retains the effective symlink policy and
+    /// provider path semantics for subsequent entries.
+    ///
+    /// # Errors
+    ///
+    /// Returns an enriched filesystem error when the scope or options are
+    /// invalid, listing is unsupported, the provider cannot open the
+    /// listing, or the returned stream cannot be initialized.
     pub(crate) fn list(&self, scope: &ListScope, options: ListOptions) -> FsResult<DirectoryStream> {
         crate::directory::internal::list_preflight::validate(self.filesystem.properties(), scope, &options)
             .map_err(|error| self.filesystem.core().enrich(error, scope.path(), FsOperation::List))?;

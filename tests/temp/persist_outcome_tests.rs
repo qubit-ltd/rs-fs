@@ -43,7 +43,7 @@ fn test_persist_outcome_preserves_publication_details_and_diagnostics() {
 }
 
 #[test]
-fn persist_outcome_accessors_are_callable_directly() {
+fn test_persist_outcome_accessors_are_callable_directly() {
     let target = Path::parse("published/report.txt").expect("path should parse");
     let outcome = PersistOutcome::new(target.clone(), AchievedAtomicity::Atomic, PublicationMethod::Direct);
     let target_accessor: fn(&PersistOutcome) -> &Path = PersistOutcome::target;

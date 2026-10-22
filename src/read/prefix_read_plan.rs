@@ -24,6 +24,7 @@ use crate::spi::ResolvedReadOptions;
 pub(crate) struct PrefixReadPlan {
     /// Original options or a safely narrowed byte range.
     options: ReadOptions,
+    /// Optional non-binding hint for providers that can bound prefix reads.
     hint: Option<PrefixReadHint>,
 }
 
@@ -91,6 +92,7 @@ impl PrefixReadPlan {
 
     /// Transfers the validated provider request options to the reader open.
     #[inline]
+    #[must_use]
     pub(crate) fn into_options(self) -> ResolvedReadOptions {
         let resolved = ResolvedReadOptions::new(self.options);
         match self.hint {

@@ -5,6 +5,8 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+use std::hint::black_box;
+
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::metadata::AtomicityRequirement;
 use qubit_fs::metadata::Checksum;
@@ -12,6 +14,7 @@ use qubit_fs::metadata::ChecksumAlgorithm;
 use qubit_fs::metadata::DurabilityRequirement;
 use qubit_fs::metadata::FileSystemCapabilities;
 use qubit_fs::metadata::FileSystemCapability;
+use qubit_fs::metadata::NonSensitiveMetadata;
 use qubit_fs::metadata::ResourceVersion;
 use qubit_fs::metadata::UserMetadata;
 use qubit_fs::write::WriteDisposition;
@@ -42,7 +45,7 @@ fn test_write_options_full_configuration_is_usable() {
 }
 
 #[test]
-fn write_requirements_are_checked_against_typed_capabilities() {
+fn test_write_requirements_are_checked_against_typed_capabilities() {
     let atomic = WriteOptions::default().with_atomicity(AtomicityRequirement::Required);
     let error = atomic.validate_against(FileSystemCapabilities::default()).unwrap_err();
     assert_eq!(Some(FileSystemCapability::AtomicReplace), error.required_capability());
@@ -80,7 +83,7 @@ fn write_requirements_are_checked_against_typed_capabilities() {
 }
 
 #[test]
-fn append_cannot_request_atomic_publication() {
+fn test_append_cannot_request_atomic_publication() {
     let options = WriteOptions::default()
         .with_disposition(WriteDisposition::Append)
         .with_atomicity(AtomicityRequirement::Required);
@@ -92,7 +95,7 @@ fn append_cannot_request_atomic_publication() {
 }
 
 #[test]
-fn append_rejects_version_preconditions_but_allows_plain_append() {
+fn test_append_rejects_version_preconditions_but_allows_plain_append() {
     let invalid = WriteOptions::default()
         .with_disposition(WriteDisposition::Append)
         .with_precondition(WritePrecondition::IfMatch(ResourceVersion::new("v1")));
@@ -105,7 +108,7 @@ fn append_rejects_version_preconditions_but_allows_plain_append() {
 }
 
 #[test]
-fn create_new_rejects_if_match_precondition() {
+fn test_create_new_rejects_if_match_precondition() {
     let options = WriteOptions::default()
         .with_disposition(WriteDisposition::CreateNew)
         .with_precondition(WritePrecondition::IfMatch(ResourceVersion::new("v1")));
@@ -117,7 +120,7 @@ fn create_new_rejects_if_match_precondition() {
 }
 
 #[test]
-fn write_options_preserve_validated_user_metadata() {
+fn test_write_options_preserve_validated_user_metadata() {
     let options = WriteOptions::default().with_user_metadata(
         UserMetadata::new()
             .with("category", "private-category")
@@ -125,4 +128,24 @@ fn write_options_preserve_validated_user_metadata() {
     );
     assert!(options.user_metadata().contains_key("category"));
     assert!(!format!("{options:?}").contains("private-category"));
+}
+
+#[test]
+fn test_option_accessors_are_executed_at_runtime() {
+    let disposition: fn(&WriteOptions) -> WriteDisposition = black_box(WriteOptions::disposition);
+    let precondition: for<'a> fn(&'a WriteOptions) -> &'a WritePrecondition = black_box(WriteOptions::precondition);
+    let create_parent: fn(&WriteOptions) -> bool = black_box(WriteOptions::create_parent);
+    let user_metadata: fn(&WriteOptions) -> &NonSensitiveMetadata = black_box(WriteOptions::user_metadata);
+    let checksum: for<'a> fn(&'a WriteOptions) -> Option<&'a Checksum> = black_box(WriteOptions::checksum);
+
+    let options = WriteOptions::default()
+        .with_create_parent(true)
+        .with_disposition(WriteDisposition::CreateOrReplace)
+        .with_checksum(Some(Checksum::new(ChecksumAlgorithm::Sha256, "abc")));
+
+    assert_eq!(WriteDisposition::CreateOrReplace, disposition(&options));
+    assert!(matches!(precondition(&options), WritePrecondition::None));
+    assert!(create_parent(&options));
+    assert!(user_metadata(&options).is_empty());
+    assert!(checksum(&options).is_some());
 }

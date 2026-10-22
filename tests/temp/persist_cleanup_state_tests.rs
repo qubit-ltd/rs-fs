@@ -9,7 +9,7 @@
 use qubit_fs::temp::PersistCleanupState;
 
 #[test]
-fn persist_cleanup_states_are_debuggable_and_distinct() {
+fn test_persist_cleanup_states_are_debuggable_and_distinct() {
     assert_ne!(
         PersistCleanupState::Complete,
         PersistCleanupState::ResidualTemporaryContainer,

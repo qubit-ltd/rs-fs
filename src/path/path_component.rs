@@ -42,6 +42,9 @@ impl PathComponent {
     /// # Parameters
     /// - `text`: Component text to validate.
     ///
+    /// # Returns
+    /// Returns the validated component.
+    ///
     /// # Errors
     /// Returns an invalid-path error when `text` is empty, contains a
     /// separator, is a traversal marker, or contains NUL.

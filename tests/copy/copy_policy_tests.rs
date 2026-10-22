@@ -12,7 +12,7 @@ use qubit_fs::copy::CopyOptions;
 use qubit_fs::metadata::SymlinkPolicy;
 
 #[test]
-fn tree_mode_is_explicit_and_symlink_override_is_preserved() {
+fn test_tree_mode_is_explicit_and_symlink_override_is_preserved() {
     let options = CopyOptions::tree().with_symlink_policy(SymlinkPolicy::FollowWithinFileSystem);
 
     assert_eq!(CopyMode::Tree, options.mode());

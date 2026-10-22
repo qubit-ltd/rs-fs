@@ -38,7 +38,7 @@ impl std::fmt::Display for SecretSourceError {
 impl std::error::Error for SecretSourceError {}
 
 #[test]
-fn persist_failure_exposes_progress_cause_display_and_owned_error() {
+fn test_persist_failure_exposes_progress_cause_display_and_owned_error() {
     let failure = PersistFailure::new(
         FsError::with_source(
             FsErrorKind::Io,
@@ -60,7 +60,7 @@ fn persist_failure_exposes_progress_cause_display_and_owned_error() {
 }
 
 #[test]
-fn persist_failure_debug_does_not_expand_secret_fs_error_source() {
+fn test_persist_failure_debug_does_not_expand_secret_fs_error_source() {
     let failure = PersistFailure::new(
         FsError::with_source(
             FsErrorKind::Io,

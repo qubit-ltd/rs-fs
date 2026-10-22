@@ -24,8 +24,11 @@ use crate::write::WriteFailure;
 ///
 /// ```
 /// use qubit_fs::spi::AsyncFileWriteSession;
+/// use std::pin::Pin;
 ///
-/// fn accepts_session<T: AsyncFileWriteSession>() {}
+/// pub async fn publish<T: AsyncFileWriteSession>(session: Pin<&mut T>) {
+///     assert!(session.commit_async().await.is_ok());
+/// }
 /// ```
 pub trait AsyncFileWriteSession: AsyncOutput<Item = u8> + Send {
     /// Asynchronously publishes bytes accepted by the session.

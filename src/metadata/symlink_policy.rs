@@ -15,7 +15,8 @@
 /// ```rust
 /// use qubit_fs::metadata::SymlinkPolicy;
 ///
-/// assert!(matches!(SymlinkPolicy::Reject, SymlinkPolicy::Reject));
+/// assert!(!SymlinkPolicy::Reject.follows());
+/// assert!(SymlinkPolicy::FollowWithinFileSystem.follows());
 /// ```
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 #[must_use]

@@ -14,7 +14,7 @@ use qubit_fs::metadata::UserMetadata;
 use qubit_fs::metadata::WriteOutcome;
 
 #[test]
-fn write_outcome_reports_actual_publication_semantics() {
+fn test_write_outcome_reports_actual_publication_semantics() {
     let outcome = WriteOutcome::new(AchievedAtomicity::Atomic, PublicationMethod::AtomicRename)
         .with_bytes_written(7)
         .with_version(ResourceVersion::new("v7"));
@@ -27,14 +27,14 @@ fn write_outcome_reports_actual_publication_semantics() {
 }
 
 #[test]
-fn write_outcome_reports_confirmed_durability() {
+fn test_write_outcome_reports_confirmed_durability() {
     let outcome = WriteOutcome::new(AchievedAtomicity::Atomic, PublicationMethod::Direct).with_durable(true);
 
     assert!(outcome.durable());
 }
 
 #[test]
-fn write_outcome_validates_and_safely_formats_diagnostics() {
+fn test_write_outcome_validates_and_safely_formats_diagnostics() {
     let outcome = WriteOutcome::new(AchievedAtomicity::Atomic, PublicationMethod::Direct).with_diagnostics(
         UserMetadata::new()
             .with("request_id", "private-request-id")
@@ -45,7 +45,7 @@ fn write_outcome_validates_and_safely_formats_diagnostics() {
 }
 
 #[test]
-fn write_outcome_accessors_are_callable_directly() {
+fn test_write_outcome_accessors_are_callable_directly() {
     let outcome = WriteOutcome::new(AchievedAtomicity::Atomic, PublicationMethod::Direct);
     let bytes_written: fn(&WriteOutcome) -> Option<u64> = WriteOutcome::bytes_written;
     let version: fn(&WriteOutcome) -> Option<&ResourceVersion> = WriteOutcome::version;

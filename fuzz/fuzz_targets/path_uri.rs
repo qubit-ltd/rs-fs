@@ -13,6 +13,8 @@
 
 #![no_main]
 
+use std::str;
+
 use libfuzzer_sys::fuzz_target;
 use qubit_fs::Path;
 use qubit_fs::path::ConnectionUri;
@@ -46,7 +48,7 @@ fn secret_text(data: &[u8]) -> String {
 fuzz_target!(|data: &[u8]| {
     let data = &data[..data.len().min(MAX_FUZZ_INPUT_LEN)];
 
-    if let Ok(text) = std::str::from_utf8(data) {
+    if let Ok(text) = str::from_utf8(data) {
         if let Ok(path) = Path::parse(text) {
             assert_eq!(path, Path::parse(path.as_str()).expect("canonical path must reparse"));
         }

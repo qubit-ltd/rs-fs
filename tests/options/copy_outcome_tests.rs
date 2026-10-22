@@ -31,7 +31,7 @@ fn test_copy_outcome_new_stores_stats_and_method() {
 }
 
 #[test]
-fn copy_outcome_preserves_validated_diagnostics() {
+fn test_copy_outcome_preserves_validated_diagnostics() {
     let outcome = CopyOutcome::new(CopyStats::default(), CopyMethod::Streamed, AchievedAtomicity::NonAtomic)
         .with_diagnostics(
             UserMetadata::new()

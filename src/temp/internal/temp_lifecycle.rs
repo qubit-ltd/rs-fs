@@ -11,18 +11,22 @@ use crate::path::Path;
 use crate::temp::PersistFailureState;
 use crate::temp::TempResourceState;
 
-/// Tracks source ownership separately from target publication.
+/// Tracks source cleanup ownership independently from target publication.
+///
+/// The snapshot retains confirmed publication data across later cleanup
+/// failures so callers can report partial progress accurately.
 #[derive(Clone)]
 pub(crate) struct TempLifecycle {
-    /// Current handle ownership state.
+    /// Cleanup responsibility currently held by the temporary handle.
     state: TempResourceState,
-    /// Publication and source-release facts for later failures.
+    /// Provider-confirmed publication and source-release facts used to
+    /// describe later failures.
     failure_state: PersistFailureState,
-    /// Last positively confirmed publication destination.
+    /// Most recent destination whose publication was positively confirmed.
     publication_target: Option<Path>,
 }
 impl TempLifecycle {
-    /// Creates an owned, unpublished resource lifecycle.
+    /// Creates a lifecycle that owns cleanup for an unpublished resource.
     #[inline]
     pub(crate) const fn new() -> Self {
         Self {
@@ -31,29 +35,43 @@ impl TempLifecycle {
             publication_target: None,
         }
     }
-    /// Returns the current handle ownership state.
+    /// Returns whether this handle owns cleanup, has released it, or cannot
+    /// determine the resource state.
+    #[must_use]
     #[inline]
     pub(crate) const fn state(&self) -> TempResourceState {
         self.state
     }
-    /// Returns retained publication and source-release facts.
+    /// Returns provider-confirmed publication and source-release progress for
+    /// interpreting persistence failures.
+    #[must_use]
     #[inline]
     pub(crate) const fn failure_state(&self) -> PersistFailureState {
         self.failure_state
     }
-    /// Returns the confirmed destination, if publication has been observed.
+    /// Returns the last confirmed publication destination, if publication has
+    /// been observed.
+    ///
+    /// The borrowed path remains tied to this lifecycle snapshot.
+    #[must_use]
     #[inline]
     pub(crate) fn publication_target(&self) -> Option<&Path> {
         self.publication_target.as_ref()
     }
-    /// Marks an in-flight mutation uncertain before awaiting the provider.
+    /// Marks an in-flight provider mutation uncertain before it is awaited.
+    ///
+    /// This prevents cleanup from treating an unconfirmed source state as
+    /// safely owned.
     #[cfg(feature = "async")]
     #[inline]
     pub(crate) fn begin_pending(&mut self) {
         self.state = TempResourceState::Indeterminate;
         self.failure_state = PersistFailureState::Indeterminate;
     }
-    /// Records confirmed publication and released source ownership.
+    /// Records successful publication and release of source cleanup ownership.
+    ///
+    /// `kept` distinguishes a retained resource from one whose source was
+    /// persisted, while `target` records the confirmed destination.
     #[inline]
     pub(crate) fn record_success(&mut self, kept: bool, target: Path) {
         self.state = if kept {
@@ -64,7 +82,12 @@ impl TempLifecycle {
         self.failure_state = PersistFailureState::PublishedSourceReleased;
         self.publication_target = Some(target);
     }
-    /// Records provider failure without discarding an earlier known target.
+    /// Records provider-reported progress after persistence fails.
+    ///
+    /// A newly supplied target replaces the saved destination only when the
+    /// failure state confirms publication. Otherwise an earlier confirmed
+    /// target remains available. `kept` distinguishes released ownership from
+    /// a retained resource when the source was published.
     #[inline]
     pub(crate) fn record_failure(&mut self, state: PersistFailureState, target: Option<Path>, kept: bool) {
         if matches!(
@@ -95,7 +118,10 @@ impl TempLifecycle {
             | PersistFailureState::PublishedSourceIndeterminate => TempResourceState::Indeterminate,
         };
     }
-    /// Releases source ownership while preserving publication certainty.
+    /// Records successful cleanup while preserving known publication progress.
+    ///
+    /// If a destination was confirmed, the publication state remains known;
+    /// otherwise cleanup is recorded as releasing an unpublished source.
     #[inline]
     pub(crate) fn record_cleanup_success(&mut self) {
         self.state = TempResourceState::Cleaned;
@@ -111,7 +137,11 @@ impl TempLifecycle {
             _ => PersistFailureState::NotPublishedSourceReleased,
         };
     }
-    /// Preserves uncertainty or records outstanding cleanup responsibility.
+    /// Records a failed cleanup attempt and its effect on source certainty.
+    ///
+    /// Errors with indeterminate effects make the source state uncertain.
+    /// Other errors leave cleanup responsibility outstanding. Previously
+    /// confirmed publication information is retained in either case.
     #[inline]
     pub(crate) fn record_cleanup_error(&mut self, error: &FsError) {
         if self.state == TempResourceState::Indeterminate {

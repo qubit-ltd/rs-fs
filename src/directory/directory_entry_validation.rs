@@ -18,6 +18,12 @@ use crate::path::Path;
 use crate::path::PathSemantics;
 
 /// Validates provider-controlled identity fields before applying list policy.
+///
+/// # Errors
+///
+/// Returns a provider-contract violation when the entry uses different path
+/// semantics, exceeds filesystem path limits, has an inconsistent name or
+/// metadata kind, or lies outside the requested root.
 pub(crate) fn validate_entry(
     entry: &DirEntry,
     scope: &ListScope,
@@ -95,6 +101,10 @@ fn relative_path<'a>(root: &Path, entry: &'a Path) -> Option<&'a str> {
 }
 
 /// Returns the descendant depth of `entry` below `root`.
+///
+/// Returns `Some(0)` when both paths identify the root, `Some(n)` for a
+/// descendant `n` components below it, and `None` when `entry` is outside the
+/// root.
 pub(crate) fn entry_depth(root: &Path, entry: &Path) -> Option<usize> {
     let relative = relative_path(root, entry)?;
     if relative.is_empty() {

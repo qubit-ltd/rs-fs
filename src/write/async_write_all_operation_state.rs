@@ -13,8 +13,16 @@ use crate::write::WriteFailureState;
 ///
 /// ```rust
 /// use qubit_fs::write::AsyncWriteAllOperationState;
+/// use qubit_fs::write::WriteFailureState;
 ///
-/// assert!(matches!(AsyncWriteAllOperationState::Ready, AsyncWriteAllOperationState::Ready));
+/// let initial = AsyncWriteAllOperationState::Ready;
+/// assert_eq!(initial, AsyncWriteAllOperationState::Ready);
+///
+/// let failed = AsyncWriteAllOperationState::Failed(WriteFailureState::NotPublished);
+/// assert_eq!(
+///     failed,
+///     AsyncWriteAllOperationState::Failed(WriteFailureState::NotPublished),
+/// );
 /// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[must_use]

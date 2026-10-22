@@ -11,20 +11,22 @@
 use crate::path::Path;
 use crate::spi::ResolvedCopyOptions;
 
-/// A facade-created copy request.
+/// A facade-created copy request that providers can inspect but cannot
+/// construct.
 ///
 /// # Examples
 ///
 /// ```rust
-/// use qubit_fs::copy::CopyOptions;
 /// use qubit_fs::path::Path;
 /// use qubit_fs::spi::CopyRequest;
 ///
-/// let source = Path::parse("/source")?;
-/// let target = Path::parse("/target")?;
-/// assert!(std::any::type_name::<CopyRequest<'_>>().contains("CopyRequest"));
-/// assert_ne!(source.as_str(), target.as_str());
-/// let _ = CopyOptions::default();
+/// fn inspect_copy_request(request: CopyRequest<'_>) -> (&Path, &Path) {
+///     (request.source(), request.target())
+/// }
+///
+/// // A provider's `FileSystemSpi::try_copy` implementation receives this
+/// // request from the facade and can inspect its resolved options as well.
+/// let _ = inspect_copy_request;
 /// # Ok::<(), qubit_fs::FsError>(())
 /// ```
 pub struct CopyRequest<'a> {

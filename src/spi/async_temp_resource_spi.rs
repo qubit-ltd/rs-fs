@@ -22,8 +22,11 @@ use crate::temp::PersistOutcome;
 ///
 /// ```
 /// use qubit_fs::spi::AsyncTempResourceSpi;
+/// use std::pin::Pin;
 ///
-/// fn accepts_session<T: AsyncTempResourceSpi>() {}
+/// pub async fn clean_up<T: AsyncTempResourceSpi>(session: Pin<&mut T>) {
+///     session.cleanup().await.expect("provider cleanup should succeed");
+/// }
 /// ```
 pub trait AsyncTempResourceSpi: Send {
     /// Performs provider-local cancellation when the facade handle is dropped.

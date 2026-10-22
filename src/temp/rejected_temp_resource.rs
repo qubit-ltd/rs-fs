@@ -36,11 +36,16 @@ use crate::spi::TempResourceSpi;
 /// # Examples
 ///
 /// ```rust
+/// use qubit_fs::error::OpenFailure;
 /// use qubit_fs::error::RecoveryCleanupState;
 /// use qubit_fs::temp::RejectedTempResource;
 ///
-/// assert!(std::any::type_name::<RejectedTempResource>().contains("RejectedTempResource"));
-/// assert_eq!(RecoveryCleanupState::Pending, RecoveryCleanupState::Pending);
+/// fn clean_rejected_open(failure: &mut OpenFailure<RejectedTempResource>) {
+///     if let Some(recovery) = failure.recovery_mut() {
+///         assert_eq!(recovery.cleanup_state(), RecoveryCleanupState::Pending);
+///         let _ = recovery.cleanup();
+///     }
+/// }
 /// ```
 #[must_use = "explicitly clean or retain the isolated recovery session"]
 pub struct RejectedTempResource {

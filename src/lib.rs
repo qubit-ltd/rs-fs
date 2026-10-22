@@ -60,6 +60,9 @@
 
 #![deny(missing_docs)]
 
+#[cfg(test)]
+mod tests;
+
 #[cfg(feature = "async")]
 mod async_file_system;
 pub mod copy;

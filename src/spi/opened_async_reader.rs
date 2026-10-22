@@ -18,14 +18,35 @@ use crate::read::AsyncFileReader;
 /// # Examples
 ///
 /// ```rust
+/// use std::io::Result as IoResult;
+/// use std::pin::Pin;
+/// use std::task::Context;
+/// use std::task::Poll;
 /// use qubit_fs::metadata::{FileKind, FileMetadata, FileSystemId, OpenedFileInfo};
 /// use qubit_fs::path::Path;
 /// use qubit_fs::spi::OpenedAsyncReader;
+/// use qubit_io::AsyncInput;
+///
+/// struct EmptyInput;
+///
+/// impl AsyncInput for EmptyInput {
+///     type Item = u8;
+///
+///     unsafe fn poll_read_unchecked(
+///         self: Pin<&mut Self>,
+///         _: &mut Context<'_>,
+///         _: &mut [u8],
+///         _: usize,
+///         _: usize,
+///     ) -> Poll<IoResult<usize>> {
+///         Poll::Ready(Ok(0))
+///     }
+/// }
 ///
 /// let info = OpenedFileInfo::new(FileSystemId::new("doc")?, Path::parse("/x")?)
 ///     .with_metadata(FileMetadata::new(FileKind::File));
-/// assert!(std::any::type_name::<OpenedAsyncReader>().contains("OpenedAsyncReader"));
-/// assert_eq!("/x", info.path().as_str());
+/// let opened = OpenedAsyncReader::new(info, Box::new(EmptyInput));
+/// assert_eq!("/x", opened.info().path().as_str());
 /// # Ok::<(), qubit_fs::FsError>(())
 /// ```
 pub struct OpenedAsyncReader {

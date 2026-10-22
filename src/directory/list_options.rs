@@ -67,104 +67,6 @@ pub struct ListOptions {
 }
 
 impl ListOptions {
-    /// Returns a copy with recursive traversal replaced.
-    #[inline]
-    #[must_use]
-    pub const fn with_recursive(mut self, recursive: bool) -> Self {
-        self.recursive = recursive;
-        self
-    }
-
-    /// Returns whether traversal recurses into child containers.
-    #[inline]
-    #[must_use]
-    pub const fn recursive(&self) -> bool {
-        self.recursive
-    }
-
-    /// Returns a copy with the symbolic-link policy override replaced.
-    #[inline]
-    #[must_use]
-    pub const fn with_symlink_policy(mut self, policy: SymlinkPolicy) -> Self {
-        self.symlink_policy = Some(policy);
-        self
-    }
-
-    /// Returns the optional symbolic-link policy override.
-    #[inline]
-    #[must_use]
-    pub const fn symlink_policy_override(&self) -> Option<SymlinkPolicy> {
-        self.symlink_policy
-    }
-
-    /// Returns a copy with metadata inclusion replaced.
-    #[inline]
-    #[must_use]
-    pub const fn with_include_metadata(mut self, include: bool) -> Self {
-        self.include_metadata = include;
-        self
-    }
-
-    /// Returns whether metadata is requested for entries.
-    #[inline]
-    #[must_use]
-    pub const fn include_metadata(&self) -> bool {
-        self.include_metadata
-    }
-
-    /// Returns a copy with the page-size hint replaced.
-    #[inline]
-    #[must_use]
-    pub const fn with_page_size(mut self, page_size: Option<usize>) -> Self {
-        self.page_size = page_size;
-        self
-    }
-
-    /// Returns the optional page-size hint.
-    #[inline]
-    #[must_use]
-    pub const fn page_size(&self) -> Option<usize> {
-        self.page_size
-    }
-
-    /// Returns a copy with the lexical prefix replaced.
-    #[inline]
-    #[must_use]
-    pub fn with_prefix(mut self, prefix: Option<String>) -> Self {
-        self.filter = prefix.map(ListFilter::Subtree);
-        self
-    }
-
-    /// Returns the optional lexical prefix.
-    ///
-    /// # Returns
-    /// `Some` with the configured subtree prefix, or `None` when no subtree
-    /// prefix filter is configured.
-    #[inline]
-    #[must_use]
-    pub fn prefix(&self) -> Option<&str> {
-        match self.filter.as_ref() {
-            Some(ListFilter::Subtree(prefix)) => Some(prefix),
-            _ => None,
-        }
-    }
-
-    /// Replaces the explicit listing filter.
-    #[must_use]
-    pub fn with_filter(mut self, filter: Option<ListFilter>) -> Self {
-        self.filter = filter;
-        self
-    }
-
-    /// Returns the explicit listing filter.
-    ///
-    /// # Returns
-    /// `Some` with the configured filter, or `None` when listing is unfiltered.
-    #[must_use]
-    pub fn filter(&self) -> Option<&ListFilter> {
-        self.filter.as_ref()
-    }
-
     /// Returns defaults for a flat object-key listing.
     #[must_use]
     pub fn object_keys() -> Self {
@@ -175,7 +77,161 @@ impl ListOptions {
         }
     }
 
+    /// Returns whether traversal recurses into child containers.
+    #[inline]
+    #[must_use]
+    pub const fn recursive(&self) -> bool {
+        self.recursive
+    }
+
+    /// Returns the optional symbolic-link policy override.
+    ///
+    /// # Returns
+    /// `Some` with the configured override, or `None` when the filesystem
+    /// default policy applies.
+    #[inline]
+    pub const fn symlink_policy_override(&self) -> Option<SymlinkPolicy> {
+        self.symlink_policy
+    }
+
+    /// Returns whether metadata is requested for entries.
+    #[inline]
+    #[must_use]
+    pub const fn include_metadata(&self) -> bool {
+        self.include_metadata
+    }
+
+    /// Returns the optional page-size hint.
+    ///
+    /// # Returns
+    /// `Some` with the provider page-size hint, or `None` when no hint is set.
+    #[inline]
+    pub const fn page_size(&self) -> Option<usize> {
+        self.page_size
+    }
+
+    /// Returns the optional lexical prefix.
+    ///
+    /// # Returns
+    /// `Some` with the configured subtree prefix, or `None` when no subtree
+    /// prefix filter is configured.
+    #[inline]
+    pub fn prefix(&self) -> Option<&str> {
+        match self.filter.as_ref() {
+            Some(ListFilter::Subtree(prefix)) => Some(prefix),
+            _ => None,
+        }
+    }
+
+    /// Returns the explicit listing filter.
+    ///
+    /// # Returns
+    /// `Some` with the configured filter, or `None` when listing is unfiltered.
+    pub fn filter(&self) -> Option<&ListFilter> {
+        self.filter.as_ref()
+    }
+
+    /// Returns the optional maximum descendant depth.
+    ///
+    /// # Returns
+    /// `Some` with the maximum descendant depth, or `None` when no depth limit
+    /// is configured.
+    #[inline]
+    pub const fn max_depth(&self) -> Option<usize> {
+        self.max_depth
+    }
+
+    /// Returns the optional maximum returned entry count.
+    ///
+    /// # Returns
+    /// `Some` with the maximum entry count, or `None` when no count limit is
+    /// configured.
+    #[inline]
+    pub const fn max_entries(&self) -> Option<usize> {
+        self.max_entries
+    }
+
+    /// Returns the optional maximum elapsed duration from stream creation.
+    ///
+    /// # Returns
+    /// `Some` with the elapsed-time limit, or `None` when no deadline is set.
+    #[inline]
+    pub const fn deadline(&self) -> Option<Duration> {
+        self.deadline
+    }
+
+    /// Returns a copy with recursive traversal replaced.
+    ///
+    /// # Parameters
+    /// - `recursive`: Whether traversal should recurse into child containers.
+    #[inline]
+    #[must_use]
+    pub const fn with_recursive(mut self, recursive: bool) -> Self {
+        self.recursive = recursive;
+        self
+    }
+
+    /// Returns a copy with the symbolic-link policy override replaced.
+    ///
+    /// # Parameters
+    /// - `policy`: Symbolic-link policy to use instead of the filesystem
+    ///   default.
+    #[inline]
+    #[must_use]
+    pub const fn with_symlink_policy(mut self, policy: SymlinkPolicy) -> Self {
+        self.symlink_policy = Some(policy);
+        self
+    }
+
+    /// Returns a copy with metadata inclusion replaced.
+    ///
+    /// # Parameters
+    /// - `include`: Whether entries should include metadata when available.
+    #[inline]
+    #[must_use]
+    pub const fn with_include_metadata(mut self, include: bool) -> Self {
+        self.include_metadata = include;
+        self
+    }
+
+    /// Returns a copy with the page-size hint replaced.
+    ///
+    /// # Parameters
+    /// - `page_size`: Provider page-size hint, or `None` to leave it
+    ///   unspecified.
+    #[inline]
+    #[must_use]
+    pub const fn with_page_size(mut self, page_size: Option<usize>) -> Self {
+        self.page_size = page_size;
+        self
+    }
+
+    /// Returns a copy with the lexical prefix replaced.
+    ///
+    /// # Parameters
+    /// - `prefix`: Subtree prefix to select, or `None` to clear the filter.
+    #[inline]
+    #[must_use]
+    pub fn with_prefix(mut self, prefix: Option<String>) -> Self {
+        self.filter = prefix.map(ListFilter::Subtree);
+        self
+    }
+
+    /// Replaces the explicit listing filter.
+    ///
+    /// # Parameters
+    /// - `filter`: Filter to apply, or `None` to list without a filter.
+    #[inline]
+    #[must_use]
+    pub fn with_filter(mut self, filter: Option<ListFilter>) -> Self {
+        self.filter = filter;
+        self
+    }
+
     /// Returns a copy with the maximum descendant depth replaced.
+    ///
+    /// # Parameters
+    /// - `max_depth`: Maximum descendant depth, or `None` for no depth limit.
     #[inline]
     #[must_use]
     pub const fn with_max_depth(mut self, max_depth: Option<usize>) -> Self {
@@ -183,14 +239,11 @@ impl ListOptions {
         self
     }
 
-    /// Returns the optional maximum descendant depth.
-    #[inline]
-    #[must_use]
-    pub const fn max_depth(&self) -> Option<usize> {
-        self.max_depth
-    }
-
     /// Returns a copy with the maximum returned entry count replaced.
+    ///
+    /// # Parameters
+    /// - `max_entries`: Maximum returned entry count, or `None` for no count
+    ///   limit.
     #[inline]
     #[must_use]
     pub const fn with_max_entries(mut self, max_entries: Option<usize>) -> Self {
@@ -198,14 +251,10 @@ impl ListOptions {
         self
     }
 
-    /// Returns the optional maximum returned entry count.
-    #[inline]
-    #[must_use]
-    pub const fn max_entries(&self) -> Option<usize> {
-        self.max_entries
-    }
-
     /// Returns a copy with the maximum elapsed duration replaced.
+    ///
+    /// # Parameters
+    /// - `deadline`: Maximum elapsed duration, or `None` for no deadline.
     #[inline]
     #[must_use]
     pub const fn with_deadline(mut self, deadline: Option<Duration>) -> Self {
@@ -213,19 +262,13 @@ impl ListOptions {
         self
     }
 
-    /// Returns the optional maximum elapsed duration from stream creation.
-    #[inline]
-    #[must_use]
-    pub const fn deadline(&self) -> Option<Duration> {
-        self.deadline
-    }
-
     /// Validates pagination and canonical provider-facing prefix values.
     ///
     /// # Errors
     ///
-    /// Returns an invalid-options error when the page size is zero or the
-    /// prefix is not a canonical relative path.
+    /// Returns `FsError` with `InvalidOptions` when the page size is zero, a
+    /// subtree prefix is not canonical, or the deadline exceeds the platform
+    /// monotonic-clock range.
     pub fn validate(&self) -> FsResult<()> {
         if self.page_size == Some(0) {
             return Err(FsError::new(
@@ -251,16 +294,6 @@ impl ListOptions {
                 ));
             }
         }
-        if self
-            .deadline
-            .is_some_and(|deadline| Instant::now().checked_add(deadline).is_none())
-        {
-            return Err(FsError::new(
-                FsErrorKind::InvalidOptions,
-                FsOperation::List,
-                "list deadline exceeds the platform monotonic-clock range",
-            ));
-        }
         Ok(())
     }
 
@@ -270,8 +303,9 @@ impl ListOptions {
     /// - `semantics`: Provider path semantics used to validate the filter.
     ///
     /// # Errors
-    /// Returns an invalid-options error when the configured filter is not
-    /// representable under `semantics`.
+    /// Returns `FsError` with `InvalidOptions` when the page size is zero, the
+    /// deadline exceeds the platform monotonic-clock range, or the filter is
+    /// invalid or incompatible with `semantics`.
     pub fn validate_for(&self, semantics: PathSemantics) -> FsResult<()> {
         self.validate_common()?;
         self.validate_filter(semantics)
@@ -353,75 +387,5 @@ impl ListOptions {
             ));
         }
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::hint::black_box;
-    use std::time::Duration;
-
-    use super::ListOptions;
-    use crate::directory::ListFilter;
-    use crate::metadata::SymlinkPolicy;
-
-    #[test]
-    fn option_accessors_are_executed_at_runtime() {
-        let constructor: fn() -> ListOptions = black_box(Default::default);
-        let with_recursive: fn(ListOptions, bool) -> ListOptions = black_box(ListOptions::with_recursive);
-        let recursive: fn(&ListOptions) -> bool = black_box(ListOptions::recursive);
-        let with_symlink_policy: fn(ListOptions, SymlinkPolicy) -> ListOptions =
-            black_box(ListOptions::with_symlink_policy);
-        let symlink_policy_override: fn(&ListOptions) -> Option<SymlinkPolicy> =
-            black_box(ListOptions::symlink_policy_override);
-        let with_include_metadata: fn(ListOptions, bool) -> ListOptions = black_box(ListOptions::with_include_metadata);
-        let include_metadata: fn(&ListOptions) -> bool = black_box(ListOptions::include_metadata);
-        let with_page_size: fn(ListOptions, Option<usize>) -> ListOptions = black_box(ListOptions::with_page_size);
-        let page_size: fn(&ListOptions) -> Option<usize> = black_box(ListOptions::page_size);
-        let with_prefix: fn(ListOptions, Option<String>) -> ListOptions = black_box(ListOptions::with_prefix);
-        let prefix: for<'a> fn(&'a ListOptions) -> Option<&'a str> = black_box(ListOptions::prefix);
-        let with_filter: fn(ListOptions, Option<ListFilter>) -> ListOptions = black_box(ListOptions::with_filter);
-        let filter: for<'a> fn(&'a ListOptions) -> Option<&'a ListFilter> = black_box(ListOptions::filter);
-        let object_keys: fn() -> ListOptions = black_box(ListOptions::object_keys);
-        let with_max_depth: fn(ListOptions, Option<usize>) -> ListOptions = black_box(ListOptions::with_max_depth);
-        let max_depth: fn(&ListOptions) -> Option<usize> = black_box(ListOptions::max_depth);
-        let with_max_entries: fn(ListOptions, Option<usize>) -> ListOptions = black_box(ListOptions::with_max_entries);
-        let max_entries: fn(&ListOptions) -> Option<usize> = black_box(ListOptions::max_entries);
-        let with_deadline: fn(ListOptions, Option<Duration>) -> ListOptions = black_box(ListOptions::with_deadline);
-        let deadline: fn(&ListOptions) -> Option<Duration> = black_box(ListOptions::deadline);
-
-        let options = with_deadline(
-            with_max_entries(
-                with_max_depth(
-                    with_filter(
-                        with_prefix(
-                            with_page_size(
-                                with_include_metadata(
-                                    with_symlink_policy(with_recursive(constructor(), true), SymlinkPolicy::Reject),
-                                    true,
-                                ),
-                                Some(20),
-                            ),
-                            Some("reports".to_owned()),
-                        ),
-                        Some(ListFilter::Subtree("reports".to_owned())),
-                    ),
-                    Some(2),
-                ),
-                Some(10),
-            ),
-            Some(Duration::from_secs(1)),
-        );
-
-        assert!(recursive(&options));
-        assert_eq!(Some(SymlinkPolicy::Reject), symlink_policy_override(&options));
-        assert!(include_metadata(&options));
-        assert_eq!(Some(20), page_size(&options));
-        assert_eq!(Some("reports"), prefix(&options));
-        assert!(matches!(filter(&options), Some(ListFilter::Subtree(value)) if value == "reports"));
-        assert!(recursive(&object_keys()));
-        assert_eq!(Some(2), max_depth(&options));
-        assert_eq!(Some(10), max_entries(&options));
-        assert_eq!(Some(Duration::from_secs(1)), deadline(&options));
     }
 }

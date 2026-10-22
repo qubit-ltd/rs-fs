@@ -11,8 +11,6 @@ use std::io::Result as IoResult;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use qubit_io::Output;
-
 use qubit_fs::FileSystem;
 use qubit_fs::Path;
 use qubit_fs::error::FsError;
@@ -57,6 +55,7 @@ use qubit_fs::temp::PersistOutcome;
 use qubit_fs::write::WriteAbortOutcome;
 use qubit_fs::write::WriteDisposition;
 use qubit_fs::write::WriteFailureState;
+use qubit_io::Output;
 
 type Files = Arc<Mutex<BTreeMap<String, Vec<u8>>>>;
 
@@ -147,10 +146,7 @@ impl FileSystemSpi for Memory {
             }),
         ))
     }
-    fn create_temp_directory(
-        &self,
-        _: CreateTempDirectoryRequest,
-    ) -> FsResult<OpenedTempDirectory> {
+    fn create_temp_directory(&self, _: CreateTempDirectoryRequest) -> FsResult<OpenedTempDirectory> {
         let mut files = self.files.lock().unwrap();
         let path = Path::parse(&format!("/scratch-dir-{}", files.len())).unwrap();
         files.insert(path.as_str().to_owned(), Vec::new());

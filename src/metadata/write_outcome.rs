@@ -63,14 +63,12 @@ impl WriteOutcome {
 
     /// Returns the number of bytes accepted by the write session, when known.
     #[inline]
-    #[must_use]
     pub const fn bytes_written(&self) -> Option<u64> {
         self.bytes_written
     }
 
     /// Returns the provider version, generation, or ETag when known.
     #[inline]
-    #[must_use]
     pub const fn version(&self) -> Option<&ResourceVersion> {
         self.version.as_ref()
     }

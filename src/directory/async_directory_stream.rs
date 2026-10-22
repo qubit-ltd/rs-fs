@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade tests.
 //! Concrete asynchronous directory stream handle.
 
 use std::fmt::Debug;
@@ -16,7 +15,7 @@ use std::time::Instant;
 use crate::directory::DirectoryStreamState;
 use crate::directory::ListOptions;
 use crate::directory::ListScope;
-use crate::directory::internal::ListStreamPolicy;
+use crate::directory::ListStreamPolicy;
 use crate::error::FsResult;
 use crate::metadata::DirEntry;
 use crate::metadata::FileSystemLimits;
@@ -52,10 +51,20 @@ impl AsyncDirectoryStream {
     /// Wraps an already-open asynchronous provider enumeration session.
     ///
     /// # Parameters
+    /// - `scope`: Validated root that constrains returned entries.
     /// - `session`: Provider asynchronous enumeration session.
+    /// - `options`: Listing filters and caller-side resource limits.
+    /// - `provider`: Provider identifier attached to facade-generated errors.
+    /// - `path_semantics`: Path rules used to validate provider entries.
+    /// - `limits`: Filesystem limits applied to returned entries.
     ///
     /// # Returns
-    /// A concrete type-erased asynchronous directory stream.
+    /// A concrete type-erased asynchronous directory stream whose deadline
+    /// starts when this constructor is called.
+    ///
+    /// # Errors
+    /// Returns an invalid-options error if the configured deadline cannot be
+    /// represented by the platform monotonic clock.
     #[inline]
     pub(crate) fn new(
         scope: ListScope,
@@ -79,7 +88,13 @@ impl AsyncDirectoryStream {
     /// Asynchronously reads the next directory entry.
     ///
     /// # Returns
-    /// A future resolving to one entry or `None` at end of enumeration.
+    /// A future resolving to `Some(entry)` for the next validated entry, or
+    /// `None` after the provider reports that enumeration is exhausted.
+    ///
+    /// # Errors
+    /// Returns a provider error, a validation or resource-limit error, or an
+    /// invalid-state error if enumeration has already reached a terminal
+    /// state. Any such error makes the stream terminal.
     pub fn next_entry_async(&mut self) -> SpiFuture<'_, FsResult<Option<DirEntry>>> {
         Box::pin(async move {
             self.policy.before_next(Instant::now())?;

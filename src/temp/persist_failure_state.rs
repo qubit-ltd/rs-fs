@@ -12,9 +12,14 @@
 /// # Examples
 ///
 /// ```rust
-/// use qubit_fs::temp::PersistFailureState;
+/// use qubit_fs::error::{FsError, FsErrorKind, FsOperation};
+/// use qubit_fs::temp::{PersistFailure, PersistFailureState};
 ///
-/// assert!(matches!(PersistFailureState::NotPublished, PersistFailureState::NotPublished));
+/// let failure = PersistFailure::new(
+///     FsError::new(FsErrorKind::Io, FsOperation::PersistTemp, "failed"),
+///     PersistFailureState::NotPublished,
+/// );
+/// assert_eq!(PersistFailureState::NotPublished, failure.state());
 /// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PersistFailureState {

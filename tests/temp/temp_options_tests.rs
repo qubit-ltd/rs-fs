@@ -12,7 +12,7 @@ use qubit_fs::temp::PersistOptions;
 use qubit_fs::temp::TempOptions;
 
 #[test]
-fn one_temp_options_type_configures_both_resource_kinds() {
+fn test_one_temp_options_type_configures_both_resource_kinds() {
     let parent = Path::parse("/tmp").expect("parent path should parse");
     let options = TempOptions::new()
         .with_parent(Some(parent.clone()))
@@ -27,7 +27,7 @@ fn one_temp_options_type_configures_both_resource_kinds() {
 }
 
 #[test]
-fn temp_options_accessors_are_callable_directly() {
+fn test_temp_options_accessors_are_callable_directly() {
     let parent = Path::parse("tmp").expect("parent path should parse");
     let options = TempOptions::default()
         .with_parent(Some(parent.clone()))
@@ -46,7 +46,7 @@ fn temp_options_accessors_are_callable_directly() {
 }
 
 #[test]
-fn persist_options_expose_parent_creation_policy() {
+fn test_persist_options_expose_parent_creation_policy() {
     assert!(!PersistOptions::default().creates_parent());
     assert!(PersistOptions::default().with_create_parent().creates_parent());
 }

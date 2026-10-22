@@ -35,7 +35,16 @@ impl<'a> ReadOperation<'a> {
         Self { filesystem }
     }
 
-    /// Reads one file into memory up to `max_bytes` after opening a reader.
+    /// Reads a complete file, rejecting content beyond `max_bytes`.
+    ///
+    /// The reader is consumed until end of stream. If the stream contains more
+    /// than the allowed number of bytes, the returned error identifies a read
+    /// budget violation; stream and buffer errors retain filesystem context.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be opened or read, if its content
+    /// exceeds `max_bytes`, or if the bounded read buffer cannot append data.
     pub(crate) fn read_all(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
         let mut reader = self.filesystem.open_reader(path, options)?;
         let mut result = ReadBuffer::new(max_bytes);
@@ -79,7 +88,17 @@ impl<'a> ReadOperation<'a> {
         }
     }
 
-    /// Reads at most `max_bytes` from a file without requiring a complete read.
+    /// Reads at most `max_bytes` from a file.
+    ///
+    /// Reading stops when the stream ends or the byte limit is reached. The
+    /// returned outcome records which condition stopped the read and includes
+    /// the resolved file information and original read options.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if read options cannot be resolved, the file cannot be
+    /// opened or read, or the bounded read buffer cannot append data. Errors
+    /// from the stream include filesystem context.
     pub(crate) fn read_prefix(
         &self,
         path: &Path,

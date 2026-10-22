@@ -24,9 +24,22 @@ use crate::write::RejectedWriter;
 /// # Examples
 ///
 /// ```rust
-/// use qubit_fs::write::WriterRecovery;
+/// use qubit_fs::error::FsResult;
+/// use qubit_fs::write::WriteAllFailure;
 ///
-/// fn observe(_recovery: WriterRecovery) {}
+/// fn clean_up(failure: &mut WriteAllFailure) -> FsResult<()> {
+///     if let Some(recovery) = failure.recovery_mut() {
+///         match recovery {
+///             qubit_fs::write::WriterRecovery::Opened(writer) => {
+///                 writer.abort()?;
+///             }
+///             qubit_fs::write::WriterRecovery::Rejected(writer) => {
+///                 writer.abort()?;
+///             }
+///         }
+///     }
+///     Ok(())
+/// }
 /// ```
 #[must_use]
 pub enum WriterRecovery {

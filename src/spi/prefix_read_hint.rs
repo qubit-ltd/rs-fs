@@ -9,6 +9,7 @@
 //! Optional provider optimization for bounded prefix reads.
 
 /// A non-binding upper bound for bytes consumed by one prefix open.
+#[must_use]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PrefixReadHint {
     max_bytes: u64,

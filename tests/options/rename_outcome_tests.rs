@@ -13,7 +13,7 @@ use qubit_fs::metadata::UserMetadata;
 use qubit_fs::rename::RenameOutcome;
 
 #[test]
-fn rename_outcome_reports_actual_method_and_atomicity() {
+fn test_rename_outcome_reports_actual_method_and_atomicity() {
     let outcome = RenameOutcome::new(
         Path::parse("/source").expect("path must parse"),
         Path::parse("/target").expect("path must parse"),
@@ -30,7 +30,7 @@ fn rename_outcome_reports_actual_method_and_atomicity() {
 }
 
 #[test]
-fn rename_outcome_preserves_validated_diagnostics() {
+fn test_rename_outcome_preserves_validated_diagnostics() {
     let outcome = RenameOutcome::new(
         Path::parse("/source").expect("path must parse"),
         Path::parse("/target").expect("path must parse"),

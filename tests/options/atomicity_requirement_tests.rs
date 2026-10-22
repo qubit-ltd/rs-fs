@@ -8,12 +8,12 @@
 use qubit_fs::metadata::AtomicityRequirement;
 
 #[test]
-fn atomicity_requirement_defaults_to_preferred() {
+fn test_atomicity_requirement_defaults_to_preferred() {
     assert_eq!(AtomicityRequirement::Preferred, AtomicityRequirement::default(),);
 }
 
 #[test]
-fn atomicity_requirement_distinguishes_all_three_contracts() {
+fn test_atomicity_requirement_distinguishes_all_three_contracts() {
     assert_ne!(AtomicityRequirement::Required, AtomicityRequirement::Preferred,);
     assert_ne!(AtomicityRequirement::Preferred, AtomicityRequirement::NotRequired,);
 }

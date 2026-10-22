@@ -35,7 +35,7 @@ fn test_list_options_full_configuration_is_usable() {
 }
 
 #[test]
-fn list_options_preserve_generic_budgets() {
+fn test_list_options_preserve_generic_budgets() {
     let options = ListOptions::default()
         .with_max_depth(Some(3))
         .with_max_entries(Some(100))

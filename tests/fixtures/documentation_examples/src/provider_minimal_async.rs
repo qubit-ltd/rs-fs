@@ -30,6 +30,26 @@ use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
 
 /// Provides metadata for one health resource without selecting a runtime.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_fs::AsyncFileSystem;
+/// use qubit_fs::FsResult;
+/// use qubit_fs::Path;
+/// use qubit_fs_documentation_examples::provider_minimal_async::AsyncHealthProvider;
+///
+/// fn main() -> FsResult<()> {
+///     let future = async {
+///         let filesystem = AsyncFileSystem::from_spi(AsyncHealthProvider::new()?)?;
+///         let metadata = filesystem.stat(&Path::parse("/health")?).await?;
+///         assert_eq!(metadata.len(), Some(2));
+///         Ok(())
+///     };
+///     drop(future);
+///     Ok(())
+/// }
+/// ```
 pub struct AsyncHealthProvider {
     /// Immutable declaration returned at the SPI boundary.
     properties: ProviderProperties,
@@ -39,7 +59,8 @@ impl AsyncHealthProvider {
     /// Creates a provider that advertises only the implemented stat operation.
     ///
     /// # Errors
-    /// Returns an invalid-properties error if the static declaration is invalid.
+    /// Returns an invalid-properties error if the static declaration is
+    /// invalid.
     pub fn new() -> FsResult<Self> {
         let properties = ProviderProperties::new(
             FileSystemInfo::new(
@@ -68,12 +89,10 @@ impl AsyncFileSystemSpi for AsyncHealthProvider {
         Box::pin(async move {
             let path = request.path();
             if path.as_str() != "/health" {
-                return Err(FsError::new(
-                    FsErrorKind::NotFound,
-                    FsOperation::Stat,
-                    "health resource not found",
-                )
-                .with_path(path.clone()));
+                return Err(
+                    FsError::new(FsErrorKind::NotFound, FsOperation::Stat, "health resource not found")
+                        .with_path(path.clone()),
+                );
             }
             Ok(StatResponse::new(
                 path.clone(),
@@ -86,7 +105,8 @@ impl AsyncFileSystemSpi for AsyncHealthProvider {
 /// Queries the health resource through the public asynchronous facade.
 ///
 /// # Errors
-/// Returns a path, provider, or facade-contract error if metadata is unavailable.
+/// Returns a path, provider, or facade-contract error if metadata is
+/// unavailable.
 pub async fn stat_health() -> FsResult<FileMetadata> {
     let filesystem = AsyncFileSystem::from_spi(AsyncHealthProvider::new()?)?;
     filesystem.stat(&Path::parse("/health")?).await

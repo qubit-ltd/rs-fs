@@ -9,7 +9,7 @@
 use qubit_fs::metadata::ResourceVersion;
 
 #[test]
-fn resource_version_preserves_and_displays_opaque_text() {
+fn test_resource_version_preserves_and_displays_opaque_text() {
     let version = ResourceVersion::from("etag-42");
 
     assert_eq!("etag-42", version.as_str());

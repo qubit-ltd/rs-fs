@@ -53,7 +53,6 @@ impl SpiPersistFailure {
     /// # Returns
     /// The provider failure with filesystem context.
     #[inline]
-    #[must_use]
     pub const fn error(&self) -> &FsError {
         &self.error
     }
@@ -73,31 +72,7 @@ impl SpiPersistFailure {
     /// # Returns
     /// The provider error and confirmed persistence state.
     #[inline]
-    #[must_use]
     pub fn into_parts(self) -> (FsError, PersistFailureState) {
         (self.error, self.state)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::SpiPersistFailure;
-    use crate::error::FsError;
-    use crate::error::FsErrorKind;
-    use crate::error::FsOperation;
-    use crate::temp::PersistFailureState;
-
-    #[test]
-    fn failure_facts_are_executed_at_runtime() {
-        let failure = SpiPersistFailure::new(
-            FsError::new(FsErrorKind::AlreadyExists, FsOperation::PersistTemp, "target exists"),
-            PersistFailureState::NotPublished,
-        );
-        assert_eq!(failure.error().kind(), FsErrorKind::AlreadyExists);
-        assert_eq!(failure.state(), PersistFailureState::NotPublished);
-
-        let (error, state) = failure.into_parts();
-        assert_eq!(error.kind(), FsErrorKind::AlreadyExists);
-        assert_eq!(state, PersistFailureState::NotPublished);
     }
 }

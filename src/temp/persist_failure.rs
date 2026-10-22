@@ -59,12 +59,6 @@ impl PersistFailure {
         }
     }
 
-    /// Retains the destination associated with a known publication attempt.
-    pub(crate) fn with_publication_target(mut self, target: Option<&Path>) -> Self {
-        self.publication_target = target.cloned();
-        self
-    }
-
     /// Returns provider-confirmed partial progress.
     ///
     /// # Returns
@@ -80,7 +74,6 @@ impl PersistFailure {
     /// # Returns
     /// The error with operation, path, provider, and source context.
     #[inline]
-    #[must_use]
     pub const fn error(&self) -> &FsError {
         &self.error
     }
@@ -97,23 +90,26 @@ impl PersistFailure {
     /// # Returns
     /// The owned filesystem error.
     #[inline]
-    #[must_use]
     pub fn into_error(self) -> FsError {
         self.error
     }
 
     /// Splits this facade failure into its causal error and state.
     #[inline]
-    #[must_use]
     pub fn into_parts(self) -> (FsError, PersistFailureState) {
         (self.error, self.state)
     }
 
     /// Consumes the failure and returns its complete recovery snapshot.
     #[inline]
-    #[must_use]
     pub fn into_recovery_parts(self) -> (FsError, PersistFailureState, Option<Path>) {
         (self.error, self.state, self.publication_target)
+    }
+
+    /// Retains the destination associated with a known publication attempt.
+    pub(crate) fn with_publication_target(mut self, target: Option<&Path>) -> Self {
+        self.publication_target = target.cloned();
+        self
     }
 }
 

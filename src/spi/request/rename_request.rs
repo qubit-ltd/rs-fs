@@ -11,20 +11,22 @@
 use crate::path::Path;
 use crate::spi::ResolvedRenameOptions;
 
-/// A facade-created rename request.
+/// A facade-created rename request that providers can inspect but cannot
+/// construct.
 ///
 /// # Examples
 ///
 /// ```rust
 /// use qubit_fs::path::Path;
-/// use qubit_fs::rename::RenameOptions;
 /// use qubit_fs::spi::RenameRequest;
 ///
-/// let source = Path::parse("/old")?;
-/// let target = Path::parse("/new")?;
-/// assert!(std::any::type_name::<RenameRequest<'_>>().contains("RenameRequest"));
-/// assert_ne!(source.as_str(), target.as_str());
-/// let _ = RenameOptions::default();
+/// fn inspect_rename_request(request: RenameRequest<'_>) -> (&Path, &Path) {
+///     (request.source(), request.target())
+/// }
+///
+/// // A provider receives this request from the facade and can inspect its
+/// // resolved options as well.
+/// let _ = inspect_rename_request;
 /// # Ok::<(), qubit_fs::FsError>(())
 /// ```
 pub struct RenameRequest<'a> {

@@ -36,7 +36,7 @@ fn test_support_statuses_are_distinct_and_overwrite_previous_state() {
 }
 
 #[test]
-fn capability_set_reports_typed_guarantees() {
+fn test_capability_set_reports_typed_guarantees() {
     let capabilities = FileSystemCapabilities::new()
         .with_guaranteed(FileSystemCapability::Read)
         .with_guaranteed(FileSystemCapability::AtomicRename);
@@ -47,7 +47,7 @@ fn capability_set_reports_typed_guarantees() {
 }
 
 #[test]
-fn capability_set_supports_mutation_and_an_empty_default() {
+fn test_capability_set_supports_mutation_and_an_empty_default() {
     let mut capabilities = FileSystemCapabilities::default();
     assert!(capabilities.is_empty());
     assert_eq!(0, capabilities.len());
@@ -60,7 +60,7 @@ fn capability_set_supports_mutation_and_an_empty_default() {
 }
 
 #[test]
-fn capability_set_iterates_and_formats_semantic_values() {
+fn test_capability_set_iterates_and_formats_semantic_values() {
     let capabilities = FileSystemCapabilities::new()
         .with_guaranteed(FileSystemCapability::Read)
         .with_guaranteed(FileSystemCapability::Write);
@@ -73,7 +73,7 @@ fn capability_set_iterates_and_formats_semantic_values() {
 }
 
 #[test]
-fn capability_all_matches_stable_iteration_order() {
+fn test_capability_all_matches_stable_iteration_order() {
     let all: &'static [FileSystemCapability] = FileSystemCapability::ALL;
     let capabilities = FileSystemCapability::ALL
         .iter()
@@ -85,7 +85,7 @@ fn capability_all_matches_stable_iteration_order() {
 }
 
 #[test]
-fn durable_write_depends_on_write() {
+fn test_durable_write_depends_on_write() {
     let capabilities = FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::DurableWrite);
     assert_eq!(
         Some((FileSystemCapability::DurableWrite, FileSystemCapability::Write)),
@@ -94,7 +94,7 @@ fn durable_write_depends_on_write() {
 }
 
 #[test]
-fn guaranteed_derived_capability_requires_guaranteed_dependency() {
+fn test_guaranteed_derived_capability_requires_guaranteed_dependency() {
     let capabilities = FileSystemCapabilities::new()
         .with_conditional(FileSystemCapability::Write)
         .with_guaranteed(FileSystemCapability::DurableWrite);
@@ -106,7 +106,7 @@ fn guaranteed_derived_capability_requires_guaranteed_dependency() {
 }
 
 #[test]
-fn conditional_derived_capability_accepts_conditional_dependency() {
+fn test_conditional_derived_capability_accepts_conditional_dependency() {
     let capabilities = FileSystemCapabilities::new()
         .with_conditional(FileSystemCapability::Write)
         .with_conditional(FileSystemCapability::DurableWrite);
@@ -115,7 +115,7 @@ fn conditional_derived_capability_accepts_conditional_dependency() {
 }
 
 #[test]
-fn capability_set_reports_the_first_missing_dependency() {
+fn test_capability_set_reports_the_first_missing_dependency() {
     let capabilities = FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::AtomicRename);
 
     assert_eq!(
@@ -125,7 +125,7 @@ fn capability_set_reports_the_first_missing_dependency() {
 }
 
 #[test]
-fn capability_set_accepts_complete_dependency_sets() {
+fn test_capability_set_accepts_complete_dependency_sets() {
     let capabilities = FileSystemCapabilities::new()
         .with_guaranteed(FileSystemCapability::Read)
         .with_guaranteed(FileSystemCapability::RangeRead)
@@ -142,7 +142,7 @@ fn capability_set_accepts_complete_dependency_sets() {
 }
 
 #[test]
-fn capability_discriminants_remain_stable_for_capability_sets() {
+fn test_capability_discriminants_remain_stable_for_capability_sets() {
     let capabilities = [
         FileSystemCapability::List,
         FileSystemCapability::Read,

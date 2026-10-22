@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// property contract tests.
 //! Provider entry-point identifiers used for facade dispatch.
 
 /// A concrete operation entry point implemented by a filesystem provider.

@@ -12,6 +12,18 @@
 macro_rules! path_request {
     ($name:ident, $options:ty) => {
         /// A facade-created request with a validated logical path.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        #[doc = concat!("use qubit_fs::spi::", stringify!($name), ";")]
+        ///
+        #[doc = concat!("fn inspect_request(request: &", stringify!($name), "<'_>) {")]
+        ///     let path = request.path();
+        ///     let options = request.options();
+        ///     let _ = (path, options);
+        /// }
+        /// ```
         pub struct $name<'a> {
             /// Validated logical path borrowed for provider dispatch.
             path: &'a crate::path::Path,

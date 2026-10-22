@@ -23,14 +23,26 @@ use crate::error::FsError;
 /// # Examples
 ///
 /// ```rust
-/// use qubit_fs::copy::{AsyncCopyFailure, CopyFailureState, CopyStats};
-/// use qubit_fs::error::{FsError, FsErrorKind, FsOperation};
+/// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
+/// # use support::*;
+/// # let (filesystem, _) = async_recording_spi::async_recording_file_system(
+/// #     AsyncRecordingConfig { copy_failure: true, ..Default::default() },
+/// # );
+/// # poll_support::ready(async {
+/// use qubit_fs::Path;
+/// use qubit_fs::copy::CopyOptions;
+/// use qubit_fs::error::FsErrorKind;
 ///
-/// assert!(std::any::type_name::<AsyncCopyFailure>().contains("AsyncCopyFailure"));
-/// let error = FsError::new(FsErrorKind::Io, FsOperation::Copy, "interrupted");
-/// assert_eq!(CopyFailureState::Unchanged, CopyFailureState::Unchanged);
-/// assert_eq!(0, CopyStats::default().bytes);
-/// assert_eq!(FsOperation::Copy, error.operation());
+/// let mut operation = filesystem.begin_copy(
+///     Path::parse("/source")?, Path::parse("/target")?, CopyOptions::default(),
+/// )?;
+/// let failure = operation.execute().await.expect_err("provider copy should fail");
+/// let (error, state, stats) = failure.into_parts();
+/// assert_eq!(FsErrorKind::Io, error.kind());
+/// assert_eq!(0, stats.bytes);
+/// assert!(matches!(state, qubit_fs::copy::CopyFailureState::Indeterminate));
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// # }).unwrap();
 /// ```
 pub struct AsyncCopyFailure {
     /// Contextual filesystem error that caused the copy to fail.
@@ -53,7 +65,6 @@ impl AsyncCopyFailure {
 
     /// Returns the contextual filesystem error.
     #[inline]
-    #[must_use]
     pub const fn error(&self) -> &FsError {
         &self.error
     }
@@ -74,7 +85,6 @@ impl AsyncCopyFailure {
 
     /// Splits the failure into owned error, state, and progress facts.
     #[inline]
-    #[must_use]
     pub fn into_parts(self) -> (FsError, CopyFailureState, CopyStats) {
         (self.error, self.state, self.partial_stats)
     }
@@ -106,32 +116,5 @@ impl Error for AsyncCopyFailure {
     #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(self.error())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::AsyncCopyFailure;
-    use crate::copy::CopyFailureState;
-    use crate::copy::CopyStats;
-    use crate::error::FsError;
-    use crate::error::FsErrorKind;
-    use crate::error::FsOperation;
-
-    #[test]
-    fn owned_parts_are_executed_at_runtime() {
-        let failure = AsyncCopyFailure::new(
-            FsError::new(FsErrorKind::NotFound, FsOperation::Copy, "missing source"),
-            CopyFailureState::Unchanged,
-            CopyStats {
-                files: 1,
-                ..CopyStats::default()
-            },
-        );
-
-        let (error, state, stats) = failure.into_parts();
-        assert_eq!(error.kind(), FsErrorKind::NotFound);
-        assert_eq!(state, CopyFailureState::Unchanged);
-        assert_eq!(stats.files, 1);
     }
 }

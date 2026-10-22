@@ -15,6 +15,6 @@ fn test_path_semantics_hierarchical_variant_is_comparable() {
 }
 
 #[test]
-fn path_semantics_defaults_to_hierarchical() {
+fn test_path_semantics_defaults_to_hierarchical() {
     assert_eq!(PathSemantics::Hierarchical, PathSemantics::default());
 }

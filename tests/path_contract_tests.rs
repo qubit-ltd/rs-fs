@@ -36,7 +36,7 @@ fn properties(semantics: PathSemantics, constraints: PathConstraints) -> FileSys
 }
 
 #[test]
-fn validates_semantics_and_path_form_without_io() {
+fn test_validates_semantics_and_path_form_without_io() {
     let hierarchical = properties(PathSemantics::Hierarchical, PathConstraints::absolute());
     let absolute = Path::parse("/a").expect("absolute path should parse");
     assert!(hierarchical.validate_path(&absolute, FsOperation::Stat).is_ok());
@@ -62,7 +62,7 @@ fn validates_semantics_and_path_form_without_io() {
 }
 
 #[test]
-fn validates_path_limits_and_preserves_operation_context() {
+fn test_validates_path_limits_and_preserves_operation_context() {
     let limits = FileSystemLimits::unknown().with_max_path_text_bytes(FileSystemLimit::Maximum(3));
     let properties = FileSystemProperties::new(
         FileSystemInfo::new(

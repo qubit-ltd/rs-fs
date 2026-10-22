@@ -14,7 +14,13 @@
 /// ```rust
 /// use qubit_fs::write::WriteFailureState;
 ///
-/// assert!(matches!(WriteFailureState::NotPublished, WriteFailureState::NotPublished));
+/// let state = WriteFailureState::RetryableNotPublished;
+/// match state {
+///     WriteFailureState::RetryableNotPublished => println!("retry the commit"),
+///     WriteFailureState::NotPublished => println!("clean up the unpublished target"),
+///     WriteFailureState::Published => println!("clean up the published target"),
+///     WriteFailureState::Indeterminate => println!("resolve publication status"),
+/// }
 /// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WriteFailureState {

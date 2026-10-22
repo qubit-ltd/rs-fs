@@ -14,7 +14,9 @@
 /// ```rust
 /// use qubit_fs::error::OpenFailureStage;
 ///
-/// assert!(matches!(OpenFailureStage::Preflight, OpenFailureStage::Preflight));
+/// let stage = OpenFailureStage::OutcomeValidation;
+/// let recovery_may_be_retained = matches!(stage, OpenFailureStage::OutcomeValidation);
+/// assert!(recovery_may_be_retained);
 /// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum OpenFailureStage {

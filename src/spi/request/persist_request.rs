@@ -11,20 +11,20 @@
 use crate::path::Path;
 use crate::temp::PersistOptions;
 
-/// A facade-created request to persist a temporary resource.
+/// A facade-created request to persist a temporary resource that providers can
+/// inspect but cannot construct.
 ///
 /// # Examples
 ///
 /// ```rust
-/// use qubit_fs::path::Path;
 /// use qubit_fs::spi::PersistRequest;
-/// use qubit_fs::temp::PersistOptions;
 ///
-/// let target = Path::parse("/final")?;
-/// assert!(std::any::type_name::<PersistRequest<'_>>().contains("PersistRequest"));
-/// assert_eq!("/final", target.as_str());
-/// let _ = PersistOptions::default();
-/// # Ok::<(), qubit_fs::FsError>(())
+/// fn inspect_persist_request(request: PersistRequest<'_>) -> (&str, bool) {
+///     (request.target().as_str(), request.options().overwrite())
+/// }
+///
+/// // A provider's persist implementation receives this request from the facade.
+/// let _ = inspect_persist_request;
 /// ```
 pub struct PersistRequest<'a> {
     /// Validated persistence destination.

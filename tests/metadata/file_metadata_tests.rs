@@ -29,7 +29,7 @@ fn test_is_file_like_matches_file_and_object() {
 }
 
 #[test]
-fn file_metadata_preserves_validated_provider_and_user_metadata() {
+fn test_file_metadata_preserves_validated_provider_and_user_metadata() {
     let metadata = FileMetadata::new(FileKind::File).with_user_metadata(
         UserMetadata::new()
             .with("category", "private-category")

@@ -26,7 +26,7 @@ fn test_copy_options_default_and_constructors_set_modes() {
 }
 
 #[test]
-fn required_server_side_copy_is_checked_before_side_effects() {
+fn test_required_server_side_copy_is_checked_before_side_effects() {
     let options = CopyOptions::default().with_server_side(ServerSidePreference::Require);
     let error = options.validate_against(FileSystemCapabilities::default()).unwrap_err();
     assert_eq!(Some(FileSystemCapability::ServerSideCopy), error.required_capability(),);
@@ -63,7 +63,7 @@ fn test_copy_options_full_configuration_is_usable() {
 }
 
 #[test]
-fn copy_options_preserve_generic_budgets() {
+fn test_copy_options_preserve_generic_budgets() {
     let options = CopyOptions::tree()
         .with_max_depth(Some(3))
         .with_max_entries(Some(10))

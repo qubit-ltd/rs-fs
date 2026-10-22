@@ -9,7 +9,7 @@
 use qubit_fs::metadata::FileSystemCapabilitySupport;
 
 #[test]
-fn capability_support_statuses_are_debuggable_and_distinct() {
+fn test_capability_support_statuses_are_debuggable_and_distinct() {
     assert_ne!(
         FileSystemCapabilitySupport::Unsupported,
         FileSystemCapabilitySupport::Conditional,

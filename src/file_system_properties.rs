@@ -193,6 +193,10 @@ impl FileSystemProperties {
     /// Validates a logical path against the provider's semantics, form, and
     /// byte limits without performing I/O.
     ///
+    /// # Parameters
+    /// - `path`: Logical path to validate against this filesystem's contract.
+    /// - `operation`: Operation associated with the path for error context.
+    ///
     /// # Errors
     /// Returns an enriched invalid-path or resource-limit error when the path
     /// does not satisfy this filesystem's declared contract.

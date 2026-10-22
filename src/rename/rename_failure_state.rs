@@ -16,7 +16,12 @@
 /// ```rust
 /// use qubit_fs::rename::RenameFailureState;
 ///
-/// assert!(matches!(RenameFailureState::Unchanged, RenameFailureState::Unchanged));
+/// let state = RenameFailureState::Indeterminate;
+/// let rename_may_have_completed = matches!(
+///     state,
+///     RenameFailureState::Renamed | RenameFailureState::Indeterminate
+/// );
+/// assert!(rename_may_have_completed);
 /// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RenameFailureState {

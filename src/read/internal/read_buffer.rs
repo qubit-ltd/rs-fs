@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// read_buffer_tests.
 //! Fallible geometric buffer growth independent of provider metadata hints.
 
 use std::collections::TryReserveError;

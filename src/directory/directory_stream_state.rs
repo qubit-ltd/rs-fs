@@ -14,7 +14,19 @@
 /// ```rust
 /// use qubit_fs::directory::DirectoryStreamState;
 ///
-/// assert!(matches!(DirectoryStreamState::Open, DirectoryStreamState::Open));
+/// let states = [
+///     DirectoryStreamState::Open,
+///     DirectoryStreamState::Exhausted,
+///     DirectoryStreamState::Failed,
+/// ];
+/// assert!(matches!(
+///     states,
+///     [
+///         DirectoryStreamState::Open,
+///         DirectoryStreamState::Exhausted,
+///         DirectoryStreamState::Failed
+///     ]
+/// ));
 /// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[must_use]

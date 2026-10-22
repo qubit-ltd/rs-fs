@@ -26,12 +26,21 @@ use super::OpenFailureStage;
 /// # Examples
 ///
 /// ```rust
-/// use qubit_fs::error::{FsError, FsErrorKind, FsOperation, OpenFailure, OpenFailureStage};
+/// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
+/// # let filesystem = support::rustdoc_provider::filesystem();
+/// use qubit_fs::Path;
+/// use qubit_fs::WriteOptions;
+/// use qubit_fs::metadata::AtomicityRequirement;
 ///
-/// assert!(std::any::type_name::<OpenFailure<()>>().contains("OpenFailure"));
-/// let error = FsError::new(FsErrorKind::NotFound, FsOperation::OpenReader, "missing");
-/// assert_eq!(FsOperation::OpenReader, error.operation());
-/// assert_eq!(OpenFailureStage::Preflight, OpenFailureStage::Preflight);
+/// let path = Path::parse("/report")?;
+/// let result = filesystem.open_writer(
+///     &path,
+///     WriteOptions::default().with_atomicity(AtomicityRequirement::Required),
+/// );
+/// let failure = result.expect_err("the fixture does not guarantee atomic writes");
+/// assert_eq!(failure.stage(), qubit_fs::error::OpenFailureStage::Preflight);
+/// assert_eq!(failure.error().operation(), qubit_fs::error::FsOperation::OpenWriter);
+/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 #[must_use = "inspect and retain recovery ownership before abandoning an open failure"]
 pub struct OpenFailure<R> {

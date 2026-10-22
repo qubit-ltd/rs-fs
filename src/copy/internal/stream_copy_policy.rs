@@ -67,6 +67,7 @@ pub(crate) fn fallback_rejection(
 
 /// Builds the writer request used by a streamed copy fallback.
 #[inline]
+#[must_use]
 pub(crate) fn fallback_write_options(options: &CopyOptions) -> WriteOptions {
     WriteOptions::default()
         .with_disposition(WriteDisposition::CreateNew)
@@ -92,12 +93,12 @@ mod tests {
     use crate::metadata::SymlinkPolicy;
 
     #[test]
-    fn fallback_rejects_tree_mode() {
+    fn test_fallback_rejects_tree_mode() {
         assert!(!fallback_options_supported(&CopyOptions::tree(), SymlinkPolicy::Reject,));
     }
 
     #[test]
-    fn fallback_rejects_symlink_policy_override_that_provider_cannot_honor() {
+    fn test_fallback_rejects_symlink_policy_override_that_provider_cannot_honor() {
         assert!(!fallback_options_supported(
             &CopyOptions::default().with_symlink_policy(SymlinkPolicy::FollowWithinFileSystem),
             SymlinkPolicy::Reject,

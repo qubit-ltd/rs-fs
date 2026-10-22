@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade tests.
 //! Synchronous aggregate write operation implementation.
 
 use qubit_io::Output;
@@ -31,11 +30,26 @@ pub(crate) struct WriteOperation<'a> {
 impl<'a> WriteOperation<'a> {
     /// Creates a write operation bound to `filesystem`.
     #[inline]
+    #[must_use]
     pub(crate) const fn new(filesystem: &'a FileSystem) -> Self {
         Self { filesystem }
     }
 
     /// Writes all bytes and retains the writer if transfer or commit fails.
+    ///
+    /// # Parameters
+    /// - `path`: Destination path to open and publish.
+    /// - `bytes`: Complete byte sequence to write.
+    /// - `options`: Creation, publication, and durability requirements.
+    ///
+    /// # Returns
+    /// The provider-confirmed publication outcome after the write is committed.
+    ///
+    /// # Errors
+    /// Returns a [`WriteAllFailure`] when preflight validation, opening,
+    /// writing, flushing, or committing fails. The failure records
+    /// publication certainty and retains an opened writer when recovery is
+    /// possible.
     pub(crate) fn write_all(
         &self,
         path: &Path,

@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade tests.
 //! Typed synchronous write failure.
 
 use std::error::Error;
@@ -68,7 +67,6 @@ impl WriteFailure {
     /// # Returns
     /// The error with operation, path, provider, and source context.
     #[inline]
-    #[must_use]
     pub const fn error(&self) -> &FsError {
         &self.error
     }
@@ -78,14 +76,12 @@ impl WriteFailure {
     /// # Returns
     /// The owned filesystem error.
     #[inline]
-    #[must_use]
     pub fn into_error(self) -> FsError {
         self.error
     }
 
     /// Splits this facade failure into its causal error and state.
     #[inline]
-    #[must_use]
     pub fn into_parts(self) -> (FsError, WriteFailureState) {
         (self.error, self.state)
     }

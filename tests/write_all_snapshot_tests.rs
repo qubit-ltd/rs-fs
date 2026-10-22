@@ -8,10 +8,37 @@
 //! Whole-file failure facts remain frozen across recovery.
 
 mod handle_support;
+use qubit_fs::FileSystem;
+use qubit_fs::FsResult;
 use qubit_fs::Path;
+use qubit_fs::error::FsError;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
+use qubit_fs::metadata::FileSystemCapabilities;
+use qubit_fs::metadata::FileSystemCapability;
+use qubit_fs::metadata::FileSystemId;
+use qubit_fs::metadata::FileSystemInfo;
+use qubit_fs::metadata::FileSystemLimits;
+use qubit_fs::metadata::OpenedFileInfo;
+use qubit_fs::metadata::SymlinkPolicy;
+use qubit_fs::metadata::WriteOutcome;
+use qubit_fs::path::PathConstraints;
+use qubit_fs::path::PathSemantics;
+use qubit_fs::spi::FileSystemSpi;
+use qubit_fs::spi::FileWriterSpi;
+use qubit_fs::spi::OpenWriterRequest;
+use qubit_fs::spi::OpenedWriter;
+use qubit_fs::spi::ProviderOperation;
+use qubit_fs::spi::ProviderOperations;
+use qubit_fs::spi::ProviderProperties;
+use qubit_fs::spi::SpiWriteFailure;
+use qubit_fs::spi::StatRequest;
+use qubit_fs::spi::StatResponse;
+use qubit_fs::write::WriteAbortOutcome;
 use qubit_fs::write::WriteFailureState;
 use qubit_fs::write::WriteOptions;
 use qubit_fs::write::WriterRecovery;
+use qubit_io::Output;
 
 /// Provider-confirmed commit states survive cleanup and ownership transfer.
 #[test]
@@ -82,34 +109,6 @@ fn test_write_all_snapshot_before_a_session_exists() {
 /// fail.
 #[test]
 fn test_partial_write_and_flush_failures_preserve_confirmed_bytes() {
-    use qubit_fs::FileSystem;
-    use qubit_fs::FsResult;
-    use qubit_fs::error::FsError;
-    use qubit_fs::error::FsErrorKind;
-    use qubit_fs::error::FsOperation;
-    use qubit_fs::metadata::FileSystemCapabilities;
-    use qubit_fs::metadata::FileSystemCapability;
-    use qubit_fs::metadata::FileSystemId;
-    use qubit_fs::metadata::FileSystemInfo;
-    use qubit_fs::metadata::FileSystemLimits;
-    use qubit_fs::metadata::OpenedFileInfo;
-    use qubit_fs::metadata::SymlinkPolicy;
-    use qubit_fs::metadata::WriteOutcome;
-    use qubit_fs::path::PathConstraints;
-    use qubit_fs::path::PathSemantics;
-    use qubit_fs::spi::FileSystemSpi;
-    use qubit_fs::spi::FileWriterSpi;
-    use qubit_fs::spi::OpenWriterRequest;
-    use qubit_fs::spi::OpenedWriter;
-    use qubit_fs::spi::ProviderOperation;
-    use qubit_fs::spi::ProviderOperations;
-    use qubit_fs::spi::ProviderProperties;
-    use qubit_fs::spi::SpiWriteFailure;
-    use qubit_fs::spi::StatRequest;
-    use qubit_fs::spi::StatResponse;
-    use qubit_fs::write::WriteAbortOutcome;
-    use qubit_io::Output;
-
     struct Provider {
         flush_failure: bool,
     }

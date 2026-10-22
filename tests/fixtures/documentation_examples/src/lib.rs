@@ -21,6 +21,3 @@ mod async_recording_spi;
 mod poll_support;
 #[cfg(test)]
 mod tests_tests;
-
-#[cfg(test)]
-mod sync_tests;

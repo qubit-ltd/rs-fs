@@ -14,7 +14,7 @@
 /// ```rust
 /// use qubit_fs::metadata::PublicationMethod;
 ///
-/// assert!(matches!(PublicationMethod::Direct, PublicationMethod::Direct));
+/// assert_ne!(PublicationMethod::AtomicRename, PublicationMethod::Direct);
 /// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PublicationMethod {

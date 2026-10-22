@@ -177,18 +177,18 @@ struct StreamCopyFallbackSpi {
 }
 
 impl StreamCopyFallbackSpi {
+    fn new(commit_already_exists: bool, stat_error: Option<FsErrorKind>) -> Self {
+        Self {
+            commit_already_exists,
+            stat_error,
+        }
+    }
     fn unavailable(operation: FsOperation) -> FsError {
         FsError::new(
             FsErrorKind::UnsupportedOperation,
             operation,
             "async test SPI does not implement this operation",
         )
-    }
-    fn new(commit_already_exists: bool, stat_error: Option<FsErrorKind>) -> Self {
-        Self {
-            commit_already_exists,
-            stat_error,
-        }
     }
     fn file_info(&self, path: &Path) -> OpenedFileInfo {
         OpenedFileInfo::new(

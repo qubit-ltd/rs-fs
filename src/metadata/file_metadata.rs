@@ -84,7 +84,6 @@ impl FileMetadata {
 
     /// Returns the known byte length, if any.
     #[inline]
-    #[must_use]
     pub const fn len(&self) -> Option<u64> {
         self.len
     }
@@ -98,28 +97,24 @@ impl FileMetadata {
 
     /// Returns the last modification time, if known.
     #[inline]
-    #[must_use]
     pub const fn modified_at(&self) -> Option<SystemTime> {
         self.modified_at
     }
 
     /// Returns the creation time, if known.
     #[inline]
-    #[must_use]
     pub const fn created_at(&self) -> Option<SystemTime> {
         self.created_at
     }
 
     /// Returns the last access time, if known.
     #[inline]
-    #[must_use]
     pub const fn accessed_at(&self) -> Option<SystemTime> {
         self.accessed_at
     }
 
     /// Returns the provider version or ETag, if known.
     #[inline]
-    #[must_use]
     pub const fn etag(&self) -> Option<&ResourceVersion> {
         self.etag.as_ref()
     }
@@ -130,14 +125,12 @@ impl FileMetadata {
     /// `Some` with the content type borrowed from this snapshot, or `None` when
     /// the provider did not report one.
     #[inline]
-    #[must_use]
     pub fn content_type(&self) -> Option<&str> {
         self.content_type.as_deref()
     }
 
     /// Returns the content checksum, if known.
     #[inline]
-    #[must_use]
     pub const fn checksum(&self) -> Option<&Checksum> {
         self.checksum.as_ref()
     }

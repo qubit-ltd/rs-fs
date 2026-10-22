@@ -15,6 +15,13 @@ use crate::write::WriteFailureState;
 /// cleanup responsibility. An indeterminate error kind overrides a
 /// contradictory unchanged annotation. Applied opening effects do not prove
 /// file publication.
+///
+/// # Parameters
+/// - `error`: The filesystem error returned by the failed open operation.
+///
+/// # Returns
+/// `true` when the error proves that opening caused no external effect;
+/// otherwise, `false`.
 #[inline]
 #[must_use]
 pub(crate) fn is_unchanged_open_failure(error: &FsError) -> bool {
@@ -26,6 +33,12 @@ pub(crate) fn is_unchanged_open_failure(error: &FsError) -> bool {
 /// Missing evidence and effects of staging or parent creation are
 /// conservatively indeterminate. This function must not classify commit or
 /// cleanup failures.
+///
+/// # Parameters
+/// - `error`: The filesystem error returned by the failed open operation.
+///
+/// # Returns
+/// The publication certainty inferred from the opening evidence.
 #[inline]
 #[must_use]
 pub(crate) fn open_failure_state(error: &FsError) -> WriteFailureState {

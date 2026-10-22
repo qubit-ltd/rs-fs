@@ -14,7 +14,7 @@
 /// ```rust
 /// use qubit_fs::error::RecoveryCleanupState;
 ///
-/// assert!(matches!(RecoveryCleanupState::Pending, RecoveryCleanupState::Pending));
+/// assert_ne!(RecoveryCleanupState::Running, RecoveryCleanupState::Completed);
 /// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RecoveryCleanupState {

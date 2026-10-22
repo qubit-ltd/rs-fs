@@ -14,7 +14,7 @@
 /// ```rust
 /// use qubit_fs::metadata::FileSystemCapability;
 ///
-/// assert!(matches!(FileSystemCapability::Read, FileSystemCapability::Read));
+/// assert!(FileSystemCapability::ALL.contains(&FileSystemCapability::Read));
 /// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[repr(u8)]

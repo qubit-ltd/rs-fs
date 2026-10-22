@@ -15,10 +15,11 @@ use std::time::Instant;
 use crate::directory::DirectoryStreamState;
 use crate::directory::ListOptions;
 use crate::directory::ListScope;
-use crate::directory::internal::ListStreamPolicy;
+use crate::directory::ListStreamPolicy;
 use crate::error::FsResult;
 use crate::metadata::DirEntry;
 use crate::metadata::FileSystemLimits;
+use crate::path::PathSemantics;
 use crate::spi::DirectoryStreamSpi;
 
 /// Type-erased synchronous directory enumeration handle.
@@ -53,17 +54,29 @@ impl DirectoryStream {
     /// Wraps an already-open provider enumeration session.
     ///
     /// # Parameters
+    /// - `scope`: Root and scope that constrain the entries returned by the
+    ///   provider.
     /// - `session`: Provider directory enumeration session.
+    /// - `options`: Filters and resource bounds applied to provider entries.
+    /// - `provider`: Provider identifier attached to stream errors.
+    /// - `path_semantics`: Provider path rules used to validate returned
+    ///   entries.
+    /// - `limits`: Provider limits used to validate returned entries.
     ///
     /// # Returns
-    /// A concrete type-erased directory stream.
+    /// A concrete type-erased stream that validates entries and enforces the
+    /// configured listing bounds.
+    ///
+    /// # Errors
+    /// Returns an invalid-options error if the configured listing deadline
+    /// cannot be represented by the platform's monotonic clock.
     #[inline]
     pub(crate) fn new(
         scope: ListScope,
         session: Box<dyn DirectoryStreamSpi>,
         options: ListOptions,
         provider: &str,
-        path_semantics: crate::path::PathSemantics,
+        path_semantics: PathSemantics,
         limits: FileSystemLimits,
     ) -> FsResult<Self> {
         let policy = ListStreamPolicy::new(scope, options, provider, path_semantics, limits, Instant::now())?;

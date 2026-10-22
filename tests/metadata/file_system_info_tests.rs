@@ -12,7 +12,7 @@ use qubit_fs::metadata::UserMetadata;
 use qubit_fs::path::PathSemantics;
 
 #[test]
-fn file_system_info_is_a_validated_local_snapshot() {
+fn test_file_system_info_is_a_validated_local_snapshot() {
     let id = FileSystemId::new("mock-instance").expect("valid filesystem identity must be accepted");
     let provider_id = "mock";
     let info = FileSystemInfo::new(id.clone(), provider_id, PathSemantics::ObjectKey)
@@ -28,7 +28,7 @@ fn file_system_info_is_a_validated_local_snapshot() {
 }
 
 #[test]
-fn file_system_info_deduplicates_schemes_and_replaces_provider_metadata() {
+fn test_file_system_info_deduplicates_schemes_and_replaces_provider_metadata() {
     let info = FileSystemInfo::new(
         FileSystemId::new("mock-instance").expect("valid filesystem identity must be accepted"),
         "mock",
@@ -46,17 +46,17 @@ fn file_system_info_deduplicates_schemes_and_replaces_provider_metadata() {
 }
 
 #[test]
-fn file_system_info_rejects_secret_bearing_provider_metadata() {
+fn test_file_system_info_rejects_secret_bearing_provider_metadata() {
     assert!(UserMetadata::new().with("access token", "secret").is_err());
 }
 
 #[test]
-fn file_system_info_rejects_sensitive_provider_metadata_keys() {
+fn test_file_system_info_rejects_sensitive_provider_metadata_keys() {
     assert!(UserMetadata::new().with("x-amz-signature", "plaintext").is_err());
 }
 
 #[test]
-fn file_system_info_preserves_validated_provider_metadata() {
+fn test_file_system_info_preserves_validated_provider_metadata() {
     let metadata = UserMetadata::new()
         .with("provider", "ready")
         .expect("ordinary provider metadata key must be accepted");
@@ -71,10 +71,25 @@ fn file_system_info_preserves_validated_provider_metadata() {
 }
 
 #[test]
-fn file_system_id_validates_and_displays_provider_identity() {
+fn test_file_system_id_validates_and_displays_provider_identity() {
     let id = FileSystemId::new("tenant-a").expect("valid filesystem identity must be accepted");
 
     assert_eq!("tenant-a", id.as_str());
     assert_eq!("tenant-a", id.to_string());
     assert!(FileSystemId::new("bad\nidentity").is_err());
+}
+
+#[test]
+fn test_file_system_info_exposes_snapshot_accessors() {
+    let id = FileSystemId::new("file-system-info-test").expect("valid id");
+    let info = FileSystemInfo::new(id.clone(), "provider", PathSemantics::Hierarchical)
+        .with_scheme("file")
+        .expect("valid scheme")
+        .with_provider_metadata(UserMetadata::new());
+
+    assert_eq!(info.id(), &id);
+    assert_eq!(info.provider_id(), "provider");
+    assert_eq!(info.schemes(), &["file"]);
+    assert_eq!(info.path_semantics(), PathSemantics::Hierarchical);
+    assert!(info.provider_metadata().is_empty());
 }

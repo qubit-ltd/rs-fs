@@ -71,7 +71,7 @@ fn assert_prefix(async_mode: bool) {
 
 /// Guaranteed range reads receive a bounded provider request.
 #[test]
-fn guaranteed_range_bounds_sync_request() {
+fn test_guaranteed_range_bounds_sync_request() {
     assert_prefix(false);
 }
 
@@ -139,7 +139,7 @@ fn test_prefix_outcome_async_exposes_termination() {
 /// Asynchronous dispatch follows the same bounded request contract.
 #[cfg(feature = "async")]
 #[test]
-fn guaranteed_range_bounds_async_request() {
+fn test_guaranteed_range_bounds_async_request() {
     assert_prefix(true);
 }
 
@@ -214,7 +214,7 @@ fn ranged() -> FileSystemCapabilities {
 
 /// Explicit windows are narrowed without moving the offset or expanding length.
 #[test]
-fn explicit_range_is_only_narrowed() {
+fn test_explicit_range_is_only_narrowed() {
     let options = ReadOptions::default().with_offset(Some(2)).with_length(Some(10));
     check_case(
         ranged(),
@@ -235,7 +235,7 @@ fn explicit_range_is_only_narrowed() {
 
 /// Optional support is insufficient to insert a new range requirement.
 #[test]
-fn conditional_and_unsupported_ranges_keep_sequential_reads() {
+fn test_conditional_and_unsupported_ranges_keep_sequential_reads() {
     for capabilities in [
         sequential(),
         sequential().with_conditional(FileSystemCapability::RangeRead),
@@ -259,7 +259,7 @@ fn conditional_and_unsupported_ranges_keep_sequential_reads() {
 
 /// Narrowing never hides a caller's out-of-budget range.
 #[test]
-fn validates_original_range_before_narrowing() {
+fn test_validates_original_range_before_narrowing() {
     let limits = FileSystemLimits::unknown().with_max_read_range_bytes(FileSystemLimit::Maximum(8));
     check_case(
         ranged(),
@@ -279,7 +279,7 @@ fn validates_original_range_before_narrowing() {
 
 /// Prefix operations never claim full checksum completion.
 #[test]
-fn checksum_policy_prevents_unsafe_range_insertion() {
+fn test_checksum_policy_prevents_unsafe_range_insertion() {
     let capabilities = ranged().with_guaranteed(FileSystemCapability::ChecksumValidation);
     let options = ReadOptions::default().with_checksum(ChecksumPolicy::BestEffort);
     check_case(
@@ -303,7 +303,7 @@ fn checksum_policy_prevents_unsafe_range_insertion() {
 /// Zero prefixes preserve the single open without requesting or consuming
 /// bytes.
 #[test]
-fn zero_prefix_preserves_original_open_options() {
+fn test_zero_prefix_preserves_original_open_options() {
     check_case(
         ranged(),
         FileSystemLimits::unknown(),
@@ -315,7 +315,7 @@ fn zero_prefix_preserves_original_open_options() {
 
 /// Offset arithmetic overflow leaves the original request to the provider.
 #[test]
-fn overflowing_candidate_is_not_inserted() {
+fn test_overflowing_candidate_is_not_inserted() {
     let options = ReadOptions::default().with_offset(Some(u64::MAX));
     check_case(
         ranged(),
@@ -328,7 +328,7 @@ fn overflowing_candidate_is_not_inserted() {
 
 /// Contradictory conditions are rejected before provider I/O.
 #[test]
-fn invalid_conditions_are_not_hidden_by_prefix_planning() {
+fn test_invalid_conditions_are_not_hidden_by_prefix_planning() {
     let options = ReadOptions::default()
         .with_if_match(Some(ResourceVersion::new("a")))
         .with_if_none_match(Some(ResourceVersion::new("b")));
@@ -343,7 +343,7 @@ fn invalid_conditions_are_not_hidden_by_prefix_planning() {
 
 /// The aggregate operation still requires the basic read capability.
 #[test]
-fn absent_read_capability_rejects_before_open() {
+fn test_absent_read_capability_rejects_before_open() {
     check_case(
         FileSystemCapabilities::new(),
         FileSystemLimits::unknown(),
@@ -355,7 +355,7 @@ fn absent_read_capability_rejects_before_open() {
 
 /// Open and stream failures retain their typed cause without a retry.
 #[test]
-fn provider_failures_preserve_sources_and_do_not_retry() {
+fn test_provider_failures_preserve_sources_and_do_not_retry() {
     use std::error::Error;
     let modes = if cfg!(feature = "async") {
         &[false, true][..]

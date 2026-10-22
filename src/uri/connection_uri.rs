@@ -69,6 +69,10 @@ impl ConnectionUri {
     /// * `text` - URI text to parse and canonicalize.
     /// * `policy` - Policy captured for later secret classification and
     ///   formatting.
+    ///
+    /// # Errors
+    ///
+    /// Returns an invalid-URI error for malformed syntax or a fragment.
     pub fn parse_with_policy(text: &str, policy: &RedactionPolicy) -> FsResult<Self> {
         let parsed = parse_canonical(text)?;
         if parsed.fragment().is_some() {

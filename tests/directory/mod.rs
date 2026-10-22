@@ -6,4 +6,6 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+mod create_directory_options_tests;
 mod directory_stream_tests;
+mod list_options_tests;

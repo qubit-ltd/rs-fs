@@ -80,7 +80,7 @@ impl FileSystemSpi for RangeSpi {
     fn properties(&self) -> ProviderProperties {
         ProviderProperties::new(
             FileSystemInfo::new(
-                FileSystemId::new("read-window").unwrap(),
+                FileSystemId::new("read-window").expect("file system ID should be valid"),
                 "read-window",
                 PathSemantics::Hierarchical,
             ),
@@ -92,7 +92,7 @@ impl FileSystemSpi for RangeSpi {
             PathConstraints::absolute(),
             SymlinkPolicy::Reject,
         )
-        .unwrap()
+        .expect("provider properties should be valid")
     }
     fn stat(&self, _: StatRequest<'_>) -> FsResult<StatResponse> {
         Err(unused())
@@ -110,7 +110,10 @@ impl FileSystemSpi for RangeSpi {
         let end = options
             .length()
             .map_or(total.len(), |n| start.saturating_add(n as usize).min(total.len()));
-        let mut info = OpenedFileInfo::new(FileSystemId::new("read-window").unwrap(), request.path().clone());
+        let mut info = OpenedFileInfo::new(
+            FileSystemId::new("read-window").expect("file system ID should be valid"),
+            request.path().clone(),
+        );
         if self.metadata {
             info = info.with_metadata(FileMetadata::new(FileKind::File).with_len(Some(total.len() as u64)));
         }
@@ -147,46 +150,68 @@ fn unused() -> FsError {
 }
 
 #[test]
-fn metadata_length_is_compared_with_selected_window() {
-    let fs = FileSystem::from_spi(RangeSpi::with_metadata()).unwrap();
-    let path = Path::parse("/source").unwrap();
+fn test_metadata_length_is_compared_with_selected_window() {
+    let fs = FileSystem::from_spi(RangeSpi::with_metadata()).expect("SPI should be accepted");
+    let path = Path::parse("/source").expect("source path should be valid");
     let options = ReadOptions::default().with_offset(Some(2)).with_length(Some(3));
-    assert_eq!(b"234", fs.read_all(&path, options.clone(), 3).unwrap().as_slice());
+    assert_eq!(
+        b"234",
+        fs.read_all(&path, options.clone(), 3)
+            .expect("selected window should fit the budget")
+            .as_slice()
+    );
     assert_eq!(
         FsErrorKind::ResourceLimitExceeded,
-        fs.read_all(&path, options, 2).unwrap_err().kind()
+        fs.read_all(&path, options, 2)
+            .expect_err("window larger than the budget should fail")
+            .kind()
     );
 }
 
 #[test]
-fn metadata_length_does_not_reject_empty_range_at_eof() {
-    let fs = FileSystem::from_shared_spi(Arc::new(RangeSpi::with_metadata())).unwrap();
-    let path = Path::parse("/source").unwrap();
+fn test_metadata_length_does_not_reject_empty_range_at_eof() {
+    let fs = FileSystem::from_shared_spi(Arc::new(RangeSpi::with_metadata())).expect("shared SPI should be accepted");
+    let path = Path::parse("/source").expect("source path should be valid");
     let options = ReadOptions::default().with_offset(Some(100));
-    assert!(fs.read_all(&path, options, 0).unwrap().is_empty());
-}
-
-#[test]
-fn read_all_accepts_unknown_metadata_but_still_enforces_stream_budget() {
-    let fs = FileSystem::from_spi(RangeSpi::without_metadata()).unwrap();
-    let path = Path::parse("/source").unwrap();
-    let options = ReadOptions::default().with_offset(Some(2)).with_length(Some(3));
-    assert_eq!(b"234", fs.read_all(&path, options.clone(), 3).unwrap().as_slice());
-    assert_eq!(
-        FsErrorKind::ResourceLimitExceeded,
-        fs.read_all(&path, options, 2).unwrap_err().kind()
+    assert!(
+        fs.read_all(&path, options, 0)
+            .expect("empty range at EOF should fit a zero-byte budget")
+            .is_empty()
     );
 }
 
 #[test]
-fn read_all_reports_open_error_before_budget_collection() {
+fn test_read_all_accepts_unknown_metadata_but_still_enforces_stream_budget() {
+    let fs = FileSystem::from_spi(RangeSpi::without_metadata()).expect("SPI should be accepted");
+    let path = Path::parse("/source").expect("source path should be valid");
+    let options = ReadOptions::default().with_offset(Some(2)).with_length(Some(3));
+    assert_eq!(
+        b"234",
+        fs.read_all(&path, options.clone(), 3)
+            .expect("selected window should fit the budget")
+            .as_slice()
+    );
+    assert_eq!(
+        FsErrorKind::ResourceLimitExceeded,
+        fs.read_all(&path, options, 2)
+            .expect_err("stream larger than the budget should fail")
+            .kind()
+    );
+}
+
+#[test]
+fn test_read_all_reports_open_error_before_budget_collection() {
     let fs = FileSystem::from_spi(RangeSpi {
         metadata: true,
         fail_open: true,
     })
-    .unwrap();
+    .expect("SPI should be accepted");
     let error = fs
-        .read_all(&Path::parse("/source").unwrap(), Default::default(), 16)
-        .unwrap_err();
+        .read_all(
+            &Path::parse("/source").expect("source path should be valid"),
+            Default::default(),
+            16,
+        )
+        .expect_err("reader open failure should be returned");
     assert_eq!(FsErrorKind::Io, error.kind());
 }

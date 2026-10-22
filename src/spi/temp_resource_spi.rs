@@ -18,9 +18,33 @@ use crate::temp::PersistOutcome;
 /// # Examples
 ///
 /// ```
+/// use qubit_fs::error::FsResult;
 /// use qubit_fs::spi::TempResourceSpi;
 ///
-/// fn accepts_session<T: TempResourceSpi>() {}
+/// struct TemporaryResource;
+///
+/// impl TempResourceSpi for TemporaryResource {
+///     fn persist(
+///         &mut self,
+///         _: qubit_fs::spi::PersistRequest<'_>,
+///     ) -> Result<qubit_fs::temp::PersistOutcome, qubit_fs::spi::SpiPersistFailure> {
+///         unimplemented!()
+///     }
+///
+///     fn keep(
+///         &mut self,
+///     ) -> Result<qubit_fs::temp::PersistOutcome, qubit_fs::spi::SpiPersistFailure> {
+///         unimplemented!()
+///     }
+///
+///     fn cleanup(&mut self) -> FsResult<()> {
+///         Ok(())
+///     }
+/// }
+///
+/// let mut resource = TemporaryResource;
+/// resource.cleanup()?;
+/// # Ok::<(), qubit_fs::FsError>(())
 /// ```
 pub trait TempResourceSpi: Send {
     /// Persists a temporary resource.

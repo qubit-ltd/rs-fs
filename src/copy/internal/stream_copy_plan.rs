@@ -151,7 +151,7 @@ mod tests {
     }
 
     #[test]
-    fn validates_options_metadata_and_progress() {
+    fn test_validates_options_metadata_and_progress() {
         let default_plan = plan(CopyOptions::default(), FileSystemLimits::unknown());
         assert!(default_plan.validate_options(SymlinkPolicy::Reject).is_ok());
         let symlink = plan(
@@ -171,7 +171,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_unsupported_options_and_limits() {
+    fn test_rejects_unsupported_options_and_limits() {
         let tree = plan(CopyOptions::tree(), FileSystemLimits::unknown());
         assert_eq!(
             tree.validate_options(SymlinkPolicy::Reject).unwrap_err().kind(),

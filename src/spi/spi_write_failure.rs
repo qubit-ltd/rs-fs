@@ -53,7 +53,6 @@ impl SpiWriteFailure {
     /// # Returns
     /// The provider failure with filesystem context.
     #[inline]
-    #[must_use]
     pub const fn error(&self) -> &FsError {
         &self.error
     }
@@ -73,31 +72,7 @@ impl SpiWriteFailure {
     /// # Returns
     /// The provider error and confirmed publication state.
     #[inline]
-    #[must_use]
     pub fn into_parts(self) -> (FsError, WriteFailureState) {
         (self.error, self.state)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::SpiWriteFailure;
-    use crate::error::FsError;
-    use crate::error::FsErrorKind;
-    use crate::error::FsOperation;
-    use crate::write::WriteFailureState;
-
-    #[test]
-    fn failure_facts_are_executed_at_runtime() {
-        let failure = SpiWriteFailure::new(
-            FsError::new(FsErrorKind::Io, FsOperation::CommitWriter, "commit failed"),
-            WriteFailureState::Published,
-        );
-        assert_eq!(failure.error().kind(), FsErrorKind::Io);
-        assert_eq!(failure.state(), WriteFailureState::Published);
-
-        let (error, state) = failure.into_parts();
-        assert_eq!(error.kind(), FsErrorKind::Io);
-        assert_eq!(state, WriteFailureState::Published);
     }
 }

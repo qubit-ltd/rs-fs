@@ -13,8 +13,16 @@
 ///
 /// ```rust
 /// use qubit_fs::copy::CopyMethod;
+/// use qubit_fs::copy::CopyOutcome;
+/// use qubit_fs::copy::CopyStats;
+/// use qubit_fs::metadata::AchievedAtomicity;
 ///
-/// assert_eq!(CopyMethod::Streamed, CopyMethod::Streamed);
+/// let outcome = CopyOutcome::new(
+///     CopyStats::default(),
+///     CopyMethod::Streamed,
+///     AchievedAtomicity::Atomic,
+/// );
+/// assert_eq!(outcome.method(), CopyMethod::Streamed);
 /// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CopyMethod {

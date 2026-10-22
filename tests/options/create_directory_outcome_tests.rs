@@ -7,6 +7,8 @@
 // =============================================================================
 //! Coverage for directory-creation outcomes.
 
+use std::hint::black_box;
+
 use qubit_fs::directory::CreateDirectoryOutcome;
 
 /// Verifies outcomes preserve whether the target already existed.
@@ -30,6 +32,20 @@ fn test_create_directory_outcome_accessors_are_callable_directly() {
     let already_existed: fn(CreateDirectoryOutcome) -> bool = CreateDirectoryOutcome::already_existed;
     let created_ancestors: fn(CreateDirectoryOutcome) -> Option<u64> = CreateDirectoryOutcome::created_ancestors;
 
+    assert!(already_existed(outcome));
+    assert_eq!(Some(2), created_ancestors(outcome));
+}
+
+#[test]
+fn test_create_directory_outcome_accessors_are_executed_at_runtime() {
+    let constructor: fn(bool) -> CreateDirectoryOutcome = black_box(CreateDirectoryOutcome::new);
+    let with_ancestors: fn(CreateDirectoryOutcome, u64) -> CreateDirectoryOutcome =
+        black_box(CreateDirectoryOutcome::with_created_ancestors);
+    let already_existed: fn(CreateDirectoryOutcome) -> bool = black_box(CreateDirectoryOutcome::already_existed);
+    let created_ancestors: fn(CreateDirectoryOutcome) -> Option<u64> =
+        black_box(CreateDirectoryOutcome::created_ancestors);
+
+    let outcome = with_ancestors(constructor(true), 2);
     assert!(already_existed(outcome));
     assert_eq!(Some(2), created_ancestors(outcome));
 }

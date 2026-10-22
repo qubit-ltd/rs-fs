@@ -19,6 +19,7 @@ use crate::error::FsOperation;
 use crate::error::FsResult;
 use crate::metadata::DirEntry;
 use crate::metadata::FileSystemLimits;
+use crate::path::PathSemantics;
 
 /// Runtime-independent policy shared by synchronous and asynchronous handles.
 pub(crate) struct ListStreamPolicy {
@@ -29,7 +30,7 @@ pub(crate) struct ListStreamPolicy {
     /// Provider identifier attached to facade-generated errors.
     provider: Box<str>,
     /// Provider path semantics used to validate every returned entry.
-    path_semantics: crate::path::PathSemantics,
+    path_semantics: PathSemantics,
     /// Provider path limits used to validate every returned entry.
     limits: FileSystemLimits,
     /// Whether enumeration has completed or encountered a terminal failure.
@@ -46,7 +47,7 @@ impl ListStreamPolicy {
         scope: ListScope,
         options: ListOptions,
         provider: &str,
-        path_semantics: crate::path::PathSemantics,
+        path_semantics: PathSemantics,
         limits: FileSystemLimits,
         now: Instant,
     ) -> FsResult<Self> {
@@ -77,6 +78,7 @@ impl ListStreamPolicy {
     }
 
     /// Returns the stream's current lifecycle state.
+    #[inline]
     pub(crate) const fn state(&self) -> DirectoryStreamState {
         self.state
     }

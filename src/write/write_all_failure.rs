@@ -18,16 +18,22 @@ use crate::write::WriterRecovery;
 
 /// A whole-file write failure retaining the recoverable writer when available.
 ///
+/// This value is returned by `FileSystem::write_all` and is not constructed
+/// directly by callers.
+///
 /// # Examples
 ///
 /// ```rust
-/// use qubit_fs::error::{FsError, FsErrorKind, FsOperation};
-/// use qubit_fs::write::{WriteAllFailure, WriteFailureState};
+/// use qubit_fs::write::WriteAllFailure;
 ///
-/// assert!(std::any::type_name::<WriteAllFailure>().contains("WriteAllFailure"));
-/// let error = FsError::new(FsErrorKind::Io, FsOperation::Write, "failed");
-/// assert_eq!(WriteFailureState::NotPublished, WriteFailureState::NotPublished);
-/// assert_eq!(FsOperation::Write, error.operation());
+/// fn inspect_failure(failure: WriteAllFailure) {
+///     let (error, state, confirmed_bytes, recovery) = failure.into_parts();
+///     eprintln!("write failed after {confirmed_bytes} confirmed bytes: {error}");
+///     if recovery.is_some() {
+///         eprintln!("a writer is available for explicit recovery");
+///     }
+///     eprintln!("publication state: {state:?}");
+/// }
 /// ```
 pub struct WriteAllFailure {
     /// Contextual filesystem error that interrupted the whole-file write.
@@ -57,7 +63,6 @@ impl WriteAllFailure {
     }
     /// Returns the causal filesystem error.
     #[inline]
-    #[must_use]
     pub const fn error(&self) -> &FsError {
         &self.error
     }
@@ -74,19 +79,18 @@ impl WriteAllFailure {
         self.written_bytes
     }
     /// Transfers the retained session without changing the failure snapshot.
-    #[must_use]
     pub fn take_recovery(&mut self) -> Option<WriterRecovery> {
         self.writer.take()
     }
     /// Returns the retained writer, if opening had completed.
     #[inline]
-    #[must_use]
+    #[must_use = "inspect the recovery state before abandoning the retained writer"]
     pub fn recovery(&self) -> Option<&WriterRecovery> {
         self.writer.as_ref()
     }
     /// Returns a mutable retained writer for explicit recovery.
     #[inline]
-    #[must_use]
+    #[must_use = "inspect the recovery state before abandoning the retained writer"]
     pub fn recovery_mut(&mut self) -> Option<&mut WriterRecovery> {
         self.writer.as_mut()
     }
@@ -96,7 +100,6 @@ impl WriteAllFailure {
     /// The original error, publication state, confirmed byte count, and
     /// optional retained writer.
     #[inline]
-    #[must_use]
     pub fn into_parts(self) -> (FsError, WriteFailureState, u64, Option<WriterRecovery>) {
         (*self.error, self.state, self.written_bytes, self.writer)
     }
@@ -129,32 +132,5 @@ impl Error for WriteAllFailure {
     #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(self.error.as_ref())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::hint::black_box;
-
-    use super::WriteAllFailure;
-    use crate::error::FsError;
-    use crate::error::FsErrorKind;
-    use crate::error::FsOperation;
-    use crate::write::WriteFailureState;
-
-    #[test]
-    fn failure_accessors_are_executed_at_runtime() {
-        let error: fn(&WriteAllFailure) -> &FsError = black_box(WriteAllFailure::error);
-        let recovery: fn(&WriteAllFailure) -> Option<&crate::write::WriterRecovery> =
-            black_box(WriteAllFailure::recovery);
-        let failure = WriteAllFailure::new(
-            FsError::new(FsErrorKind::NotFound, FsOperation::OpenWriter, "missing target"),
-            WriteFailureState::NotPublished,
-            4,
-            None,
-        );
-
-        assert_eq!(FsErrorKind::NotFound, error(&failure).kind());
-        assert!(recovery(&failure).is_none());
     }
 }

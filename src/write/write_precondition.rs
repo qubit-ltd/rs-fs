@@ -14,9 +14,14 @@ use crate::metadata::ResourceVersion;
 /// # Examples
 ///
 /// ```rust
+/// use qubit_fs::metadata::ResourceVersion;
 /// use qubit_fs::write::WritePrecondition;
 ///
-/// assert!(matches!(WritePrecondition::None, WritePrecondition::None));
+/// let precondition = WritePrecondition::IfMatch(ResourceVersion::new("v1"));
+/// let WritePrecondition::IfMatch(version) = precondition else {
+///     panic!("expected a version match precondition");
+/// };
+/// assert_eq!(version.as_str(), "v1");
 /// ```
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum WritePrecondition {

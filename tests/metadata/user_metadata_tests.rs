@@ -33,6 +33,16 @@ fn test_user_metadata_accepts_keys_with_uri_delimiters() {
 }
 
 #[test]
+fn test_user_metadata_rejects_secret_bearing_keys() {
+    assert!(UserMetadata::new().with("access token", "secret").is_err());
+}
+
+#[test]
+fn test_user_metadata_rejects_sensitive_provider_metadata_keys() {
+    assert!(UserMetadata::new().with("x-amz-signature", "plaintext").is_err());
+}
+
+#[test]
 fn test_user_metadata_accessors_are_callable_directly() {
     let metadata = UserMetadata::new()
         .with("region", "private-region")

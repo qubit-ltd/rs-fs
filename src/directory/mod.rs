@@ -35,6 +35,7 @@ pub use delete_outcome::DeleteOutcome;
 pub(crate) use directory_operation::DirectoryOperation;
 pub use directory_stream::DirectoryStream;
 pub use directory_stream_state::DirectoryStreamState;
+pub(crate) use internal::ListStreamPolicy;
 pub use list_filter::ListFilter;
 pub use list_options::ListOptions;
 pub use list_scope::ListScope;

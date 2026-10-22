@@ -65,7 +65,6 @@ impl AsyncWriteAllOperationFailure {
         }
     }
     /// Returns the contextual filesystem error.
-    #[must_use]
     pub const fn error(&self) -> &FsError {
         &self.error
     }
@@ -83,12 +82,10 @@ impl AsyncWriteAllOperationFailure {
     ///
     /// This discards publication state and confirmed byte count. The operation
     /// still owns any recovery writer; prefer `into_parts` when recovering.
-    #[must_use]
     pub fn into_error(self) -> FsError {
         self.error
     }
     /// Consumes the failure and returns all recovery facts.
-    #[must_use]
     pub fn into_parts(self) -> (FsError, WriteFailureState, u64) {
         (self.error, self.state, self.written_bytes)
     }

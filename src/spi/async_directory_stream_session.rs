@@ -25,6 +25,12 @@ pub trait AsyncDirectoryStreamSession: Send {
     /// Asynchronously reads the next directory entry or provider page.
     ///
     /// # Returns
-    /// A future resolving to one entry or `None` at end of enumeration.
+    /// A future resolving to the next entry, or `None` when enumeration is
+    /// complete. Providers return [`FsResult::Err`] when enumeration fails;
+    /// the error retains the filesystem context available to the provider.
+    ///
+    /// # Errors
+    /// The future resolves to an error when the provider cannot continue
+    /// enumeration.
     fn next_entry_async(&mut self) -> SpiFuture<'_, FsResult<Option<DirEntry>>>;
 }

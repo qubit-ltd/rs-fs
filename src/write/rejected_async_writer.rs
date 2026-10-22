@@ -40,10 +40,13 @@ use crate::write::WriteAbortOutcome;
 ///
 /// ```rust
 /// use qubit_fs::error::RecoveryCleanupState;
-/// use qubit_fs::write::RejectedAsyncWriter;
+/// use qubit_fs::write::AsyncWriterRecovery;
 ///
-/// assert!(std::any::type_name::<RejectedAsyncWriter>().contains("RejectedAsyncWriter"));
-/// assert_eq!(RecoveryCleanupState::Pending, RecoveryCleanupState::Pending);
+/// fn inspect_recovery(recovery: AsyncWriterRecovery) {
+///     if let AsyncWriterRecovery::Rejected(writer) = recovery {
+///         assert_eq!(writer.cleanup_state(), RecoveryCleanupState::Pending);
+///     }
+/// }
 /// ```
 #[must_use = "explicitly clean or retain the isolated recovery session"]
 pub struct RejectedAsyncWriter {
@@ -68,6 +71,7 @@ impl RejectedAsyncWriter {
     }
     /// Returns cleanup progress; errors and cancellation do not release
     /// ownership.
+    #[inline]
     pub const fn cleanup_state(&self) -> RecoveryCleanupState {
         self.state
     }

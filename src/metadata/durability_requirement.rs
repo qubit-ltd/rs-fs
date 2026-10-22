@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade tests.
 //! Durability requirements for completed filesystem operations.
 
 /// Required storage synchronization strength for an operation outcome.
@@ -15,7 +14,9 @@
 /// ```rust
 /// use qubit_fs::metadata::DurabilityRequirement;
 ///
-/// assert!(matches!(DurabilityRequirement::NotRequired, DurabilityRequirement::NotRequired));
+/// let requirement = DurabilityRequirement::Required;
+/// assert_eq!(requirement, DurabilityRequirement::Required);
+/// assert_eq!(DurabilityRequirement::default(), DurabilityRequirement::NotRequired);
 /// ```
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum DurabilityRequirement {

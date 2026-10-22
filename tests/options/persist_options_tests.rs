@@ -17,15 +17,17 @@ fn test_persist_options_full_configuration_is_usable() {
     let options = PersistOptions::default()
         .with_overwrite(true)
         .with_atomicity(AtomicityRequirement::Preferred)
-        .with_preserve_metadata(MetadataPreservePolicy::All);
+        .with_preserve_metadata(MetadataPreservePolicy::All)
+        .with_create_parent();
 
     assert!(options.overwrite());
     assert_eq!(AtomicityRequirement::Preferred, options.atomicity());
     assert_eq!(MetadataPreservePolicy::All, options.preserve_metadata());
+    assert!(options.creates_parent());
 }
 
 #[test]
-fn required_persist_atomicity_fails_preflight_without_atomic_temp_capability() {
+fn test_persist_options_rejects_required_atomicity_without_atomic_temp_capability() {
     let options = PersistOptions::default();
 
     let error = options

@@ -53,7 +53,9 @@ use crate::rename::RenameOutcome;
 /// ```
 /// use qubit_fs::spi::AsyncFileSystemSpi;
 ///
-/// fn accepts_provider<T: AsyncFileSystemSpi>() {}
+/// fn inspect_provider<T: AsyncFileSystemSpi>(provider: &T) {
+///     let _properties = provider.properties();
+/// }
 /// ```
 pub trait AsyncFileSystemSpi: Send + Sync {
     /// Returns one immutable provider property snapshot without asynchronous

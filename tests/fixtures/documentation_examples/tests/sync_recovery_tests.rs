@@ -6,9 +6,6 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-//! Exercises the guide's synchronous recovery carrier through the public
-//! facade.
-
 use std::io::Cursor;
 use std::io::Result as IoResult;
 
@@ -45,15 +42,18 @@ use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
 use qubit_fs::write::WriteAbortOutcome;
 use qubit_fs::write::WriteFailureState;
+use qubit_fs_documentation_examples::sync_recovery::copy_report;
 use qubit_io::Output;
-
-use super::sync_recovery::copy_report;
 
 struct PublishedThenCleanupFailure;
 impl FileSystemSpi for PublishedThenCleanupFailure {
     fn properties(&self) -> ProviderProperties {
         ProviderProperties::new(
-            FileSystemInfo::new(FileSystemId::new("docs").unwrap(), "docs", PathSemantics::Hierarchical),
+            FileSystemInfo::new(
+                FileSystemId::new("docs").expect("documentation filesystem identity should be valid"),
+                "docs",
+                PathSemantics::Hierarchical,
+            ),
             ProviderOperations::new()
                 .with(ProviderOperation::Stat)
                 .with(ProviderOperation::OpenReader)
@@ -65,7 +65,7 @@ impl FileSystemSpi for PublishedThenCleanupFailure {
             PathConstraints::absolute(),
             SymlinkPolicy::Reject,
         )
-        .unwrap()
+        .expect("documentation filesystem properties should be valid")
     }
     fn stat(&self, request: StatRequest<'_>) -> FsResult<StatResponse> {
         Ok(StatResponse::new(
@@ -118,14 +118,15 @@ impl FileWriterSpi for FailedWriter {
 }
 
 #[test]
-fn synchronous_example_retains_publication_and_both_errors() {
-    let filesystem = FileSystem::from_spi(PublishedThenCleanupFailure).unwrap();
+fn test_synchronous_example_retains_publication_and_both_errors() {
+    let filesystem = FileSystem::from_spi(PublishedThenCleanupFailure)
+        .expect("the fixture provider should produce a valid filesystem");
     let recovery = copy_report(
         &filesystem,
-        &Path::parse("/source").unwrap(),
-        &Path::parse("/target").unwrap(),
+        &Path::parse("/source").expect("the source path should be valid"),
+        &Path::parse("/target").expect("the target path should be valid"),
     )
-    .unwrap_err();
+    .expect_err("the fixture should preserve the publication and cleanup failure");
     assert_eq!(CopyFailureState::Published, recovery.failure.state());
     assert!(
         recovery
@@ -136,5 +137,11 @@ fn synchronous_example_retains_publication_and_both_errors() {
     );
     assert_eq!(5, recovery.failure.partial_stats().bytes);
     assert!(recovery.failure.has_recovery());
-    assert_eq!(FsOperation::AbortWriter, recovery.cleanup_error.unwrap().operation());
+    assert_eq!(
+        FsOperation::AbortWriter,
+        recovery
+            .cleanup_error
+            .expect("the fixture writer should report its cleanup failure")
+            .operation()
+    );
 }

@@ -46,7 +46,10 @@ use crate::rename::RenameOutcome;
 /// ```
 /// use qubit_fs::spi::FileSystemSpi;
 ///
-/// fn accepts_provider<T: FileSystemSpi>() {}
+/// fn inspect_provider<T: FileSystemSpi>(provider: &T) {
+///     let properties = provider.properties();
+///     assert!(!properties.info().provider_id().is_empty());
+/// }
 /// ```
 pub trait FileSystemSpi: Send + Sync {
     /// Returns one immutable property snapshot.

@@ -29,6 +29,15 @@ pub struct CreateDirectoryOutcome {
 impl CreateDirectoryOutcome {
     /// Creates an outcome. `already_existed` reports an accepted existing
     /// directory.
+    ///
+    /// # Parameters
+    ///
+    /// * `already_existed` indicates whether an existing directory satisfied
+    ///   the request.
+    ///
+    /// # Returns
+    ///
+    /// A new outcome without a provider-reported ancestor count.
     #[inline]
     #[must_use]
     pub const fn new(already_existed: bool) -> Self {
@@ -39,6 +48,10 @@ impl CreateDirectoryOutcome {
     }
 
     /// Returns whether an existing directory satisfied the request.
+    ///
+    /// # Returns
+    ///
+    /// `true` when an existing directory satisfied the request.
     #[inline]
     #[must_use]
     pub const fn already_existed(self) -> bool {
@@ -46,6 +59,14 @@ impl CreateDirectoryOutcome {
     }
 
     /// Attaches the number of ancestor directories created, when known.
+    ///
+    /// # Parameters
+    ///
+    /// * `count` is the number of ancestor directories created.
+    ///
+    /// # Returns
+    ///
+    /// The updated outcome with the reported ancestor count.
     #[inline]
     #[must_use]
     pub const fn with_created_ancestors(mut self, count: u64) -> Self {
@@ -54,30 +75,13 @@ impl CreateDirectoryOutcome {
     }
 
     /// Returns the number of created ancestor directories, when reported.
+    ///
+    /// # Returns
+    ///
+    /// `Some(count)` when the provider reported the number of created
+    /// ancestors, or `None` when it did not.
     #[inline]
-    #[must_use]
     pub const fn created_ancestors(self) -> Option<u64> {
         self.created_ancestors
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::hint::black_box;
-
-    use super::CreateDirectoryOutcome;
-
-    #[test]
-    fn outcome_accessors_are_executed_at_runtime() {
-        let constructor: fn(bool) -> CreateDirectoryOutcome = black_box(CreateDirectoryOutcome::new);
-        let with_ancestors: fn(CreateDirectoryOutcome, u64) -> CreateDirectoryOutcome =
-            black_box(CreateDirectoryOutcome::with_created_ancestors);
-        let already_existed: fn(CreateDirectoryOutcome) -> bool = black_box(CreateDirectoryOutcome::already_existed);
-        let created_ancestors: fn(CreateDirectoryOutcome) -> Option<u64> =
-            black_box(CreateDirectoryOutcome::created_ancestors);
-
-        let outcome = with_ancestors(constructor(true), 2);
-        assert!(already_existed(outcome));
-        assert_eq!(Some(2), created_ancestors(outcome));
     }
 }

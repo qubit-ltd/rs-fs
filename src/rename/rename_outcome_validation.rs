@@ -16,7 +16,22 @@ use crate::rename::RenameFailureState;
 use crate::rename::RenameOptions;
 use crate::rename::RenameOutcome;
 
-/// Validates provider outcome guarantees shared by sync and async facades.
+/// Validates provider-reported success against the requested rename guarantees.
+///
+/// The outcome must satisfy required atomicity and durability, must not use
+/// copy-then-delete publication, and must identify the requested source and
+/// target. Violations after reported success are classified with the
+/// destination state implied by the reported outcome.
+///
+/// # Parameters
+/// - `outcome`: Successful outcome reported by the provider.
+/// - `options`: Guarantees requested for this rename.
+/// - `source`: Source identity requested by the caller.
+/// - `target`: Target identity requested by the caller.
+///
+/// # Returns
+/// `Some` with a validation error when the provider outcome violates a
+/// guarantee or reports different identities; otherwise, `None`.
 pub(crate) fn validate_rename_outcome(
     outcome: &RenameOutcome,
     options: &RenameOptions,

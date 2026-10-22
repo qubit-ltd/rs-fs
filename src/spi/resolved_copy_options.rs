@@ -16,14 +16,15 @@ use crate::metadata::SymlinkPolicy;
 /// # Examples
 ///
 /// ```rust
-/// use qubit_fs::copy::CopyOptions;
-/// use qubit_fs::metadata::SymlinkPolicy;
 /// use qubit_fs::spi::ResolvedCopyOptions;
 ///
-/// let options = CopyOptions::default();
-/// assert!(std::any::type_name::<ResolvedCopyOptions>().contains("ResolvedCopyOptions"));
-/// assert_eq!(SymlinkPolicy::Reject, SymlinkPolicy::Reject);
-/// let _ = options;
+/// fn inspect_copy_options(options: &ResolvedCopyOptions) {
+///     let _caller_options = options.options();
+///     let _symlink_policy = options.symlink_policy();
+/// }
+///
+/// // A provider receives this facade-created value in its copy request.
+/// let _ = inspect_copy_options;
 /// ```
 #[derive(Clone)]
 pub struct ResolvedCopyOptions {
@@ -39,6 +40,9 @@ impl ResolvedCopyOptions {
     /// # Parameters
     /// - `options`: Validated caller options after normalization.
     /// - `symlink_policy`: Effective provider policy for this request.
+    ///
+    /// # Returns
+    /// The resolved options exposed to the provider.
     #[inline]
     pub(crate) const fn new(options: CopyOptions, symlink_policy: SymlinkPolicy) -> Self {
         Self {
@@ -48,6 +52,9 @@ impl ResolvedCopyOptions {
     }
 
     /// Returns the resolved options.
+    ///
+    /// # Returns
+    /// The validated caller options retained by the facade.
     #[inline]
     #[must_use]
     pub const fn options(&self) -> &CopyOptions {
@@ -55,29 +62,12 @@ impl ResolvedCopyOptions {
     }
 
     /// Returns the effective symbolic-link policy.
+    ///
+    /// # Returns
+    /// The provider policy selected for this request.
     #[inline]
     #[must_use = "the resolved symbolic-link policy must be used"]
     pub const fn symlink_policy(&self) -> SymlinkPolicy {
         self.symlink_policy
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::hint::black_box;
-
-    use super::ResolvedCopyOptions;
-    use crate::copy::CopyOptions;
-    use crate::metadata::SymlinkPolicy;
-
-    #[test]
-    fn resolved_options_expose_their_values() {
-        let options = CopyOptions::default();
-        let resolved = ResolvedCopyOptions::new(options.clone(), SymlinkPolicy::FollowWithinFileSystem);
-        let options_accessor: fn(&ResolvedCopyOptions) -> &CopyOptions = black_box(ResolvedCopyOptions::options);
-        let policy_accessor: fn(&ResolvedCopyOptions) -> SymlinkPolicy = black_box(ResolvedCopyOptions::symlink_policy);
-
-        assert_eq!(&options, options_accessor(&resolved));
-        assert_eq!(SymlinkPolicy::FollowWithinFileSystem, policy_accessor(&resolved));
     }
 }

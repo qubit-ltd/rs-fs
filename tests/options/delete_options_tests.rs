@@ -23,7 +23,7 @@ fn test_delete_options_full_configuration_is_usable() {
 }
 
 #[test]
-fn delete_requirements_are_checked_against_typed_capabilities() {
+fn test_delete_requirements_are_checked_against_typed_capabilities() {
     let recursive = DeleteOptions::default().with_recursive(true);
     let error = recursive
         .validate_against(FileSystemCapabilities::default())

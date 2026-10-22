@@ -9,6 +9,15 @@
 //! Reasons the allowlisted stream copy cannot serve options.
 
 /// First static reason a stream fallback cannot honor a copy request.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_fs::copy::FallbackRejection;
+///
+/// let rejection = FallbackRejection::TreeMode;
+/// assert_eq!(rejection, FallbackRejection::TreeMode);
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum FallbackRejection {

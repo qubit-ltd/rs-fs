@@ -73,6 +73,32 @@ pub struct CopyOptions {
 }
 
 impl CopyOptions {
+    /// Creates options for copying one file-like resource.
+    ///
+    /// # Returns
+    /// Copy options with `mode` set to [`CopyMode::File`].
+    #[inline]
+    #[must_use]
+    pub fn file() -> Self {
+        Self {
+            mode: CopyMode::File,
+            ..Self::default()
+        }
+    }
+
+    /// Creates options for copying a resource tree.
+    ///
+    /// # Returns
+    /// Copy options with `mode` set to [`CopyMode::Tree`].
+    #[inline]
+    #[must_use]
+    pub fn tree() -> Self {
+        Self {
+            mode: CopyMode::Tree,
+            ..Self::default()
+        }
+    }
+
     /// Returns a copy of these options with the source mode replaced.
     #[inline]
     #[must_use]
@@ -275,32 +301,6 @@ impl CopyOptions {
     #[must_use]
     pub const fn deadline(&self) -> Option<Duration> {
         self.deadline
-    }
-
-    /// Creates options for copying one file-like resource.
-    ///
-    /// # Returns
-    /// Copy options with `mode` set to [`CopyMode::File`].
-    #[inline]
-    #[must_use]
-    pub fn file() -> Self {
-        Self {
-            mode: CopyMode::File,
-            ..Self::default()
-        }
-    }
-
-    /// Creates options for copying a resource tree.
-    ///
-    /// # Returns
-    /// Copy options with `mode` set to [`CopyMode::Tree`].
-    #[inline]
-    #[must_use]
-    pub fn tree() -> Self {
-        Self {
-            mode: CopyMode::Tree,
-            ..Self::default()
-        }
     }
 
     /// Validates required copy semantics before provider side effects.

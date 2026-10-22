@@ -19,6 +19,13 @@ use crate::metadata::FileSystemProperties;
 use crate::path::PathSemantics;
 
 /// Validates the scope and combined raw query prefix without normalizing keys.
+///
+/// # Errors
+/// Returns an invalid-options error when a namespace scope is used with
+/// hierarchical path semantics or the listing options do not match the path
+/// semantics. Returns the path validation error when the selected path violates
+/// filesystem limits. Returns a resource-limit error when the combined raw
+/// query prefix exceeds the filesystem path text limit.
 pub(crate) fn validate(properties: &FileSystemProperties, scope: &ListScope, options: &ListOptions) -> FsResult<()> {
     let semantics = properties.info().path_semantics();
     match scope {

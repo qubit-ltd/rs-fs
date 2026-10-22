@@ -50,8 +50,8 @@ impl FileReader {
     /// arbitrary [`Input`] does not automatically become a file reader.
     ///
     /// # Parameters
-    /// - `inner`: Already-open byte input.
     /// - `info`: File identity and optional open-time metadata snapshot.
+    /// - `inner`: Already-open byte input.
     ///
     /// # Returns
     /// A concrete file reader handle.

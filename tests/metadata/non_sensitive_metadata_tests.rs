@@ -10,7 +10,7 @@ use qubit_fs::metadata::NonSensitiveMetadata;
 use qubit_fs::metadata::UserMetadata;
 
 #[test]
-fn non_sensitive_metadata_preserves_safe_metadata_without_logging_values() {
+fn test_non_sensitive_metadata_preserves_safe_metadata_without_logging_values() {
     let metadata = UserMetadata::new()
         .with("endpoint", "private-value")
         .expect("safe keys should be accepted");
@@ -28,7 +28,7 @@ fn non_sensitive_metadata_preserves_safe_metadata_without_logging_values() {
 }
 
 #[test]
-fn non_sensitive_metadata_accessors_are_callable_directly() {
+fn test_non_sensitive_metadata_accessors_are_callable_directly() {
     let metadata = NonSensitiveMetadata::from(
         UserMetadata::new()
             .with("endpoint", "private-value")

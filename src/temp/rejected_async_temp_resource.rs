@@ -28,21 +28,21 @@ use crate::spi::SpiFuture;
 /// its session, never on a diagnostic path. Drop performs no explicit cleanup
 /// or cancellation hook; retain this handle until cleanup is confirmed.
 ///
-/// ```compile_fail
-/// use qubit_fs::temp::RejectedAsyncTempResource;
-/// fn cannot_publish(mut recovery: RejectedAsyncTempResource) {
-///     recovery.keep();
-/// }
-/// ```
-///
 /// # Examples
 ///
 /// ```rust
+/// use qubit_fs::error::OpenFailure;
 /// use qubit_fs::error::RecoveryCleanupState;
 /// use qubit_fs::temp::RejectedAsyncTempResource;
 ///
-/// assert!(std::any::type_name::<RejectedAsyncTempResource>().contains("RejectedAsyncTempResource"));
-/// assert_eq!(RecoveryCleanupState::Pending, RecoveryCleanupState::Pending);
+/// async fn inspect_rejected_open(
+///     failure: &mut OpenFailure<RejectedAsyncTempResource>,
+/// ) {
+///     if let Some(recovery) = failure.recovery_mut() {
+///         assert_eq!(recovery.cleanup_state(), RecoveryCleanupState::Pending);
+///         let _ = recovery.cleanup_async().await;
+///     }
+/// }
 /// ```
 #[must_use = "explicitly clean or retain the isolated recovery session"]
 pub struct RejectedAsyncTempResource {
@@ -67,6 +67,7 @@ impl RejectedAsyncTempResource {
     }
     /// Returns cleanup progress; errors and cancellation do not release
     /// ownership.
+    #[inline]
     pub const fn cleanup_state(&self) -> RecoveryCleanupState {
         self.state
     }

@@ -13,6 +13,7 @@ use crate::write::AsyncWriterRecovery;
 use crate::write::WriteFailureState;
 use crate::write::internal::WriteAllRecoverySnapshot;
 /// Keeps operation facts outside the borrowed execution future.
+#[must_use = "the guard must remain alive until execution finishes"]
 pub(crate) struct WriteAllCancellationGuard<'a> {
     /// Owning operation state updated on completion or cancellation.
     state: &'a mut AsyncWriteAllOperationState,
@@ -39,6 +40,7 @@ impl<'a> WriteAllCancellationGuard<'a> {
         }
     }
     /// Borrows the retained writer slot for provider execution.
+    #[must_use = "the writer slot must be passed to provider execution"]
     #[inline]
     pub(crate) fn writer_mut(&mut self) -> &mut Option<AsyncWriterRecovery> {
         self.writer

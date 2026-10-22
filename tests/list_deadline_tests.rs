@@ -32,7 +32,7 @@ use support::listing::Observations;
 
 /// Merely constructing an expired future must not change stream state.
 #[test]
-fn dropping_unpolled_next_has_no_side_effects() {
+fn test_dropping_unpolled_next_has_no_side_effects() {
     let observations = Arc::new(Observations::default());
     let provider = ListingProvider {
         semantics: PathSemantics::ObjectKey,
@@ -66,7 +66,7 @@ fn dropping_unpolled_next_has_no_side_effects() {
 /// Each completed future consumes one entry and leaves subsequent entries
 /// available.
 #[test]
-fn ready_next_consumes_exactly_one_entry() {
+fn test_ready_next_consumes_exactly_one_entry() {
     let observations = Arc::new(Observations::default());
     let provider = ListingProvider {
         semantics: PathSemantics::ObjectKey,

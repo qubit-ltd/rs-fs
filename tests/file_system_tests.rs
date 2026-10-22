@@ -567,19 +567,19 @@ fn test_sync_facade_requires_operation_capabilities_before_dispatch() {
 
     let reader = file_system
         .open_reader(&path, ReadOptions::default())
-        .expect_err("capability");
+        .expect_err("opening a reader must require the read capability");
     let writer = file_system
         .open_writer(&path, WriteOptions::default())
-        .expect_err("capability");
+        .expect_err("opening a writer must require the write capability");
     let file = file_system
         .create_temp_file(TempOptions::default())
-        .expect_err("capability");
+        .expect_err("creating a temporary file must require its capability");
     let directory = file_system
         .create_temp_directory(TempOptions::default())
-        .expect_err("capability");
+        .expect_err("creating a temporary directory must require its capability");
     let create = file_system
         .create_directory(&path, CreateDirectoryOptions::default())
-        .expect_err("capability");
+        .expect_err("creating a directory must require the create-directory capability");
     for error in [&reader, writer.error(), file.error(), directory.error(), &create] {
         assert_eq!(FsErrorKind::UnsupportedCapability, error.kind());
     }
@@ -603,7 +603,7 @@ fn test_sync_spi_default_operations_report_unsupported() {
     let path = Path::parse("/resource").expect("test path should parse");
     let target = Path::parse("/target").expect("test target should parse");
 
-    let error = match filesystem.list(&ListScope::Path((path).clone()), ListOptions::default()) {
+    let error = match filesystem.list(&ListScope::Path(path.clone()), ListOptions::default()) {
         Ok(_) => panic!("default list implementation must reject the request"),
         Err(error) => error,
     };

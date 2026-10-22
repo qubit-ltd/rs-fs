@@ -90,6 +90,8 @@ impl OpenedAsyncWriter {
     }
 
     /// Transfers the unvalidated identity and owned session to the facade.
+    #[inline]
+    #[must_use]
     pub(crate) fn into_parts(self) -> (OpenedFileInfo, Box<dyn AsyncFileWriteSession>) {
         (self.info, self.session)
     }

@@ -32,6 +32,7 @@ use super::FallbackRejection;
 /// # }
 /// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[must_use]
 pub struct CopyAssessment {
     route: CopyExecutionRoute,
     fallback_rejection: Option<FallbackRejection>,
@@ -49,14 +50,12 @@ impl CopyAssessment {
 
     /// Returns the possible execution route.
     #[inline]
-    #[must_use]
     pub const fn route(self) -> CopyExecutionRoute {
         self.route
     }
 
     /// Returns the first static fallback rejection, if any.
     #[inline]
-    #[must_use]
     pub const fn fallback_rejection(self) -> Option<FallbackRejection> {
         self.fallback_rejection
     }

@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade tests.
 //! A single configured filesystem limit.
 
 /// A provider-declared limit for one filesystem property.
@@ -15,7 +14,9 @@
 /// ```rust
 /// use qubit_fs::metadata::FileSystemLimit;
 ///
-/// assert!(matches!(FileSystemLimit::Unknown, FileSystemLimit::Unknown));
+/// let limit = FileSystemLimit::Maximum(4096);
+/// assert_eq!(limit.maximum(), Some(4096));
+/// assert!(!limit.is_exceeded_by(4096));
 /// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum FileSystemLimit {

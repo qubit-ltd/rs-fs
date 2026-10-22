@@ -13,9 +13,13 @@
 /// # Examples
 ///
 /// ```rust
-/// use qubit_fs::spi::CopyDeclineReason;
+/// use qubit_fs::spi::{CopyAttempt, CopyDeclineReason};
 ///
-/// assert!(matches!(CopyDeclineReason::NotImplemented, CopyDeclineReason::NotImplemented));
+/// let attempt = CopyAttempt::Declined(CopyDeclineReason::NotApplicable);
+/// assert!(matches!(
+///     attempt,
+///     CopyAttempt::Declined(CopyDeclineReason::NotApplicable)
+/// ));
 /// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]

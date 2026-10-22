@@ -13,9 +13,10 @@
 /// # Examples
 ///
 /// ```rust
-/// use qubit_fs::path::PathForm;
+/// use qubit_fs::path::{PathConstraints, PathForm};
 ///
-/// assert!(matches!(PathForm::Absolute, PathForm::Absolute));
+/// let constraints = PathConstraints::absolute();
+/// assert_eq!(PathForm::Absolute, constraints.form());
 /// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PathForm {

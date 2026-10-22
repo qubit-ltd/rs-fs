@@ -20,10 +20,7 @@ use super::poll_support::ready;
 
 #[test]
 fn provider_guide_example_reads_health_resource() {
-    assert_eq!(
-        b"ok",
-        super::provider_minimal::read_health().unwrap().as_slice()
-    );
+    assert_eq!(b"ok", super::provider_minimal::read_health().unwrap().as_slice());
 }
 
 /// The async provider example resolves through the facade without a runtime.
@@ -49,10 +46,7 @@ fn async_example_retains_failure_and_failed_cleanup() {
     let Err(WriteReportError::Recovery(recovery)) = result else {
         panic!("expected recovery");
     };
-    assert_eq!(
-        WriteFailureState::Published,
-        recovery.primary.as_ref().unwrap().state()
-    );
+    assert_eq!(WriteFailureState::Published, recovery.primary.as_ref().unwrap().state());
     assert!(recovery.cleanup_error.is_some());
     assert!(recovery.operation.has_recovery());
 }

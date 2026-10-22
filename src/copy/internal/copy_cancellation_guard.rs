@@ -58,6 +58,7 @@ impl<'a> CopyCancellationGuard<'a> {
     ///
     /// # Returns
     /// The mutable slot used to retain an opened recovery writer.
+    #[must_use = "update or inspect the recovery writer slot"]
     #[inline]
     pub(in crate::copy) fn writer_mut(&mut self) -> &mut Option<AsyncWriterRecovery> {
         self.writer

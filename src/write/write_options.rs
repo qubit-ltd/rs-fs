@@ -68,27 +68,11 @@ impl Default for WriteOptions {
 }
 
 impl WriteOptions {
-    /// Returns a copy with parent creation replaced.
-    #[inline]
-    #[must_use]
-    pub const fn with_create_parent(mut self, create: bool) -> Self {
-        self.create_parent = create;
-        self
-    }
-
     /// Returns whether missing parent directories are created.
     #[inline]
     #[must_use]
     pub const fn create_parent(&self) -> bool {
         self.create_parent
-    }
-
-    /// Returns a copy with the destination disposition replaced.
-    #[inline]
-    #[must_use]
-    pub const fn with_disposition(mut self, disposition: WriteDisposition) -> Self {
-        self.disposition = disposition;
-        self
     }
 
     /// Returns the destination disposition.
@@ -98,27 +82,11 @@ impl WriteOptions {
         self.disposition
     }
 
-    /// Returns a copy with the atomicity requirement replaced.
-    #[inline]
-    #[must_use]
-    pub const fn with_atomicity(mut self, atomicity: AtomicityRequirement) -> Self {
-        self.atomicity = atomicity;
-        self
-    }
-
     /// Returns the atomicity requirement.
     #[inline]
     #[must_use]
     pub const fn atomicity(&self) -> AtomicityRequirement {
         self.atomicity
-    }
-
-    /// Returns a copy with the durability requirement replaced.
-    #[inline]
-    #[must_use]
-    pub const fn with_durability(mut self, durability: DurabilityRequirement) -> Self {
-        self.durability = durability;
-        self
     }
 
     /// Returns the completed-publication durability requirement.
@@ -128,27 +96,11 @@ impl WriteOptions {
         self.durability
     }
 
-    /// Returns a copy with the version precondition replaced.
-    #[inline]
-    #[must_use]
-    pub fn with_precondition(mut self, precondition: WritePrecondition) -> Self {
-        self.precondition = precondition;
-        self
-    }
-
     /// Returns the version precondition.
     #[inline]
     #[must_use]
     pub const fn precondition(&self) -> &WritePrecondition {
         &self.precondition
-    }
-
-    /// Returns a copy with the content type replaced.
-    #[inline]
-    #[must_use]
-    pub fn with_content_type(mut self, content_type: Option<String>) -> Self {
-        self.content_type = content_type;
-        self
     }
 
     /// Returns the optional content type.
@@ -165,19 +117,67 @@ impl WriteOptions {
         &self.user_metadata
     }
 
+    /// Returns the optional expected checksum.
+    #[inline]
+    #[must_use]
+    pub const fn checksum(&self) -> Option<&Checksum> {
+        self.checksum.as_ref()
+    }
+
+    /// Returns a copy with parent creation replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_create_parent(mut self, create: bool) -> Self {
+        self.create_parent = create;
+        self
+    }
+
+    /// Returns a copy with the destination disposition replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_disposition(mut self, disposition: WriteDisposition) -> Self {
+        self.disposition = disposition;
+        self
+    }
+
+    /// Returns a copy with the atomicity requirement replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_atomicity(mut self, atomicity: AtomicityRequirement) -> Self {
+        self.atomicity = atomicity;
+        self
+    }
+
+    /// Returns a copy with the durability requirement replaced.
+    #[inline]
+    #[must_use]
+    pub const fn with_durability(mut self, durability: DurabilityRequirement) -> Self {
+        self.durability = durability;
+        self
+    }
+
+    /// Returns a copy with the version precondition replaced.
+    #[inline]
+    #[must_use]
+    pub fn with_precondition(mut self, precondition: WritePrecondition) -> Self {
+        self.precondition = precondition;
+        self
+    }
+
+    /// Returns a copy with the content type replaced.
+    #[inline]
+    #[must_use]
+    pub fn with_content_type(mut self, content_type: Option<String>) -> Self {
+        self.content_type = content_type;
+        self
+    }
+
     /// Returns a copy with the expected checksum replaced.
     #[inline]
     #[must_use]
     pub fn with_checksum(mut self, checksum: Option<Checksum>) -> Self {
         self.checksum = checksum;
         self
-    }
-
-    /// Returns the optional expected checksum.
-    #[inline]
-    #[must_use]
-    pub const fn checksum(&self) -> Option<&Checksum> {
-        self.checksum.as_ref()
     }
 
     /// Replaces user-defined metadata that has already passed key validation.
@@ -264,39 +264,8 @@ impl WriteOptions {
     }
 }
 
-/// Builds a typed unmet write requirement.
+/// Builds an error that identifies the unsupported capability required by a
+/// write.
 fn missing_requirement(capability: FileSystemCapability, message: &str) -> FsError {
     FsError::new(FsErrorKind::RequirementNotMet, FsOperation::OpenWriter, message).with_required_capability(capability)
-}
-
-#[cfg(test)]
-mod tests {
-    use std::hint::black_box;
-
-    use super::WriteOptions;
-    use crate::metadata::Checksum;
-    use crate::metadata::ChecksumAlgorithm;
-    use crate::metadata::NonSensitiveMetadata;
-    use crate::write::WriteDisposition;
-    use crate::write::WritePrecondition;
-
-    #[test]
-    fn option_accessors_are_executed_at_runtime() {
-        let disposition: fn(&WriteOptions) -> WriteDisposition = black_box(WriteOptions::disposition);
-        let precondition: for<'a> fn(&'a WriteOptions) -> &'a WritePrecondition = black_box(WriteOptions::precondition);
-        let create_parent: fn(&WriteOptions) -> bool = black_box(WriteOptions::create_parent);
-        let user_metadata: fn(&WriteOptions) -> &NonSensitiveMetadata = black_box(WriteOptions::user_metadata);
-        let checksum: for<'a> fn(&'a WriteOptions) -> Option<&'a Checksum> = black_box(WriteOptions::checksum);
-
-        let options = WriteOptions::default()
-            .with_create_parent(true)
-            .with_disposition(WriteDisposition::CreateOrReplace)
-            .with_checksum(Some(Checksum::new(ChecksumAlgorithm::Sha256, "abc")));
-
-        assert_eq!(WriteDisposition::CreateOrReplace, disposition(&options));
-        assert!(matches!(precondition(&options), WritePrecondition::None));
-        assert!(create_parent(&options));
-        assert!(user_metadata(&options).is_empty());
-        assert!(checksum(&options).is_some());
-    }
 }

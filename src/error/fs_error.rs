@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade tests.
 //! Concrete filesystem error type.
 
 use std::error::Error;
@@ -44,6 +43,7 @@ use crate::path::Path;
 /// assert_eq!(Some(&path), error.path());
 /// # Ok::<(), qubit_fs::FsError>(())
 /// ```
+#[must_use = "inspect the filesystem error instead of silently discarding it"]
 pub struct FsError {
     /// Error category.
     kind: FsErrorKind,
@@ -81,7 +81,6 @@ impl FsError {
     /// # Returns
     /// New filesystem error.
     #[inline]
-    #[must_use]
     pub fn new(kind: FsErrorKind, operation: FsOperation, message: &str) -> Self {
         Self {
             kind,
@@ -122,177 +121,6 @@ impl FsError {
         }
     }
 
-    /// Adds primary path context.
-    ///
-    /// # Parameters
-    /// - `path`: Concrete path where the operation failed. For a two-path
-    ///   operation this may be either request path; use [`Self::target`] to
-    ///   identify the destination.
-    ///
-    /// # Returns
-    /// Updated filesystem error.
-    #[inline]
-    #[must_use]
-    pub fn with_path(mut self, path: impl Into<Path>) -> Self {
-        self.path = Some(Box::new(path.into()));
-        self
-    }
-
-    /// Rebinds the error to the public operation that was requested.
-    ///
-    /// This is useful for convenience operations implemented through another
-    /// primitive, such as `exists` implemented through `stat`, while retaining
-    /// all path, provider, capability, and source context.
-    ///
-    /// # Parameters
-    /// - `operation`: Public operation whose failure is being returned.
-    ///
-    /// # Returns
-    /// Updated filesystem error.
-    #[inline]
-    #[must_use]
-    pub fn with_operation(mut self, operation: FsOperation) -> Self {
-        self.operation = operation;
-        self
-    }
-
-    /// Adds secondary target path context.
-    ///
-    /// # Parameters
-    /// - `target`: Destination path of a two-path operation.
-    ///
-    /// # Returns
-    /// Updated filesystem error.
-    #[inline]
-    #[must_use]
-    pub fn with_target(mut self, target: impl Into<Path>) -> Self {
-        self.target = Some(Box::new(target.into()));
-        self
-    }
-
-    /// Adds the concrete source entry where a structured operation failed.
-    #[inline]
-    #[must_use]
-    pub fn with_failure_path(mut self, path: impl Into<Path>) -> Self {
-        self.failure_path = Some(Box::new(path.into()));
-        self
-    }
-
-    /// Adds the concrete destination entry where a structured operation failed.
-    #[inline]
-    #[must_use]
-    pub fn with_failure_target(mut self, target: impl Into<Path>) -> Self {
-        self.failure_target = Some(Box::new(target.into()));
-        self
-    }
-
-    /// Adds provider context.
-    ///
-    /// # Parameters
-    /// - `provider`: Canonical provider id involved in the operation.
-    ///
-    /// # Returns
-    /// Updated filesystem error.
-    #[inline]
-    #[must_use]
-    pub fn with_provider(mut self, provider: impl Display) -> Self {
-        self.provider = Some(provider.to_string().into());
-        self
-    }
-
-    /// Adds the capability required by an unsupported or unmet request.
-    ///
-    /// # Parameters
-    /// - `capability`: Stable capability required by the request.
-    ///
-    /// # Returns
-    /// Updated filesystem error.
-    #[inline]
-    #[must_use]
-    pub fn with_required_capability(mut self, capability: FileSystemCapability) -> Self {
-        self.required_capability = Some(capability);
-        self
-    }
-
-    /// Adds the strongest known external effect of the failed operation.
-    ///
-    /// # Parameters
-    ///
-    /// * `effect_state` - Provider-neutral effect state proven by the provider.
-    ///
-    /// # Returns
-    ///
-    /// Updated filesystem error.
-    #[inline]
-    #[must_use]
-    pub fn with_effect_state(mut self, effect_state: FsEffectState) -> Self {
-        self.effect_state = Some(effect_state);
-        self
-    }
-
-    /// Replaces untrusted session locations with a known cleanup request.
-    ///
-    /// Used only for quarantined sessions whose opening identity was invalid.
-    /// Diagnostic entry and target paths cannot be trusted in this case. The
-    /// original category, effect evidence, message, and source remain intact.
-    pub(crate) fn with_trusted_cleanup_context(
-        mut self,
-        operation: FsOperation,
-        path: Option<&Path>,
-        provider: &str,
-    ) -> Self {
-        self.operation = operation;
-        self.path = path.cloned().map(Box::new);
-        self.target = None;
-        self.failure_path = None;
-        self.failure_target = None;
-        self.provider = Some(provider.into());
-        self
-    }
-
-    /// Adds missing path, target, and provider context without overwriting
-    /// provider-supplied details.
-    ///
-    /// Core resource wrappers use this when an error crosses an abstraction
-    /// boundary. It preserves a provider's more specific context while making
-    /// generic validation and stream failures actionable to callers.
-    ///
-    /// # Parameters
-    /// - `path`: Fallback primary path for the requested operation.
-    /// - `target`: Fallback secondary path, when the operation has one.
-    /// - `provider`: Fallback canonical provider id.
-    ///
-    /// # Returns
-    /// Updated error with every previously absent context field filled.
-    #[inline]
-    #[must_use]
-    pub(crate) fn with_missing_context(mut self, path: &Path, target: Option<&Path>, provider: &str) -> Self {
-        if self.path.is_none() {
-            self.path = Some(Box::new(path.clone()));
-        }
-        if self.target.is_none() {
-            self.target = target.cloned().map(Box::new);
-        }
-        if self.provider.is_none() {
-            self.provider = Some(provider.into());
-        }
-        self
-    }
-
-    /// Adds provider context only when an error does not already carry it.
-    ///
-    /// This is used by operations that have no meaningful logical path, such
-    /// as provider capability checks performed before temporary resource
-    /// creation.
-    #[inline]
-    #[must_use]
-    pub(crate) fn with_missing_provider(mut self, provider: &str) -> Self {
-        if self.provider.is_none() {
-            self.provider = Some(provider.into());
-        }
-        self
-    }
-
     /// Creates an invalid-path error.
     ///
     /// # Parameters
@@ -302,7 +130,6 @@ impl FsError {
     /// # Returns
     /// Invalid-path filesystem error.
     #[inline]
-    #[must_use]
     pub fn invalid_path(operation: FsOperation, message: &str) -> Self {
         Self::new(FsErrorKind::InvalidPath, operation, message)
     }
@@ -316,7 +143,6 @@ impl FsError {
     /// # Returns
     /// A filesystem error retaining `error` as its source.
     #[inline]
-    #[must_use]
     pub fn from_io(error: io::Error, operation: FsOperation) -> Self {
         let kind = match error.kind() {
             io::ErrorKind::NotFound => FsErrorKind::NotFound,
@@ -390,9 +216,8 @@ impl FsError {
     /// Returns the primary path associated with this error.
     ///
     /// # Returns
-    /// The path when one was attached.
+    /// `Some` when a primary path was attached, or `None` otherwise.
     #[inline]
-    #[must_use]
     pub fn path(&self) -> Option<&Path> {
         self.path.as_deref()
     }
@@ -400,9 +225,8 @@ impl FsError {
     /// Returns the secondary target path associated with this error.
     ///
     /// # Returns
-    /// The target path when one was attached.
+    /// `Some` when a target path was attached, or `None` otherwise.
     #[inline]
-    #[must_use]
     pub fn target(&self) -> Option<&Path> {
         self.target.as_deref()
     }
@@ -410,10 +234,9 @@ impl FsError {
     /// Returns the concrete source entry where the operation failed.
     ///
     /// # Returns
-    /// The structured source path when one was attached for copy, rename, or
-    /// similar multi-path operations.
+    /// `Some` when a structured source path was attached for copy, rename, or
+    /// similar multi-path operations, or `None` otherwise.
     #[inline]
-    #[must_use]
     pub fn failure_path(&self) -> Option<&Path> {
         self.failure_path.as_deref()
     }
@@ -421,10 +244,9 @@ impl FsError {
     /// Returns the concrete destination entry where the operation failed.
     ///
     /// # Returns
-    /// The structured destination path when one was attached for copy, rename,
-    /// or similar multi-path operations.
+    /// `Some` when a structured destination path was attached for copy, rename,
+    /// or similar multi-path operations, or `None` otherwise.
     #[inline]
-    #[must_use]
     pub fn failure_target(&self) -> Option<&Path> {
         self.failure_target.as_deref()
     }
@@ -432,9 +254,8 @@ impl FsError {
     /// Returns the provider associated with this error.
     ///
     /// # Returns
-    /// The canonical provider id when one was attached.
+    /// `Some` when a canonical provider id was attached, or `None` otherwise.
     #[inline]
-    #[must_use]
     pub fn provider(&self) -> Option<&str> {
         self.provider.as_deref()
     }
@@ -442,10 +263,9 @@ impl FsError {
     /// Returns the required capability associated with this error.
     ///
     /// # Returns
-    /// The capability when the error describes unsupported functionality or
-    /// an unmet semantic requirement.
+    /// `Some` when the error describes unsupported functionality or an unmet
+    /// semantic requirement, or `None` otherwise.
     #[inline]
-    #[must_use]
     pub fn required_capability(&self) -> Option<FileSystemCapability> {
         self.required_capability
     }
@@ -457,7 +277,6 @@ impl FsError {
     /// `Some` when a provider proved an effect state, or `None` when the error
     /// carries no effect-state claim.
     #[inline]
-    #[must_use]
     pub fn effect_state(&self) -> Option<FsEffectState> {
         self.effect_state
     }
@@ -467,6 +286,118 @@ impl FsError {
     #[must_use]
     pub fn has_indeterminate_effect(&self) -> bool {
         self.kind == FsErrorKind::Indeterminate || self.effect_state == Some(FsEffectState::Indeterminate)
+    }
+
+    /// Adds primary path context.
+    ///
+    /// # Parameters
+    /// - `path`: Concrete path where the operation failed. For a two-path
+    ///   operation this may be either request path; use [`Self::target`] to
+    ///   identify the destination.
+    ///
+    /// # Returns
+    /// Updated filesystem error.
+    #[inline]
+    pub fn with_path(mut self, path: impl Into<Path>) -> Self {
+        self.path = Some(Box::new(path.into()));
+        self
+    }
+
+    /// Rebinds the error to the public operation that was requested.
+    ///
+    /// This is useful for convenience operations implemented through another
+    /// primitive, such as `exists` implemented through `stat`, while retaining
+    /// all path, provider, capability, and source context.
+    ///
+    /// # Parameters
+    /// - `operation`: Public operation whose failure is being returned.
+    ///
+    /// # Returns
+    /// Updated filesystem error.
+    #[inline]
+    pub fn with_operation(mut self, operation: FsOperation) -> Self {
+        self.operation = operation;
+        self
+    }
+
+    /// Adds secondary target path context.
+    ///
+    /// # Parameters
+    /// - `target`: Destination path of a two-path operation.
+    ///
+    /// # Returns
+    /// Updated filesystem error.
+    #[inline]
+    pub fn with_target(mut self, target: impl Into<Path>) -> Self {
+        self.target = Some(Box::new(target.into()));
+        self
+    }
+
+    /// Adds the concrete source entry where a structured operation failed.
+    ///
+    /// # Parameters
+    /// - `path`: Concrete source entry where the operation failed.
+    ///
+    /// # Returns
+    /// Updated error with the failure source path attached.
+    #[inline]
+    pub fn with_failure_path(mut self, path: impl Into<Path>) -> Self {
+        self.failure_path = Some(Box::new(path.into()));
+        self
+    }
+
+    /// Adds the concrete destination entry where a structured operation failed.
+    ///
+    /// # Parameters
+    /// - `target`: Concrete destination entry where the operation failed.
+    ///
+    /// # Returns
+    /// Updated error with the failure destination path attached.
+    #[inline]
+    pub fn with_failure_target(mut self, target: impl Into<Path>) -> Self {
+        self.failure_target = Some(Box::new(target.into()));
+        self
+    }
+
+    /// Adds provider context.
+    ///
+    /// # Parameters
+    /// - `provider`: Canonical provider id involved in the operation.
+    ///
+    /// # Returns
+    /// Updated filesystem error.
+    #[inline]
+    pub fn with_provider(mut self, provider: impl Display) -> Self {
+        self.provider = Some(provider.to_string().into());
+        self
+    }
+
+    /// Adds the capability required by an unsupported or unmet request.
+    ///
+    /// # Parameters
+    /// - `capability`: Stable capability required by the request.
+    ///
+    /// # Returns
+    /// Updated filesystem error.
+    #[inline]
+    pub fn with_required_capability(mut self, capability: FileSystemCapability) -> Self {
+        self.required_capability = Some(capability);
+        self
+    }
+
+    /// Adds the strongest known external effect of the failed operation.
+    ///
+    /// # Parameters
+    ///
+    /// * `effect_state` - Provider-neutral effect state proven by the provider.
+    ///
+    /// # Returns
+    ///
+    /// Updated filesystem error.
+    #[inline]
+    pub fn with_effect_state(mut self, effect_state: FsEffectState) -> Self {
+        self.effect_state = Some(effect_state);
+        self
     }
 
     /// Converts this filesystem error into a byte-stream error.
@@ -499,6 +430,67 @@ impl FsError {
             _ => io::ErrorKind::Other,
         };
         io::Error::new(kind, self)
+    }
+
+    /// Replaces untrusted session locations with a known cleanup request.
+    ///
+    /// Used only for quarantined sessions whose opening identity was invalid.
+    /// Diagnostic entry and target paths cannot be trusted in this case. The
+    /// original category, effect evidence, message, and source remain intact.
+    pub(crate) fn with_trusted_cleanup_context(
+        mut self,
+        operation: FsOperation,
+        path: Option<&Path>,
+        provider: &str,
+    ) -> Self {
+        self.operation = operation;
+        self.path = path.cloned().map(Box::new);
+        self.target = None;
+        self.failure_path = None;
+        self.failure_target = None;
+        self.provider = Some(provider.into());
+        self
+    }
+
+    /// Adds missing path, target, and provider context without overwriting
+    /// provider-supplied details.
+    ///
+    /// Core resource wrappers use this when an error crosses an abstraction
+    /// boundary. It preserves a provider's more specific context while making
+    /// generic validation and stream failures actionable to callers.
+    ///
+    /// # Parameters
+    /// - `path`: Fallback primary path for the requested operation.
+    /// - `target`: Fallback secondary path, when the operation has one.
+    /// - `provider`: Fallback canonical provider id.
+    ///
+    /// # Returns
+    /// Updated error with every previously absent context field filled.
+    #[inline]
+    pub(crate) fn with_missing_context(mut self, path: &Path, target: Option<&Path>, provider: &str) -> Self {
+        if self.path.is_none() {
+            self.path = Some(Box::new(path.clone()));
+        }
+        if self.target.is_none() {
+            self.target = target.cloned().map(Box::new);
+        }
+        if self.provider.is_none() {
+            self.provider = Some(provider.into());
+        }
+        self
+    }
+
+    /// Adds provider context only when an error does not already carry it.
+    ///
+    /// This is used by operations that have no meaningful logical path, such
+    /// as provider capability checks performed before temporary resource
+    /// creation.
+    #[inline]
+    pub(crate) fn with_missing_provider(mut self, provider: &str) -> Self {
+        if self.provider.is_none() {
+            self.provider = Some(provider.into());
+        }
+        self
     }
 }
 

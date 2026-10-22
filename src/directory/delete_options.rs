@@ -51,7 +51,6 @@ impl DeleteOptions {
 
     /// Returns the optional required ETag or provider version.
     #[inline]
-    #[must_use]
     pub const fn if_match(&self) -> Option<&ResourceVersion> {
         self.if_match.as_ref()
     }

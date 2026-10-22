@@ -14,10 +14,25 @@ use crate::copy::CopyFailureState;
 ///
 /// # Examples
 ///
-/// ```rust
-/// use qubit_fs::copy::AsyncCopyOperationState;
+/// This example observes an operation before and after execution.
 ///
-/// assert!(matches!(AsyncCopyOperationState::Ready, AsyncCopyOperationState::Ready));
+/// ```rust
+/// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
+/// # use support::*;
+/// # let (filesystem, _) = async_recording_spi::async_recording_file_system(Default::default());
+/// # poll_support::ready(async {
+/// use qubit_fs::Path;
+/// use qubit_fs::copy::AsyncCopyOperationState;
+/// use qubit_fs::copy::CopyOptions;
+///
+/// let mut operation = filesystem.begin_copy(
+///     Path::parse("/source")?, Path::parse("/target")?, CopyOptions::default(),
+/// )?;
+/// assert_eq!(AsyncCopyOperationState::Ready, operation.state());
+/// operation.execute().await?;
+/// assert_eq!(AsyncCopyOperationState::Completed, operation.state());
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// # }).unwrap();
 /// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AsyncCopyOperationState {

@@ -92,7 +92,7 @@ fn test_path_constraints_accept_matching_forms() {
 }
 
 #[test]
-fn path_constraints_accessors_are_callable_directly() {
+fn test_path_constraints_accessors_are_callable_directly() {
     let absolute = PathConstraints::absolute();
     let relative = PathConstraints::relative();
     let either = PathConstraints::either();

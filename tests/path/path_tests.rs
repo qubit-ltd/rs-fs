@@ -8,6 +8,9 @@
 
 //! Tests for logical filesystem paths.
 
+use std::hint::black_box;
+
+use qubit_fs::FsResult;
 use qubit_fs::Path;
 use qubit_fs::path::PathComponent;
 use qubit_fs::path::PathSemantics;
@@ -160,4 +163,41 @@ fn test_path_public_operations_are_callable_without_reparsing() {
     assert_eq!("/child", child(&root, &component).as_str());
     assert_eq!("/nested", join(&root, &relative).as_str());
     assert_eq!("/", as_ref(&root));
+}
+
+#[test]
+fn test_path_accessors_and_constructors_are_executed_at_runtime() {
+    let root: fn() -> Path = black_box(Path::root);
+    let parse_literal: fn(&str) -> FsResult<Path> = black_box(Path::parse_literal);
+    let parse_with_semantics: fn(&str, PathSemantics) -> FsResult<Path> = black_box(Path::parse_with_semantics);
+    let as_str: for<'a> fn(&'a Path) -> &'a str = black_box(Path::as_str);
+    let file_name: for<'a> fn(&'a Path) -> Option<&'a str> = black_box(Path::file_name);
+    let is_absolute: fn(&Path) -> bool = black_box(Path::is_absolute);
+    let semantics: fn(&Path) -> PathSemantics = black_box(Path::semantics);
+    let components = black_box(Path::components);
+    let child: fn(&Path, &PathComponent) -> Path = black_box(Path::child);
+    let join: fn(&Path, &RelativePath) -> Path = black_box(Path::join);
+    let as_ref: for<'a> fn(&'a Path) -> &'a str = black_box(<Path as AsRef<str>>::as_ref);
+
+    let built = Path::from_components(true, vec!["reports", "daily.csv"]).expect("components should form a path");
+    assert!(Path::from_components(false, Vec::<&str>::new()).is_err());
+    let literal = parse_literal("bucket/key").expect("literal path should parse");
+    let provider = parse_with_semantics("bucket/key", PathSemantics::ProviderSpecific)
+        .expect("provider-specific path should parse");
+    let component = PathComponent::parse("archive").expect("component should parse");
+    let relative = RelativePath::parse("daily.csv").expect("relative path should parse");
+
+    assert_eq!("/", as_str(&root()));
+    assert_eq!(Some("daily.csv"), file_name(&built));
+    assert!(is_absolute(&built));
+    assert_eq!(PathSemantics::ObjectKey, semantics(&literal));
+    assert_eq!(PathSemantics::ProviderSpecific, semantics(&provider));
+    let parent = Path::parse("/reports").expect("parent path should parse");
+    assert_eq!("/reports/daily.csv", as_str(&join(&parent, &relative)));
+    assert_eq!(
+        "/reports/archive",
+        as_str(&child(&Path::parse("/reports").unwrap(), &component))
+    );
+    assert_eq!("reports/daily.csv", components(&built).collect::<Vec<_>>().join("/"));
+    assert_eq!(as_str(&built), as_ref(&built));
 }

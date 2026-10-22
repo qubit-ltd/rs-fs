@@ -50,6 +50,7 @@ struct BenchmarkSpi {
 }
 
 impl BenchmarkSpi {
+    #[must_use]
     fn new(payload: Vec<u8>, ranged: bool, consumed: Arc<AtomicUsize>, requested_length: Arc<AtomicU64>) -> Self {
         let mut capabilities = FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::Read);
         if ranged {

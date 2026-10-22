@@ -22,13 +22,15 @@ use crate::rename::RenameFailureState;
 /// # Examples
 ///
 /// ```rust
-/// use qubit_fs::error::{FsError, FsErrorKind, FsOperation};
-/// use qubit_fs::rename::{RenameFailure, RenameFailureState};
+/// use qubit_fs::rename::{RenameFailure, RenameFailureState, RenameOutcome};
 ///
-/// assert!(std::any::type_name::<RenameFailure>().contains("RenameFailure"));
-/// let error = FsError::new(FsErrorKind::NotFound, FsOperation::Rename, "missing");
-/// assert_eq!(RenameFailureState::Unchanged, RenameFailureState::Unchanged);
-/// assert_eq!(FsOperation::Rename, error.operation());
+/// fn inspect_rename(result: Result<RenameOutcome, RenameFailure>) {
+///     if let Err(failure) = result {
+///         let state: RenameFailureState = failure.state();
+///         let operation = failure.error().operation();
+///         println!("rename failed during {operation:?}: {state:?}");
+///     }
+/// }
 /// ```
 pub struct RenameFailure {
     /// Contextual filesystem error that interrupted the rename.
@@ -44,7 +46,6 @@ impl RenameFailure {
     }
     /// Returns the contextual filesystem error.
     #[inline]
-    #[must_use]
     pub const fn error(&self) -> &FsError {
         &self.error
     }
@@ -56,7 +57,6 @@ impl RenameFailure {
     }
     /// Splits the failure into its error and state.
     #[inline]
-    #[must_use]
     pub fn into_parts(self) -> (FsError, RenameFailureState) {
         (self.error, self.state)
     }

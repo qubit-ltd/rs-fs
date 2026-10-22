@@ -27,7 +27,7 @@ fn opened_writer(commit_failure: Option<WriteFailureState>) -> FileWriter {
 }
 
 #[test]
-fn repeated_commit_preserves_known_sync_publication_state() {
+fn test_repeated_commit_preserves_known_sync_publication_state() {
     let (filesystem, commit_calls, abort_calls) = handle_support::writer_lifecycle_filesystem_with_counts(None, None);
     let mut writer = filesystem
         .open_writer(
@@ -48,7 +48,7 @@ fn repeated_commit_preserves_known_sync_publication_state() {
 }
 
 #[test]
-fn repeated_commit_preserves_failed_sync_publication_states() {
+fn test_repeated_commit_preserves_failed_sync_publication_states() {
     for (provider_state, expected_writer_state) in [
         (WriteFailureState::NotPublished, WriterState::NotPublished),
         (WriteFailureState::Published, WriterState::Published),
@@ -67,7 +67,7 @@ fn repeated_commit_preserves_failed_sync_publication_states() {
 }
 
 #[test]
-fn retryable_sync_commit_remains_retryable() {
+fn test_retryable_sync_commit_remains_retryable() {
     let (filesystem, commit_calls, abort_calls) =
         handle_support::writer_lifecycle_filesystem_with_counts(Some(WriteFailureState::RetryableNotPublished), None);
     let mut writer = filesystem
@@ -96,7 +96,7 @@ fn retryable_sync_commit_remains_retryable() {
 }
 
 #[test]
-fn repeated_commit_after_sync_abort_reports_not_published() {
+fn test_repeated_commit_after_sync_abort_reports_not_published() {
     let mut writer = opened_writer(Some(WriteFailureState::NotPublished));
     writer.commit().expect_err("configured commit should fail");
     let _ = writer.abort().expect("staging cleanup should succeed");
@@ -113,7 +113,7 @@ mod common;
 
 #[cfg(feature = "async")]
 #[test]
-fn repeated_commit_preserves_async_publication_state() {
+fn test_repeated_commit_preserves_async_publication_state() {
     use common::async_recording_spi::AsyncRecordingConfig;
     use common::async_recording_spi::async_recording_file_system;
     use common::poll_support::ready;
@@ -131,7 +131,7 @@ fn repeated_commit_preserves_async_publication_state() {
 
 #[cfg(feature = "async")]
 #[test]
-fn retryable_async_commit_remains_retryable() {
+fn test_retryable_async_commit_remains_retryable() {
     use common::async_recording_spi::AsyncRecordingConfig;
     use common::async_recording_spi::async_recording_file_system;
     use common::poll_support::ready;
@@ -155,7 +155,7 @@ fn retryable_async_commit_remains_retryable() {
 
 #[cfg(feature = "async")]
 #[test]
-fn repeated_commit_preserves_async_failed_publication_states() {
+fn test_repeated_commit_preserves_async_failed_publication_states() {
     use common::async_recording_spi::AsyncRecordingConfig;
     use common::async_recording_spi::async_recording_file_system;
     use common::poll_support::ready;

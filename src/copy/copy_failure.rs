@@ -67,7 +67,6 @@ impl CopyFailure {
     }
     /// Returns the contextual filesystem error.
     #[inline]
-    #[must_use]
     pub const fn error(&self) -> &FsError {
         &self.parts.error
     }
@@ -118,7 +117,6 @@ impl CopyFailure {
     /// The filesystem error, confirmed publication state, partial statistics,
     /// and optional writer retained for recovery.
     #[inline]
-    #[must_use]
     pub fn into_parts(self) -> (FsError, CopyFailureState, CopyStats, Option<WriterRecovery>) {
         let mut parts = self.parts;
         (parts.error, parts.state, parts.partial_stats, parts.writer.take())

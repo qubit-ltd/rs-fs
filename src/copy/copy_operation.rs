@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// copy fallback tests.
 //! Synchronous copy operation implementation.
 
 use qubit_io::Output;
@@ -504,7 +503,7 @@ mod tests {
     }
 
     #[test]
-    fn copied_byte_accounting_is_executed_at_runtime() {
+    fn test_copied_byte_accounting_is_executed_at_runtime() {
         let filesystem = test_filesystem();
         let source = Path::parse("/source").expect("valid source path");
         let target = Path::parse("/target").expect("valid target path");

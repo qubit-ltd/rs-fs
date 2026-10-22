@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade tests.
 //! Asynchronous read operation implementation.
 
 use qubit_io::AsyncInput;
@@ -23,20 +22,34 @@ use crate::read::ReadOptions;
 use crate::read::internal::ReadBuffer;
 use crate::read::prefix_read_plan::PrefixReadPlan;
 
-/// Executes aggregate asynchronous read operations for one facade.
+/// Coordinates asynchronous reads through one filesystem facade.
+///
+/// The operation object borrows the facade so every reader uses the same
+/// provider configuration and error-context policy.
 pub(crate) struct AsyncReadOperation<'a> {
-    /// Facade that opens and contextualizes the reader.
+    /// Opens readers and enriches their errors with filesystem context.
     filesystem: &'a AsyncFileSystem,
 }
 
 impl<'a> AsyncReadOperation<'a> {
-    /// Creates an asynchronous read operation bound to `filesystem`.
+    /// Creates read operations using `filesystem` for reader creation and error
+    /// context.
     #[inline]
     pub(crate) const fn new(filesystem: &'a AsyncFileSystem) -> Self {
         Self { filesystem }
     }
 
-    /// Reads an entire file asynchronously while enforcing `max_bytes`.
+    /// Reads a complete file asynchronously, rejecting content beyond
+    /// `max_bytes`.
+    ///
+    /// The reader is consumed until end of stream. If the stream contains more
+    /// than the allowed number of bytes, the returned error identifies a read
+    /// budget violation; stream and buffer errors retain filesystem context.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be opened or read, if its content
+    /// exceeds `max_bytes`, or if the bounded read buffer cannot append data.
     pub(crate) async fn read_all(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
         let mut reader = self.filesystem.open_reader(path, options).await?;
         let mut bytes = ReadBuffer::new(max_bytes);
@@ -84,6 +97,16 @@ impl<'a> AsyncReadOperation<'a> {
     }
 
     /// Reads at most `max_bytes` from a file asynchronously.
+    ///
+    /// Reading stops when the stream ends or the byte limit is reached. The
+    /// returned outcome records which condition stopped the read and includes
+    /// the resolved file information and original read options.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if read options cannot be resolved, the file cannot be
+    /// opened or read, or the bounded read buffer cannot append data. Errors
+    /// from the stream include filesystem context.
     pub(crate) async fn read_prefix(
         &self,
         path: &Path,

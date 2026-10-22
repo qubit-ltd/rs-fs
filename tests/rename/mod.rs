@@ -7,4 +7,5 @@
 // =============================================================================
 //! Rename primitive integration tests.
 
+mod rename_outcome_tests;
 mod rename_tests;

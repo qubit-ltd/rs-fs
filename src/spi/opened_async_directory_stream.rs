@@ -57,9 +57,15 @@ impl OpenedAsyncDirectoryStream {
     /// - `root`: Validated directory root requested by the caller.
     /// - `options`: Validated listing behavior.
     /// - `provider`: Stable provider identifier used in generated errors.
+    /// - `path_semantics`: Rules used to validate provider entry paths.
+    /// - `limits`: Resource bounds applied to the stream.
     ///
     /// # Returns
     /// A facade-owned asynchronous directory stream.
+    ///
+    /// # Errors
+    /// Returns an error when the listing policy cannot be initialized from the
+    /// supplied scope, options, path semantics, and filesystem limits.
     #[inline]
     pub(crate) fn into_stream(
         self,

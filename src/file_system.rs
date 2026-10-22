@@ -29,11 +29,15 @@ use crate::error::FsResult;
 use crate::error::OpenFailure;
 use crate::error::OpenFailureStage;
 use crate::facade::facade_core::FacadeCore;
+use crate::metadata::FileKind;
 use crate::metadata::FileMetadata;
 use crate::metadata::FileSystemCapability;
 use crate::metadata::FileSystemProperties;
+use crate::metadata::OpenedFileInfo;
+use crate::metadata::WriteOutcome;
 use crate::path::Path;
 use crate::read::FileReader;
+use crate::read::PrefixReadOutcome;
 use crate::read::ReadOperation;
 use crate::read::ReadOptions;
 use crate::rename::RenameFailure;
@@ -42,6 +46,8 @@ use crate::rename::RenameOptions;
 use crate::rename::RenameOutcome;
 use crate::rename::validate_rename_outcome;
 use crate::spi::CreateDirectoryRequest;
+use crate::spi::CreateTempDirectoryRequest;
+use crate::spi::CreateTempFileRequest;
 use crate::spi::DeleteDirectoryRequest;
 use crate::spi::DeleteFileRequest;
 use crate::spi::FileSystemSpi;
@@ -54,6 +60,7 @@ use crate::spi::ResolvedReadOptions;
 use crate::spi::ResolvedRenameOptions;
 use crate::spi::ResolvedWriteOptions;
 use crate::spi::StatRequest;
+use crate::temp::PersistOptions;
 use crate::temp::RejectedTempResource;
 use crate::temp::TempDirectory;
 use crate::temp::TempFile;
@@ -93,6 +100,17 @@ pub struct FileSystem {
 impl FileSystem {
     /// Constructs a facade and caches the provider's single validated property
     /// snapshot.
+    ///
+    /// # Parameters
+    /// - `spi`: Provider implementation whose properties and operations back
+    ///   the facade.
+    ///
+    /// # Returns
+    /// The facade when the provider property snapshot is valid.
+    ///
+    /// # Errors
+    /// Returns the provider property validation error when its snapshot is
+    /// inconsistent.
     #[inline]
     pub fn from_spi<S>(spi: S) -> FsResult<Self>
     where
@@ -102,6 +120,16 @@ impl FileSystem {
     }
 
     /// Constructs a facade from a shared provider implementation.
+    ///
+    /// # Parameters
+    /// - `spi`: Shared provider implementation retained by the facade.
+    ///
+    /// # Returns
+    /// The facade when the provider property snapshot is valid.
+    ///
+    /// # Errors
+    /// Returns the provider property validation error when its snapshot is
+    /// inconsistent.
     #[inline]
     pub fn from_shared_spi(spi: Arc<dyn FileSystemSpi>) -> FsResult<Self> {
         let core = FacadeCore::new(spi.properties())?;
@@ -112,15 +140,13 @@ impl FileSystem {
     }
 
     /// Returns the immutable property snapshot without provider I/O.
+    ///
+    /// # Returns
+    /// The validated properties captured when this facade was constructed.
     #[inline]
     #[must_use]
     pub fn properties(&self) -> &FileSystemProperties {
         self.core.properties()
-    }
-
-    /// Validates a write request without opening a provider session.
-    pub fn validate_write(&self, path: &Path, options: &WriteOptions) -> FsResult<()> {
-        self.core.validate_write_request(path, options)
     }
 
     /// Assesses copy routes without performing provider I/O.
@@ -128,20 +154,17 @@ impl FileSystem {
     /// # Errors
     /// Returns an invalid-options or requirement error when no provider or
     /// stream execution route can satisfy the request.
+    ///
+    /// # Parameters
+    /// - `source`: Logical source path.
+    /// - `target`: Logical destination path.
+    /// - `options`: Copy policy to assess.
+    ///
+    /// # Returns
+    /// The selected route and the first statically rejected fallback, when one
+    /// exists.
     pub fn assess_copy(&self, source: &Path, target: &Path, options: &CopyOptions) -> FsResult<CopyAssessment> {
         self.core.assess_copy(source, target, options)
-    }
-
-    /// Returns shared deterministic facade policy to operation objects.
-    #[inline]
-    pub(crate) fn core(&self) -> &FacadeCore {
-        &self.core
-    }
-
-    /// Returns the synchronous provider implementation to operation objects.
-    #[inline]
-    pub(crate) fn spi(&self) -> &dyn FileSystemSpi {
-        self.spi.as_ref()
     }
 
     /// Reads metadata after all local validation succeeds.
@@ -149,6 +172,12 @@ impl FileSystem {
     /// # Errors
     /// Returns the provider or validation error when `path` is invalid, the
     /// provider cannot stat it, or the provider returns a mismatched path.
+    ///
+    /// # Parameters
+    /// - `path`: Logical resource path to inspect.
+    ///
+    /// # Returns
+    /// Metadata for the requested path after provider identity validation.
     pub fn stat(&self, path: &Path) -> FsResult<FileMetadata> {
         self.validate_path(path, FsOperation::Stat)?;
         let response = self
@@ -170,6 +199,13 @@ impl FileSystem {
     /// # Errors
     /// Returns the original filesystem error for validation, provider, or
     /// provider-contract failures other than `NotFound`.
+    ///
+    /// # Parameters
+    /// - `path`: Logical resource path to check.
+    ///
+    /// # Returns
+    /// `true` when metadata is returned, or `false` for an explicit not-found
+    /// response.
     pub fn exists(&self, path: &Path) -> FsResult<bool> {
         match self.stat(path) {
             Ok(_) => Ok(true),
@@ -185,6 +221,14 @@ impl FileSystem {
     /// Returns [`CopyFailure`] with a recovery state. A provider failure is
     /// never retried; only an explicit provider decline can select the
     /// facade's allowlisted fallback.
+    ///
+    /// # Parameters
+    /// - `source`: Logical resource to copy.
+    /// - `target`: Logical destination path.
+    /// - `options`: Copy behavior and fallback policy.
+    ///
+    /// # Returns
+    /// The confirmed copy outcome.
     #[allow(clippy::result_large_err)]
     pub fn copy(&self, source: &Path, target: &Path, options: CopyOptions) -> Result<CopyOutcome, CopyFailure> {
         CopyOperation::new(self, source, target, options).execute()
@@ -195,6 +239,14 @@ impl FileSystem {
     /// # Errors
     /// Returns [`RenameFailure`] with the provider-confirmed transition state.
     /// This method never implements rename through copy and delete.
+    ///
+    /// # Parameters
+    /// - `source`: Existing logical resource path.
+    /// - `target`: Destination logical path.
+    /// - `options`: Rename policy passed to the provider.
+    ///
+    /// # Returns
+    /// The provider-confirmed rename outcome.
     pub fn rename(&self, source: &Path, target: &Path, options: RenameOptions) -> Result<RenameOutcome, RenameFailure> {
         if let Err(error) = self.rename_preflight(source, target, &options) {
             return Err(self.contextualize_rename_failure(
@@ -235,6 +287,13 @@ impl FileSystem {
     /// # Errors
     /// Returns an invalid-options, missing-capability, or provider error when
     /// the scope or options cannot be served.
+    ///
+    /// # Parameters
+    /// - `scope`: Directory scope to enumerate.
+    /// - `options`: Listing behavior and limits.
+    ///
+    /// # Returns
+    /// A stream of validated directory entries.
     pub fn list(&self, scope: &ListScope, options: ListOptions) -> FsResult<DirectoryStream> {
         DirectoryOperation::new(self).list(scope, options)
     }
@@ -244,30 +303,15 @@ impl FileSystem {
     /// # Errors
     /// Returns an invalid-path, unsupported-capability, provider, or
     /// provider-contract error when the reader cannot be opened safely.
+    ///
+    /// # Parameters
+    /// - `path`: Logical file path to open.
+    /// - `options`: Read range and behavior.
+    ///
+    /// # Returns
+    /// A reader bound to the validated provider handle.
     pub fn open_reader(&self, path: &Path, options: ReadOptions) -> FsResult<FileReader> {
         self.open_reader_resolved(path, ResolvedReadOptions::new(options))
-    }
-
-    /// Opens a facade-validated reader with an internal resolved option hint.
-    pub(crate) fn open_reader_resolved(&self, path: &Path, resolved: ResolvedReadOptions) -> FsResult<FileReader> {
-        let options = resolved.options().clone();
-        self.validate_path(path, FsOperation::OpenReader)?;
-        options
-            .validate_against(self.properties().capabilities())
-            .map_err(|error| self.enrich(error, path, FsOperation::OpenReader))?;
-        self.properties()
-            .limits()
-            .validate_read_range(path, options.length())
-            .map_err(|error| self.enrich(error, path, FsOperation::OpenReader))?;
-        self.require(FileSystemCapability::Read, FsOperation::OpenReader, path)?;
-        self.spi
-            .open_reader(OpenReaderRequest::new(path, resolved))
-            .and_then(|opened| {
-                let (info, reader) = opened.into_parts();
-                self.validate_opened_info(&info, path)?;
-                Ok(FileReader::new(info, reader))
-            })
-            .map_err(|error| self.enrich(error, path, FsOperation::OpenReader))
     }
 
     /// Opens a provider writer after local option validation.
@@ -276,6 +320,13 @@ impl FileSystem {
     /// Returns [`OpenFailure`] identifying preflight, provider-open, or
     /// provider-contract failure; a retained rejected writer is available when
     /// provider cleanup is required.
+    ///
+    /// # Parameters
+    /// - `path`: Logical file path to open for writing.
+    /// - `options`: Write and publication behavior.
+    ///
+    /// # Returns
+    /// The writer, or an `OpenFailure` retaining cleanup state when needed.
     pub fn open_writer(&self, path: &Path, options: WriteOptions) -> Result<FileWriter, OpenFailure<RejectedWriter>> {
         self.core
             .validate_write_request(path, &options)
@@ -319,6 +370,12 @@ impl FileSystem {
     /// # Errors
     /// Returns [`OpenFailure`] when preflight, provider creation, or temporary
     /// identity validation fails; the recovery value may retain cleanup work.
+    ///
+    /// # Parameters
+    /// - `options`: Parent and naming policy for the temporary file.
+    ///
+    /// # Returns
+    /// A temporary file handle bound to this facade.
     pub fn create_temp_file(&self, options: TempOptions) -> Result<TempFile, OpenFailure<RejectedTempResource>> {
         let parent = options.parent().cloned();
         self.core
@@ -329,7 +386,7 @@ impl FileSystem {
             .map_err(|error| OpenFailure::new(error, OpenFailureStage::Preflight, None))?;
         let opened = self
             .spi
-            .create_temp_file(crate::spi::CreateTempFileRequest::new(options))
+            .create_temp_file(CreateTempFileRequest::new(options))
             .map_err(|error| {
                 OpenFailure::new(
                     self.core.enrich(error, parent.as_ref(), FsOperation::CreateTemp),
@@ -338,7 +395,7 @@ impl FileSystem {
                 )
             })?;
         let (info, session) = opened.into_parts();
-        if let Err(cause) = self.validate_temp_info(&info, crate::metadata::FileKind::File) {
+        if let Err(cause) = self.validate_temp_info(&info, FileKind::File) {
             let error = FsError::with_source(
                 FsErrorKind::ProviderContractViolation,
                 FsOperation::ValidateProviderOutcome,
@@ -369,6 +426,12 @@ impl FileSystem {
     /// # Errors
     /// Returns [`OpenFailure`] when preflight, provider creation, or temporary
     /// identity validation fails; the recovery value may retain cleanup work.
+    ///
+    /// # Parameters
+    /// - `options`: Parent and naming policy for the temporary directory.
+    ///
+    /// # Returns
+    /// A temporary directory handle bound to this facade.
     pub fn create_temp_directory(
         &self,
         options: TempOptions,
@@ -386,7 +449,7 @@ impl FileSystem {
             .map_err(|error| OpenFailure::new(error, OpenFailureStage::Preflight, None))?;
         let opened = self
             .spi
-            .create_temp_directory(crate::spi::CreateTempDirectoryRequest::new(options))
+            .create_temp_directory(CreateTempDirectoryRequest::new(options))
             .map_err(|error| {
                 OpenFailure::new(
                     self.core.enrich(error, parent.as_ref(), FsOperation::CreateTemp),
@@ -395,7 +458,7 @@ impl FileSystem {
                 )
             })?;
         let (info, session) = opened.into_parts();
-        if let Err(cause) = self.validate_temp_info(&info, crate::metadata::FileKind::Directory) {
+        if let Err(cause) = self.validate_temp_info(&info, FileKind::Directory) {
             let error = FsError::with_source(
                 FsErrorKind::ProviderContractViolation,
                 FsOperation::ValidateProviderOutcome,
@@ -425,6 +488,13 @@ impl FileSystem {
     /// # Errors
     /// Returns an invalid-path, missing-capability, provider, or provider-
     /// contract error when the directory cannot be created as requested.
+    ///
+    /// # Parameters
+    /// - `path`: Logical directory path to create.
+    /// - `options`: Creation and parent handling policy.
+    ///
+    /// # Returns
+    /// The provider-confirmed directory creation outcome.
     pub fn create_directory(&self, path: &Path, options: CreateDirectoryOptions) -> FsResult<CreateDirectoryOutcome> {
         self.validate_path(path, FsOperation::CreateDir)?;
         self.require(FileSystemCapability::CreateDirectory, FsOperation::CreateDir, path)?;
@@ -451,6 +521,13 @@ impl FileSystem {
     /// # Errors
     /// Returns an invalid-options, missing-capability, provider, or
     /// provider-contract error when deletion cannot be confirmed.
+    ///
+    /// # Parameters
+    /// - `path`: Logical file path to delete.
+    /// - `options`: Deletion policy.
+    ///
+    /// # Returns
+    /// The provider-confirmed deletion outcome.
     #[inline]
     pub fn delete_file(&self, path: &Path, options: DeleteOptions) -> FsResult<DeleteOutcome> {
         self.delete(path, options, false)
@@ -461,9 +538,156 @@ impl FileSystem {
     /// # Errors
     /// Returns an invalid-options, missing-capability, provider, or
     /// provider-contract error when deletion cannot be confirmed.
+    ///
+    /// # Parameters
+    /// - `path`: Logical directory path to delete.
+    /// - `options`: Deletion policy.
+    ///
+    /// # Returns
+    /// The provider-confirmed deletion outcome.
     #[inline]
     pub fn delete_directory(&self, path: &Path, options: DeleteOptions) -> FsResult<DeleteOutcome> {
         self.delete(path, options, true)
+    }
+
+    /// Reads one file into memory up to `max_bytes` after opening a reader.
+    ///
+    /// The byte cap applies to bytes actually read, even when opened metadata
+    /// overestimates the resource length.
+    ///
+    /// # Errors
+    /// Returns the reader or read error when validation, opening, or bounded
+    /// reading fails.
+    ///
+    /// # Parameters
+    /// - `path`: Logical file path to read.
+    /// - `options`: Read range and behavior.
+    /// - `max_bytes`: Maximum number of bytes allowed in memory.
+    ///
+    /// # Returns
+    /// The complete contents when the file fits within the byte cap.
+    pub fn read_all(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
+        ReadOperation::new(self).read_all(path, options, max_bytes)
+    }
+
+    /// Reads at most max_bytes from a file without requiring a complete read.
+    ///
+    /// # Errors
+    /// Returns the reader or read error when validation, opening, or bounded
+    /// reading fails.
+    ///
+    /// # Parameters
+    /// - `path`: Logical file path to read.
+    /// - `options`: Read range and behavior.
+    /// - `max_bytes`: Maximum number of bytes to consume.
+    ///
+    /// # Returns
+    /// The bytes read and the termination reason, which distinguishes end of
+    /// file from reaching the byte limit.
+    pub fn read_prefix(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<PrefixReadOutcome> {
+        ReadOperation::new(self).read_prefix(path, options, max_bytes)
+    }
+
+    /// Writes all bytes and retains the writer if transfer or commit fails.
+    ///
+    /// # Errors
+    /// Returns [`WriteAllFailure`] with the confirmed byte count and retained
+    /// writer when validation, transfer, or publication fails.
+    ///
+    /// # Parameters
+    /// - `path`: Logical destination path.
+    /// - `bytes`: Complete payload to write.
+    /// - `options`: Write and publication behavior.
+    ///
+    /// # Returns
+    /// The confirmed write outcome, or a failure retaining the writer and
+    /// confirmed transfer state.
+    pub fn write_all(&self, path: &Path, bytes: &[u8], options: WriteOptions) -> Result<WriteOutcome, WriteAllFailure> {
+        WriteOperation::new(self).write_all(path, bytes, options)
+    }
+
+    /// Validates a write request without opening a provider session.
+    ///
+    /// # Parameters
+    /// - `path`: Logical destination path to validate.
+    /// - `options`: Write configuration checked against cached capabilities and
+    ///   limits.
+    ///
+    /// # Returns
+    /// `Ok(())` when the request is locally valid.
+    ///
+    /// # Errors
+    /// Returns the path, option, capability, or limit validation error.
+    pub fn validate_write(&self, path: &Path, options: &WriteOptions) -> FsResult<()> {
+        self.core.validate_write_request(path, options)
+    }
+
+    /// Returns shared deterministic facade policy to operation objects.
+    #[inline]
+    pub(crate) fn core(&self) -> &FacadeCore {
+        &self.core
+    }
+
+    /// Returns the synchronous provider implementation to operation objects.
+    #[inline]
+    pub(crate) fn spi(&self) -> &dyn FileSystemSpi {
+        self.spi.as_ref()
+    }
+
+    /// Opens a facade-validated reader with an internal resolved option hint.
+    pub(crate) fn open_reader_resolved(&self, path: &Path, resolved: ResolvedReadOptions) -> FsResult<FileReader> {
+        let options = resolved.options().clone();
+        self.validate_path(path, FsOperation::OpenReader)?;
+        options
+            .validate_against(self.properties().capabilities())
+            .map_err(|error| self.enrich(error, path, FsOperation::OpenReader))?;
+        self.properties()
+            .limits()
+            .validate_read_range(path, options.length())
+            .map_err(|error| self.enrich(error, path, FsOperation::OpenReader))?;
+        self.require(FileSystemCapability::Read, FsOperation::OpenReader, path)?;
+        self.spi
+            .open_reader(OpenReaderRequest::new(path, resolved))
+            .and_then(|opened| {
+                let (info, reader) = opened.into_parts();
+                self.validate_opened_info(&info, path)?;
+                Ok(FileReader::new(info, reader))
+            })
+            .map_err(|error| self.enrich(error, path, FsOperation::OpenReader))
+    }
+
+    /// Validates a temporary-resource persistence request before provider
+    /// effects.
+    ///
+    /// This crate-visible preflight preserves source and target context before
+    /// a temporary resource is handed to its provider.
+    pub(crate) fn preflight_temp_persist(
+        &self,
+        source: &Path,
+        target: &Path,
+        options: &PersistOptions,
+    ) -> FsResult<()> {
+        self.validate_path(source, FsOperation::PersistTemp)?;
+        self.validate_path(target, FsOperation::PersistTemp)?;
+        options
+            .validate_against(self.properties().capabilities())
+            .map_err(|error| {
+                self.enrich(error, source, FsOperation::PersistTemp)
+                    .with_target(target.clone())
+            })?;
+        Ok(())
+    }
+
+    /// Validates a provider-generated target reported by temporary keep.
+    pub(crate) fn validate_temp_keep_target(&self, source: &Path, target: &Path) -> FsResult<()> {
+        self.validate_path(target, FsOperation::KeepTemp).map_err(|_| {
+            self.contract_error(
+                source,
+                FsOperation::ValidateProviderOutcome,
+                "provider returned a temporary keep target with an invalid logical path",
+            )
+            .with_target(target.clone())
+        })
     }
 
     /// Validates and dispatches one deletion primitive.
@@ -546,7 +770,7 @@ impl FileSystem {
     }
 
     /// Validates the identity the provider attached to an opened file handle.
-    fn validate_opened_info(&self, info: &crate::metadata::OpenedFileInfo, path: &Path) -> FsResult<()> {
+    fn validate_opened_info(&self, info: &OpenedFileInfo, path: &Path) -> FsResult<()> {
         if info.filesystem_id() != self.properties().info().id() || info.path() != path {
             return Err(self.contract_error(
                 path,
@@ -559,11 +783,7 @@ impl FileSystem {
 
     /// Validates the filesystem identity captured for a newly-created temporary
     /// resource.
-    fn validate_temp_info(
-        &self,
-        info: &crate::metadata::OpenedFileInfo,
-        expected_kind: crate::metadata::FileKind,
-    ) -> FsResult<()> {
+    fn validate_temp_info(&self, info: &OpenedFileInfo, expected_kind: FileKind) -> FsResult<()> {
         if info.filesystem_id() != self.properties().info().id() {
             return Err(self.contract_error(
                 info.path(),
@@ -586,76 +806,5 @@ impl FileSystem {
             ));
         }
         Ok(())
-    }
-
-    /// Validates a temporary-resource persistence request before provider
-    /// effects.
-    pub(crate) fn preflight_temp_persist(
-        &self,
-        source: &Path,
-        target: &Path,
-        options: &crate::temp::PersistOptions,
-    ) -> FsResult<()> {
-        self.validate_path(source, FsOperation::PersistTemp)?;
-        self.validate_path(target, FsOperation::PersistTemp)?;
-        options
-            .validate_against(self.properties().capabilities())
-            .map_err(|error| {
-                self.enrich(error, source, FsOperation::PersistTemp)
-                    .with_target(target.clone())
-            })?;
-        Ok(())
-    }
-
-    /// Validates a provider-generated target reported by temporary keep.
-    pub(crate) fn validate_temp_keep_target(&self, source: &Path, target: &Path) -> FsResult<()> {
-        self.validate_path(target, FsOperation::KeepTemp).map_err(|_| {
-            self.contract_error(
-                source,
-                FsOperation::ValidateProviderOutcome,
-                "provider returned a temporary keep target with an invalid logical path",
-            )
-            .with_target(target.clone())
-        })
-    }
-
-    /// Reads one file into memory up to `max_bytes` after opening a reader.
-    ///
-    /// The byte cap applies to bytes actually read, even when opened metadata
-    /// overestimates the resource length.
-    ///
-    /// # Errors
-    /// Returns the reader or read error when validation, opening, or bounded
-    /// reading fails.
-    pub fn read_all(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
-        ReadOperation::new(self).read_all(path, options, max_bytes)
-    }
-
-    /// Reads at most max_bytes from a file without requiring a complete read.
-    ///
-    /// # Errors
-    /// Returns the reader or read error when validation, opening, or bounded
-    /// reading fails.
-    pub fn read_prefix(
-        &self,
-        path: &Path,
-        options: ReadOptions,
-        max_bytes: usize,
-    ) -> FsResult<crate::read::PrefixReadOutcome> {
-        ReadOperation::new(self).read_prefix(path, options, max_bytes)
-    }
-
-    /// Writes all bytes and retains the writer if transfer or commit fails.
-    ///
-    /// # Errors
-    /// Returns [`WriteAllFailure`] with the confirmed byte count and retained
-    /// writer when validation, transfer, or publication fails.
-    pub fn write_all(
-        &self,
-        path: &Path,
-        bytes: &[u8],
-        options: WriteOptions,
-    ) -> Result<crate::metadata::WriteOutcome, WriteAllFailure> {
-        WriteOperation::new(self).write_all(path, bytes, options)
     }
 }

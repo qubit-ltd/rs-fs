@@ -19,8 +19,8 @@ use qubit_fs::directory::ListScope;
 use qubit_fs::error::FsError;
 use qubit_fs::metadata::WriteOutcome;
 use qubit_fs::write::AsyncWriteAllOperation;
-use qubit_fs::write::AsyncWriterRecovery;
 use qubit_fs::write::AsyncWriteAllOperationFailure;
+use qubit_fs::write::AsyncWriterRecovery;
 use qubit_fs::write::WriteOptions;
 
 #[derive(Debug)]
@@ -80,7 +80,8 @@ pub async fn write_report(
     })))
 }
 
-/// Lists report keys across a configured flat namespace with a bounded result set.
+/// Lists report keys across a configured flat namespace with a bounded result
+/// set.
 pub async fn list_reports(filesystem: &AsyncFileSystem) -> Result<Vec<Path>, FsError> {
     let scope = ListScope::Namespace;
     let options = ListOptions::object_keys()

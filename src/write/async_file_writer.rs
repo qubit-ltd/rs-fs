@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade tests.
 //! Concrete asynchronous file writer handle.
 
 use std::fmt::Debug;

@@ -158,6 +158,7 @@ impl CopyOutcome {
         &self.diagnostics
     }
     /// Marks this result as the facade's streamed fallback.
+    #[must_use]
     pub(crate) fn streamed_fallback(stats: CopyStats, atomicity: AchievedAtomicity, durable: bool) -> Self {
         Self {
             stats,
@@ -246,7 +247,7 @@ mod tests {
     use crate::metadata::ResourceVersion;
 
     #[test]
-    fn outcome_accessors_are_executed_at_runtime() {
+    fn test_outcome_accessors_are_executed_at_runtime() {
         let constructor: fn(CopyStats, CopyMethod, AchievedAtomicity) -> CopyOutcome = black_box(CopyOutcome::new);
         let metadata: fn(&CopyOutcome) -> MetadataPreservePolicy = black_box(CopyOutcome::metadata);
         let target_version: for<'a> fn(&'a CopyOutcome) -> Option<&'a ResourceVersion> =

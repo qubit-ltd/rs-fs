@@ -7,8 +7,8 @@
 // =============================================================================
 //! Public rename outcome coverage for the shared facade validation path.
 
-use qubit_fs::metadata::AchievedAtomicity;
 use qubit_fs::Path;
+use qubit_fs::metadata::AchievedAtomicity;
 use qubit_fs::metadata::PublicationMethod;
 use qubit_fs::rename::RenameOutcome;
 

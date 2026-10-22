@@ -9,6 +9,15 @@
 //! Completion state for bounded prefix reads.
 
 /// Explains why a bounded prefix read stopped.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_fs::PrefixReadTermination;
+///
+/// let termination = PrefixReadTermination::StreamEnded;
+/// assert_eq!(termination, PrefixReadTermination::StreamEnded);
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum PrefixReadTermination {

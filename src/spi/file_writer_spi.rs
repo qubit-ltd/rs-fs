@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
 //! Provider-side synchronous writer sessions.
 
 use qubit_io::Output;
@@ -21,10 +20,12 @@ use crate::write::WriteAbortOutcome;
 ///
 /// ```
 /// use qubit_fs::spi::FileWriterSpi;
-/// use qubit_io::Output;
+/// use qubit_fs::metadata::WriteOutcome;
+/// use qubit_fs::spi::SpiWriteFailure;
 ///
-/// fn accepts_writer<T: FileWriterSpi>() {}
-/// fn accepts_output<T: Output<Item = u8>>() {}
+/// fn publish<T: FileWriterSpi>(writer: &mut T) -> Result<WriteOutcome, SpiWriteFailure> {
+///     writer.commit()
+/// }
 /// ```
 pub trait FileWriterSpi: Output<Item = u8> + Send {
     /// Publishes accepted bytes.

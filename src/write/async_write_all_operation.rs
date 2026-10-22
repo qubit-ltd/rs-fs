@@ -99,7 +99,6 @@ impl AsyncWriteAllOperation {
     }
     /// Returns the operation state.
     #[inline]
-    #[must_use = "inspect publication state before choosing a recovery action"]
     pub const fn state(&self) -> AsyncWriteAllOperationState {
         self.state
     }
@@ -111,7 +110,6 @@ impl AsyncWriteAllOperation {
     }
     /// Returns mutable access to the retained recovery writer.
     #[inline]
-    #[must_use]
     pub fn recovery(&mut self) -> Option<&mut AsyncWriterRecovery> {
         self.writer.as_mut()
     }
@@ -120,7 +118,6 @@ impl AsyncWriteAllOperation {
     /// Subsequent writer recovery does not change this operation's historical
     /// publication state or byte count.
     #[inline]
-    #[must_use]
     pub fn take_recovery(&mut self) -> Option<AsyncWriterRecovery> {
         self.writer.take()
     }
