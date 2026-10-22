@@ -21,7 +21,7 @@ qubit-fs = "0.2"
 同步 API 默认启用。需要异步门面时必须显式开启 async feature：
 
 ```toml
-qubit-fs = { version = "0.2", features = ["async"] }
+qubit-fs = { version = "0.3", features = ["async"] }
 ```
 
 ## 快速开始

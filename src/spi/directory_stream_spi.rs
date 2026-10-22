@@ -29,9 +29,7 @@ use crate::metadata::DirEntry;
 /// }
 ///
 /// let mut stream = EmptyStream;
-/// assert!(stream.next_entry()?.is_none());
-/// # Ok(())
-/// # }
+/// assert!(stream.next_entry().expect("the provider cannot fail").is_none());
 /// ```
 pub trait DirectoryStreamSpi: Send {
     /// Returns the next lazy directory entry.

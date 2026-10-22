@@ -50,7 +50,7 @@
 ## 安装与最小配置
 
 默认 feature 集为空，只提供同步 API。异步应用显式配置
-`qubit-fs = { version = "0.2", features = ["async"] }`，并使用自己已有的执行器；库不要求 Tokio。
+`qubit-fs = { version = "0.3", features = ["async"] }`，并使用自己已有的执行器；库不要求 Tokio。
 
 运行本手册中的本地示例需要：
 

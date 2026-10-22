@@ -62,7 +62,7 @@ limits.
 ## Installation and Minimal Configuration
 
 The default feature set is empty and provides synchronous APIs. Enable
-`qubit-fs = { version = "0.2", features = ["async"] }` for asynchronous APIs.
+`qubit-fs = { version = "0.3", features = ["async"] }` for asynchronous APIs.
 The application chooses its executor; the library does not require Tokio.
 
 For the runnable local example in this guide, use:

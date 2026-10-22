@@ -23,7 +23,7 @@ Synchronous APIs are enabled by default. Enable the asynchronous facade
 explicitly when it is needed:
 
 ```toml
-qubit-fs = { version = "0.2", features = ["async"] }
+qubit-fs = { version = "0.3", features = ["async"] }
 ```
 
 ## Quick Start

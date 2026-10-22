@@ -1,6 +1,6 @@
 [package]
 name = "qubit-fs"
-version = "0.2.2"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.94"
 authors = ["Haixing Hu <starfish.hu@gmail.com>"]
@@ -40,7 +40,7 @@ qubit-budget = { path = "../rs-budget", version = "0.9" }
 fluent-uri = "^0.4"
 qubit-io = { path = "../rs-io", version = "0.19" }
 
-qubit-redact = { path = "../rs-redact", version = "0.9", features = ["uri"] }
+qubit-redact = { path = "../rs-redact", version = "0.10", features = ["uri"] }
 
 
 [dev-dependencies]
