@@ -13,7 +13,7 @@
 /// # Examples
 ///
 /// ```
-/// use qubit_fs::PrefixReadTermination;
+/// use qubit_fs::read::PrefixReadTermination;
 ///
 /// let termination = PrefixReadTermination::StreamEnded;
 /// assert_eq!(termination, PrefixReadTermination::StreamEnded);

@@ -29,7 +29,7 @@ use super::OpenFailureStage;
 /// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
 /// # let filesystem = support::rustdoc_provider::filesystem();
 /// use qubit_fs::Path;
-/// use qubit_fs::WriteOptions;
+/// use qubit_fs::write::WriteOptions;
 /// use qubit_fs::metadata::AtomicityRequirement;
 ///
 /// let path = Path::parse("/report")?;

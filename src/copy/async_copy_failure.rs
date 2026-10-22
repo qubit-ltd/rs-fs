@@ -25,6 +25,7 @@ use crate::error::FsError;
 /// ```rust
 /// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
 /// # use support::*;
+/// # use support::async_recording_spi::AsyncRecordingConfig;
 /// # let (filesystem, _) = async_recording_spi::async_recording_file_system(
 /// #     AsyncRecordingConfig { copy_failure: true, ..Default::default() },
 /// # );

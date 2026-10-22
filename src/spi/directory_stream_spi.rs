@@ -19,6 +19,7 @@ use crate::metadata::DirEntry;
 /// use qubit_fs::error::FsResult;
 /// use qubit_fs::metadata::DirEntry;
 /// use qubit_fs::spi::DirectoryStreamSpi;
+/// # fn main() -> FsResult<()> {
 ///
 /// struct EmptyStream;
 /// impl DirectoryStreamSpi for EmptyStream {
@@ -29,6 +30,8 @@ use crate::metadata::DirEntry;
 ///
 /// let mut stream = EmptyStream;
 /// assert!(stream.next_entry()?.is_none());
+/// # Ok(())
+/// # }
 /// ```
 pub trait DirectoryStreamSpi: Send {
     /// Returns the next lazy directory entry.
