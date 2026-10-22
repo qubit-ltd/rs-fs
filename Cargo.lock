@@ -362,9 +362,7 @@ dependencies = [
 
 [[package]]
 name = "qubit-budget"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "353cf62af65868c70d5af6468b101a8099bd6de980d84678eeb99f99eb679161"
+version = "0.9.0"
 dependencies = [
  "thiserror",
 ]
@@ -382,9 +380,7 @@ dependencies = [
 
 [[package]]
 name = "qubit-io"
-version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3eea3e8f7e4b8f96cff01287dec8214ec565b0531b5b495204d14df7a05b85e"
+version = "0.19.0"
 dependencies = [
  "qubit-utils",
 ]
@@ -392,8 +388,6 @@ dependencies = [
 [[package]]
 name = "qubit-redact"
 version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "240e7d45b9e8bd72ed7653b02c4fb16ea116b09feeaa07a4aa15a6475da5e2ec"
 dependencies = [
  "fluent-uri",
  "qubit-budget",
