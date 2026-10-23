@@ -44,7 +44,7 @@ use qubit_fs::spi::StatResponse;
 ///         let filesystem = AsyncFileSystem::from_spi(AsyncHealthProvider::new()?)?;
 ///         let metadata = filesystem.stat(&Path::parse("/health")?).await?;
 ///         assert_eq!(metadata.len(), Some(2));
-///         Ok(())
+///         Ok::<(), qubit_fs::FsError>(())
 ///     };
 ///     drop(future);
 ///     Ok(())

@@ -16,7 +16,7 @@ or an async runtime for you.
 
 ```toml
 [dependencies]
-qubit-fs = "0.2"
+qubit-fs = "0.3"
 ```
 
 Synchronous APIs are enabled by default. Enable the asynchronous facade
@@ -35,8 +35,8 @@ The temporary directory is removed when the demo ends.
 
 ```toml
 [dependencies]
-qubit-fs = "0.2"
-qubit-fs-local = "0.10"
+qubit-fs = "0.3"
+qubit-fs-local = "0.11"
 tempfile = "3"
 ```
 
