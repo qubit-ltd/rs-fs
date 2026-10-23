@@ -97,13 +97,6 @@ dependencies = [
 [[package]]
 name = "qubit-budget"
 version = "0.9.1"
-dependencies = [
- "thiserror",
-]
-
-[[package]]
-name = "qubit-budget"
-version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "646da5f1103a59c0e0ed63c68f1c69568dac263f9a8da5542b9a55a760b52acb"
 dependencies = [
@@ -152,7 +145,7 @@ version = "0.5.0"
 dependencies = [
  "getrandom",
  "libc",
- "qubit-budget 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "qubit-budget 0.9.1",
  "qubit-io",
  "qubit-redact 0.9.0",
  "rustix",
@@ -323,3 +316,7 @@ checksum = "ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc"
 dependencies = [
  "windows-link",
 ]
+
+[[patch.unused]]
+name = "qubit-fs-testkit"
+version = "0.8.0"

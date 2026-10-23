@@ -363,13 +363,6 @@ dependencies = [
 [[package]]
 name = "qubit-budget"
 version = "0.9.1"
-dependencies = [
- "thiserror",
-]
-
-[[package]]
-name = "qubit-budget"
-version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "646da5f1103a59c0e0ed63c68f1c69568dac263f9a8da5542b9a55a760b52acb"
 dependencies = [
@@ -382,7 +375,7 @@ version = "0.3.0"
 dependencies = [
  "criterion",
  "fluent-uri",
- "qubit-budget 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "qubit-budget",
  "qubit-io",
  "qubit-redact",
 ]
@@ -399,7 +392,7 @@ name = "qubit-redact"
 version = "0.10.0"
 dependencies = [
  "fluent-uri",
- "qubit-budget 0.9.1",
+ "qubit-budget",
 ]
 
 [[package]]
@@ -750,3 +743,7 @@ name = "zmij"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
+
+[[patch.unused]]
+name = "qubit-fs-testkit"
+version = "0.8.0"
