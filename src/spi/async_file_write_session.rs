@@ -9,7 +9,7 @@
 
 use std::pin::Pin;
 
-use qubit_io::AsyncOutput;
+use qubit_io::AsyncByteOutput;
 
 use super::SpiFuture;
 use crate::error::FsResult;
@@ -30,7 +30,7 @@ use crate::write::WriteFailure;
 ///     assert!(session.commit_async().await.is_ok());
 /// }
 /// ```
-pub trait AsyncFileWriteSession: AsyncOutput<Item = u8> + Send {
+pub trait AsyncFileWriteSession: AsyncByteOutput + Send {
     /// Asynchronously publishes bytes accepted by the session.
     ///
     /// # Returns

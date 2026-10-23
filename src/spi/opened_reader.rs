@@ -8,7 +8,7 @@
 // facade.
 //! Provider-opened synchronous reader envelope.
 
-use qubit_io::Input;
+use qubit_io::ByteInput;
 
 use crate::metadata::OpenedFileInfo;
 
@@ -31,7 +31,7 @@ pub struct OpenedReader {
     /// Resource identity claimed by the provider.
     info: OpenedFileInfo,
     /// Provider byte-input session.
-    reader: Box<dyn Input<Item = u8> + Send>,
+    reader: Box<dyn ByteInput + Send>,
 }
 
 impl OpenedReader {
@@ -45,7 +45,7 @@ impl OpenedReader {
     /// An opened-reader envelope for facade validation.
     #[inline]
     #[must_use]
-    pub fn new(info: OpenedFileInfo, reader: Box<dyn Input<Item = u8> + Send>) -> Self {
+    pub fn new(info: OpenedFileInfo, reader: Box<dyn ByteInput + Send>) -> Self {
         Self { info, reader }
     }
 
@@ -55,7 +55,7 @@ impl OpenedReader {
     /// The claimed resource identity and provider reader session.
     #[inline]
     #[must_use]
-    pub(crate) fn into_parts(self) -> (OpenedFileInfo, Box<dyn Input<Item = u8> + Send>) {
+    pub(crate) fn into_parts(self) -> (OpenedFileInfo, Box<dyn ByteInput + Send>) {
         (self.info, self.reader)
     }
 }

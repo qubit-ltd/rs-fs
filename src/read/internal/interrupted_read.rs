@@ -10,6 +10,7 @@
 
 use std::io;
 
+use qubit_io::ByteInput;
 use qubit_io::Input;
 
 use crate::error::FsEffectState;
@@ -48,7 +49,7 @@ fn retryable(error: &io::Error) -> bool {
 ///
 /// Returns an error from `before_read`, a non-retryable input error, or a
 /// retryable input error after any later setup attempt fails.
-pub(crate) fn read_retry_interrupted<I: Input<Item = u8> + ?Sized>(
+pub(crate) fn read_retry_interrupted<I: ByteInput + ?Sized>(
     input: &mut I,
     output: &mut [u8],
     mut before_read: impl FnMut() -> io::Result<()>,

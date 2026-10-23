@@ -84,6 +84,7 @@ use qubit_fs::write::WriteFailureState;
 use qubit_fs::write::WriteOptions;
 use qubit_fs::write::WriterRecovery;
 use qubit_fs::write::WriterState;
+use qubit_io::ByteInput;
 use qubit_io::Input;
 use qubit_io::Output;
 
@@ -330,7 +331,7 @@ impl FileSystemSpi for RecordingSpi {
                 "injected reader failure",
             ));
         }
-        let reader: Box<dyn Input<Item = u8> + Send> = if matches!(self.response, CopyResponse::DeclinedReadFailure) {
+        let reader: Box<dyn ByteInput + Send> = if matches!(self.response, CopyResponse::DeclinedReadFailure) {
             Box::new(FailingReader)
         } else {
             Box::new(Cursor::new(b"bytes".to_vec()))
@@ -701,9 +702,7 @@ fn test_copy_stream_fallback_enforces_byte_and_entry_budgets() {
     assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
     assert_eq!(CopyFailureState::Unchanged, failure.state());
     assert!(bytes.lock().expect("bytes lock should succeed").is_empty());
-    assert!(
-        failure.error().to_string().contains("copy byte limit was exceeded")
-    );
+    assert!(failure.error().to_string().contains("copy byte limit was exceeded"));
     assert_eq!(Some(&path("/source")), failure.error().path());
 
     let (filesystem, _, bytes) = recording_filesystem(CopyResponse::Declined);
@@ -715,10 +714,7 @@ fn test_copy_stream_fallback_enforces_byte_and_entry_budgets() {
         )
         .expect("a five-byte budget must accept the complete five-byte copy");
     assert_eq!(5, outcome.stats().bytes);
-    assert_eq!(
-        b"bytes",
-        bytes.lock().expect("bytes lock should succeed").as_slice()
-    );
+    assert_eq!(b"bytes", bytes.lock().expect("bytes lock should succeed").as_slice());
 
     let (filesystem, calls, _) = recording_filesystem(CopyResponse::Declined);
     let failure = filesystem

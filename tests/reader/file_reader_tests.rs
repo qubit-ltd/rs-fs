@@ -230,6 +230,6 @@ impl Input for RecordingReader {
 
     unsafe fn read_unchecked(&mut self, output: &mut [u8], index: usize, count: usize) -> std::io::Result<usize> {
         self.read_requests.lock().expect("requests lock").push(count);
-        std::io::Read::read(&mut self.inner, &mut output[index..index + count])
+        Input::read(&mut self.inner, &mut output[index..index + count])
     }
 }

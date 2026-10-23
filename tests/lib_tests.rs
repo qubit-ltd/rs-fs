@@ -9,6 +9,7 @@
 mod common;
 #[cfg(feature = "async")]
 pub(crate) use common::async_recording_spi;
+#[cfg(feature = "async")]
 pub(crate) use common::poll_support;
 mod copy;
 mod directory;
@@ -27,6 +28,7 @@ mod write;
 mod writer;
 
 #[test]
+#[cfg(feature = "async")]
 fn test_poll_support_completes_ready_future() {
     assert_eq!(42, poll_support::ready(async { 42 }));
 }

@@ -12,6 +12,7 @@ use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
 use std::io::Result as IoResult;
 
+use qubit_io::ByteInput;
 use qubit_io::Input;
 
 use crate::metadata::OpenedFileInfo;
@@ -38,7 +39,7 @@ use crate::metadata::OpenedFileInfo;
 /// ```
 pub struct FileReader {
     /// Provider byte input.
-    inner: Box<dyn Input<Item = u8> + Send>,
+    inner: Box<dyn ByteInput + Send>,
     /// Stable identity and metadata captured at open time.
     info: OpenedFileInfo,
 }
@@ -57,7 +58,7 @@ impl FileReader {
     /// A concrete file reader handle.
     #[inline]
     #[must_use]
-    pub(crate) fn new(info: OpenedFileInfo, inner: Box<dyn Input<Item = u8> + Send>) -> Self {
+    pub(crate) fn new(info: OpenedFileInfo, inner: Box<dyn ByteInput + Send>) -> Self {
         Self { inner, info }
     }
 

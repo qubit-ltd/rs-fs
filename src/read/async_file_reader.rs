@@ -16,6 +16,7 @@ use std::pin::Pin;
 use std::task::Context;
 use std::task::Poll;
 
+use qubit_io::AsyncByteInput;
 use qubit_io::AsyncInput;
 use qubit_io::BoxAsyncInput;
 
@@ -45,7 +46,7 @@ use crate::metadata::OpenedFileInfo;
 /// ```
 pub struct AsyncFileReader {
     /// Pinned provider byte input.
-    inner: BoxAsyncInput<dyn AsyncInput<Item = u8> + Send>,
+    inner: BoxAsyncInput<dyn AsyncByteInput + Send>,
     /// Stable identity and metadata captured at open time.
     info: OpenedFileInfo,
 }
@@ -61,7 +62,7 @@ impl AsyncFileReader {
     /// A pinned, type-erased asynchronous file reader.
     #[inline]
     #[must_use]
-    pub(crate) fn new(info: OpenedFileInfo, inner: Box<dyn AsyncInput<Item = u8> + Send>) -> Self {
+    pub(crate) fn new(info: OpenedFileInfo, inner: Box<dyn AsyncByteInput + Send>) -> Self {
         Self {
             inner: BoxAsyncInput::new(inner),
             info,

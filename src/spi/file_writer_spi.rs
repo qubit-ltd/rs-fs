@@ -7,7 +7,7 @@
 // =============================================================================
 //! Provider-side synchronous writer sessions.
 
-use qubit_io::Output;
+use qubit_io::ByteOutput;
 
 use super::SpiWriteFailure;
 use crate::error::FsResult;
@@ -27,7 +27,7 @@ use crate::write::WriteAbortOutcome;
 ///     writer.commit()
 /// }
 /// ```
-pub trait FileWriterSpi: Output<Item = u8> + Send {
+pub trait FileWriterSpi: ByteOutput + Send {
     /// Publishes accepted bytes.
     ///
     /// # Returns

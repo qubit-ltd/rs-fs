@@ -54,6 +54,8 @@ use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
 #[cfg(feature = "async")]
 use qubit_io::AsyncInput;
+#[cfg(feature = "async")]
+use qubit_io::Input;
 
 struct MetadataProvider {
     hint: Option<u64>,
@@ -122,7 +124,7 @@ impl AsyncInput for ReadyReader {
         index: usize,
         count: usize,
     ) -> Poll<std::io::Result<usize>> {
-        Poll::Ready(std::io::Read::read(&mut self.0, &mut out[index..index + count]))
+        Poll::Ready(Input::read(&mut self.0, &mut out[index..index + count]))
     }
 }
 
