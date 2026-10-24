@@ -12,12 +12,3 @@ pub mod async_recovery;
 pub mod provider_minimal;
 pub mod provider_minimal_async;
 pub mod sync_recovery;
-
-#[cfg(test)]
-#[path = "../../../common/async_recording_spi.rs"]
-mod async_recording_spi;
-#[cfg(test)]
-#[path = "../../../common/poll_support.rs"]
-mod poll_support;
-#[cfg(test)]
-mod tests_tests;

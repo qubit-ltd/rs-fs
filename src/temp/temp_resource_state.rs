@@ -14,8 +14,18 @@
 /// ```rust
 /// use qubit_fs::temp::TempResourceState;
 ///
-/// assert!(matches!(TempResourceState::Owned, TempResourceState::Owned));
+/// let state = TempResourceState::Owned;
+/// let description = match state {
+///     TempResourceState::Owned => "cleanup is owned",
+///     TempResourceState::Persisted => "source was published",
+///     TempResourceState::Kept => "cleanup was released",
+///     TempResourceState::Cleaned => "source was cleaned",
+///     TempResourceState::CleanupRequired => "cleanup remains",
+///     TempResourceState::Indeterminate => "source state is unknown",
+/// };
+/// assert_eq!(description, "cleanup is owned");
 /// ```
+#[must_use]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TempResourceState {
     /// The handle owns cleanup responsibility for an unpublished source.

@@ -18,7 +18,7 @@ use qubit_fs::write::WriterState;
 mod handle_support;
 
 fn opened_writer(commit_failure: Option<WriteFailureState>) -> FileWriter {
-    handle_support::writer_lifecycle_filesystem(commit_failure, None)
+    handle_support::implementation_tests::writer_lifecycle_filesystem(commit_failure, None)
         .open_writer(
             &Path::parse("/target").expect("path should parse"),
             WriteOptions::default(),
@@ -28,7 +28,8 @@ fn opened_writer(commit_failure: Option<WriteFailureState>) -> FileWriter {
 
 #[test]
 fn test_repeated_commit_preserves_known_sync_publication_state() {
-    let (filesystem, commit_calls, abort_calls) = handle_support::writer_lifecycle_filesystem_with_counts(None, None);
+    let (filesystem, commit_calls, abort_calls) =
+        handle_support::implementation_tests::writer_lifecycle_filesystem_with_counts(None, None);
     let mut writer = filesystem
         .open_writer(
             &Path::parse("/target").expect("path should parse"),
@@ -69,7 +70,10 @@ fn test_repeated_commit_preserves_failed_sync_publication_states() {
 #[test]
 fn test_retryable_sync_commit_remains_retryable() {
     let (filesystem, commit_calls, abort_calls) =
-        handle_support::writer_lifecycle_filesystem_with_counts(Some(WriteFailureState::RetryableNotPublished), None);
+        handle_support::implementation_tests::writer_lifecycle_filesystem_with_counts(
+            Some(WriteFailureState::RetryableNotPublished),
+            None,
+        );
     let mut writer = filesystem
         .open_writer(
             &Path::parse("/target").expect("path should parse"),
@@ -98,7 +102,8 @@ fn test_retryable_sync_commit_remains_retryable() {
 #[test]
 fn test_repeated_commit_after_sync_abort_reports_not_published() {
     let mut writer = opened_writer(Some(WriteFailureState::NotPublished));
-    writer.commit().expect_err("configured commit should fail");
+    let failure = writer.commit().expect_err("configured commit should fail");
+    assert_eq!(WriteFailureState::NotPublished, failure.state());
     let _ = writer.abort().expect("staging cleanup should succeed");
     assert_eq!(WriterState::Aborted, writer.state());
 

@@ -9,10 +9,12 @@
 use qubit_fs::Path;
 use qubit_fs::read::ReadOptions;
 
+use crate::handle_support::implementation_tests::filesystem;
+
 /// Verifies the public prefix-read facade stops at the requested bound.
 #[test]
 fn test_read_prefix_stops_at_requested_maximum() {
-    let (file_system, _, _) = crate::handle_support::filesystem(false, Vec::new());
+    let (file_system, _, _) = filesystem(false, Vec::new());
     let path = Path::parse("/source").expect("test path should parse");
     let bytes = file_system
         .read_prefix(&path, ReadOptions::default(), 3)

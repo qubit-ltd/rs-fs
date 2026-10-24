@@ -22,6 +22,7 @@
 ///     WriteFailureState::Indeterminate => println!("resolve publication status"),
 /// }
 /// ```
+#[must_use]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WriteFailureState {
     /// Publication can be retried using the retained session.

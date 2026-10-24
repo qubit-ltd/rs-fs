@@ -11,6 +11,7 @@ use std::pin::Pin;
 use std::task::Context;
 use std::task::Poll;
 
+use qubit_fs::Path;
 use qubit_fs::metadata::FileSystemId;
 use qubit_fs::metadata::OpenedFileInfo;
 use qubit_fs::read::AsyncFileReader;
@@ -39,7 +40,7 @@ fn test_async_byte_boundary_accepts_pinned_provider() {
     let constructor: fn(OpenedFileInfo, Box<dyn AsyncByteInput + Send>) -> OpenedAsyncReader = OpenedAsyncReader::new;
     let info = OpenedFileInfo::new(
         FileSystemId::new("async-byte-contract").expect("valid id"),
-        qubit_fs::Path::parse("/data").expect("valid path"),
+        Path::parse("/data").expect("valid path"),
     );
     let opened = constructor(info, Box::new(PinnedInput(PhantomPinned)));
     assert_eq!(opened.info().path().as_str(), "/data");

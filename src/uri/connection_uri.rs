@@ -53,10 +53,15 @@ impl ConnectionUri {
     /// Returns an invalid-URI error for malformed syntax or a fragment.
     ///
     /// # Parameters
+    ///
     /// - `text`: Connection URI text to parse.
-    /// - `policy`: Redaction policy used when producing redacted views.
+    ///
+    /// # Returns
+    ///
+    /// The parsed connection URI with the standard redaction policy.
     ///
     /// # Errors
+    ///
     /// Returns an invalid-URI error for malformed syntax or a fragment.
     pub fn parse(text: &str) -> FsResult<Self> {
         Self::parse_with_policy(text, &RedactionPolicy::standard())
@@ -69,6 +74,10 @@ impl ConnectionUri {
     /// * `text` - URI text to parse and canonicalize.
     /// * `policy` - Policy captured for later secret classification and
     ///   formatting.
+    ///
+    /// # Returns
+    ///
+    /// The parsed connection URI with a snapshot of `policy`.
     ///
     /// # Errors
     ///
@@ -116,6 +125,10 @@ impl ConnectionUri {
 
     /// Converts this connection URI to a secret-free resource URI.
     ///
+    /// # Returns
+    ///
+    /// The corresponding secret-free resource URI.
+    ///
     /// # Errors
     ///
     /// Returns an invalid-URI error when the connection URI contains sensitive
@@ -129,6 +142,14 @@ impl ConnectionUri {
     ///
     /// The callback result is returned unchanged; callers must not use it to
     /// expose secret data through ordinary formatting or serialization.
+    ///
+    /// # Parameters
+    ///
+    /// - `inspect`: Callback that observes the unredacted URI text.
+    ///
+    /// # Returns
+    ///
+    /// The value returned by `inspect`.
     #[inline]
     pub fn expose_unredacted<R>(&self, inspect: impl FnOnce(&str) -> R) -> R {
         inspect(self.parsed.as_str())

@@ -17,7 +17,10 @@ use crate::metadata::OpenedFileInfo;
 ///
 /// ```rust
 /// use qubit_fs::error::FsResult;
-/// use qubit_fs::metadata::{FileKind, FileMetadata, FileSystemId, OpenedFileInfo};
+/// use qubit_fs::metadata::FileKind;
+/// use qubit_fs::metadata::FileMetadata;
+/// use qubit_fs::metadata::FileSystemId;
+/// use qubit_fs::metadata::OpenedFileInfo;
 /// use qubit_fs::path::Path;
 /// use qubit_fs::spi::TempResourceSpi;
 /// use qubit_fs::spi::OpenedTempFile;

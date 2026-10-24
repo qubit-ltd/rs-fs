@@ -19,7 +19,10 @@ use crate::metadata::DirEntry;
 /// ```
 /// use qubit_fs::spi::AsyncDirectoryStreamSession;
 ///
-/// fn accepts_session<T: AsyncDirectoryStreamSession>() {}
+/// async fn read_next<T: AsyncDirectoryStreamSession>(session: &mut T) {
+///     let result = session.next_entry_async().await;
+///     assert!(result.is_ok());
+/// }
 /// ```
 pub trait AsyncDirectoryStreamSession: Send {
     /// Asynchronously reads the next directory entry or provider page.

@@ -43,6 +43,13 @@ impl UserMetadata {
 
     /// Adds one metadata pair.
     ///
+    /// # Parameters
+    /// `key` is the metadata name and `value` is its unformatted string value.
+    /// The key must not resemble credential material.
+    ///
+    /// # Returns
+    /// The updated metadata map when the key is accepted.
+    ///
     /// # Errors
     /// Returns an invalid-options error when the key resembles credential
     /// material.
@@ -59,6 +66,12 @@ impl UserMetadata {
     }
 
     /// Returns the value associated with a key.
+    ///
+    /// # Parameters
+    /// `key` is the metadata name to look up.
+    ///
+    /// # Returns
+    /// `Some` with the value when `key` is present, or `None` otherwise.
     #[must_use]
     #[inline]
     pub fn get(&self, key: &str) -> Option<&str> {
@@ -87,6 +100,7 @@ impl UserMetadata {
 }
 
 impl Debug for UserMetadata {
+    /// Formats the metadata using its keys without exposing its values.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter

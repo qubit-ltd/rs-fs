@@ -56,6 +56,14 @@ pub(crate) const fn from_write_failure_state(state: WriteFailureState) -> CopyFa
 
 /// Maps validated native success statistics to publication certainty after a
 /// later cooperative deadline check fails.
+///
+/// # Parameters
+///
+/// - `stats`: Validated statistics returned by the completed native copy.
+///
+/// # Returns
+///
+/// The publication certainty inferred from the completed statistics.
 #[inline]
 pub(crate) const fn from_completed_stats(stats: &CopyStats) -> CopyFailureState {
     if stats.files != 0
@@ -86,6 +94,7 @@ pub(crate) const fn from_completed_stats(stats: &CopyStats) -> CopyFailureState 
 /// # Returns
 ///
 /// Failure statistics retaining the observed byte count.
+#[must_use]
 #[inline]
 pub(crate) const fn fallback_failure_stats(bytes: u64) -> CopyStats {
     CopyStats {
@@ -110,7 +119,7 @@ mod tests {
     use crate::copy::CopyStats;
 
     #[test]
-    fn completed_statistics_map_to_publication_states() {
+    fn test_completed_statistics_map_to_publication_states() {
         let mapper: fn(&CopyStats) -> CopyFailureState = black_box(from_completed_stats);
 
         assert_eq!(

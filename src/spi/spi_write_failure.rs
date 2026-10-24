@@ -53,6 +53,7 @@ impl SpiWriteFailure {
     /// # Returns
     /// The provider failure with filesystem context.
     #[inline]
+    #[must_use = "inspect the filesystem error instead of silently discarding it"]
     pub const fn error(&self) -> &FsError {
         &self.error
     }
@@ -62,7 +63,6 @@ impl SpiWriteFailure {
     /// # Returns
     /// The provider-confirmed publication state.
     #[inline]
-    #[must_use]
     pub const fn state(&self) -> WriteFailureState {
         self.state
     }
@@ -72,6 +72,7 @@ impl SpiWriteFailure {
     /// # Returns
     /// The provider error and confirmed publication state.
     #[inline]
+    #[must_use = "retain or handle the provider failure parts"]
     pub fn into_parts(self) -> (FsError, WriteFailureState) {
         (self.error, self.state)
     }

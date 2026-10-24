@@ -36,6 +36,7 @@ pub struct RenameOptions {
 }
 
 impl Default for RenameOptions {
+    /// Creates options that reject overwrites and prefer atomic rename.
     #[inline]
     fn default() -> Self {
         Self {
@@ -106,6 +107,9 @@ impl RenameOptions {
     /// # Errors
     /// Returns [`FsErrorKind::RequirementNotMet`] when required atomic or
     /// durable rename publication is not supported.
+    ///
+    /// # Returns
+    /// `Ok(())` when the requested requirements are supported or optional.
     pub fn validate_against(&self, capabilities: FileSystemCapabilities) -> Result<(), FsError> {
         if self.atomicity() == AtomicityRequirement::Required
             && !capabilities.supports(FileSystemCapability::AtomicRename)

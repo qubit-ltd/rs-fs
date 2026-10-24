@@ -7,6 +7,7 @@
 // =============================================================================
 //! Crate-internal tests for contracts that public APIs cannot construct.
 
+mod copy;
 mod directory;
 mod facade;
 mod spi;

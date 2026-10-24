@@ -41,6 +41,13 @@ use qubit_fs::spi::ProviderProperties;
 use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
 
+#[cfg(feature = "async")]
+use crate::async_recording_spi::AsyncRecordingConfig;
+#[cfg(feature = "async")]
+use crate::async_recording_spi::async_recording_file_system;
+#[cfg(feature = "async")]
+use crate::poll_support::ready;
+
 /// A readable provider whose destination open fails with controlled evidence.
 struct OpenFailureSpi {
     kind: FsErrorKind,
@@ -165,9 +172,6 @@ fn test_sync_copy_skip_requires_explicit_unchanged_effect() {
 #[cfg(feature = "async")]
 #[test]
 fn test_async_copy_open_failure_matches_sync_contract() {
-    use crate::async_recording_spi::AsyncRecordingConfig;
-    use crate::async_recording_spi::async_recording_file_system;
-    use crate::poll_support::ready;
     for (kind, effect, expected) in failure_cases() {
         let (fs, _) = async_recording_file_system(AsyncRecordingConfig {
             decline_copy: true,
@@ -191,9 +195,6 @@ fn test_async_copy_open_failure_matches_sync_contract() {
 #[cfg(feature = "async")]
 #[test]
 fn test_async_copy_skip_requires_explicit_unchanged_effect() {
-    use crate::async_recording_spi::AsyncRecordingConfig;
-    use crate::async_recording_spi::async_recording_file_system;
-    use crate::poll_support::ready;
     for effect in [Some(FsEffectState::Unchanged), None, Some(FsEffectState::Indeterminate)] {
         let (fs, _) = async_recording_file_system(AsyncRecordingConfig {
             decline_copy: true,

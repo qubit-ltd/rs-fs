@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade tests.
 //! Directory creation options.
 
 use crate::metadata::NonSensitiveMetadata;
@@ -33,6 +32,10 @@ pub struct CreateDirectoryOptions {
 
 impl Default for CreateDirectoryOptions {
     /// Creates non-recursive options that reject an existing directory.
+    ///
+    /// # Returns
+    /// Options with recursive creation and acceptance of an existing
+    /// directory disabled, and with no user metadata.
     #[inline]
     fn default() -> Self {
         Self {
@@ -45,6 +48,9 @@ impl Default for CreateDirectoryOptions {
 
 impl CreateDirectoryOptions {
     /// Returns whether missing parent directories should be created.
+    ///
+    /// # Returns
+    /// `true` when missing parent directories should be created.
     #[inline]
     #[must_use]
     pub const fn recursive(&self) -> bool {
@@ -52,6 +58,9 @@ impl CreateDirectoryOptions {
     }
 
     /// Returns whether an existing directory should be accepted.
+    ///
+    /// # Returns
+    /// `true` when creating a directory that already exists is allowed.
     #[inline]
     #[must_use]
     pub const fn exists_ok(&self) -> bool {
@@ -59,12 +68,22 @@ impl CreateDirectoryOptions {
     }
 
     /// Returns validated user-defined metadata.
+    ///
+    /// # Returns
+    /// The metadata associated with these creation options.
     #[inline]
+    #[must_use]
     pub const fn user_metadata(&self) -> &NonSensitiveMetadata {
         &self.user_metadata
     }
 
     /// Replaces recursive parent creation.
+    ///
+    /// # Parameters
+    /// `recursive` enables creation of missing parent directories when `true`.
+    ///
+    /// # Returns
+    /// These options with recursive parent creation set to `recursive`.
     #[inline]
     #[must_use]
     pub const fn with_recursive(mut self, recursive: bool) -> Self {
@@ -73,6 +92,12 @@ impl CreateDirectoryOptions {
     }
 
     /// Replaces acceptance of an existing directory.
+    ///
+    /// # Parameters
+    /// `exists_ok` enables accepting an already existing directory when `true`.
+    ///
+    /// # Returns
+    /// These options with existing-directory acceptance set to `exists_ok`.
     #[inline]
     #[must_use]
     pub const fn with_exists_ok(mut self, exists_ok: bool) -> Self {
@@ -81,6 +106,12 @@ impl CreateDirectoryOptions {
     }
 
     /// Replaces user-defined metadata that has already passed key validation.
+    ///
+    /// # Parameters
+    /// `metadata` is the validated metadata to associate with these options.
+    ///
+    /// # Returns
+    /// These options with `metadata` wrapped as non-sensitive metadata.
     #[inline]
     #[must_use]
     pub fn with_user_metadata(mut self, metadata: UserMetadata) -> Self {

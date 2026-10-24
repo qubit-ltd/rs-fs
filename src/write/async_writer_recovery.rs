@@ -60,6 +60,7 @@ pub enum AsyncWriterRecovery {
 
 impl AsyncWriterRecovery {
     /// Borrows a validated writer, or returns None for a rejected session.
+    #[inline]
     pub(crate) fn opened(&self) -> Option<&AsyncFileWriter> {
         match self {
             Self::Opened(writer) => Some(writer),
@@ -69,6 +70,7 @@ impl AsyncWriterRecovery {
 
     /// Mutably borrows a validated writer, or returns None for a rejected
     /// session.
+    #[inline]
     pub(crate) fn opened_mut(&mut self) -> Option<&mut AsyncFileWriter> {
         match self {
             Self::Opened(writer) => Some(writer),

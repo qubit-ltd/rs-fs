@@ -40,7 +40,6 @@ pub(crate) fn is_unchanged_open_failure(error: &FsError) -> bool {
 /// # Returns
 /// The publication certainty inferred from the opening evidence.
 #[inline]
-#[must_use]
 pub(crate) fn open_failure_state(error: &FsError) -> WriteFailureState {
     if is_unchanged_open_failure(error) {
         WriteFailureState::NotPublished

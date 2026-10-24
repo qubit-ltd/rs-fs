@@ -8,4 +8,5 @@
 //! Rename primitive integration tests.
 
 mod rename_outcome_tests;
+mod rename_outcome_validation_tests;
 mod rename_tests;

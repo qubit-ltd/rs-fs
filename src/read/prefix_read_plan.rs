@@ -31,9 +31,25 @@ pub(crate) struct PrefixReadPlan {
 impl PrefixReadPlan {
     /// Validates the original request before considering a narrower range.
     ///
+    /// # Parameters
+    ///
+    /// - `properties` supplies the filesystem capabilities and configured read
+    ///   limits.
+    /// - `path` identifies the resource to validate and add to contextualized
+    ///   errors.
+    /// - `options` contains the requested read range and checksum policy.
+    /// - `max_bytes` is the requested upper bound for a prefix read; zero
+    ///   disables the hint.
+    ///
+    /// # Returns
+    ///
+    /// Returns a validated plan containing the effective read options and, when
+    /// applicable, a non-binding provider hint.
+    ///
     /// # Errors
     /// Returns the original request validation error, or an unmet requirement
-    /// when a partial read cannot establish complete checksum validation.
+    /// when the request is unsupported or a partial read cannot establish
+    /// complete checksum validation.
     pub(crate) fn new(
         properties: &FileSystemProperties,
         path: &Path,
@@ -85,8 +101,11 @@ impl PrefixReadPlan {
                 options = options.with_length(Some(length));
             }
         }
-        let hint = (max_bytes > 0 && options.checksum() == ChecksumPolicy::None && u64::try_from(max_bytes).is_ok())
-            .then(|| PrefixReadHint::new(u64::try_from(max_bytes).expect("checked above")));
+        let hint = if max_bytes > 0 && options.checksum() == ChecksumPolicy::None {
+            u64::try_from(max_bytes).ok().map(PrefixReadHint::new)
+        } else {
+            None
+        };
         Ok(Self { options, hint })
     }
 

@@ -24,6 +24,7 @@ macro_rules! path_request {
         ///     let _ = (path, options);
         /// }
         /// ```
+        #[must_use]
         pub struct $name<'a> {
             /// Validated logical path borrowed for provider dispatch.
             path: &'a crate::path::Path,

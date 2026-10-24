@@ -63,36 +63,50 @@ impl<R> OpenFailure<R> {
             recovery,
         }
     }
+
     /// Returns the original failure; cleanup does not rewrite it.
+    #[must_use = "inspect the original filesystem error before discarding it"]
+    #[inline]
     pub const fn error(&self) -> &FsError {
         &self.error
     }
+
     /// Returns the stage where opening stopped.
+    #[must_use = "use the opening stage to classify the failure"]
+    #[inline]
     pub const fn stage(&self) -> OpenFailureStage {
         self.stage
     }
+
     /// Returns the retained recovery session, or None before an envelope
     /// arrived.
+    #[inline]
     pub const fn recovery(&self) -> Option<&R> {
         self.recovery.as_ref()
     }
+
     /// Borrows the retained session for explicit cleanup, when available.
+    #[inline]
     pub fn recovery_mut(&mut self) -> Option<&mut R> {
         self.recovery.as_mut()
     }
+
     /// Transfers recovery ownership without changing the historical failure.
     pub fn take_recovery(&mut self) -> Option<R> {
         self.recovery.take()
     }
+
     /// Returns all failure facts and transfers any recovery ownership.
     ///
     /// # Returns
     /// The original error, opening stage, and optional retained recovery
     /// session.
+    #[must_use = "retain or inspect the failure facts returned by this method"]
     pub fn into_parts(self) -> (FsError, OpenFailureStage, Option<R>) {
         (*self.error, self.stage, self.recovery)
     }
 }
+
 impl<R> Debug for OpenFailure<R> {
     /// Formats failure facts without formatting the session or its claimed
     /// identity.
@@ -104,12 +118,14 @@ impl<R> Debug for OpenFailure<R> {
             .finish()
     }
 }
+
 impl<R> Display for OpenFailure<R> {
     /// Formats only the original contextual failure.
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         Display::fmt(&self.error, f)
     }
 }
+
 impl<R: 'static> Error for OpenFailure<R> {
     /// Exposes the original error chain without surrendering recovery
     /// ownership.

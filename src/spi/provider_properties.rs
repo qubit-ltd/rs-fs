@@ -201,7 +201,7 @@ impl ProviderProperties {
     fn missing_capability_operation_error(&self, capability: FileSystemCapability) -> Option<FsError> {
         let operation = self.missing_capability_operation(capability)?;
         let message =
-            format!("declared capability {capability:?} requires unavailable provider operation {operation:?}",);
+            format!("declared capability {capability:?} requires unavailable provider operation {operation:?}");
         Some(
             FsError::new(FsErrorKind::InvalidOptions, FsOperation::ValidateProperties, &message)
                 .with_required_capability(capability),

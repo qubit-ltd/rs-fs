@@ -63,6 +63,7 @@ pub trait AsyncFileSystemSpi: Send + Sync {
     ///
     /// # Returns
     /// The provider's immutable property snapshot.
+    #[must_use]
     fn properties(&self) -> ProviderProperties;
 
     /// Asynchronously reads metadata for a validated request.

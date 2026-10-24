@@ -34,7 +34,7 @@ mod common;
 
 /// An entire namespace is a query scope rather than an empty resource path.
 #[test]
-fn namespace_is_not_an_empty_resource_path() {
+fn test_namespace_is_not_an_empty_resource_path() {
     assert!(Path::parse_literal("").is_err());
     assert!(ListScope::Namespace.path().is_none());
     let path = Path::parse_literal("folder/").unwrap();
@@ -126,7 +126,7 @@ fn keys(names: &[&str]) -> Vec<DirEntry> {
 
 /// Namespace listings accept both top-level and nested logical keys.
 #[test]
-fn namespace_accepts_entire_flat_keyspace() {
+fn test_namespace_accepts_entire_flat_keyspace() {
     check_listing(
         ListScope::Namespace,
         ListOptions::object_keys(),
@@ -140,7 +140,7 @@ fn namespace_accepts_entire_flat_keyspace() {
 
 /// A raw path prefix has no implicit separator and its filter is relative.
 #[test]
-fn raw_prefix_and_relative_filter_preserve_exact_text() {
+fn test_raw_prefix_and_relative_filter_preserve_exact_text() {
     check_listing(
         ListScope::Path(Path::parse_literal("folder").unwrap()),
         ListOptions::object_keys(),
@@ -182,7 +182,7 @@ fn raw_prefix_and_relative_filter_preserve_exact_text() {
 
 /// Invalid scopes and unsupported capabilities are rejected before I/O.
 #[test]
-fn namespace_preflight_rejects_hierarchical_and_unsupported_listing() {
+fn test_namespace_preflight_rejects_hierarchical_and_unsupported_listing() {
     check_listing(
         ListScope::Namespace,
         ListOptions::default(),
@@ -215,7 +215,7 @@ fn namespace_preflight_rejects_hierarchical_and_unsupported_listing() {
 /// Combined query text is budgeted before opening, while entries are checked
 /// later.
 #[test]
-fn query_and_entry_limits_are_distinct() {
+fn test_query_and_entry_limits_are_distinct() {
     let limits = FileSystemLimits::unknown().with_max_path_text_bytes(FileSystemLimit::Maximum(4));
     let options = ListOptions::object_keys().with_filter(Some(ListFilter::LiteralPrefix("abcde".into())));
     check_listing(
@@ -250,7 +250,7 @@ fn query_and_entry_limits_are_distinct() {
 
 /// Namespace scope never relaxes provider entry path semantics.
 #[test]
-fn namespace_rejects_foreign_entry_semantics() {
+fn test_namespace_rejects_foreign_entry_semantics() {
     check_listing(
         ListScope::Namespace,
         ListOptions::object_keys(),

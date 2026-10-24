@@ -30,7 +30,25 @@ impl<'a> AsyncDirectoryOperation<'a> {
         Self { filesystem }
     }
 
-    /// Opens a validated asynchronous provider directory stream.
+    /// Opens a provider directory stream after validating the requested scope
+    /// and options.
+    ///
+    /// The requested page size is clamped to the filesystem limit before
+    /// dispatch. The stream retains the effective symlink policy and
+    /// provider path semantics for subsequent entries.
+    ///
+    /// # Parameters
+    /// - `scope`: Validated directory path or namespace to enumerate.
+    /// - `options`: Listing filters, page size, and caller-side limits.
+    ///
+    /// # Returns
+    /// A validated asynchronous stream over the provider's directory entries.
+    ///
+    /// # Errors
+    ///
+    /// Returns an enriched filesystem error when the scope or options are
+    /// invalid, listing is unsupported, the provider cannot open the listing,
+    /// or the returned stream cannot be initialized.
     pub(crate) async fn list(&self, scope: &ListScope, options: ListOptions) -> FsResult<AsyncDirectoryStream> {
         crate::directory::internal::list_preflight::validate(self.filesystem.properties(), scope, &options)
             .map_err(|error| self.filesystem.core().enrich(error, scope.path(), FsOperation::List))?;

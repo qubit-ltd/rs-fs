@@ -39,14 +39,34 @@ use crate::write::WriteAbortOutcome;
 /// # Examples
 ///
 /// ```rust
-/// use qubit_fs::error::RecoveryCleanupState;
+/// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
+/// # use support::*;
+/// # let (filesystem, _) = async_recording_spi::async_recording_file_system(
+/// #     async_recording_spi::AsyncRecordingConfig {
+/// #         invalid_opened_identity: true,
+/// #         ..Default::default()
+/// #     },
+/// # );
+/// # poll_support::ready(async {
+/// use qubit_fs::Path;
 /// use qubit_fs::write::AsyncWriterRecovery;
+/// use qubit_fs::write::WriteOptions;
 ///
-/// fn inspect_recovery(recovery: AsyncWriterRecovery) {
-///     if let AsyncWriterRecovery::Rejected(writer) = recovery {
-///         assert_eq!(writer.cleanup_state(), RecoveryCleanupState::Pending);
-///     }
+/// let mut operation = filesystem.begin_write_all(
+///     Path::parse("/report")?, b"bytes".to_vec(), WriteOptions::default(),
+/// )?;
+/// let failure = operation
+///     .execute()
+///     .await
+///     .expect_err("invalid provider identity");
+/// let mut recovery = operation.take_recovery().expect("retained rejected session");
+///
+/// if let AsyncWriterRecovery::Rejected(writer) = &mut recovery {
+///     assert!(writer.abort_async().await.is_ok());
 /// }
+/// drop(failure);
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// # }).unwrap();
 /// ```
 #[must_use = "explicitly clean or retain the isolated recovery session"]
 pub struct RejectedAsyncWriter {
@@ -71,6 +91,7 @@ impl RejectedAsyncWriter {
     }
     /// Returns cleanup progress; errors and cancellation do not release
     /// ownership.
+    #[must_use]
     #[inline]
     pub const fn cleanup_state(&self) -> RecoveryCleanupState {
         self.state

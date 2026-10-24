@@ -681,7 +681,8 @@ fn test_async_temp_file_cancellation_retains_uncertainty() {
         let mut temporary = ready(filesystem.create_temp_file(TempOptions::default())).expect("resource");
         let target = path("/published");
         if operation == FsOperation::CleanupTemp {
-            ready(temporary.persist(&target, PersistOptions::default())).expect_err("partial publish");
+            let failure = ready(temporary.persist(&target, PersistOptions::default())).expect_err("partial publish");
+            assert_eq!(PersistFailureState::PublishedSourceRetained, failure.state());
             drop(temporary.cleanup());
             assert_eq!(TempResourceState::CleanupRequired, temporary.state());
             let mut pending = temporary.cleanup();
@@ -734,7 +735,8 @@ fn test_async_temp_directory_cancellation_retains_uncertainty() {
         let mut temporary = ready(filesystem.create_temp_directory(TempOptions::default())).expect("resource");
         let target = path("/published");
         if operation == FsOperation::CleanupTemp {
-            ready(temporary.persist(&target, PersistOptions::default())).expect_err("partial publish");
+            let failure = ready(temporary.persist(&target, PersistOptions::default())).expect_err("partial publish");
+            assert_eq!(PersistFailureState::PublishedSourceRetained, failure.state());
             drop(temporary.cleanup());
             assert_eq!(TempResourceState::CleanupRequired, temporary.state());
             let mut pending = temporary.cleanup();

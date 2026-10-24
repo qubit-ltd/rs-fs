@@ -34,6 +34,7 @@ const MAX_FUZZ_INPUT_LEN: usize = 4096;
 ///
 /// A non-empty hexadecimal string safe to embed as a URI userinfo password or
 /// query value.
+#[must_use]
 fn secret_text(data: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut secret = String::from("fuzz-secret-");

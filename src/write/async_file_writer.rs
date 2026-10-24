@@ -135,19 +135,6 @@ impl AsyncFileWriter {
         self.state
     }
 
-    /// Returns the bytes accepted by the underlying write session.
-    #[inline]
-    #[must_use]
-    pub(crate) const fn written_bytes(&self) -> u64 {
-        self.written_bytes
-    }
-
-    /// Records that cancellation interrupted an operation using this writer.
-    #[inline]
-    pub(crate) fn mark_indeterminate(&mut self) {
-        self.state = WriterState::Indeterminate;
-    }
-
     /// Asynchronously publishes bytes accepted by this session.
     ///
     /// A definite failure retains the open session for retry or abort. An
@@ -159,6 +146,11 @@ impl AsyncFileWriter {
     ///
     /// # Returns
     /// A future resolving to the actual publication outcome.
+    ///
+    /// # Errors
+    /// The future returns [`WriteFailure`] when the provider fails publication
+    /// or violates the requested atomicity, durability, or byte-count
+    /// contract. The failure state records what is known about publication.
     pub fn commit_async(&mut self) -> SpiFuture<'_, Result<WriteOutcome, WriteFailure>> {
         if self.state != WriterState::Open {
             let publication_state = self.state.publication_failure_state();
@@ -249,6 +241,10 @@ impl AsyncFileWriter {
     /// # Returns
     /// A future resolving to the provider-confirmed destination publication
     /// state after cleanup.
+    ///
+    /// # Errors
+    /// The future returns an [`FsError`] when provider cleanup fails. The error
+    /// includes the operation context available from the facade.
     pub fn abort_async(&mut self) -> SpiFuture<'_, crate::error::FsResult<WriteAbortOutcome>> {
         if self.abort_completed
             || !matches!(
@@ -283,6 +279,19 @@ impl AsyncFileWriter {
                 }
             }
         })
+    }
+
+    /// Returns the bytes accepted by the underlying write session.
+    #[inline]
+    #[must_use]
+    pub(crate) const fn written_bytes(&self) -> u64 {
+        self.written_bytes
+    }
+
+    /// Records that cancellation interrupted an operation using this writer.
+    #[inline]
+    pub(crate) fn mark_indeterminate(&mut self) {
+        self.state = WriterState::Indeterminate;
     }
 
     /// Builds a stable invalid-state error.

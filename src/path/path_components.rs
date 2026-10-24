@@ -6,7 +6,6 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-// facade tests.
 //! Iteration over lexical logical path components.
 
 /// Iterator over the path's lexical component boundaries.
@@ -29,6 +28,14 @@ pub struct PathComponents<'a> {
 
 impl<'a> PathComponents<'a> {
     /// Creates an iterator for `text`, removing only the absolute root marker.
+    ///
+    /// # Parameters
+    /// - `text`: Lexical path text to iterate over.
+    /// - `absolute`: Whether `text` starts at a logical root.
+    /// - `literal`: Whether separators in `text` must remain literal.
+    ///
+    /// # Returns
+    /// An iterator over the remaining lexical components.
     pub(crate) fn new(text: &'a str, absolute: bool, literal: bool) -> Self {
         let text = if absolute && !literal {
             text.strip_prefix('/').unwrap_or(text)
@@ -45,6 +52,9 @@ impl<'a> Iterator for PathComponents<'a> {
     type Item = &'a str;
 
     /// Returns the next lexical component, including empty literal components.
+    ///
+    /// # Returns
+    /// `Some` with the next component, or `None` when no component remains.
     fn next(&mut self) -> Option<Self::Item> {
         let remaining = self.remaining?;
         match remaining.split_once('/') {

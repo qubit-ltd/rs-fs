@@ -42,6 +42,7 @@ impl<'a> PersistRequest<'a> {
     ///
     /// # Returns
     /// A provider persistence request borrowing `target`.
+    #[must_use]
     #[inline]
     pub(crate) const fn new(target: &'a Path, options: PersistOptions) -> Self {
         Self { target, options }

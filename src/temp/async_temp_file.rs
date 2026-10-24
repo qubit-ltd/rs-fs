@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
 //! Runtime-neutral asynchronous temporary-file facade handle.
 
 use std::pin::Pin;
@@ -19,6 +18,7 @@ use crate::metadata::AchievedAtomicity;
 use crate::metadata::AtomicityRequirement;
 use crate::path::Path;
 use crate::path::PathComponent;
+use crate::path::RelativePath;
 use crate::spi::AsyncTempResourceSpi;
 use crate::spi::PersistRequest;
 use crate::spi::SpiFuture;
@@ -69,6 +69,8 @@ impl AsyncTempFile {
     /// - `file_system`: Facade that owns validation and persistence policy.
     /// - `path`: Validated provider-local temporary path.
     /// - `session`: Provider lifecycle session.
+    /// - `resource_name`: Human-readable resource kind used in lifecycle
+    ///   diagnostics.
     ///
     /// # Returns
     /// An owned asynchronous temporary-file handle.
@@ -102,12 +104,14 @@ impl AsyncTempFile {
     /// # Returns
     /// The handle's current cleanup and publication state.
     #[inline]
-    #[must_use]
     pub const fn state(&self) -> TempResourceState {
         self.lifecycle.state()
     }
 
     /// Returns one lexically safe child path.
+    ///
+    /// # Returns
+    /// The path formed by appending `component` to this temporary file path.
     #[inline]
     #[must_use]
     pub fn child(&self, component: &PathComponent) -> Path {
@@ -115,9 +119,12 @@ impl AsyncTempFile {
     }
 
     /// Returns one lexically safe descendant path.
+    ///
+    /// # Returns
+    /// The path formed by joining `relative` to this temporary file path.
     #[inline]
     #[must_use]
-    pub fn descendant(&self, relative: &crate::path::RelativePath) -> Path {
+    pub fn descendant(&self, relative: &RelativePath) -> Path {
         self.path.join(relative)
     }
 

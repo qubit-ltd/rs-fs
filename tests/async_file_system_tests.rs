@@ -71,6 +71,7 @@ use qubit_fs::spi::StatResponse;
 use qubit_fs::temp::TempOptions;
 use qubit_fs::write::WriteOptions;
 
+/// Provider that advertises copy without reader or writer fallback support.
 struct PropertiesOnlySpi;
 
 /// Provider that records construction-time property snapshot requests.
@@ -224,6 +225,8 @@ fn default_async_properties() -> ProviderProperties {
     .expect("default provider properties should be valid")
 }
 
+/// Creates the unsupported-operation error used by unexercised provider
+/// methods.
 fn unused() -> FsError {
     FsError::new(FsErrorKind::UnsupportedOperation, FsOperation::Other, "unused")
 }
@@ -304,7 +307,7 @@ fn test_async_spi_default_operations_report_unsupported() {
     let path = Path::parse("/resource").expect("test path should parse");
     let target = Path::parse("/target").expect("test target should parse");
 
-    let error = ready(file_system.list(&ListScope::Path((path).clone()), ListOptions::default()))
+    let error = ready(file_system.list(&ListScope::Path(path.clone()), ListOptions::default()))
         .expect_err("default list implementation must reject the request");
     assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
     assert_eq!(FsOperation::List, error.operation());

@@ -14,7 +14,12 @@
 /// ```rust
 /// use qubit_fs::temp::PersistCleanupState;
 ///
-/// assert!(matches!(PersistCleanupState::Complete, PersistCleanupState::Complete));
+/// let cleanup_state = PersistCleanupState::Complete;
+/// let cleanup_succeeded = match cleanup_state {
+///     PersistCleanupState::Complete => true,
+///     _ => false,
+/// };
+/// assert!(cleanup_succeeded);
 /// ```
 #[must_use]
 #[non_exhaustive]

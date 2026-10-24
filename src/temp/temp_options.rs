@@ -46,7 +46,6 @@ impl TempOptions {
 
     /// Returns the optional parent directory or prefix.
     #[inline]
-    #[must_use]
     pub const fn parent(&self) -> Option<&Path> {
         self.parent.as_ref()
     }

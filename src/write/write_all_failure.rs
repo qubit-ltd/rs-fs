@@ -8,6 +8,7 @@
 //! Failure returned by the convenience whole-file write operation.
 
 use std::error::Error;
+use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
@@ -35,6 +36,7 @@ use crate::write::WriterRecovery;
 ///     eprintln!("publication state: {state:?}");
 /// }
 /// ```
+#[must_use]
 pub struct WriteAllFailure {
     /// Contextual filesystem error that interrupted the whole-file write.
     error: Box<FsError>,
@@ -61,34 +63,53 @@ impl WriteAllFailure {
             writer,
         }
     }
+
     /// Returns the causal filesystem error.
+    ///
+    /// # Returns
+    /// The filesystem error with its original operation and provider context.
+    #[must_use = "inspect the filesystem error instead of silently discarding it"]
     #[inline]
     pub const fn error(&self) -> &FsError {
         &self.error
     }
     /// Returns publication certainty at the original failure, even after
     /// recovery.
-    #[must_use]
+    ///
+    /// # Returns
+    /// The immutable publication state captured when the write failed.
     pub const fn state(&self) -> WriteFailureState {
         self.state
     }
     /// Returns the original acknowledged byte count, excluding uncertain
     /// writes.
+    ///
+    /// # Returns
+    /// The number of bytes acknowledged before the failure.
     #[must_use]
     pub const fn written_bytes(&self) -> u64 {
         self.written_bytes
     }
     /// Transfers the retained session without changing the failure snapshot.
+    ///
+    /// # Returns
+    /// The retained writer, or `None` if no writer remains available.
     pub fn take_recovery(&mut self) -> Option<WriterRecovery> {
         self.writer.take()
     }
     /// Returns the retained writer, if opening had completed.
+    ///
+    /// # Returns
+    /// A shared reference to the retained writer, or `None` if unavailable.
     #[inline]
     #[must_use = "inspect the recovery state before abandoning the retained writer"]
     pub fn recovery(&self) -> Option<&WriterRecovery> {
         self.writer.as_ref()
     }
     /// Returns a mutable retained writer for explicit recovery.
+    ///
+    /// # Returns
+    /// A mutable reference to the retained writer, or `None` if unavailable.
     #[inline]
     #[must_use = "inspect the recovery state before abandoning the retained writer"]
     pub fn recovery_mut(&mut self) -> Option<&mut WriterRecovery> {
@@ -99,6 +120,7 @@ impl WriteAllFailure {
     /// # Returns
     /// The original error, publication state, confirmed byte count, and
     /// optional retained writer.
+    #[must_use = "retain the failure details or recover the retained writer"]
     #[inline]
     pub fn into_parts(self) -> (FsError, WriteFailureState, u64, Option<WriterRecovery>) {
         (*self.error, self.state, self.written_bytes, self.writer)
@@ -109,11 +131,11 @@ impl Display for WriteAllFailure {
     /// Formats the causal failure without exposing writer internals.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
-        self.error.fmt(formatter)
+        Display::fmt(&self.error, formatter)
     }
 }
 
-impl std::fmt::Debug for WriteAllFailure {
+impl Debug for WriteAllFailure {
     /// Formats the causal error and whether recovery is available.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {

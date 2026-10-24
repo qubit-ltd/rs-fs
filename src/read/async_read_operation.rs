@@ -35,6 +35,7 @@ impl<'a> AsyncReadOperation<'a> {
     /// Creates read operations using `filesystem` for reader creation and error
     /// context.
     #[inline]
+    #[must_use]
     pub(crate) const fn new(filesystem: &'a AsyncFileSystem) -> Self {
         Self { filesystem }
     }

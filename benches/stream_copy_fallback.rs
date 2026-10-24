@@ -66,6 +66,7 @@ struct CopySpi {
 
 impl CopySpi {
     /// Allocates namespace/session storage outside the timed copy.
+    #[must_use]
     fn new(payload: Arc<[u8]>, read_chunk: usize, write_chunk: usize) -> Self {
         let properties = ProviderProperties::new(
             FileSystemInfo::new(
@@ -99,6 +100,7 @@ impl FileSystemSpi for CopySpi {
     fn properties(&self) -> ProviderProperties {
         self.properties.clone()
     }
+
     fn stat(&self, request: StatRequest<'_>) -> FsResult<StatResponse> {
         if request.path().as_str() != "/source" {
             return Err(FsError::new(FsErrorKind::NotFound, FsOperation::Stat, "no target yet"));
@@ -108,6 +110,7 @@ impl FileSystemSpi for CopySpi {
             FileMetadata::new(FileKind::File).with_len(Some(self.payload.len() as u64)),
         ))
     }
+
     fn open_reader(&self, request: OpenReaderRequest<'_>) -> FsResult<OpenedReader> {
         Ok(OpenedReader::new(
             OpenedFileInfo::new(self.properties.info().id().clone(), request.path().clone()),
@@ -118,6 +121,7 @@ impl FileSystemSpi for CopySpi {
             }),
         ))
     }
+
     fn open_writer(&self, request: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
         Ok(OpenedWriter::new(
             OpenedFileInfo::new(self.properties.info().id().clone(), request.path().clone()),
@@ -135,6 +139,7 @@ struct ShortReader {
     position: usize,
     chunk: usize,
 }
+
 impl Input for ShortReader {
     type Item = u8;
     unsafe fn read_unchecked(&mut self, output: &mut [u8], index: usize, count: usize) -> IoResult<usize> {
@@ -150,6 +155,7 @@ struct ShortWriter {
     bytes: Vec<u8>,
     chunk: usize,
 }
+
 impl Output for ShortWriter {
     type Item = u8;
     unsafe fn write_unchecked(&mut self, bytes: &[u8], index: usize, count: usize) -> IoResult<usize> {
@@ -157,6 +163,7 @@ impl Output for ShortWriter {
         self.bytes.extend_from_slice(&bytes[index..index + count]);
         Ok(count)
     }
+
     fn flush(&mut self) -> IoResult<()> {
         Ok(())
     }
@@ -169,6 +176,7 @@ impl FileWriterSpi for ShortWriter {
                 .with_bytes_written(self.bytes.len() as u64),
         )
     }
+
     fn abort(&mut self) -> FsResult<WriteAbortOutcome> {
         Ok(WriteAbortOutcome::NotPublished)
     }

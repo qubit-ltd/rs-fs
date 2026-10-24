@@ -623,18 +623,35 @@ impl FileSystem {
     }
 
     /// Returns shared deterministic facade policy to operation objects.
+    ///
+    /// # Returns
+    /// The cached policy shared by internal operation objects.
     #[inline]
     pub(crate) fn core(&self) -> &FacadeCore {
         &self.core
     }
 
     /// Returns the synchronous provider implementation to operation objects.
+    ///
+    /// # Returns
+    /// The provider implementation retained by this facade.
     #[inline]
     pub(crate) fn spi(&self) -> &dyn FileSystemSpi {
         self.spi.as_ref()
     }
 
     /// Opens a facade-validated reader with an internal resolved option hint.
+    ///
+    /// # Parameters
+    /// - `path`: Logical file path to open.
+    /// - `resolved`: Validated read options, including any internal hint.
+    ///
+    /// # Returns
+    /// A reader bound to the validated provider handle.
+    ///
+    /// # Errors
+    /// Returns a path, option, capability, provider, or provider-contract
+    /// error when the reader cannot be opened safely.
     pub(crate) fn open_reader_resolved(&self, path: &Path, resolved: ResolvedReadOptions) -> FsResult<FileReader> {
         let options = resolved.options().clone();
         self.validate_path(path, FsOperation::OpenReader)?;
@@ -661,6 +678,18 @@ impl FileSystem {
     ///
     /// This crate-visible preflight preserves source and target context before
     /// a temporary resource is handed to its provider.
+    ///
+    /// # Parameters
+    /// - `source`: Temporary resource path.
+    /// - `target`: Requested persistence destination.
+    /// - `options`: Persistence behavior to validate.
+    ///
+    /// # Returns
+    /// `Ok(())` when the paths and options pass local validation.
+    ///
+    /// # Errors
+    /// Returns a path or option validation error with source and target
+    /// context.
     pub(crate) fn preflight_temp_persist(
         &self,
         source: &Path,
@@ -679,6 +708,16 @@ impl FileSystem {
     }
 
     /// Validates a provider-generated target reported by temporary keep.
+    ///
+    /// # Parameters
+    /// - `source`: Temporary resource path used for error context.
+    /// - `target`: Provider-reported destination path.
+    ///
+    /// # Returns
+    /// `Ok(())` when the provider-reported target is a valid logical path.
+    ///
+    /// # Errors
+    /// Returns a provider-contract error when the target path is invalid.
     pub(crate) fn validate_temp_keep_target(&self, source: &Path, target: &Path) -> FsResult<()> {
         self.validate_path(target, FsOperation::KeepTemp).map_err(|_| {
             self.contract_error(
@@ -691,6 +730,17 @@ impl FileSystem {
     }
 
     /// Validates and dispatches one deletion primitive.
+    ///
+    /// # Parameters
+    /// - `path`: Logical target path.
+    /// - `options`: Deletion policy.
+    /// - `directory`: Whether to invoke the directory deletion primitive.
+    ///
+    /// # Returns
+    /// The provider-confirmed deletion outcome.
+    ///
+    /// # Errors
+    /// Returns validation, capability, provider, or provider-contract errors.
     fn delete(&self, path: &Path, options: DeleteOptions, directory: bool) -> FsResult<DeleteOutcome> {
         self.validate_path(path, FsOperation::Delete)?;
         options
@@ -717,6 +767,17 @@ impl FileSystem {
     }
 
     /// Performs validation before the single rename provider call.
+    ///
+    /// # Parameters
+    /// - `source`: Existing logical resource path.
+    /// - `target`: Requested destination path.
+    /// - `options`: Rename policy.
+    ///
+    /// # Returns
+    /// `Ok(())` when the request passes local validation.
+    ///
+    /// # Errors
+    /// Returns a path, option, capability, or same-path validation error.
     fn rename_preflight(&self, source: &Path, target: &Path, options: &RenameOptions) -> FsResult<()> {
         self.validate_path(source, FsOperation::Rename)?;
         self.validate_path(target, FsOperation::Rename)?;
@@ -741,6 +802,14 @@ impl FileSystem {
 
     /// Adds source, target, and provider facts required by public rename
     /// failures.
+    ///
+    /// # Parameters
+    /// - `failure`: Rename failure to enrich.
+    /// - `source`: Original source path.
+    /// - `target`: Requested destination path.
+    ///
+    /// # Returns
+    /// The failure with missing source, target, and provider context filled.
     fn contextualize_rename_failure(&self, failure: RenameFailure, source: &Path, target: &Path) -> RenameFailure {
         let (error, state) = failure.into_parts();
         RenameFailure::new(
@@ -750,26 +819,73 @@ impl FileSystem {
     }
 
     /// Validates a path against the cached provider snapshot before I/O.
+    ///
+    /// # Parameters
+    /// - `path`: Logical resource path to validate.
+    /// - `operation`: Operation associated with validation errors.
+    ///
+    /// # Returns
+    /// `Ok(())` when the path is valid for this provider.
+    ///
+    /// # Errors
+    /// Returns the path validation error.
     fn validate_path(&self, path: &Path, operation: FsOperation) -> FsResult<()> {
         self.core.validate_path(path, operation)
     }
 
     /// Requires an advertised capability before I/O.
+    ///
+    /// # Parameters
+    /// - `capability`: Capability required by the operation.
+    /// - `operation`: Operation associated with a missing-capability error.
+    /// - `path`: Logical resource path included in error context.
+    ///
+    /// # Returns
+    /// `Ok(())` when the provider advertises the capability.
+    ///
+    /// # Errors
+    /// Returns a missing-capability error when the provider lacks it.
     fn require(&self, capability: FileSystemCapability, operation: FsOperation, path: &Path) -> FsResult<()> {
         self.core.require(capability, operation, Some(path))
     }
 
     /// Adds missing public error context to a provider error.
+    ///
+    /// # Parameters
+    /// - `error`: Provider error to enrich.
+    /// - `path`: Logical resource path associated with the error.
+    /// - `operation`: Operation associated with the error.
+    ///
+    /// # Returns
+    /// The error with missing path, operation, and provider context filled.
     fn enrich(&self, error: FsError, path: &Path, operation: FsOperation) -> FsError {
         self.core.enrich(error, Some(path), operation)
     }
 
     /// Builds a provider-contract error for an invalid outcome.
+    ///
+    /// # Parameters
+    /// - `path`: Path associated with the invalid outcome.
+    /// - `operation`: Operation that produced the outcome.
+    /// - `message`: Description of the provider contract violation.
+    ///
+    /// # Returns
+    /// A provider-contract error containing the supplied context.
     fn contract_error(&self, path: &Path, operation: FsOperation, message: &str) -> FsError {
         self.core.contract_error(path, operation, message)
     }
 
     /// Validates the identity the provider attached to an opened file handle.
+    ///
+    /// # Parameters
+    /// - `info`: Provider-reported opened-file identity.
+    /// - `path`: Requested logical resource path.
+    ///
+    /// # Returns
+    /// `Ok(())` when filesystem and path identities match.
+    ///
+    /// # Errors
+    /// Returns a provider-contract error when either identity differs.
     fn validate_opened_info(&self, info: &OpenedFileInfo, path: &Path) -> FsResult<()> {
         if info.filesystem_id() != self.properties().info().id() || info.path() != path {
             return Err(self.contract_error(
@@ -783,6 +899,16 @@ impl FileSystem {
 
     /// Validates the filesystem identity captured for a newly-created temporary
     /// resource.
+    ///
+    /// # Parameters
+    /// - `info`: Provider-reported temporary-resource identity.
+    /// - `expected_kind`: Resource kind requested from the provider.
+    ///
+    /// # Returns
+    /// `Ok(())` when filesystem, path, and resource kind are valid.
+    ///
+    /// # Errors
+    /// Returns a provider-contract error when any identity is inconsistent.
     fn validate_temp_info(&self, info: &OpenedFileInfo, expected_kind: FileKind) -> FsResult<()> {
         if info.filesystem_id() != self.properties().info().id() {
             return Err(self.contract_error(

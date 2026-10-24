@@ -9,7 +9,10 @@
 
 use crate::metadata::ChecksumAlgorithm;
 
-/// Content checksum.
+/// Associates a checksum value with the algorithm that produced it.
+///
+/// The value is stored as text so callers can preserve the encoding supplied
+/// by a filesystem provider; this type does not validate the value's format.
 ///
 /// # Examples
 ///
@@ -21,21 +24,24 @@ use crate::metadata::ChecksumAlgorithm;
 /// ```
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Checksum {
-    /// Algorithm used to compute the checksum.
+    /// Algorithm the provider used to compute `value`.
     pub algorithm: ChecksumAlgorithm,
-    /// Encoded checksum value.
+    /// Provider-encoded checksum text, retained without format validation.
     pub value: String,
 }
 
 impl Checksum {
-    /// Creates a checksum.
+    /// Creates checksum metadata from an algorithm and its encoded value.
+    ///
+    /// The value is copied into owned storage and is not checked against the
+    /// selected algorithm.
     ///
     /// # Parameters
-    /// - `algorithm`: Checksum algorithm.
-    /// - `value`: Encoded checksum value.
+    /// - `algorithm`: Algorithm that produced the checksum.
+    /// - `value`: Provider-encoded checksum text to retain.
     ///
     /// # Returns
-    /// New checksum.
+    /// Checksum metadata containing the supplied algorithm and value.
     #[inline]
     #[must_use]
     pub fn new(algorithm: ChecksumAlgorithm, value: &str) -> Self {

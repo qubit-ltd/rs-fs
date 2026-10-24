@@ -130,13 +130,6 @@ impl FileWriter {
         self.state
     }
 
-    /// Returns the bytes accepted by the underlying write session.
-    #[inline]
-    #[must_use]
-    pub(crate) const fn written_bytes(&self) -> u64 {
-        self.written_bytes
-    }
-
     /// Publishes bytes accepted by this session.
     ///
     /// This method borrows rather than consumes the writer. The provider's
@@ -269,6 +262,13 @@ impl FileWriter {
                 Err(self.contextual_error(error, FsOperation::AbortWriter))
             }
         }
+    }
+
+    /// Returns the bytes accepted by the underlying write session.
+    #[inline]
+    #[must_use]
+    pub(crate) const fn written_bytes(&self) -> u64 {
+        self.written_bytes
     }
 
     /// Builds a stable invalid-state error for this writer.

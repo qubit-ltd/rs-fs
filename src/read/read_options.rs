@@ -42,7 +42,65 @@ pub struct ReadOptions {
 }
 
 impl ReadOptions {
+    /// Returns the optional byte offset.
+    ///
+    /// # Returns
+    /// The offset from which reading begins, or `None` to start at the
+    /// resource's beginning.
+    #[inline]
+    #[must_use]
+    pub const fn offset(&self) -> Option<u64> {
+        self.offset
+    }
+
+    /// Returns the optional byte length.
+    ///
+    /// # Returns
+    /// The maximum number of bytes to read, or `None` to read through EOF.
+    #[inline]
+    #[must_use]
+    pub const fn length(&self) -> Option<u64> {
+        self.length
+    }
+
+    /// Returns the optional positive version precondition.
+    ///
+    /// # Returns
+    /// The required resource version, if one was configured.
+    #[inline]
+    #[must_use]
+    pub const fn if_match(&self) -> Option<&ResourceVersion> {
+        self.if_match.as_ref()
+    }
+
+    /// Returns the optional negative version precondition.
+    ///
+    /// # Returns
+    /// The resource version that must not match, if one was configured.
+    #[inline]
+    #[must_use]
+    pub const fn if_none_match(&self) -> Option<&ResourceVersion> {
+        self.if_none_match.as_ref()
+    }
+
+    /// Returns the checksum policy.
+    ///
+    /// # Returns
+    /// The checksum validation policy requested for the read.
+    #[inline]
+    #[must_use]
+    pub const fn checksum(&self) -> ChecksumPolicy {
+        self.checksum
+    }
+
     /// Returns a copy with the byte offset replaced.
+    ///
+    /// # Parameters
+    /// - `offset`: The byte offset to use, or `None` to read from the
+    ///   beginning.
+    ///
+    /// # Returns
+    /// A copy of these options with the requested offset.
     #[inline]
     #[must_use]
     pub const fn with_offset(mut self, offset: Option<u64>) -> Self {
@@ -50,14 +108,13 @@ impl ReadOptions {
         self
     }
 
-    /// Returns the optional byte offset.
-    #[inline]
-    #[must_use]
-    pub const fn offset(&self) -> Option<u64> {
-        self.offset
-    }
-
     /// Returns a copy with the byte length replaced.
+    ///
+    /// # Parameters
+    /// - `length`: The maximum byte length, or `None` to read through EOF.
+    ///
+    /// # Returns
+    /// A copy of these options with the requested length.
     #[inline]
     #[must_use]
     pub const fn with_length(mut self, length: Option<u64>) -> Self {
@@ -65,14 +122,14 @@ impl ReadOptions {
         self
     }
 
-    /// Returns the optional byte length.
-    #[inline]
-    #[must_use]
-    pub const fn length(&self) -> Option<u64> {
-        self.length
-    }
-
     /// Returns a copy with the positive version precondition replaced.
+    ///
+    /// # Parameters
+    /// - `if_match`: The required resource version, or `None` to clear the
+    ///   precondition.
+    ///
+    /// # Returns
+    /// A copy of these options with the requested precondition.
     #[inline]
     #[must_use]
     pub fn with_if_match(mut self, if_match: Option<ResourceVersion>) -> Self {
@@ -80,14 +137,14 @@ impl ReadOptions {
         self
     }
 
-    /// Returns the optional positive version precondition.
-    #[inline]
-    #[must_use]
-    pub const fn if_match(&self) -> Option<&ResourceVersion> {
-        self.if_match.as_ref()
-    }
-
     /// Returns a copy with the negative version precondition replaced.
+    ///
+    /// # Parameters
+    /// - `if_none_match`: The version that must not match, or `None` to clear
+    ///   the precondition.
+    ///
+    /// # Returns
+    /// A copy of these options with the requested precondition.
     #[inline]
     #[must_use]
     pub fn with_if_none_match(mut self, if_none_match: Option<ResourceVersion>) -> Self {
@@ -95,26 +152,18 @@ impl ReadOptions {
         self
     }
 
-    /// Returns the optional negative version precondition.
-    #[inline]
-    #[must_use]
-    pub const fn if_none_match(&self) -> Option<&ResourceVersion> {
-        self.if_none_match.as_ref()
-    }
-
     /// Returns a copy with the checksum policy replaced.
+    ///
+    /// # Parameters
+    /// - `checksum`: The checksum validation policy to use.
+    ///
+    /// # Returns
+    /// A copy of these options with the requested checksum policy.
     #[inline]
     #[must_use]
     pub const fn with_checksum(mut self, checksum: ChecksumPolicy) -> Self {
         self.checksum = checksum;
         self
-    }
-
-    /// Returns the checksum policy.
-    #[inline]
-    #[must_use]
-    pub const fn checksum(&self) -> ChecksumPolicy {
-        self.checksum
     }
 
     /// Validates provider-independent read options without performing I/O.
@@ -152,11 +201,17 @@ impl ReadOptions {
     /// Providers should call this method before opening a reader or producing
     /// any observable side effect.
     ///
-    /// # Errors
+    /// # Parameters
+    /// - `capabilities`: The capabilities advertised by the target filesystem.
     ///
-    /// Returns [`FsErrorKind::InvalidOptions`] for mutually exclusive version
-    /// conditions, or [`FsErrorKind::RequirementNotMet`] with the exact
-    /// missing capability for range, conditional, or required-checksum reads.
+    /// # Returns
+    /// `Ok(())` when the requested semantics are supported.
+    ///
+    /// # Errors
+    /// Returns [`FsErrorKind::InvalidOptions`] for invalid version conditions
+    /// or an unrepresentable explicit range. Returns
+    /// [`FsErrorKind::RequirementNotMet`] with the exact missing capability
+    /// for range, conditional, or required-checksum reads.
     pub fn validate_against(&self, capabilities: FileSystemCapabilities) -> Result<(), FsError> {
         self.validate()?;
         if (self.offset.is_some() || self.length.is_some()) && !capabilities.supports(FileSystemCapability::RangeRead) {
@@ -184,7 +239,14 @@ impl ReadOptions {
     }
 }
 
-/// Builds a typed unmet read requirement.
+/// Builds a typed error for a read requirement the filesystem cannot meet.
+///
+/// # Parameters
+/// - `capability`: The capability required by the read options.
+/// - `message`: A diagnostic describing the unsupported read behavior.
+///
+/// # Returns
+/// An error identifying the missing capability and the open-reader operation.
 fn missing_requirement(capability: FileSystemCapability, message: &str) -> FsError {
     FsError::new(FsErrorKind::RequirementNotMet, FsOperation::OpenReader, message).with_required_capability(capability)
 }

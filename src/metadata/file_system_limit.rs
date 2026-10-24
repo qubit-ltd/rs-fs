@@ -36,7 +36,6 @@ pub enum FileSystemLimit {
 impl FileSystemLimit {
     /// Returns the finite inclusive maximum, when one exists.
     #[inline]
-    #[must_use]
     pub const fn maximum(self) -> Option<u64> {
         match self {
             Self::Maximum(maximum) => Some(maximum),

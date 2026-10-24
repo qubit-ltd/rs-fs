@@ -56,6 +56,7 @@ impl SpiRenameFailure {
     /// # Returns
     /// A borrowed view of the contextual [`FsError`].
     #[inline]
+    #[must_use = "inspect the filesystem error instead of silently discarding it"]
     pub fn error(&self) -> &FsError {
         &self.error
     }
@@ -75,6 +76,7 @@ impl SpiRenameFailure {
     /// # Returns
     /// The provider error and confirmed rename state.
     #[inline]
+    #[must_use = "inspect or retain the provider error before discarding it"]
     pub fn into_parts(self) -> (FsError, RenameFailureState) {
         (*self.error, self.state)
     }

@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade tests.
 //! Recoverable failure returned by an asynchronous copy operation.
 
 use std::error::Error;
@@ -45,6 +44,7 @@ use crate::error::FsError;
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// # }).unwrap();
 /// ```
+#[must_use = "inspect the asynchronous copy failure and its publication state"]
 pub struct AsyncCopyFailure {
     /// Contextual filesystem error that caused the copy to fail.
     error: FsError,
@@ -65,26 +65,37 @@ impl AsyncCopyFailure {
     }
 
     /// Returns the contextual filesystem error.
+    ///
+    /// # Returns
+    /// The contextual error that caused the asynchronous copy to fail.
     #[inline]
+    #[must_use = "inspect the filesystem error instead of discarding it"]
     pub const fn error(&self) -> &FsError {
         &self.error
     }
 
     /// Returns the confirmed publication state.
+    ///
+    /// # Returns
+    /// The destination publication state confirmed when the copy failed.
     #[inline]
-    #[must_use]
     pub const fn state(&self) -> CopyFailureState {
         self.state
     }
 
     /// Returns partial transfer statistics.
+    ///
+    /// # Returns
+    /// The transfer progress confirmed before the failure.
     #[inline]
-    #[must_use]
     pub const fn partial_stats(&self) -> &CopyStats {
         &self.partial_stats
     }
 
     /// Splits the failure into owned error, state, and progress facts.
+    ///
+    /// # Returns
+    /// The contextual error, confirmed publication state, and partial progress.
     #[inline]
     pub fn into_parts(self) -> (FsError, CopyFailureState, CopyStats) {
         (self.error, self.state, self.partial_stats)

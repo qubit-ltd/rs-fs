@@ -32,6 +32,7 @@ use crate::read::ReadOptions;
 /// # Ok(())
 /// # }
 /// ```
+#[must_use]
 #[derive(Debug)]
 pub struct PrefixReadOutcome {
     bytes: Vec<u8>,
@@ -43,6 +44,17 @@ pub struct PrefixReadOutcome {
 
 impl PrefixReadOutcome {
     /// Creates a prefix result inside the facade.
+    ///
+    /// # Parameters
+    /// - `bytes`: Bytes accumulated before the read stopped.
+    /// - `info`: Resource identity and metadata captured when the reader
+    ///   opened.
+    /// - `options`: Read options retained for the operation.
+    /// - `max_bytes`: Maximum number of bytes requested for the prefix.
+    /// - `termination`: Reason the bounded read stopped.
+    ///
+    /// # Returns
+    /// A prefix outcome containing the supplied read facts.
     #[inline]
     pub(crate) fn new(
         bytes: Vec<u8>,
@@ -61,6 +73,9 @@ impl PrefixReadOutcome {
     }
 
     /// Returns the bytes without transferring ownership.
+    ///
+    /// # Returns
+    /// The accumulated prefix bytes borrowed from this outcome.
     #[inline]
     #[must_use]
     pub fn bytes(&self) -> &[u8] {
@@ -68,6 +83,9 @@ impl PrefixReadOutcome {
     }
 
     /// Returns the information captured when the reader was opened.
+    ///
+    /// # Returns
+    /// The resource identity and metadata snapshot captured at open time.
     #[inline]
     #[must_use]
     pub const fn info(&self) -> &OpenedFileInfo {
@@ -75,6 +93,9 @@ impl PrefixReadOutcome {
     }
 
     /// Returns the caller options retained for this read.
+    ///
+    /// # Returns
+    /// The options used to configure this read.
     #[inline]
     #[must_use]
     pub const fn options(&self) -> &ReadOptions {
@@ -82,6 +103,9 @@ impl PrefixReadOutcome {
     }
 
     /// Returns the requested prefix limit.
+    ///
+    /// # Returns
+    /// The maximum number of bytes requested for this prefix.
     #[inline]
     #[must_use]
     pub const fn max_bytes(&self) -> usize {
@@ -89,6 +113,9 @@ impl PrefixReadOutcome {
     }
 
     /// Returns the reason the read stopped.
+    ///
+    /// # Returns
+    /// The termination state recorded by the bounded read.
     #[inline]
     #[must_use]
     pub const fn termination(&self) -> PrefixReadTermination {

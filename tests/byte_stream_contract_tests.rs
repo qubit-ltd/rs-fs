@@ -6,6 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use qubit_fs::Path;
 use qubit_fs::metadata::FileSystemId;
 use qubit_fs::metadata::OpenedFileInfo;
 use qubit_fs::read::FileReader;
@@ -16,9 +17,12 @@ use qubit_io::ByteInput;
 use qubit_io::ByteOutput;
 use qubit_io::Input;
 
+/// An input provider that immediately reports end of stream.
 struct OnlyInput;
+
 impl Input for OnlyInput {
     type Item = u8;
+
     unsafe fn read_unchecked(&mut self, _: &mut [u8], _: usize, _: usize) -> std::io::Result<usize> {
         Ok(0)
     }
@@ -29,7 +33,7 @@ fn test_sync_byte_stream_contract() {
     let constructor: fn(OpenedFileInfo, Box<dyn ByteInput + Send>) -> OpenedReader = OpenedReader::new;
     let info = OpenedFileInfo::new(
         FileSystemId::new("byte-contract").expect("valid id"),
-        qubit_fs::Path::parse("/data").expect("valid path"),
+        Path::parse("/data").expect("valid path"),
     );
     let _opened = constructor(info, Box::new(OnlyInput));
     fn require_input<T: ByteInput>() {}

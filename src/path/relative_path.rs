@@ -42,6 +42,10 @@ impl RelativePath {
     /// # Parameters
     /// - `text`: Relative path text to normalize and validate.
     ///
+    /// # Returns
+    /// Returns the normalized descendant path with redundant separators and
+    /// current-directory components removed.
+    ///
     /// # Errors
     /// Returns an invalid-path error when `text` is empty, absolute, contains
     /// NUL, or escapes above the relative root.

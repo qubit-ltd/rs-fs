@@ -16,15 +16,15 @@ use crate::spi::ResolvedListOptions;
 /// # Examples
 ///
 /// ```rust
-/// use qubit_fs::directory::ListOptions;
-/// use qubit_fs::path::Path;
 /// use qubit_fs::spi::ListRequest;
 ///
-/// let path = Path::parse("/dir")?;
-/// assert!(std::any::type_name::<ListRequest<'_>>().contains("ListRequest"));
-/// assert_eq!("/dir", path.as_str());
-/// let _ = ListOptions::default();
-/// # Ok::<(), qubit_fs::FsError>(())
+/// fn inspect_list_request(request: ListRequest<'_>) {
+///     let _scope = request.scope();
+///     let _options = request.options();
+/// }
+///
+/// // The facade supplies this request to a provider's `FileSystemSpi::list`.
+/// let _ = inspect_list_request;
 /// ```
 pub struct ListRequest<'a> {
     /// Caller-selected prefix or configured namespace.
@@ -35,6 +35,10 @@ pub struct ListRequest<'a> {
 
 impl<'a> ListRequest<'a> {
     /// Creates a request after facade preflight.
+    ///
+    /// # Parameters
+    /// - `scope`: Caller-selected listing scope validated by the facade.
+    /// - `options`: Listing behavior resolved by the facade for the provider.
     pub(crate) const fn new(scope: &'a ListScope, options: ResolvedListOptions) -> Self {
         Self { scope, options }
     }

@@ -36,6 +36,10 @@ pub struct DeleteOptions {
 
 impl DeleteOptions {
     /// Returns whether container resources should be removed recursively.
+    ///
+    /// # Returns
+    ///
+    /// `true` when deleting a container also removes its contents.
     #[inline]
     #[must_use]
     pub const fn recursive(&self) -> bool {
@@ -43,6 +47,10 @@ impl DeleteOptions {
     }
 
     /// Returns whether a missing target should be treated as success.
+    ///
+    /// # Returns
+    ///
+    /// `true` when a missing target is accepted as a successful deletion.
     #[inline]
     #[must_use]
     pub const fn missing_ok(&self) -> bool {
@@ -50,12 +58,25 @@ impl DeleteOptions {
     }
 
     /// Returns the optional required ETag or provider version.
+    ///
+    /// # Returns
+    ///
+    /// `Some` with the required provider version, or `None` when no version
+    /// condition is required.
     #[inline]
     pub const fn if_match(&self) -> Option<&ResourceVersion> {
         self.if_match.as_ref()
     }
 
     /// Replaces recursive container deletion.
+    ///
+    /// # Parameters
+    ///
+    /// - `recursive`: whether deletion should include container contents.
+    ///
+    /// # Returns
+    ///
+    /// The updated options, consuming the previous value.
     #[inline]
     #[must_use]
     pub const fn with_recursive(mut self, recursive: bool) -> Self {
@@ -64,6 +85,14 @@ impl DeleteOptions {
     }
 
     /// Replaces missing-target acceptance.
+    ///
+    /// # Parameters
+    ///
+    /// - `missing_ok`: whether a missing target should count as success.
+    ///
+    /// # Returns
+    ///
+    /// The updated options, consuming the previous value.
     #[inline]
     #[must_use]
     pub const fn with_missing_ok(mut self, missing_ok: bool) -> Self {
@@ -72,6 +101,15 @@ impl DeleteOptions {
     }
 
     /// Replaces the optional required ETag or provider version.
+    ///
+    /// # Parameters
+    ///
+    /// - `if_match`: required provider version, or `None` to remove the
+    ///   condition.
+    ///
+    /// # Returns
+    ///
+    /// The updated options, consuming the previous value.
     #[inline]
     #[must_use]
     pub fn with_if_match(mut self, if_match: Option<ResourceVersion>) -> Self {
@@ -80,6 +118,14 @@ impl DeleteOptions {
     }
 
     /// Validates required deletion semantics before provider side effects.
+    ///
+    /// # Parameters
+    ///
+    /// - `capabilities`: capabilities advertised by the target filesystem.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` when the requested options are supported.
     ///
     /// # Errors
     ///
@@ -102,7 +148,10 @@ impl DeleteOptions {
     }
 }
 
-/// Builds a typed unmet delete requirement.
+/// Builds an error describing an unsupported required delete capability.
+///
+/// The capability is retained in the error so callers can distinguish the
+/// missing requirement programmatically; `message` supplies its explanation.
 fn missing_requirement(capability: FileSystemCapability, message: &str) -> FsError {
     FsError::new(FsErrorKind::RequirementNotMet, FsOperation::Delete, message).with_required_capability(capability)
 }

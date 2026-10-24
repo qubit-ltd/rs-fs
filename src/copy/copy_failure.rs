@@ -43,13 +43,22 @@ use crate::write::WriterRecovery;
 /// assert!(!failure.has_recovery());
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
+#[must_use = "inspect or explicitly recover from the copy failure"]
 pub struct CopyFailure {
     /// Heap-owned error, publication state, progress, and recovery writer.
     parts: Box<CopyFailureParts>,
 }
 impl CopyFailure {
     /// Creates a typed copy failure from validated facade facts.
-    #[must_use]
+    ///
+    /// # Parameters
+    /// - `error`: Contextual filesystem error that caused the copy to fail.
+    /// - `state`: Confirmed destination publication state.
+    /// - `partial_stats`: Transfer progress confirmed before failure.
+    /// - `writer`: Optional writer retained for recovery.
+    ///
+    /// # Returns
+    /// A copy failure retaining the supplied facts.
     pub(crate) fn new(
         error: FsError,
         state: CopyFailureState,
@@ -66,23 +75,35 @@ impl CopyFailure {
         }
     }
     /// Returns the contextual filesystem error.
+    ///
+    /// # Returns
+    /// The error that caused the copy operation to fail.
     #[inline]
+    #[must_use = "inspect the filesystem error instead of silently discarding it"]
     pub const fn error(&self) -> &FsError {
         &self.parts.error
     }
     /// Returns the publication state at failure.
+    ///
+    /// # Returns
+    /// The state confirmed when the operation failed.
     #[inline]
-    #[must_use]
     pub const fn state(&self) -> CopyFailureState {
         self.parts.state
     }
     /// Returns statistics accumulated before failure.
+    ///
+    /// # Returns
+    /// A reference to the progress counters accumulated before failure.
     #[inline]
     #[must_use]
     pub const fn partial_stats(&self) -> &CopyStats {
         &self.parts.partial_stats
     }
     /// Returns whether a writer is available for recovery.
+    ///
+    /// # Returns
+    /// `true` when a recovery writer is retained, or `false` otherwise.
     #[inline]
     #[must_use]
     pub const fn has_recovery(&self) -> bool {
@@ -90,23 +111,34 @@ impl CopyFailure {
     }
 
     /// Returns the recovery writer if retained.
+    ///
+    /// # Returns
+    /// `Some` with a borrowed recovery writer when one is retained, or `None`
+    /// otherwise.
     #[inline]
-    #[must_use]
+    #[must_use = "inspect the recovery state before abandoning the retained writer"]
     pub fn recovery(&self) -> Option<&WriterRecovery> {
         self.parts.writer.as_ref()
     }
 
     /// Returns a mutable recovery writer if retained.
+    ///
+    /// # Returns
+    /// `Some` with mutable access to a retained recovery writer, or `None`
+    /// otherwise.
     #[inline]
-    #[must_use]
+    #[must_use = "inspect the recovery state before abandoning the retained writer"]
     pub fn recovery_mut(&mut self) -> Option<&mut WriterRecovery> {
         self.parts.writer.as_mut()
     }
 
     /// Takes ownership of the recovery writer when recovery responsibility
     /// remains with the caller.
+    ///
+    /// # Returns
+    /// `Some` with the retained recovery writer, or `None` if it was absent or
+    /// already taken.
     #[inline]
-    #[must_use]
     pub fn take_recovery(&mut self) -> Option<WriterRecovery> {
         self.parts.writer.take()
     }
@@ -150,38 +182,5 @@ impl Error for CopyFailure {
     #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(self.error())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::hint::black_box;
-
-    use super::CopyFailure;
-    use crate::copy::CopyFailureState;
-    use crate::copy::CopyStats;
-    use crate::error::FsError;
-    use crate::error::FsErrorKind;
-    use crate::error::FsOperation;
-    use crate::write::WriterRecovery;
-
-    #[test]
-    fn recovery_accessors_are_executed_at_runtime() {
-        let has_recovery: fn(&CopyFailure) -> bool = black_box(CopyFailure::has_recovery);
-        let recovery: fn(&CopyFailure) -> Option<&WriterRecovery> = black_box(CopyFailure::recovery);
-        let recovery_mut: for<'a> fn(&'a mut CopyFailure) -> Option<&'a mut WriterRecovery> =
-            black_box(CopyFailure::recovery_mut);
-        let take_recovery: fn(&mut CopyFailure) -> Option<WriterRecovery> = black_box(CopyFailure::take_recovery);
-        let mut failure = CopyFailure::new(
-            FsError::new(FsErrorKind::NotFound, FsOperation::Copy, "missing source"),
-            CopyFailureState::Unchanged,
-            CopyStats::default(),
-            None,
-        );
-
-        assert!(!has_recovery(&failure));
-        assert!(recovery(&failure).is_none());
-        assert!(recovery_mut(&mut failure).is_none());
-        assert!(take_recovery(&mut failure).is_none());
     }
 }

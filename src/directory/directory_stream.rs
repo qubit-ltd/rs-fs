@@ -36,7 +36,10 @@ use crate::spi::DirectoryStreamSpi;
 /// # use qubit_fs::{FileSystem, FsResult, Path};
 /// # use qubit_fs::directory::ListOptions;
 /// # fn visit(filesystem: &FileSystem, root: &Path) -> FsResult<()> {
-/// let mut stream = filesystem.list(&qubit_fs::directory::ListScope::Path(root.clone()), ListOptions::default())?;
+/// let mut stream = filesystem.list(
+///     &qubit_fs::directory::ListScope::Path(root.clone()),
+///     ListOptions::default(),
+/// )?;
 /// while let Some(entry) = stream.next_entry()? {
 ///     println!("{}", entry.path);
 /// }

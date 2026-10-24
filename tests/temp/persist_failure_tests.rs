@@ -17,10 +17,11 @@ use qubit_fs::temp::PersistFailureState;
 use qubit_fs::temp::PersistOptions;
 use qubit_fs::temp::TempOptions;
 
-use crate::handle_support::temp_failure_filesystem;
+use crate::handle_support::implementation_tests::temp_failure_filesystem;
 
 const SECRET_SOURCE_TEXT: &str = "authorization=secret-token";
 
+/// Exposes a recognizable secret through formatting to test debug redaction.
 struct SecretSourceError;
 
 impl std::fmt::Debug for SecretSourceError {

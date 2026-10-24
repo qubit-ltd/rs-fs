@@ -9,6 +9,7 @@
 
 use super::rename_outcome_validation_error::RenameOutcomeValidationError;
 use crate::metadata::AchievedAtomicity;
+use crate::metadata::AtomicityRequirement;
 use crate::metadata::DurabilityRequirement;
 use crate::metadata::PublicationMethod;
 use crate::path::Path;
@@ -38,9 +39,7 @@ pub(crate) fn validate_rename_outcome(
     source: &Path,
     target: &Path,
 ) -> Option<RenameOutcomeValidationError> {
-    if options.atomicity() == crate::metadata::AtomicityRequirement::Required
-        && outcome.atomicity() != AchievedAtomicity::Atomic
-    {
+    if options.atomicity() == AtomicityRequirement::Required && outcome.atomicity() != AchievedAtomicity::Atomic {
         return Some(RenameOutcomeValidationError {
             message: "provider reported non-atomic success for an atomic-required rename",
             state: RenameFailureState::Renamed,

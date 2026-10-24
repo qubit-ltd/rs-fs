@@ -24,6 +24,7 @@ impl CreateTempDirectoryRequest {
     /// # Returns
     /// A provider temporary-directory request.
     #[allow(dead_code)]
+    #[must_use]
     #[inline]
     pub(crate) const fn new(options: TempOptions) -> Self {
         Self { options }

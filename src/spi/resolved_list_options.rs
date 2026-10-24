@@ -48,14 +48,20 @@ impl ResolvedListOptions {
         }
     }
 
-    /// Returns the resolved options.
+    /// Returns the caller's validated and normalized listing options.
+    ///
+    /// The returned value is borrowed from this facade-created snapshot, so a
+    /// provider can inspect request settings without changing them.
     #[inline]
     #[must_use]
     pub const fn options(&self) -> &ListOptions {
         &self.options
     }
 
-    /// Returns the effective symbolic-link policy.
+    /// Returns the symbolic-link policy selected for this provider request.
+    ///
+    /// This value already incorporates the caller's override and the
+    /// filesystem default, so providers should apply it directly.
     #[inline]
     #[must_use = "the resolved symbolic-link policy must be used"]
     pub const fn symlink_policy(&self) -> SymlinkPolicy {

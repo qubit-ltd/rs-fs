@@ -11,6 +11,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 /// Tracks one copy operation's cumulative elapsed-time budget.
+#[must_use]
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct CopyDeadline {
     /// Monotonic instant at which the operation was constructed.
@@ -22,6 +23,7 @@ pub(crate) struct CopyDeadline {
 impl CopyDeadline {
     /// Starts tracking a copy operation.
     #[inline]
+    #[must_use = "use the deadline to enforce the copy budget"]
     pub(crate) fn new(maximum: Option<Duration>) -> Self {
         Self {
             started_at: Instant::now(),
@@ -31,6 +33,7 @@ impl CopyDeadline {
 
     /// Returns whether the cumulative budget has expired.
     #[inline]
+    #[must_use]
     pub(crate) fn expired(self) -> bool {
         self.maximum.is_some_and(|maximum| self.started_at.elapsed() >= maximum)
     }

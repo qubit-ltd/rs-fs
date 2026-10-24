@@ -24,5 +24,8 @@ fn test_rename_outcome_preserves_durable_publication_fact() {
         PublicationMethod::AtomicRename,
     )
     .with_durable(true);
-    assert!(outcome.durable());
+    assert!(
+        outcome.durable(),
+        "durable publication should be reported by the outcome"
+    );
 }

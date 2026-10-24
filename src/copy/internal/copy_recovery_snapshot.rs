@@ -6,8 +6,10 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 //! Private recovery facts retained by an owning asynchronous copy operation.
+
 use crate::copy::CopyFailureState;
 use crate::copy::CopyStats;
+
 /// Publication certainty and progress retained independently of execution.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct CopyRecoverySnapshot {
@@ -16,9 +18,15 @@ pub(crate) struct CopyRecoverySnapshot {
     /// Confirmed copy progress at the recorded state.
     pub(crate) stats: CopyStats,
 }
+
 impl CopyRecoverySnapshot {
     /// Creates the initial no-effect, zero-progress snapshot.
+    ///
+    /// # Returns
+    /// A snapshot indicating that no destination effects have been published
+    /// and no copy progress has been recorded.
     #[inline]
+    #[must_use]
     pub(crate) const fn unchanged() -> Self {
         Self {
             state: CopyFailureState::Unchanged,

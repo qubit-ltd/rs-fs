@@ -32,6 +32,7 @@ use crate::rename::RenameFailureState;
 ///     }
 /// }
 /// ```
+#[must_use = "inspect the rename state before deciding how to recover"]
 pub struct RenameFailure {
     /// Contextual filesystem error that interrupted the rename.
     error: FsError,
@@ -40,23 +41,46 @@ pub struct RenameFailure {
 }
 impl RenameFailure {
     /// Creates a typed facade rename failure.
-    #[must_use]
+    ///
+    /// # Parameters
+    /// - `error`: Contextual error that interrupted the operation.
+    /// - `state`: Provider-confirmed state of the source and destination.
+    ///
+    /// # Returns
+    /// A failure retaining both the error and publication state.
     pub(crate) const fn new(error: FsError, state: RenameFailureState) -> Self {
         Self { error, state }
     }
-    /// Returns the contextual filesystem error.
+    /// Borrows the contextual filesystem error that interrupted the rename.
+    ///
+    /// The returned error retains operation context and may carry a
+    /// lower-level source error.
+    ///
+    /// # Returns
+    /// The error retained by this failure.
     #[inline]
+    #[must_use = "inspect the filesystem error before handling the rename failure"]
     pub const fn error(&self) -> &FsError {
         &self.error
     }
-    /// Returns the state of the source/target transition at failure.
+    /// Returns the provider-confirmed source and target transition state.
+    ///
+    /// `Indeterminate` means the provider cannot establish whether the rename
+    /// completed, so callers must not assume either the old or new layout.
+    ///
+    /// # Returns
+    /// The publication state observed when the operation failed.
     #[inline]
     #[must_use]
     pub const fn state(&self) -> RenameFailureState {
         self.state
     }
-    /// Splits the failure into its error and state.
+    /// Consumes the failure and returns its error and publication state.
+    ///
+    /// # Returns
+    /// The retained contextual error and provider-confirmed transition state.
     #[inline]
+    #[must_use = "retain and inspect the error and rename state"]
     pub fn into_parts(self) -> (FsError, RenameFailureState) {
         (self.error, self.state)
     }

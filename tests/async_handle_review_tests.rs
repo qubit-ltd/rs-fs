@@ -226,7 +226,8 @@ fn test_async_writer_abort_preserves_published_state() {
     });
     let mut writer =
         ready(file_system.open_writer(&path("/final"), WriteOptions::default())).expect("writer should open");
-    ready(writer.commit_async()).expect_err("provider should report published failure");
+    let failure = ready(writer.commit_async()).expect_err("provider should report published failure");
+    assert_eq!(WriteFailureState::Published, failure.state());
     let _ = ready(writer.abort_async()).expect("cleanup should succeed");
     assert_eq!(WriterState::Published, writer.state());
 }
@@ -716,7 +717,8 @@ fn test_async_copy_failure_exposes_recovery_writer_accessor() {
     let mut operation = file_system
         .begin_copy(path("/source"), path("/target"), CopyOptions::default())
         .expect("copy preflight should succeed");
-    ready(operation.execute()).expect_err("configured transfer failure should propagate");
+    let failure = ready(operation.execute()).expect_err("configured transfer failure should propagate");
+    assert_eq!(FsErrorKind::Io, failure.error().kind());
     assert!(
         operation
             .recovery()

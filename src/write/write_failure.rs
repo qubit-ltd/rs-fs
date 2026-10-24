@@ -30,6 +30,7 @@ use crate::write::WriteFailureState;
 /// assert_eq!(WriteFailureState::NotPublished, failure.state());
 /// ```
 #[derive(Debug)]
+#[must_use = "inspect the write failure and its recovery state"]
 pub struct WriteFailure {
     /// Contextual filesystem error returned by the write attempt.
     error: FsError,
@@ -57,7 +58,6 @@ impl WriteFailure {
     /// # Returns
     /// The recovery state for this commit attempt.
     #[inline]
-    #[must_use]
     pub const fn state(&self) -> WriteFailureState {
         self.state
     }
@@ -67,6 +67,7 @@ impl WriteFailure {
     /// # Returns
     /// The error with operation, path, provider, and source context.
     #[inline]
+    #[must_use = "inspect the underlying filesystem error"]
     pub const fn error(&self) -> &FsError {
         &self.error
     }
@@ -81,6 +82,7 @@ impl WriteFailure {
     }
 
     /// Splits this facade failure into its causal error and state.
+    #[must_use = "inspect the filesystem error and recovery state"]
     #[inline]
     pub fn into_parts(self) -> (FsError, WriteFailureState) {
         (self.error, self.state)

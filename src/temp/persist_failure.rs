@@ -31,6 +31,7 @@ use crate::temp::PersistFailureState;
 /// assert_eq!(PersistFailureState::NotPublished, failure.state());
 /// ```
 #[derive(Debug)]
+#[must_use = "inspect and retain the persistence recovery state before discarding this failure"]
 pub struct PersistFailure {
     /// Contextual filesystem error that interrupted persistence.
     error: FsError,
@@ -50,7 +51,6 @@ impl PersistFailure {
     /// # Returns
     /// A failure preserving both the cause and recovery contract.
     #[inline]
-    #[must_use]
     pub fn new(error: FsError, state: PersistFailureState) -> Self {
         Self {
             error,
@@ -73,6 +73,7 @@ impl PersistFailure {
     ///
     /// # Returns
     /// The error with operation, path, provider, and source context.
+    #[must_use = "inspect the filesystem error details"]
     #[inline]
     pub const fn error(&self) -> &FsError {
         &self.error
@@ -95,12 +96,14 @@ impl PersistFailure {
     }
 
     /// Splits this facade failure into its causal error and state.
+    #[must_use = "retain or inspect the causal error and recovery state"]
     #[inline]
     pub fn into_parts(self) -> (FsError, PersistFailureState) {
         (self.error, self.state)
     }
 
     /// Consumes the failure and returns its complete recovery snapshot.
+    #[must_use = "retain or inspect the causal error and complete recovery snapshot"]
     #[inline]
     pub fn into_recovery_parts(self) -> (FsError, PersistFailureState, Option<Path>) {
         (self.error, self.state, self.publication_target)

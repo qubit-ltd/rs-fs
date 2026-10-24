@@ -42,7 +42,6 @@ impl WriterState {
     /// This describes the destination's known historical state, rather than
     /// the validity of the repeated operation itself.
     #[inline]
-    #[must_use]
     pub(crate) const fn publication_failure_state(self) -> WriteFailureState {
         match self {
             Self::Open => WriteFailureState::RetryableNotPublished,

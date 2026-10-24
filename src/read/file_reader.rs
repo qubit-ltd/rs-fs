@@ -76,11 +76,15 @@ impl FileReader {
 impl Input for FileReader {
     type Item = u8;
 
+    /// Reports whether the wrapped byte input can satisfy reads from its
+    /// buffer.
     #[inline]
     fn is_buffered(&self) -> bool {
         self.inner.is_buffered()
     }
 
+    /// Reads the requested byte range under the caller's `Input` safety
+    /// contract.
     #[inline]
     unsafe fn read_unchecked(&mut self, output: &mut [u8], index: usize, count: usize) -> IoResult<usize> {
         // SAFETY: The caller guarantees the same range contract required by
@@ -90,6 +94,7 @@ impl Input for FileReader {
 }
 
 impl Debug for FileReader {
+    /// Formats the reader's stable file information without exposing its input.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter

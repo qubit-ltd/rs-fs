@@ -28,6 +28,15 @@ pub struct DeleteOutcome {
 impl DeleteOutcome {
     /// Creates an outcome. `already_missing` reports an accepted missing
     /// target.
+    ///
+    /// # Parameters
+    ///
+    /// * `already_missing` indicates whether an already-missing target
+    ///   satisfied the request.
+    ///
+    /// # Returns
+    ///
+    /// A new outcome without a provider-reported deletion count.
     #[inline]
     #[must_use]
     pub const fn new(already_missing: bool) -> Self {
@@ -38,24 +47,41 @@ impl DeleteOutcome {
     }
 
     /// Returns whether a missing target satisfied the request.
+    ///
+    /// # Returns
+    ///
+    /// `true` when an already-missing target satisfied the request.
     #[inline]
     #[must_use]
     pub const fn already_missing(self) -> bool {
         self.already_missing
     }
 
+    /// Returns the number of deleted entries, when reported.
+    ///
+    /// # Returns
+    ///
+    /// `Some(count)` when the provider reported the number of deleted entries,
+    /// or `None` when it did not.
+    #[inline]
+    #[must_use]
+    pub const fn deleted_entries(self) -> Option<u64> {
+        self.deleted_entries
+    }
+
     /// Attaches the number of deleted entries, when known.
+    ///
+    /// # Parameters
+    ///
+    /// * `count` is the number of entries deleted.
+    ///
+    /// # Returns
+    ///
+    /// The updated outcome with the reported deletion count.
     #[inline]
     #[must_use]
     pub const fn with_deleted_entries(mut self, count: u64) -> Self {
         self.deleted_entries = Some(count);
         self
-    }
-
-    /// Returns the number of deleted entries, when reported.
-    #[inline]
-    #[must_use]
-    pub const fn deleted_entries(self) -> Option<u64> {
-        self.deleted_entries
     }
 }

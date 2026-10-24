@@ -82,6 +82,9 @@ impl OpenedFileInfo {
     }
 
     /// Returns the logical path fixed when the provider opened the handle.
+    ///
+    /// # Returns
+    /// The path captured at open time.
     #[inline]
     #[must_use]
     pub const fn path(&self) -> &Path {

@@ -34,6 +34,7 @@ pub(crate) struct StreamCopyPlan<'a> {
 impl<'a> StreamCopyPlan<'a> {
     /// Creates a plan for one validated copy request.
     #[inline]
+    #[must_use]
     pub(crate) const fn new(
         options: &'a CopyOptions,
         limits: &'a FileSystemLimits,
@@ -88,6 +89,7 @@ impl<'a> StreamCopyPlan<'a> {
 
     /// Builds the writer request used by the fallback.
     #[inline]
+    #[must_use]
     pub(crate) fn writer_options(&self) -> WriteOptions {
         fallback_write_options(self.options)
     }
@@ -106,6 +108,7 @@ impl<'a> StreamCopyPlan<'a> {
 
     /// Returns the fallback statistics for a completed regular-file copy.
     #[inline]
+    #[must_use]
     pub(crate) fn completed_stats(bytes: u64) -> CopyStats {
         CopyStats {
             files: 1,
@@ -116,6 +119,7 @@ impl<'a> StreamCopyPlan<'a> {
 
     /// Returns whether an unchanged conflict may be reported as skipped.
     #[inline]
+    #[must_use]
     pub(crate) fn may_skip_conflict(&self, state: CopyFailureState) -> bool {
         self.options.conflict() == CopyConflictPolicy::Skip && state == CopyFailureState::Unchanged
     }

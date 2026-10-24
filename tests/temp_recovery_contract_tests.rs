@@ -32,7 +32,8 @@ fn test_persist_failure_retains_release_state() {
 /// Failed unpublished attempts must not fabricate historical publication.
 #[test]
 fn test_unpublished_failure_has_no_publication_target() {
-    let (filesystem, _, _) = handle_support::temp_failure_filesystem(PersistFailureState::NotPublished);
+    let (filesystem, _, _) =
+        handle_support::implementation_tests::temp_failure_filesystem(PersistFailureState::NotPublished);
     let target = Path::parse("/requested").expect("target");
     let mut file = filesystem.create_temp_file(TempOptions::default()).expect("file");
     let failure = file.persist(&target, PersistOptions::default()).expect_err("failure");
@@ -63,7 +64,8 @@ fn test_temp_file_source_failure_states_are_sticky() {
             false,
         ),
     ] {
-        let (filesystem, cleanup_calls, persist_calls) = handle_support::temp_failure_filesystem(state);
+        let (filesystem, cleanup_calls, persist_calls) =
+            handle_support::implementation_tests::temp_failure_filesystem(state);
         let mut temporary = filesystem.create_temp_file(TempOptions::default()).expect("resource");
         let target = Path::parse("/published").expect("target");
         let failure = temporary
@@ -122,7 +124,8 @@ fn test_temp_directory_source_failure_states_are_sticky() {
             false,
         ),
     ] {
-        let (filesystem, cleanup_calls, persist_calls) = handle_support::temp_failure_filesystem(state);
+        let (filesystem, cleanup_calls, persist_calls) =
+            handle_support::implementation_tests::temp_failure_filesystem(state);
         let mut temporary = filesystem
             .create_temp_directory(TempOptions::default())
             .expect("resource");
@@ -171,7 +174,7 @@ fn test_temp_file_keep_failure_retains_generated_target() {
         PersistFailureState::PublishedSourceRetained,
         PersistFailureState::PublishedSourceReleased,
     ] {
-        let (filesystem, _, _) = handle_support::temp_failure_filesystem(state);
+        let (filesystem, _, _) = handle_support::implementation_tests::temp_failure_filesystem(state);
         let mut temporary = filesystem.create_temp_file(TempOptions::default()).expect("resource");
         let target = Path::parse("/kept-resource").expect("target");
         let failure = temporary.keep().expect_err("injected keep failure");
@@ -204,7 +207,7 @@ fn test_temp_directory_keep_failure_retains_generated_target() {
         PersistFailureState::PublishedSourceRetained,
         PersistFailureState::PublishedSourceReleased,
     ] {
-        let (filesystem, _, _) = handle_support::temp_failure_filesystem(state);
+        let (filesystem, _, _) = handle_support::implementation_tests::temp_failure_filesystem(state);
         let mut temporary = filesystem
             .create_temp_directory(TempOptions::default())
             .expect("resource");
@@ -241,7 +244,8 @@ fn test_cleanup_failure_does_not_restore_owned_source() {
             PersistFailureState::NotPublishedSourceIndeterminate,
         ),
     ] {
-        let (filesystem, calls) = handle_support::temp_lifecycle_error_filesystem(None, Some(kind));
+        let (filesystem, calls) =
+            handle_support::implementation_tests::temp_lifecycle_error_filesystem(None, Some(kind));
         let mut file = filesystem.create_temp_file(TempOptions::default()).expect("file");
         assert_eq!(kind, file.cleanup().expect_err("injected cleanup failure").kind());
         let retry = file.keep().expect_err("not owned");
@@ -255,10 +259,11 @@ fn test_cleanup_failure_does_not_restore_owned_source() {
 /// permanently.
 #[test]
 fn test_temp_file_published_cleanup_becomes_source_indeterminate() {
-    let (filesystem, cleanup_calls, persist_calls) = handle_support::temp_failure_with_cleanup_error_filesystem(
-        PersistFailureState::PublishedSourceRetained,
-        Some(FsErrorKind::Indeterminate),
-    );
+    let (filesystem, cleanup_calls, persist_calls) =
+        handle_support::implementation_tests::temp_failure_with_cleanup_error_filesystem(
+            PersistFailureState::PublishedSourceRetained,
+            Some(FsErrorKind::Indeterminate),
+        );
     let mut temporary = filesystem.create_temp_file(TempOptions::default()).expect("resource");
     let target = Path::parse("/published").expect("target");
     let failure = temporary
@@ -293,10 +298,11 @@ fn test_temp_file_published_cleanup_becomes_source_indeterminate() {
 /// permanently.
 #[test]
 fn test_temp_directory_published_cleanup_becomes_source_indeterminate() {
-    let (filesystem, cleanup_calls, persist_calls) = handle_support::temp_failure_with_cleanup_error_filesystem(
-        PersistFailureState::PublishedSourceRetained,
-        Some(FsErrorKind::Indeterminate),
-    );
+    let (filesystem, cleanup_calls, persist_calls) =
+        handle_support::implementation_tests::temp_failure_with_cleanup_error_filesystem(
+            PersistFailureState::PublishedSourceRetained,
+            Some(FsErrorKind::Indeterminate),
+        );
     let mut temporary = filesystem
         .create_temp_directory(TempOptions::default())
         .expect("resource");

@@ -17,7 +17,7 @@ use qubit_fs::temp::TempOptions;
 use qubit_fs::temp::TempResourceState;
 #[test]
 fn test_temp_directory_child_components_are_lexically_safe() {
-    let (filesystem, cleanup_calls, _) = crate::handle_support::filesystem(false, Vec::new());
+    let (filesystem, cleanup_calls, _) = crate::handle_support::implementation_tests::filesystem(false, Vec::new());
     let mut directory = filesystem
         .create_temp_directory(TempOptions::default())
         .expect("temporary directory should open");
@@ -36,7 +36,8 @@ fn test_temp_directory_child_components_are_lexically_safe() {
 /// prevents subsequent lifecycle actions from reusing the session.
 #[test]
 fn test_temp_directory_persist_marks_resource_persisted() {
-    let (filesystem, cleanup_calls, persist_calls) = crate::handle_support::filesystem(false, Vec::new());
+    let (filesystem, cleanup_calls, persist_calls) =
+        crate::handle_support::implementation_tests::filesystem(false, Vec::new());
     let mut directory = filesystem
         .create_temp_directory(TempOptions::default())
         .expect("temporary directory should open");
@@ -58,7 +59,7 @@ fn test_temp_directory_persist_marks_resource_persisted() {
 /// merely advertising the capability and returning a non-atomic outcome.
 #[test]
 fn test_temp_directory_rejects_non_atomic_required_persist_outcome() {
-    let filesystem = crate::handle_support::non_atomic_temp_directory_filesystem();
+    let filesystem = crate::handle_support::implementation_tests::non_atomic_temp_directory_filesystem();
     let mut directory = filesystem
         .create_temp_directory(TempOptions::default())
         .expect("temporary directory should open");
@@ -76,7 +77,7 @@ fn test_temp_directory_rejects_non_atomic_required_persist_outcome() {
 /// Rejects a provider outcome that reports a different persistence target.
 #[test]
 fn test_temp_directory_rejects_mismatched_persist_target() {
-    let (filesystem, _, _) = crate::handle_support::filesystem(false, Vec::new());
+    let (filesystem, _, _) = crate::handle_support::implementation_tests::filesystem(false, Vec::new());
     let mut directory = filesystem
         .create_temp_directory(TempOptions::default())
         .expect("temporary directory should open");
@@ -97,7 +98,7 @@ fn test_temp_directory_rejects_mismatched_persist_target() {
 /// leaves the completed handle unusable for further persistence.
 #[test]
 fn test_temp_directory_keep_releases_cleanup_responsibility() {
-    let (filesystem, cleanup_calls, _) = crate::handle_support::filesystem(false, Vec::new());
+    let (filesystem, cleanup_calls, _) = crate::handle_support::implementation_tests::filesystem(false, Vec::new());
     let mut directory = filesystem
         .create_temp_directory(TempOptions::default())
         .expect("temporary directory should open");
@@ -129,7 +130,8 @@ fn test_temp_directory_persist_failure_preserves_provider_progress() {
         ),
         (PersistFailureState::Indeterminate, TempResourceState::Indeterminate),
     ] {
-        let (filesystem, cleanup_calls, persist_calls) = crate::handle_support::temp_failure_filesystem(failure_state);
+        let (filesystem, cleanup_calls, persist_calls) =
+            crate::handle_support::implementation_tests::temp_failure_filesystem(failure_state);
         let mut directory = filesystem
             .create_temp_directory(TempOptions::default())
             .expect("temporary directory should open");
@@ -174,7 +176,7 @@ fn test_temp_directory_lifecycle_errors_preserve_recovery_state() {
         ("cleanup", FsErrorKind::Io, TempResourceState::CleanupRequired),
         ("cleanup", FsErrorKind::Indeterminate, TempResourceState::Indeterminate),
     ] {
-        let (filesystem, cleanup_calls) = crate::handle_support::temp_lifecycle_error_filesystem(
+        let (filesystem, cleanup_calls) = crate::handle_support::implementation_tests::temp_lifecycle_error_filesystem(
             (operation == "keep").then_some(error_kind),
             (operation == "cleanup").then_some(error_kind),
         );

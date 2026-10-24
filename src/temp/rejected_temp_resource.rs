@@ -60,6 +60,11 @@ pub struct RejectedTempResource {
 }
 impl RejectedTempResource {
     /// Takes ownership of a rejected session and trusted request context.
+    ///
+    /// # Parameters
+    /// - `session`: Provider session whose cleanup authority is isolated here.
+    /// - `provider`: Trusted provider identifier used to contextualize errors.
+    /// - `path`: Requested path, if available, used only as trusted context.
     pub(crate) fn new(session: Box<dyn TempResourceSpi>, provider: &str, path: Option<Path>) -> Self {
         Self {
             session,
@@ -68,8 +73,9 @@ impl RejectedTempResource {
             path,
         }
     }
-    /// Returns cleanup progress; errors and cancellation do not release
-    /// ownership.
+    /// Returns the last observed cleanup state without changing ownership.
+    #[inline]
+    #[must_use]
     pub const fn cleanup_state(&self) -> RecoveryCleanupState {
         self.state
     }
@@ -78,6 +84,9 @@ impl RejectedTempResource {
     ///
     /// A failed attempt retains the session for explicit retry or
     /// reconciliation. This synchronous method may block in provider I/O.
+    ///
+    /// # Returns
+    /// `Ok(())` when the provider confirms cleanup.
     ///
     /// # Errors
     /// Returns InvalidState after confirmed cleanup, or the contextual provider

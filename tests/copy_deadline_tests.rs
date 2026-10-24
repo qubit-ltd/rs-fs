@@ -20,7 +20,7 @@ struct DelayReset;
 
 impl Drop for DelayReset {
     fn drop(&mut self) {
-        handle_support::set_writer_delays(Duration::ZERO, Duration::ZERO);
+        handle_support::implementation_tests::set_writer_delays(Duration::ZERO, Duration::ZERO);
     }
 }
 
@@ -41,10 +41,10 @@ fn test_copy_options_default_has_no_deadline() {
 
 #[test]
 fn test_deadline_checked_after_flush_retains_unpublished_writer() {
-    let _lock = handle_support::writer_delay_guard();
+    let _lock = handle_support::implementation_tests::writer_delay_guard();
     let _reset = DelayReset;
-    handle_support::set_writer_delays(Duration::from_millis(20), Duration::ZERO);
-    let filesystem = handle_support::filesystem(false, Vec::new()).0;
+    handle_support::implementation_tests::set_writer_delays(Duration::from_millis(20), Duration::ZERO);
+    let filesystem = handle_support::implementation_tests::filesystem(false, Vec::new()).0;
 
     let failure = filesystem
         .copy(
@@ -60,10 +60,10 @@ fn test_deadline_checked_after_flush_retains_unpublished_writer() {
 
 #[test]
 fn test_deadline_checked_after_commit_reports_published_without_writer() {
-    let _lock = handle_support::writer_delay_guard();
+    let _lock = handle_support::implementation_tests::writer_delay_guard();
     let _reset = DelayReset;
-    handle_support::set_writer_delays(Duration::ZERO, Duration::from_millis(20));
-    let filesystem = handle_support::filesystem(false, Vec::new()).0;
+    handle_support::implementation_tests::set_writer_delays(Duration::ZERO, Duration::from_millis(20));
+    let filesystem = handle_support::implementation_tests::filesystem(false, Vec::new()).0;
 
     let failure = filesystem
         .copy(
@@ -79,7 +79,8 @@ fn test_deadline_checked_after_commit_reports_published_without_writer() {
 
 #[test]
 fn test_indeterminate_commit_retains_writer_for_recovery() {
-    let filesystem = handle_support::writer_lifecycle_filesystem(Some(WriteFailureState::Indeterminate), None);
+    let filesystem =
+        handle_support::implementation_tests::writer_lifecycle_filesystem(Some(WriteFailureState::Indeterminate), None);
 
     let failure = filesystem
         .copy(

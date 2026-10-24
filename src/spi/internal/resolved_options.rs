@@ -11,7 +11,16 @@
 /// Defines one immutable facade-resolved option value.
 macro_rules! resolved_options {
     ($name:ident, $options:ty) => {
-        /// Immutable options resolved by the facade before provider dispatch.
+        #[doc = concat!(
+                                            "Immutable options resolved by the facade before provider dispatch.\n\n",
+                                            "# Examples\n\n",
+                                            "```rust\n",
+                                            "use qubit_fs::spi::", stringify!($name), ";\n\n",
+                                            "fn inspect(options: &", stringify!($name), ") {\n",
+                                            "    let _caller_options = options.options();\n",
+                                            "}\n",
+                                            "```",
+                                        )]
         #[derive(Clone)]
         pub struct $name {
             /// Caller options retained after facade validation and

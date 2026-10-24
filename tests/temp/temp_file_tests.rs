@@ -16,7 +16,7 @@ use qubit_fs::temp::TempOptions;
 use qubit_fs::temp::TempResourceState;
 #[test]
 fn test_required_non_atomic_temp_persist_retains_cleanup_responsibility() {
-    let (filesystem, cleanup_calls, _) = crate::handle_support::filesystem(false, Vec::new());
+    let (filesystem, cleanup_calls, _) = crate::handle_support::implementation_tests::filesystem(false, Vec::new());
     let mut temporary = filesystem
         .create_temp_file(TempOptions::default())
         .expect("temporary file should open");
@@ -40,7 +40,8 @@ fn test_required_non_atomic_temp_persist_retains_cleanup_responsibility() {
 
 #[test]
 fn test_temp_file_illegal_target_fails_preflight_without_provider_persist_and_remains_owned() {
-    let (filesystem, cleanup_calls, persist_calls) = crate::handle_support::filesystem(false, Vec::new());
+    let (filesystem, cleanup_calls, persist_calls) =
+        crate::handle_support::implementation_tests::filesystem(false, Vec::new());
     let mut temporary = filesystem
         .create_temp_file(TempOptions::default())
         .expect("temporary file should open");
@@ -60,7 +61,7 @@ fn test_temp_file_illegal_target_fails_preflight_without_provider_persist_and_re
 
 #[test]
 fn test_temp_file_rejects_provider_path_outside_facade_constraints() {
-    let error = crate::handle_support::invalid_temp_path_filesystem()
+    let error = crate::handle_support::implementation_tests::invalid_temp_path_filesystem()
         .create_temp_file(TempOptions::default())
         .expect_err("relative provider temporary path must be rejected");
     assert_eq!(FsErrorKind::ProviderContractViolation, error.error().kind());
@@ -70,7 +71,8 @@ fn test_temp_file_rejects_provider_path_outside_facade_constraints() {
 /// and makes the completed file handle unavailable for further cleanup or keep.
 #[test]
 fn test_temp_file_persist_marks_resource_persisted() {
-    let (filesystem, cleanup_calls, persist_calls) = crate::handle_support::filesystem(false, Vec::new());
+    let (filesystem, cleanup_calls, persist_calls) =
+        crate::handle_support::implementation_tests::filesystem(false, Vec::new());
     let mut temporary = filesystem
         .create_temp_file(TempOptions::default())
         .expect("temporary file should open");
@@ -95,7 +97,7 @@ fn test_temp_file_persist_marks_resource_persisted() {
 /// a target different from the caller's requested final path.
 #[test]
 fn test_temp_file_persist_rejects_wrong_provider_target() {
-    let (filesystem, _, _) = crate::handle_support::filesystem(false, Vec::new());
+    let (filesystem, _, _) = crate::handle_support::implementation_tests::filesystem(false, Vec::new());
     let mut temporary = filesystem
         .create_temp_file(TempOptions::default())
         .expect("temporary file should open");
@@ -116,7 +118,7 @@ fn test_temp_file_persist_rejects_wrong_provider_target() {
 /// cause a second best-effort cleanup when dropped.
 #[test]
 fn test_temp_file_cleanup_marks_resource_cleaned() {
-    let (filesystem, cleanup_calls, _) = crate::handle_support::filesystem(false, Vec::new());
+    let (filesystem, cleanup_calls, _) = crate::handle_support::implementation_tests::filesystem(false, Vec::new());
     let mut temporary = filesystem
         .create_temp_file(TempOptions::default())
         .expect("temporary file should open");
@@ -140,7 +142,7 @@ fn test_temp_file_cleanup_marks_resource_cleaned() {
 /// cleanup responsibility without publishing the source.
 #[test]
 fn test_temp_file_keep_marks_resource_kept() {
-    let (filesystem, cleanup_calls, _) = crate::handle_support::filesystem(false, Vec::new());
+    let (filesystem, cleanup_calls, _) = crate::handle_support::implementation_tests::filesystem(false, Vec::new());
     let mut temporary = filesystem
         .create_temp_file(TempOptions::default())
         .expect("temporary file should open");
@@ -163,7 +165,8 @@ fn test_temp_file_persist_failure_preserves_provider_progress() {
         ),
         (PersistFailureState::Indeterminate, TempResourceState::Indeterminate),
     ] {
-        let (filesystem, cleanup_calls, persist_calls) = crate::handle_support::temp_failure_filesystem(failure_state);
+        let (filesystem, cleanup_calls, persist_calls) =
+            crate::handle_support::implementation_tests::temp_failure_filesystem(failure_state);
         let mut temporary = filesystem
             .create_temp_file(TempOptions::default())
             .expect("temporary file should open");
@@ -208,7 +211,7 @@ fn test_temp_file_lifecycle_errors_preserve_recovery_state() {
         ("cleanup", FsErrorKind::Io, TempResourceState::CleanupRequired),
         ("cleanup", FsErrorKind::Indeterminate, TempResourceState::Indeterminate),
     ] {
-        let (filesystem, cleanup_calls) = crate::handle_support::temp_lifecycle_error_filesystem(
+        let (filesystem, cleanup_calls) = crate::handle_support::implementation_tests::temp_lifecycle_error_filesystem(
             (operation == "keep").then_some(error_kind),
             (operation == "cleanup").then_some(error_kind),
         );

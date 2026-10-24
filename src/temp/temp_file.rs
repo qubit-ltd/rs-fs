@@ -76,7 +76,6 @@ impl TempFile {
     }
     /// Returns the resource lifecycle state.
     #[inline]
-    #[must_use]
     pub const fn state(&self) -> TempResourceState {
         self.lifecycle.state()
     }

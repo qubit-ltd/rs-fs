@@ -164,11 +164,13 @@ pub(crate) struct AsyncRecordingProbe {
 impl AsyncRecordingProbe {
     /// Returns the calls observed so far.
     #[allow(dead_code)]
+    #[must_use]
     pub(crate) fn calls(&self) -> Vec<&'static str> {
         self.calls.lock().expect("calls lock should succeed").clone()
     }
     /// Returns local writer cancellation notifications.
     #[allow(dead_code)]
+    #[must_use]
     pub(crate) fn writer_cancellations(&self) -> usize {
         *self
             .writer_cancellations
@@ -177,6 +179,7 @@ impl AsyncRecordingProbe {
     }
     /// Returns local temporary-resource cancellation notifications.
     #[allow(dead_code)]
+    #[must_use]
     pub(crate) fn temp_cancellations(&self) -> usize {
         *self
             .temp_cancellations
@@ -185,6 +188,7 @@ impl AsyncRecordingProbe {
     }
     /// Returns writer options observed by the provider.
     #[allow(dead_code)]
+    #[must_use]
     pub(crate) fn writer_options(&self) -> Vec<WriteOptions> {
         self.writer_options
             .lock()

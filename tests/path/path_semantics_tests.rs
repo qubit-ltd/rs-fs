@@ -11,7 +11,7 @@ use qubit_fs::path::PathSemantics;
 fn test_path_semantics_hierarchical_variant_is_comparable() {
     let semantics = PathSemantics::Hierarchical;
 
-    assert!(matches!(semantics, PathSemantics::Hierarchical));
+    assert_eq!(semantics, PathSemantics::Hierarchical);
 }
 
 #[test]

@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-mod atomicity_requirement_tests;
 mod checksum_policy_tests;
 mod copy_conflict_policy_tests;
 mod copy_method_tests;

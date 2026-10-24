@@ -37,6 +37,9 @@ pub struct NonSensitiveMetadata(
 
 impl NonSensitiveMetadata {
     /// Creates empty validated metadata.
+    ///
+    /// # Returns
+    /// An empty metadata wrapper.
     #[inline]
     #[must_use]
     pub fn new() -> Self {
@@ -44,6 +47,9 @@ impl NonSensitiveMetadata {
     }
 
     /// Returns the validated metadata without mutable access.
+    ///
+    /// # Returns
+    /// A shared reference to the wrapped metadata.
     #[inline]
     #[must_use]
     pub const fn as_metadata(&self) -> &UserMetadata {
@@ -51,6 +57,9 @@ impl NonSensitiveMetadata {
     }
 
     /// Consumes this wrapper and returns the underlying metadata.
+    ///
+    /// # Returns
+    /// The validated metadata previously held by this wrapper.
     #[inline]
     #[must_use]
     pub fn into_metadata(self) -> UserMetadata {
@@ -58,6 +67,9 @@ impl NonSensitiveMetadata {
     }
 
     /// Returns whether the wrapped map contains no metadata pairs.
+    ///
+    /// # Returns
+    /// `true` when the wrapped map is empty, or `false` otherwise.
     #[must_use]
     #[inline]
     pub fn is_empty(&self) -> bool {
@@ -65,6 +77,12 @@ impl NonSensitiveMetadata {
     }
 
     /// Returns whether a metadata key is present.
+    ///
+    /// # Parameters
+    /// `key` is the metadata name to look up.
+    ///
+    /// # Returns
+    /// `true` when `key` is present, or `false` otherwise.
     #[must_use]
     #[inline]
     pub fn contains_key(&self, key: &str) -> bool {
@@ -73,9 +91,11 @@ impl NonSensitiveMetadata {
 
     /// Returns the value associated with a metadata key.
     ///
+    /// # Parameters
+    /// `key` is the metadata name to look up.
+    ///
     /// # Returns
     /// `Some` with the value when `key` is present, or `None` otherwise.
-    #[must_use]
     #[inline]
     pub fn get(&self, key: &str) -> Option<&str> {
         self.0.get(key)
@@ -84,6 +104,12 @@ impl NonSensitiveMetadata {
 
 impl From<UserMetadata> for NonSensitiveMetadata {
     /// Wraps arbitrary user metadata.
+    ///
+    /// # Parameters
+    /// `metadata` is the metadata value to wrap.
+    ///
+    /// # Returns
+    /// A wrapper retaining the supplied metadata.
     #[inline]
     fn from(metadata: UserMetadata) -> Self {
         Self(metadata)
@@ -91,6 +117,10 @@ impl From<UserMetadata> for NonSensitiveMetadata {
 }
 
 impl AsRef<UserMetadata> for NonSensitiveMetadata {
+    /// Borrows the validated metadata without exposing mutable access.
+    ///
+    /// # Returns
+    /// A shared reference to the wrapped metadata.
     #[inline]
     fn as_ref(&self) -> &UserMetadata {
         self.as_metadata()
@@ -98,6 +128,13 @@ impl AsRef<UserMetadata> for NonSensitiveMetadata {
 }
 
 impl From<NonSensitiveMetadata> for UserMetadata {
+    /// Consumes the wrapper and returns its validated metadata.
+    ///
+    /// # Parameters
+    /// `metadata` is the validated metadata wrapper to consume.
+    ///
+    /// # Returns
+    /// The metadata previously held by the wrapper.
     #[inline]
     fn from(metadata: NonSensitiveMetadata) -> Self {
         metadata.into_metadata()

@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// property contract tests.
 //! Compact immutable sets of provider operation entry points.
 
 use super::ProviderOperation;

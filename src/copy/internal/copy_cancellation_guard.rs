@@ -68,9 +68,6 @@ impl<'a> CopyCancellationGuard<'a> {
     ///
     /// # Parameters
     /// - `result`: Final copy outcome or typed failure.
-    ///
-    /// # Returns
-    /// The unchanged result after updating operation state and recovery facts.
     #[inline]
     pub(in crate::copy) fn finish(&mut self, result: &Result<CopyOutcome, AsyncCopyFailure>) {
         *self.state = match result {

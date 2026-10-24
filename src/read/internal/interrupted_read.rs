@@ -18,6 +18,9 @@ use crate::error::FsError;
 use crate::error::FsErrorKind;
 
 /// Reports whether an interruption is safe to retry without losing effects.
+///
+/// Filesystem errors are retryable only when their effect state is absent or
+/// explicitly unchanged; ordinary interrupted I/O errors are retryable.
 fn retryable(error: &io::Error) -> bool {
     if let Some(fs_error) = error.get_ref().and_then(|source| source.downcast_ref::<FsError>()) {
         return fs_error.kind() == FsErrorKind::Interrupted

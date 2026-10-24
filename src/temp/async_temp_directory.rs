@@ -73,7 +73,6 @@ impl AsyncTempDirectory {
     /// # Returns
     /// The handle's current cleanup and publication state.
     #[inline]
-    #[must_use]
     pub const fn state(&self) -> TempResourceState {
         self.0.state()
     }

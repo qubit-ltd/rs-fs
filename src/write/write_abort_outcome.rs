@@ -14,7 +14,12 @@
 /// ```rust
 /// use qubit_fs::write::WriteAbortOutcome;
 ///
-/// assert!(matches!(WriteAbortOutcome::NotPublished, WriteAbortOutcome::NotPublished));
+/// let outcome = WriteAbortOutcome::Published;
+/// let destination_may_have_changed = match outcome {
+///     WriteAbortOutcome::NotPublished => false,
+///     WriteAbortOutcome::Published | WriteAbortOutcome::Indeterminate => true,
+/// };
+/// assert!(destination_may_have_changed);
 /// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[must_use]

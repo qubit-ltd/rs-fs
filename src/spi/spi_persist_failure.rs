@@ -53,6 +53,7 @@ impl SpiPersistFailure {
     /// # Returns
     /// The provider failure with filesystem context.
     #[inline]
+    #[must_use = "inspect the filesystem error instead of silently discarding it"]
     pub const fn error(&self) -> &FsError {
         &self.error
     }

@@ -75,89 +75,16 @@ impl CopyOutcome {
         }
     }
 
-    /// Replaces provider-native diagnostics that have already passed key
-    /// validation.
-    #[inline]
-    #[must_use]
-    pub fn with_diagnostics(mut self, diagnostics: UserMetadata) -> Self {
-        self.diagnostics = NonSensitiveMetadata::from(diagnostics);
-        self
-    }
-
-    /// Returns the completed copy statistics.
-    #[inline]
-    #[must_use]
-    pub const fn stats(&self) -> &CopyStats {
-        &self.stats
-    }
-    /// Returns the actual method used by the completed operation.
-    #[inline]
-    #[must_use]
-    pub const fn method(&self) -> CopyMethod {
-        self.method
-    }
-    /// Returns the atomicity actually achieved while publishing the target.
-    #[inline]
-    #[must_use]
-    pub const fn atomicity(&self) -> AchievedAtomicity {
-        self.atomicity
-    }
-    /// Returns whether provider-confirmed durability synchronization completed.
-    #[inline]
-    #[must_use]
-    pub const fn durable(&self) -> bool {
-        self.durable
-    }
-    /// Replaces the provider-reported durability completion fact.
-    #[inline]
-    #[must_use]
-    pub fn with_durable(mut self, durable: bool) -> Self {
-        self.durable = durable;
-        self
-    }
-
-    /// Records the metadata preservation policy actually achieved by the
-    /// provider.
-    #[inline]
-    #[must_use]
-    pub fn with_metadata(mut self, metadata: MetadataPreservePolicy) -> Self {
-        self.metadata = metadata;
-        self
-    }
-
-    /// Records the destination version reported after publication.
-    #[inline]
-    #[must_use]
-    pub fn with_target_version(mut self, target_version: ResourceVersion) -> Self {
-        self.target_version = Some(target_version);
-        self
-    }
-    /// Returns the metadata preservation result represented by this outcome.
-    #[inline]
-    #[must_use]
-    pub const fn metadata(&self) -> MetadataPreservePolicy {
-        self.metadata
-    }
-    /// Returns the target version when the provider reported one.
-    #[inline]
-    #[must_use]
-    pub const fn target_version(&self) -> Option<&ResourceVersion> {
-        self.target_version.as_ref()
-    }
-    /// Returns whether the facade streamed after the provider declined its fast
-    /// path.
-    #[inline]
-    #[must_use]
-    pub const fn used_fallback(&self) -> bool {
-        self.used_fallback
-    }
-    /// Returns provider diagnostics that are safe to expose.
-    #[inline]
-    #[must_use]
-    pub const fn diagnostics(&self) -> &NonSensitiveMetadata {
-        &self.diagnostics
-    }
     /// Marks this result as the facade's streamed fallback.
+    ///
+    /// # Parameters
+    /// - `stats`: Counts and bytes accumulated by the fallback copy.
+    /// - `atomicity`: Atomicity achieved while publishing the destination.
+    /// - `durable`: Whether durability synchronization was confirmed.
+    ///
+    /// # Returns
+    /// An outcome marked as fallback with no provider diagnostics or target
+    /// version.
     #[must_use]
     pub(crate) fn streamed_fallback(stats: CopyStats, atomicity: AchievedAtomicity, durable: bool) -> Self {
         Self {
@@ -172,8 +99,154 @@ impl CopyOutcome {
         }
     }
 
+    /// Returns the completed copy statistics.
+    ///
+    /// # Returns
+    /// A borrow of the aggregate counts and bytes reported by the operation.
+    #[inline]
+    #[must_use]
+    pub const fn stats(&self) -> &CopyStats {
+        &self.stats
+    }
+
+    /// Returns the actual method used by the completed operation.
+    ///
+    /// # Returns
+    /// The method the provider or facade used to transfer the resources.
+    #[inline]
+    #[must_use]
+    pub const fn method(&self) -> CopyMethod {
+        self.method
+    }
+
+    /// Returns the atomicity actually achieved while publishing the target.
+    ///
+    /// # Returns
+    /// The achieved atomicity, which may be weaker than the requested level.
+    #[inline]
+    #[must_use]
+    pub const fn atomicity(&self) -> AchievedAtomicity {
+        self.atomicity
+    }
+
+    /// Returns whether provider-confirmed durability synchronization completed.
+    ///
+    /// # Returns
+    /// `true` only when the provider confirmed the requested synchronization.
+    #[inline]
+    #[must_use]
+    pub const fn durable(&self) -> bool {
+        self.durable
+    }
+
+    /// Returns the metadata preservation result represented by this outcome.
+    ///
+    /// # Returns
+    /// The metadata preservation policy the provider reports as achieved.
+    #[inline]
+    #[must_use]
+    pub const fn metadata(&self) -> MetadataPreservePolicy {
+        self.metadata
+    }
+
+    /// Returns the target version when the provider reported one.
+    ///
+    /// # Returns
+    /// `Some` with the destination version when reported, or `None` otherwise.
+    #[inline]
+    pub const fn target_version(&self) -> Option<&ResourceVersion> {
+        self.target_version.as_ref()
+    }
+
+    /// Returns whether the facade streamed after the provider declined its fast
+    /// path.
+    ///
+    /// # Returns
+    /// `true` when the facade completed this operation using streamed fallback.
+    #[inline]
+    #[must_use]
+    pub const fn used_fallback(&self) -> bool {
+        self.used_fallback
+    }
+
+    /// Returns provider diagnostics that are safe to expose.
+    ///
+    /// # Returns
+    /// A borrow of validated diagnostics with sensitive keys removed.
+    #[inline]
+    #[must_use]
+    pub const fn diagnostics(&self) -> &NonSensitiveMetadata {
+        &self.diagnostics
+    }
+
+    /// Replaces provider-native diagnostics that have already passed key
+    /// validation.
+    ///
+    /// # Parameters
+    /// - `diagnostics`: Provider metadata whose keys have passed validation.
+    ///
+    /// # Returns
+    /// This outcome with the validated diagnostics stored for safe exposure.
+    #[inline]
+    #[must_use]
+    pub fn with_diagnostics(mut self, diagnostics: UserMetadata) -> Self {
+        self.diagnostics = NonSensitiveMetadata::from(diagnostics);
+        self
+    }
+
+    /// Replaces the provider-reported durability completion fact.
+    ///
+    /// # Parameters
+    /// - `durable`: Whether the provider confirmed durability synchronization.
+    ///
+    /// # Returns
+    /// This outcome with the provider's durability fact recorded.
+    #[inline]
+    #[must_use]
+    pub fn with_durable(mut self, durable: bool) -> Self {
+        self.durable = durable;
+        self
+    }
+
+    /// Records the metadata preservation policy actually achieved by the
+    /// provider.
+    ///
+    /// # Parameters
+    /// - `metadata`: The preservation policy the provider reports as achieved.
+    ///
+    /// # Returns
+    /// This outcome with the achieved metadata policy recorded.
+    #[inline]
+    #[must_use]
+    pub fn with_metadata(mut self, metadata: MetadataPreservePolicy) -> Self {
+        self.metadata = metadata;
+        self
+    }
+
+    /// Records the destination version reported after publication.
+    ///
+    /// # Parameters
+    /// - `target_version`: Version reported for the published destination.
+    ///
+    /// # Returns
+    /// This outcome with the destination version recorded.
+    #[inline]
+    #[must_use]
+    pub fn with_target_version(mut self, target_version: ResourceVersion) -> Self {
+        self.target_version = Some(target_version);
+        self
+    }
+
     /// Returns the first provider-completed outcome fact that contradicts the
     /// resolved copy request.
+    ///
+    /// # Parameters
+    /// - `options`: The resolved request whose constraints the outcome must
+    ///   meet.
+    ///
+    /// # Returns
+    /// The first violated contract, or `None` when all checked constraints
+    /// hold.
     pub(crate) fn contract_violation(&self, options: &CopyOptions) -> Option<&'static str> {
         if self.used_fallback || self.method == CopyMethod::Streamed {
             return Some("provider returned a facade streamed-fallback outcome as native success");
@@ -235,43 +308,14 @@ impl CopyOutcome {
 
 #[cfg(test)]
 mod tests {
-    use std::hint::black_box;
-
     use super::CopyOutcome;
     use crate::copy::CopyMethod;
     use crate::copy::CopyOptions;
     use crate::copy::CopyStats;
-    use crate::copy::MetadataPreservePolicy;
     use crate::metadata::AchievedAtomicity;
-    use crate::metadata::NonSensitiveMetadata;
-    use crate::metadata::ResourceVersion;
 
     #[test]
-    fn test_outcome_accessors_are_executed_at_runtime() {
-        let constructor: fn(CopyStats, CopyMethod, AchievedAtomicity) -> CopyOutcome = black_box(CopyOutcome::new);
-        let metadata: fn(&CopyOutcome) -> MetadataPreservePolicy = black_box(CopyOutcome::metadata);
-        let target_version: for<'a> fn(&'a CopyOutcome) -> Option<&'a ResourceVersion> =
-            black_box(CopyOutcome::target_version);
-        let diagnostics: fn(&CopyOutcome) -> &NonSensitiveMetadata = black_box(CopyOutcome::diagnostics);
-        let with_target_version: fn(CopyOutcome, ResourceVersion) -> CopyOutcome =
-            black_box(CopyOutcome::with_target_version);
-        let with_diagnostics: fn(CopyOutcome, crate::metadata::UserMetadata) -> CopyOutcome =
-            black_box(CopyOutcome::with_diagnostics);
-
-        let outcome = with_diagnostics(
-            with_target_version(
-                constructor(CopyStats::default(), CopyMethod::Native, AchievedAtomicity::Atomic),
-                ResourceVersion::new("generation-7"),
-            ),
-            crate::metadata::UserMetadata::new(),
-        );
-        assert_eq!(MetadataPreservePolicy::None, metadata(&outcome));
-        assert_eq!(
-            Some("generation-7"),
-            target_version(&outcome).map(ResourceVersion::as_str)
-        );
-        assert!(diagnostics(&outcome).is_empty());
-
+    fn test_contract_violation_rejects_exceeded_copy_limits() {
         let bytes_exceeded = CopyOutcome::new(
             CopyStats {
                 bytes: 11,

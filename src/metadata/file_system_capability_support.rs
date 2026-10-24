@@ -14,7 +14,12 @@
 /// ```rust
 /// use qubit_fs::metadata::FileSystemCapabilitySupport;
 ///
-/// assert!(matches!(FileSystemCapabilitySupport::Unsupported, FileSystemCapabilitySupport::Unsupported));
+/// let support = FileSystemCapabilitySupport::Conditional;
+/// let can_attempt = match support {
+///     FileSystemCapabilitySupport::Unsupported => false,
+///     FileSystemCapabilitySupport::Conditional | FileSystemCapabilitySupport::Guaranteed => true,
+/// };
+/// assert!(can_attempt);
 /// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[must_use]

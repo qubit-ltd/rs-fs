@@ -16,7 +16,6 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-#[cfg(feature = "async")]
 use qubit_fs::AsyncFileSystem;
 use qubit_fs::Path;
 use qubit_fs::directory::DirectoryStreamState;

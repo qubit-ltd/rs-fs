@@ -6,7 +6,9 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 //! Recovery snapshot for async whole-file writes.
+
 use crate::write::WriteFailureState;
+
 /// Facts frozen when an owning write completes or is cancelled.
 #[derive(Clone, Copy)]
 pub(crate) struct WriteAllRecoverySnapshot {
@@ -15,6 +17,7 @@ pub(crate) struct WriteAllRecoverySnapshot {
     /// Bytes acknowledged by completed successful writes.
     pub(crate) written_bytes: u64,
 }
+
 impl WriteAllRecoverySnapshot {
     /// Creates a snapshot before any provider work has started.
     #[inline]

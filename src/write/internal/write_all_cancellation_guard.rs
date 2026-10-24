@@ -6,12 +6,14 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 //! Cancellation guard for async whole-file writes.
+
 use crate::metadata::WriteOutcome;
 use crate::write::AsyncWriteAllOperationFailure;
 use crate::write::AsyncWriteAllOperationState;
 use crate::write::AsyncWriterRecovery;
 use crate::write::WriteFailureState;
 use crate::write::internal::WriteAllRecoverySnapshot;
+
 /// Keeps operation facts outside the borrowed execution future.
 #[must_use = "the guard must remain alive until execution finishes"]
 pub(crate) struct WriteAllCancellationGuard<'a> {

@@ -29,6 +29,7 @@ use crate::error::FsError;
 /// );
 /// assert_eq!(CopyFailureState::Unchanged, failure.state());
 /// ```
+#[must_use = "inspect the provider copy failure before discarding it"]
 pub struct SpiCopyFailure {
     /// Provider failure with filesystem context.
     error: Box<FsError>,
@@ -49,7 +50,6 @@ impl SpiCopyFailure {
     /// # Returns
     /// A failure containing all provider-confirmed facts.
     #[inline]
-    #[must_use]
     pub fn new(error: FsError, state: CopyFailureState, partial_stats: CopyStats) -> Self {
         Self {
             error: Box::new(error),
@@ -63,6 +63,7 @@ impl SpiCopyFailure {
     /// # Returns
     /// The provider failure with filesystem context.
     #[inline]
+    #[must_use = "inspect the filesystem error instead of silently discarding it"]
     pub fn error(&self) -> &FsError {
         &self.error
     }
@@ -72,7 +73,6 @@ impl SpiCopyFailure {
     /// # Returns
     /// The provider-confirmed publication state.
     #[inline]
-    #[must_use]
     pub const fn state(&self) -> CopyFailureState {
         self.state
     }
@@ -82,6 +82,7 @@ impl SpiCopyFailure {
     /// # Returns
     /// The provider error, publication state, and partial transfer statistics.
     #[inline]
+    #[must_use = "inspect the provider copy failure facts"]
     pub fn into_parts(self) -> (FsError, CopyFailureState, CopyStats) {
         (*self.error, self.state, self.partial_stats)
     }

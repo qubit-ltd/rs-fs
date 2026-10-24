@@ -106,7 +106,12 @@ impl HealthProvider {
         if path.as_str() == "/health" {
             Ok(())
         } else {
-            Err(FsError::new(FsErrorKind::NotFound, operation, "health resource not found").with_path(path.clone()))
+            Err(FsError::new(
+                FsErrorKind::NotFound,
+                operation,
+                "health resource not found",
+            )
+            .with_path(path.clone()))
         }
     }
 }

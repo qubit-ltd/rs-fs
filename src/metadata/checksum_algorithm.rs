@@ -15,7 +15,8 @@
 /// # Examples
 ///
 /// ```rust
-/// use qubit_fs::metadata::{Checksum, ChecksumAlgorithm};
+/// use qubit_fs::metadata::Checksum;
+/// use qubit_fs::metadata::ChecksumAlgorithm;
 ///
 /// let checksum = Checksum::new(ChecksumAlgorithm::Sha256, "deadbeef");
 /// assert_eq!(checksum.algorithm, ChecksumAlgorithm::Sha256);

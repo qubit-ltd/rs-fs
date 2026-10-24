@@ -20,4 +20,17 @@ use std::pin::Pin;
 ///
 /// # Lifetimes
 /// - `'a`: Maximum lifetime of borrows held by the future.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_fs::spi::SpiFuture;
+///
+/// async fn provider_operation() -> usize {
+///     let future: SpiFuture<'static, usize> = Box::pin(async { 42 });
+///     future.await
+/// }
+///
+/// let _operation = provider_operation();
+/// ```
 pub type SpiFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;

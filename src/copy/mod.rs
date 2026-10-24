@@ -26,6 +26,8 @@ mod copy_outcome;
 mod copy_stats;
 mod fallback_rejection;
 mod internal;
+#[cfg(test)]
+pub(crate) use internal::StreamCopyPlan;
 mod metadata_preserve_policy;
 mod server_side_preference;
 
@@ -47,6 +49,8 @@ pub use copy_options::CopyOptions;
 pub use copy_outcome::CopyOutcome;
 pub use copy_stats::CopyStats;
 pub use fallback_rejection::FallbackRejection;
+#[cfg(test)]
+pub(crate) use internal::StreamCopyPlan;
 pub(crate) use internal::fallback_failure_stats;
 pub(crate) use internal::fallback_rejection;
 pub(crate) use internal::from_write_failure_state;

@@ -65,16 +65,18 @@ impl AsyncWriteAllOperationFailure {
         }
     }
     /// Returns the contextual filesystem error.
+    #[inline]
     pub const fn error(&self) -> &FsError {
         &self.error
     }
     /// Returns the publication facts recorded when execution stopped.
-    #[must_use]
+    #[inline]
     pub const fn state(&self) -> WriteFailureState {
         self.state
     }
     /// Returns bytes acknowledged by completed writes before execution stopped.
     #[must_use]
+    #[inline]
     pub const fn written_bytes(&self) -> u64 {
         self.written_bytes
     }

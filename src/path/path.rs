@@ -46,6 +46,9 @@ pub struct Path {
 
 impl Path {
     /// Creates the canonical hierarchical root path.
+    ///
+    /// # Returns
+    /// Returns the absolute hierarchical root path.
     #[inline]
     #[must_use]
     pub fn root() -> Self {
@@ -66,6 +69,9 @@ impl Path {
     /// # Parameters
     /// - `absolute`: Whether the resulting path is rooted at the provider root.
     /// - `components`: Validated path-component text to join in order.
+    ///
+    /// # Returns
+    /// Returns the validated path containing the joined components.
     ///
     /// # Errors
     /// Returns an invalid-path error when a component is empty, contains a
@@ -111,6 +117,9 @@ impl Path {
     /// # Errors
     /// Returns [`FsError`] with an invalid-path kind when `text` is empty,
     /// contains NUL, or escapes above the hierarchical root.
+    ///
+    /// # Returns
+    /// Returns the normalized hierarchical path.
     #[inline]
     pub fn parse(text: &str) -> FsResult<Self> {
         Self::parse_with_semantics(text, PathSemantics::Hierarchical)
@@ -123,6 +132,9 @@ impl Path {
     /// # Errors
     /// Returns [`FsError`] with an invalid-path kind when `text` is empty or
     /// contains NUL.
+    ///
+    /// # Returns
+    /// Returns the provider-literal path preserving `text`.
     #[inline]
     pub fn parse_literal(text: &str) -> FsResult<Self> {
         Self::parse_with_semantics(text, PathSemantics::ObjectKey)
@@ -140,6 +152,9 @@ impl Path {
     /// # Errors
     /// Returns an invalid-path error when `text` is empty, contains NUL, or
     /// escapes above the hierarchical root.
+    ///
+    /// # Returns
+    /// Returns the path using the selected provider semantics.
     pub fn parse_with_semantics(text: &str, semantics: PathSemantics) -> FsResult<Self> {
         if text.is_empty() || text.contains('\0') {
             return Err(invalid_path());
@@ -186,6 +201,10 @@ impl Path {
     }
 
     /// Returns the validated logical path text.
+    ///
+    /// # Returns
+    /// Returns the canonical or provider-literal spelling borrowed from this
+    /// path.
     #[inline]
     #[must_use]
     pub fn as_str(&self) -> &str {
@@ -202,7 +221,6 @@ impl Path {
     /// `Some` with the final non-empty component, or `None` for a root or a
     /// literal path ending in a separator.
     #[inline]
-    #[must_use]
     pub fn file_name(&self) -> Option<&str> {
         if self.text == "/" || (self.literal && self.text.ends_with('/')) {
             return None;
@@ -211,6 +229,9 @@ impl Path {
     }
 
     /// Returns whether this path is absolute.
+    ///
+    /// # Returns
+    /// Returns `true` when this path starts at a provider root.
     #[inline]
     #[must_use]
     pub const fn is_absolute(&self) -> bool {
@@ -218,6 +239,9 @@ impl Path {
     }
 
     /// Returns the semantics used to validate this logical path.
+    ///
+    /// # Returns
+    /// Returns the semantics selected when this path was parsed or constructed.
     #[inline]
     #[must_use]
     pub const fn semantics(&self) -> PathSemantics {
@@ -225,6 +249,10 @@ impl Path {
     }
 
     /// Iterates lexical component boundaries without using an empty root value.
+    ///
+    /// # Returns
+    /// Returns an iterator over lexical components; literal paths preserve
+    /// empty components between separators.
     #[inline]
     #[must_use]
     pub fn components(&self) -> PathComponents<'_> {
@@ -232,6 +260,12 @@ impl Path {
     }
 
     /// Appends one validated component without re-parsing provider text.
+    ///
+    /// # Parameters
+    /// - `component`: Validated component to append.
+    ///
+    /// # Returns
+    /// Returns a new path with `component` appended.
     #[inline]
     #[must_use]
     pub fn child(&self, component: &PathComponent) -> Self {
@@ -240,6 +274,12 @@ impl Path {
 
     /// Appends a safe normalized relative path without re-parsing provider
     /// text.
+    ///
+    /// # Parameters
+    /// - `relative`: Validated relative path to append.
+    ///
+    /// # Returns
+    /// Returns a new path with `relative` appended.
     #[inline]
     #[must_use]
     pub fn join(&self, relative: &RelativePath) -> Self {

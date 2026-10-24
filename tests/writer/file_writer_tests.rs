@@ -30,7 +30,7 @@ fn test_write_abort_outcome_exposes_all_publication_states() {
 
 #[test]
 fn test_write_all_commit_failure_retains_open_writer_for_recovery() {
-    let (filesystem, _, _) = crate::handle_support::filesystem(true, Vec::new());
+    let (filesystem, _, _) = crate::handle_support::implementation_tests::filesystem(true, Vec::new());
     let failure = filesystem
         .write_all(
             &Path::parse("/target").expect("path should parse"),
@@ -56,7 +56,7 @@ fn test_write_all_commit_failure_retains_open_writer_for_recovery() {
 /// terminal-state behavior through the public filesystem facade.
 #[test]
 fn test_open_writer_transfers_bytes_and_rejects_closed_operations() {
-    let (filesystem, _, _) = crate::handle_support::filesystem(false, Vec::new());
+    let (filesystem, _, _) = crate::handle_support::implementation_tests::filesystem(false, Vec::new());
     let target = Path::parse("/target").expect("path should parse");
     let mut writer = filesystem
         .open_writer(&target, WriteOptions::default())
@@ -113,7 +113,8 @@ fn test_open_writer_preserves_provider_commit_and_abort_states() {
         (WriteFailureState::Published, WriterState::Published),
         (WriteFailureState::Indeterminate, WriterState::Indeterminate),
     ] {
-        let filesystem = crate::handle_support::writer_lifecycle_filesystem(Some(failure_state), None);
+        let filesystem =
+            crate::handle_support::implementation_tests::writer_lifecycle_filesystem(Some(failure_state), None);
         let mut writer = filesystem
             .open_writer(
                 &Path::parse("/target").expect("path should parse"),
@@ -143,7 +144,7 @@ fn test_open_writer_abort_failure_tracks_certainty() {
         (FsErrorKind::Io, WriterState::Open),
         (FsErrorKind::Indeterminate, WriterState::Indeterminate),
     ] {
-        let filesystem = crate::handle_support::writer_lifecycle_filesystem(None, Some(kind));
+        let filesystem = crate::handle_support::implementation_tests::writer_lifecycle_filesystem(None, Some(kind));
         let mut writer = filesystem
             .open_writer(
                 &Path::parse("/target").expect("path should parse"),
@@ -160,7 +161,7 @@ fn test_open_writer_abort_failure_tracks_certainty() {
 /// publication after the writer has reached the published state.
 #[test]
 fn test_open_writer_rejects_non_atomic_required_commit_outcome() {
-    let filesystem = crate::handle_support::non_atomic_temp_directory_filesystem();
+    let filesystem = crate::handle_support::implementation_tests::non_atomic_temp_directory_filesystem();
     let mut writer = filesystem
         .open_writer(
             &Path::parse("/target").expect("path should parse"),
@@ -179,7 +180,7 @@ fn test_open_writer_rejects_non_atomic_required_commit_outcome() {
 /// durability-required write has already been published.
 #[test]
 fn test_open_writer_rejects_non_durable_required_commit_outcome() {
-    let (filesystem, _, _) = crate::handle_support::filesystem(false, Vec::new());
+    let (filesystem, _, _) = crate::handle_support::implementation_tests::filesystem(false, Vec::new());
     let mut writer = filesystem
         .open_writer(
             &Path::parse("/target").expect("path should parse"),

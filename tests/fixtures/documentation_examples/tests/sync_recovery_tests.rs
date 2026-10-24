@@ -50,7 +50,8 @@ impl FileSystemSpi for PublishedThenCleanupFailure {
     fn properties(&self) -> ProviderProperties {
         ProviderProperties::new(
             FileSystemInfo::new(
-                FileSystemId::new("docs").expect("documentation filesystem identity should be valid"),
+                FileSystemId::new("docs")
+                    .expect("documentation filesystem identity should be valid"),
                 "docs",
                 PathSemantics::Hierarchical,
             ),
@@ -75,13 +76,19 @@ impl FileSystemSpi for PublishedThenCleanupFailure {
     }
     fn open_reader(&self, request: OpenReaderRequest<'_>) -> FsResult<OpenedReader> {
         Ok(OpenedReader::new(
-            OpenedFileInfo::new(self.properties().info().id().clone(), request.path().clone()),
+            OpenedFileInfo::new(
+                self.properties().info().id().clone(),
+                request.path().clone(),
+            ),
             Box::new(Cursor::new(b"bytes")),
         ))
     }
     fn open_writer(&self, request: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
         Ok(OpenedWriter::new(
-            OpenedFileInfo::new(self.properties().info().id().clone(), request.path().clone()),
+            OpenedFileInfo::new(
+                self.properties().info().id().clone(),
+                request.path().clone(),
+            ),
             Box::new(FailedWriter),
         ))
     }

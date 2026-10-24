@@ -7,6 +7,7 @@
 // =============================================================================
 //! Recording-provider coverage for copy dispatch and fallback.
 
+use std::hint::black_box;
 use std::io::Cursor;
 use std::io::Result as IoResult;
 use std::sync::Arc;
@@ -19,6 +20,7 @@ use qubit_fs::FsResult;
 use qubit_fs::Path;
 use qubit_fs::copy::CopyConflictPolicy;
 use qubit_fs::copy::CopyExecutionRoute;
+use qubit_fs::copy::CopyFailure;
 use qubit_fs::copy::CopyFailureState;
 use qubit_fs::copy::CopyMethod;
 use qubit_fs::copy::CopyOptions;
@@ -148,6 +150,7 @@ fn recording_filesystem_without_copy(response: CopyResponse) -> RecordingHandles
 fn recording_filesystem_with_write_limit(response: CopyResponse, maximum_write_bytes: u64) -> RecordingHandles {
     recording_filesystem_with_options(response, true, Some(maximum_write_bytes))
 }
+/// Constructs a recording filesystem with a finite read-range limit.
 fn recording_filesystem_with_range_limit(response: CopyResponse, maximum_read_range_bytes: u64) -> RecordingHandles {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let bytes = Arc::new(Mutex::new(Vec::new()));
@@ -165,6 +168,25 @@ fn recording_filesystem_with_range_limit(response: CopyResponse, maximum_read_ra
     .expect("recording facade should construct");
     (filesystem, calls, bytes)
 }
+
+#[test]
+fn test_recovery_accessors_are_executed_at_runtime() {
+    let has_recovery: fn(&CopyFailure) -> bool = black_box(CopyFailure::has_recovery);
+    let recovery: fn(&CopyFailure) -> Option<&WriterRecovery> = black_box(CopyFailure::recovery);
+    let recovery_mut: for<'a> fn(&'a mut CopyFailure) -> Option<&'a mut WriterRecovery> =
+        black_box(CopyFailure::recovery_mut);
+    let take_recovery: fn(&mut CopyFailure) -> Option<WriterRecovery> = black_box(CopyFailure::take_recovery);
+    let (filesystem, _, _) = recording_filesystem(CopyResponse::Failed);
+    let mut failure = filesystem
+        .copy(&path("/source"), &path("/target"), CopyOptions::default())
+        .expect_err("the recording provider reports a failed copy");
+
+    assert!(!has_recovery(&failure));
+    assert!(recovery(&failure).is_none());
+    assert!(recovery_mut(&mut failure).is_none());
+    assert!(take_recovery(&mut failure).is_none());
+}
+
 /// Constructs a recording filesystem with explicit capability and limit flags.
 fn recording_filesystem_with_options(
     response: CopyResponse,

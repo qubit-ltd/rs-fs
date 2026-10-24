@@ -37,7 +37,6 @@ pub enum ListScope {
 impl ListScope {
     /// Returns the resource prefix, or `None` for a whole namespace query.
     #[inline]
-    #[must_use]
     pub const fn path(&self) -> Option<&Path> {
         match self {
             Self::Path(path) => Some(path),

@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade tests.
 //! Synchronous directory operation implementation.
 
 use crate::FileSystem;

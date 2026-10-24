@@ -35,8 +35,8 @@ impl ResourceVersion {
     ///
     /// # Returns
     /// A resource version preserving `value` exactly.
-    #[inline]
     #[must_use]
+    #[inline]
     pub fn new(value: impl Into<String>) -> Self {
         Self(value.into())
     }
@@ -45,14 +45,21 @@ impl ResourceVersion {
     ///
     /// # Returns
     /// The borrowed version text.
-    #[inline]
     #[must_use]
+    #[inline]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 }
 
 impl Display for ResourceVersion {
+    /// Writes the provider-defined version text without changing its contents.
+    ///
+    /// # Parameters
+    /// - `formatter`: The formatting destination.
+    ///
+    /// # Returns
+    /// An error if writing to the formatting destination fails.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter.write_str(self.as_str())
@@ -60,6 +67,7 @@ impl Display for ResourceVersion {
 }
 
 impl AsRef<str> for ResourceVersion {
+    /// Borrows the provider-defined version text as a string slice.
     #[inline]
     fn as_ref(&self) -> &str {
         self.as_str()
@@ -67,6 +75,13 @@ impl AsRef<str> for ResourceVersion {
 }
 
 impl From<&str> for ResourceVersion {
+    /// Creates a resource version from borrowed provider-defined text.
+    ///
+    /// # Parameters
+    /// - `value`: The version text to copy into the resource version.
+    ///
+    /// # Returns
+    /// A resource version containing `value` exactly.
     #[inline]
     fn from(value: &str) -> Self {
         Self::new(value)
@@ -74,6 +89,13 @@ impl From<&str> for ResourceVersion {
 }
 
 impl From<String> for ResourceVersion {
+    /// Creates a resource version from owned provider-defined text.
+    ///
+    /// # Parameters
+    /// - `value`: The version text to move into the resource version.
+    ///
+    /// # Returns
+    /// A resource version containing `value` exactly.
     #[inline]
     fn from(value: String) -> Self {
         Self::new(value)

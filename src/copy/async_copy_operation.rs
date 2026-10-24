@@ -87,6 +87,17 @@ pub struct AsyncCopyOperation {
 
 impl AsyncCopyOperation {
     /// Builds a preflight-validated operation without provider I/O.
+    ///
+    /// # Parameters
+    /// - `file_system`: Facade that will validate and execute the operation.
+    /// - `source`: Validated logical source path.
+    /// - `target`: Validated logical destination path.
+    /// - `options`: Copy options resolved by the facade.
+    /// - `symlink_policy`: Policy applied when traversing symbolic links.
+    ///
+    /// # Returns
+    /// A ready operation that retains the resolved copy request.
+    #[must_use]
     pub(crate) fn new(
         file_system: AsyncFileSystem,
         source: Path,
@@ -117,6 +128,9 @@ impl AsyncCopyOperation {
     }
 
     /// Returns the immutable destination path.
+    ///
+    /// # Returns
+    /// The destination path captured when the operation was created.
     #[inline]
     #[must_use]
     pub const fn target(&self) -> &Path {
@@ -124,6 +138,9 @@ impl AsyncCopyOperation {
     }
 
     /// Returns the current operation lifecycle state.
+    ///
+    /// # Returns
+    /// The state most recently recorded by this operation.
     #[inline]
     #[must_use]
     pub const fn state(&self) -> AsyncCopyOperationState {
@@ -131,6 +148,9 @@ impl AsyncCopyOperation {
     }
 
     /// Returns whether a recovery writer is retained by this operation.
+    ///
+    /// # Returns
+    /// `true` when a recovery writer is retained, or `false` otherwise.
     #[inline]
     #[must_use]
     pub const fn has_recovery(&self) -> bool {
@@ -138,12 +158,18 @@ impl AsyncCopyOperation {
     }
 
     /// Borrows the retained recovery writer, if one exists.
+    ///
+    /// # Returns
+    /// `Some` with the retained writer, or `None` when no writer is retained.
     #[inline]
     pub fn recovery(&mut self) -> Option<&mut AsyncWriterRecovery> {
         self.writer.as_mut()
     }
 
     /// Takes ownership of the retained recovery writer, if one exists.
+    ///
+    /// # Returns
+    /// `Some` with the removed writer, or `None` when no writer was retained.
     #[inline]
     pub fn take_recovery(&mut self) -> Option<AsyncWriterRecovery> {
         self.writer.take()
@@ -193,6 +219,21 @@ impl AsyncCopyOperation {
 
 /// Dispatches the asynchronous provider attempt and falls back only when the
 /// provider explicitly declines it.
+///
+/// # Parameters
+/// - `filesystem`: Facade used for provider execution and fallback.
+/// - `source`: Validated source path.
+/// - `target`: Validated destination path.
+/// - `options`: Copy policy resolved by the facade.
+/// - `deadline`: Caller budget shared by provider and fallback work.
+/// - `writer`: Retained recovery writer, if fallback has opened one.
+///
+/// # Returns
+/// The completed copy outcome when the provider or fallback succeeds.
+///
+/// # Errors
+/// The contextual failure when limits, provider execution, or outcome
+/// validation fails.
 async fn execute_copy(
     filesystem: &AsyncFileSystem,
     source: &Path,
@@ -253,6 +294,21 @@ async fn execute_copy(
 
 /// Streams a declined asynchronous copy while retaining any recovery writer
 /// in `writer_slot` until publication or cleanup completes.
+///
+/// # Parameters
+/// - `filesystem`: Facade used to read and write the copied resource.
+/// - `source`: Validated source path.
+/// - `target`: Validated destination path.
+/// - `options`: Copy policy resolved by the facade.
+/// - `deadline`: Caller budget checked throughout the transfer.
+/// - `writer_slot`: Slot that retains the writer while recovery is possible.
+///
+/// # Returns
+/// A future that resolves to the streamed copy outcome on success.
+///
+/// # Errors
+/// The contextual failure when preflight, streaming, publication, or cleanup
+/// fails.
 #[inline]
 fn stream_copy_fallback<'a>(
     filesystem: &'a AsyncFileSystem,
@@ -556,6 +612,14 @@ fn stream_copy_fallback<'a>(
 }
 
 /// Builds a caller-budget error for an asynchronous copy.
+///
+/// # Parameters
+/// - `source`: Source path associated with the copy.
+/// - `target`: Destination path associated with the copy.
+/// - `message`: Human-readable reason the caller budget was exceeded.
+///
+/// # Returns
+/// A resource-limit error associated with the source and destination paths.
 fn budget_error(source: &Path, target: &Path, message: &str) -> FsError {
     FsError::new(FsErrorKind::ResourceLimitExceeded, FsOperation::Copy, message)
         .with_path(source.clone())
@@ -563,6 +627,15 @@ fn budget_error(source: &Path, target: &Path, message: &str) -> FsError {
 }
 
 /// Builds the stable failure used for an invalid execute retry.
+///
+/// # Parameters
+/// - `source`: Source path captured by the operation.
+/// - `target`: Destination path captured by the operation.
+/// - `provider`: Provider identifier associated with the operation.
+/// - `snapshot`: Last confirmed publication state and transfer statistics.
+///
+/// # Returns
+/// An invalid-state failure containing the saved publication state and stats.
 fn invalid_state_failure(
     source: &Path,
     target: &Path,

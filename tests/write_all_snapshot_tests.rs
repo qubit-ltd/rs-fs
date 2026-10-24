@@ -49,7 +49,7 @@ fn test_write_all_commit_failure_preserves_snapshot() {
         WriteFailureState::Published,
         WriteFailureState::Indeterminate,
     ] {
-        let fs = handle_support::writer_lifecycle_filesystem(Some(state), None);
+        let fs = handle_support::implementation_tests::writer_lifecycle_filesystem(Some(state), None);
         let mut failure = fs
             .write_all(
                 &Path::parse("/target").expect("path"),
@@ -80,11 +80,11 @@ fn test_write_all_commit_failure_preserves_snapshot() {
 fn test_write_all_snapshot_before_a_session_exists() {
     for (filesystem, expected) in [
         (
-            handle_support::limited_write_filesystem(1),
+            handle_support::implementation_tests::limited_write_filesystem(1),
             WriteFailureState::NotPublished,
         ),
         (
-            handle_support::provider_open_failure_filesystem(),
+            handle_support::implementation_tests::provider_open_failure_filesystem(),
             WriteFailureState::Indeterminate,
         ),
     ] {

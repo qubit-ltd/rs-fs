@@ -23,19 +23,34 @@ use qubit_fs::write::AsyncWriteAllOperationFailure;
 use qubit_fs::write::AsyncWriterRecovery;
 use qubit_fs::write::WriteOptions;
 
+/// Retains an asynchronous write operation when cleanup cannot finish.
+///
+/// This guide type keeps the original operation, primary failure, and cleanup
+/// failure together so callers can reconcile publication state before retrying.
 #[derive(Debug)]
 pub struct WriteRecovery {
+    /// The operation containing the write's publication and recovery state.
     pub operation: AsyncWriteAllOperation,
+    /// The failure that triggered recovery, or `None` when cancellation did.
     pub primary: Option<AsyncWriteAllOperationFailure>,
+    /// An error returned while aborting a retained writer, if any.
     pub cleanup_error: Option<FsError>,
 }
 
+/// Describes whether report writing failed before execution or needs recovery.
 #[derive(Debug)]
 pub enum WriteReportError {
+    /// The operation could not be prepared before asynchronous execution.
     Preflight(AsyncWriteAllOperationFailure),
+    /// The operation and any cleanup failure needed for reconciliation.
     Recovery(Box<WriteRecovery>),
 }
 
+/// Writes report bytes and retains ambiguous outcomes for caller reconciliation.
+///
+/// Cancellation applies only to execution. Once execution completes or is
+/// cancelled, any retained writer is aborted, and the operation state is
+/// returned when the result cannot safely be treated as published.
 pub async fn write_report(
     filesystem: &AsyncFileSystem,
     path: Path,
@@ -82,6 +97,9 @@ pub async fn write_report(
 
 /// Lists report keys across a configured flat namespace with a bounded result
 /// set.
+///
+/// This guide example uses a literal prefix and caps the returned entries to
+/// keep listing work bounded.
 pub async fn list_reports(filesystem: &AsyncFileSystem) -> Result<Vec<Path>, FsError> {
     let scope = ListScope::Namespace;
     let options = ListOptions::object_keys()

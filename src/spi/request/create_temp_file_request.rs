@@ -36,7 +36,7 @@ impl CreateTempFileRequest {
     /// - `options`: Validated temporary-file creation options.
     ///
     /// # Returns
-    /// A provider temporary-file request.
+    /// A request containing the validated temporary-file options.
     #[allow(dead_code)]
     #[must_use]
     #[inline]
@@ -48,8 +48,8 @@ impl CreateTempFileRequest {
     ///
     /// # Returns
     /// The immutable temporary-file creation options.
-    #[inline]
     #[must_use]
+    #[inline]
     pub const fn options(&self) -> &TempOptions {
         &self.options
     }

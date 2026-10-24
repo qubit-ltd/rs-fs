@@ -15,7 +15,10 @@ use qubit_fs::error::FsOperation;
 fn test_io_error_with_indeterminate_effect_is_uncertain() {
     let error = FsError::new(FsErrorKind::Io, FsOperation::CleanupTemp, "injected")
         .with_effect_state(FsEffectState::Indeterminate);
-    assert!(error.has_indeterminate_effect());
+    assert!(
+        error.has_indeterminate_effect(),
+        "an indeterminate effect state must remain uncertain"
+    );
     assert_eq!(FsErrorKind::Io, error.kind());
 }
 
@@ -23,5 +26,8 @@ fn test_io_error_with_indeterminate_effect_is_uncertain() {
 fn test_legacy_indeterminate_kind_remains_conservative() {
     let error = FsError::new(FsErrorKind::Indeterminate, FsOperation::AbortWriter, "injected")
         .with_effect_state(FsEffectState::Unchanged);
-    assert!(error.has_indeterminate_effect());
+    assert!(
+        error.has_indeterminate_effect(),
+        "the legacy indeterminate error kind must remain conservative"
+    );
 }

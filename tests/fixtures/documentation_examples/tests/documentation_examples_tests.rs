@@ -10,28 +10,35 @@ use qubit_fs::Path;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::write::AsyncWriteAllOperationState;
 use qubit_fs::write::WriteFailureState;
+use qubit_fs_documentation_examples::async_recovery::WriteReportError;
+use qubit_fs_documentation_examples::async_recovery::write_report;
+use qubit_fs_documentation_examples::provider_minimal::read_health;
+use qubit_fs_documentation_examples::provider_minimal_async::stat_health;
 
-use super::async_recording_spi::AsyncCopyStage;
-use super::async_recording_spi::AsyncRecordingConfig;
-use super::async_recording_spi::async_recording_file_system;
-use super::async_recovery::WriteReportError;
-use super::async_recovery::write_report;
-use super::poll_support::ready;
+#[path = "../../../common/async_recording_spi.rs"]
+mod async_recording_spi;
+#[path = "../../../common/poll_support.rs"]
+mod poll_support;
+
+use async_recording_spi::AsyncCopyStage;
+use async_recording_spi::AsyncRecordingConfig;
+use async_recording_spi::async_recording_file_system;
+use poll_support::ready;
 
 #[test]
-fn provider_guide_example_reads_health_resource() {
-    assert_eq!(b"ok", super::provider_minimal::read_health().unwrap().as_slice());
+fn test_provider_guide_example_reads_health_resource() {
+    assert_eq!(b"ok", read_health().unwrap().as_slice());
 }
 
 /// The async provider example resolves through the facade without a runtime.
 #[test]
-fn provider_guide_async_example_reads_health_metadata() {
-    let metadata = ready(super::provider_minimal_async::stat_health()).expect("health metadata must resolve");
+fn test_provider_guide_async_example_reads_health_metadata() {
+    let metadata = ready(stat_health()).expect("health metadata must resolve");
     assert_eq!(Some(2), metadata.len());
 }
 
 #[test]
-fn async_example_retains_failure_and_failed_cleanup() {
+fn test_async_example_retains_failure_and_failed_cleanup() {
     let (filesystem, _) = async_recording_file_system(AsyncRecordingConfig {
         writer_commit_failure: Some(WriteFailureState::Published),
         writer_abort_failure: Some(FsErrorKind::Io),
@@ -52,7 +59,7 @@ fn async_example_retains_failure_and_failed_cleanup() {
 }
 
 #[test]
-fn async_example_cancellation_keeps_operation_without_writer() {
+fn test_async_example_cancellation_keeps_operation_without_writer() {
     let (filesystem, _) = async_recording_file_system(AsyncRecordingConfig {
         pending_stage: Some(AsyncCopyStage::OpenWriter),
         ..Default::default()
@@ -76,7 +83,7 @@ fn async_example_cancellation_keeps_operation_without_writer() {
 }
 
 #[test]
-fn async_example_success_publishes() {
+fn test_async_example_success_publishes() {
     let (filesystem, _) = async_recording_file_system(Default::default());
     ready(write_report(
         &filesystem,

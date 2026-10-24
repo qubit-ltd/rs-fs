@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+mod atomicity_requirement_tests;
 mod checksum_tests;
 mod file_kind_tests;
 mod file_metadata_tests;

@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade tests.
 //! Copy publication state at the point of provider failure.
 
 /// Stable copy state for recovery decisions; error text is not a state
@@ -25,6 +24,7 @@
 /// };
 /// assert!(destination_may_have_changed);
 /// ```
+#[must_use]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CopyFailureState {
     /// No destination effect was published.

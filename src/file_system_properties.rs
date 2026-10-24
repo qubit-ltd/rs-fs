@@ -67,42 +67,6 @@ pub struct FileSystemProperties {
 }
 
 impl FileSystemProperties {
-    /// Derives the application-visible property snapshot from one validated
-    /// provider snapshot.
-    ///
-    /// The facade adds conditional copy support only when the provider exposes
-    /// metadata, reader, and writer entry points together with corresponding
-    /// read and write capabilities. This method performs no I/O.
-    ///
-    /// # Parameters
-    /// - `provider`: Validated provider operations, guarantees, and limits.
-    ///
-    /// # Returns
-    /// A validated application-visible property snapshot.
-    ///
-    /// # Errors
-    /// Returns an invalid-options error when the derived snapshot violates a
-    /// shared property invariant.
-    pub(crate) fn from_provider(provider: &ProviderProperties) -> FsResult<Self> {
-        let mut capabilities = provider.declared_capabilities();
-        let operations = provider.operations();
-        let streamed_copy = operations.supports(ProviderOperation::Stat)
-            && operations.supports(ProviderOperation::OpenReader)
-            && operations.supports(ProviderOperation::OpenWriter)
-            && capabilities.supports(FileSystemCapability::Read)
-            && capabilities.supports(FileSystemCapability::Write);
-        if streamed_copy && !capabilities.supports(FileSystemCapability::Copy) {
-            capabilities = capabilities.with_conditional(FileSystemCapability::Copy);
-        }
-        Self::new(
-            provider.info().clone(),
-            capabilities,
-            *provider.limits(),
-            provider.path_constraints().clone(),
-            provider.symlink_policy(),
-        )
-    }
-
     /// Builds and validates an immutable filesystem property snapshot.
     ///
     /// This method performs no I/O.
@@ -138,6 +102,42 @@ impl FileSystemProperties {
         };
         properties.validate()?;
         Ok(properties)
+    }
+
+    /// Derives the application-visible property snapshot from one validated
+    /// provider snapshot.
+    ///
+    /// The facade adds conditional copy support only when the provider exposes
+    /// metadata, reader, and writer entry points together with corresponding
+    /// read and write capabilities. This method performs no I/O.
+    ///
+    /// # Parameters
+    /// - `provider`: Validated provider operations, guarantees, and limits.
+    ///
+    /// # Returns
+    /// A validated application-visible property snapshot.
+    ///
+    /// # Errors
+    /// Returns an invalid-options error when the derived snapshot violates a
+    /// shared property invariant.
+    pub(crate) fn from_provider(provider: &ProviderProperties) -> FsResult<Self> {
+        let mut capabilities = provider.declared_capabilities();
+        let operations = provider.operations();
+        let streamed_copy = operations.supports(ProviderOperation::Stat)
+            && operations.supports(ProviderOperation::OpenReader)
+            && operations.supports(ProviderOperation::OpenWriter)
+            && capabilities.supports(FileSystemCapability::Read)
+            && capabilities.supports(FileSystemCapability::Write);
+        if streamed_copy && !capabilities.supports(FileSystemCapability::Copy) {
+            capabilities = capabilities.with_conditional(FileSystemCapability::Copy);
+        }
+        Self::new(
+            provider.info().clone(),
+            capabilities,
+            *provider.limits(),
+            provider.path_constraints().clone(),
+            provider.symlink_policy(),
+        )
     }
 
     /// Returns the stable filesystem identity and configuration.

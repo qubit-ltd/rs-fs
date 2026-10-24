@@ -105,7 +105,6 @@ impl WriteOptions {
 
     /// Returns the optional content type.
     #[inline]
-    #[must_use]
     pub fn content_type(&self) -> Option<&str> {
         self.content_type.as_deref()
     }
@@ -119,7 +118,6 @@ impl WriteOptions {
 
     /// Returns the optional expected checksum.
     #[inline]
-    #[must_use]
     pub const fn checksum(&self) -> Option<&Checksum> {
         self.checksum.as_ref()
     }

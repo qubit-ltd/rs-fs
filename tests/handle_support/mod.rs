@@ -7,6 +7,4 @@
 // =============================================================================
 
 #[allow(dead_code)]
-mod implementation_tests;
-
-pub(crate) use implementation_tests::*;
+pub(crate) mod implementation_tests;

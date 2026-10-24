@@ -28,6 +28,7 @@ pub(crate) struct TempLifecycle {
 impl TempLifecycle {
     /// Creates a lifecycle that owns cleanup for an unpublished resource.
     #[inline]
+    #[must_use]
     pub(crate) const fn new() -> Self {
         Self {
             state: TempResourceState::Owned,
@@ -37,7 +38,6 @@ impl TempLifecycle {
     }
     /// Returns whether this handle owns cleanup, has released it, or cannot
     /// determine the resource state.
-    #[must_use]
     #[inline]
     pub(crate) const fn state(&self) -> TempResourceState {
         self.state

@@ -37,11 +37,13 @@ use crate::write::WriteAbortOutcome;
 /// # Examples
 ///
 /// ```rust
-/// use qubit_fs::error::RecoveryCleanupState;
+/// use qubit_fs::error::FsResult;
 /// use qubit_fs::write::RejectedWriter;
+/// use qubit_fs::write::WriteAbortOutcome;
 ///
-/// assert!(std::any::type_name::<RejectedWriter>().contains("RejectedWriter"));
-/// assert_eq!(RecoveryCleanupState::Pending, RecoveryCleanupState::Pending);
+/// fn clean_up(mut recovery: RejectedWriter) -> FsResult<WriteAbortOutcome> {
+///     recovery.abort()
+/// }
 /// ```
 #[must_use = "explicitly clean or retain the isolated recovery session"]
 pub struct RejectedWriter {
@@ -66,6 +68,13 @@ impl RejectedWriter {
     }
     /// Returns cleanup progress; errors and cancellation do not release
     /// ownership.
+    ///
+    /// # Returns
+    /// The latest cleanup state: `Pending` before cleanup, `Running` while an
+    /// attempt is active, `Completed` after confirmed cleanup, or
+    /// `Indeterminate` when cleanup did not finish conclusively.
+    #[must_use]
+    #[inline]
     pub const fn cleanup_state(&self) -> RecoveryCleanupState {
         self.state
     }
@@ -78,6 +87,9 @@ impl RejectedWriter {
     /// # Errors
     /// Returns InvalidState after confirmed cleanup, or the contextual provider
     /// error without replacing the original opening failure.
+    ///
+    /// # Returns
+    /// The outcome reported by the provider after cleanup completes.
     pub fn abort(&mut self) -> FsResult<WriteAbortOutcome> {
         if self.state == RecoveryCleanupState::Completed {
             return Err(self.contextual_error(FsError::new(

@@ -57,6 +57,14 @@ pub struct TempDirectory {
 }
 impl TempDirectory {
     /// Creates the facade handle from validated provider parts.
+    ///
+    /// # Parameters
+    /// - `filesystem`: Facade that validates and applies persistence policy.
+    /// - `path`: Provider-local path of the opened temporary directory.
+    /// - `session`: Provider session that owns the directory lifecycle.
+    ///
+    /// # Returns
+    /// A handle initialized with cleanup ownership of the opened directory.
     pub(crate) fn new(filesystem: FileSystem, path: Path, session: Box<dyn TempResourceSpi>) -> Self {
         Self {
             filesystem,
@@ -66,24 +74,42 @@ impl TempDirectory {
         }
     }
     /// Returns the logical temporary directory path.
+    ///
+    /// # Returns
+    /// The provider-local logical path while this handle is borrowed.
     #[inline]
     #[must_use]
     pub const fn path(&self) -> &Path {
         &self.path
     }
     /// Returns the resource lifecycle state.
+    ///
+    /// # Returns
+    /// The current ownership and cleanup state of this temporary resource.
     #[inline]
-    #[must_use]
     pub const fn state(&self) -> TempResourceState {
         self.lifecycle.state()
     }
     /// Returns one lexically safe child path.
+    ///
+    /// # Parameters
+    /// - `component`: A validated single path component.
+    ///
+    /// # Returns
+    /// The component appended to this temporary directory's logical path.
     #[inline]
     #[must_use]
     pub fn child(&self, component: &PathComponent) -> Path {
         self.path.child(component)
     }
     /// Returns one lexically safe descendant path.
+    ///
+    /// # Parameters
+    /// - `relative`: A validated relative path that cannot escape this
+    ///   directory.
+    ///
+    /// # Returns
+    /// The relative path joined to this temporary directory's logical path.
     #[inline]
     #[must_use]
     pub fn descendant(&self, relative: &RelativePath) -> Path {
@@ -191,6 +217,10 @@ impl TempDirectory {
     /// # Errors
     /// Returns an invalid-state error when cleanup is no longer legal, or the
     /// provider cleanup error when cleanup cannot be confirmed.
+    ///
+    /// # Returns
+    /// `Ok(())` when cleanup is confirmed; otherwise, the contextual cleanup
+    /// error.
     pub fn cleanup(&mut self) -> FsResult<()> {
         if !matches!(
             self.lifecycle.state(),
@@ -256,6 +286,14 @@ impl TempDirectory {
     }
 }
 impl Debug for TempDirectory {
+    /// Formats the handle's path and lifecycle state without exposing provider
+    /// internals.
+    ///
+    /// # Parameters
+    /// - `f`: Formatter that receives the debug representation.
+    ///
+    /// # Returns
+    /// `Ok(())` when formatting succeeds, or the formatter's error.
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         f.debug_struct("TempDirectory")
@@ -265,6 +303,7 @@ impl Debug for TempDirectory {
     }
 }
 impl Drop for TempDirectory {
+    /// Attempts best-effort cleanup while this handle still owns the resource.
     fn drop(&mut self) {
         if matches!(
             self.lifecycle.state(),
