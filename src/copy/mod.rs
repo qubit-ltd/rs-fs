@@ -26,8 +26,6 @@ mod copy_outcome;
 mod copy_stats;
 mod fallback_rejection;
 mod internal;
-#[cfg(test)]
-pub(crate) use internal::StreamCopyPlan;
 mod metadata_preserve_policy;
 mod server_side_preference;
 

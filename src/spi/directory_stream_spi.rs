@@ -19,7 +19,6 @@ use crate::metadata::DirEntry;
 /// use qubit_fs::error::FsResult;
 /// use qubit_fs::metadata::DirEntry;
 /// use qubit_fs::spi::DirectoryStreamSpi;
-/// # fn main() -> FsResult<()> {
 ///
 /// struct EmptyStream;
 /// impl DirectoryStreamSpi for EmptyStream {

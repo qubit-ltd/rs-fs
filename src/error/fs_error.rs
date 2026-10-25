@@ -156,6 +156,8 @@ impl FsError {
             io::ErrorKind::TimedOut => FsErrorKind::Timeout,
             io::ErrorKind::Interrupted => FsErrorKind::Interrupted,
             io::ErrorKind::StorageFull => FsErrorKind::QuotaExceeded,
+            io::ErrorKind::QuotaExceeded => FsErrorKind::QuotaExceeded,
+            io::ErrorKind::OutOfMemory => FsErrorKind::ResourceLimitExceeded,
             io::ErrorKind::InvalidData => FsErrorKind::DataCorruption,
             _ => FsErrorKind::Io,
         };

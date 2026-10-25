@@ -93,6 +93,8 @@ fn test_fs_error_from_io_maps_standard_categories() {
         (io::ErrorKind::TimedOut, FsErrorKind::Timeout),
         (io::ErrorKind::Interrupted, FsErrorKind::Interrupted),
         (io::ErrorKind::StorageFull, FsErrorKind::QuotaExceeded),
+        (io::ErrorKind::QuotaExceeded, FsErrorKind::QuotaExceeded),
+        (io::ErrorKind::OutOfMemory, FsErrorKind::ResourceLimitExceeded),
         (io::ErrorKind::InvalidData, FsErrorKind::DataCorruption),
         (io::ErrorKind::Other, FsErrorKind::Io),
     ] {

@@ -403,11 +403,21 @@ fn stream_copy_fallback<'a>(
                     && is_unchanged_open_failure(error.error())
                     && options.conflict() == CopyConflictPolicy::Skip =>
             {
+                let stats = CopyStats {
+                    skipped: 1,
+                    ..CopyStats::default()
+                };
+                if deadline.expired() {
+                    return Err(filesystem.contextual_copy_failure(
+                        budget_error(source, target, "copy deadline was exceeded"),
+                        CopyFailureState::Unchanged,
+                        stats,
+                        source,
+                        target,
+                    ));
+                }
                 return Ok(CopyOutcome::streamed_fallback(
-                    CopyStats {
-                        skipped: 1,
-                        ..CopyStats::default()
-                    },
+                    stats,
                     crate::metadata::AchievedAtomicity::NonAtomic,
                     false,
                 ));
@@ -572,12 +582,23 @@ fn stream_copy_fallback<'a>(
                         target,
                     ));
                 }
+                let state = from_writer_state(writer.state());
                 let _ = writer_slot.take();
+                let stats = CopyStats {
+                    skipped: 1,
+                    ..CopyStats::default()
+                };
+                if deadline.expired() {
+                    return Err(filesystem.contextual_copy_failure(
+                        budget_error(source, target, "copy deadline was exceeded"),
+                        state,
+                        stats,
+                        source,
+                        target,
+                    ));
+                }
                 return Ok(CopyOutcome::streamed_fallback(
-                    CopyStats {
-                        skipped: 1,
-                        ..CopyStats::default()
-                    },
+                    stats,
                     crate::metadata::AchievedAtomicity::NonAtomic,
                     false,
                 ));
@@ -597,14 +618,14 @@ fn stream_copy_fallback<'a>(
             return Err(filesystem.contextual_copy_failure(
                 budget_error(source, target, "copy deadline was exceeded"),
                 CopyFailureState::Published,
-                StreamCopyPlan::completed_stats(bytes),
+                StreamCopyPlan::completed_stats(metadata.kind(), bytes),
                 source,
                 target,
             ));
         }
         let _ = writer_slot.take();
         Ok(CopyOutcome::streamed_fallback(
-            StreamCopyPlan::completed_stats(bytes),
+            StreamCopyPlan::completed_stats(metadata.kind(), bytes),
             write_outcome.atomicity(),
             write_outcome.durable(),
         ))

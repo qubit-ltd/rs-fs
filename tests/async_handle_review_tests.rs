@@ -232,8 +232,7 @@ fn test_async_writer_abort_preserves_published_state() {
     assert_eq!(WriterState::Published, writer.state());
 }
 
-/// Rejects a non-atomic successful temporary persist and retains source cleanup
-/// responsibility.
+/// Rejects non-atomic temporary publication without inventing source ownership.
 #[test]
 fn test_async_temp_persist_rechecks_required_atomic_outcome() {
     let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
@@ -248,8 +247,8 @@ fn test_async_temp_persist_rechecks_required_atomic_outcome() {
     ))
     .expect_err("a non-atomic persist must fail the required atomic contract");
     assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
-    assert_eq!(PersistFailureState::PublishedSourceRetained, failure.state());
-    assert_eq!(TempResourceState::CleanupRequired, temp.state());
+    assert_eq!(PersistFailureState::PublishedSourceIndeterminate, failure.state());
+    assert_eq!(TempResourceState::Indeterminate, temp.state());
 }
 
 /// Rejects entries outside the list root and transitions the stream to a

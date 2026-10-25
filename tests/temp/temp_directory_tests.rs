@@ -58,7 +58,7 @@ fn test_temp_directory_persist_marks_resource_persisted() {
 /// Verifies a provider cannot satisfy required atomic directory persistence by
 /// merely advertising the capability and returning a non-atomic outcome.
 #[test]
-fn test_temp_directory_rejects_non_atomic_required_persist_outcome() {
+fn test_temp_directory_non_atomic_required_persist_does_not_assume_source_ownership() {
     let filesystem = crate::handle_support::implementation_tests::non_atomic_temp_directory_filesystem();
     let mut directory = filesystem
         .create_temp_directory(TempOptions::default())
@@ -71,7 +71,27 @@ fn test_temp_directory_rejects_non_atomic_required_persist_outcome() {
         )
         .expect_err("non-atomic provider result must violate requirement");
     assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
-    assert_eq!(TempResourceState::CleanupRequired, directory.state());
+    assert_eq!(PersistFailureState::PublishedSourceIndeterminate, failure.state());
+    assert_eq!(TempResourceState::Indeterminate, directory.state());
+    let target = Path::parse("/published-directory").expect("target should parse");
+    assert_eq!(Some(&target), failure.publication_target());
+    assert_eq!(Some(&target), failure.error().target());
+    assert_eq!(
+        FsErrorKind::InvalidState,
+        directory.cleanup().expect_err("source is uncertain").kind()
+    );
+    assert_eq!(
+        PersistFailureState::PublishedSourceIndeterminate,
+        directory.keep().expect_err("source is uncertain").state()
+    );
+    assert_eq!(
+        PersistFailureState::PublishedSourceIndeterminate,
+        directory
+            .persist(&Path::parse("/next").expect("target"), PersistOptions::default())
+            .expect_err("source is uncertain")
+            .state()
+    );
+    drop(directory);
 }
 
 /// Rejects a provider outcome that reports a different persistence target.

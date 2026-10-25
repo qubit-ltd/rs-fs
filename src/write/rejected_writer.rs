@@ -72,7 +72,10 @@ impl RejectedWriter {
     /// # Returns
     /// The latest cleanup state: `Pending` before cleanup, `Running` while an
     /// attempt is active, `Completed` after confirmed cleanup, or
-    /// `Indeterminate` when cleanup did not finish conclusively.
+    /// `Indeterminate` when cleanup did not finish conclusively. This cleanup
+    /// state is independent of destination publication certainty; an
+    /// `Ok(WriteAbortOutcome::Indeterminate)` confirms cleanup while leaving
+    /// destination publication unknown.
     #[must_use]
     #[inline]
     pub const fn cleanup_state(&self) -> RecoveryCleanupState {
@@ -100,10 +103,7 @@ impl RejectedWriter {
         }
         let mut guard = RecoveryCleanupGuard::start(&mut self.state);
         let result = self.session.abort();
-        guard.finish(matches!(
-            &result,
-            Ok(WriteAbortOutcome::NotPublished | WriteAbortOutcome::Published)
-        ));
+        guard.finish(result.is_ok());
         drop(guard);
         result.map_err(|error| self.contextual_error(error))
     }

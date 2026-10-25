@@ -115,6 +115,7 @@ enum CopyResponse {
     DeclinedReaderFailure,
     DeclinedReadFailure,
     DeclinedWriterAlreadyExists,
+    DeclinedSlowWriterAlreadyExists,
     DeclinedWriterFailure,
     DeclinedWriterInvalidIdentity,
     DeclinedWriteFailure,
@@ -122,12 +123,14 @@ enum CopyResponse {
     DeclinedCommitRetryable,
     DeclinedCommitPublished,
     DeclinedCommitIndeterminate,
+    DeclinedCommitAlreadyExists,
 }
 /// Records facade-to-provider calls and stream-fallback bytes.
 struct RecordingSpi {
     response: CopyResponse,
     advertise_copy: bool,
     source_length: u64,
+    source_kind: FileKind,
     maximum_read_range_bytes: Option<u64>,
     maximum_write_bytes: Option<u64>,
     calls: Arc<Mutex<Vec<&'static str>>>,
@@ -158,6 +161,7 @@ fn recording_filesystem_with_range_limit(response: CopyResponse, maximum_read_ra
         response,
         advertise_copy: true,
         source_length: 5,
+        source_kind: FileKind::File,
         maximum_read_range_bytes: Some(maximum_read_range_bytes),
         maximum_write_bytes: None,
         calls: Arc::clone(&calls),
@@ -199,6 +203,7 @@ fn recording_filesystem_with_options(
         response,
         advertise_copy,
         source_length: 5,
+        source_kind: FileKind::File,
         maximum_read_range_bytes: None,
         maximum_write_bytes,
         calls: Arc::clone(&calls),
@@ -218,6 +223,26 @@ fn recording_filesystem_with_source_length(response: CopyResponse, source_length
         response,
         advertise_copy: true,
         source_length,
+        source_kind: FileKind::File,
+        maximum_read_range_bytes: None,
+        maximum_write_bytes: None,
+        calls: Arc::clone(&calls),
+        bytes: Arc::clone(&bytes),
+        writer_options: Arc::new(Mutex::new(Vec::new())),
+        writer_durable: false,
+    })
+    .expect("recording facade should construct");
+    (filesystem, calls, bytes)
+}
+/// Constructs a recording filesystem whose source metadata has a selected kind.
+fn recording_filesystem_with_source_kind(response: CopyResponse, source_kind: FileKind) -> RecordingHandles {
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let bytes = Arc::new(Mutex::new(Vec::new()));
+    let filesystem = FileSystem::from_spi(RecordingSpi {
+        response,
+        advertise_copy: true,
+        source_length: 5,
+        source_kind,
         maximum_read_range_bytes: None,
         maximum_write_bytes: None,
         calls: Arc::clone(&calls),
@@ -236,6 +261,7 @@ fn recording_filesystem_with_writer_durability(durable: bool) -> (FileSystem, Ar
         response: CopyResponse::Declined,
         advertise_copy: true,
         source_length: 5,
+        source_kind: FileKind::File,
         maximum_read_range_bytes: None,
         maximum_write_bytes: None,
         calls: Arc::new(Mutex::new(Vec::new())),
@@ -331,7 +357,7 @@ impl FileSystemSpi for RecordingSpi {
                 "injected stat failure",
             ));
         }
-        let mut metadata = FileMetadata::new(FileKind::File);
+        let mut metadata = FileMetadata::new(self.source_kind.clone());
         if matches!(self.response, CopyResponse::DeclinedUnsupportedSourceKind) {
             metadata = metadata.with_kind(FileKind::Directory);
         }
@@ -377,6 +403,15 @@ impl FileSystemSpi for RecordingSpi {
             )
             .with_effect_state(FsEffectState::Unchanged));
         }
+        if matches!(self.response, CopyResponse::DeclinedSlowWriterAlreadyExists) {
+            std::thread::sleep(Duration::from_millis(20));
+            return Err(FsError::new(
+                FsErrorKind::AlreadyExists,
+                FsOperation::OpenWriter,
+                "injected existing target after writer-open delay",
+            )
+            .with_effect_state(FsEffectState::Unchanged));
+        }
         if matches!(self.response, CopyResponse::DeclinedWriterFailure) {
             return Err(
                 FsError::new(FsErrorKind::Io, FsOperation::OpenWriter, "injected writer failure")
@@ -399,8 +434,15 @@ impl FileSystemSpi for RecordingSpi {
                     CopyResponse::DeclinedCommitRetryable => Some(WriteFailureState::RetryableNotPublished),
                     CopyResponse::DeclinedCommitPublished => Some(WriteFailureState::Published),
                     CopyResponse::DeclinedCommitIndeterminate => Some(WriteFailureState::Indeterminate),
+                    CopyResponse::DeclinedCommitAlreadyExists => Some(WriteFailureState::RetryableNotPublished),
                     _ => None,
                 },
+                commit_failure_error: if matches!(self.response, CopyResponse::DeclinedCommitAlreadyExists) {
+                    FsErrorKind::AlreadyExists
+                } else {
+                    FsErrorKind::Io
+                },
+                commit_delay: matches!(self.response, CopyResponse::DeclinedCommitAlreadyExists),
                 durable: self.writer_durable,
             }),
         ))
@@ -499,13 +541,15 @@ impl FileSystemSpi for RecordingSpi {
             | CopyResponse::DeclinedReaderFailure
             | CopyResponse::DeclinedReadFailure
             | CopyResponse::DeclinedWriterAlreadyExists
+            | CopyResponse::DeclinedSlowWriterAlreadyExists
             | CopyResponse::DeclinedWriterFailure
             | CopyResponse::DeclinedWriterInvalidIdentity
             | CopyResponse::DeclinedWriteFailure
             | CopyResponse::DeclinedCommitFailure
             | CopyResponse::DeclinedCommitRetryable
             | CopyResponse::DeclinedCommitPublished
-            | CopyResponse::DeclinedCommitIndeterminate => Ok(CopyAttempt::Declined(CopyDeclineReason::NotApplicable)),
+            | CopyResponse::DeclinedCommitIndeterminate
+            | CopyResponse::DeclinedCommitAlreadyExists => Ok(CopyAttempt::Declined(CopyDeclineReason::NotApplicable)),
             CopyResponse::Failed => Err(SpiCopyFailure::new(
                 FsError::new(FsErrorKind::Io, FsOperation::BeginCopy, "injected"),
                 CopyFailureState::Indeterminate,
@@ -541,6 +585,8 @@ struct RecordingWriter {
     fail_flush: bool,
     fail_write: bool,
     commit_failure_state: Option<WriteFailureState>,
+    commit_failure_error: FsErrorKind,
+    commit_delay: bool,
     durable: bool,
 }
 
@@ -580,8 +626,15 @@ impl Output for RecordingWriter {
 impl FileWriterSpi for RecordingWriter {
     fn commit(&mut self) -> Result<WriteOutcome, SpiWriteFailure> {
         if let Some(state) = self.commit_failure_state {
+            if self.commit_delay {
+                std::thread::sleep(Duration::from_millis(20));
+            }
             return Err(SpiWriteFailure::new(
-                FsError::new(FsErrorKind::Io, FsOperation::CommitWriter, "injected commit failure"),
+                FsError::new(
+                    self.commit_failure_error,
+                    FsOperation::CommitWriter,
+                    "injected commit failure",
+                ),
                 state,
             ));
         }
@@ -801,6 +854,53 @@ fn test_copy_fallback_does_not_require_copy_capability() {
         ["stat", "open_reader", "open_writer"],
         calls.lock().expect("calls lock should succeed").as_slice()
     );
+}
+
+#[test]
+fn test_copy_stream_fallback_reports_source_resource_kind() {
+    for (source_kind, expected_files, expected_objects) in [(FileKind::File, 1, 0), (FileKind::Object, 0, 1)] {
+        let (filesystem, _, _) = recording_filesystem_with_source_kind(CopyResponse::Declined, source_kind);
+        let outcome = filesystem
+            .copy(&path("/source"), &path("/target"), CopyOptions::default())
+            .expect("supported source kinds should complete the stream fallback");
+
+        assert_eq!(expected_files, outcome.stats().files);
+        assert_eq!(expected_objects, outcome.stats().objects);
+        assert_eq!(5, outcome.stats().bytes);
+    }
+}
+
+#[test]
+fn test_copy_skip_deadline_is_checked_after_open_and_abort() {
+    for (response, expected_calls) in [
+        (
+            CopyResponse::DeclinedSlowWriterAlreadyExists,
+            vec!["try_copy", "stat", "open_reader", "open_writer"],
+        ),
+        (
+            CopyResponse::DeclinedCommitAlreadyExists,
+            vec!["try_copy", "stat", "open_reader", "open_writer"],
+        ),
+    ] {
+        let (filesystem, calls, _) = recording_filesystem(response);
+        let failure = filesystem
+            .copy(
+                &path("/source"),
+                &path("/target"),
+                CopyOptions::default()
+                    .with_conflict(CopyConflictPolicy::Skip)
+                    .with_deadline(Some(Duration::from_millis(1))),
+            )
+            .expect_err("deadline expires after the configured skip stage");
+
+        assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
+        assert_eq!(CopyFailureState::Unchanged, failure.state());
+        assert_eq!(1, failure.partial_stats().skipped);
+        assert_eq!(
+            expected_calls,
+            calls.lock().expect("calls lock should succeed").as_slice()
+        );
+    }
 }
 
 /// Verifies a preferred server-side attempt may use the safe stream fallback.

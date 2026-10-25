@@ -114,6 +114,8 @@ pub(crate) struct AsyncRecordingConfig {
     pub(crate) invalid_opened_identity: bool,
     pub(crate) invalid_stat_path: bool,
     pub(crate) stat_kind: Option<FileKind>,
+    pub(crate) reader_bytes: Option<Vec<u8>>,
+    pub(crate) native_copy_stats: Option<CopyStats>,
     pub(crate) atomic_temp_persist: bool,
     pub(crate) completed_copy: Option<AchievedAtomicity>,
     pub(crate) decline_copy: bool,
@@ -131,7 +133,9 @@ pub(crate) struct AsyncRecordingConfig {
     pub(crate) writer_atomicity: Option<AchievedAtomicity>,
     pub(crate) writer_durable: bool,
     pub(crate) writer_commit_failure: Option<WriteFailureState>,
+    pub(crate) writer_commit_error: Option<FsErrorKind>,
     pub(crate) writer_abort_failure: Option<FsErrorKind>,
+    pub(crate) writer_abort_outcome: Option<WriteAbortOutcome>,
     pub(crate) writer_open_error: Option<FsErrorKind>,
     pub(crate) writer_open_effect: Option<FsEffectState>,
     /// Maximum bytes acknowledged by one successful provider write.
@@ -157,6 +161,7 @@ pub(crate) struct AsyncRecordingConfig {
 #[allow(dead_code)]
 pub(crate) struct AsyncRecordingProbe {
     calls: Arc<Mutex<Vec<&'static str>>>,
+    written_bytes: Arc<Mutex<Vec<u8>>>,
     writer_cancellations: Arc<Mutex<usize>>,
     temp_cancellations: Arc<Mutex<usize>>,
     writer_options: Arc<Mutex<Vec<WriteOptions>>>,
@@ -167,6 +172,15 @@ impl AsyncRecordingProbe {
     #[must_use]
     pub(crate) fn calls(&self) -> Vec<&'static str> {
         self.calls.lock().expect("calls lock should succeed").clone()
+    }
+    /// Returns a snapshot of bytes acknowledged by the recording writer.
+    #[allow(dead_code)]
+    #[must_use]
+    pub(crate) fn written_bytes(&self) -> Vec<u8> {
+        self.written_bytes
+            .lock()
+            .expect("written-byte probe lock should succeed")
+            .clone()
     }
     /// Returns local writer cancellation notifications.
     #[allow(dead_code)]
@@ -200,11 +214,13 @@ impl AsyncRecordingProbe {
 /// Creates an async facade with controllable fallback and temporary sessions.
 pub(crate) fn async_recording_file_system(config: AsyncRecordingConfig) -> (AsyncFileSystem, AsyncRecordingProbe) {
     let calls = Arc::new(Mutex::new(Vec::new()));
+    let written_bytes = Arc::new(Mutex::new(Vec::new()));
     let cancellations = Arc::new(Mutex::new(0));
     let temp_cancellations = Arc::new(Mutex::new(0));
     let writer_options = Arc::new(Mutex::new(Vec::new()));
     let probe = AsyncRecordingProbe {
         calls: Arc::clone(&calls),
+        written_bytes: Arc::clone(&written_bytes),
         writer_cancellations: Arc::clone(&cancellations),
         temp_cancellations: Arc::clone(&temp_cancellations),
         writer_options: Arc::clone(&writer_options),
@@ -212,6 +228,7 @@ pub(crate) fn async_recording_file_system(config: AsyncRecordingConfig) -> (Asyn
     let file_system = AsyncFileSystem::from_spi(AsyncRecordingSpi {
         config,
         calls,
+        written_bytes,
         cancellations,
         temp_cancellations,
         writer_options,
@@ -224,6 +241,7 @@ pub(crate) fn async_recording_file_system(config: AsyncRecordingConfig) -> (Asyn
 struct AsyncRecordingSpi {
     config: AsyncRecordingConfig,
     calls: Arc<Mutex<Vec<&'static str>>>,
+    written_bytes: Arc<Mutex<Vec<u8>>>,
     cancellations: Arc<Mutex<usize>>,
     temp_cancellations: Arc<Mutex<usize>>,
     writer_options: Arc<Mutex<Vec<WriteOptions>>>,
@@ -363,7 +381,9 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
             });
         }
         let mut metadata = FileMetadata::new(self.config.stat_kind.clone().unwrap_or(FileKind::File));
-        metadata = metadata.with_len(Some(5));
+        metadata = metadata.with_len(Some(
+            self.config.reader_bytes.as_ref().map_or(5, |bytes| bytes.len()) as u64
+        ));
         let path = if self.config.invalid_stat_path {
             Path::parse("/different").expect("test path should parse")
         } else {
@@ -398,6 +418,9 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
         let info = self.info(request.path());
         let config = self.config.clone();
         Box::pin(async move {
+            let kind = config.stat_kind.clone().unwrap_or(FileKind::File);
+            let reader_len = config.reader_bytes.as_ref().map_or(5, |bytes| bytes.len()) as u64;
+            let info = info.with_metadata(FileMetadata::new(kind).with_len(Some(reader_len)));
             let opened = OpenedAsyncReader::new(info, Box::new(RecordingInput { position: 0, config }));
             let _ = opened.info();
             Ok(opened)
@@ -417,7 +440,20 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
             return Box::pin(async { Err(unused().with_effect_state(FsEffectState::Unchanged)) });
         }
         if let Some(kind) = self.config.writer_open_error {
+            let yield_once = self.config.yield_once_stage == Some(AsyncCopyStage::OpenWriter);
             return Box::pin(async move {
+                if yield_once {
+                    let mut yielded = false;
+                    std::future::poll_fn(move |_| {
+                        if yielded {
+                            Poll::Ready(())
+                        } else {
+                            yielded = true;
+                            Poll::Pending
+                        }
+                    })
+                    .await;
+                }
                 let error = FsError::new(kind, FsOperation::OpenWriter, "injected writer-open failure");
                 Err(match self.config.writer_open_effect {
                     Some(effect) => error.with_effect_state(effect),
@@ -427,13 +463,27 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
         }
         let info = self.info(request.path());
         let config = self.config.clone();
+        let yield_once = config.yield_once_stage == Some(AsyncCopyStage::OpenWriter);
         Box::pin(async move {
+            if yield_once {
+                let mut yielded = false;
+                std::future::poll_fn(move |_| {
+                    if yielded {
+                        Poll::Ready(())
+                    } else {
+                        yielded = true;
+                        Poll::Pending
+                    }
+                })
+                .await;
+            }
             let opened = OpenedAsyncWriter::new(
                 info,
                 Box::new(RecordingWriter {
                     confirmed: 0,
                     flush_yielded: false,
                     config,
+                    written_bytes: Arc::clone(&self.written_bytes),
                     cancellations: Arc::clone(&self.cancellations),
                 }),
             );
@@ -495,9 +545,10 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
             return Box::pin(async { Ok(CopyAttempt::Declined(CopyDeclineReason::NotApplicable)) });
         }
         if let Some(atomicity) = self.config.completed_copy {
+            let stats = self.config.native_copy_stats.unwrap_or_default();
             return Box::pin(async move {
                 Ok(CopyAttempt::Completed(CopyOutcome::new(
-                    CopyStats::default(),
+                    stats,
                     CopyMethod::Native,
                     atomicity,
                 )))
@@ -635,7 +686,8 @@ impl AsyncInput for RecordingInput {
         if this.config.failing_stage == Some(AsyncCopyStage::ReaderRead) {
             return Poll::Ready(Err(IoError::other("injected read failure")));
         }
-        let bytes = b"bytes";
+        let default_bytes = b"bytes";
+        let bytes = this.config.reader_bytes.as_deref().unwrap_or(default_bytes);
         let read = bytes[this.position..].len().min(count);
         output[index..index + read].copy_from_slice(&bytes[this.position..this.position + read]);
         this.position += read;
@@ -648,6 +700,7 @@ struct RecordingWriter {
     confirmed: usize,
     flush_yielded: bool,
     config: AsyncRecordingConfig,
+    written_bytes: Arc<Mutex<Vec<u8>>>,
     cancellations: Arc<Mutex<usize>>,
 }
 impl AsyncOutput for RecordingWriter {
@@ -655,8 +708,8 @@ impl AsyncOutput for RecordingWriter {
     unsafe fn poll_write_unchecked(
         self: Pin<&mut Self>,
         _: &mut Context<'_>,
-        _: &[u8],
-        _: usize,
+        bytes: &[u8],
+        index: usize,
         count: usize,
     ) -> Poll<IoResult<usize>> {
         let this = self.get_mut();
@@ -675,6 +728,10 @@ impl AsyncOutput for RecordingWriter {
         if pending || failing {
             accepted = accepted.min(config.writer_progress_before_stop.saturating_sub(this.confirmed));
         }
+        this.written_bytes
+            .lock()
+            .expect("written-byte probe lock should succeed")
+            .extend_from_slice(&bytes[index..index + accepted]);
         this.confirmed += accepted;
         Poll::Ready(Ok(accepted))
     }
@@ -716,7 +773,11 @@ impl AsyncFileWriteSession for RecordingWriter {
             }
             if let Some(state) = config.writer_commit_failure {
                 return Err(WriteFailure::new(
-                    FsError::new(FsErrorKind::Io, FsOperation::CommitWriter, "injected commit failure"),
+                    FsError::new(
+                        config.writer_commit_error.unwrap_or(FsErrorKind::Io),
+                        FsOperation::CommitWriter,
+                        "injected commit failure",
+                    ),
                     state,
                 ));
             }
@@ -738,13 +799,15 @@ impl AsyncFileWriteSession for RecordingWriter {
         Box::pin(async move {
             match config.writer_abort_failure {
                 Some(kind) => Err(FsError::new(kind, FsOperation::AbortWriter, "injected abort failure")),
-                None => Ok(match config.writer_commit_failure {
-                    Some(WriteFailureState::Published) => WriteAbortOutcome::Published,
-                    Some(WriteFailureState::Indeterminate) => WriteAbortOutcome::Indeterminate,
-                    Some(WriteFailureState::RetryableNotPublished) | Some(WriteFailureState::NotPublished) | None => {
-                        WriteAbortOutcome::NotPublished
-                    }
-                }),
+                None => Ok(config
+                    .writer_abort_outcome
+                    .unwrap_or(match config.writer_commit_failure {
+                        Some(WriteFailureState::Published) => WriteAbortOutcome::Published,
+                        Some(WriteFailureState::Indeterminate) => WriteAbortOutcome::Indeterminate,
+                        Some(WriteFailureState::RetryableNotPublished)
+                        | Some(WriteFailureState::NotPublished)
+                        | None => WriteAbortOutcome::NotPublished,
+                    })),
             }
         })
     }
@@ -754,6 +817,76 @@ impl AsyncFileWriteSession for RecordingWriter {
             .cancellations
             .lock()
             .expect("cancellation lock should succeed") += 1;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Error as IoError;
+    use std::pin::Pin;
+    use std::sync::Arc;
+    use std::sync::Mutex;
+    use std::task::Context;
+    use std::task::Poll;
+    use std::task::Waker;
+
+    use qubit_io::AsyncOutput;
+
+    use super::AsyncCopyStage;
+    use super::AsyncRecordingConfig;
+    use super::RecordingWriter;
+
+    #[test]
+    fn test_recording_writer_records_only_accepted_range() {
+        let written_bytes = Arc::new(Mutex::new(Vec::new()));
+        let mut writer = RecordingWriter {
+            confirmed: 0,
+            flush_yielded: false,
+            config: AsyncRecordingConfig {
+                writer_chunk: Some(2),
+                ..AsyncRecordingConfig::default()
+            },
+            written_bytes: Arc::clone(&written_bytes),
+            cancellations: Arc::new(Mutex::new(0)),
+        };
+        let waker = Waker::noop();
+        let mut context = Context::from_waker(waker);
+        let bytes = b"<payload>";
+        // SAFETY: index 1 and count 7 describe a valid range in `bytes`.
+        let accepted = unsafe { Pin::new(&mut writer).poll_write_unchecked(&mut context, bytes, 1, 7) };
+        assert!(matches!(accepted, Poll::Ready(Ok(2))));
+        assert_eq!(
+            b"pa",
+            written_bytes.lock().expect("probe lock should succeed").as_slice()
+        );
+
+        writer.config = AsyncRecordingConfig {
+            pending_stage: Some(AsyncCopyStage::WriterWrite),
+            writer_progress_before_stop: 2,
+            ..AsyncRecordingConfig::default()
+        };
+        // SAFETY: the same valid range remains available.
+        let pending = unsafe { Pin::new(&mut writer).poll_write_unchecked(&mut context, bytes, 1, 7) };
+        assert!(matches!(pending, Poll::Pending));
+        assert_eq!(
+            b"pa",
+            written_bytes.lock().expect("probe lock should succeed").as_slice()
+        );
+
+        writer.config = AsyncRecordingConfig {
+            failing_stage: Some(AsyncCopyStage::WriterWrite),
+            writer_progress_before_stop: 2,
+            ..AsyncRecordingConfig::default()
+        };
+        // SAFETY: the same valid range remains available.
+        let failed = unsafe { Pin::new(&mut writer).poll_write_unchecked(&mut context, bytes, 1, 7) };
+        assert!(
+            matches!(failed, Poll::Ready(Err(error)) if error.kind() == IoError::other("injected write failure").kind())
+        );
+        assert_eq!(
+            b"pa",
+            written_bytes.lock().expect("probe lock should succeed").as_slice()
+        );
     }
 }
 

@@ -771,19 +771,74 @@ fn test_async_temp_directory_cancellation_retains_uncertainty() {
     }
 }
 
-/// A contract violation after confirmed publication retains its destination.
+/// A contract violation preserves the destination without granting source
+/// cleanup authority.
 #[test]
-fn test_async_temp_atomicity_violation_retains_publication_target() {
-    let (filesystem, _) = async_recording_file_system(AsyncRecordingConfig {
-        atomic_temp_persist: true,
-        temp_persist_atomicity: Some(AchievedAtomicity::NonAtomic),
-        ..AsyncRecordingConfig::default()
-    });
-    let mut file = ready(filesystem.create_temp_file(TempOptions::default())).expect("file");
-    let target = path("/published");
-    let failure = ready(file.persist(&target, PersistOptions::default())).expect_err("atomicity violation");
-    assert_eq!(PersistFailureState::PublishedSourceRetained, failure.state());
-    assert_eq!(Some(&target), failure.publication_target());
+fn test_async_temp_atomicity_violation_preserves_publication_without_cleanup_authority() {
+    for is_directory in [false, true] {
+        let (filesystem, probe) = async_recording_file_system(AsyncRecordingConfig {
+            atomic_temp_persist: true,
+            temp_persist_atomicity: Some(AchievedAtomicity::NonAtomic),
+            ..AsyncRecordingConfig::default()
+        });
+        let target = path("/published");
+        if is_directory {
+            let mut temporary = ready(filesystem.create_temp_directory(TempOptions::default())).expect("directory");
+            let failure =
+                ready(temporary.persist(&target, PersistOptions::default())).expect_err("atomicity violation");
+            assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+            assert_eq!(PersistFailureState::PublishedSourceIndeterminate, failure.state());
+            assert_eq!(Some(&target), failure.publication_target());
+            assert_eq!(Some(&target), failure.error().target());
+            assert_eq!(TempResourceState::Indeterminate, temporary.state());
+            assert_eq!(
+                PersistFailureState::PublishedSourceIndeterminate,
+                ready(temporary.keep()).expect_err("source is uncertain").state()
+            );
+            assert_eq!(
+                PersistFailureState::PublishedSourceIndeterminate,
+                ready(temporary.persist(&path("/next"), PersistOptions::default()))
+                    .expect_err("source is uncertain")
+                    .state()
+            );
+            assert_eq!(
+                FsErrorKind::InvalidState,
+                ready(temporary.cleanup()).expect_err("source is uncertain").kind()
+            );
+            drop(temporary);
+        } else {
+            let mut temporary = ready(filesystem.create_temp_file(TempOptions::default())).expect("file");
+            let failure =
+                ready(temporary.persist(&target, PersistOptions::default())).expect_err("atomicity violation");
+            assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+            assert_eq!(PersistFailureState::PublishedSourceIndeterminate, failure.state());
+            assert_eq!(Some(&target), failure.publication_target());
+            assert_eq!(Some(&target), failure.error().target());
+            assert_eq!(TempResourceState::Indeterminate, temporary.state());
+            assert_eq!(
+                PersistFailureState::PublishedSourceIndeterminate,
+                ready(temporary.keep()).expect_err("source is uncertain").state()
+            );
+            assert_eq!(
+                PersistFailureState::PublishedSourceIndeterminate,
+                ready(temporary.persist(&path("/next"), PersistOptions::default()))
+                    .expect_err("source is uncertain")
+                    .state()
+            );
+            assert_eq!(
+                FsErrorKind::InvalidState,
+                ready(temporary.cleanup()).expect_err("source is uncertain").kind()
+            );
+            drop(temporary);
+        }
+        let create_call = if is_directory {
+            "create_temp_directory"
+        } else {
+            "create_temp_file"
+        };
+        assert_eq!(vec![create_call, "persist"], probe.calls());
+        assert_eq!(0, probe.temp_cancellations());
+    }
 }
 
 /// Completed cleanup failure preserves publication while source authority

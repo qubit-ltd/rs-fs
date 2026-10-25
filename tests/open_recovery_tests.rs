@@ -65,6 +65,7 @@ struct Calls {
     cleanups: AtomicUsize,
     drops: AtomicUsize,
     fail: AtomicBool,
+    abort_indeterminate: AtomicBool,
     #[cfg(feature = "async")]
     pending: AtomicBool,
 }
@@ -141,7 +142,13 @@ impl FileWriterSpi for Session {
         panic!("isolated session must not commit")
     }
     fn abort(&mut self) -> FsResult<WriteAbortOutcome> {
-        self.cleanup_owned().map(|()| WriteAbortOutcome::NotPublished)
+        self.cleanup_owned().map(|()| {
+            if self.0.abort_indeterminate.load(Ordering::SeqCst) {
+                WriteAbortOutcome::Indeterminate
+            } else {
+                WriteAbortOutcome::NotPublished
+            }
+        })
     }
 }
 impl TempResourceSpi for Session {
@@ -212,6 +219,27 @@ fn test_rejected_writer_can_retry_cleanup_without_publishing() {
     assert_eq!(calls.cleanups.load(Ordering::SeqCst), 2);
     drop(failed);
     assert_eq!(calls.drops.load(Ordering::SeqCst), 1);
+}
+
+/// An indeterminate destination result still confirms successful cleanup.
+#[test]
+fn test_rejected_writer_indeterminate_abort_completes_cleanup() {
+    let calls = Arc::new(Calls::default());
+    calls.abort_indeterminate.store(true, Ordering::SeqCst);
+    let fs = FileSystem::from_spi(Provider(Arc::clone(&calls))).expect("filesystem");
+    let mut failed = fs
+        .open_writer(&Path::parse("/target").expect("path"), WriteOptions::default())
+        .expect_err("identity mismatch");
+    let recovery = failed.recovery_mut().expect("recovery");
+
+    assert_eq!(recovery.abort().expect("cleanup"), WriteAbortOutcome::Indeterminate);
+    assert_eq!(recovery.cleanup_state(), RecoveryCleanupState::Completed);
+    assert_eq!(calls.cleanups.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        recovery.abort().expect_err("already cleaned").kind(),
+        FsErrorKind::InvalidState
+    );
+    assert_eq!(calls.cleanups.load(Ordering::SeqCst), 1);
 }
 
 /// Temporary identity rejection never starts an implicit cleanup attempt.
@@ -360,10 +388,14 @@ mod asynchronous {
         }
         fn abort_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<WriteAbortOutcome>> {
             Box::pin(async move {
-                self.get_mut()
-                    .cleanup_gated()
-                    .await
-                    .map(|()| WriteAbortOutcome::NotPublished)
+                let this = self.get_mut();
+                this.cleanup_gated().await.map(|()| {
+                    if this.0.abort_indeterminate.load(Ordering::SeqCst) {
+                        WriteAbortOutcome::Indeterminate
+                    } else {
+                        WriteAbortOutcome::NotPublished
+                    }
+                })
             })
         }
         fn cancel_on_drop(self: Pin<&mut Self>) {
@@ -456,6 +488,29 @@ mod asynchronous {
         assert_eq!(calls.cleanups.load(Ordering::SeqCst), 3);
         drop(failed);
         assert_eq!(calls.drops.load(Ordering::SeqCst), 1);
+    }
+
+    /// An indeterminate destination result still confirms async cleanup.
+    #[test]
+    fn test_async_rejected_writer_indeterminate_abort_completes_cleanup() {
+        let calls = Arc::new(Calls::default());
+        calls.abort_indeterminate.store(true, Ordering::SeqCst);
+        let fs = AsyncFileSystem::from_spi(Provider(Arc::clone(&calls))).expect("filesystem");
+        let mut failed = ready(fs.open_writer(&Path::parse("/target").expect("path"), WriteOptions::default()))
+            .expect_err("identity");
+        let recovery = failed.recovery_mut().expect("recovery");
+
+        assert_eq!(
+            ready(recovery.abort_async()).expect("cleanup"),
+            WriteAbortOutcome::Indeterminate
+        );
+        assert_eq!(recovery.cleanup_state(), RecoveryCleanupState::Completed);
+        assert_eq!(calls.cleanups.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            ready(recovery.abort_async()).expect_err("already cleaned").kind(),
+            FsErrorKind::InvalidState
+        );
+        assert_eq!(calls.cleanups.load(Ordering::SeqCst), 1);
     }
 
     /// Both temporary envelope types use the same cancellation-safe ownership.

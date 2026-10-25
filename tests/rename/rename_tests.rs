@@ -10,6 +10,8 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 
+#[cfg(feature = "async")]
+use qubit_fs::AsyncFileSystem;
 use qubit_fs::FileSystem;
 use qubit_fs::FsError;
 use qubit_fs::FsResult;
@@ -33,6 +35,8 @@ use qubit_fs::path::PathSemantics;
 use qubit_fs::rename::RenameFailureState;
 use qubit_fs::rename::RenameOptions;
 use qubit_fs::rename::RenameOutcome;
+#[cfg(feature = "async")]
+use qubit_fs::spi::AsyncFileSystemSpi;
 use qubit_fs::spi::CreateDirectoryRequest;
 use qubit_fs::spi::CreateTempDirectoryRequest;
 use qubit_fs::spi::CreateTempFileRequest;
@@ -51,6 +55,8 @@ use qubit_fs::spi::ProviderOperation;
 use qubit_fs::spi::ProviderOperations;
 use qubit_fs::spi::ProviderProperties;
 use qubit_fs::spi::RenameRequest;
+#[cfg(feature = "async")]
+use qubit_fs::spi::SpiFuture;
 use qubit_fs::spi::SpiRenameFailure;
 use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
@@ -59,7 +65,8 @@ use qubit_fs::spi::StatResponse;
 struct RenameSpi {
     atomicity: AchievedAtomicity,
     method: PublicationMethod,
-    wrong_identity: bool,
+    wrong_source: bool,
+    wrong_target: bool,
     durable_capability: bool,
     durable_outcome: bool,
     calls: Arc<Mutex<Vec<&'static str>>>,
@@ -70,7 +77,8 @@ fn filesystem(atomicity: AchievedAtomicity) -> (FileSystem, Arc<Mutex<Vec<&'stat
     let filesystem = FileSystem::from_spi(RenameSpi {
         atomicity,
         method: PublicationMethod::AtomicRename,
-        wrong_identity: false,
+        wrong_source: false,
+        wrong_target: false,
         durable_capability: false,
         durable_outcome: false,
         calls: Arc::clone(&calls),
@@ -145,12 +153,12 @@ impl FileSystemSpi for RenameSpi {
     fn rename(&self, request: RenameRequest<'_>) -> Result<RenameOutcome, SpiRenameFailure> {
         self.calls.lock().expect("calls lock should succeed").push("rename");
         Ok(RenameOutcome::new(
-            if self.wrong_identity {
+            if self.wrong_source {
                 path("/reported-source")
             } else {
                 request.source().clone()
             },
-            if self.wrong_identity {
+            if self.wrong_target {
                 path("/reported-target")
             } else {
                 request.target().clone()
@@ -168,13 +176,66 @@ impl FileSystemSpi for RenameSpi {
     }
 }
 
+#[cfg(feature = "async")]
+impl AsyncFileSystemSpi for RenameSpi {
+    fn properties(&self) -> ProviderProperties {
+        let mut capabilities = FileSystemCapabilities::new()
+            .with_guaranteed(FileSystemCapability::Rename)
+            .with_guaranteed(FileSystemCapability::AtomicRename);
+        if self.durable_capability {
+            capabilities = capabilities.with_guaranteed(FileSystemCapability::DurableRename);
+        }
+        ProviderProperties::new(
+            FileSystemInfo::new(
+                FileSystemId::new("rename-recording").expect("valid id"),
+                "rename-recording",
+                PathSemantics::Hierarchical,
+            ),
+            ProviderOperations::new()
+                .with(ProviderOperation::Stat)
+                .with(ProviderOperation::Rename),
+            capabilities,
+            FileSystemLimits::unknown(),
+            PathConstraints::absolute(),
+            SymlinkPolicy::Reject,
+        )
+        .expect("valid properties")
+    }
+
+    fn stat<'a>(&'a self, _: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
+        Box::pin(async { Err(unused()) })
+    }
+
+    fn rename<'a>(&'a self, request: RenameRequest<'a>) -> SpiFuture<'a, Result<RenameOutcome, SpiRenameFailure>> {
+        Box::pin(async move {
+            self.calls.lock().expect("calls lock should succeed").push("rename");
+            Ok(RenameOutcome::new(
+                if self.wrong_source {
+                    path("/reported-source")
+                } else {
+                    request.source().clone()
+                },
+                if self.wrong_target {
+                    path("/reported-target")
+                } else {
+                    request.target().clone()
+                },
+                self.atomicity,
+                self.method,
+            )
+            .with_durable(self.durable_outcome))
+        })
+    }
+}
+
 /// Verifies a provider durability downgrade is rejected after publication.
 #[test]
 fn test_rename_durability_downgrade_is_typed_contract_failure() {
     let filesystem = FileSystem::from_spi(RenameSpi {
         atomicity: AchievedAtomicity::Atomic,
         method: PublicationMethod::AtomicRename,
-        wrong_identity: false,
+        wrong_source: false,
+        wrong_target: false,
         durable_capability: true,
         durable_outcome: false,
         calls: Arc::new(Mutex::new(Vec::new())),
@@ -231,7 +292,8 @@ fn test_rename_rejects_copy_then_delete_provider_outcome() {
     let filesystem = FileSystem::from_spi(RenameSpi {
         atomicity: AchievedAtomicity::Atomic,
         method: PublicationMethod::CopyThenDelete,
-        wrong_identity: false,
+        wrong_source: false,
+        wrong_target: false,
         durable_capability: false,
         durable_outcome: false,
         calls: Arc::clone(&calls),
@@ -253,7 +315,8 @@ fn test_rename_rejects_provider_outcome_with_wrong_identity() {
     let filesystem = FileSystem::from_spi(RenameSpi {
         atomicity: AchievedAtomicity::Atomic,
         method: PublicationMethod::AtomicRename,
-        wrong_identity: true,
+        wrong_source: true,
+        wrong_target: true,
         durable_capability: false,
         durable_outcome: false,
         calls: Arc::clone(&calls),
@@ -266,6 +329,111 @@ fn test_rename_rejects_provider_outcome_with_wrong_identity() {
     assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
     assert_eq!(RenameFailureState::Indeterminate, failure.state());
     assert_eq!(["rename"], calls.lock().expect("calls lock should succeed").as_slice());
+}
+
+/// Verifies identity mismatches take precedence over downgraded guarantees.
+#[test]
+fn test_rename_identity_mismatch_is_indeterminate_before_guarantee_checks() {
+    for wrong_source in [true, false] {
+        for (atomicity, method, durable_capability, durable_outcome, options) in [
+            (
+                AchievedAtomicity::NonAtomic,
+                PublicationMethod::AtomicRename,
+                false,
+                false,
+                RenameOptions::default().with_atomicity(AtomicityRequirement::Required),
+            ),
+            (
+                AchievedAtomicity::Atomic,
+                PublicationMethod::CopyThenDelete,
+                false,
+                false,
+                RenameOptions::default(),
+            ),
+            (
+                AchievedAtomicity::Atomic,
+                PublicationMethod::AtomicRename,
+                true,
+                false,
+                RenameOptions::default().with_durability(DurabilityRequirement::Required),
+            ),
+        ] {
+            let calls = Arc::new(Mutex::new(Vec::new()));
+            let filesystem = FileSystem::from_spi(RenameSpi {
+                atomicity,
+                method,
+                wrong_source,
+                wrong_target: !wrong_source,
+                durable_capability,
+                durable_outcome,
+                calls: Arc::clone(&calls),
+            })
+            .expect("facade should construct");
+            let source = path("/requested-source");
+            let target = path("/requested-target");
+            let failure = filesystem
+                .rename(&source, &target, options)
+                .expect_err("identity mismatch must fail");
+
+            assert_eq!(RenameFailureState::Indeterminate, failure.state());
+            assert_eq!(Some(&source), failure.error().path());
+            assert_eq!(Some(&target), failure.error().target());
+            assert_eq!(FsOperation::Rename, failure.error().operation());
+            assert_eq!(["rename"], calls.lock().expect("calls lock should succeed").as_slice(),);
+        }
+    }
+}
+
+#[cfg(feature = "async")]
+#[test]
+fn test_async_rename_identity_mismatch_precedes_guarantee_checks() {
+    for wrong_source in [true, false] {
+        for (atomicity, method, durable_capability, durable_outcome, options) in [
+            (
+                AchievedAtomicity::NonAtomic,
+                PublicationMethod::AtomicRename,
+                false,
+                false,
+                RenameOptions::default().with_atomicity(AtomicityRequirement::Required),
+            ),
+            (
+                AchievedAtomicity::Atomic,
+                PublicationMethod::CopyThenDelete,
+                false,
+                false,
+                RenameOptions::default(),
+            ),
+            (
+                AchievedAtomicity::Atomic,
+                PublicationMethod::AtomicRename,
+                true,
+                false,
+                RenameOptions::default().with_durability(DurabilityRequirement::Required),
+            ),
+        ] {
+            let calls = Arc::new(Mutex::new(Vec::new()));
+            let filesystem = AsyncFileSystem::from_spi(RenameSpi {
+                atomicity,
+                method,
+                wrong_source,
+                wrong_target: !wrong_source,
+                durable_capability,
+                durable_outcome,
+                calls: Arc::clone(&calls),
+            })
+            .expect("async facade should construct");
+            let source = path("/requested-source");
+            let target = path("/requested-target");
+            let failure = crate::poll_support::ready(filesystem.rename(&source, &target, options))
+                .expect_err("identity mismatch must fail");
+
+            assert_eq!(RenameFailureState::Indeterminate, failure.state());
+            assert_eq!(Some(&source), failure.error().path());
+            assert_eq!(Some(&target), failure.error().target());
+            assert_eq!(FsOperation::Rename, failure.error().operation());
+            assert_eq!(["rename"], calls.lock().expect("calls lock should succeed").as_slice(),);
+        }
+    }
 }
 
 /// Verifies a typed facade rename failure can be safely formatted and consumed

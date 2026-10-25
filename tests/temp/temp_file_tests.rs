@@ -15,7 +15,7 @@ use qubit_fs::temp::PersistOptions;
 use qubit_fs::temp::TempOptions;
 use qubit_fs::temp::TempResourceState;
 #[test]
-fn test_required_non_atomic_temp_persist_retains_cleanup_responsibility() {
+fn test_required_non_atomic_temp_persist_does_not_assume_source_ownership() {
     let (filesystem, cleanup_calls, _) = crate::handle_support::implementation_tests::filesystem(false, Vec::new());
     let mut temporary = filesystem
         .create_temp_file(TempOptions::default())
@@ -29,13 +29,30 @@ fn test_required_non_atomic_temp_persist_retains_cleanup_responsibility() {
         )
         .expect_err("non-atomic result must violate required contract");
     assert_eq!(FsErrorKind::ProviderContractViolation, error.error().kind());
-    assert_eq!(TempResourceState::CleanupRequired, temporary.state());
+    assert_eq!(PersistFailureState::PublishedSourceIndeterminate, error.state());
+    assert_eq!(TempResourceState::Indeterminate, temporary.state());
     assert_eq!(
         Some(&Path::parse("/target").expect("target")),
         error.publication_target()
     );
-    temporary.cleanup().expect("cleanup should remain available");
-    assert_eq!(1, *cleanup_calls.lock().expect("cleanup lock should succeed"));
+    assert_eq!(Some(&Path::parse("/target").expect("target")), error.error().target());
+    assert_eq!(
+        FsErrorKind::InvalidState,
+        temporary.cleanup().expect_err("source is uncertain").kind()
+    );
+    assert_eq!(
+        PersistFailureState::PublishedSourceIndeterminate,
+        temporary.keep().expect_err("source is uncertain").state()
+    );
+    assert_eq!(
+        PersistFailureState::PublishedSourceIndeterminate,
+        temporary
+            .persist(&Path::parse("/next").expect("target"), PersistOptions::default())
+            .expect_err("source is uncertain")
+            .state()
+    );
+    drop(temporary);
+    assert_eq!(0, *cleanup_calls.lock().expect("cleanup lock should succeed"));
 }
 
 #[test]

@@ -39,6 +39,12 @@ pub(crate) fn validate_rename_outcome(
     source: &Path,
     target: &Path,
 ) -> Option<RenameOutcomeValidationError> {
+    if outcome.source() != source || outcome.target() != target {
+        return Some(RenameOutcomeValidationError {
+            message: "provider returned a rename outcome with different identities",
+            state: RenameFailureState::Indeterminate,
+        });
+    }
     if options.atomicity() == AtomicityRequirement::Required && outcome.atomicity() != AchievedAtomicity::Atomic {
         return Some(RenameOutcomeValidationError {
             message: "provider reported non-atomic success for an atomic-required rename",
@@ -55,12 +61,6 @@ pub(crate) fn validate_rename_outcome(
         return Some(RenameOutcomeValidationError {
             message: "provider reported non-durable success for a durability-required rename",
             state: RenameFailureState::Renamed,
-        });
-    }
-    if outcome.source() != source || outcome.target() != target {
-        return Some(RenameOutcomeValidationError {
-            message: "provider returned a rename outcome with different identities",
-            state: RenameFailureState::Indeterminate,
         });
     }
     None

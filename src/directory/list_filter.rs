@@ -20,6 +20,10 @@
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ListFilter {
     /// Select a path and its descendants using component boundaries.
+    ///
+    /// This filter defines the selected subtree independently of the
+    /// `recursive` option. `max_depth` can cap returned descendant depth
+    /// relative to the requested list root.
     Subtree(String),
     /// Select keys by their raw string prefix.
     LiteralPrefix(String),

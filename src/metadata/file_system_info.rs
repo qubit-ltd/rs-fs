@@ -9,6 +9,9 @@
 
 use std::fmt::Display;
 
+use crate::error::FsError;
+use crate::error::FsErrorKind;
+use crate::error::FsOperation;
 use crate::error::FsResult;
 use crate::metadata::FileSystemId;
 use crate::metadata::NonSensitiveMetadata;
@@ -67,6 +70,16 @@ impl FileSystemInfo {
     ///
     /// Returns an invalid-URI error when `scheme` is not a valid URI scheme.
     pub fn with_scheme(mut self, scheme: &str) -> FsResult<Self> {
+        let mut characters = scheme.bytes();
+        let valid = characters.next().is_some_and(|first| first.is_ascii_alphabetic())
+            && characters.all(|next| next.is_ascii_alphanumeric() || matches!(next, b'+' | b'-' | b'.'));
+        if !valid {
+            return Err(FsError::new(
+                FsErrorKind::InvalidUri,
+                FsOperation::ParseUri,
+                "invalid URI scheme",
+            ));
+        }
         let scheme = Uri::parse(&format!("{scheme}:/"))?.scheme().to_owned();
         if !self.schemes.contains(&scheme) {
             self.schemes.push(scheme);

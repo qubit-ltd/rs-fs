@@ -6,6 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
 use qubit_fs::metadata::FileSystemId;
 use qubit_fs::metadata::FileSystemInfo;
 use qubit_fs::metadata::UserMetadata;
@@ -43,6 +45,42 @@ fn test_file_system_info_deduplicates_schemes_and_replaces_provider_metadata() {
     assert_eq!(&["mock"], info.schemes());
     assert!(info.provider_metadata().is_empty());
     assert!(info.clone().with_scheme("1invalid").is_err());
+}
+
+#[test]
+fn test_with_scheme_rejects_uri_and_path_input() {
+    for scheme in [
+        "",
+        "1file",
+        "file:/suffix",
+        "file://host",
+        "file/path",
+        " file",
+        "fíle",
+        "file?query",
+        "file#fragment",
+    ] {
+        let error = FileSystemInfo::new(
+            FileSystemId::new("scheme-test").expect("valid filesystem identity"),
+            "mock",
+            PathSemantics::Hierarchical,
+        )
+        .with_scheme(scheme)
+        .expect_err("only a complete URI scheme should be accepted");
+        assert_eq!(FsErrorKind::InvalidUri, error.kind(), "input: {scheme:?}");
+        assert_eq!(FsOperation::ParseUri, error.operation(), "input: {scheme:?}");
+    }
+
+    let info = FileSystemInfo::new(
+        FileSystemId::new("scheme-valid-test").expect("valid filesystem identity"),
+        "mock",
+        PathSemantics::Hierarchical,
+    )
+    .with_scheme("A+B.C-D")
+    .expect("valid URI scheme should be accepted")
+    .with_scheme("a+b.c-d")
+    .expect("duplicate scheme should be accepted");
+    assert_eq!(&["a+b.c-d"], info.schemes());
 }
 
 #[test]

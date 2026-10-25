@@ -225,11 +225,15 @@ impl<'a> CopyOperation<'a> {
                     && is_unchanged_open_failure(error.error())
                     && self.options.conflict() == CopyConflictPolicy::Skip =>
             {
+                let stats = CopyStats {
+                    skipped: 1,
+                    ..CopyStats::default()
+                };
+                if let Some(error) = self.deadline_error() {
+                    return Err(self.failure(error, CopyFailureState::Unchanged, stats, None));
+                }
                 return Ok(CopyOutcome::streamed_fallback(
-                    CopyStats {
-                        skipped: 1,
-                        ..CopyStats::default()
-                    },
+                    stats,
                     AchievedAtomicity::NonAtomic,
                     false,
                 ));
@@ -361,11 +365,15 @@ impl<'a> CopyOperation<'a> {
                             Some(writer),
                         ));
                     }
+                    let stats = CopyStats {
+                        skipped: 1,
+                        ..CopyStats::default()
+                    };
+                    if let Some(error) = self.deadline_error() {
+                        return Err(self.failure(error, from_writer_state(writer.state()), stats, None));
+                    }
                     return Ok(CopyOutcome::streamed_fallback(
-                        CopyStats {
-                            skipped: 1,
-                            ..CopyStats::default()
-                        },
+                        stats,
                         AchievedAtomicity::NonAtomic,
                         false,
                     ));
@@ -382,12 +390,12 @@ impl<'a> CopyOperation<'a> {
             return Err(self.failure(
                 error,
                 CopyFailureState::Published,
-                StreamCopyPlan::completed_stats(bytes),
+                StreamCopyPlan::completed_stats(metadata.kind(), bytes),
                 None,
             ));
         }
         Ok(CopyOutcome::streamed_fallback(
-            StreamCopyPlan::completed_stats(bytes),
+            StreamCopyPlan::completed_stats(metadata.kind(), bytes),
             write_outcome.atomicity(),
             write_outcome.durable(),
         ))

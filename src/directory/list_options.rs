@@ -44,6 +44,10 @@ use crate::path::RelativePath;
 #[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct ListOptions {
     /// Whether listing should recurse into child containers.
+    ///
+    /// Without a filter, `false` limits traversal to immediate children. A
+    /// [`ListFilter::Subtree`] still selects that subtree and its descendants;
+    /// `max_depth` controls how far below the list root results may extend.
     recursive: bool,
     /// Optional symbolic-link policy overriding the filesystem default.
     symlink_policy: Option<SymlinkPolicy>,
@@ -53,10 +57,10 @@ pub struct ListOptions {
     page_size: Option<usize>,
     /// Optional lexical prefix filter relative to the requested list root.
     ///
-    /// The filter uses canonical `/`-separated relative paths. For example,
-    /// listing `/root` with `prefix: Some("nested/item")` matches
-    /// `/root/nested/item`, while `prefix: Some("item")` only matches an
-    /// immediate child named `item`.
+    /// [`ListFilter::Subtree`] uses canonical `/`-separated relative paths.
+    /// Listing `/root` with `Subtree("nested")` selects `/root/nested` and
+    /// its descendants, including deeper entries when `recursive` is false.
+    /// `max_depth` can limit the returned descendant depth relative to `/root`.
     filter: Option<ListFilter>,
     /// Maximum returned descendant depth relative to the list root.
     max_depth: Option<usize>,
@@ -78,6 +82,10 @@ impl ListOptions {
     }
 
     /// Returns whether traversal recurses into child containers.
+    ///
+    /// When a subtree filter is present, the filter still selects its
+    /// descendants; `max_depth` bounds their depth. Without a filter,
+    /// `false` selects immediate children only.
     #[inline]
     #[must_use]
     pub const fn recursive(&self) -> bool {
@@ -110,7 +118,7 @@ impl ListOptions {
         self.page_size
     }
 
-    /// Returns the optional lexical prefix.
+    /// Returns the optional subtree prefix set through the legacy prefix API.
     ///
     /// # Returns
     /// `Some` with the configured subtree prefix, or `None` when no subtree
@@ -206,10 +214,11 @@ impl ListOptions {
         self
     }
 
-    /// Returns a copy with the lexical prefix replaced.
+    /// Returns a copy with the subtree prefix replaced through the legacy API.
     ///
     /// # Parameters
-    /// - `prefix`: Subtree prefix to select, or `None` to clear the filter.
+    /// - `prefix`: Relative subtree path to select, or `None` to clear the
+    ///   filter.
     #[inline]
     #[must_use]
     pub fn with_prefix(mut self, prefix: Option<String>) -> Self {

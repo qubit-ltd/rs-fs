@@ -102,7 +102,10 @@ impl RejectedAsyncWriter {
     /// A failed attempt retains the session for explicit retry or
     /// reconciliation. No work occurs until polled. Dropping a polled,
     /// unfinished future records Indeterminate; dropping an unpolled future
-    /// leaves the state unchanged.
+    /// leaves the state unchanged. Cleanup completion is independent of
+    /// destination publication certainty:
+    /// `Ok(WriteAbortOutcome::Indeterminate)` confirms cleanup while
+    /// leaving the destination state unknown.
     ///
     /// # Errors
     /// Returns InvalidState after confirmed cleanup, or the contextual provider
@@ -118,10 +121,7 @@ impl RejectedAsyncWriter {
             }
             let mut guard = RecoveryCleanupGuard::start(&mut self.state);
             let result = self.session.as_mut().abort_async().await;
-            guard.finish(matches!(
-                &result,
-                Ok(WriteAbortOutcome::NotPublished | WriteAbortOutcome::Published)
-            ));
+            guard.finish(result.is_ok());
             drop(guard);
             result.map_err(|error| self.contextual_error(error))
         })

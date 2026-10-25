@@ -106,12 +106,13 @@ impl<'a> StreamCopyPlan<'a> {
         Ok(next)
     }
 
-    /// Returns the fallback statistics for a completed regular-file copy.
+    /// Returns the fallback statistics for a completed file or object copy.
     #[inline]
     #[must_use]
-    pub(crate) fn completed_stats(bytes: u64) -> CopyStats {
+    pub(crate) fn completed_stats(source_kind: &FileKind, bytes: u64) -> CopyStats {
         CopyStats {
-            files: 1,
+            files: u64::from(source_kind == &FileKind::File),
+            objects: u64::from(source_kind == &FileKind::Object),
             bytes,
             ..CopyStats::default()
         }
@@ -169,7 +170,7 @@ mod tests {
                 .is_ok()
         );
         assert_eq!(default_plan.next_bytes(2, 3).unwrap(), 5);
-        assert_eq!(StreamCopyPlan::completed_stats(5).bytes, 5);
+        assert_eq!(StreamCopyPlan::completed_stats(&FileKind::File, 5).bytes, 5);
         assert!(!default_plan.may_skip_conflict(CopyFailureState::Unchanged));
         let _ = default_plan.writer_options();
     }

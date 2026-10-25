@@ -5,9 +5,12 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Publication certainty after writer cancellation.
+//! Destination publication certainty after writer cleanup.
 
-/// Provider-confirmed destination state after writer cleanup completes.
+/// Provider-confirmed destination publication state after writer cleanup
+/// completes. Every successful outcome confirms cleanup; `Indeterminate`
+/// means only that the destination publication state is unknown. A provider
+/// that cannot confirm cleanup must return an error instead.
 ///
 /// # Examples
 ///

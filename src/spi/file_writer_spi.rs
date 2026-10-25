@@ -38,10 +38,13 @@ pub trait FileWriterSpi: ByteOutput + Send {
     /// does not complete successfully.
     fn commit(&mut self) -> Result<WriteOutcome, SpiWriteFailure>;
 
-    /// Releases provider staging resources.
+    /// Releases provider staging resources. Returning `Ok` confirms cleanup
+    /// completed, regardless of whether destination publication is known.
     ///
     /// # Returns
-    /// The provider-confirmed destination state after cleanup.
+    /// The provider-confirmed destination publication state after cleanup.
+    /// `Indeterminate` leaves publication unknown while still confirming
+    /// cleanup; return `Err` when cleanup itself cannot be confirmed.
     ///
     /// # Errors
     /// Returns the provider cleanup failure with filesystem context.

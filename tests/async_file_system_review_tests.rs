@@ -105,17 +105,20 @@ fn path(value: &str) -> Path {
 /// publication semantics and preserves the provider operation order.
 #[test]
 fn test_async_write_all_publishes_complete_bytes() {
+    let payload = b"non-repeating async payload".to_vec();
     let config = AsyncRecordingConfig {
         writer_atomicity: Some(AchievedAtomicity::Atomic),
+        writer_chunk: Some(2),
         ..AsyncRecordingConfig::default()
     };
     let (filesystem, probe) = async_recording_file_system(config);
     let mut operation = filesystem
-        .begin_write_all(path("/async-write-all"), b"bytes".to_vec(), WriteOptions::default())
+        .begin_write_all(path("/async-write-all"), payload.clone(), WriteOptions::default())
         .expect("write preflight should succeed");
     let outcome = ready(operation.execute()).expect("async write-all should commit");
     assert_eq!(AchievedAtomicity::Atomic, outcome.atomicity());
     assert_eq!(vec!["open_writer"], probe.calls(),);
+    assert_eq!(payload, probe.written_bytes());
 }
 
 #[test]

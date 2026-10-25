@@ -14,6 +14,7 @@ use crate::copy::CopyFailureState;
 use crate::copy::CopyOutcome;
 use crate::copy::CopyStats;
 use crate::copy::internal::CopyRecoverySnapshot;
+use crate::copy::internal::from_completed_stats;
 use crate::write::AsyncWriterRecovery;
 
 /// Marks a polled operation indeterminate if cancellation interrupts provider
@@ -72,7 +73,7 @@ impl<'a> CopyCancellationGuard<'a> {
     pub(in crate::copy) fn finish(&mut self, result: &Result<CopyOutcome, AsyncCopyFailure>) {
         *self.state = match result {
             Ok(outcome) => {
-                self.recovery.state = CopyFailureState::Published;
+                self.recovery.state = from_completed_stats(outcome.stats());
                 self.recovery.stats = *outcome.stats();
                 AsyncCopyOperationState::Completed
             }

@@ -20,6 +20,7 @@ use qubit_fs::copy::AsyncCopyOperationState;
 use qubit_fs::copy::CopyConflictPolicy;
 use qubit_fs::copy::CopyFailureState;
 use qubit_fs::copy::CopyOptions;
+use qubit_fs::copy::CopyStats;
 use qubit_fs::copy::MetadataPreservePolicy;
 use qubit_fs::copy::ServerSidePreference;
 use qubit_fs::error::FsErrorKind;
@@ -29,6 +30,7 @@ use qubit_fs::metadata::DurabilityRequirement;
 use qubit_fs::metadata::FileSystemCapability;
 use qubit_fs::metadata::SymlinkPolicy;
 use qubit_fs::write::AsyncWriterRecovery;
+use qubit_fs::write::WriteAbortOutcome;
 use qubit_fs::write::WriteFailureState;
 use qubit_fs::write::WriterState;
 
@@ -41,6 +43,18 @@ use crate::poll_support::ready;
 /// Returns a stable absolute path for copy scenarios.
 fn path(value: &str) -> Path {
     Path::parse(value).expect("test path should parse")
+}
+
+/// Repolls a deterministic test future when its provider intentionally yields.
+fn ready_repoll<F: Future>(future: F) -> F::Output {
+    let mut future = Box::pin(future);
+    let mut context = Context::from_waker(Waker::noop());
+    for _ in 0..100_000 {
+        if let Poll::Ready(output) = future.as_mut().poll(&mut context) {
+            return output;
+        }
+    }
+    panic!("deterministic test future did not become ready");
 }
 
 /// Polls until the configured provider stage suspends, then lets the deadline
@@ -109,6 +123,131 @@ fn test_async_copy_deadline_after_commit_reports_published() {
         operation.state(),
         AsyncCopyOperationState::Failed(CopyFailureState::Published)
     );
+}
+
+#[test]
+fn test_async_copy_skip_deadline_is_checked_after_open_and_abort() {
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
+        omitted_capability: Some(FileSystemCapability::Copy),
+        writer_open_error: Some(FsErrorKind::AlreadyExists),
+        writer_open_effect: Some(qubit_fs::error::FsEffectState::Unchanged),
+        yield_once_stage: Some(AsyncCopyStage::OpenWriter),
+        ..AsyncRecordingConfig::default()
+    });
+    let mut operation = file_system
+        .begin_copy(
+            path("/source"),
+            path("/target"),
+            CopyOptions::default()
+                .with_conflict(CopyConflictPolicy::Skip)
+                .with_deadline(Some(Duration::from_millis(100))),
+        )
+        .expect("copy preflight");
+
+    let failure = expire_at_pending_stage(&mut operation);
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
+    assert_eq!(CopyFailureState::Unchanged, failure.state());
+    assert_eq!(1, failure.partial_stats().skipped);
+    assert!(!operation.has_recovery());
+
+    for abort_outcome in [WriteAbortOutcome::Published, WriteAbortOutcome::Indeterminate] {
+        let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
+            decline_copy: true,
+            writer_commit_failure: Some(WriteFailureState::RetryableNotPublished),
+            writer_commit_error: Some(FsErrorKind::AlreadyExists),
+            writer_abort_outcome: Some(abort_outcome),
+            yield_once_stage: Some(AsyncCopyStage::WriterCommit),
+            ..AsyncRecordingConfig::default()
+        });
+        let mut operation = file_system
+            .begin_copy(
+                path("/source"),
+                path("/target"),
+                CopyOptions::default()
+                    .with_conflict(CopyConflictPolicy::Skip)
+                    .with_deadline(Some(Duration::from_millis(100))),
+            )
+            .expect("copy preflight");
+        let failure = expire_at_pending_stage(&mut operation);
+        assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
+        assert_eq!(
+            if abort_outcome == WriteAbortOutcome::Published {
+                CopyFailureState::Published
+            } else {
+                CopyFailureState::Indeterminate
+            },
+            failure.state()
+        );
+        assert_eq!(1, failure.partial_stats().skipped);
+        assert!(!operation.has_recovery());
+    }
+}
+
+#[test]
+fn test_async_copy_repeated_completed_snapshot_uses_validated_statistics() {
+    for (stats, options, expected_state) in [
+        (
+            CopyStats {
+                skipped: 1,
+                ..CopyStats::default()
+            },
+            CopyOptions::default().with_conflict(CopyConflictPolicy::Skip),
+            CopyFailureState::Unchanged,
+        ),
+        (
+            CopyStats {
+                files: 1,
+                failed: 1,
+                ..CopyStats::default()
+            },
+            CopyOptions::default().with_continue_on_error(true),
+            CopyFailureState::PartiallyPublished,
+        ),
+    ] {
+        let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig {
+            completed_copy: Some(AchievedAtomicity::Atomic),
+            native_copy_stats: Some(stats),
+            ..AsyncRecordingConfig::default()
+        });
+        let mut operation = file_system
+            .begin_copy(path("/source"), path("/target"), options)
+            .expect("preflight should succeed");
+        let outcome = ready(operation.execute()).expect("configured copy should complete");
+        let repeated = ready(operation.execute()).expect_err("completed operation cannot execute again");
+
+        assert_eq!(FsErrorKind::InvalidState, repeated.error().kind());
+        assert_eq!(expected_state, repeated.state());
+        assert_eq!(stats, *repeated.partial_stats());
+        assert_eq!(stats, *outcome.stats());
+        assert_eq!(AsyncCopyOperationState::Completed, operation.state());
+        assert_eq!(vec!["try_copy"], probe.calls());
+    }
+}
+
+#[test]
+fn test_async_stream_fallback_counts_file_and_object_sources() {
+    let bytes = (0..20_000).map(|index| (index % 251) as u8).collect::<Vec<_>>();
+    for (kind, expected_files, expected_objects) in [
+        (qubit_fs::metadata::FileKind::File, 1, 0),
+        (qubit_fs::metadata::FileKind::Object, 0, 1),
+    ] {
+        let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig {
+            decline_copy: true,
+            stat_kind: Some(kind),
+            reader_bytes: Some(bytes.clone()),
+            writer_chunk: Some(2),
+            ..AsyncRecordingConfig::default()
+        });
+        let mut operation = file_system
+            .begin_copy(path("/source"), path("/target"), CopyOptions::default())
+            .expect("preflight should succeed");
+        let outcome = ready_repoll(operation.execute()).expect("stream fallback should complete");
+
+        assert_eq!(expected_files, outcome.stats().files);
+        assert_eq!(expected_objects, outcome.stats().objects);
+        assert_eq!(bytes.len() as u64, outcome.stats().bytes);
+        assert_eq!(bytes, probe.written_bytes());
+    }
 }
 
 /// Covers every failed streamed I/O stage while retaining the recovery writer.
@@ -623,7 +762,7 @@ fn test_async_repeated_native_failure_replays_snapshot_without_provider_retry() 
 }
 
 #[test]
-fn test_async_repeated_completed_copy_replays_published_snapshot_without_provider_retry() {
+fn test_async_repeated_completed_copy_replays_indeterminate_snapshot_without_provider_retry() {
     let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig {
         completed_copy: Some(AchievedAtomicity::Atomic),
         ..AsyncRecordingConfig::default()
@@ -637,7 +776,7 @@ fn test_async_repeated_completed_copy_replays_published_snapshot_without_provide
     let repeated = ready(operation.execute()).expect_err("a completed operation cannot execute again");
 
     assert_eq!(FsErrorKind::InvalidState, repeated.error().kind());
-    assert_eq!(CopyFailureState::Published, repeated.state());
+    assert_eq!(CopyFailureState::Indeterminate, repeated.state());
     assert_eq!(stats, *repeated.partial_stats());
     assert_eq!(AsyncCopyOperationState::Completed, operation.state());
     assert_eq!(vec!["try_copy"], probe.calls());

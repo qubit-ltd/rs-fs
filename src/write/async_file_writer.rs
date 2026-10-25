@@ -142,7 +142,10 @@ impl AsyncFileWriter {
     /// state to [`WriterState::Indeterminate`]. Once the returned future has
     /// been polled, dropping it before completion also makes the writer
     /// indeterminate because publication may already have started. Dropping an
-    /// unpolled future leaves the writer open.
+    /// unpolled future leaves the writer open. Only a failure in
+    /// [`WriteFailureState::RetryableNotPublished`] leaves the writer open for
+    /// another explicit commit attempt. [`WriteFailureState::NotPublished`]
+    /// allows only a valid abort; it does not make commit retryable.
     ///
     /// # Returns
     /// A future resolving to the actual publication outcome.
@@ -240,7 +243,8 @@ impl AsyncFileWriter {
     ///
     /// # Returns
     /// A future resolving to the provider-confirmed destination publication
-    /// state after cleanup.
+    /// state after cleanup. Every `Ok` confirms cleanup;
+    /// `Indeterminate` means only that destination publication is unknown.
     ///
     /// # Errors
     /// The future returns an [`FsError`] when provider cleanup fails. The error

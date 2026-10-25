@@ -224,6 +224,8 @@ impl FileWriter {
     ///
     /// Abort is allowed while open and after every failed commit. Successful
     /// cleanup does not imply that an already-published target was rolled back.
+    /// Every `Ok` outcome confirms cleanup; `Indeterminate` means only that the
+    /// destination publication state remains unknown.
     /// An indeterminate abort disables automatic drop cleanup so the caller can
     /// inspect provider state before choosing a recovery action.
     ///

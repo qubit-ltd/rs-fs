@@ -159,7 +159,7 @@ impl TempDirectory {
                     && outcome.atomicity() != AchievedAtomicity::Atomic
                 {
                     self.lifecycle.record_failure(
-                        PersistFailureState::PublishedSourceRetained,
+                        PersistFailureState::PublishedSourceIndeterminate,
                         Some(target.clone()),
                         false,
                     );
@@ -171,7 +171,7 @@ impl TempDirectory {
                         )
                         .with_path(self.path.clone())
                         .with_target(target.clone()),
-                        PersistFailureState::PublishedSourceRetained,
+                        PersistFailureState::PublishedSourceIndeterminate,
                     )
                     .with_publication_target(self.lifecycle.publication_target()));
                 }
