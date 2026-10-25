@@ -84,6 +84,12 @@ it is rejected for hierarchical filesystems, whose root is `ListScope::Path(Path
 `Path` still rejects empty strings. Namespace does not permit access beyond the
 configured filesystem, and cannot be used to open, stat, or write a resource.
 
+For a hierarchical listing rooted at `/root`, `ListFilter::Subtree("nested")`
+selects `/root/nested` and its descendants, including a deeper entry such as
+`/root/nested/child/report.txt`, even when `recursive` is false. Without a
+filter, `recursive = false` limits results to immediate children; `max_depth`
+limits descendant depth relative to `/root`.
+
 For flat keys, `LiteralPrefix` is relative to the selected scope. A root `folder/`
 and filter `a` match `folder/a` and `folder/ab`. A root `folder` also matches
 `folderish`; no separator is inserted and no key text is normalized. Namespace
@@ -125,8 +131,8 @@ use qubit_fs::Path;
 use qubit_fs::copy::CopyExecutionRoute;
 use qubit_fs::copy::CopyOptions;
 use qubit_fs::directory::ListScope;
-use qubit_fs::read::ReadOptions;
 use qubit_fs::read::PrefixReadTermination;
+use qubit_fs::read::ReadOptions;
 use qubit_fs::write::WriteOptions;
 use qubit_fs_local::LocalFileSystems;
 use qubit_fs_local::LocalResourcePolicy;
@@ -189,13 +195,24 @@ use qubit_fs::copy::CopyOutcome;
 use qubit_fs::error::FsError;
 use qubit_fs::write::WriterRecovery;
 
+/// Retains a copy failure and any error from aborting its writer.
 #[derive(Debug)]
 pub struct CopyRecovery {
+    /// The copy failure, including its publication and recovery state.
     pub failure: CopyFailure,
+    /// An error returned while aborting the retained writer, if any.
     pub cleanup_error: Option<FsError>,
 }
 
-pub fn copy_report(filesystem: &FileSystem, source: &Path, target: &Path) -> Result<CopyOutcome, CopyRecovery> {
+/// Copies a file and retains recovery details when the operation fails.
+///
+/// If a writer remains available after failure, this function attempts to
+/// abort it. Aborting does not guarantee that the target was rolled back.
+pub fn copy_report(
+    filesystem: &FileSystem,
+    source: &Path,
+    target: &Path,
+) -> Result<CopyOutcome, CopyRecovery> {
     match filesystem.copy(source, target, CopyOptions::default()) {
         Ok(outcome) => Ok(outcome),
         Err(mut failure) => {
@@ -252,23 +269,38 @@ use qubit_fs::directory::ListScope;
 use qubit_fs::error::FsError;
 use qubit_fs::metadata::WriteOutcome;
 use qubit_fs::write::AsyncWriteAllOperation;
-use qubit_fs::write::AsyncWriterRecovery;
 use qubit_fs::write::AsyncWriteAllOperationFailure;
+use qubit_fs::write::AsyncWriterRecovery;
 use qubit_fs::write::WriteOptions;
 
+/// Retains an asynchronous write operation when cleanup cannot finish.
+///
+/// This guide type keeps the original operation, primary failure, and cleanup
+/// failure together so callers can reconcile publication state before retrying.
 #[derive(Debug)]
 pub struct WriteRecovery {
+    /// The operation containing the write's publication and recovery state.
     pub operation: AsyncWriteAllOperation,
+    /// The failure that triggered recovery, or `None` when cancellation did.
     pub primary: Option<AsyncWriteAllOperationFailure>,
+    /// An error returned while aborting a retained writer, if any.
     pub cleanup_error: Option<FsError>,
 }
 
+/// Describes whether report writing failed before execution or needs recovery.
 #[derive(Debug)]
 pub enum WriteReportError {
+    /// The operation could not be prepared before asynchronous execution.
     Preflight(AsyncWriteAllOperationFailure),
+    /// The operation and any cleanup failure needed for reconciliation.
     Recovery(Box<WriteRecovery>),
 }
 
+/// Writes report bytes and retains ambiguous outcomes for caller reconciliation.
+///
+/// Cancellation applies only to execution. Once execution completes or is
+/// cancelled, any retained writer is aborted, and the operation state is
+/// returned when the result cannot safely be treated as published.
 pub async fn write_report(
     filesystem: &AsyncFileSystem,
     path: Path,
@@ -313,7 +345,11 @@ pub async fn write_report(
     })))
 }
 
-/// Lists report keys across a configured flat namespace with a bounded result set.
+/// Lists report keys across a configured flat namespace with a bounded result
+/// set.
+///
+/// This guide example uses a literal prefix and caps the returned entries to
+/// keep listing work bounded.
 pub async fn list_reports(filesystem: &AsyncFileSystem) -> Result<Vec<Path>, FsError> {
     let scope = ListScope::Namespace;
     let options = ListOptions::object_keys()
@@ -421,7 +457,8 @@ an ordinary `FsError` would lose recovery responsibility and is not provided.
 Cleanup errors and polled-future cancellation retain the session and record
 `RecoveryCleanupState::Indeterminate`; an unpolled cleanup future changes nothing.
 A confirmed cleanup records `Completed`; another cleanup returns `InvalidState`
-without provider I/O. An indeterminate abort is not confirmation. Dropping a
+without provider I/O. Every successful abort confirms cleanup; `Indeterminate`
+only leaves target publication unknown. Dropping a
 rejected handle does not initiate cleanup or `cancel_on_drop`. Cleanup uses the
 session's actual ownership, not an unvalidated diagnostic path. Public cleanup
 context contains only the configured provider and known request path; a temporary
@@ -434,6 +471,9 @@ Use `recovery`, `recovery_mut` where available, and `take_recovery` instead of t
 removed writer-only accessors. Synchronous `WriteAllFailure::state()` and
 `written_bytes()` capture immutable failure facts, including short writes and
 exact commit states; abort or transferring recovery never changes those facts.
+Only `RetryableNotPublished` leaves an asynchronous writer open for another
+explicit commit attempt. `NotPublished` is terminal and permits only a valid
+abort; `Published` must not be resent, and `Indeterminate` requires reconciliation.
 The failure's `into_parts` returns error, state, confirmed bytes, and recovery.
 A copy collision during opening can count as Skip only when the provider failed with proven
 unchanged effects and no rejected session. Invalid opened identities remain

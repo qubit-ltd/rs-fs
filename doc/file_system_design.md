@@ -122,7 +122,10 @@ including `RetryableNotPublished`, `NotPublished`, `Published`, or
 `Indeterminate`. Copy additionally models partial publication. A known published
 result remains published when later guarantee checking or cleanup fails.
 Neither the absence of a writer nor successful cleanup proves no target effect.
-No write/copy failure triggers an implicit retry.
+Only `RetryableNotPublished` permits an explicit repeat commit; `NotPublished`
+is terminal and allows only a valid abort. `Published` must not be resent, and
+`Indeterminate` requires reconciliation. No write/copy failure triggers an
+implicit retry.
 
 ## Owning asynchronous whole-file writes
 
@@ -172,11 +175,17 @@ Copy deadlines are cooperative cumulative budgets starting at operation
 construction. Checks surround provider work and stream stages. They do not
 interrupt an arbitrary pending provider future. Provider errors stay primary;
 timeout after confirmed publication preserves publication and successful stats.
+An expired deadline after an eligible Skip returns the deadline error with the
+skipped count and known publication state retained; callers must not interpret
+that error as a completed copy.
 
 Directory streams are incremental and can fail after earlier entries. They are
 not snapshots. `Subtree` preserves hierarchical boundaries. `LiteralPrefix`
 compares raw object-key text relative to `ListScope::Path`, or complete logical
 keys for `ListScope::Namespace`; it does not decode or normalize keys. List/copy symlink overrides remain scoped to each operation.
+For hierarchical paths, `Subtree` selects the named path and its descendants;
+`recursive = false` does not remove that filter scope, while `max_depth` bounds
+returned descendant depth from the list root.
 
 Atomicity and durability are independent. `WriteOutcome`, `RenameOutcome`,
 and `CopyOutcome` expose durability facts alongside applicable atomicity,
@@ -282,7 +291,8 @@ an ordinary `FsError` would lose recovery responsibility and is not provided.
 Cleanup errors and polled-future cancellation retain the session and record
 `RecoveryCleanupState::Indeterminate`; an unpolled cleanup future changes nothing.
 A confirmed cleanup records `Completed`; another cleanup returns `InvalidState`
-without provider I/O. An indeterminate abort is not confirmation. Dropping a
+without provider I/O. Every successful abort confirms cleanup; `Indeterminate`
+only means target publication remains unknown. Dropping a
 rejected handle does not initiate cleanup or `cancel_on_drop`. Cleanup uses the
 session's actual ownership, not an unvalidated diagnostic path. Public cleanup
 context contains only the configured provider and known request path; a temporary

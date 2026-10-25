@@ -97,9 +97,10 @@ I/O，因此标记 unchanged。适配器可以注记纯路径／选项转换失�
 原生 I/O。
 
 该规则仅用于打开阶段。提交继续保留 `RetryableNotPublished`、`NotPublished`、`Published`
-或 `Indeterminate` 等阶段状态；copy 还可表示部分发布。后续保证校验或清理失败，不能抹去
-已确认的发布。没有 writer 或清理成功均不能证明目标没有副作用。write/copy 失败不会触发
-隐式重试。
+或 `Indeterminate` 等阶段状态；copy 还可表示部分发布。只有 `RetryableNotPublished` 才允许
+显式再次提交；`NotPublished` 是终态，只允许合法 abort。`Published` 不应重发，
+`Indeterminate` 需要核查。后续保证校验或清理失败，不能抹去已确认的发布。没有 writer 或
+清理成功均不能证明目标没有副作用。write/copy 失败不会触发隐式重试。
 
 ## 拥有请求的异步整文件写入
 
@@ -138,11 +139,14 @@ payload 或 provider session。旧异步 `write_all` 和错误包装已删除；
 
 copy deadline 是从 operation 构造起累计的协作式预算，在提供者调用和流式阶段前后检查。
 它不能打断任意 Pending future。提供者错误仍为主错误；已确认发布后的超时保留发布事实和
-成功统计。
+成功统计。符合 Skip 条件的操作若在成功出口超时，会以错误返回，同时保留 skipped 计数及
+已知发布状态；调用方不能将该错误解释为完成复制。
 
 目录流逐步返回条目，可能在已经处理部分条目后失败，不提供快照保证。`Subtree` 保留层级
 边界；`LiteralPrefix` 相对于 `ListScope::Path` 匹配原始对象键文本，
 对于 `ListScope::Namespace` 则匹配完整逻辑键，不解码或规范化键。
+层级路径的 `Subtree` 选择指定路径及其后代；`recursive = false` 不会取消过滤范围，
+`max_depth` 则按列举根目录限制返回的后代深度。
 list/copy 的符号链接覆盖策略仅对本次操作生效。
 
 原子性与持久性独立。`WriteOutcome`、`RenameOutcome`、`CopyOutcome` 报告实际 durability，
@@ -228,7 +232,7 @@ persist 或原始 session。应用应保留错误，或用 `take_recovery` 接�
 清理失败或已轮询的清理 future 被取消后，会话仍保留，清理状态变为
 `RecoveryCleanupState::Indeterminate`；丢弃未轮询的 future 不改变状态。
 确认清理完成后状态为 `Completed`，再次清理只返回 `InvalidState`，不调用 provider。
-不确定的 abort 结果不算完成确认。隔离句柄的 Drop 不启动清理，也不调用
+任意成功的 abort 都确认清理完成；`Indeterminate` 只表示目标发布状态未知。隔离句柄的 Drop 不启动清理，也不调用
 `cancel_on_drop`。清理必须依据 session 实际拥有的资源，不能依据未校验的诊断路径。
 公开清理错误只使用已配置的 provider 和已知请求路径；没有 parent 的临时请求不伪造路径。
 主失败和清理错误应同时保留。

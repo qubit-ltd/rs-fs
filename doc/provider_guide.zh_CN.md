@@ -66,11 +66,43 @@ use qubit_fs::spi::ProviderProperties;
 use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
 
+/// A minimal synchronous provider that serves a single health resource.
+///
+/// The provider reports `/health` as a two-byte file containing `ok` and
+/// rejects every other path.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_fs::FileSystem;
+/// use qubit_fs::FsResult;
+/// use qubit_fs::Path;
+/// use qubit_fs::read::ReadOptions;
+/// use qubit_fs_documentation_examples::provider_minimal::HealthProvider;
+///
+/// fn main() -> FsResult<()> {
+///     let filesystem = FileSystem::from_spi(HealthProvider::new()?)?;
+///     let body = filesystem.read_all(&Path::parse("/health")?, ReadOptions::default(), 16)?;
+///     assert_eq!(body, b"ok");
+///     Ok(())
+/// }
+/// ```
 pub struct HealthProvider {
+    /// Properties advertised to the filesystem when this provider is mounted.
     properties: ProviderProperties,
 }
 
 impl HealthProvider {
+    /// Creates a provider configured to serve `/health`.
+    ///
+    /// # Returns
+    ///
+    /// A provider with the required stat and reader operations enabled.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the filesystem identity or provider properties are
+    /// invalid.
     pub fn new() -> FsResult<Self> {
         let id = FileSystemId::new("docs-health")?;
         let properties = ProviderProperties::new(
@@ -86,6 +118,21 @@ impl HealthProvider {
         Ok(Self { properties })
     }
 
+    /// Rejects paths other than the single resource served by this provider.
+    ///
+    /// # Parameters
+    ///
+    /// - `path`: The requested logical path.
+    /// - `operation`: The provider operation being attempted.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` for `/health`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `NotFound` error for any path other than `/health`, preserving
+    /// the rejected path and requested operation in the error context.
     fn validate_path(path: &Path, operation: FsOperation) -> FsResult<()> {
         if path.as_str() == "/health" {
             Ok(())
@@ -101,10 +148,28 @@ impl HealthProvider {
 }
 
 impl FileSystemSpi for HealthProvider {
+    /// Returns a clone of the provider properties used when it was created.
+    ///
+    /// # Returns
+    ///
+    /// The immutable provider property snapshot.
     fn properties(&self) -> ProviderProperties {
         self.properties.clone()
     }
 
+    /// Reports `/health` as a two-byte regular file.
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: The validated request containing the path to inspect.
+    ///
+    /// # Returns
+    ///
+    /// Metadata identifying `/health` as a two-byte regular file.
+    ///
+    /// # Errors
+    ///
+    /// Returns `NotFound` when the request targets a path other than `/health`.
     fn stat(&self, request: StatRequest<'_>) -> FsResult<StatResponse> {
         Self::validate_path(request.path(), FsOperation::Stat)?;
         Ok(StatResponse::new(
@@ -113,6 +178,19 @@ impl FileSystemSpi for HealthProvider {
         ))
     }
 
+    /// Opens `/health` as a reader over the bytes `ok`.
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: The validated request containing the path to open.
+    ///
+    /// # Returns
+    ///
+    /// A reader bound to this provider's filesystem identity and `/health`.
+    ///
+    /// # Errors
+    ///
+    /// Returns `NotFound` when the request targets a path other than `/health`.
     fn open_reader(&self, request: OpenReaderRequest<'_>) -> FsResult<OpenedReader> {
         Self::validate_path(request.path(), FsOperation::OpenReader)?;
         Ok(OpenedReader::new(
@@ -122,6 +200,16 @@ impl FileSystemSpi for HealthProvider {
     }
 }
 
+/// Mounts the minimal provider and reads its `/health` resource.
+///
+/// # Returns
+///
+/// Returns the resource bytes, which are `ok` for this provider.
+///
+/// # Errors
+///
+/// Returns an error if provider construction, filesystem mounting, path
+/// parsing, or reading the resource fails.
 pub fn read_health() -> FsResult<Vec<u8>> {
     let filesystem = FileSystem::from_spi(HealthProvider::new()?)?;
     filesystem.read_all(&Path::parse("/health")?, ReadOptions::default(), 16)
@@ -158,6 +246,26 @@ use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
 
 /// Provides metadata for one health resource without selecting a runtime.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_fs::AsyncFileSystem;
+/// use qubit_fs::FsResult;
+/// use qubit_fs::Path;
+/// use qubit_fs_documentation_examples::provider_minimal_async::AsyncHealthProvider;
+///
+/// fn main() -> FsResult<()> {
+///     let future = async {
+///         let filesystem = AsyncFileSystem::from_spi(AsyncHealthProvider::new()?)?;
+///         let metadata = filesystem.stat(&Path::parse("/health")?).await?;
+///         assert_eq!(metadata.len(), Some(2));
+///         Ok::<(), qubit_fs::FsError>(())
+///     };
+///     drop(future);
+///     Ok(())
+/// }
+/// ```
 pub struct AsyncHealthProvider {
     /// Immutable declaration returned at the SPI boundary.
     properties: ProviderProperties,
@@ -167,7 +275,8 @@ impl AsyncHealthProvider {
     /// Creates a provider that advertises only the implemented stat operation.
     ///
     /// # Errors
-    /// Returns an invalid-properties error if the static declaration is invalid.
+    /// Returns an invalid-properties error if the static declaration is
+    /// invalid.
     pub fn new() -> FsResult<Self> {
         let properties = ProviderProperties::new(
             FileSystemInfo::new(
@@ -214,7 +323,8 @@ impl AsyncFileSystemSpi for AsyncHealthProvider {
 /// Queries the health resource through the public asynchronous facade.
 ///
 /// # Errors
-/// Returns a path, provider, or facade-contract error if metadata is unavailable.
+/// Returns a path, provider, or facade-contract error if metadata is
+/// unavailable.
 pub async fn stat_health() -> FsResult<FileMetadata> {
     let filesystem = AsyncFileSystem::from_spi(AsyncHealthProvider::new()?)?;
     filesystem.stat(&Path::parse("/health")?).await
@@ -294,7 +404,7 @@ persist 或原始 session。应用应保留错误，或用 `take_recovery` 接�
 清理失败或已轮询的清理 future 被取消后，会话仍保留，清理状态变为
 `RecoveryCleanupState::Indeterminate`；丢弃未轮询的 future 不改变状态。
 确认清理完成后状态为 `Completed`，再次清理只返回 `InvalidState`，不调用 provider。
-不确定的 abort 结果不算完成确认。隔离句柄的 Drop 不启动清理，也不调用
+任意成功的 abort 都确认清理完成；`Indeterminate` 只表示目标发布状态未知。隔离句柄的 Drop 不启动清理，也不调用
 `cancel_on_drop`。清理必须依据 session 实际拥有的资源，不能依据未校验的诊断路径。
 公开清理错误只使用已配置的 provider 和已知请求路径；没有 parent 的临时请求不伪造路径。
 主失败和清理错误应同时保留。

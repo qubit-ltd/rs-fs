@@ -70,6 +70,11 @@ tempfile = "3"
 应使用 `ListScope::Path(Path::root())`。`Path` 仍拒绝空字符串。Namespace 不会扩大
 配置的文件系统边界，也不能用来打开、查询属性或写入资源。
 
+层级列举以 `/root` 为根、过滤器为 `ListFilter::Subtree("nested")` 时，会选择
+`/root/nested` 及其后代，例如更深的 `/root/nested/child/report.txt`；即使
+`recursive` 为 false，该过滤范围也不会缩窄。无过滤器时，`recursive = false` 只返回
+直接子项；`max_depth` 限制相对 `/root` 的后代深度。
+
 平面键的 `LiteralPrefix` 相对于所选范围匹配。例如根为 `folder/`、过滤器为 `a`
 时匹配 `folder/a` 和 `folder/ab`；根为 `folder` 时还会匹配 `folderish`。
 匹配过程不补分隔符，也不规范化键文本。Namespace 的过滤器匹配完整逻辑键。
@@ -103,8 +108,8 @@ use qubit_fs::Path;
 use qubit_fs::copy::CopyExecutionRoute;
 use qubit_fs::copy::CopyOptions;
 use qubit_fs::directory::ListScope;
-use qubit_fs::read::ReadOptions;
 use qubit_fs::read::PrefixReadTermination;
+use qubit_fs::read::ReadOptions;
 use qubit_fs::write::WriteOptions;
 use qubit_fs_local::LocalFileSystems;
 use qubit_fs_local::LocalResourcePolicy;
@@ -163,13 +168,24 @@ use qubit_fs::copy::CopyOutcome;
 use qubit_fs::error::FsError;
 use qubit_fs::write::WriterRecovery;
 
+/// Retains a copy failure and any error from aborting its writer.
 #[derive(Debug)]
 pub struct CopyRecovery {
+    /// The copy failure, including its publication and recovery state.
     pub failure: CopyFailure,
+    /// An error returned while aborting the retained writer, if any.
     pub cleanup_error: Option<FsError>,
 }
 
-pub fn copy_report(filesystem: &FileSystem, source: &Path, target: &Path) -> Result<CopyOutcome, CopyRecovery> {
+/// Copies a file and retains recovery details when the operation fails.
+///
+/// If a writer remains available after failure, this function attempts to
+/// abort it. Aborting does not guarantee that the target was rolled back.
+pub fn copy_report(
+    filesystem: &FileSystem,
+    source: &Path,
+    target: &Path,
+) -> Result<CopyOutcome, CopyRecovery> {
     match filesystem.copy(source, target, CopyOptions::default()) {
         Ok(outcome) => Ok(outcome),
         Err(mut failure) => {
@@ -220,23 +236,38 @@ use qubit_fs::directory::ListScope;
 use qubit_fs::error::FsError;
 use qubit_fs::metadata::WriteOutcome;
 use qubit_fs::write::AsyncWriteAllOperation;
-use qubit_fs::write::AsyncWriterRecovery;
 use qubit_fs::write::AsyncWriteAllOperationFailure;
+use qubit_fs::write::AsyncWriterRecovery;
 use qubit_fs::write::WriteOptions;
 
+/// Retains an asynchronous write operation when cleanup cannot finish.
+///
+/// This guide type keeps the original operation, primary failure, and cleanup
+/// failure together so callers can reconcile publication state before retrying.
 #[derive(Debug)]
 pub struct WriteRecovery {
+    /// The operation containing the write's publication and recovery state.
     pub operation: AsyncWriteAllOperation,
+    /// The failure that triggered recovery, or `None` when cancellation did.
     pub primary: Option<AsyncWriteAllOperationFailure>,
+    /// An error returned while aborting a retained writer, if any.
     pub cleanup_error: Option<FsError>,
 }
 
+/// Describes whether report writing failed before execution or needs recovery.
 #[derive(Debug)]
 pub enum WriteReportError {
+    /// The operation could not be prepared before asynchronous execution.
     Preflight(AsyncWriteAllOperationFailure),
+    /// The operation and any cleanup failure needed for reconciliation.
     Recovery(Box<WriteRecovery>),
 }
 
+/// Writes report bytes and retains ambiguous outcomes for caller reconciliation.
+///
+/// Cancellation applies only to execution. Once execution completes or is
+/// cancelled, any retained writer is aborted, and the operation state is
+/// returned when the result cannot safely be treated as published.
 pub async fn write_report(
     filesystem: &AsyncFileSystem,
     path: Path,
@@ -281,7 +312,11 @@ pub async fn write_report(
     })))
 }
 
-/// Lists report keys across a configured flat namespace with a bounded result set.
+/// Lists report keys across a configured flat namespace with a bounded result
+/// set.
+///
+/// This guide example uses a literal prefix and caps the returned entries to
+/// keep listing work bounded.
 pub async fn list_reports(filesystem: &AsyncFileSystem) -> Result<Vec<Path>, FsError> {
     let scope = ListScope::Namespace;
     let options = ListOptions::object_keys()
@@ -371,7 +406,7 @@ persist 或原始 session。应用应保留错误，或用 `take_recovery` 接�
 清理失败或已轮询的清理 future 被取消后，会话仍保留，清理状态变为
 `RecoveryCleanupState::Indeterminate`；丢弃未轮询的 future 不改变状态。
 确认清理完成后状态为 `Completed`，再次清理只返回 `InvalidState`，不调用 provider。
-不确定的 abort 结果不算完成确认。隔离句柄的 Drop 不启动清理，也不调用
+任意成功的 abort 都确认清理完成；`Indeterminate` 只表示目标发布状态未知。隔离句柄的 Drop 不启动清理，也不调用
 `cancel_on_drop`。清理必须依据 session 实际拥有的资源，不能依据未校验的诊断路径。
 公开清理错误只使用已配置的 provider 和已知请求路径；没有 parent 的临时请求不伪造路径。
 主失败和清理错误应同时保留。
@@ -383,6 +418,8 @@ persist 或原始 session。应用应保留错误，或用 `take_recovery` 接�
 字节数和确切提交状态；abort 或取走会话都不改写历史。`into_parts` 返回错误、状态、
 已确认字节数和恢复会话。对于打开阶段的 copy 碰撞，只有 provider 打开失败、明确证明无副作用且没有隔离会话
 时，才能把碰撞按 Skip 处理；打开身份违例仍是结果不确定的失败。
+异步 writer 只有在 `RetryableNotPublished` 时才保持打开并允许显式再次提交；
+`NotPublished` 已是终态，只能执行合法 abort。`Published` 不应重发，`Indeterminate` 需要核查。
 
 provider 尚未交回的会话无法由核心接管。打开失败或取消之前在 provider 内部创建的资源，
 仍由 provider 负责保留和回收。
