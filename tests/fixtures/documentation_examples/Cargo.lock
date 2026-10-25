@@ -87,15 +87,6 @@ dependencies = [
 
 [[package]]
 name = "qubit-budget"
-version = "0.7.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac4f70174f2710e72f5b14ad20157c6b31255be0057dee76cf3b55af07708b34"
-dependencies = [
- "thiserror",
-]
-
-[[package]]
-name = "qubit-budget"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "646da5f1103a59c0e0ed63c68f1c69568dac263f9a8da5542b9a55a760b52acb"
@@ -108,9 +99,9 @@ name = "qubit-fs"
 version = "0.3.0"
 dependencies = [
  "fluent-uri",
- "qubit-budget 0.9.1",
+ "qubit-budget",
  "qubit-io",
- "qubit-redact 0.10.0",
+ "qubit-redact",
 ]
 
 [[package]]
@@ -134,7 +125,9 @@ dependencies = [
 
 [[package]]
 name = "qubit-io"
-version = "0.19.0"
+version = "0.19.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68e1ec30447bea2466d46c5149d029b45b8714e1eff690f110ff35b23904b643"
 dependencies = [
  "qubit-utils",
 ]
@@ -145,20 +138,11 @@ version = "0.5.0"
 dependencies = [
  "getrandom",
  "libc",
- "qubit-budget 0.9.1",
+ "qubit-budget",
  "qubit-io",
- "qubit-redact 0.9.0",
+ "qubit-redact",
  "rustix",
  "windows-sys",
-]
-
-[[package]]
-name = "qubit-redact"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "240e7d45b9e8bd72ed7653b02c4fb16ea116b09feeaa07a4aa15a6475da5e2ec"
-dependencies = [
- "qubit-budget 0.7.3",
 ]
 
 [[package]]
@@ -166,7 +150,7 @@ name = "qubit-redact"
 version = "0.10.0"
 dependencies = [
  "fluent-uri",
- "qubit-budget 0.9.1",
+ "qubit-budget",
 ]
 
 [[package]]
@@ -316,7 +300,3 @@ checksum = "ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc"
 dependencies = [
  "windows-link",
 ]
-
-[[patch.unused]]
-name = "qubit-fs-testkit"
-version = "0.8.0"

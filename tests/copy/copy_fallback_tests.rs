@@ -124,6 +124,8 @@ enum CopyResponse {
     DeclinedCommitPublished,
     DeclinedCommitIndeterminate,
     DeclinedCommitAlreadyExists,
+    DeclinedCommitAbortPublished,
+    DeclinedCommitAbortIndeterminate,
 }
 /// Records facade-to-provider calls and stream-fallback bytes.
 struct RecordingSpi {
@@ -435,14 +437,32 @@ impl FileSystemSpi for RecordingSpi {
                     CopyResponse::DeclinedCommitPublished => Some(WriteFailureState::Published),
                     CopyResponse::DeclinedCommitIndeterminate => Some(WriteFailureState::Indeterminate),
                     CopyResponse::DeclinedCommitAlreadyExists => Some(WriteFailureState::RetryableNotPublished),
+                    CopyResponse::DeclinedCommitAbortPublished | CopyResponse::DeclinedCommitAbortIndeterminate => {
+                        Some(WriteFailureState::RetryableNotPublished)
+                    }
                     _ => None,
                 },
-                commit_failure_error: if matches!(self.response, CopyResponse::DeclinedCommitAlreadyExists) {
+                commit_failure_error: if matches!(
+                    self.response,
+                    CopyResponse::DeclinedCommitAlreadyExists
+                        | CopyResponse::DeclinedCommitAbortPublished
+                        | CopyResponse::DeclinedCommitAbortIndeterminate
+                ) {
                     FsErrorKind::AlreadyExists
                 } else {
                     FsErrorKind::Io
                 },
-                commit_delay: matches!(self.response, CopyResponse::DeclinedCommitAlreadyExists),
+                commit_delay: matches!(
+                    self.response,
+                    CopyResponse::DeclinedCommitAlreadyExists
+                        | CopyResponse::DeclinedCommitAbortPublished
+                        | CopyResponse::DeclinedCommitAbortIndeterminate
+                ),
+                abort_outcome: match self.response {
+                    CopyResponse::DeclinedCommitAbortPublished => WriteAbortOutcome::Published,
+                    CopyResponse::DeclinedCommitAbortIndeterminate => WriteAbortOutcome::Indeterminate,
+                    _ => WriteAbortOutcome::NotPublished,
+                },
                 durable: self.writer_durable,
             }),
         ))
@@ -549,7 +569,11 @@ impl FileSystemSpi for RecordingSpi {
             | CopyResponse::DeclinedCommitRetryable
             | CopyResponse::DeclinedCommitPublished
             | CopyResponse::DeclinedCommitIndeterminate
-            | CopyResponse::DeclinedCommitAlreadyExists => Ok(CopyAttempt::Declined(CopyDeclineReason::NotApplicable)),
+            | CopyResponse::DeclinedCommitAlreadyExists
+            | CopyResponse::DeclinedCommitAbortPublished
+            | CopyResponse::DeclinedCommitAbortIndeterminate => {
+                Ok(CopyAttempt::Declined(CopyDeclineReason::NotApplicable))
+            }
             CopyResponse::Failed => Err(SpiCopyFailure::new(
                 FsError::new(FsErrorKind::Io, FsOperation::BeginCopy, "injected"),
                 CopyFailureState::Indeterminate,
@@ -587,6 +611,7 @@ struct RecordingWriter {
     commit_failure_state: Option<WriteFailureState>,
     commit_failure_error: FsErrorKind,
     commit_delay: bool,
+    abort_outcome: WriteAbortOutcome,
     durable: bool,
 }
 
@@ -641,7 +666,7 @@ impl FileWriterSpi for RecordingWriter {
         Ok(WriteOutcome::new(AchievedAtomicity::NonAtomic, PublicationMethod::StreamCopy).with_durable(self.durable))
     }
     fn abort(&mut self) -> FsResult<WriteAbortOutcome> {
-        Ok(WriteAbortOutcome::NotPublished)
+        Ok(self.abort_outcome)
     }
 }
 
@@ -898,6 +923,36 @@ fn test_copy_skip_deadline_is_checked_after_open_and_abort() {
         assert_eq!(1, failure.partial_stats().skipped);
         assert_eq!(
             expected_calls,
+            calls.lock().expect("calls lock should succeed").as_slice()
+        );
+    }
+}
+
+#[test]
+fn test_sync_copy_commit_skip_deadline_preserves_abort_publication_state() {
+    for (response, expected_state) in [
+        (CopyResponse::DeclinedCommitAbortPublished, CopyFailureState::Published),
+        (
+            CopyResponse::DeclinedCommitAbortIndeterminate,
+            CopyFailureState::Indeterminate,
+        ),
+    ] {
+        let (filesystem, calls, _) = recording_filesystem(response);
+        let failure = filesystem
+            .copy(
+                &path("/source"),
+                &path("/target"),
+                CopyOptions::default()
+                    .with_conflict(CopyConflictPolicy::Skip)
+                    .with_deadline(Some(Duration::from_millis(1))),
+            )
+            .expect_err("deadline expires after commit skip abort");
+
+        assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
+        assert_eq!(expected_state, failure.state());
+        assert_eq!(1, failure.partial_stats().skipped);
+        assert_eq!(
+            ["try_copy", "stat", "open_reader", "open_writer"],
             calls.lock().expect("calls lock should succeed").as_slice()
         );
     }

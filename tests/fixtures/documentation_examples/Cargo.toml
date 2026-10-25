@@ -16,11 +16,10 @@ qubit-fs = { path = "../../..", version = "0.3", features = ["async"] }
 
 qubit-fs-local = { path = "../../../../rs-fs-local", version = "0.11" }
 
-qubit-io = { path = "../../../../rs-io", version = "0.19" }
+qubit-io = "0.19"
 
 tempfile = "3"
 
 [patch.crates-io]
 qubit-fs = { path = "../../.." }
 qubit-local-files = { path = "../../../../rs-local-files" }
-qubit-io = { path = "../../../../rs-io" }

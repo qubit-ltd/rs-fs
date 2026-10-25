@@ -9,7 +9,7 @@
 
 /// Identifies the algorithm used to compute a content checksum.
 ///
-/// Use the standard variants when the algorithm is known, or [`Other`] to
+/// Use the standard variants when the algorithm is known, or [`Self::Other`] to
 /// retain a provider-defined algorithm name when it is not represented here.
 ///
 /// # Examples

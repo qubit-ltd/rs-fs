@@ -59,7 +59,8 @@ fn test_temp_directory_persist_marks_resource_persisted() {
 /// merely advertising the capability and returning a non-atomic outcome.
 #[test]
 fn test_temp_directory_non_atomic_required_persist_does_not_assume_source_ownership() {
-    let filesystem = crate::handle_support::implementation_tests::non_atomic_temp_directory_filesystem();
+    let (filesystem, cleanup_calls) =
+        crate::handle_support::implementation_tests::non_atomic_temp_directory_filesystem_with_cleanup_calls();
     let mut directory = filesystem
         .create_temp_directory(TempOptions::default())
         .expect("temporary directory should open");
@@ -92,6 +93,7 @@ fn test_temp_directory_non_atomic_required_persist_does_not_assume_source_owners
             .state()
     );
     drop(directory);
+    assert_eq!(0, *cleanup_calls.lock().expect("cleanup lock should succeed"));
 }
 
 /// Rejects a provider outcome that reports a different persistence target.

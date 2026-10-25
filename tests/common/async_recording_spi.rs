@@ -820,76 +820,6 @@ impl AsyncFileWriteSession for RecordingWriter {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use std::io::Error as IoError;
-    use std::pin::Pin;
-    use std::sync::Arc;
-    use std::sync::Mutex;
-    use std::task::Context;
-    use std::task::Poll;
-    use std::task::Waker;
-
-    use qubit_io::AsyncOutput;
-
-    use super::AsyncCopyStage;
-    use super::AsyncRecordingConfig;
-    use super::RecordingWriter;
-
-    #[test]
-    fn test_recording_writer_records_only_accepted_range() {
-        let written_bytes = Arc::new(Mutex::new(Vec::new()));
-        let mut writer = RecordingWriter {
-            confirmed: 0,
-            flush_yielded: false,
-            config: AsyncRecordingConfig {
-                writer_chunk: Some(2),
-                ..AsyncRecordingConfig::default()
-            },
-            written_bytes: Arc::clone(&written_bytes),
-            cancellations: Arc::new(Mutex::new(0)),
-        };
-        let waker = Waker::noop();
-        let mut context = Context::from_waker(waker);
-        let bytes = b"<payload>";
-        // SAFETY: index 1 and count 7 describe a valid range in `bytes`.
-        let accepted = unsafe { Pin::new(&mut writer).poll_write_unchecked(&mut context, bytes, 1, 7) };
-        assert!(matches!(accepted, Poll::Ready(Ok(2))));
-        assert_eq!(
-            b"pa",
-            written_bytes.lock().expect("probe lock should succeed").as_slice()
-        );
-
-        writer.config = AsyncRecordingConfig {
-            pending_stage: Some(AsyncCopyStage::WriterWrite),
-            writer_progress_before_stop: 2,
-            ..AsyncRecordingConfig::default()
-        };
-        // SAFETY: the same valid range remains available.
-        let pending = unsafe { Pin::new(&mut writer).poll_write_unchecked(&mut context, bytes, 1, 7) };
-        assert!(matches!(pending, Poll::Pending));
-        assert_eq!(
-            b"pa",
-            written_bytes.lock().expect("probe lock should succeed").as_slice()
-        );
-
-        writer.config = AsyncRecordingConfig {
-            failing_stage: Some(AsyncCopyStage::WriterWrite),
-            writer_progress_before_stop: 2,
-            ..AsyncRecordingConfig::default()
-        };
-        // SAFETY: the same valid range remains available.
-        let failed = unsafe { Pin::new(&mut writer).poll_write_unchecked(&mut context, bytes, 1, 7) };
-        assert!(
-            matches!(failed, Poll::Ready(Err(error)) if error.kind() == IoError::other("injected write failure").kind())
-        );
-        assert_eq!(
-            b"pa",
-            written_bytes.lock().expect("probe lock should succeed").as_slice()
-        );
-    }
-}
-
 /// Records temporary lifecycle calls and completes them successfully.
 struct RecordingTempSession {
     calls: Arc<Mutex<Vec<&'static str>>>,
@@ -1016,4 +946,74 @@ impl AsyncTempResourceSpi for RecordingTempSession {
 /// Builds an error for unsupported provider methods outside this test scope.
 fn unused() -> FsError {
     FsError::new(FsErrorKind::UnsupportedOperation, FsOperation::Other, "unused")
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Error as IoError;
+    use std::pin::Pin;
+    use std::sync::Arc;
+    use std::sync::Mutex;
+    use std::task::Context;
+    use std::task::Poll;
+    use std::task::Waker;
+
+    use qubit_io::AsyncOutput;
+
+    use super::AsyncCopyStage;
+    use super::AsyncRecordingConfig;
+    use super::RecordingWriter;
+
+    #[test]
+    fn test_recording_writer_records_only_accepted_range() {
+        let written_bytes = Arc::new(Mutex::new(Vec::new()));
+        let mut writer = RecordingWriter {
+            confirmed: 0,
+            flush_yielded: false,
+            config: AsyncRecordingConfig {
+                writer_chunk: Some(2),
+                ..AsyncRecordingConfig::default()
+            },
+            written_bytes: Arc::clone(&written_bytes),
+            cancellations: Arc::new(Mutex::new(0)),
+        };
+        let waker = Waker::noop();
+        let mut context = Context::from_waker(waker);
+        let bytes = b"<payload>";
+        // SAFETY: index 1 and count 7 describe a valid range in `bytes`.
+        let accepted = unsafe { Pin::new(&mut writer).poll_write_unchecked(&mut context, bytes, 1, 7) };
+        assert!(matches!(accepted, Poll::Ready(Ok(2))));
+        assert_eq!(
+            b"pa",
+            written_bytes.lock().expect("probe lock should succeed").as_slice()
+        );
+
+        writer.config = AsyncRecordingConfig {
+            pending_stage: Some(AsyncCopyStage::WriterWrite),
+            writer_progress_before_stop: 2,
+            ..AsyncRecordingConfig::default()
+        };
+        // SAFETY: the same valid range remains available.
+        let pending = unsafe { Pin::new(&mut writer).poll_write_unchecked(&mut context, bytes, 1, 7) };
+        assert!(matches!(pending, Poll::Pending));
+        assert_eq!(
+            b"pa",
+            written_bytes.lock().expect("probe lock should succeed").as_slice()
+        );
+
+        writer.config = AsyncRecordingConfig {
+            failing_stage: Some(AsyncCopyStage::WriterWrite),
+            writer_progress_before_stop: 2,
+            ..AsyncRecordingConfig::default()
+        };
+        // SAFETY: the same valid range remains available.
+        let failed = unsafe { Pin::new(&mut writer).poll_write_unchecked(&mut context, bytes, 1, 7) };
+        assert!(
+            matches!(failed, Poll::Ready(Err(error)) if error.kind() == IoError::other("injected write failure").kind())
+        );
+        assert_eq!(
+            b"pa",
+            written_bytes.lock().expect("probe lock should succeed").as_slice()
+        );
+    }
 }

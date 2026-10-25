@@ -384,14 +384,21 @@ pub(crate) fn temp_lifecycle_error_filesystem(
 /// Builds a filesystem whose temporary directory reports a non-atomic
 /// persistence outcome while still advertising atomic capability support.
 pub(crate) fn non_atomic_temp_directory_filesystem() -> FileSystem {
-    FileSystem::from_spi(BehaviorSpi {
+    non_atomic_temp_directory_filesystem_with_cleanup_calls().0
+}
+
+/// Builds a non-atomic temporary-directory filesystem and exposes its cleanup
+/// count.
+pub(crate) fn non_atomic_temp_directory_filesystem_with_cleanup_calls() -> (FileSystem, Arc<Mutex<usize>>) {
+    let cleanup_calls = Arc::new(Mutex::new(0));
+    let filesystem = FileSystem::from_spi(BehaviorSpi {
         fail_commit: false,
         fail_write: false,
         commit_failure: None,
         abort_failure: None,
         limits: FileSystemLimits::unknown(),
         entries: Mutex::new(Vec::new()),
-        cleanup_calls: Arc::new(Mutex::new(0)),
+        cleanup_calls: Arc::clone(&cleanup_calls),
         persist_calls: Arc::new(Mutex::new(0)),
         commit_calls: Arc::new(Mutex::new(0)),
         abort_calls: Arc::new(Mutex::new(0)),
@@ -402,7 +409,8 @@ pub(crate) fn non_atomic_temp_directory_filesystem() -> FileSystem {
         directory_persist_non_atomic: true,
         provider_open_error: false,
     })
-    .expect("facade should construct")
+    .expect("facade should construct");
+    (filesystem, cleanup_calls)
 }
 
 #[test]

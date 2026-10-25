@@ -48,7 +48,6 @@ impl WriteFailure {
     /// # Returns
     /// A failure preserving both the cause and recovery contract.
     #[inline]
-    #[must_use]
     pub fn new(error: FsError, state: WriteFailureState) -> Self {
         Self { error, state }
     }
