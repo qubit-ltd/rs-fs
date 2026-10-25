@@ -184,6 +184,40 @@ fn test_async_copy_skip_deadline_is_checked_after_open_and_abort() {
 }
 
 #[test]
+fn test_async_copy_commit_skip_preserves_abort_publication_state_without_deadline() {
+    for abort_outcome in [WriteAbortOutcome::Published, WriteAbortOutcome::Indeterminate] {
+        let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
+            decline_copy: true,
+            writer_commit_failure: Some(WriteFailureState::RetryableNotPublished),
+            writer_commit_error: Some(FsErrorKind::AlreadyExists),
+            writer_abort_outcome: Some(abort_outcome),
+            ..AsyncRecordingConfig::default()
+        });
+        let mut operation = file_system
+            .begin_copy(
+                path("/source"),
+                path("/target"),
+                CopyOptions::default().with_conflict(CopyConflictPolicy::Skip),
+            )
+            .expect("copy preflight");
+        let failure =
+            ready(operation.execute()).expect_err("abort publication facts must not be reported as a successful skip");
+
+        assert_eq!(FsErrorKind::AlreadyExists, failure.error().kind());
+        assert_eq!(
+            if abort_outcome == WriteAbortOutcome::Published {
+                CopyFailureState::Published
+            } else {
+                CopyFailureState::Indeterminate
+            },
+            failure.state()
+        );
+        assert_eq!(1, failure.partial_stats().skipped);
+        assert!(!operation.has_recovery());
+    }
+}
+
+#[test]
 fn test_async_copy_repeated_completed_snapshot_uses_validated_statistics() {
     for (stats, options, expected_state) in [
         (

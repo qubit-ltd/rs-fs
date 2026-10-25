@@ -369,8 +369,12 @@ impl<'a> CopyOperation<'a> {
                         skipped: 1,
                         ..CopyStats::default()
                     };
+                    let abort_state = from_writer_state(writer.state());
                     if let Some(error) = self.deadline_error() {
-                        return Err(self.failure(error, from_writer_state(writer.state()), stats, None));
+                        return Err(self.failure(error, abort_state, stats, None));
+                    }
+                    if abort_state != CopyFailureState::Unchanged {
+                        return Err(self.failure(error, abort_state, stats, None));
                     }
                     return Ok(CopyOutcome::streamed_fallback(
                         stats,

@@ -958,6 +958,30 @@ fn test_sync_copy_commit_skip_deadline_preserves_abort_publication_state() {
     }
 }
 
+#[test]
+fn test_sync_copy_commit_skip_preserves_abort_publication_state_without_deadline() {
+    for (response, expected_state) in [
+        (CopyResponse::DeclinedCommitAbortPublished, CopyFailureState::Published),
+        (
+            CopyResponse::DeclinedCommitAbortIndeterminate,
+            CopyFailureState::Indeterminate,
+        ),
+    ] {
+        let (filesystem, _, _) = recording_filesystem(response);
+        let failure = filesystem
+            .copy(
+                &path("/source"),
+                &path("/target"),
+                CopyOptions::default().with_conflict(CopyConflictPolicy::Skip),
+            )
+            .expect_err("abort publication facts must not be reported as a successful skip");
+
+        assert_eq!(FsErrorKind::AlreadyExists, failure.error().kind());
+        assert_eq!(expected_state, failure.state());
+        assert_eq!(1, failure.partial_stats().skipped);
+    }
+}
+
 /// Verifies a preferred server-side attempt may use the safe stream fallback.
 #[test]
 fn test_copy_declined_with_preferred_server_side_uses_stream_fallback() {

@@ -573,6 +573,7 @@ fn stream_copy_fallback<'a>(
                 if failure.error().kind() == FsErrorKind::AlreadyExists
                     && plan.may_skip_conflict(from_writer_state(writer.state())) =>
             {
+                let error = failure.into_error();
                 if let Err(cleanup_error) = writer.abort_async().await {
                     return Err(filesystem.contextual_copy_failure(
                         cleanup_error,
@@ -596,6 +597,9 @@ fn stream_copy_fallback<'a>(
                         source,
                         target,
                     ));
+                }
+                if state != CopyFailureState::Unchanged {
+                    return Err(filesystem.contextual_copy_failure(error, state, stats, source, target));
                 }
                 return Ok(CopyOutcome::streamed_fallback(
                     stats,
