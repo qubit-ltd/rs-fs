@@ -144,6 +144,16 @@ Platform roots and authority boundaries come from the configured provider.
 
 ## Testing
 
+To manually check the local provider integration examples, run:
+
+```bash
+cargo test --manifest-path tests/fixtures/documentation_examples/Cargo.toml
+cargo run --manifest-path tests/fixtures/documentation_examples/Cargo.toml --bin quick_start
+```
+
+These fixture commands are a local integration entry point; the core CI checks
+this crate and its documentation.
+
 ```bash
 # Run tests with the default feature set
 cargo test

@@ -127,6 +127,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## 测试
 
+如需手动验证本地 provider 集成示例，可运行：
+
+```bash
+cargo test --manifest-path tests/fixtures/documentation_examples/Cargo.toml
+cargo run --manifest-path tests/fixtures/documentation_examples/Cargo.toml --bin quick_start
+```
+
+这些 fixture 命令用于本地集成验证；核心 CI 检查本 crate 及其文档。
+
 ```bash
 # 使用默认 feature 集运行测试
 cargo test

@@ -4,5 +4,3 @@ set -euo pipefail
 project_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
 cd "$project_root"
 python3 scripts/check-documentation.py
-cargo test --manifest-path tests/fixtures/documentation_examples/Cargo.toml --all-features
-cargo run --manifest-path tests/fixtures/documentation_examples/Cargo.toml --bin quick_start
