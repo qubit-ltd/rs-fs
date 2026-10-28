@@ -69,12 +69,13 @@ directory/temp 等领域组织，私有辅助类型归属对应领域。同步�
 
 `qubit_fs::spi` 请求携带经门面校验的路径和已解析选项。提供者返回封装对象，而不是自行
 构造应用句柄。`stat` 返回 `FsResult<StatResponse>`，将 metadata 与所描述路径绑定，
-门面检查路径后才暴露 `FileMetadata`。reader、writer、目录流和临时资源的打开结果同样
-携带身份信息，通过校验后才能转为门面拥有的句柄。
+门面检查路径后才暴露 `FileMetadata`。reader、writer 和临时资源的打开结果携带身份信息，
+门面校验后才会转为门面拥有的句柄。目录流由请求 scope 和选项约束；门面逐项校验返回路径。
+目录流 SPI 不提供可供门面校验的打开身份。
 
-调用流程为：校验请求 → 检查能力和限制 → 调用提供者原语 → 校验身份与 outcome → 补充
-类型化结果的上下文。提供者返回不合法的成功结果属于契约违例，不能因此虚构成功的 fallback，
-也不能重复执行可能已经发布的操作。
+调用流程为：校验请求 → 检查能力和限制 → 调用提供者原语 → 校验适用的打开身份、条目路径
+和 outcome → 补充类型化结果的上下文。提供者返回不合法的成功结果属于契约违例，不能因此
+虚构成功的 fallback，也不能重复执行可能已经发布的操作。
 
 ## 发布事实与失败状态
 
@@ -149,11 +150,19 @@ copy deadline 是从 operation 构造起累计的协作式预算，在提供者�
 `max_depth` 则按列举根目录限制返回的后代深度。
 list/copy 的符号链接覆盖策略仅对本次操作生效。
 
+丢弃已经 poll 的 `AsyncDirectoryStream::next_entry_async()` future 会使流进入 `Failed`，因为
+提供者可能已经前进。后续读取返回 `InvalidState`，不会再次调用提供者。SPI 不承诺回退或续传；
+重新打开流后，由应用自行去重或对账。重新列举没有快照、稳定顺序或结果不重复的保证。
+同步 `DirectoryStream::next_entry()` 会在当前调用中完成，没有丢弃 future 的取消边界。
+
 原子性与持久性独立。`WriteOutcome`、`RenameOutcome`、`CopyOutcome` 报告实际 durability，
 以及适用的原子性、发布／复制方法和 metadata。`PersistOutcome` 报告发布与清理，没有
 durability 字段，持久化成功不能证明已完成持久同步。
-required 保证在可行时于分派前检查，完成后再根据 outcome 校验。rename 是同一文件系统的
-原语，不是跨文件系统 move 协议。
+`PersistOptions` 默认不覆盖目标、要求 `AtomicityRequirement::Required`、保留
+`MetadataPreservePolicy::Portable`，且不创建父目录。Required 原子性不代表持久性；业务能接受
+较弱原子性时可显式请求 `AtomicityRequirement::Preferred`，但不保证持久化成功。required
+保证会在可行时于分派前检查，并在完成后根据 outcome 校验。rename 是同一文件系统的原语，
+不是跨文件系统 move 协议。
 
 ## 临时资源
 

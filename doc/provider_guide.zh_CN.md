@@ -355,6 +355,13 @@ writer 和临时资源实现必须分别报告发布、清理和恢复失败。�
 此前已确认的发布目标。门面的源生命周期和失败状态可以保守地变为整体
 `Indeterminate`；provider 正常返回且能够确定两个维度时，才使用精确的源不确定状态。
 
+异步目录列举有单独的取消契约：丢弃已经 poll 的
+`AsyncDirectoryStream::next_entry_async()` future 会使该流进入 `Failed`，因为提供者可能
+已经前进。后续读取返回 `InvalidState`，不会再次调用提供者。SPI 不承诺回退或续传；调用方
+可以重新打开流，再根据应用保存的进度去重或对账。重新列举没有快照保证，也不保证顺序稳定或
+结果不重复。该契约只适用于异步流；同步的 `DirectoryStream::next_entry()` 是同步调用，没有
+丢弃 future 的取消边界。
+
 ## 9. 接入 `qubit-fs-testkit`
 
 适配器应运行 `qubit-fs-testkit` 的共享契约套件，并针对限制、capability、路径规则

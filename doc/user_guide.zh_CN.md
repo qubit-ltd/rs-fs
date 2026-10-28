@@ -85,6 +85,11 @@ tempfile = "3"
 这是一种协作式预算，不能中断永久 Pending 的 future。只构造再丢弃未经 poll 的
 next-entry future，不会改变流状态。
 
+如果丢弃已经 poll 过的 `next_entry_async()` future，目录流会进入 `Failed`：提供者可能已
+经前进。此后继续读取会返回 `InvalidState`，不会再次调用提供者。要继续列举，需重新打开
+流；但重新列举没有快照保证，也不保证顺序稳定或结果不重复。应用应记录已处理进度，并按
+自身业务需要去重或对账。
+
 `read_prefix` 只打开一次 reader，不额外 stat，消费字节数不超过前缀上限。
 只有 `RangeRead` 为 **Guaranteed**、未请求 checksum、前缀长度为正，且范围可表示
 并符合 provider 上限时，才会自动添加或收紧 range；原始选项总是先校验。
@@ -208,8 +213,10 @@ pub fn copy_report(
 目录流不是原子快照。
 
 层级子树过滤使用 `ListFilter::Subtree`。平面对象键使用
-`ListOptions::object_keys().with_filter(ListFilter::LiteralPrefix(...))` 按原始文本匹配，
-不解码或规范化键，且要求根非空。提供者无法忠实表达该请求时可以拒绝。
+`ListOptions::object_keys().with_filter(Some(ListFilter::LiteralPrefix(...)))` 按原始文本匹配，
+不解码或规范化键。只有使用 `ListScope::Path` 时才要求非空根；`ListScope::Namespace` 没有
+路径根，过滤器直接匹配完整逻辑键。下方完整异步示例使用 `Namespace`。提供者无法忠实表达
+请求时可以拒绝。
 
 ### 异步写入与取消
 
@@ -366,6 +373,11 @@ write/copy 归为 `Indeterminate`。打开步骤已生效不代表整文件已�
 持久化成功本身不能证明已完成持久同步。原子性与持久性不同，二者不能互相
 推导。静态不可能满足的 required 保证会在 I/O 前拒绝，完成后还会核验实际 outcome；已知发布
 之后发现保证不满足，不能把结果改写为未产生变化。
+
+`PersistOptions::default()` 默认不覆盖目标、要求 `AtomicityRequirement::Required`、保留
+portable metadata，且不创建父目录。Required 原子性不等于持久性保证。业务可以接受较弱原子性
+时，才显式设置 `with_atomicity(AtomicityRequirement::Preferred)`；这也不保证持久化一定成功。
+选项和默认值见 [`PersistOptions` Rustdoc](https://docs.rs/qubit-fs/0.3/qubit_fs/temp/struct.PersistOptions.html)。
 
 没有原生 copy，或提供者明确无副作用地拒绝 fast path 后，门面可以执行允许范围内的普通文件
 流式复制；原生复制失败不会触发自动重试。要求服务端、原子或持久复制、目录树模式，以及改变

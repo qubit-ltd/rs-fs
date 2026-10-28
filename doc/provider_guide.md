@@ -372,6 +372,16 @@ conservatively become overall `Indeterminate`; use a precise
 source-indeterminate state when a provider returns normally and can establish
 both axes.
 
+Asynchronous directory enumeration has a local cancellation contract: dropping
+a polled `AsyncDirectoryStream::next_entry_async()` future marks that stream
+`Failed`, since the provider may already have advanced. A later read returns
+`InvalidState` without another provider call. The SPI does not promise rewind or
+resume. The caller may open a new stream, then deduplicate or reconcile results
+using application-level progress; re-enumeration is not a snapshot and does not
+guarantee ordering or duplicate-free entries. This contract applies to the
+asynchronous stream API; synchronous `DirectoryStream::next_entry()` completes
+as a synchronous call and has no future-drop cancellation boundary.
+
 ## 9. Use `qubit-fs-testkit`
 
 Adapters should run the shared contract suite from `qubit-fs-testkit` and add

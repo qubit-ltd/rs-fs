@@ -102,6 +102,13 @@ is rejected; a real provider failure retains its category and source. Checks are
 cooperative and cannot interrupt a permanently pending provider future. Creating
 and dropping an unpolled next-entry future does not change stream state.
 
+Dropping a polled `next_entry_async()` future makes that stream `Failed`, because
+the provider may have advanced before cancellation. Further reads return
+`InvalidState` without another provider call. Open a new stream to continue, but
+re-enumeration is not a snapshot and does not guarantee stable ordering or
+duplicate-free results. Applications should record progress and deduplicate or
+reconcile entries according to their own needs.
+
 `read_prefix` opens once and consumes at most the requested prefix without an
 extra stat. It inserts or narrows a provider range only for **Guaranteed**
 `RangeRead`, no checksum request, a positive prefix length, and representable
@@ -237,9 +244,12 @@ earlier entries were processed. Record progress before fetching the next entry;
 a listing is not an atomic snapshot.
 
 Use `ListFilter::Subtree` for hierarchical subtrees. For flat object keys,
-`ListOptions::object_keys().with_filter(ListFilter::LiteralPrefix(...))` performs
-raw prefix matching without decoding or normalizing keys. A nonempty root is
-required; providers can reject requests they cannot represent faithfully.
+`ListOptions::object_keys().with_filter(Some(ListFilter::LiteralPrefix(...)))`
+performs raw prefix matching without decoding or normalizing keys. A nonempty
+root is required only with `ListScope::Path`; `ListScope::Namespace` has no path
+root and applies the filter to complete logical keys. The complete async example
+below uses `Namespace`. Providers can reject requests they cannot represent
+faithfully.
 
 ### Async writing and cancellation
 
@@ -408,6 +418,14 @@ persistence alone does not establish durable publication. Atomicity and durabili
 the other. Required guarantees are checked before I/O when statically impossible
 and against provider outcomes after completion. A violated guarantee after known
 publication does not change that publication into an unchanged result.
+
+`PersistOptions::default()` uses `overwrite = false`,
+`atomicity = AtomicityRequirement::Required`, portable metadata preservation,
+and `create_parent = false`. Required atomicity does not guarantee durability.
+When the application can accept a weaker atomicity requirement, set
+`with_atomicity(AtomicityRequirement::Preferred)` explicitly; this does not
+guarantee that persistence will succeed. See [`PersistOptions` Rustdoc](https://docs.rs/qubit-fs/0.3/qubit_fs/temp/struct.PersistOptions.html)
+for the options and defaults.
 
 The facade can perform allowlisted regular-file stream copy without native
 copy, or after a provider explicitly declines without effects. It does not

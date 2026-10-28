@@ -85,14 +85,18 @@ Optional/required request guarantees are still checked for each operation.
 Requests under `qubit_fs::spi` carry facade-validated paths and resolved options.
 Providers return envelopes rather than constructing application handles.
 `stat` returns `FsResult<StatResponse>`: path-bound metadata. The facade checks
-the response path before exposing `FileMetadata`. Opened readers, writers,
-directory streams and temporary resources similarly carry identity information
-that is verified before conversion into a facade-owned handle.
+the response path before exposing `FileMetadata`. Opened readers, writers, and
+temporary resources carry identity information that the facade verifies before
+conversion into facade-owned handles. Directory streams are constrained by the
+requested scope and options; the facade validates each returned entry path
+against those constraints. The directory-stream SPI does not expose an opened
+identity to validate.
 
 The pipeline is: validate request → check capabilities and limits → dispatch
-provider primitive → validate identity/outcome → enrich typed results. Invalid
-provider success is a contract violation, not permission to invent a successful
-fallback or repeat an operation that may already have published.
+provider primitive → validate the applicable opened identity, entry paths, and
+outcome → enrich typed results. Invalid provider success is a contract
+violation, not permission to invent a successful fallback or repeat an
+operation that may already have published.
 
 ## Publication and failure facts
 
@@ -187,11 +191,24 @@ For hierarchical paths, `Subtree` selects the named path and its descendants;
 `recursive = false` does not remove that filter scope, while `max_depth` bounds
 returned descendant depth from the list root.
 
+Dropping a polled `AsyncDirectoryStream::next_entry_async()` future marks the
+stream `Failed`, because the provider may have advanced. Further reads return
+`InvalidState` without another provider call. The SPI does not promise rewind or
+resume. Reopen the stream and let the application deduplicate or reconcile
+results; re-enumeration has no snapshot, stable-order, or duplicate-free
+guarantee. Synchronous `DirectoryStream::next_entry()` completes inline and has
+no future-drop cancellation boundary.
+
 Atomicity and durability are independent. `WriteOutcome`, `RenameOutcome`,
 and `CopyOutcome` expose durability facts alongside applicable atomicity,
 publication/copy method and metadata. `PersistOutcome` reports publication and
-cleanup without a durability field; persistence success does not establish durability. Required
-guarantees are validated both before dispatch where possible and after outcomes.
+cleanup without a durability field; persistence success does not establish durability. `PersistOptions`
+defaults to `overwrite = false`, `AtomicityRequirement::Required`,
+`MetadataPreservePolicy::Portable`, and `create_parent = false`. Required
+atomicity does not imply durability; applications may explicitly request
+`AtomicityRequirement::Preferred` when weaker atomicity is acceptable, without
+guaranteeing persistence success. Required guarantees are validated both before
+dispatch where possible and after outcomes.
 Rename remains a same-filesystem primitive, not a cross-filesystem move protocol.
 
 ## Temporary resources
