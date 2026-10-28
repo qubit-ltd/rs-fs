@@ -58,7 +58,7 @@ impl<'a> CopyOperation<'a> {
     /// Creates a pending synchronous copy operation.
     #[inline]
     pub(crate) fn new(filesystem: &'a FileSystem, source: &'a Path, target: &'a Path, options: CopyOptions) -> Self {
-        let deadline = CopyDeadline::new(options.deadline());
+        let deadline = CopyDeadline::new(options.deadline(), std::time::Instant::now);
         Self {
             filesystem,
             source,
@@ -455,5 +455,212 @@ impl<'a> CopyOperation<'a> {
             .with_path(self.source.clone())
             .with_target(self.target.clone())
             .with_provider(self.filesystem.properties().info().provider_id())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+    use std::io::Cursor;
+    use std::io::Result as IoResult;
+    use std::time::Duration;
+    use std::time::Instant;
+
+    use qubit_io::Output;
+
+    use super::CopyOperation;
+    use crate::copy::CopyFailureState;
+    use crate::copy::CopyOptions;
+    use crate::error::FsError;
+    use crate::error::FsErrorKind;
+    use crate::error::FsOperation;
+    use crate::error::FsResult;
+    use crate::metadata::AchievedAtomicity;
+    use crate::metadata::FileKind;
+    use crate::metadata::FileMetadata;
+    use crate::metadata::FileSystemCapabilities;
+    use crate::metadata::FileSystemCapability;
+    use crate::metadata::FileSystemId;
+    use crate::metadata::FileSystemInfo;
+    use crate::metadata::FileSystemLimits;
+    use crate::metadata::OpenedFileInfo;
+    use crate::metadata::PublicationMethod;
+    use crate::metadata::SymlinkPolicy;
+    use crate::metadata::WriteOutcome;
+    use crate::path::Path;
+    use crate::path::PathConstraints;
+    use crate::path::PathSemantics;
+    use crate::spi::FileSystemSpi;
+    use crate::spi::FileWriterSpi;
+    use crate::spi::OpenReaderRequest;
+    use crate::spi::OpenWriterRequest;
+    use crate::spi::OpenedReader;
+    use crate::spi::OpenedWriter;
+    use crate::spi::ProviderOperation;
+    use crate::spi::ProviderOperations;
+    use crate::spi::ProviderProperties;
+    use crate::spi::SpiWriteFailure;
+    use crate::spi::StatRequest;
+    use crate::spi::StatResponse;
+    use crate::write::WriteAbortOutcome;
+    use crate::write::WriteFailureState;
+
+    thread_local! {
+        static NOW: Cell<Option<Instant>> = const { Cell::new(None) };
+        static ADVANCE_ON_FLUSH: Cell<bool> = const { Cell::new(false) };
+        static ADVANCE_ON_COMMIT: Cell<bool> = const { Cell::new(false) };
+    }
+
+    fn test_now() -> Instant {
+        NOW.with(|now| now.get().expect("test clock should be initialized"))
+    }
+
+    fn advance_clock() {
+        NOW.with(|now| {
+            now.set(Some(
+                now.get().expect("test clock should be initialized") + Duration::from_secs(1),
+            ))
+        });
+    }
+
+    struct StageSpi {
+        late_commit_error: bool,
+    }
+    impl FileSystemSpi for StageSpi {
+        fn properties(&self) -> ProviderProperties {
+            ProviderProperties::new(
+                FileSystemInfo::new(
+                    FileSystemId::new("deadline-test").expect("valid id"),
+                    "deadline-test",
+                    PathSemantics::Hierarchical,
+                ),
+                ProviderOperations::new()
+                    .with(ProviderOperation::Stat)
+                    .with(ProviderOperation::OpenReader)
+                    .with(ProviderOperation::OpenWriter),
+                FileSystemCapabilities::new()
+                    .with_guaranteed(FileSystemCapability::Read)
+                    .with_guaranteed(FileSystemCapability::Write),
+                FileSystemLimits::unknown(),
+                PathConstraints::absolute(),
+                SymlinkPolicy::Reject,
+            )
+            .expect("valid provider properties")
+        }
+
+        fn stat(&self, request: StatRequest<'_>) -> FsResult<StatResponse> {
+            Ok(StatResponse::new(
+                request.path().clone(),
+                FileMetadata::new(FileKind::File).with_len(Some(1)),
+            ))
+        }
+
+        fn open_reader(&self, request: OpenReaderRequest<'_>) -> FsResult<OpenedReader> {
+            let info = OpenedFileInfo::new(
+                FileSystemId::new("deadline-test").expect("valid id"),
+                request.path().clone(),
+            )
+            .with_metadata(FileMetadata::new(FileKind::File).with_len(Some(1)));
+            Ok(OpenedReader::new(info, Box::new(Cursor::new(vec![b'x']))))
+        }
+
+        fn open_writer(&self, request: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
+            let info = OpenedFileInfo::new(
+                FileSystemId::new("deadline-test").expect("valid id"),
+                request.path().clone(),
+            )
+            .with_metadata(FileMetadata::new(FileKind::File));
+            Ok(OpenedWriter::new(
+                info,
+                Box::new(StageWriter {
+                    late_commit_error: self.late_commit_error,
+                }),
+            ))
+        }
+    }
+
+    struct StageWriter {
+        late_commit_error: bool,
+    }
+    impl Output for StageWriter {
+        type Item = u8;
+        unsafe fn write_unchecked(&mut self, _: &[u8], _: usize, count: usize) -> IoResult<usize> {
+            Ok(count)
+        }
+        fn flush(&mut self) -> IoResult<()> {
+            if ADVANCE_ON_FLUSH.with(Cell::get) {
+                advance_clock();
+            }
+            Ok(())
+        }
+    }
+    impl FileWriterSpi for StageWriter {
+        fn commit(&mut self) -> Result<WriteOutcome, SpiWriteFailure> {
+            if ADVANCE_ON_COMMIT.with(Cell::get) {
+                advance_clock();
+            }
+            if self.late_commit_error {
+                return Err(SpiWriteFailure::new(
+                    FsError::new(FsErrorKind::Io, FsOperation::CommitWriter, "late commit failure"),
+                    WriteFailureState::RetryableNotPublished,
+                ));
+            }
+            Ok(WriteOutcome::new(
+                AchievedAtomicity::NonAtomic,
+                PublicationMethod::Direct,
+            ))
+        }
+        fn abort(&mut self) -> FsResult<WriteAbortOutcome> {
+            Ok(WriteAbortOutcome::NotPublished)
+        }
+    }
+
+    fn operation(late_commit_error: bool) -> CopyOperation<'static> {
+        let filesystem = Box::leak(Box::new(
+            crate::FileSystem::from_spi(StageSpi { late_commit_error }).expect("valid test filesystem"),
+        ));
+        let source = Box::leak(Box::new(Path::parse("/source").expect("valid source path")));
+        let target = Box::leak(Box::new(Path::parse("/target").expect("valid target path")));
+        let start = Instant::now();
+        NOW.with(|now| now.set(Some(start)));
+        let mut operation = CopyOperation::new(
+            filesystem,
+            source,
+            target,
+            CopyOptions::file().with_deadline(Some(Duration::from_secs(1))),
+        );
+        operation.deadline = super::CopyDeadline::new(Some(Duration::from_secs(1)), test_now);
+        operation
+    }
+
+    #[test]
+    fn test_copy_deadline_after_flush_retains_unpublished_writer_and_bytes() {
+        ADVANCE_ON_FLUSH.with(|advance| advance.set(true));
+        let failure = operation(false).execute().expect_err("deadline after flush must fail");
+        ADVANCE_ON_FLUSH.with(|advance| advance.set(false));
+        assert_eq!(CopyFailureState::Unchanged, failure.state());
+        assert_eq!(1, failure.partial_stats().bytes);
+        assert!(failure.has_recovery());
+    }
+
+    #[test]
+    fn test_copy_deadline_after_commit_reports_published_without_recovery() {
+        ADVANCE_ON_COMMIT.with(|advance| advance.set(true));
+        let failure = operation(false).execute().expect_err("deadline after commit must fail");
+        ADVANCE_ON_COMMIT.with(|advance| advance.set(false));
+        assert_eq!(CopyFailureState::Published, failure.state());
+        assert_eq!(1, failure.partial_stats().bytes);
+        assert!(!failure.has_recovery());
+    }
+
+    #[test]
+    fn test_copy_deadline_preserves_late_provider_commit_error() {
+        ADVANCE_ON_COMMIT.with(|advance| advance.set(true));
+        let failure = operation(true)
+            .execute()
+            .expect_err("provider commit error must remain primary");
+        ADVANCE_ON_COMMIT.with(|advance| advance.set(false));
+        assert_eq!(FsErrorKind::Io, failure.error().kind());
+        assert_eq!(CopyFailureState::Unchanged, failure.state());
     }
 }

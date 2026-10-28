@@ -49,6 +49,8 @@ use crate::write::internal::open_failure_state;
 /// # Examples
 ///
 /// This example uses an isolated in-memory provider fixture.
+/// The operation remains owned by the caller after an execution error, so the
+/// caller can inspect its state and take any retained writer recovery.
 ///
 /// ```rust
 /// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
@@ -109,7 +111,7 @@ impl AsyncCopyOperation {
             file_system,
             source,
             target,
-            deadline: CopyDeadline::new(options.deadline()),
+            deadline: CopyDeadline::new(options.deadline(), std::time::Instant::now),
             options: ResolvedCopyOptions::new(options, symlink_policy),
             state: AsyncCopyOperationState::Ready,
             writer: None,
@@ -184,6 +186,13 @@ impl AsyncCopyOperation {
     /// pending provider future is not forcibly woken by this operation, and
     /// external cancellation does not roll back provider publication.
     ///
+    /// The returned [`AsyncCopyFailure`] owns the error, publication state, and
+    /// copy statistics. This operation retains any recovery writer; inspect it
+    /// with [`Self::recovery`] or transfer it with [`Self::take_recovery`].
+    /// Keep the operation outside the cancellation scope and cancel only
+    /// this `execute` future so those facts and recovery ownership remain
+    /// available.
+    ///
     /// # Returns
     /// The provider-confirmed copy outcome.
     ///
@@ -223,7 +232,7 @@ impl AsyncCopyOperation {
 /// # Parameters
 /// - `filesystem`: Facade used for provider execution and fallback.
 /// - `source`: Validated source path.
-/// - `target`: Validated destination path.
+/// - `target`: Destination path associated with the copy.
 /// - `options`: Copy policy resolved by the facade.
 /// - `deadline`: Caller budget shared by provider and fallback work.
 /// - `writer`: Retained recovery writer, if fallback has opened one.
@@ -679,4 +688,429 @@ fn invalid_state_failure(
         snapshot.state,
         snapshot.stats,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+    use std::io::Result as IoResult;
+    use std::pin::Pin;
+    use std::task::Context;
+    use std::task::Poll;
+    use std::task::Waker;
+    use std::time::Duration;
+    use std::time::Instant;
+
+    use qubit_io::AsyncInput;
+    use qubit_io::AsyncOutput;
+
+    use super::AsyncCopyOperation;
+    use super::CopyDeadline;
+    use crate::copy::AsyncCopyOperationState;
+    use crate::copy::CopyConflictPolicy;
+    use crate::copy::CopyFailureState;
+    use crate::copy::CopyOptions;
+    use crate::error::FsError;
+    use crate::error::FsErrorKind;
+    use crate::error::FsOperation;
+    use crate::error::FsResult;
+    use crate::metadata::AchievedAtomicity;
+    use crate::metadata::FileKind;
+    use crate::metadata::FileMetadata;
+    use crate::metadata::FileSystemCapabilities;
+    use crate::metadata::FileSystemCapability;
+    use crate::metadata::FileSystemId;
+    use crate::metadata::FileSystemInfo;
+    use crate::metadata::FileSystemLimits;
+    use crate::metadata::OpenedFileInfo;
+    use crate::metadata::PublicationMethod;
+    use crate::metadata::SymlinkPolicy;
+    use crate::metadata::WriteOutcome;
+    use crate::path::Path;
+    use crate::path::PathConstraints;
+    use crate::path::PathSemantics;
+    use crate::spi::AsyncFileSystemSpi;
+    use crate::spi::AsyncFileWriteSession;
+    use crate::spi::OpenReaderRequest;
+    use crate::spi::OpenWriterRequest;
+    use crate::spi::OpenedAsyncReader;
+    use crate::spi::OpenedAsyncWriter;
+    use crate::spi::ProviderOperation;
+    use crate::spi::ProviderOperations;
+    use crate::spi::ProviderProperties;
+    use crate::spi::SpiFuture;
+    use crate::spi::StatRequest;
+    use crate::spi::StatResponse;
+    use crate::write::WriteAbortOutcome;
+    use crate::write::WriteFailure;
+    use crate::write::WriteFailureState;
+
+    thread_local! { static NOW: Cell<Option<Instant>> = const { Cell::new(None) }; }
+    fn test_now() -> Instant {
+        NOW.with(|now| now.get().expect("test clock initialized"))
+    }
+    fn advance_clock() {
+        NOW.with(|now| {
+            now.set(Some(
+                now.get().expect("test clock initialized") + Duration::from_secs(1),
+            ))
+        });
+    }
+
+    #[derive(Clone, Copy)]
+    enum SuspendAt {
+        Flush,
+        Commit,
+    }
+    struct StageSpi {
+        suspend_at: SuspendAt,
+        fail_commit: bool,
+        skip_open: bool,
+        skip_commit: bool,
+        abort_outcome: WriteAbortOutcome,
+    }
+    impl StageSpi {
+        fn info(&self, path: &Path) -> OpenedFileInfo {
+            OpenedFileInfo::new(
+                FileSystemId::new("async-deadline-test").expect("valid id"),
+                path.clone(),
+            )
+            .with_metadata(FileMetadata::new(FileKind::File).with_len(Some(1)))
+        }
+    }
+    impl AsyncFileSystemSpi for StageSpi {
+        fn properties(&self) -> ProviderProperties {
+            ProviderProperties::new(
+                FileSystemInfo::new(
+                    FileSystemId::new("async-deadline-test").expect("valid id"),
+                    "async-deadline-test",
+                    PathSemantics::Hierarchical,
+                ),
+                ProviderOperations::new()
+                    .with(ProviderOperation::Stat)
+                    .with(ProviderOperation::OpenReader)
+                    .with(ProviderOperation::OpenWriter),
+                FileSystemCapabilities::new()
+                    .with_guaranteed(FileSystemCapability::Read)
+                    .with_guaranteed(FileSystemCapability::Write),
+                FileSystemLimits::unknown(),
+                PathConstraints::absolute(),
+                SymlinkPolicy::Reject,
+            )
+            .expect("valid provider properties")
+        }
+        fn stat<'a>(&'a self, request: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
+            Box::pin(async move {
+                Ok(StatResponse::new(
+                    request.path().clone(),
+                    FileMetadata::new(FileKind::File).with_len(Some(1)),
+                ))
+            })
+        }
+        fn open_reader<'a>(&'a self, request: OpenReaderRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
+            let info = self.info(request.path());
+            Box::pin(async move { Ok(OpenedAsyncReader::new(info, Box::new(StageReader { read: false }))) })
+        }
+        fn open_writer<'a>(&'a self, request: OpenWriterRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
+            let info = self.info(request.path());
+            let suspend_at = self.suspend_at;
+            let fail_commit = self.fail_commit;
+            let skip_open = self.skip_open;
+            let skip_commit = self.skip_commit;
+            let abort_outcome = self.abort_outcome;
+            if skip_open {
+                let mut yielded = false;
+                return Box::pin(std::future::poll_fn(move |_| {
+                    if !yielded {
+                        yielded = true;
+                        return Poll::Pending;
+                    }
+                    Poll::Ready(Err(FsError::new(
+                        FsErrorKind::AlreadyExists,
+                        FsOperation::OpenWriter,
+                        "skip conflict",
+                    )
+                    .with_effect_state(crate::error::FsEffectState::Unchanged)))
+                }));
+            }
+            Box::pin(async move {
+                Ok(OpenedAsyncWriter::new(
+                    info,
+                    Box::new(StageWriter {
+                        suspend_at,
+                        fail_commit,
+                        skip_commit,
+                        abort_outcome,
+                        flush_pending: false,
+                    }),
+                ))
+            })
+        }
+    }
+
+    struct StageReader {
+        read: bool,
+    }
+    impl AsyncInput for StageReader {
+        type Item = u8;
+        unsafe fn poll_read_unchecked(
+            mut self: Pin<&mut Self>,
+            _: &mut Context<'_>,
+            output: &mut [u8],
+            index: usize,
+            count: usize,
+        ) -> Poll<IoResult<usize>> {
+            let this = self.as_mut().get_mut();
+            if this.read || count == 0 {
+                return Poll::Ready(Ok(0));
+            }
+            output[index] = b'x';
+            this.read = true;
+            Poll::Ready(Ok(1))
+        }
+    }
+    struct StageWriter {
+        suspend_at: SuspendAt,
+        fail_commit: bool,
+        skip_commit: bool,
+        abort_outcome: WriteAbortOutcome,
+        flush_pending: bool,
+    }
+    impl AsyncOutput for StageWriter {
+        type Item = u8;
+        unsafe fn poll_write_unchecked(
+            self: Pin<&mut Self>,
+            _: &mut Context<'_>,
+            _: &[u8],
+            _: usize,
+            count: usize,
+        ) -> Poll<IoResult<usize>> {
+            Poll::Ready(Ok(count))
+        }
+        fn poll_flush(mut self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<IoResult<()>> {
+            let this = self.as_mut().get_mut();
+            if matches!(this.suspend_at, SuspendAt::Flush) && !this.flush_pending {
+                this.flush_pending = true;
+                Poll::Pending
+            } else {
+                Poll::Ready(Ok(()))
+            }
+        }
+    }
+    impl AsyncFileWriteSession for StageWriter {
+        fn commit_async<'a>(mut self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
+            let this = self.as_mut().get_mut();
+            let fail = this.fail_commit;
+            let skip = this.skip_commit;
+            let suspend = matches!(this.suspend_at, SuspendAt::Commit) || skip;
+            let mut yielded = false;
+            Box::pin(std::future::poll_fn(move |_| {
+                if suspend && !yielded {
+                    yielded = true;
+                    return Poll::Pending;
+                }
+                advance_clock();
+                Poll::Ready(if skip {
+                    Err(WriteFailure::new(
+                        FsError::new(FsErrorKind::AlreadyExists, FsOperation::CommitWriter, "skip conflict"),
+                        WriteFailureState::RetryableNotPublished,
+                    ))
+                } else if fail {
+                    Err(WriteFailure::new(
+                        FsError::new(FsErrorKind::Io, FsOperation::CommitWriter, "late async commit failure"),
+                        WriteFailureState::RetryableNotPublished,
+                    ))
+                } else {
+                    Ok(WriteOutcome::new(
+                        AchievedAtomicity::NonAtomic,
+                        PublicationMethod::Direct,
+                    ))
+                })
+            }))
+        }
+        fn abort_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<WriteAbortOutcome>> {
+            let outcome = self.get_mut().abort_outcome;
+            Box::pin(async move {
+                advance_clock();
+                Ok(outcome)
+            })
+        }
+    }
+
+    fn operation(suspend_at: SuspendAt, fail_commit: bool) -> AsyncCopyOperation {
+        let file_system = crate::AsyncFileSystem::from_spi(StageSpi {
+            suspend_at,
+            fail_commit,
+            skip_open: false,
+            skip_commit: false,
+            abort_outcome: WriteAbortOutcome::NotPublished,
+        })
+        .expect("valid async filesystem");
+        let start = Instant::now();
+        NOW.with(|now| now.set(Some(start)));
+        let mut operation = AsyncCopyOperation::new(
+            file_system,
+            Path::parse("/source").expect("source"),
+            Path::parse("/target").expect("target"),
+            CopyOptions::file().with_deadline(Some(Duration::from_secs(1))),
+            SymlinkPolicy::Reject,
+        );
+        operation.deadline = CopyDeadline::new(Some(Duration::from_secs(1)), test_now);
+        operation
+    }
+
+    fn skip_operation(skip_open: bool, abort_outcome: WriteAbortOutcome, with_deadline: bool) -> AsyncCopyOperation {
+        let file_system = crate::AsyncFileSystem::from_spi(StageSpi {
+            suspend_at: SuspendAt::Commit,
+            fail_commit: false,
+            skip_open,
+            skip_commit: !skip_open,
+            abort_outcome,
+        })
+        .expect("valid async filesystem");
+        let start = Instant::now();
+        NOW.with(|now| now.set(Some(start)));
+        let mut options = CopyOptions::default().with_conflict(CopyConflictPolicy::Skip);
+        if with_deadline {
+            options = options.with_deadline(Some(Duration::from_secs(1)));
+        }
+        let mut operation = AsyncCopyOperation::new(
+            file_system,
+            Path::parse("/source").expect("source"),
+            Path::parse("/target").expect("target"),
+            options,
+            SymlinkPolicy::Reject,
+        );
+        if with_deadline {
+            operation.deadline = CopyDeadline::new(Some(Duration::from_secs(1)), test_now);
+        }
+        operation
+    }
+
+    #[test]
+    fn test_async_copy_deadline_after_flush_preserves_unpublished_recovery() {
+        let mut operation = operation(SuspendAt::Flush, false);
+        let mut future = Box::pin(operation.execute());
+        let mut context = Context::from_waker(Waker::noop());
+        assert!(
+            future.as_mut().poll(&mut context).is_pending(),
+            "flush must suspend on first poll"
+        );
+        advance_clock();
+        let failure = match future.as_mut().poll(&mut context) {
+            Poll::Ready(Err(failure)) => failure,
+            _ => panic!("expired flush must fail"),
+        };
+        drop(future);
+        assert_eq!(CopyFailureState::Unchanged, failure.state());
+        assert_eq!(1, failure.partial_stats().bytes);
+        assert!(operation.has_recovery());
+        assert_eq!(
+            AsyncCopyOperationState::Failed(CopyFailureState::Unchanged),
+            operation.state()
+        );
+    }
+
+    #[test]
+    fn test_async_copy_deadline_after_commit_is_published_without_recovery() {
+        let mut operation = operation(SuspendAt::Commit, false);
+        let mut future = Box::pin(operation.execute());
+        let mut context = Context::from_waker(Waker::noop());
+        assert!(
+            future.as_mut().poll(&mut context).is_pending(),
+            "commit must suspend on first poll"
+        );
+        advance_clock();
+        let failure = match future.as_mut().poll(&mut context) {
+            Poll::Ready(Err(failure)) => failure,
+            _ => panic!("expired commit must fail"),
+        };
+        drop(future);
+        assert_eq!(CopyFailureState::Published, failure.state());
+        assert_eq!(1, failure.partial_stats().bytes);
+        assert!(!operation.has_recovery());
+    }
+
+    #[test]
+    fn test_async_copy_deadline_preserves_late_provider_commit_error() {
+        let mut operation = operation(SuspendAt::Commit, true);
+        let mut future = Box::pin(operation.execute());
+        let mut context = Context::from_waker(Waker::noop());
+        assert!(future.as_mut().poll(&mut context).is_pending());
+        advance_clock();
+        let failure = match future.as_mut().poll(&mut context) {
+            Poll::Ready(Err(failure)) => failure,
+            _ => panic!("provider error must win"),
+        };
+        drop(future);
+        assert_eq!(FsErrorKind::Io, failure.error().kind());
+        assert_eq!(CopyFailureState::Unchanged, failure.state());
+    }
+
+    #[test]
+    fn test_async_copy_deadline_after_open_skip_preserves_skipped_stats() {
+        let mut operation = skip_operation(true, WriteAbortOutcome::NotPublished, true);
+        let mut future = Box::pin(operation.execute());
+        let mut context = Context::from_waker(Waker::noop());
+        assert!(
+            future.as_mut().poll(&mut context).is_pending(),
+            "provider open must suspend first"
+        );
+        advance_clock();
+        let failure = match future.as_mut().poll(&mut context) {
+            Poll::Ready(Err(failure)) => failure,
+            _ => panic!("expired skipped open must fail"),
+        };
+        drop(future);
+        assert_eq!(CopyFailureState::Unchanged, failure.state());
+        assert_eq!(1, failure.partial_stats().skipped);
+        assert!(!operation.has_recovery());
+    }
+
+    #[test]
+    fn test_async_copy_deadline_after_skip_abort_keeps_abort_publication_state() {
+        for abort_outcome in [WriteAbortOutcome::Published, WriteAbortOutcome::Indeterminate] {
+            let mut operation = skip_operation(false, abort_outcome, true);
+            let mut future = Box::pin(operation.execute());
+            let mut context = Context::from_waker(Waker::noop());
+            assert!(
+                future.as_mut().poll(&mut context).is_pending(),
+                "commit must suspend first"
+            );
+            advance_clock();
+            let failure = match future.as_mut().poll(&mut context) {
+                Poll::Ready(Err(failure)) => failure,
+                _ => panic!("expired skipped commit must fail"),
+            };
+            drop(future);
+            assert_eq!(
+                if abort_outcome == WriteAbortOutcome::Published {
+                    CopyFailureState::Published
+                } else {
+                    CopyFailureState::Indeterminate
+                },
+                failure.state(),
+            );
+            assert_eq!(1, failure.partial_stats().skipped);
+            assert!(!operation.has_recovery());
+        }
+    }
+
+    #[test]
+    fn test_async_copy_skip_without_deadline_remains_successful() {
+        let mut operation = skip_operation(true, WriteAbortOutcome::NotPublished, false);
+        let mut future = Box::pin(operation.execute());
+        let mut context = Context::from_waker(Waker::noop());
+        assert!(
+            future.as_mut().poll(&mut context).is_pending(),
+            "provider open must suspend first"
+        );
+        let outcome = match future.as_mut().poll(&mut context) {
+            Poll::Ready(Ok(outcome)) => outcome,
+            _ => panic!("unbounded skip should succeed"),
+        };
+        drop(future);
+        assert_eq!(1, outcome.stats().skipped);
+        assert_eq!(AsyncCopyOperationState::Completed, operation.state());
+    }
 }

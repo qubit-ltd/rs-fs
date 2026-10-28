@@ -259,6 +259,22 @@ impl AsyncFileSystem {
     }
 
     /// Asynchronously opens a validated writer and verifies its identity.
+    ///
+    /// An [`OpenFailure`] identifies where the attempt stopped:
+    /// [`OpenFailureStage::Preflight`] means local validation rejected it
+    /// before provider I/O; [`OpenFailureStage::ProviderOpen`] means the
+    /// provider returned an error before an opened envelope; and
+    /// [`OpenFailureStage::OutcomeValidation`] means an opened envelope failed
+    /// identity validation. The last stage can retain a [`RejectedAsyncWriter`]
+    /// that owns an isolated session with abort-only cleanup authority. Handle
+    /// that recovery explicitly with `abort_async`; dropping the failure or
+    /// receiving no recovery does not prove that no side effect occurred.
+    /// Keep the typed failure intact when recovery matters instead of using `?`
+    /// to discard it.
+    ///
+    /// # Errors
+    /// Returns the contextual error, opening stage, and any isolated recovery
+    /// session when validation, provider opening, or outcome validation fails.
     pub async fn open_writer(
         &self,
         path: &Path,
@@ -366,7 +382,11 @@ impl AsyncFileSystem {
             .await
             .map_err(|error| self.enrich(error, path, FsOperation::CreateDir))?;
         if outcome.already_existed() && !exists_ok {
-            return Err(self.contract_error(path, "provider accepted an existing directory without exists_ok"));
+            return Err(self.core.contract_error(
+                path,
+                FsOperation::CreateDir,
+                "provider accepted an existing directory without exists_ok",
+            ));
         }
         Ok(outcome)
     }
@@ -550,6 +570,9 @@ impl AsyncFileSystem {
     ///
     /// This method performs no provider I/O. Provider work begins only when
     /// [`AsyncCopyOperation::execute`] is polled.
+    /// Keep the returned operation outside the cancellation scope and cancel
+    /// only its `execute` future. The operation then remains available to
+    /// inspect publication state and take any retained writer recovery.
     ///
     /// # Errors
     /// Returns [`AsyncCopyFailure`] when local preflight rejects the request.
@@ -667,7 +690,11 @@ impl AsyncFileSystem {
         }
         .map_err(|error| self.enrich(error, path, FsOperation::Delete))?;
         if outcome.already_missing() && !missing_ok {
-            return Err(self.contract_error(path, "provider accepted a missing target without missing_ok"));
+            return Err(self.core.contract_error(
+                path,
+                FsOperation::Delete,
+                "provider accepted a missing target without missing_ok",
+            ));
         }
         Ok(outcome)
     }

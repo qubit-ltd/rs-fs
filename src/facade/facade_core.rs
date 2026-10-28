@@ -109,8 +109,7 @@ impl FacadeCore {
                 FsOperation::Copy,
                 "copy source and target must differ",
             )
-            .with_path(source.clone())
-            .with_target(target.clone()));
+            .with_missing_context(source, Some(target), self.properties.info().provider_id()));
         }
         options
             .validate_against(self.properties.capabilities())
@@ -123,7 +122,8 @@ impl FacadeCore {
                 FsErrorKind::RequirementNotMet,
                 FsOperation::Copy,
                 "copy entry limit must be greater than zero",
-            ));
+            )
+            .with_missing_context(source, Some(target), self.properties.info().provider_id()));
         }
         let mut rejection = crate::copy::fallback_rejection(options, self.properties.symlink_policy());
         if rejection.is_none() {
@@ -148,7 +148,8 @@ impl FacadeCore {
                 FsErrorKind::RequirementNotMet,
                 FsOperation::Copy,
                 "copy has no available provider or stream execution path",
-            )),
+            )
+            .with_missing_context(source, Some(target), self.properties.info().provider_id())),
         }
     }
 
@@ -251,5 +252,63 @@ impl FacadeCore {
     #[inline]
     pub(crate) fn next_prefix_read_len(accumulated: usize, maximum: usize) -> usize {
         maximum.saturating_sub(accumulated).min(Self::PREFIX_BUFFER_SIZE)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FacadeCore;
+    use crate::error::FsEffectState;
+    use crate::error::FsError;
+    use crate::error::FsErrorKind;
+    use crate::error::FsOperation;
+    use crate::metadata::FileSystemCapabilities;
+    use crate::metadata::FileSystemId;
+    use crate::metadata::FileSystemInfo;
+    use crate::metadata::FileSystemLimits;
+    use crate::metadata::SymlinkPolicy;
+    use crate::path::Path;
+    use crate::path::PathConstraints;
+    use crate::path::PathSemantics;
+    use crate::spi::ProviderOperations;
+    use crate::spi::ProviderProperties;
+
+    fn core() -> FacadeCore {
+        let properties = ProviderProperties::new(
+            FileSystemInfo::new(
+                FileSystemId::new("facade-core-test").expect("test id should be valid"),
+                "facade-core-test",
+                PathSemantics::Hierarchical,
+            ),
+            ProviderOperations::new(),
+            FileSystemCapabilities::new(),
+            FileSystemLimits::unknown(),
+            PathConstraints::absolute(),
+            SymlinkPolicy::Reject,
+        )
+        .expect("test provider properties should be valid");
+        FacadeCore::new(properties).expect("facade core should construct")
+    }
+
+    #[test]
+    fn test_enrich_preserves_source_and_effect_while_adding_context() {
+        let core = core();
+        let path = Path::parse("/resource").expect("test path should parse");
+        let original = FsError::with_source(
+            FsErrorKind::Io,
+            FsOperation::Other,
+            "provider operation failed",
+            std::io::Error::other("injected source"),
+        )
+        .with_effect_state(FsEffectState::PartiallyApplied);
+
+        let error = core.enrich(original, Some(&path), FsOperation::Delete);
+
+        assert_eq!(FsErrorKind::Io, error.kind());
+        assert_eq!(FsOperation::Delete, error.operation());
+        assert_eq!(Some("facade-core-test"), error.provider());
+        assert_eq!(Some(&path), error.path());
+        assert_eq!(Some(FsEffectState::PartiallyApplied), error.effect_state());
+        assert!(std::error::Error::source(&error).is_some());
     }
 }
