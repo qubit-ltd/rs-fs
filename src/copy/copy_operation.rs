@@ -7,6 +7,9 @@
 // =============================================================================
 //! Synchronous copy operation implementation.
 
+use std::io::Error as IoError;
+use std::io::ErrorKind as IoErrorKind;
+
 use qubit_io::Output;
 
 use super::CopyConflictPolicy;
@@ -309,9 +312,9 @@ impl<'a> CopyOperation<'a> {
                     ));
                 }
             };
-            if let Err(error) = Output::write_fully(&mut writer, &buffer[..read]) {
+            if let Err(error) = self.write_chunk(&mut writer, &buffer[..read]) {
                 return Err(self.failure(
-                    self.io_error(self.target, FsOperation::Write, error),
+                    error,
                     from_writer_state(writer.state()),
                     fallback_failure_stats(writer.written_bytes()),
                     Some(writer),
@@ -398,11 +401,53 @@ impl<'a> CopyOperation<'a> {
                 None,
             ));
         }
-        Ok(CopyOutcome::streamed_fallback(
+        let mut outcome = CopyOutcome::streamed_fallback(
             StreamCopyPlan::completed_stats(metadata.kind(), bytes),
             write_outcome.atomicity(),
             write_outcome.durable(),
-        ))
+        );
+        if let Some(version) = write_outcome.version() {
+            outcome = outcome.with_target_version(version.clone());
+        }
+        Ok(outcome)
+    }
+
+    /// Writes one source chunk while checking the operation deadline around
+    /// every provider write attempt.
+    ///
+    /// # Parameters
+    /// - `writer`: Destination writer that retains accepted bytes for recovery.
+    /// - `bytes`: Source chunk to write completely.
+    ///
+    /// # Returns
+    /// `Ok(())` after the complete chunk has been accepted.
+    ///
+    /// # Errors
+    /// Returns a deadline error, a write-zero error, or the provider write
+    /// error with destination context.
+    fn write_chunk(&self, writer: &mut FileWriter, bytes: &[u8]) -> FsResult<()> {
+        let mut written = 0;
+        while written < bytes.len() {
+            if let Some(error) = self.deadline_error() {
+                return Err(error);
+            }
+            match Output::write(writer, &bytes[written..]) {
+                Ok(0) => {
+                    return Err(self.io_error(
+                        self.target,
+                        FsOperation::Write,
+                        IoError::new(IoErrorKind::WriteZero, "failed to write copy chunk"),
+                    ));
+                }
+                Ok(count) => written += count,
+                Err(error) if error.kind() == IoErrorKind::Interrupted => {}
+                Err(error) => return Err(self.io_error(self.target, FsOperation::Write, error)),
+            }
+            if let Some(error) = self.deadline_error() {
+                return Err(error);
+            }
+        }
+        Ok(())
     }
 
     /// Builds a typed copy failure with operation context.
@@ -462,6 +507,8 @@ impl<'a> CopyOperation<'a> {
 mod tests {
     use std::cell::Cell;
     use std::io::Cursor;
+    use std::io::Error as IoError;
+    use std::io::ErrorKind;
     use std::io::Result as IoResult;
     use std::time::Duration;
     use std::time::Instant;
@@ -509,6 +556,11 @@ mod tests {
         static NOW: Cell<Option<Instant>> = const { Cell::new(None) };
         static ADVANCE_ON_FLUSH: Cell<bool> = const { Cell::new(false) };
         static ADVANCE_ON_COMMIT: Cell<bool> = const { Cell::new(false) };
+        static WRITE_MODE: Cell<u8> = const { Cell::new(0) };
+        static WRITE_CALLS: Cell<usize> = const { Cell::new(0) };
+        static FLUSH_CALLS: Cell<usize> = const { Cell::new(0) };
+        static COMMIT_CALLS: Cell<usize> = const { Cell::new(0) };
+        static WRITTEN: std::cell::RefCell<Vec<u8>> = const { std::cell::RefCell::new(Vec::new()) };
     }
 
     fn test_now() -> Instant {
@@ -551,7 +603,11 @@ mod tests {
         fn stat(&self, request: StatRequest<'_>) -> FsResult<StatResponse> {
             Ok(StatResponse::new(
                 request.path().clone(),
-                FileMetadata::new(FileKind::File).with_len(Some(1)),
+                FileMetadata::new(FileKind::File).with_len(Some(match WRITE_MODE.with(Cell::get) {
+                    2 => 2,
+                    8 => 4,
+                    _ => 1,
+                })),
             ))
         }
 
@@ -561,7 +617,12 @@ mod tests {
                 request.path().clone(),
             )
             .with_metadata(FileMetadata::new(FileKind::File).with_len(Some(1)));
-            Ok(OpenedReader::new(info, Box::new(Cursor::new(vec![b'x']))))
+            let bytes = match WRITE_MODE.with(Cell::get) {
+                2 => vec![b'x', b'y'],
+                8 => vec![b'w', b'x', b'y', b'z'],
+                _ => vec![b'x'],
+            };
+            Ok(OpenedReader::new(info, Box::new(Cursor::new(bytes))))
         }
 
         fn open_writer(&self, request: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
@@ -584,10 +645,59 @@ mod tests {
     }
     impl Output for StageWriter {
         type Item = u8;
-        unsafe fn write_unchecked(&mut self, _: &[u8], _: usize, count: usize) -> IoResult<usize> {
-            Ok(count)
+        unsafe fn write_unchecked(&mut self, input: &[u8], index: usize, count: usize) -> IoResult<usize> {
+            let call = WRITE_CALLS.with(|calls| {
+                let call = calls.get();
+                calls.set(call + 1);
+                call
+            });
+            match (WRITE_MODE.with(Cell::get), call) {
+                (1, 0) => {
+                    advance_clock();
+                    Err(IoError::new(ErrorKind::Interrupted, "injected interruption"))
+                }
+                (2, 0) => {
+                    advance_clock();
+                    Ok(1)
+                }
+                (3, _) => Ok(0),
+                (4, _) => Err(IoError::other("injected write error")),
+                (5, 0) => {
+                    WRITTEN.with(|bytes| bytes.borrow_mut().push(input[index]));
+                    Ok(1)
+                }
+                (5, _) => {
+                    WRITTEN.with(|bytes| bytes.borrow_mut().extend_from_slice(&input[index..index + count]));
+                    Ok(count)
+                }
+                (6, 0) => {
+                    advance_clock();
+                    Err(IoError::other("real error at deadline"))
+                }
+                (7, 0) => Err(IoError::new(ErrorKind::Interrupted, "retryable interruption")),
+                (7, _) => {
+                    WRITTEN.with(|bytes| bytes.borrow_mut().extend_from_slice(&input[index..index + count]));
+                    Ok(count)
+                }
+                (8, _) => {
+                    WRITTEN.with(|bytes| bytes.borrow_mut().push(input[index]));
+                    Ok(1)
+                }
+                (9, 0) => Err(IoError::new(
+                    ErrorKind::Interrupted,
+                    FsError::new(
+                        FsErrorKind::Indeterminate,
+                        FsOperation::Write,
+                        "uncertain interrupted write",
+                    )
+                    .with_effect_state(crate::error::FsEffectState::Indeterminate),
+                )),
+                (0, _) => Ok(count),
+                _ => panic!("unexpected scripted write call"),
+            }
         }
         fn flush(&mut self) -> IoResult<()> {
+            FLUSH_CALLS.with(|calls| calls.set(calls.get() + 1));
             if ADVANCE_ON_FLUSH.with(Cell::get) {
                 advance_clock();
             }
@@ -596,6 +706,7 @@ mod tests {
     }
     impl FileWriterSpi for StageWriter {
         fn commit(&mut self) -> Result<WriteOutcome, SpiWriteFailure> {
+            COMMIT_CALLS.with(|calls| calls.set(calls.get() + 1));
             if ADVANCE_ON_COMMIT.with(Cell::get) {
                 advance_clock();
             }
@@ -605,10 +716,10 @@ mod tests {
                     WriteFailureState::RetryableNotPublished,
                 ));
             }
-            Ok(WriteOutcome::new(
-                AchievedAtomicity::NonAtomic,
-                PublicationMethod::Direct,
-            ))
+            Ok(
+                WriteOutcome::new(AchievedAtomicity::NonAtomic, PublicationMethod::Direct)
+                    .with_version(crate::metadata::ResourceVersion::new("generation-7")),
+            )
         }
         fn abort(&mut self) -> FsResult<WriteAbortOutcome> {
             Ok(WriteAbortOutcome::NotPublished)
@@ -616,6 +727,10 @@ mod tests {
     }
 
     fn operation(late_commit_error: bool) -> CopyOperation<'static> {
+        operation_with_mode(late_commit_error, 0)
+    }
+
+    fn operation_with_mode(late_commit_error: bool, mode: u8) -> CopyOperation<'static> {
         let filesystem = Box::leak(Box::new(
             crate::FileSystem::from_spi(StageSpi { late_commit_error }).expect("valid test filesystem"),
         ));
@@ -623,6 +738,11 @@ mod tests {
         let target = Box::leak(Box::new(Path::parse("/target").expect("valid target path")));
         let start = Instant::now();
         NOW.with(|now| now.set(Some(start)));
+        WRITE_MODE.with(|value| value.set(mode));
+        WRITE_CALLS.with(|value| value.set(0));
+        WRITTEN.with(|bytes| bytes.borrow_mut().clear());
+        FLUSH_CALLS.with(|value| value.set(0));
+        COMMIT_CALLS.with(|value| value.set(0));
         let mut operation = CopyOperation::new(
             filesystem,
             source,
@@ -631,6 +751,85 @@ mod tests {
         );
         operation.deadline = super::CopyDeadline::new(Some(Duration::from_secs(1)), test_now);
         operation
+    }
+
+    #[test]
+    fn test_copy_deadline_interrupt_stops_before_next_write() {
+        let failure = operation_with_mode(false, 1)
+            .execute()
+            .expect_err("deadline after interruption must fail");
+        assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
+        assert_eq!(FsOperation::Copy, failure.error().operation());
+        assert_eq!(Some(&Path::parse("/source").expect("path")), failure.error().path());
+        assert_eq!(Some(&Path::parse("/target").expect("path")), failure.error().target());
+        assert_eq!(Some("deadline-test"), failure.error().provider());
+        assert!(failure.has_recovery());
+        assert_eq!(0, failure.partial_stats().bytes);
+        assert_eq!(1, WRITE_CALLS.with(Cell::get));
+        assert_eq!(0, FLUSH_CALLS.with(Cell::get));
+        assert_eq!(0, COMMIT_CALLS.with(Cell::get));
+    }
+
+    #[test]
+    fn test_copy_deadline_short_write_preserves_confirmed_prefix() {
+        let failure = operation_with_mode(false, 2)
+            .execute()
+            .expect_err("deadline after short write must fail");
+        assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
+        assert_eq!(FsOperation::Copy, failure.error().operation());
+        assert!(failure.error().path().is_some());
+        assert!(failure.error().target().is_some());
+        assert_eq!(Some("deadline-test"), failure.error().provider());
+        assert!(failure.has_recovery());
+        assert_eq!(1, failure.partial_stats().bytes);
+        assert_eq!(1, WRITE_CALLS.with(Cell::get));
+        assert_eq!(0, FLUSH_CALLS.with(Cell::get));
+        assert_eq!(0, COMMIT_CALLS.with(Cell::get));
+    }
+
+    #[test]
+    fn test_copy_write_chunk_retries_interruption_and_short_writes_exact_payload() {
+        let interrupted = operation_with_mode(false, 7)
+            .execute()
+            .expect("interrupted write should retry");
+        assert_eq!(vec![b'x'], WRITTEN.with(|bytes| bytes.borrow().clone()));
+        assert_eq!(2, WRITE_CALLS.with(Cell::get));
+        assert_eq!(
+            Some(&crate::metadata::ResourceVersion::new("generation-7")),
+            interrupted.target_version()
+        );
+        let short = operation_with_mode(false, 8)
+            .execute()
+            .expect("short writes should complete");
+        assert_eq!(b"wxyz", WRITTEN.with(|bytes| bytes.borrow().clone()).as_slice());
+        assert_eq!(4, WRITE_CALLS.with(Cell::get));
+        assert_eq!(
+            Some(&crate::metadata::ResourceVersion::new("generation-7")),
+            short.target_version()
+        );
+    }
+
+    #[test]
+    fn test_copy_write_chunk_returns_write_zero_and_preserves_uncertain_error() {
+        let zero = operation_with_mode(false, 3)
+            .execute()
+            .expect_err("zero write must fail");
+        assert_eq!(FsErrorKind::Io, zero.error().kind());
+        assert!(zero.has_recovery());
+        assert_eq!(1, WRITE_CALLS.with(Cell::get));
+        let error = operation_with_mode(false, 6)
+            .execute()
+            .expect_err("provider error wins over deadline");
+        assert_eq!(FsErrorKind::Io, error.error().kind());
+        assert_eq!(FsOperation::Copy, error.error().operation());
+        assert_eq!(1, WRITE_CALLS.with(Cell::get));
+        assert_eq!(0, FLUSH_CALLS.with(Cell::get));
+        assert_eq!(0, COMMIT_CALLS.with(Cell::get));
+        let typed_interrupted = operation_with_mode(false, 9)
+            .execute()
+            .expect_err("uncertain typed interruption must not retry");
+        assert_eq!(1, WRITE_CALLS.with(Cell::get));
+        assert!(typed_interrupted.has_recovery());
     }
 
     #[test]

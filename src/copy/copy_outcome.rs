@@ -154,7 +154,7 @@ impl CopyOutcome {
         self.metadata
     }
 
-    /// Returns the target version when the provider reported one.
+    /// Returns the target version reported by the provider or fallback writer.
     ///
     /// # Returns
     /// `Some` with the destination version when reported, or `None` otherwise.

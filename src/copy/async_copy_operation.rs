@@ -637,11 +637,15 @@ fn stream_copy_fallback<'a>(
             ));
         }
         let _ = writer_slot.take();
-        Ok(CopyOutcome::streamed_fallback(
+        let mut outcome = CopyOutcome::streamed_fallback(
             StreamCopyPlan::completed_stats(metadata.kind(), bytes),
             write_outcome.atomicity(),
             write_outcome.durable(),
-        ))
+        );
+        if let Some(version) = write_outcome.version() {
+            outcome = outcome.with_target_version(version.clone());
+        }
+        Ok(outcome)
     })
 }
 

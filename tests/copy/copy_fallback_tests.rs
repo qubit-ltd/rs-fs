@@ -483,11 +483,10 @@ impl FileSystemSpi for RecordingSpi {
     fn try_copy(&self, _: CopyRequest<'_>) -> Result<CopyAttempt, SpiCopyFailure> {
         self.calls.lock().expect("calls lock should succeed").push("try_copy");
         match self.response {
-            CopyResponse::Completed => Ok(CopyAttempt::Completed(CopyOutcome::new(
-                CopyStats::default(),
-                CopyMethod::Native,
-                AchievedAtomicity::Atomic,
-            ))),
+            CopyResponse::Completed => Ok(CopyAttempt::Completed(
+                CopyOutcome::new(CopyStats::default(), CopyMethod::Native, AchievedAtomicity::Atomic)
+                    .with_target_version(qubit_fs::metadata::ResourceVersion::new("native-generation")),
+            )),
             CopyResponse::CompletedAtomicDowngrade => Ok(CopyAttempt::Completed(CopyOutcome::new(
                 CopyStats {
                     files: 1,
@@ -772,6 +771,10 @@ fn test_copy_completed_does_not_open_fallback_handles() {
         .expect("native copy should succeed");
     assert_eq!(CopyMethod::Native, outcome.method());
     assert_eq!(
+        Some(&qubit_fs::metadata::ResourceVersion::new("native-generation")),
+        outcome.target_version()
+    );
+    assert_eq!(
         ["try_copy"],
         calls.lock().expect("calls lock should succeed").as_slice()
     );
@@ -816,6 +819,7 @@ fn test_copy_declined_uses_allowlisted_stream_fallback() {
         .expect("safe fallback should succeed");
     assert_eq!(CopyMethod::Streamed, outcome.method());
     assert!(outcome.used_fallback());
+    assert_eq!(None, outcome.target_version());
     assert_eq!(b"bytes", bytes.lock().expect("bytes lock should succeed").as_slice());
     assert_eq!(
         ["try_copy", "stat", "open_reader", "open_writer"],
@@ -1095,6 +1099,7 @@ fn test_copy_declined_preserves_stream_and_writer_recovery_states() {
         )
         .expect("an existing target should be skipped when explicitly allowed");
     assert_eq!(1, skipped.stats().skipped);
+    assert_eq!(None, skipped.target_version());
 
     for (response, expected, writer_state) in [
         (

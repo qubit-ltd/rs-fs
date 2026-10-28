@@ -8,11 +8,14 @@
 //! External fallback failures and cancellation behavior for asynchronous copy.
 
 use std::future::Future;
+use std::pin::Pin;
 use std::task::Context;
 use std::task::Poll;
 use std::task::Waker;
 use std::time::Duration;
 
+use qubit_fs::AsyncFileSystem;
+use qubit_fs::FsResult;
 use qubit_fs::Path;
 use qubit_fs::copy::AsyncCopyOperationState;
 use qubit_fs::copy::CopyConflictPolicy;
@@ -25,12 +28,37 @@ use qubit_fs::error::FsErrorKind;
 use qubit_fs::metadata::AchievedAtomicity;
 use qubit_fs::metadata::AtomicityRequirement;
 use qubit_fs::metadata::DurabilityRequirement;
+use qubit_fs::metadata::FileKind;
+use qubit_fs::metadata::FileMetadata;
+use qubit_fs::metadata::FileSystemCapabilities;
 use qubit_fs::metadata::FileSystemCapability;
+use qubit_fs::metadata::FileSystemId;
+use qubit_fs::metadata::FileSystemInfo;
+use qubit_fs::metadata::FileSystemLimits;
+use qubit_fs::metadata::OpenedFileInfo;
+use qubit_fs::metadata::PublicationMethod;
+use qubit_fs::metadata::ResourceVersion;
 use qubit_fs::metadata::SymlinkPolicy;
+use qubit_fs::metadata::WriteOutcome;
+use qubit_fs::path::PathConstraints;
+use qubit_fs::path::PathSemantics;
+use qubit_fs::spi::AsyncFileSystemSpi;
+use qubit_fs::spi::AsyncFileWriteSession;
+use qubit_fs::spi::OpenReaderRequest;
+use qubit_fs::spi::OpenWriterRequest;
+use qubit_fs::spi::OpenedAsyncReader;
+use qubit_fs::spi::OpenedAsyncWriter;
+use qubit_fs::spi::ProviderOperations;
+use qubit_fs::spi::ProviderProperties;
+use qubit_fs::spi::SpiFuture;
+use qubit_fs::spi::StatRequest;
+use qubit_fs::spi::StatResponse;
 use qubit_fs::write::AsyncWriterRecovery;
 use qubit_fs::write::WriteAbortOutcome;
 use qubit_fs::write::WriteFailureState;
 use qubit_fs::write::WriterState;
+use qubit_io::AsyncInput;
+use qubit_io::AsyncOutput;
 
 use crate::async_recording_spi::AsyncCopyStage;
 use crate::async_recording_spi::AsyncRecordingConfig;
@@ -53,6 +81,132 @@ fn ready_repoll<F: Future>(future: F) -> F::Output {
         }
     }
     panic!("deterministic test future did not become ready");
+}
+
+struct VersionProbe;
+struct EmptyInput;
+struct VersionedWriter;
+
+impl AsyncFileSystemSpi for VersionProbe {
+    fn properties(&self) -> ProviderProperties {
+        ProviderProperties::new(
+            FileSystemInfo::new(
+                FileSystemId::new("async-version-probe").expect("valid id"),
+                "async-version-probe",
+                PathSemantics::Hierarchical,
+            ),
+            ProviderOperations::new()
+                .with(qubit_fs::spi::ProviderOperation::Stat)
+                .with(qubit_fs::spi::ProviderOperation::OpenReader)
+                .with(qubit_fs::spi::ProviderOperation::OpenWriter),
+            FileSystemCapabilities::new()
+                .with_guaranteed(FileSystemCapability::Read)
+                .with_guaranteed(FileSystemCapability::Write),
+            FileSystemLimits::unknown(),
+            PathConstraints::absolute(),
+            SymlinkPolicy::Reject,
+        )
+        .expect("valid provider properties")
+    }
+
+    fn stat<'a>(&'a self, request: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
+        let path = request.path().clone();
+        Box::pin(async move {
+            Ok(StatResponse::new(
+                path,
+                FileMetadata::new(FileKind::File).with_len(Some(0)),
+            ))
+        })
+    }
+
+    fn open_reader<'a>(&'a self, request: OpenReaderRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
+        let info = OpenedFileInfo::new(
+            FileSystemId::new("async-version-probe").expect("valid id"),
+            request.path().clone(),
+        );
+        Box::pin(async move { Ok(OpenedAsyncReader::new(info, Box::new(EmptyInput))) })
+    }
+
+    fn open_writer<'a>(&'a self, request: OpenWriterRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
+        let info = OpenedFileInfo::new(
+            FileSystemId::new("async-version-probe").expect("valid id"),
+            request.path().clone(),
+        );
+        Box::pin(async move { Ok(OpenedAsyncWriter::new(info, Box::new(VersionedWriter))) })
+    }
+}
+
+impl AsyncInput for EmptyInput {
+    type Item = u8;
+    unsafe fn poll_read_unchecked(
+        self: Pin<&mut Self>,
+        _: &mut Context<'_>,
+        _: &mut [u8],
+        _: usize,
+        _: usize,
+    ) -> Poll<std::io::Result<usize>> {
+        Poll::Ready(Ok(0))
+    }
+}
+
+impl AsyncOutput for VersionedWriter {
+    type Item = u8;
+    unsafe fn poll_write_unchecked(
+        self: Pin<&mut Self>,
+        _: &mut Context<'_>,
+        _: &[u8],
+        _: usize,
+        count: usize,
+    ) -> Poll<std::io::Result<usize>> {
+        Poll::Ready(Ok(count))
+    }
+    fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+}
+
+impl AsyncFileWriteSession for VersionedWriter {
+    fn commit_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<WriteOutcome, qubit_fs::write::WriteFailure>> {
+        Box::pin(async {
+            Ok(
+                WriteOutcome::new(AchievedAtomicity::NonAtomic, PublicationMethod::Direct)
+                    .with_version(ResourceVersion::new("generation-7")),
+            )
+        })
+    }
+    fn abort_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<WriteAbortOutcome>> {
+        Box::pin(async { Ok(WriteAbortOutcome::NotPublished) })
+    }
+}
+
+#[test]
+fn test_async_stream_fallback_preserves_commit_target_version() {
+    let file_system = AsyncFileSystem::from_spi(VersionProbe).expect("provider should construct");
+    let mut operation = file_system
+        .begin_copy(path("/source"), path("/target"), CopyOptions::default())
+        .expect("copy preflight should succeed");
+    let outcome = ready_repoll(operation.execute()).expect("empty fallback should commit");
+    assert_eq!(Some(&ResourceVersion::new("generation-7")), outcome.target_version());
+}
+
+#[test]
+fn test_async_stream_fallback_skip_has_no_target_version() {
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
+        decline_copy: true,
+        writer_open_error: Some(FsErrorKind::AlreadyExists),
+        writer_open_effect: Some(qubit_fs::error::FsEffectState::Unchanged),
+        ..AsyncRecordingConfig::default()
+    });
+    let mut operation = file_system
+        .begin_copy(
+            path("/source"),
+            path("/target"),
+            CopyOptions::default().with_conflict(CopyConflictPolicy::Skip),
+        )
+        .expect("copy preflight should succeed");
+    let outcome = ready_repoll(operation.execute()).expect("existing target should be skipped");
+    assert_eq!(1, outcome.stats().skipped);
+    assert_eq!(None, outcome.target_version());
 }
 
 #[test]
@@ -391,6 +545,7 @@ fn test_async_native_path_does_not_apply_fallback_mode_restrictions() {
         .expect("native copy owns tree semantics");
     let outcome = ready(operation.execute()).expect("native copy should succeed");
     assert!(!outcome.used_fallback());
+    assert_eq!(None, outcome.target_version());
     assert_eq!(vec!["try_copy"], probe.calls());
 }
 
