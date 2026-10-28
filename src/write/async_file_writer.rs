@@ -413,6 +413,18 @@ impl AsyncOutput for AsyncFileWriter {
         // the wrapped asynchronous output session.
         match unsafe { this.session.as_mut().poll_write_unchecked(cx, input, index, count) } {
             Poll::Ready(Ok(written)) => {
+                if written > count {
+                    this.state = WriterState::Indeterminate;
+                    return Poll::Ready(Err(FsError::new(
+                        FsErrorKind::ProviderContractViolation,
+                        FsOperation::Write,
+                        "provider reported accepting more bytes than requested",
+                    )
+                    .with_effect_state(FsEffectState::Indeterminate)
+                    .with_path(this.info.path().clone())
+                    .with_provider(&this.provider)
+                    .into_io_error()));
+                }
                 if let Err(error) = this.record_written_bytes(written) {
                     this.state = WriterState::Indeterminate;
                     return Poll::Ready(Err(error));

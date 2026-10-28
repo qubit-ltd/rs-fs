@@ -379,6 +379,18 @@ impl Output for FileWriter {
         // the wrapped output session.
         match unsafe { self.session.write_unchecked(input, index, count) } {
             Ok(value) => {
+                if value > count {
+                    self.state = WriterState::Indeterminate;
+                    return Err(FsError::new(
+                        FsErrorKind::ProviderContractViolation,
+                        FsOperation::Write,
+                        "provider reported accepting more bytes than requested",
+                    )
+                    .with_effect_state(FsEffectState::Indeterminate)
+                    .with_path(self.info.path().clone())
+                    .with_provider(&self.provider)
+                    .into_io_error());
+                }
                 if let Err(error) = self.record_written_bytes(value) {
                     self.state = WriterState::Indeterminate;
                     return Err(error);
