@@ -8,15 +8,436 @@
 
 mod handle_support;
 
+#[cfg(feature = "async")]
+use std::future::Future;
+#[cfg(feature = "async")]
+use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+#[cfg(feature = "async")]
+use std::task::Context;
+#[cfg(feature = "async")]
+use std::task::Poll;
+#[cfg(feature = "async")]
+use std::task::Waker;
+
+#[cfg(feature = "async")]
+use qubit_fs::AsyncFileSystem;
+use qubit_fs::FileSystem;
+use qubit_fs::FsResult;
 use qubit_fs::Path;
 use qubit_fs::error::FsError;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::error::FsOperation;
+use qubit_fs::metadata::AchievedAtomicity;
+use qubit_fs::metadata::FileKind;
+use qubit_fs::metadata::FileMetadata;
+use qubit_fs::metadata::FileSystemCapabilities;
+use qubit_fs::metadata::FileSystemCapability;
+use qubit_fs::metadata::FileSystemId;
+use qubit_fs::metadata::FileSystemInfo;
+use qubit_fs::metadata::FileSystemLimits;
+use qubit_fs::metadata::OpenedFileInfo;
+use qubit_fs::metadata::PublicationMethod;
+use qubit_fs::metadata::SymlinkPolicy;
+use qubit_fs::path::PathConstraints;
+use qubit_fs::path::PathSemantics;
+#[cfg(feature = "async")]
+use qubit_fs::spi::AsyncFileSystemSpi;
+#[cfg(feature = "async")]
+use qubit_fs::spi::AsyncTempResourceSpi;
+use qubit_fs::spi::CreateTempDirectoryRequest;
+use qubit_fs::spi::CreateTempFileRequest;
+use qubit_fs::spi::FileSystemSpi;
+#[cfg(feature = "async")]
+use qubit_fs::spi::OpenedAsyncTempDirectory;
+#[cfg(feature = "async")]
+use qubit_fs::spi::OpenedAsyncTempFile;
+use qubit_fs::spi::OpenedTempDirectory;
+use qubit_fs::spi::OpenedTempFile;
+use qubit_fs::spi::PersistRequest;
+use qubit_fs::spi::ProviderOperation;
+use qubit_fs::spi::ProviderOperations;
+use qubit_fs::spi::ProviderProperties;
+#[cfg(feature = "async")]
+use qubit_fs::spi::SpiFuture;
+use qubit_fs::spi::SpiPersistFailure;
+use qubit_fs::spi::StatRequest;
+use qubit_fs::spi::StatResponse;
+use qubit_fs::spi::TempResourceSpi;
+use qubit_fs::temp::PersistCleanupState;
 use qubit_fs::temp::PersistFailure;
 use qubit_fs::temp::PersistFailureState;
 use qubit_fs::temp::PersistOptions;
+use qubit_fs::temp::PersistOutcome;
 use qubit_fs::temp::TempOptions;
 use qubit_fs::temp::TempResourceState;
+
+struct ResidualProbe {
+    kind: FileKind,
+    cleanup_calls: Arc<AtomicUsize>,
+}
+
+impl ResidualProbe {
+    fn outcome(&self, target: &Path) -> PersistOutcome {
+        PersistOutcome::new(target.clone(), AchievedAtomicity::Atomic, PublicationMethod::Direct)
+            .with_cleanup_state(PersistCleanupState::ResidualTemporaryContainer)
+    }
+
+    fn keep_target(&self) -> Path {
+        Path::parse(if self.kind == FileKind::File {
+            "/kept-file"
+        } else {
+            "/kept-directory"
+        })
+        .expect("keep target")
+    }
+}
+
+impl TempResourceSpi for ResidualProbe {
+    fn persist(&mut self, request: PersistRequest<'_>) -> Result<PersistOutcome, SpiPersistFailure> {
+        Ok(self.outcome(request.target()))
+    }
+
+    fn keep(&mut self) -> Result<PersistOutcome, SpiPersistFailure> {
+        let target = self.keep_target();
+        Ok(self.outcome(&target))
+    }
+
+    fn cleanup(&mut self) -> FsResult<()> {
+        self.cleanup_calls.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    }
+}
+
+#[cfg(feature = "async")]
+impl AsyncTempResourceSpi for ResidualProbe {
+    fn cleanup<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<()>> {
+        Box::pin(async move {
+            self.get_mut().cleanup_calls.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        })
+    }
+
+    fn keep<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<PersistOutcome, SpiPersistFailure>> {
+        Box::pin(async move {
+            let this = self.get_mut();
+            let target = this.keep_target();
+            Ok(this.outcome(&target))
+        })
+    }
+
+    fn persist<'a>(
+        self: Pin<&'a mut Self>,
+        request: PersistRequest<'a>,
+    ) -> SpiFuture<'a, Result<PersistOutcome, SpiPersistFailure>> {
+        Box::pin(async move { Ok(self.get_mut().outcome(request.target())) })
+    }
+}
+
+fn residual_properties() -> ProviderProperties {
+    let operations = ProviderOperations::new()
+        .with(ProviderOperation::Stat)
+        .with(ProviderOperation::CreateTempFile)
+        .with(ProviderOperation::CreateTempDirectory);
+    let capabilities = FileSystemCapabilities::new()
+        .with_guaranteed(FileSystemCapability::TempFile)
+        .with_guaranteed(FileSystemCapability::TempDirectory)
+        .with_guaranteed(FileSystemCapability::AtomicTempPersist);
+    ProviderProperties::new(
+        FileSystemInfo::new(
+            FileSystemId::new("residual-probe").expect("filesystem id"),
+            "residual-probe",
+            PathSemantics::Hierarchical,
+        ),
+        operations,
+        capabilities,
+        FileSystemLimits::unknown(),
+        PathConstraints::absolute(),
+        SymlinkPolicy::Reject,
+    )
+    .expect("valid provider properties")
+}
+
+struct ResidualProvider {
+    properties: ProviderProperties,
+    cleanup_calls: Arc<AtomicUsize>,
+}
+
+impl ResidualProvider {
+    fn opened(&self, kind: FileKind) -> OpenedFileInfo {
+        OpenedFileInfo::new(
+            self.properties.info().id().clone(),
+            Path::parse(if kind == FileKind::File {
+                "/scratch-file"
+            } else {
+                "/scratch-dir"
+            })
+            .expect("temporary path"),
+        )
+        .with_metadata(FileMetadata::new(kind))
+    }
+
+    fn session(&self, kind: FileKind) -> Box<ResidualProbe> {
+        Box::new(ResidualProbe {
+            kind,
+            cleanup_calls: Arc::clone(&self.cleanup_calls),
+        })
+    }
+}
+
+impl FileSystemSpi for ResidualProvider {
+    fn properties(&self) -> ProviderProperties {
+        self.properties.clone()
+    }
+
+    fn stat(&self, _: StatRequest<'_>) -> FsResult<StatResponse> {
+        unreachable!("stat is not used by this contract probe")
+    }
+
+    fn create_temp_file(&self, _: CreateTempFileRequest) -> FsResult<OpenedTempFile> {
+        Ok(OpenedTempFile::new(
+            self.opened(FileKind::File),
+            self.session(FileKind::File),
+        ))
+    }
+
+    fn create_temp_directory(&self, _: CreateTempDirectoryRequest) -> FsResult<OpenedTempDirectory> {
+        Ok(OpenedTempDirectory::new(
+            self.opened(FileKind::Directory),
+            self.session(FileKind::Directory),
+        ))
+    }
+}
+
+#[cfg(feature = "async")]
+impl AsyncFileSystemSpi for ResidualProvider {
+    fn properties(&self) -> ProviderProperties {
+        self.properties.clone()
+    }
+
+    fn stat<'a>(&'a self, _: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
+        Box::pin(async { unreachable!("stat is not used by this contract probe") })
+    }
+
+    fn create_temp_file<'a>(&'a self, _: CreateTempFileRequest) -> SpiFuture<'a, FsResult<OpenedAsyncTempFile>> {
+        Box::pin(async move {
+            Ok(OpenedAsyncTempFile::new(
+                self.opened(FileKind::File),
+                self.session(FileKind::File),
+            ))
+        })
+    }
+
+    fn create_temp_directory<'a>(
+        &'a self,
+        _: CreateTempDirectoryRequest,
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncTempDirectory>> {
+        Box::pin(async move {
+            Ok(OpenedAsyncTempDirectory::new(
+                self.opened(FileKind::Directory),
+                self.session(FileKind::Directory),
+            ))
+        })
+    }
+}
+
+#[cfg(feature = "async")]
+fn poll_ready<F: Future>(future: F) -> F::Output {
+    let mut future = std::pin::pin!(future);
+    let mut context = Context::from_waker(Waker::noop());
+    match future.as_mut().poll(&mut context) {
+        Poll::Ready(value) => value,
+        Poll::Pending => panic!("probe future unexpectedly suspended"),
+    }
+}
+
+/// A residual private container does not change the confirmed publication
+/// result.
+#[test]
+fn test_persist_outcome_preserves_residual_temporary_container() {
+    let target = Path::parse("/published").expect("target");
+    let outcome = PersistOutcome::new(target.clone(), AchievedAtomicity::Atomic, PublicationMethod::Direct)
+        .with_cleanup_state(PersistCleanupState::ResidualTemporaryContainer);
+
+    assert_eq!(&target, outcome.target());
+    assert_eq!(AchievedAtomicity::Atomic, outcome.atomicity());
+    assert_eq!(PublicationMethod::Direct, outcome.method());
+    assert_eq!(PersistCleanupState::ResidualTemporaryContainer, outcome.cleanup_state());
+}
+
+#[test]
+fn test_sync_temp_handles_preserve_residual_persist_and_keep_outcomes() {
+    for kind in [FileKind::File, FileKind::Directory] {
+        for persist in [true, false] {
+            let cleanup_calls = Arc::new(AtomicUsize::new(0));
+            let provider = ResidualProvider {
+                properties: residual_properties(),
+                cleanup_calls: Arc::clone(&cleanup_calls),
+            };
+            let filesystem = FileSystem::from_spi(provider).expect("filesystem");
+            let requested_target = Path::parse("/published").expect("target");
+            let (outcome, state) = match (kind.clone(), persist) {
+                (FileKind::File, true) => {
+                    let mut handle = filesystem
+                        .create_temp_file(TempOptions::default())
+                        .expect("temporary file");
+                    let outcome = handle
+                        .persist(&requested_target, PersistOptions::default())
+                        .expect("persist");
+                    let state = handle.state();
+                    assert_eq!(
+                        FsErrorKind::InvalidState,
+                        handle.cleanup().expect_err("terminal cleanup").kind()
+                    );
+                    (outcome, state)
+                }
+                (FileKind::File, false) => {
+                    let mut handle = filesystem
+                        .create_temp_file(TempOptions::default())
+                        .expect("temporary file");
+                    let outcome = handle.keep().expect("keep");
+                    let state = handle.state();
+                    assert_eq!(
+                        FsErrorKind::InvalidState,
+                        handle.cleanup().expect_err("terminal cleanup").kind()
+                    );
+                    (outcome, state)
+                }
+                (FileKind::Directory, true) => {
+                    let mut handle = filesystem
+                        .create_temp_directory(TempOptions::default())
+                        .expect("temporary directory");
+                    let outcome = handle
+                        .persist(&requested_target, PersistOptions::default())
+                        .expect("persist");
+                    let state = handle.state();
+                    assert_eq!(
+                        FsErrorKind::InvalidState,
+                        handle.cleanup().expect_err("terminal cleanup").kind()
+                    );
+                    (outcome, state)
+                }
+                (FileKind::Directory, false) => {
+                    let mut handle = filesystem
+                        .create_temp_directory(TempOptions::default())
+                        .expect("temporary directory");
+                    let outcome = handle.keep().expect("keep");
+                    let state = handle.state();
+                    assert_eq!(
+                        FsErrorKind::InvalidState,
+                        handle.cleanup().expect_err("terminal cleanup").kind()
+                    );
+                    (outcome, state)
+                }
+                _ => unreachable!(),
+            };
+            let expected_target = if persist {
+                requested_target
+            } else if kind == FileKind::File {
+                Path::parse("/kept-file").expect("target")
+            } else {
+                Path::parse("/kept-directory").expect("target")
+            };
+            assert_eq!(&expected_target, outcome.target());
+            assert_eq!(
+                if persist {
+                    TempResourceState::Persisted
+                } else {
+                    TempResourceState::Kept
+                },
+                state
+            );
+            assert_eq!(PersistCleanupState::ResidualTemporaryContainer, outcome.cleanup_state());
+            assert_eq!(0, cleanup_calls.load(Ordering::SeqCst));
+        }
+    }
+}
+
+#[test]
+#[cfg(feature = "async")]
+fn test_async_temp_handles_preserve_residual_persist_and_keep_outcomes() {
+    for kind in [FileKind::File, FileKind::Directory] {
+        for persist in [true, false] {
+            let cleanup_calls = Arc::new(AtomicUsize::new(0));
+            let provider = ResidualProvider {
+                properties: residual_properties(),
+                cleanup_calls: Arc::clone(&cleanup_calls),
+            };
+            let filesystem = AsyncFileSystem::from_spi(provider).expect("filesystem");
+            let requested_target = Path::parse("/published").expect("target");
+            let (outcome, state) = match (kind.clone(), persist) {
+                (FileKind::File, true) => {
+                    let mut handle =
+                        poll_ready(filesystem.create_temp_file(TempOptions::default())).expect("temporary file");
+                    let outcome =
+                        poll_ready(handle.persist(&requested_target, PersistOptions::default())).expect("persist");
+                    let state = handle.state();
+                    assert_eq!(
+                        FsErrorKind::InvalidState,
+                        poll_ready(handle.cleanup()).expect_err("terminal cleanup").kind()
+                    );
+                    (outcome, state)
+                }
+                (FileKind::File, false) => {
+                    let mut handle =
+                        poll_ready(filesystem.create_temp_file(TempOptions::default())).expect("temporary file");
+                    let outcome = poll_ready(handle.keep()).expect("keep");
+                    let state = handle.state();
+                    assert_eq!(
+                        FsErrorKind::InvalidState,
+                        poll_ready(handle.cleanup()).expect_err("terminal cleanup").kind()
+                    );
+                    (outcome, state)
+                }
+                (FileKind::Directory, true) => {
+                    let mut handle = poll_ready(filesystem.create_temp_directory(TempOptions::default()))
+                        .expect("temporary directory");
+                    let outcome =
+                        poll_ready(handle.persist(&requested_target, PersistOptions::default())).expect("persist");
+                    let state = handle.state();
+                    assert_eq!(
+                        FsErrorKind::InvalidState,
+                        poll_ready(handle.cleanup()).expect_err("terminal cleanup").kind()
+                    );
+                    (outcome, state)
+                }
+                (FileKind::Directory, false) => {
+                    let mut handle = poll_ready(filesystem.create_temp_directory(TempOptions::default()))
+                        .expect("temporary directory");
+                    let outcome = poll_ready(handle.keep()).expect("keep");
+                    let state = handle.state();
+                    assert_eq!(
+                        FsErrorKind::InvalidState,
+                        poll_ready(handle.cleanup()).expect_err("terminal cleanup").kind()
+                    );
+                    (outcome, state)
+                }
+                _ => unreachable!(),
+            };
+            let expected_target = if persist {
+                requested_target
+            } else if kind == FileKind::File {
+                Path::parse("/kept-file").expect("target")
+            } else {
+                Path::parse("/kept-directory").expect("target")
+            };
+            assert_eq!(&expected_target, outcome.target());
+            assert_eq!(
+                if persist {
+                    TempResourceState::Persisted
+                } else {
+                    TempResourceState::Kept
+                },
+                state
+            );
+            assert_eq!(PersistCleanupState::ResidualTemporaryContainer, outcome.cleanup_state());
+            assert_eq!(0, cleanup_calls.load(Ordering::SeqCst));
+        }
+    }
+}
+
 #[test]
 fn test_persist_failure_retains_release_state() {
     let failure = PersistFailure::new(
