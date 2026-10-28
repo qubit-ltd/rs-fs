@@ -29,6 +29,7 @@ fn test_required_non_atomic_temp_persist_does_not_assume_source_ownership() {
         )
         .expect_err("non-atomic result must violate required contract");
     assert_eq!(FsErrorKind::ProviderContractViolation, error.error().kind());
+    assert_eq!(Some("handles-test"), error.error().provider());
     assert_eq!(PersistFailureState::PublishedSourceIndeterminate, error.state());
     assert_eq!(TempResourceState::Indeterminate, temporary.state());
     assert_eq!(
@@ -127,6 +128,7 @@ fn test_temp_file_persist_rejects_wrong_provider_target() {
         )
         .expect_err("wrong provider target must violate the contract");
     assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+    assert_eq!(Some("handles-test"), failure.error().provider());
     assert_eq!(PersistFailureState::Indeterminate, failure.state());
     assert_eq!(TempResourceState::Indeterminate, temporary.state());
 }

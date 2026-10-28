@@ -252,18 +252,31 @@ fn test_async_temp_file_persist_delegates_after_preflight() {
 /// Rejects a provider outcome that reports a different persistence target.
 #[test]
 fn test_async_temp_file_rejects_mismatched_persist_target() {
-    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
-        atomic_temp_persist: true,
-        ..AsyncRecordingConfig::default()
-    });
-    let mut temp = ready(file_system.create_temp_file(TempOptions::default())).expect("temporary file should open");
+    for is_directory in [false, true] {
+        let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
+            atomic_temp_persist: true,
+            ..AsyncRecordingConfig::default()
+        });
+        let failure = if is_directory {
+            let mut temp = ready(file_system.create_temp_directory(TempOptions::default()))
+                .expect("temporary directory should open");
+            let failure = ready(temp.persist(&path("/wrong-persist-target"), PersistOptions::default()))
+                .expect_err("mismatched target should violate the provider contract");
+            assert_eq!(TempResourceState::Indeterminate, temp.state());
+            failure
+        } else {
+            let mut temp =
+                ready(file_system.create_temp_file(TempOptions::default())).expect("temporary file should open");
+            let failure = ready(temp.persist(&path("/wrong-persist-target"), PersistOptions::default()))
+                .expect_err("mismatched target should violate the provider contract");
+            assert_eq!(TempResourceState::Indeterminate, temp.state());
+            failure
+        };
 
-    let failure = ready(temp.persist(&path("/wrong-persist-target"), PersistOptions::default()))
-        .expect_err("mismatched target should violate the provider contract");
-
-    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
-    assert_eq!(PersistFailureState::Indeterminate, failure.state());
-    assert_eq!(TempResourceState::Indeterminate, temp.state());
+        assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+        assert_eq!(Some("async-recording"), failure.error().provider());
+        assert_eq!(PersistFailureState::Indeterminate, failure.state());
+    }
 }
 
 /// Covers cleanup and keep delegation for both opaque temporary resource kinds.
@@ -787,6 +800,7 @@ fn test_async_temp_atomicity_violation_preserves_publication_without_cleanup_aut
             let failure =
                 ready(temporary.persist(&target, PersistOptions::default())).expect_err("atomicity violation");
             assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+            assert_eq!(Some("async-recording"), failure.error().provider());
             assert_eq!(PersistFailureState::PublishedSourceIndeterminate, failure.state());
             assert_eq!(Some(&target), failure.publication_target());
             assert_eq!(Some(&target), failure.error().target());
@@ -811,6 +825,7 @@ fn test_async_temp_atomicity_violation_preserves_publication_without_cleanup_aut
             let failure =
                 ready(temporary.persist(&target, PersistOptions::default())).expect_err("atomicity violation");
             assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+            assert_eq!(Some("async-recording"), failure.error().provider());
             assert_eq!(PersistFailureState::PublishedSourceIndeterminate, failure.state());
             assert_eq!(Some(&target), failure.publication_target());
             assert_eq!(Some(&target), failure.error().target());

@@ -72,6 +72,7 @@ fn test_temp_directory_non_atomic_required_persist_does_not_assume_source_owners
         )
         .expect_err("non-atomic provider result must violate requirement");
     assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+    assert_eq!(Some("handles-test"), failure.error().provider());
     assert_eq!(PersistFailureState::PublishedSourceIndeterminate, failure.state());
     assert_eq!(TempResourceState::Indeterminate, directory.state());
     let target = Path::parse("/published-directory").expect("target should parse");
@@ -112,6 +113,7 @@ fn test_temp_directory_rejects_mismatched_persist_target() {
         .expect_err("mismatched target should violate the provider contract");
 
     assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+    assert_eq!(Some("handles-test"), failure.error().provider());
     assert_eq!(PersistFailureState::Indeterminate, failure.state());
     assert_eq!(TempResourceState::Indeterminate, directory.state());
 }

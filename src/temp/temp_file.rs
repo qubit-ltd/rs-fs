@@ -115,7 +115,8 @@ impl TempFile {
                             "provider reported a persistence target different from the request",
                         )
                         .with_path(self.path.clone())
-                        .with_target(target.clone()),
+                        .with_target(target.clone())
+                        .with_provider(self.filesystem.properties().info().provider_id()),
                         PersistFailureState::Indeterminate,
                     ));
                 }
@@ -134,7 +135,8 @@ impl TempFile {
                             "provider reported non-atomic success for atomic-required persist",
                         )
                         .with_path(self.path.clone())
-                        .with_target(target.clone()),
+                        .with_target(target.clone())
+                        .with_provider(self.filesystem.properties().info().provider_id()),
                         PersistFailureState::PublishedSourceIndeterminate,
                     )
                     .with_publication_target(self.lifecycle.publication_target()));
