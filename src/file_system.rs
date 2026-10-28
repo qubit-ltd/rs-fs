@@ -666,14 +666,13 @@ impl FileSystem {
             .validate_read_range(path, options.length())
             .map_err(|error| self.enrich(error, path, FsOperation::OpenReader))?;
         self.require(FileSystemCapability::Read, FsOperation::OpenReader, path)?;
-        self.spi
+        let opened = self
+            .spi
             .open_reader(OpenReaderRequest::new(path, resolved))
-            .and_then(|opened| {
-                let (info, reader) = opened.into_parts();
-                self.validate_opened_info(&info, path)?;
-                Ok(FileReader::new(info, reader))
-            })
-            .map_err(|error| self.enrich(error, path, FsOperation::OpenReader))
+            .map_err(|error| self.enrich(error, path, FsOperation::OpenReader))?;
+        let (info, reader) = opened.into_parts();
+        self.validate_opened_info(&info, path)?;
+        Ok(FileReader::new(info, reader))
     }
 
     /// Validates a temporary-resource persistence request before provider

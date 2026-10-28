@@ -36,6 +36,7 @@ use qubit_fs::metadata::FileSystemCapability;
 use qubit_fs::metadata::FileSystemId;
 use qubit_fs::metadata::FileSystemInfo;
 use qubit_fs::metadata::FileSystemLimits;
+use qubit_fs::metadata::OpenedFileInfo;
 use qubit_fs::metadata::SymlinkPolicy;
 use qubit_fs::path::PathConstraints;
 use qubit_fs::path::PathSemantics;
@@ -44,6 +45,8 @@ use qubit_fs::rename::RenameOptions;
 use qubit_fs::spi::CreateDirectoryRequest;
 use qubit_fs::spi::DeleteFileRequest;
 use qubit_fs::spi::FileSystemSpi;
+use qubit_fs::spi::OpenReaderRequest;
+use qubit_fs::spi::OpenedReader;
 use qubit_fs::spi::ProviderOperation;
 use qubit_fs::spi::ProviderOperations;
 use qubit_fs::spi::ProviderProperties;
@@ -56,6 +59,7 @@ fn path(value: &str) -> Path {
 
 struct SyncOutcomeSpi {
     calls: Arc<AtomicUsize>,
+    invalid_opened_identity: bool,
 }
 
 impl FileSystemSpi for SyncOutcomeSpi {
@@ -68,10 +72,12 @@ impl FileSystemSpi for SyncOutcomeSpi {
             ),
             ProviderOperations::new()
                 .with(ProviderOperation::Stat)
+                .with(ProviderOperation::OpenReader)
                 .with(ProviderOperation::CreateDirectory)
                 .with(ProviderOperation::DeleteFile)
                 .with(ProviderOperation::DeleteDirectory),
             FileSystemCapabilities::new()
+                .with_guaranteed(FileSystemCapability::Read)
                 .with_guaranteed(FileSystemCapability::CreateDirectory)
                 .with_guaranteed(FileSystemCapability::Delete),
             FileSystemLimits::unknown(),
@@ -85,6 +91,22 @@ impl FileSystemSpi for SyncOutcomeSpi {
         Ok(StatResponse::new(
             request.path().clone(),
             FileMetadata::new(FileKind::File),
+        ))
+    }
+
+    fn open_reader(&self, request: OpenReaderRequest<'_>) -> FsResult<OpenedReader> {
+        let id = if self.invalid_opened_identity {
+            "other-provider"
+        } else {
+            "async-recording"
+        };
+        Ok(OpenedReader::new(
+            OpenedFileInfo::new(
+                FileSystemId::new(id).expect("test id should be valid"),
+                request.path().clone(),
+            )
+            .with_metadata(FileMetadata::new(FileKind::File)),
+            Box::new(std::io::Cursor::new(Vec::<u8>::new())),
         ))
     }
 
@@ -105,6 +127,7 @@ fn test_assess_copy_preflight_preserves_request_context() {
     let sync_calls = Arc::new(AtomicUsize::new(0));
     let sync = FileSystem::from_spi(SyncOutcomeSpi {
         calls: Arc::clone(&sync_calls),
+        invalid_opened_identity: false,
     })
     .expect("sync facade should construct");
     for (source, target, options, kind) in [
@@ -177,6 +200,7 @@ fn test_sync_async_outcome_diagnostics_match() {
     let sync_calls = Arc::new(AtomicUsize::new(0));
     let sync = FileSystem::from_spi(SyncOutcomeSpi {
         calls: Arc::clone(&sync_calls),
+        invalid_opened_identity: false,
     })
     .expect("sync facade should construct");
     let resource_path = path("/resource");
@@ -227,6 +251,22 @@ fn test_identity_and_rename_diagnostics_keep_their_operations() {
     assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
     assert_eq!(FsOperation::ValidateProviderOutcome, error.operation());
     assert_eq!(Some(&resource_path), error.path());
+    assert_eq!(Some("async-recording"), error.provider());
+    assert!(!error.to_string().contains("other-provider"));
+
+    let sync = FileSystem::from_spi(SyncOutcomeSpi {
+        calls: Arc::new(AtomicUsize::new(0)),
+        invalid_opened_identity: true,
+    })
+    .expect("sync facade should construct");
+    let sync_error = sync
+        .open_reader(&resource_path, ReadOptions::default())
+        .expect_err("sync provider returned reader with invalid identity");
+    assert_eq!(FsErrorKind::ProviderContractViolation, sync_error.kind());
+    assert_eq!(FsOperation::ValidateProviderOutcome, sync_error.operation());
+    assert_eq!(Some(&resource_path), sync_error.path());
+    assert_eq!(Some("async-recording"), sync_error.provider());
+    assert!(!sync_error.to_string().contains("other-provider"));
 
     let (filesystem, _) = async_recording_file_system(AsyncRecordingConfig {
         rename_atomicity: Some(AchievedAtomicity::Atomic),

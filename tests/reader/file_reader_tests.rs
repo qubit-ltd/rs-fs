@@ -56,6 +56,8 @@ use qubit_io::Input;
 
 struct ReaderSpi {
     wrong_opened_path: bool,
+    wrong_filesystem_id: bool,
+    fail_open_reader: bool,
     read_requests: Arc<Mutex<Vec<usize>>>,
 }
 
@@ -87,14 +89,29 @@ impl FileSystemSpi for ReaderSpi {
         Err(unsupported())
     }
     fn open_reader(&self, request: OpenReaderRequest<'_>) -> FsResult<OpenedReader> {
+        if self.fail_open_reader {
+            return Err(FsError::new(
+                FsErrorKind::Io,
+                FsOperation::OpenReader,
+                "reader open failed",
+            ));
+        }
         let path = if self.wrong_opened_path {
             Path::parse("/different").expect("valid path")
         } else {
             request.path().clone()
         };
         Ok(OpenedReader::new(
-            OpenedFileInfo::new(FileSystemId::new("reader-test").expect("valid id"), path)
-                .with_metadata(FileMetadata::new(FileKind::File).with_len(Some(5))),
+            OpenedFileInfo::new(
+                FileSystemId::new(if self.wrong_filesystem_id {
+                    "other-reader-test"
+                } else {
+                    "reader-test"
+                })
+                .expect("valid id"),
+                path,
+            )
+            .with_metadata(FileMetadata::new(FileKind::File).with_len(Some(5))),
             Box::new(RecordingReader {
                 inner: Cursor::new(b"bytes".to_vec()),
                 read_requests: Arc::clone(&self.read_requests),
@@ -132,6 +149,8 @@ fn unsupported() -> FsError {
 fn test_open_reader_rejects_wrong_opened_identity() {
     let file_system = FileSystem::from_shared_spi(Arc::new(ReaderSpi {
         wrong_opened_path: true,
+        wrong_filesystem_id: false,
+        fail_open_reader: false,
         read_requests: Arc::new(Mutex::new(Vec::new())),
     }))
     .expect("facade should open");
@@ -140,6 +159,47 @@ fn test_open_reader_rejects_wrong_opened_identity() {
         .open_reader(&requested, Default::default())
         .expect_err("wrong identity must be rejected");
     assert_eq!(error.kind(), FsErrorKind::ProviderContractViolation);
+    assert_eq!(FsOperation::ValidateProviderOutcome, error.operation());
+    assert_eq!(Some(&requested), error.path());
+    assert_eq!(Some("reader-test"), error.provider());
+}
+
+#[test]
+fn test_open_reader_rejects_wrong_filesystem_identity() {
+    let file_system = FileSystem::from_shared_spi(Arc::new(ReaderSpi {
+        wrong_opened_path: false,
+        wrong_filesystem_id: true,
+        fail_open_reader: false,
+        read_requests: Arc::new(Mutex::new(Vec::new())),
+    }))
+    .expect("facade should open");
+    let requested = Path::parse("/requested").expect("valid path");
+    let error = file_system
+        .open_reader(&requested, Default::default())
+        .expect_err("wrong filesystem identity must be rejected");
+    assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
+    assert_eq!(FsOperation::ValidateProviderOutcome, error.operation());
+    assert_eq!(Some(&requested), error.path());
+    assert_eq!(Some("reader-test"), error.provider());
+}
+
+#[test]
+fn test_open_reader_spi_error_keeps_open_operation() {
+    let file_system = FileSystem::from_shared_spi(Arc::new(ReaderSpi {
+        wrong_opened_path: false,
+        wrong_filesystem_id: false,
+        fail_open_reader: true,
+        read_requests: Arc::new(Mutex::new(Vec::new())),
+    }))
+    .expect("facade should open");
+    let requested = Path::parse("/requested").expect("valid path");
+    let error = file_system
+        .open_reader(&requested, Default::default())
+        .expect_err("provider failure must be returned");
+    assert_eq!(FsErrorKind::Io, error.kind());
+    assert_eq!(FsOperation::OpenReader, error.operation());
+    assert_eq!(Some(&requested), error.path());
+    assert_eq!(Some("reader-test"), error.provider());
 }
 
 /// Delegates regular byte transfer while preserving the opened identity.
@@ -147,6 +207,8 @@ fn test_open_reader_rejects_wrong_opened_identity() {
 fn test_open_reader_reads_bytes_and_exposes_identity() {
     let file_system = FileSystem::from_spi(ReaderSpi {
         wrong_opened_path: false,
+        wrong_filesystem_id: false,
+        fail_open_reader: false,
         read_requests: Arc::new(Mutex::new(Vec::new())),
     })
     .expect("facade should open");
@@ -169,6 +231,8 @@ fn test_read_all_returns_bytes_and_enforces_maximum() {
     let read_requests = Arc::new(Mutex::new(Vec::new()));
     let file_system = FileSystem::from_spi(ReaderSpi {
         wrong_opened_path: false,
+        wrong_filesystem_id: false,
+        fail_open_reader: false,
         read_requests: Arc::clone(&read_requests),
     })
     .expect("facade should open");
@@ -192,6 +256,8 @@ fn test_read_prefix_returns_bounded_bytes() {
     let read_requests = Arc::new(Mutex::new(Vec::new()));
     let file_system = FileSystem::from_spi(ReaderSpi {
         wrong_opened_path: false,
+        wrong_filesystem_id: false,
+        fail_open_reader: false,
         read_requests: Arc::clone(&read_requests),
     })
     .expect("facade should open");
