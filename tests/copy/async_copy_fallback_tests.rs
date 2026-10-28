@@ -668,6 +668,10 @@ fn test_dropping_unpolled_execute_future_keeps_operation_ready() {
 fn test_async_completed_copy_rechecks_required_atomicity() {
     let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
         completed_copy: Some(AchievedAtomicity::NonAtomic),
+        native_copy_stats: Some(CopyStats {
+            files: 1,
+            ..CopyStats::default()
+        }),
         ..AsyncRecordingConfig::default()
     });
     let mut operation = file_system
@@ -689,6 +693,10 @@ fn test_async_completed_native_copy_violates_required_server_side() {
     let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
         completed_copy: Some(AchievedAtomicity::Atomic),
         server_side_copy: true,
+        native_copy_stats: Some(CopyStats {
+            files: 1,
+            ..CopyStats::default()
+        }),
         ..AsyncRecordingConfig::default()
     });
     let mut operation = file_system
@@ -709,6 +717,10 @@ fn test_async_completed_native_copy_violates_required_server_side() {
 fn test_async_completed_copy_missing_metadata_is_contract_failure() {
     let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
         completed_copy: Some(AchievedAtomicity::Atomic),
+        native_copy_stats: Some(CopyStats {
+            files: 1,
+            ..CopyStats::default()
+        }),
         ..AsyncRecordingConfig::default()
     });
     let mut operation = file_system
@@ -721,6 +733,83 @@ fn test_async_completed_copy_missing_metadata_is_contract_failure() {
     let failure = ready(operation.execute()).expect_err("missing metadata preservation must be rejected");
     assert_eq!(CopyFailureState::Published, failure.state());
     assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+}
+
+#[test]
+fn test_async_copy_violation_uses_skip_publication_facts() {
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
+        completed_copy: Some(AchievedAtomicity::NonAtomic),
+        native_copy_stats: Some(CopyStats {
+            skipped: 1,
+            ..CopyStats::default()
+        }),
+        ..AsyncRecordingConfig::default()
+    });
+    let mut operation = file_system
+        .begin_copy(
+            path("/source"),
+            path("/target"),
+            CopyOptions::file()
+                .with_conflict(CopyConflictPolicy::Skip)
+                .with_atomicity(AtomicityRequirement::Required),
+        )
+        .expect("preflight should succeed");
+    let failure = ready(operation.execute()).expect_err("non-atomic result must fail the request");
+    assert_eq!(CopyFailureState::Unchanged, failure.state());
+    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+}
+
+#[test]
+fn test_async_copy_violation_rejects_inconsistent_skip_stats() {
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
+        completed_copy: Some(AchievedAtomicity::NonAtomic),
+        native_copy_stats: Some(CopyStats {
+            skipped: 1,
+            bytes: 100,
+            ..CopyStats::default()
+        }),
+        ..AsyncRecordingConfig::default()
+    });
+    let mut operation = file_system
+        .begin_copy(
+            path("/source"),
+            path("/target"),
+            CopyOptions::file()
+                .with_conflict(CopyConflictPolicy::Skip)
+                .with_atomicity(AtomicityRequirement::Required),
+        )
+        .expect("preflight should succeed");
+    let failure = ready(operation.execute()).expect_err("inconsistent completion stats must fail");
+    assert_eq!(CopyFailureState::Indeterminate, failure.state());
+    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+}
+
+#[test]
+fn test_async_tree_copy_violation_preserves_partial_publication_facts() {
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
+        completed_copy: Some(AchievedAtomicity::NonAtomic),
+        native_copy_stats: Some(CopyStats {
+            files: 1,
+            directories: 1,
+            failed: 1,
+            ..CopyStats::default()
+        }),
+        ..AsyncRecordingConfig::default()
+    });
+    let mut operation = file_system
+        .begin_copy(
+            path("/source"),
+            path("/target"),
+            CopyOptions::tree().with_max_entries(Some(1)),
+        )
+        .expect("preflight should succeed");
+    let failure = ready(operation.execute()).expect_err("partial completed tree must violate atomicity");
+
+    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+    assert_eq!(CopyFailureState::PartiallyPublished, failure.state());
+    assert_eq!(1, failure.partial_stats().files);
+    assert_eq!(1, failure.partial_stats().directories);
+    assert_eq!(1, failure.partial_stats().failed);
 }
 
 /// Verifies an asynchronous provider failure retains the requested source and

@@ -144,7 +144,7 @@ impl<'a> CopyOperation<'a> {
         if let Some(message) = outcome.contract_violation(&self.options) {
             return Err(self.contextualize_failure(self.failure(
                 FsError::new(FsErrorKind::ProviderContractViolation, FsOperation::Copy, message),
-                CopyFailureState::Published,
+                outcome.violation_failure_state(&self.options),
                 *outcome.stats(),
                 None,
             )));

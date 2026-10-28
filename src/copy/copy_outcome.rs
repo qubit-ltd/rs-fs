@@ -8,6 +8,7 @@
 //! Copy operation outcome.
 
 use crate::copy::CopyConflictPolicy;
+use crate::copy::CopyFailureState;
 use crate::copy::CopyMethod;
 use crate::copy::CopyMode;
 use crate::copy::CopyOptions;
@@ -20,6 +21,10 @@ use crate::metadata::ResourceVersion;
 use crate::metadata::UserMetadata;
 
 /// Outcome returned by copy operations.
+///
+/// Facades validate the reported statistics shape before checking requested
+/// guarantees. When a guarantee is violated, coherent statistics still
+/// determine whether the destination is unchanged, published, or partial.
 ///
 /// # Examples
 ///
@@ -248,6 +253,9 @@ impl CopyOutcome {
     /// The first violated contract, or `None` when all checked constraints
     /// hold.
     pub(crate) fn contract_violation(&self, options: &CopyOptions) -> Option<&'static str> {
+        if self.statistics_shape_violation(options.mode()).is_some() {
+            return Some("provider reported structurally inconsistent copy statistics");
+        }
         if self.used_fallback || self.method == CopyMethod::Streamed {
             return Some("provider returned a facade streamed-fallback outcome as native success");
         }
@@ -280,21 +288,7 @@ impl CopyOutcome {
         if options.max_bytes().is_some_and(|maximum| self.stats.bytes > maximum) {
             return Some("provider reported copy bytes beyond the requested limit");
         }
-        let entries = self
-            .stats
-            .files
-            .checked_add(self.stats.directories)
-            .and_then(|value| value.checked_add(self.stats.symlinks))
-            .and_then(|value| value.checked_add(self.stats.objects))
-            .and_then(|value| value.checked_add(self.stats.prefixes));
-        let valid_skipped_file = options.mode() == CopyMode::File
-            && options.conflict() == CopyConflictPolicy::Skip
-            && self.stats.skipped == 1
-            && entries == Some(0);
-        let valid_copied_file = entries == Some(1) && self.stats.directories == 0 && self.stats.prefixes == 0;
-        if options.mode() == CopyMode::File && !valid_copied_file && !valid_skipped_file {
-            return Some("provider reported a file-mode copy without exactly one resource");
-        }
+        let entries = self.entry_count();
         if entries.is_none()
             || options.max_entries().is_some_and(|maximum| {
                 u64::try_from(maximum).is_ok_and(|maximum| entries.is_some_and(|entries| entries > maximum))
@@ -304,15 +298,63 @@ impl CopyOutcome {
         }
         None
     }
+
+    /// Infers destination publication facts for a rejected completed outcome.
+    ///
+    /// Statistics must form a coherent shape for the requested mode before
+    /// they can establish publication. A request guarantee violation alone
+    /// does not invalidate otherwise coherent statistics.
+    pub(crate) fn violation_failure_state(&self, options: &CopyOptions) -> CopyFailureState {
+        if self.statistics_shape_violation(options.mode()).is_some() {
+            return CopyFailureState::Indeterminate;
+        }
+        crate::copy::internal::from_completed_stats(&self.stats)
+    }
+
+    fn entry_count(&self) -> Option<u64> {
+        self.stats
+            .files
+            .checked_add(self.stats.directories)
+            .and_then(|value| value.checked_add(self.stats.symlinks))
+            .and_then(|value| value.checked_add(self.stats.objects))
+            .and_then(|value| value.checked_add(self.stats.prefixes))
+    }
+
+    fn statistics_shape_violation(&self, mode: CopyMode) -> Option<&'static str> {
+        let Some(entries) = self.entry_count() else {
+            return Some("provider reported copy entry counters that overflow");
+        };
+        if mode != CopyMode::File {
+            return None;
+        }
+        let valid_skipped_file = self.stats.skipped == 1
+            && entries == 0
+            && self.stats.bytes == 0
+            && self.stats.overwritten == 0
+            && self.stats.failed == 0;
+        let valid_copied_file = entries == 1
+            && self.stats.directories == 0
+            && self.stats.prefixes == 0
+            && self.stats.overwritten <= entries
+            && self.stats.skipped == 0
+            && self.stats.failed == 0;
+        if valid_copied_file || valid_skipped_file {
+            None
+        } else {
+            Some("provider reported a file-mode copy without exactly one resource")
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::CopyOutcome;
+    use crate::copy::CopyFailureState;
     use crate::copy::CopyMethod;
     use crate::copy::CopyOptions;
     use crate::copy::CopyStats;
     use crate::metadata::AchievedAtomicity;
+    use crate::metadata::AtomicityRequirement;
 
     #[test]
     fn test_contract_violation_rejects_exceeded_copy_limits() {
@@ -342,6 +384,110 @@ mod tests {
             entries_exceeded
                 .contract_violation(&CopyOptions::tree().with_max_entries(Some(1)))
                 .is_some()
+        );
+    }
+
+    #[test]
+    fn test_violation_failure_state_uses_coherent_statistics() {
+        let skipped = CopyOutcome::new(
+            CopyStats {
+                skipped: 1,
+                ..CopyStats::default()
+            },
+            CopyMethod::Native,
+            AchievedAtomicity::NonAtomic,
+        );
+        let file_skip = CopyOptions::file()
+            .with_conflict(crate::copy::CopyConflictPolicy::Skip)
+            .with_atomicity(AtomicityRequirement::Required);
+        assert_eq!(
+            Some("provider reported non-atomic success for an atomic-required copy"),
+            skipped.contract_violation(&file_skip)
+        );
+        assert_eq!(CopyFailureState::Unchanged, skipped.violation_failure_state(&file_skip));
+
+        let copied_empty_file = CopyOutcome::new(
+            CopyStats {
+                files: 1,
+                ..CopyStats::default()
+            },
+            CopyMethod::Native,
+            AchievedAtomicity::NonAtomic,
+        );
+        assert_eq!(
+            CopyFailureState::Published,
+            copied_empty_file.violation_failure_state(&file_skip)
+        );
+
+        let failed_only = CopyOutcome::new(
+            CopyStats {
+                failed: 1,
+                ..CopyStats::default()
+            },
+            CopyMethod::Native,
+            AchievedAtomicity::Atomic,
+        );
+        assert_eq!(
+            CopyFailureState::Indeterminate,
+            failed_only.violation_failure_state(&CopyOptions::default())
+        );
+
+        let partial_tree = CopyOutcome::new(
+            CopyStats {
+                files: 1,
+                failed: 1,
+                ..CopyStats::default()
+            },
+            CopyMethod::Native,
+            AchievedAtomicity::NonAtomic,
+        );
+        assert_eq!(
+            CopyFailureState::PartiallyPublished,
+            partial_tree.violation_failure_state(&CopyOptions::tree().with_atomicity(AtomicityRequirement::Required)),
+        );
+
+        let inconsistent = CopyOutcome::new(
+            CopyStats {
+                files: 1,
+                skipped: 1,
+                ..CopyStats::default()
+            },
+            CopyMethod::Native,
+            AchievedAtomicity::Atomic,
+        );
+        assert_eq!(
+            CopyFailureState::Indeterminate,
+            inconsistent
+                .violation_failure_state(&CopyOptions::file().with_conflict(crate::copy::CopyConflictPolicy::Skip)),
+        );
+
+        let too_many_overwrites = CopyOutcome::new(
+            CopyStats {
+                files: 1,
+                overwritten: 2,
+                ..CopyStats::default()
+            },
+            CopyMethod::Native,
+            AchievedAtomicity::Atomic,
+        );
+        assert!(too_many_overwrites.contract_violation(&CopyOptions::file()).is_some());
+        assert_eq!(
+            CopyFailureState::Indeterminate,
+            too_many_overwrites.violation_failure_state(&CopyOptions::file())
+        );
+
+        let overflow = CopyOutcome::new(
+            CopyStats {
+                files: u64::MAX,
+                objects: 1,
+                ..CopyStats::default()
+            },
+            CopyMethod::Native,
+            AchievedAtomicity::Atomic,
+        );
+        assert_eq!(
+            CopyFailureState::Indeterminate,
+            overflow.violation_failure_state(&CopyOptions::default())
         );
     }
 }

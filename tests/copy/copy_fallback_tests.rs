@@ -103,6 +103,8 @@ enum CopyResponse {
     CompletedInvalidOverwrittenStats,
     CompletedInvalidFileStats,
     CompletedFileSkipped,
+    CompletedFileSkippedAndCopied,
+    CompletedFileSkippedNonAtomic,
     CompletedStreamedOutcome,
     Declined,
     DeclinedSkipAtomic,
@@ -296,7 +298,9 @@ fn properties(
     }
     if matches!(
         response,
-        CopyResponse::CompletedAtomicDowngrade | CopyResponse::DeclinedSkipAtomic
+        CopyResponse::CompletedAtomicDowngrade
+            | CopyResponse::CompletedFileSkippedNonAtomic
+            | CopyResponse::DeclinedSkipAtomic
     ) {
         capabilities = capabilities.with_guaranteed(FileSystemCapability::AtomicFileCopy);
     }
@@ -485,30 +489,43 @@ impl FileSystemSpi for RecordingSpi {
                 AchievedAtomicity::Atomic,
             ))),
             CopyResponse::CompletedAtomicDowngrade => Ok(CopyAttempt::Completed(CopyOutcome::new(
-                CopyStats::default(),
+                CopyStats {
+                    files: 1,
+                    ..CopyStats::default()
+                },
                 CopyMethod::Native,
                 AchievedAtomicity::NonAtomic,
             ))),
             CopyResponse::CompletedDurabilityDowngrade => Ok(CopyAttempt::Completed(CopyOutcome::new(
-                CopyStats::default(),
+                CopyStats {
+                    files: 1,
+                    ..CopyStats::default()
+                },
                 CopyMethod::Native,
                 AchievedAtomicity::Atomic,
             ))),
             CopyResponse::CompletedServerSideRequiredButNative | CopyResponse::CompletedMetadataDowngrade => {
                 Ok(CopyAttempt::Completed(CopyOutcome::new(
-                    CopyStats::default(),
+                    CopyStats {
+                        files: 1,
+                        ..CopyStats::default()
+                    },
                     CopyMethod::Native,
                     AchievedAtomicity::Atomic,
                 )))
             }
             CopyResponse::CompletedServerSideWhenDisabled => Ok(CopyAttempt::Completed(CopyOutcome::new(
-                CopyStats::default(),
+                CopyStats {
+                    files: 1,
+                    ..CopyStats::default()
+                },
                 CopyMethod::ServerSide,
                 AchievedAtomicity::Atomic,
             ))),
             CopyResponse::CompletedInvalidSkippedStats => Ok(CopyAttempt::Completed(CopyOutcome::new(
                 CopyStats {
                     skipped: 1,
+                    bytes: 100,
                     ..CopyStats::default()
                 },
                 CopyMethod::Native,
@@ -545,6 +562,23 @@ impl FileSystemSpi for RecordingSpi {
                 },
                 CopyMethod::Native,
                 AchievedAtomicity::Atomic,
+            ))),
+            CopyResponse::CompletedFileSkippedAndCopied => Ok(CopyAttempt::Completed(CopyOutcome::new(
+                CopyStats {
+                    files: 1,
+                    skipped: 1,
+                    ..CopyStats::default()
+                },
+                CopyMethod::Native,
+                AchievedAtomicity::Atomic,
+            ))),
+            CopyResponse::CompletedFileSkippedNonAtomic => Ok(CopyAttempt::Completed(CopyOutcome::new(
+                CopyStats {
+                    skipped: 1,
+                    ..CopyStats::default()
+                },
+                CopyMethod::Native,
+                AchievedAtomicity::NonAtomic,
             ))),
             CopyResponse::CompletedStreamedOutcome => Ok(CopyAttempt::Completed(CopyOutcome::new(
                 CopyStats::default(),
@@ -1397,7 +1431,7 @@ fn test_copy_completed_skipped_stats_violate_fail_conflict_policy() {
     let failure = filesystem
         .copy(&path("/source"), &path("/target"), CopyOptions::default())
         .expect_err("skipped stats must match the conflict policy");
-    assert_eq!(CopyFailureState::Published, failure.state());
+    assert_eq!(CopyFailureState::Indeterminate, failure.state());
     assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
 }
 
@@ -1409,7 +1443,7 @@ fn test_copy_completed_failed_stats_violate_stop_on_error_policy() {
     let failure = filesystem
         .copy(&path("/source"), &path("/target"), CopyOptions::default())
         .expect_err("failed stats must match the continue-on-error policy");
-    assert_eq!(CopyFailureState::Published, failure.state());
+    assert_eq!(CopyFailureState::Indeterminate, failure.state());
     assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
 }
 
@@ -1432,7 +1466,7 @@ fn test_copy_file_mode_rejects_tree_stats() {
     let failure = filesystem
         .copy(&path("/source"), &path("/target"), CopyOptions::file())
         .expect_err("file mode must reject tree-shaped completion stats");
-    assert_eq!(CopyFailureState::Published, failure.state());
+    assert_eq!(CopyFailureState::Indeterminate, failure.state());
     assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
 }
 
@@ -1451,6 +1485,50 @@ fn test_copy_file_mode_allows_one_skipped_entry() {
     assert_eq!(0, outcome.stats().files);
 }
 
+#[test]
+fn test_copy_file_mode_skip_cannot_report_both_copy_and_skip() {
+    let (filesystem, _, _) = recording_filesystem(CopyResponse::CompletedFileSkippedAndCopied);
+    let failure = filesystem
+        .copy(
+            &path("/source"),
+            &path("/target"),
+            CopyOptions::file().with_conflict(CopyConflictPolicy::Skip),
+        )
+        .expect_err("a single source cannot be both copied and skipped");
+    assert_eq!(CopyFailureState::Indeterminate, failure.state());
+    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+}
+
+#[test]
+fn test_copy_file_atomicity_violation_preserves_completed_file_fact() {
+    let (filesystem, _, _) = recording_filesystem(CopyResponse::CompletedAtomicDowngrade);
+    let failure = filesystem
+        .copy(
+            &path("/source"),
+            &path("/target"),
+            CopyOptions::default().with_atomicity(AtomicityRequirement::Required),
+        )
+        .expect_err("non-atomic copy must violate the requested guarantee");
+    assert_eq!(CopyFailureState::Published, failure.state());
+    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+}
+
+#[test]
+fn test_copy_file_skip_atomicity_violation_is_unchanged() {
+    let (filesystem, _, _) = recording_filesystem(CopyResponse::CompletedFileSkippedNonAtomic);
+    let failure = filesystem
+        .copy(
+            &path("/source"),
+            &path("/target"),
+            CopyOptions::default()
+                .with_conflict(CopyConflictPolicy::Skip)
+                .with_atomicity(AtomicityRequirement::Required),
+        )
+        .expect_err("non-atomic skip must violate the requested guarantee");
+    assert_eq!(CopyFailureState::Unchanged, failure.state());
+    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+}
+
 /// Verifies only the facade may return a streamed fallback outcome; providers
 /// must not present it as a native fast-path completion.
 #[test]
@@ -1459,7 +1537,7 @@ fn test_copy_completed_streamed_outcome_violates_native_contract() {
     let failure = filesystem
         .copy(&path("/source"), &path("/target"), CopyOptions::default())
         .expect_err("providers must not return facade fallback outcomes");
-    assert_eq!(CopyFailureState::Published, failure.state());
+    assert_eq!(CopyFailureState::Indeterminate, failure.state());
     assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
 }
 

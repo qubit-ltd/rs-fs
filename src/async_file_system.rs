@@ -593,7 +593,7 @@ impl AsyncFileSystem {
         if let Some(message) = outcome.contract_violation(options) {
             return Err(self.contextual_copy_failure(
                 FsError::new(FsErrorKind::ProviderContractViolation, FsOperation::Copy, message),
-                CopyFailureState::Published,
+                outcome.violation_failure_state(options),
                 *outcome.stats(),
                 source,
                 target,
