@@ -55,6 +55,12 @@ struct Probe {
     flushes: AtomicUsize,
     commits: AtomicUsize,
     aborts: AtomicUsize,
+    #[cfg(feature = "async")]
+    async_commit_failure: AtomicUsize,
+    #[cfg(feature = "async")]
+    async_abort_outcome: AtomicUsize,
+    #[cfg(feature = "async")]
+    async_expected_bytes: AtomicUsize,
     accepted: std::sync::Mutex<Vec<u8>>,
 }
 
@@ -304,17 +310,40 @@ mod asynchronous {
         fn commit_async<'a>(
             self: Pin<&'a mut Self>,
         ) -> SpiFuture<'a, Result<WriteOutcome, qubit_fs::write::WriteFailure>> {
-            self.get_mut().0.commits.fetch_add(1, Ordering::SeqCst);
-            Box::pin(async {
+            let probe = Arc::clone(&self.get_mut().0);
+            let attempt = probe.commits.fetch_add(1, Ordering::SeqCst);
+            let failure = probe.async_commit_failure.load(Ordering::SeqCst);
+            Box::pin(async move {
+                if failure != 0 && attempt == 0 {
+                    let state = match failure {
+                        1 => qubit_fs::write::WriteFailureState::RetryableNotPublished,
+                        2 => qubit_fs::write::WriteFailureState::NotPublished,
+                        3 => qubit_fs::write::WriteFailureState::Published,
+                        _ => qubit_fs::write::WriteFailureState::Indeterminate,
+                    };
+                    return Err(qubit_fs::write::WriteFailure::new(
+                        FsError::new(FsErrorKind::Io, FsOperation::CommitWriter, "commit probe"),
+                        state,
+                    ));
+                }
                 Ok(WriteOutcome::new(
                     qubit_fs::metadata::AchievedAtomicity::Atomic,
                     qubit_fs::metadata::PublicationMethod::AtomicRename,
-                ))
+                )
+                .with_bytes_written(probe.async_expected_bytes.load(Ordering::SeqCst) as u64))
             })
         }
         fn abort_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<WriteAbortOutcome>> {
-            self.get_mut().0.aborts.fetch_add(1, Ordering::SeqCst);
-            Box::pin(async { Ok(WriteAbortOutcome::Indeterminate) })
+            let probe = Arc::clone(&self.get_mut().0);
+            probe.aborts.fetch_add(1, Ordering::SeqCst);
+            let outcome = probe.async_abort_outcome.load(Ordering::SeqCst);
+            Box::pin(async move {
+                Ok(match outcome {
+                    1 => WriteAbortOutcome::NotPublished,
+                    2 => WriteAbortOutcome::Published,
+                    _ => WriteAbortOutcome::Indeterminate,
+                })
+            })
         }
     }
 
@@ -373,22 +402,75 @@ mod asynchronous {
     }
 
     #[test]
-    fn test_async_zero_length_overreported_write_is_rejected() {
+    fn test_async_zero_length_write_does_not_call_provider() {
         let probe = Arc::new(Probe::default());
         let fs = AsyncFileSystem::from_spi(AsyncFs(Arc::clone(&probe))).unwrap();
         let path = Path::parse("/count-async-zero").unwrap();
         ready(async {
             let mut writer = fs.open_writer(&path, WriteOptions::default()).await.unwrap();
             let mut cx = Context::from_waker(Waker::noop());
+            let state = writer.state();
             let result = unsafe { Pin::new(&mut writer).poll_write_unchecked(&mut cx, b"", 0, 0) };
-            let error = match result {
-                Poll::Ready(Err(error)) => error,
-                _ => panic!("zero overcount must fail"),
-            };
-            checked(&error, &path);
-            assert_eq!(WriterState::Indeterminate, writer.state());
+            assert!(matches!(result, Poll::Ready(Ok(0))));
+            assert_eq!(state, writer.state());
+            assert_eq!(0, probe.writes.load(Ordering::SeqCst));
             assert_eq!(0, probe.commits.load(Ordering::SeqCst));
         });
+    }
+
+    #[test]
+    fn test_async_zero_length_write_preserves_lifecycle_states() {
+        for (commit_failure, abort_outcome, expected) in [
+            (0, 0, WriterState::Open),
+            (1, 0, WriterState::Open),
+            (0, 0, WriterState::Committed),
+            (2, 0, WriterState::NotPublished),
+            (3, 0, WriterState::Published),
+            (4, 0, WriterState::Indeterminate),
+            (0, 1, WriterState::Aborted),
+        ] {
+            let probe = Arc::new(Probe::default());
+            probe.async_commit_failure.store(commit_failure, Ordering::SeqCst);
+            probe.async_abort_outcome.store(abort_outcome, Ordering::SeqCst);
+            let fs = AsyncFileSystem::from_spi(AsyncFs(Arc::clone(&probe))).unwrap();
+            let path = Path::parse("/count-async-zero-state").unwrap();
+            ready(async {
+                let mut writer = fs.open_writer(&path, WriteOptions::default()).await.unwrap();
+                if commit_failure != 0 {
+                    assert!(ready(writer.commit_async()).is_err());
+                } else if expected == WriterState::Committed {
+                    ready(writer.commit_async()).unwrap();
+                } else if expected == WriterState::Aborted {
+                    assert_eq!(WriteAbortOutcome::NotPublished, ready(writer.abort_async()).unwrap());
+                }
+
+                let mut cx = Context::from_waker(Waker::noop());
+                if expected == WriterState::Open {
+                    probe.async_expected_bytes.store(1, Ordering::SeqCst);
+                    assert!(matches!(
+                        unsafe { Pin::new(&mut writer).poll_write_unchecked(&mut cx, b"x", 0, 1) },
+                        Poll::Ready(Ok(1))
+                    ));
+                }
+
+                let state = writer.state();
+                let writes = probe.writes.load(Ordering::SeqCst);
+                let flushes = probe.flushes.load(Ordering::SeqCst);
+                let commits = probe.commits.load(Ordering::SeqCst);
+                for (input, index) in [(&b""[..], 0), (&b"abc"[..], 3)] {
+                    let result = unsafe { Pin::new(&mut writer).poll_write_unchecked(&mut cx, input, index, 0) };
+                    assert!(matches!(result, Poll::Ready(Ok(0))));
+                    assert_eq!(state, writer.state());
+                    assert_eq!(writes, probe.writes.load(Ordering::SeqCst));
+                    assert_eq!(flushes, probe.flushes.load(Ordering::SeqCst));
+                    assert_eq!(commits, probe.commits.load(Ordering::SeqCst));
+                }
+                assert_eq!(expected, writer.state());
+                if expected == WriterState::Open {
+                    ready(writer.commit_async()).unwrap();
+                }
+            });
+        }
     }
 
     #[test]

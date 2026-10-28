@@ -403,6 +403,9 @@ impl AsyncOutput for AsyncFileWriter {
         count: usize,
     ) -> Poll<IoResult<usize>> {
         let this = self.get_mut();
+        if count == 0 {
+            return Poll::Ready(Ok(0));
+        }
         if this.state != WriterState::Open {
             return Poll::Ready(Err(this.closed_io_error()));
         }
@@ -479,5 +482,99 @@ impl Drop for AsyncFileWriter {
         {
             self.session.as_mut().cancel_on_drop();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::pin::Pin;
+    use std::task::Context;
+    use std::task::Poll;
+    use std::task::Waker;
+
+    use qubit_io::AsyncOutput;
+
+    use super::AsyncFileWriter;
+    use crate::error::FsResult;
+    use crate::metadata::AchievedAtomicity;
+    use crate::metadata::AtomicityRequirement;
+    use crate::metadata::DurabilityRequirement;
+    use crate::metadata::FileSystemId;
+    use crate::metadata::OpenedFileInfo;
+    use crate::metadata::PublicationMethod;
+    use crate::metadata::WriteOutcome;
+    use crate::path::Path;
+    use crate::spi::AsyncFileWriteSession;
+    use crate::spi::SpiFuture;
+    use crate::write::WriteAbortOutcome;
+    use crate::write::WriteFailure;
+
+    struct Session;
+
+    impl AsyncOutput for Session {
+        type Item = u8;
+
+        fn is_buffered(&self) -> bool {
+            false
+        }
+
+        unsafe fn poll_write_unchecked(
+            self: Pin<&mut Self>,
+            _: &mut Context<'_>,
+            _: &[u8],
+            _: usize,
+            count: usize,
+        ) -> Poll<std::io::Result<usize>> {
+            Poll::Ready(Ok(count))
+        }
+
+        fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    impl AsyncFileWriteSession for Session {
+        fn commit_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
+            Box::pin(async {
+                Ok(WriteOutcome::new(
+                    AchievedAtomicity::Atomic,
+                    PublicationMethod::AtomicRename,
+                ))
+            })
+        }
+
+        fn abort_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<WriteAbortOutcome>> {
+            Box::pin(async { Ok(WriteAbortOutcome::NotPublished) })
+        }
+    }
+
+    #[test]
+    fn zero_length_write_preserves_written_bytes_after_nonempty_write() {
+        let info = OpenedFileInfo::new(
+            FileSystemId::new("async-writer-test").unwrap(),
+            Path::parse("/zero-write").unwrap(),
+        );
+        let mut writer = AsyncFileWriter::new(
+            info,
+            Box::new(Session),
+            AtomicityRequirement::default(),
+            DurabilityRequirement::default(),
+            false,
+            "async-writer-test",
+            None,
+        );
+        let mut cx = Context::from_waker(Waker::noop());
+        assert!(matches!(
+            unsafe { Pin::new(&mut writer).poll_write_unchecked(&mut cx, b"x", 0, 1) },
+            Poll::Ready(Ok(1))
+        ));
+        assert_eq!(1, writer.written_bytes());
+
+        let written_bytes = writer.written_bytes();
+        assert!(matches!(
+            unsafe { Pin::new(&mut writer).poll_write_unchecked(&mut cx, b"", 0, 0) },
+            Poll::Ready(Ok(0))
+        ));
+        assert_eq!(written_bytes, writer.written_bytes());
     }
 }
