@@ -81,6 +81,7 @@ impl<'a> AsyncDirectoryOperation<'a> {
             self.filesystem.properties().info().provider_id(),
             self.filesystem.properties().info().path_semantics(),
             *self.filesystem.properties().limits(),
+            self.filesystem.properties().path_constraints().clone(),
         )
     }
 }

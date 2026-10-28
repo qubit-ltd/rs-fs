@@ -25,6 +25,7 @@ use qubit_fs::error::FsErrorKind;
 use qubit_fs::metadata::DirEntry;
 use qubit_fs::metadata::FileKind;
 use qubit_fs::metadata::FileSystemLimits;
+use qubit_fs::path::PathConstraints;
 use qubit_fs::path::PathSemantics;
 use support::listing::ListingProvider;
 use support::listing::Observations;
@@ -37,6 +38,7 @@ fn test_dropping_unpolled_next_has_no_side_effects() {
         semantics: PathSemantics::ObjectKey,
         supported: true,
         limits: FileSystemLimits::unknown(),
+        constraints: PathConstraints::either(),
         entries: vec![],
         observations: Arc::clone(&observations),
     };
@@ -71,6 +73,7 @@ fn test_ready_next_consumes_exactly_one_entry() {
         semantics: PathSemantics::ObjectKey,
         supported: true,
         limits: FileSystemLimits::unknown(),
+        constraints: PathConstraints::either(),
         entries: ["a", "b"]
             .into_iter()
             .map(|key| DirEntry::new(Path::parse_literal(key).unwrap(), FileKind::File))

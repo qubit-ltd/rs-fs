@@ -19,6 +19,7 @@ use crate::error::FsOperation;
 use crate::error::FsResult;
 use crate::metadata::DirEntry;
 use crate::metadata::FileSystemLimits;
+use crate::path::PathConstraints;
 use crate::path::PathSemantics;
 
 /// Runtime-independent policy shared by synchronous and asynchronous handles.
@@ -33,6 +34,8 @@ pub(crate) struct ListStreamPolicy {
     path_semantics: PathSemantics,
     /// Provider path limits used to validate every returned entry.
     limits: FileSystemLimits,
+    /// Provider path form constraints used to validate every returned entry.
+    constraints: PathConstraints,
     /// Whether enumeration has completed or encountered a terminal failure.
     state: DirectoryStreamState,
     /// Monotonic deadline computed when the stream is created.
@@ -49,6 +52,7 @@ impl ListStreamPolicy {
         provider: &str,
         path_semantics: PathSemantics,
         limits: FileSystemLimits,
+        constraints: PathConstraints,
         now: Instant,
     ) -> FsResult<Self> {
         let mut policy = Self {
@@ -57,6 +61,7 @@ impl ListStreamPolicy {
             provider: provider.into(),
             path_semantics,
             limits,
+            constraints,
             state: DirectoryStreamState::Open,
             deadline: None,
             returned_entries: 0,
@@ -112,9 +117,13 @@ impl ListStreamPolicy {
         self.check_deadline(now)?;
         match entry {
             Some(entry) => {
-                if let Err(error) =
-                    directory_entry_validation::validate_entry(&entry, &self.scope, self.path_semantics, self.limits)
-                {
+                if let Err(error) = directory_entry_validation::validate_entry(
+                    &entry,
+                    &self.scope,
+                    self.path_semantics,
+                    self.limits,
+                    &self.constraints,
+                ) {
                     self.state = DirectoryStreamState::Failed;
                     return Err(self.contextual_error(error));
                 }

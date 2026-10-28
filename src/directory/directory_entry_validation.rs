@@ -15,6 +15,7 @@ use crate::error::FsResult;
 use crate::metadata::DirEntry;
 use crate::metadata::FileSystemLimits;
 use crate::path::Path;
+use crate::path::PathConstraints;
 use crate::path::PathSemantics;
 
 /// Validates provider-controlled identity fields before applying list policy.
@@ -29,11 +30,18 @@ pub(crate) fn validate_entry(
     scope: &ListScope,
     semantics: PathSemantics,
     limits: FileSystemLimits,
+    constraints: &PathConstraints,
 ) -> FsResult<()> {
     if entry.path.semantics() != semantics {
         return Err(contract_error(
             &entry.path,
             "provider returned a directory entry with foreign path semantics",
+        ));
+    }
+    if constraints.validate(&entry.path).is_err() {
+        return Err(contract_error(
+            &entry.path,
+            "provider returned a directory entry with a disallowed path form",
         ));
     }
     if limits

@@ -13,6 +13,7 @@ use crate::directory::AsyncDirectoryStream;
 use crate::directory::ListOptions;
 use crate::directory::ListScope;
 use crate::metadata::FileSystemLimits;
+use crate::path::PathConstraints;
 use crate::path::PathSemantics;
 
 /// An already-open asynchronous directory stream.
@@ -59,6 +60,8 @@ impl OpenedAsyncDirectoryStream {
     /// - `provider`: Stable provider identifier used in generated errors.
     /// - `path_semantics`: Rules used to validate provider entry paths.
     /// - `limits`: Resource bounds applied to the stream.
+    /// - `constraints`: Filesystem path-form constraints applied to provider
+    ///   entries.
     ///
     /// # Returns
     /// A facade-owned asynchronous directory stream.
@@ -74,7 +77,16 @@ impl OpenedAsyncDirectoryStream {
         provider: &str,
         path_semantics: PathSemantics,
         limits: FileSystemLimits,
+        constraints: PathConstraints,
     ) -> crate::error::FsResult<AsyncDirectoryStream> {
-        AsyncDirectoryStream::new(scope, self.session, options, provider, path_semantics, limits)
+        AsyncDirectoryStream::new(
+            scope,
+            self.session,
+            options,
+            provider,
+            path_semantics,
+            limits,
+            constraints,
+        )
     }
 }

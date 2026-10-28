@@ -15,6 +15,7 @@ use qubit_fs::AsyncFileSystem;
 use qubit_fs::FileSystem;
 use qubit_fs::FsError;
 use qubit_fs::Path;
+use qubit_fs::directory::DirectoryStreamState;
 use qubit_fs::directory::ListFilter;
 use qubit_fs::directory::ListOptions;
 use qubit_fs::directory::ListScope;
@@ -24,6 +25,7 @@ use qubit_fs::metadata::DirEntry;
 use qubit_fs::metadata::FileKind;
 use qubit_fs::metadata::FileSystemLimit;
 use qubit_fs::metadata::FileSystemLimits;
+use qubit_fs::path::PathConstraints;
 use qubit_fs::path::PathSemantics;
 
 mod support;
@@ -63,6 +65,7 @@ fn check_listing(
             semantics,
             supported,
             limits,
+            constraints: PathConstraints::either(),
             entries: entries.clone(),
             observations: Arc::clone(&observations),
         };
@@ -260,4 +263,106 @@ fn test_namespace_rejects_foreign_entry_semantics() {
         vec![DirEntry::new(Path::parse("/a").unwrap(), FileKind::File)],
         Err((FsErrorKind::ProviderContractViolation, true)),
     );
+}
+
+/// Filesystem path-form constraints apply to provider results in both facades.
+#[test]
+fn test_namespace_enforces_provider_path_constraints() {
+    let modes = if cfg!(feature = "async") {
+        &[false, true][..]
+    } else {
+        &[false][..]
+    };
+    for &asynchronous in modes {
+        for (constraints, names, rejected) in [
+            (PathConstraints::relative(), &["/a"][..], true),
+            (PathConstraints::relative(), &["a"][..], false),
+            (PathConstraints::either(), &["/a", "a"][..], false),
+        ] {
+            let observations = Arc::new(Observations::default());
+            let provider = ListingProvider {
+                semantics: PathSemantics::ObjectKey,
+                supported: true,
+                limits: FileSystemLimits::unknown(),
+                constraints,
+                entries: keys(names),
+                observations: Arc::clone(&observations),
+            };
+            if asynchronous {
+                #[cfg(feature = "async")]
+                {
+                    let filesystem = AsyncFileSystem::from_spi(provider).unwrap();
+                    let mut stream =
+                        common::poll_support::ready(filesystem.list(&ListScope::Namespace, ListOptions::object_keys()))
+                            .unwrap();
+                    let result = common::poll_support::ready(stream.next_entry_async());
+                    if rejected {
+                        let error = result.unwrap_err();
+                        assert_eq!(error.kind(), FsErrorKind::ProviderContractViolation);
+                        assert_eq!(error.operation(), FsOperation::List);
+                        assert_eq!(error.path().unwrap().as_str(), "/a");
+                        assert_eq!(error.provider(), Some("scope-test"));
+                        assert_eq!(stream.state(), DirectoryStreamState::Failed);
+                        assert_eq!(observations.next_calls.load(Ordering::SeqCst), 1);
+                        assert_eq!(
+                            common::poll_support::ready(stream.next_entry_async())
+                                .unwrap_err()
+                                .kind(),
+                            FsErrorKind::InvalidState
+                        );
+                        assert_eq!(observations.next_calls.load(Ordering::SeqCst), 1);
+                    } else {
+                        let first = result.unwrap().unwrap();
+                        assert_eq!(first.path, Path::parse_literal(names[0]).unwrap());
+                        for expected in &names[1..] {
+                            assert_eq!(
+                                common::poll_support::ready(stream.next_entry_async())
+                                    .unwrap()
+                                    .unwrap()
+                                    .path,
+                                Path::parse_literal(expected).unwrap()
+                            );
+                        }
+                        assert!(
+                            common::poll_support::ready(stream.next_entry_async())
+                                .unwrap()
+                                .is_none()
+                        );
+                        assert_eq!(stream.state(), DirectoryStreamState::Exhausted);
+                    }
+                }
+                #[cfg(not(feature = "async"))]
+                unreachable!("async feature required");
+            } else {
+                let filesystem = FileSystem::from_spi(provider).unwrap();
+                let mut stream = filesystem
+                    .list(&ListScope::Namespace, ListOptions::object_keys())
+                    .unwrap();
+                let result = stream.next_entry();
+                if rejected {
+                    let error = result.unwrap_err();
+                    assert_eq!(error.kind(), FsErrorKind::ProviderContractViolation);
+                    assert_eq!(error.operation(), FsOperation::List);
+                    assert_eq!(error.path().unwrap().as_str(), "/a");
+                    assert_eq!(error.provider(), Some("scope-test"));
+                    assert_eq!(stream.state(), DirectoryStreamState::Failed);
+                    assert_eq!(observations.next_calls.load(Ordering::SeqCst), 1);
+                    assert_eq!(stream.next_entry().unwrap_err().kind(), FsErrorKind::InvalidState);
+                    assert_eq!(observations.next_calls.load(Ordering::SeqCst), 1);
+                } else {
+                    let first = result.unwrap().unwrap();
+                    assert_eq!(first.path, Path::parse_literal(names[0]).unwrap());
+                    for expected in &names[1..] {
+                        assert_eq!(
+                            stream.next_entry().unwrap().unwrap().path,
+                            Path::parse_literal(expected).unwrap()
+                        );
+                    }
+                    assert!(stream.next_entry().unwrap().is_none());
+                    assert_eq!(stream.state(), DirectoryStreamState::Exhausted);
+                }
+            }
+            assert_eq!(observations.list_calls.load(Ordering::SeqCst), 1);
+        }
+    }
 }

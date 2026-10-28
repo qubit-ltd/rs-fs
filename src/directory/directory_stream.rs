@@ -19,6 +19,7 @@ use crate::directory::ListStreamPolicy;
 use crate::error::FsResult;
 use crate::metadata::DirEntry;
 use crate::metadata::FileSystemLimits;
+use crate::path::PathConstraints;
 use crate::path::PathSemantics;
 use crate::spi::DirectoryStreamSpi;
 
@@ -65,6 +66,8 @@ impl DirectoryStream {
     /// - `path_semantics`: Provider path rules used to validate returned
     ///   entries.
     /// - `limits`: Provider limits used to validate returned entries.
+    /// - `constraints`: Provider path-form constraints used to validate
+    ///   returned entries.
     ///
     /// # Returns
     /// A concrete type-erased stream that validates entries and enforces the
@@ -81,8 +84,17 @@ impl DirectoryStream {
         provider: &str,
         path_semantics: PathSemantics,
         limits: FileSystemLimits,
+        constraints: PathConstraints,
     ) -> FsResult<Self> {
-        let policy = ListStreamPolicy::new(scope, options, provider, path_semantics, limits, Instant::now())?;
+        let policy = ListStreamPolicy::new(
+            scope,
+            options,
+            provider,
+            path_semantics,
+            limits,
+            constraints,
+            Instant::now(),
+        )?;
         Ok(Self { session, policy })
     }
 

@@ -22,6 +22,7 @@ use crate::metadata::DirEntry;
 use crate::metadata::FileKind;
 use crate::metadata::FileSystemLimits;
 use crate::path::Path;
+use crate::path::PathConstraints;
 use crate::path::PathSemantics;
 
 /// Creates a flat policy with caller-supplied time and options.
@@ -32,6 +33,7 @@ fn policy(now: Instant, options: ListOptions) -> ListStreamPolicy {
         "clock-test",
         PathSemantics::ObjectKey,
         FileSystemLimits::unknown(),
+        PathConstraints::either(),
         now,
     )
     .expect("valid deterministic listing policy")
@@ -194,6 +196,7 @@ fn test_overflowing_deadline_is_rejected_at_construction() {
         "clock-test",
         PathSemantics::ObjectKey,
         FileSystemLimits::unknown(),
+        PathConstraints::either(),
         Instant::now(),
     );
     assert_eq!(

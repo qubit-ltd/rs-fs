@@ -19,6 +19,7 @@ use crate::directory::ListStreamPolicy;
 use crate::error::FsResult;
 use crate::metadata::DirEntry;
 use crate::metadata::FileSystemLimits;
+use crate::path::PathConstraints;
 use crate::spi::AsyncDirectoryStreamSession;
 use crate::spi::SpiFuture;
 
@@ -57,6 +58,8 @@ impl AsyncDirectoryStream {
     /// - `provider`: Provider identifier attached to facade-generated errors.
     /// - `path_semantics`: Path rules used to validate provider entries.
     /// - `limits`: Filesystem limits applied to returned entries.
+    /// - `constraints`: Filesystem path-form constraints applied to returned
+    ///   entries.
     ///
     /// # Returns
     /// A concrete type-erased asynchronous directory stream whose deadline
@@ -73,8 +76,17 @@ impl AsyncDirectoryStream {
         provider: &str,
         path_semantics: crate::path::PathSemantics,
         limits: FileSystemLimits,
+        constraints: PathConstraints,
     ) -> FsResult<Self> {
-        let policy = ListStreamPolicy::new(scope, options, provider, path_semantics, limits, Instant::now())?;
+        let policy = ListStreamPolicy::new(
+            scope,
+            options,
+            provider,
+            path_semantics,
+            limits,
+            constraints,
+            Instant::now(),
+        )?;
         Ok(Self { session, policy })
     }
 

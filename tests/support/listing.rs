@@ -58,6 +58,7 @@ pub struct ListingProvider {
     pub semantics: PathSemantics,
     pub supported: bool,
     pub limits: FileSystemLimits,
+    pub constraints: PathConstraints,
     pub entries: Vec<DirEntry>,
     pub observations: Arc<Observations>,
 }
@@ -77,7 +78,7 @@ impl ListingProvider {
                 .with(ProviderOperation::List),
             capabilities,
             self.limits,
-            PathConstraints::either(),
+            self.constraints.clone(),
             SymlinkPolicy::Reject,
         )
         .unwrap()

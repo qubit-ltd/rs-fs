@@ -73,6 +73,7 @@ impl<'a> DirectoryOperation<'a> {
                     self.filesystem.properties().info().provider_id(),
                     self.filesystem.properties().info().path_semantics(),
                     *self.filesystem.properties().limits(),
+                    self.filesystem.properties().path_constraints().clone(),
                 )
             })
             .map_err(|error| self.filesystem.core().enrich(error, scope.path(), FsOperation::List))
