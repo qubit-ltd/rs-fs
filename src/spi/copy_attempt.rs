@@ -37,7 +37,11 @@ pub enum CopyAttempt {
         /// Provider-confirmed completed copy outcome.
         CopyOutcome,
     ),
-    /// The facade may select its later fallback.
+    /// The facade may select its later fallback only when the provider made
+    /// no external change and retained no cleanup responsibility. If effects
+    /// occurred or are uncertain, return [`CopyAttempt::Completed`] only for a
+    /// confirmed success; otherwise return [`crate::spi::SpiCopyFailure`] with
+    /// the known publication state and statistics.
     Declined(
         /// Reason the provider declined native execution.
         CopyDeclineReason,

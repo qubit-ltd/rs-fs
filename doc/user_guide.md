@@ -191,6 +191,10 @@ failure it returns the original `CopyFailure`, its publication state, partial
 statistics, and any retained writer. An abort failure is stored separately.
 The caller must keep the returned recovery object until it decides how to
 reconcile or finish cleanup. The helper does not automatically repeat the copy.
+The failure's publication state is a snapshot from the failed operation;
+`cleanup_outcome` records the later abort result and does not revise that snapshot.
+For a rejected writer, the abort result describes cleanup of the isolated session,
+not the unvalidated identity returned by the provider.
 
 <!-- example: sync-recovery -->
 ```rust
@@ -201,6 +205,7 @@ use qubit_fs::copy::CopyOptions;
 use qubit_fs::copy::CopyOutcome;
 use qubit_fs::error::FsError;
 use qubit_fs::write::WriterRecovery;
+use qubit_fs::write::WriteAbortOutcome;
 
 /// Retains a copy failure and any error from aborting its writer.
 #[derive(Debug)]
@@ -209,6 +214,8 @@ pub struct CopyRecovery {
     pub failure: CopyFailure,
     /// An error returned while aborting the retained writer, if any.
     pub cleanup_error: Option<FsError>,
+    /// The provider's confirmed result after cleanup, if cleanup succeeded.
+    pub cleanup_outcome: Option<WriteAbortOutcome>,
 }
 
 /// Copies a file and retains recovery details when the operation fails.
@@ -224,13 +231,22 @@ pub fn copy_report(
         Ok(outcome) => Ok(outcome),
         Err(mut failure) => {
             // Abort handles the retained session; it does not promise target rollback.
-            let cleanup_error = match failure.recovery_mut() {
-                Some(WriterRecovery::Opened(writer)) => writer.abort().err(),
-                Some(WriterRecovery::Rejected(writer)) => writer.abort().err(),
+            let cleanup = match failure.recovery_mut() {
+                Some(WriterRecovery::Opened(writer)) => Some(writer.abort()),
+                Some(WriterRecovery::Rejected(writer)) => Some(writer.abort()),
                 None => None,
             };
+            let (cleanup_outcome, cleanup_error) = match cleanup {
+                Some(Ok(outcome)) => (Some(outcome), None),
+                Some(Err(error)) => (None, Some(error)),
+                None => (None, None),
+            };
             // Preserve the publication facts and writer even when cleanup fails.
-            Err(CopyRecovery { failure, cleanup_error })
+            Err(CopyRecovery {
+                failure,
+                cleanup_error,
+                cleanup_outcome,
+            })
         }
     }
 }
@@ -281,6 +297,7 @@ use qubit_fs::metadata::WriteOutcome;
 use qubit_fs::write::AsyncWriteAllOperation;
 use qubit_fs::write::AsyncWriteAllOperationFailure;
 use qubit_fs::write::AsyncWriterRecovery;
+use qubit_fs::write::WriteAbortOutcome;
 use qubit_fs::write::WriteOptions;
 
 /// Retains an asynchronous write operation when cleanup cannot finish.
@@ -295,6 +312,8 @@ pub struct WriteRecovery {
     pub primary: Option<AsyncWriteAllOperationFailure>,
     /// An error returned while aborting a retained writer, if any.
     pub cleanup_error: Option<FsError>,
+    /// The provider's confirmed result after cleanup, if cleanup succeeded.
+    pub cleanup_outcome: Option<WriteAbortOutcome>,
 }
 
 /// Describes whether report writing failed before execution or needs recovery.
@@ -340,10 +359,15 @@ pub async fn write_report(
         Some(Err(failure)) => Some(failure),
         None => None, // The operation now records cancellation facts.
     };
-    let cleanup_error = match operation.recovery() {
-        Some(AsyncWriterRecovery::Opened(writer)) => writer.abort_async().await.err(),
-        Some(AsyncWriterRecovery::Rejected(writer)) => writer.abort_async().await.err(),
+    let cleanup = match operation.recovery() {
+        Some(AsyncWriterRecovery::Opened(writer)) => Some(writer.abort_async().await),
+        Some(AsyncWriterRecovery::Rejected(writer)) => Some(writer.abort_async().await),
         None => None,
+    };
+    let (cleanup_outcome, cleanup_error) = match cleanup {
+        Some(Ok(outcome)) => (Some(outcome), None),
+        Some(Err(error)) => (None, Some(error)),
+        None => (None, None),
     };
     // Published means do not resend. Indeterminate requires reconciliation,
     // including when no writer was returned. A missing stat result is not
@@ -352,6 +376,7 @@ pub async fn write_report(
         operation,
         primary,
         cleanup_error,
+        cleanup_outcome,
     })))
 }
 
@@ -376,7 +401,10 @@ pub async fn list_reports(filesystem: &AsyncFileSystem) -> Result<Vec<Path>, FsE
 
 An explicit error is in `primary`; cancellation has `primary == None` and leaves
 its state in `operation`. A failed abort leaves both `cleanup_error` and the
-writer in the returned recovery object. Inspect `operation.filesystem()` and
+writer in the returned recovery object. A successful abort result is retained in
+`cleanup_outcome`; it is later than and independent of the operation snapshot. For
+a rejected writer, that result describes cleanup of its isolated session and is
+not a guarantee about the unvalidated provider identity. Inspect `operation.filesystem()` and
 `operation.path()` when no writer was returned. Neither a missing writer nor
 one `stat` returning `NotFound` establishes that pending remote work cannot
 publish later. Reconciliation depends on the provider's request identity and
@@ -535,6 +563,28 @@ These are returned-length and consumption bounds, not process RSS bounds or
 limits on provider/network prefetch. The local provider advertises conditional
 range support, so automatic prefix narrowing still requires a provider advertising
 `RangeRead` as Guaranteed.
+
+### Listing metadata and stream completion
+
+`ListOptions::with_include_metadata(true)` requires metadata on every returned
+entry. If an entry has no metadata, the stream fails instead of returning a
+metadata-free entry. For the synchronous `DirectoryStream`, the first
+`next_entry()` that returns `None` observes EOF and ends the stream; subsequent
+calls return `InvalidState`. A stream that fails must be reopened before another
+enumeration attempt.
+
+### Temporary publication cleanup
+
+A successful `PersistOutcome` remains successful when its cleanup state is
+`ResidualTemporaryContainer`. Do not repeat publication or clean up the
+published target. `Complete` means the private temporary container was removed;
+`ResidualTemporaryContainer` means publication succeeded but private data
+remains. It is not a publication failure and does not leave the published source
+under the handle's control. The outcome retains validated non-sensitive
+`diagnostics()` for providers' existing operational mechanisms. The portable API
+does not locate or retry cleanup of a private container, and providers do not
+promise background cleanup. A handle in `Persisted` or `Kept` state is terminal;
+later `cleanup`, `persist`, and `keep` calls are rejected.
 
 ## Further reading
 

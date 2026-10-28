@@ -51,7 +51,10 @@ pub struct ListOptions {
     recursive: bool,
     /// Optional symbolic-link policy overriding the filesystem default.
     symlink_policy: Option<SymlinkPolicy>,
-    /// Whether entries should include metadata when available.
+    /// Whether every returned entry must include metadata.
+    ///
+    /// When enabled, an entry without metadata fails the stream; metadata is
+    /// not best-effort.
     include_metadata: bool,
     /// Optional provider page size hint.
     page_size: Option<usize>,
@@ -102,7 +105,9 @@ impl ListOptions {
         self.symlink_policy
     }
 
-    /// Returns whether metadata is requested for entries.
+    /// Returns whether metadata is required for entries.
+    ///
+    /// When `true`, missing metadata makes the listing fail.
     #[inline]
     #[must_use]
     pub const fn include_metadata(&self) -> bool {
@@ -194,7 +199,8 @@ impl ListOptions {
     /// Returns a copy with metadata inclusion replaced.
     ///
     /// # Parameters
-    /// - `include`: Whether entries should include metadata when available.
+    /// - `include`: Whether metadata is required for every returned entry. When
+    ///   enabled, missing metadata makes the listing fail.
     #[inline]
     #[must_use]
     pub const fn with_include_metadata(mut self, include: bool) -> Self {

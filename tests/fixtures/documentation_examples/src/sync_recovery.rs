@@ -13,6 +13,7 @@ use qubit_fs::copy::CopyOptions;
 use qubit_fs::copy::CopyOutcome;
 use qubit_fs::error::FsError;
 use qubit_fs::write::WriterRecovery;
+use qubit_fs::write::WriteAbortOutcome;
 
 /// Retains a copy failure and any error from aborting its writer.
 #[derive(Debug)]
@@ -21,6 +22,8 @@ pub struct CopyRecovery {
     pub failure: CopyFailure,
     /// An error returned while aborting the retained writer, if any.
     pub cleanup_error: Option<FsError>,
+    /// The provider's confirmed result after cleanup, if cleanup succeeded.
+    pub cleanup_outcome: Option<WriteAbortOutcome>,
 }
 
 /// Copies a file and retains recovery details when the operation fails.
@@ -36,13 +39,22 @@ pub fn copy_report(
         Ok(outcome) => Ok(outcome),
         Err(mut failure) => {
             // Abort handles the retained session; it does not promise target rollback.
-            let cleanup_error = match failure.recovery_mut() {
-                Some(WriterRecovery::Opened(writer)) => writer.abort().err(),
-                Some(WriterRecovery::Rejected(writer)) => writer.abort().err(),
+            let cleanup = match failure.recovery_mut() {
+                Some(WriterRecovery::Opened(writer)) => Some(writer.abort()),
+                Some(WriterRecovery::Rejected(writer)) => Some(writer.abort()),
                 None => None,
             };
+            let (cleanup_outcome, cleanup_error) = match cleanup {
+                Some(Ok(outcome)) => (Some(outcome), None),
+                Some(Err(error)) => (None, Some(error)),
+                None => (None, None),
+            };
             // Preserve the publication facts and writer even when cleanup fails.
-            Err(CopyRecovery { failure, cleanup_error })
+            Err(CopyRecovery {
+                failure,
+                cleanup_error,
+                cleanup_outcome,
+            })
         }
     }
 }

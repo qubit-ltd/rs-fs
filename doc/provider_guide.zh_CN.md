@@ -28,8 +28,9 @@
 ## 4. capability 依赖的保证强度
 
 Capability 有 `Conditional` 和 `Guaranteed` 两种支持强度。`Conditional` 派生能力
-要求基础能力被支持；`Guaranteed` 派生能力要求基础能力也是 `Guaranteed`。门面会在
-provider 使用前拒绝不一致的声明。
+要求基础能力被支持；`Guaranteed` 派生能力要求基础能力也是 `Guaranteed`。基础能力缺失并非唯一的不一致情况：
+若派生能力为 `Guaranteed`，基础能力仅为 `Conditional` 也不满足要求。`missing_dependency()` 会报告首个缺失或
+强度不足的基础能力，门面会在 provider 使用前拒绝不一致的声明。
 
 ## 5. 一个完整的最小 provider
 
@@ -449,6 +450,18 @@ Guaranteed `RangeRead` 的 provider 生效。
 - 运行共享 testkit 契约套件及 provider 专属恢复测试。
 - 运行 `cargo test --locked --all-features`、doctest、clippy、rustdoc 和文档校验器。
 - 审查发布、清理、取消和错误状态的行为。
+
+## 复制与持久化结果
+
+只有原生复制尝试没有造成外部变更、也没有留下清理责任时，才能返回
+`CopyAttempt::Declined`。若外部状态已变化或效果不确定，应返回带已知发布状态和统计信息的
+`SpiCopyFailure`。无副作用拒绝后，门面会直接选择流式回退；原生尝试失败不能回退。
+
+即使 `PersistOutcome::cleanup_state()` 为 `ResidualTemporaryContainer`，该结果仍确认发布成功。
+应保留成功事实，不要再次发布或清理已发布目标。portable API 不提供私有容器定位或清理重试接口，
+也不承诺 provider 在后台自动清理。outcome 保留经过校验的非敏感 `diagnostics()`；provider 可沿用
+既有运维机制处理私有残留。句柄处于 `Persisted` 或 `Kept` 状态后即为终态，后续 `cleanup`、`persist`
+或 `keep` 调用都会被拒绝。
 
 ## 15. 延伸阅读
 

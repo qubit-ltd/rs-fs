@@ -34,7 +34,10 @@ for every addition.
 Capabilities have `Conditional` and `Guaranteed` support strengths. A
 `Conditional` derived capability requires its base capability to be supported;
 a `Guaranteed` derived capability requires the base capability to be
-`Guaranteed`. The facade rejects inconsistent declarations before use.
+`Guaranteed`. A missing base is not the only inconsistency: a conditional base
+is also insufficient for a guaranteed derived capability. The
+`missing_dependency()` result reports the first absent or insufficient base,
+and the facade rejects inconsistent declarations before use.
 
 ## 5. A complete minimal provider
 
@@ -490,6 +493,23 @@ range support, so automatic prefix narrowing still requires a provider advertisi
 - Run `cargo test --locked --all-features`, doctests, clippy, rustdoc, and the
   documentation checker.
 - Review publication, cleanup, cancellation, and error-state behavior.
+
+## Copy and persistence outcomes
+
+Return `CopyAttempt::Declined` only when the native attempt caused no external
+change and left no cleanup responsibility. If it changed external state or the
+effects are uncertain, return `SpiCopyFailure` with the known publication
+state and statistics. The facade selects streaming fallback directly after a
+side-effect-free decline; a failed native attempt is not eligible for fallback.
+
+`PersistOutcome` confirms publication even when
+`cleanup_state()` is `ResidualTemporaryContainer`. Preserve that success and do
+not publish again or clean up the published target. The portable API provides
+no private-container locator or cleanup retry operation, and does not promise
+provider background cleanup. The outcome retains validated non-sensitive
+`diagnostics()`; providers can use these with their existing operational
+mechanisms to handle private residuals. A handle in `Persisted` or `Kept` state
+is terminal: further `cleanup`, `persist`, or `keep` calls are rejected.
 
 ## 15. Further reading
 

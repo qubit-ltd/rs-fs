@@ -16,6 +16,15 @@ use crate::path::Path;
 
 /// Confirmed result of publishing a temporary source to its final target.
 ///
+/// A successful outcome remains authoritative even when cleanup state is
+/// [`PersistCleanupState::ResidualTemporaryContainer`]. Do not publish again or
+/// clean up the published target in that case. The portable API does not expose
+/// a private-container locator or retry operation; providers must report the
+/// residual state without promising automatic background cleanup. The outcome
+/// retains validated non-sensitive provider diagnostics for the provider's
+/// existing operational mechanisms. Once a handle is `Persisted` or `Kept`, it
+/// cannot be cleaned up, persisted, or kept again.
+///
 /// # Examples
 ///
 /// ```rust
@@ -88,14 +97,25 @@ impl PersistOutcome {
         self.method
     }
 
-    /// Returns provider-native non-sensitive diagnostics.
+    /// Returns provider-native non-sensitive diagnostics already validated
+    /// when the outcome was constructed.
+    ///
+    /// Providers may use these diagnostics with their existing operational
+    /// mechanisms to investigate residual private containers; this accessor
+    /// does not expose a portable cleanup or retry operation.
     #[inline]
     #[must_use]
     pub const fn diagnostics(&self) -> &NonSensitiveMetadata {
         &self.diagnostics
     }
 
-    /// Returns the state of the private temporary container after publication.
+    /// Returns the private temporary-container cleanup result after
+    /// publication.
+    ///
+    /// `Complete` means the private container was removed. A
+    /// `ResidualTemporaryContainer` means publication succeeded but the private
+    /// container remains; it does not mean publication failed or that the
+    /// handle still owns the published source.
     #[inline]
     pub const fn cleanup_state(&self) -> PersistCleanupState {
         self.cleanup_state

@@ -21,6 +21,7 @@ use qubit_fs::metadata::WriteOutcome;
 use qubit_fs::write::AsyncWriteAllOperation;
 use qubit_fs::write::AsyncWriteAllOperationFailure;
 use qubit_fs::write::AsyncWriterRecovery;
+use qubit_fs::write::WriteAbortOutcome;
 use qubit_fs::write::WriteOptions;
 
 /// Retains an asynchronous write operation when cleanup cannot finish.
@@ -35,6 +36,8 @@ pub struct WriteRecovery {
     pub primary: Option<AsyncWriteAllOperationFailure>,
     /// An error returned while aborting a retained writer, if any.
     pub cleanup_error: Option<FsError>,
+    /// The provider's confirmed result after cleanup, if cleanup succeeded.
+    pub cleanup_outcome: Option<WriteAbortOutcome>,
 }
 
 /// Describes whether report writing failed before execution or needs recovery.
@@ -80,10 +83,15 @@ pub async fn write_report(
         Some(Err(failure)) => Some(failure),
         None => None, // The operation now records cancellation facts.
     };
-    let cleanup_error = match operation.recovery() {
-        Some(AsyncWriterRecovery::Opened(writer)) => writer.abort_async().await.err(),
-        Some(AsyncWriterRecovery::Rejected(writer)) => writer.abort_async().await.err(),
+    let cleanup = match operation.recovery() {
+        Some(AsyncWriterRecovery::Opened(writer)) => Some(writer.abort_async().await),
+        Some(AsyncWriterRecovery::Rejected(writer)) => Some(writer.abort_async().await),
         None => None,
+    };
+    let (cleanup_outcome, cleanup_error) = match cleanup {
+        Some(Ok(outcome)) => (Some(outcome), None),
+        Some(Err(error)) => (None, Some(error)),
+        None => (None, None),
     };
     // Published means do not resend. Indeterminate requires reconciliation,
     // including when no writer was returned. A missing stat result is not
@@ -92,6 +100,7 @@ pub async fn write_report(
         operation,
         primary,
         cleanup_error,
+        cleanup_outcome,
     })))
 }
 

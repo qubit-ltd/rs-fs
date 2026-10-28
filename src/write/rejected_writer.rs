@@ -41,7 +41,8 @@ use crate::write::WriteAbortOutcome;
 /// use qubit_fs::write::RejectedWriter;
 /// use qubit_fs::write::WriteAbortOutcome;
 ///
-/// fn clean_up(mut recovery: RejectedWriter) -> FsResult<WriteAbortOutcome> {
+/// fn clean_up(recovery: &mut RejectedWriter) -> FsResult<WriteAbortOutcome> {
+///     // Keep the handle available if cleanup returns an error.
 ///     recovery.abort()
 /// }
 /// ```

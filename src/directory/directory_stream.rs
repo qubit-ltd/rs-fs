@@ -108,10 +108,14 @@ impl DirectoryStream {
     /// Reads the next directory entry.
     ///
     /// # Returns
-    /// `Some` for one entry or `None` at end of enumeration.
+    /// `Some` for one entry or `None` at the first end-of-file observation.
+    ///
+    /// Once `None` has been returned, the stream is terminal and this method
+    /// returns `InvalidState` on later calls.
     ///
     /// # Errors
-    /// Returns a filesystem error when enumeration cannot continue.
+    /// Returns a filesystem error when enumeration cannot continue. After an
+    /// error the stream is terminal; reopen it to enumerate again.
     #[inline]
     pub fn next_entry(&mut self) -> FsResult<Option<DirEntry>> {
         self.policy.before_next(Instant::now())?;

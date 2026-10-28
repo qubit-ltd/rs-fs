@@ -160,6 +160,12 @@ pub trait FileSystemSpi: Send + Sync {
     }
     /// Attempts an optional provider copy primitive.
     ///
+    /// Return [`CopyAttempt::Declined`] only if this attempt caused no external
+    /// change and left no cleanup responsibility. If effects occurred or are
+    /// uncertain, return [`SpiCopyFailure`] with the known state and
+    /// statistics; the facade may stream-fallback only after a
+    /// side-effect-free decline.
+    ///
     /// # Parameters
     /// - `_request`: Facade-validated copy request.
     ///

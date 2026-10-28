@@ -155,6 +155,13 @@ list/copy 的符号链接覆盖策略仅对本次操作生效。
 重新打开流后，由应用自行去重或对账。重新列举没有快照、稳定顺序或结果不重复的保证。
 同步 `DirectoryStream::next_entry()` 会在当前调用中完成，没有丢弃 future 的取消边界。
 
+原生复制返回 `Declined` 就授权门面执行流式回退，因此必须没有外部变更，也没有遗留清理责任。
+已变化或效果不确定时必须用 `SpiCopyFailure` 表示。即使
+`PersistOutcome::cleanup_state()` 为 `ResidualTemporaryContainer`，成功发布仍然成功；调用方不得
+重复发布或移除已发布目标。portable API 不提供私有容器清理重试，也不承诺 provider 后台处理。
+`include_metadata = true` 时，条目缺少 metadata 会使列表失败。同步目录流首次观察 EOF 时返回
+`None`，之后读取返回 `InvalidState`；流失败后必须重新打开。
+
 原子性与持久性独立。`WriteOutcome`、`RenameOutcome`、`CopyOutcome` 报告实际 durability，
 以及适用的原子性、发布／复制方法和 metadata。`PersistOutcome` 报告发布与清理，没有
 durability 字段，持久化成功不能证明已完成持久同步。
@@ -168,6 +175,11 @@ durability 字段，持久化成功不能证明已完成持久同步。
 
 临时文件和目录句柄拥有清理责任，提供显式 `cleanup`、`keep`、`persist`。创建子资源时校验
 相对路径，防止逃出所拥有的临时命名空间。支持的 Drop 清理仅尽力执行，不能替代完成确认。
+
+`PersistOutcome` 区分私有容器清理成功（`Complete`）与发布成功但仍有私有残留
+（`ResidualTemporaryContainer`）。后者不代表发布失败，也不表示已发布源仍由句柄控制。outcome
+保留经过校验的非敏感诊断信息，供 provider 沿用既有运维机制；portable API 不提供私有容器定位或
+清理重试。句柄进入 `Persisted` 或 `Kept` 后即为终态，后续 `cleanup`、`persist` 和 `keep` 调用都会被拒绝。
 
 | 持久化失败状态 | 目标事实 | 源责任 |
 | --- | --- | --- |

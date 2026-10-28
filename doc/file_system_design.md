@@ -199,6 +199,17 @@ results; re-enumeration has no snapshot, stable-order, or duplicate-free
 guarantee. Synchronous `DirectoryStream::next_entry()` completes inline and has
 no future-drop cancellation boundary.
 
+Native copy `Declined` is the facade's permission to stream-fallback and
+therefore requires no external change and no remaining cleanup responsibility.
+Changed or uncertain effects must be represented as `SpiCopyFailure`. A
+successful temporary publication remains successful when
+`PersistOutcome::cleanup_state()` is `ResidualTemporaryContainer`; callers must
+not repeat publication or remove the published target. The portable API does
+not expose private-container cleanup retry or promise provider background work.
+Listing with `include_metadata = true` fails if an entry lacks metadata. A
+synchronous directory stream returns `None` at its first EOF observation and
+rejects later reads with `InvalidState`; after failure it must be reopened.
+
 Atomicity and durability are independent. `WriteOutcome`, `RenameOutcome`,
 and `CopyOutcome` expose durability facts alongside applicable atomicity,
 publication/copy method and metadata. `PersistOutcome` reports publication and
@@ -217,6 +228,15 @@ Temporary file/directory handles own cleanup responsibility and expose explicit
 `cleanup`, `keep`, and `persist`. Child creation validates relative paths and
 prevents escaping the owned temporary namespace. Drop cleanup is best effort
 where supported and is not a substitute for confirmation.
+
+`PersistOutcome` distinguishes successful private-container removal
+(`Complete`) from successful publication with residual private data
+(`ResidualTemporaryContainer`). The latter is not a publication failure and
+does not keep the published source under handle control. The outcome preserves
+validated non-sensitive diagnostics for providers' existing operational
+mechanisms; the portable API exposes no private-container locator or cleanup
+retry. A `Persisted` or `Kept` handle is terminal, so later `cleanup`, `persist`,
+and `keep` calls are rejected.
 
 | Persist failure state | Target fact | Source responsibility |
 | --- | --- | --- |

@@ -183,6 +183,12 @@ pub trait AsyncFileSystemSpi: Send + Sync {
 
     /// Attempts an optional native asynchronous copy primitive.
     ///
+    /// Return [`CopyAttempt::Declined`] only if this attempt caused no external
+    /// change and left no cleanup responsibility. If effects occurred or are
+    /// uncertain, resolve to [`SpiCopyFailure`] with the known state and
+    /// statistics; the facade may stream-fallback only after a side-effect-free
+    /// decline.
+    ///
     /// # Parameters
     /// - `_request`: Facade-validated copy request.
     ///

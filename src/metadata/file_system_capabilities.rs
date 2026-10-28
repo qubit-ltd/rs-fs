@@ -179,11 +179,13 @@ impl FileSystemCapabilities {
     }
 
     /// Returns the first advertised capability whose required base capability
-    /// is absent.
+    /// has insufficient support.
     ///
-    /// `None` means that every advertised derived capability has its required
-    /// base capability. The returned pair contains the derived capability
-    /// followed by the missing base capability.
+    /// A conditional derived capability requires its base capability to be
+    /// conditional or guaranteed. A guaranteed derived capability requires a
+    /// guaranteed base capability. Thus a base capability may be advertised
+    /// yet still be insufficient. The returned pair contains the derived
+    /// capability followed by the absent or insufficient base capability.
     ///
     /// # Returns
     /// `Some` with the first derived capability and missing base capability,

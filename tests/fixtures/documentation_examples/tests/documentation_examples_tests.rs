@@ -9,6 +9,7 @@
 use qubit_fs::Path;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::write::AsyncWriteAllOperationState;
+use qubit_fs::write::WriteAbortOutcome;
 use qubit_fs::write::WriteFailureState;
 use qubit_fs_documentation_examples::async_recovery::WriteReportError;
 use qubit_fs_documentation_examples::async_recovery::write_report;
@@ -55,7 +56,35 @@ fn test_async_example_retains_failure_and_failed_cleanup() {
     };
     assert_eq!(WriteFailureState::Published, recovery.primary.as_ref().unwrap().state());
     assert!(recovery.cleanup_error.is_some());
+    assert!(recovery.cleanup_outcome.is_none());
     assert!(recovery.operation.has_recovery());
+}
+
+#[test]
+fn test_async_example_preserves_each_successful_cleanup_outcome() {
+    for outcome in [
+        WriteAbortOutcome::NotPublished,
+        WriteAbortOutcome::Published,
+        WriteAbortOutcome::Indeterminate,
+    ] {
+        let (filesystem, _) = async_recording_file_system(AsyncRecordingConfig {
+            writer_commit_failure: Some(WriteFailureState::Published),
+            writer_abort_outcome: Some(outcome),
+            ..Default::default()
+        });
+        let result = ready(write_report(
+            &filesystem,
+            Path::parse("/report").unwrap(),
+            b"bytes".to_vec(),
+            std::future::pending(),
+        ));
+        let Err(WriteReportError::Recovery(recovery)) = result else {
+            panic!("expected recovery");
+        };
+        assert_eq!(Some(outcome), recovery.cleanup_outcome);
+        assert!(recovery.cleanup_error.is_none());
+        assert!(recovery.operation.has_recovery());
+    }
 }
 
 #[test]
@@ -74,6 +103,8 @@ fn test_async_example_cancellation_keeps_operation_without_writer() {
         panic!("expected recovery");
     };
     assert!(recovery.primary.is_none());
+    assert!(recovery.cleanup_outcome.is_none());
+    assert!(recovery.cleanup_error.is_none());
     assert!(!recovery.operation.has_recovery());
     assert_eq!(
         AsyncWriteAllOperationState::Failed(WriteFailureState::Indeterminate),

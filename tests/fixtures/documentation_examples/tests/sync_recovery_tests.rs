@@ -45,7 +45,9 @@ use qubit_fs::write::WriteFailureState;
 use qubit_fs_documentation_examples::sync_recovery::copy_report;
 use qubit_io::Output;
 
-struct PublishedThenCleanupFailure;
+struct PublishedThenCleanupFailure {
+    abort_outcome: Result<WriteAbortOutcome, FsErrorKind>,
+}
 impl FileSystemSpi for PublishedThenCleanupFailure {
     fn properties(&self) -> ProviderProperties {
         ProviderProperties::new(
@@ -89,12 +91,16 @@ impl FileSystemSpi for PublishedThenCleanupFailure {
                 self.properties().info().id().clone(),
                 request.path().clone(),
             ),
-            Box::new(FailedWriter),
+            Box::new(FailedWriter {
+                abort_outcome: self.abort_outcome.clone(),
+            }),
         ))
     }
 }
 
-struct FailedWriter;
+struct FailedWriter {
+    abort_outcome: Result<WriteAbortOutcome, FsErrorKind>,
+}
 impl Output for FailedWriter {
     type Item = u8;
     unsafe fn write_unchecked(&mut self, _: &[u8], _: usize, count: usize) -> IoResult<usize> {
@@ -116,17 +122,17 @@ impl FileWriterSpi for FailedWriter {
         ))
     }
     fn abort(&mut self) -> FsResult<WriteAbortOutcome> {
-        Err(FsError::new(
-            FsErrorKind::Io,
-            FsOperation::AbortWriter,
-            "cleanup failed",
-        ))
+        self.abort_outcome
+            .clone()
+            .map_err(|kind| FsError::new(kind, FsOperation::AbortWriter, "cleanup failed"))
     }
 }
 
 #[test]
 fn test_synchronous_example_retains_publication_and_both_errors() {
-    let filesystem = FileSystem::from_spi(PublishedThenCleanupFailure)
+    let filesystem = FileSystem::from_spi(PublishedThenCleanupFailure {
+        abort_outcome: Err(FsErrorKind::Io),
+    })
         .expect("the fixture provider should produce a valid filesystem");
     let recovery = copy_report(
         &filesystem,
@@ -151,4 +157,28 @@ fn test_synchronous_example_retains_publication_and_both_errors() {
             .expect("the fixture writer should report its cleanup failure")
             .operation()
     );
+    assert_eq!(None, recovery.cleanup_outcome);
+}
+
+#[test]
+fn test_synchronous_example_preserves_each_successful_cleanup_outcome() {
+    for outcome in [
+        WriteAbortOutcome::NotPublished,
+        WriteAbortOutcome::Published,
+        WriteAbortOutcome::Indeterminate,
+    ] {
+        let filesystem = FileSystem::from_spi(PublishedThenCleanupFailure {
+            abort_outcome: Ok(outcome),
+        })
+        .expect("the fixture provider should produce a valid filesystem");
+        let recovery = copy_report(
+            &filesystem,
+            &Path::parse("/source").expect("the source path should be valid"),
+            &Path::parse("/target").expect("the target path should be valid"),
+        )
+        .expect_err("the fixture should preserve the primary publication failure");
+        assert_eq!(Some(outcome), recovery.cleanup_outcome);
+        assert!(recovery.cleanup_error.is_none());
+        assert!(recovery.failure.has_recovery());
+    }
 }
