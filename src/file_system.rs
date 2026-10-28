@@ -68,6 +68,7 @@ use crate::temp::TempOptions;
 use crate::write::FileWriter;
 use crate::write::RejectedWriter;
 use crate::write::WriteAllFailure;
+use crate::write::WriteDisposition;
 use crate::write::WriteOperation;
 use crate::write::WriteOptions;
 
@@ -333,6 +334,7 @@ impl FileSystem {
             .map_err(|error| OpenFailure::new(error, OpenFailureStage::Preflight, None))?;
         let atomicity = options.atomicity();
         let durability = options.durability();
+        let append = options.disposition() == WriteDisposition::Append;
         let opened = self
             .spi
             .open_writer(OpenWriterRequest::new(path, ResolvedWriteOptions::new(options)))
@@ -360,6 +362,7 @@ impl FileSystem {
             session,
             atomicity,
             durability,
+            append,
             self.properties().info().provider_id(),
             self.properties().limits().max_write_bytes().maximum(),
         ))

@@ -142,6 +142,11 @@ pub(crate) struct AsyncRecordingConfig {
     pub(crate) writer_chunk: Option<usize>,
     /// Successful bytes before an injected write suspension or failure.
     pub(crate) writer_progress_before_stop: usize,
+    /// Returns zero after the configured number of accepted direct-append
+    /// bytes.
+    pub(crate) writer_zero_progress_after: Option<usize>,
+    /// Makes accepted writer bytes immediately visible and advertises Append.
+    pub(crate) writer_direct_append: bool,
     pub(crate) range_read: bool,
     pub(crate) maximum_read_range_bytes: Option<u64>,
     pub(crate) maximum_write_bytes: Option<u64>,
@@ -165,6 +170,8 @@ pub(crate) struct AsyncRecordingProbe {
     writer_cancellations: Arc<Mutex<usize>>,
     temp_cancellations: Arc<Mutex<usize>>,
     writer_options: Arc<Mutex<Vec<WriteOptions>>>,
+    writer_commits: Arc<Mutex<usize>>,
+    writer_aborts: Arc<Mutex<usize>>,
 }
 impl AsyncRecordingProbe {
     /// Returns the calls observed so far.
@@ -209,6 +216,16 @@ impl AsyncRecordingProbe {
             .expect("writer options lock should succeed")
             .clone()
     }
+    /// Returns provider commit calls observed so far.
+    #[must_use]
+    pub(crate) fn writer_commits(&self) -> usize {
+        *self.writer_commits.lock().expect("commit lock should succeed")
+    }
+    /// Returns provider abort calls observed so far.
+    #[must_use]
+    pub(crate) fn writer_aborts(&self) -> usize {
+        *self.writer_aborts.lock().expect("abort lock should succeed")
+    }
 }
 
 /// Creates an async facade with controllable fallback and temporary sessions.
@@ -218,12 +235,16 @@ pub(crate) fn async_recording_file_system(config: AsyncRecordingConfig) -> (Asyn
     let cancellations = Arc::new(Mutex::new(0));
     let temp_cancellations = Arc::new(Mutex::new(0));
     let writer_options = Arc::new(Mutex::new(Vec::new()));
+    let writer_commits = Arc::new(Mutex::new(0));
+    let writer_aborts = Arc::new(Mutex::new(0));
     let probe = AsyncRecordingProbe {
         calls: Arc::clone(&calls),
         written_bytes: Arc::clone(&written_bytes),
         writer_cancellations: Arc::clone(&cancellations),
         temp_cancellations: Arc::clone(&temp_cancellations),
         writer_options: Arc::clone(&writer_options),
+        writer_commits: Arc::clone(&writer_commits),
+        writer_aborts: Arc::clone(&writer_aborts),
     };
     let file_system = AsyncFileSystem::from_spi(AsyncRecordingSpi {
         config,
@@ -232,6 +253,8 @@ pub(crate) fn async_recording_file_system(config: AsyncRecordingConfig) -> (Asyn
         cancellations,
         temp_cancellations,
         writer_options,
+        writer_commits,
+        writer_aborts,
     })
     .expect("recording async facade should construct");
     (file_system, probe)
@@ -245,6 +268,8 @@ struct AsyncRecordingSpi {
     cancellations: Arc<Mutex<usize>>,
     temp_cancellations: Arc<Mutex<usize>>,
     writer_options: Arc<Mutex<Vec<WriteOptions>>>,
+    writer_commits: Arc<Mutex<usize>>,
+    writer_aborts: Arc<Mutex<usize>>,
 }
 impl AsyncRecordingSpi {
     /// Records an SPI invocation.
@@ -270,6 +295,9 @@ impl AsyncRecordingSpi {
             if !omitted {
                 capabilities = capabilities.with_guaranteed(capability);
             }
+        }
+        if self.config.writer_direct_append {
+            capabilities = capabilities.with_guaranteed(FileSystemCapability::Append);
         }
         if self.config.completed_copy.is_some() {
             capabilities = capabilities
@@ -485,6 +513,8 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
                     config,
                     written_bytes: Arc::clone(&self.written_bytes),
                     cancellations: Arc::clone(&self.cancellations),
+                    writer_commits: Arc::clone(&self.writer_commits),
+                    writer_aborts: Arc::clone(&self.writer_aborts),
                 }),
             );
             let _ = opened.info();
@@ -702,6 +732,8 @@ struct RecordingWriter {
     config: AsyncRecordingConfig,
     written_bytes: Arc<Mutex<Vec<u8>>>,
     cancellations: Arc<Mutex<usize>>,
+    writer_commits: Arc<Mutex<usize>>,
+    writer_aborts: Arc<Mutex<usize>>,
 }
 impl AsyncOutput for RecordingWriter {
     type Item = u8;
@@ -716,6 +748,12 @@ impl AsyncOutput for RecordingWriter {
         let config = &this.config;
         let pending = config.pending_stage == Some(AsyncCopyStage::WriterWrite);
         let failing = config.failing_stage == Some(AsyncCopyStage::WriterWrite);
+        if config
+            .writer_zero_progress_after
+            .is_some_and(|limit| this.confirmed >= limit)
+        {
+            return Poll::Ready(Ok(0));
+        }
         if this.confirmed >= config.writer_progress_before_stop {
             if pending {
                 return Poll::Pending;
@@ -725,6 +763,9 @@ impl AsyncOutput for RecordingWriter {
             }
         }
         let mut accepted = count.min(config.writer_chunk.unwrap_or(count));
+        if let Some(limit) = config.writer_zero_progress_after {
+            accepted = accepted.min(limit.saturating_sub(this.confirmed));
+        }
         if pending || failing {
             accepted = accepted.min(config.writer_progress_before_stop.saturating_sub(this.confirmed));
         }
@@ -754,7 +795,9 @@ impl AsyncOutput for RecordingWriter {
 }
 impl AsyncFileWriteSession for RecordingWriter {
     fn commit_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
-        let config = self.get_mut().config.clone();
+        let this = self.get_mut();
+        *this.writer_commits.lock().expect("commit lock should succeed") += 1;
+        let config = this.config.clone();
         if config.pending_stage == Some(AsyncCopyStage::WriterCommit) {
             return Box::pin(std::future::pending());
         }
@@ -795,19 +838,24 @@ impl AsyncFileWriteSession for RecordingWriter {
         })
     }
     fn abort_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<WriteAbortOutcome>> {
-        let config = self.get_mut().config.clone();
+        let this = self.get_mut();
+        *this.writer_aborts.lock().expect("abort lock should succeed") += 1;
+        let config = this.config.clone();
+        let published = this.confirmed > 0 && config.writer_direct_append;
         Box::pin(async move {
             match config.writer_abort_failure {
                 Some(kind) => Err(FsError::new(kind, FsOperation::AbortWriter, "injected abort failure")),
-                None => Ok(config
-                    .writer_abort_outcome
-                    .unwrap_or(match config.writer_commit_failure {
+                None => Ok(config.writer_abort_outcome.unwrap_or(if published {
+                    WriteAbortOutcome::Published
+                } else {
+                    match config.writer_commit_failure {
                         Some(WriteFailureState::Published) => WriteAbortOutcome::Published,
                         Some(WriteFailureState::Indeterminate) => WriteAbortOutcome::Indeterminate,
                         Some(WriteFailureState::RetryableNotPublished)
                         | Some(WriteFailureState::NotPublished)
                         | None => WriteAbortOutcome::NotPublished,
-                    })),
+                    }
+                })),
             }
         })
     }
@@ -976,6 +1024,8 @@ mod tests {
             },
             written_bytes: Arc::clone(&written_bytes),
             cancellations: Arc::new(Mutex::new(0)),
+            writer_commits: Arc::new(Mutex::new(0)),
+            writer_aborts: Arc::new(Mutex::new(0)),
         };
         let waker = Waker::noop();
         let mut context = Context::from_waker(waker);

@@ -12,6 +12,8 @@ use qubit_fs::error::FsEffectState;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::write::AsyncWriteAllOperationState;
 use qubit_fs::write::AsyncWriterRecovery;
+use qubit_fs::write::WriteAbortOutcome;
+use qubit_fs::write::WriteDisposition;
 use qubit_fs::write::WriteFailureState;
 use qubit_fs::write::WriteOptions;
 
@@ -129,6 +131,72 @@ fn test_unpolled_execute_preserves_ready_request() {
     ready(operation.execute()).unwrap();
     assert_eq!(0, operation.written_bytes());
     assert!(!operation.has_recovery());
+}
+
+#[test]
+fn test_async_write_all_zero_progress_after_append_prefix_preserves_publication_facts() {
+    let (filesystem, probe) = async_recording_file_system(AsyncRecordingConfig {
+        writer_zero_progress_after: Some(2),
+        writer_direct_append: true,
+        ..Default::default()
+    });
+    let mut operation = filesystem
+        .begin_write_all(
+            Path::parse("/target").expect("valid target"),
+            b"abcd".to_vec(),
+            WriteOptions::default().with_disposition(WriteDisposition::Append),
+        )
+        .expect("preflight succeeds");
+    let failure = ready(operation.execute()).expect_err("nonempty zero progress is WriteZero");
+
+    assert_eq!(b"ab", probe.written_bytes().as_slice());
+    assert_eq!(2, failure.written_bytes());
+    assert_eq!(WriteFailureState::Indeterminate, failure.state());
+    assert_eq!(
+        AsyncWriteAllOperationState::Failed(WriteFailureState::Indeterminate),
+        operation.state()
+    );
+    assert_eq!(0, probe.writer_commits());
+    assert_eq!(0, probe.writer_aborts());
+    assert!(operation.has_recovery());
+
+    let abort = operation
+        .recovery()
+        .map(|recovery| match recovery {
+            AsyncWriterRecovery::Opened(writer) => ready(writer.abort_async()),
+            AsyncWriterRecovery::Rejected(_) => panic!("fixture returns a validated writer"),
+        })
+        .expect("recovery writer retained")
+        .expect("abort confirms direct append publication");
+    assert_eq!(WriteAbortOutcome::Published, abort);
+    assert_eq!(1, probe.writer_aborts());
+    assert_eq!(b"ab", probe.written_bytes().as_slice());
+    assert_eq!(2, operation.written_bytes());
+    assert_eq!(
+        AsyncWriteAllOperationState::Failed(WriteFailureState::Indeterminate),
+        operation.state()
+    );
+}
+
+#[test]
+fn test_async_write_all_zero_progress_empty_payload_is_successful() {
+    let (filesystem, probe) = async_recording_file_system(AsyncRecordingConfig {
+        writer_zero_progress_after: Some(0),
+        writer_direct_append: true,
+        ..Default::default()
+    });
+    let mut operation = filesystem
+        .begin_write_all(
+            Path::parse("/empty").expect("valid target"),
+            Vec::new(),
+            WriteOptions::default().with_disposition(WriteDisposition::Append),
+        )
+        .expect("preflight succeeds");
+    ready(operation.execute()).expect("empty payload succeeds");
+    assert!(probe.written_bytes().is_empty());
+    assert_eq!(0, operation.written_bytes());
+    assert_eq!(1, probe.writer_commits());
+    assert_eq!(0, probe.writer_aborts());
 }
 
 #[test]

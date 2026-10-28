@@ -65,6 +65,7 @@ use crate::write::AsyncFileWriter;
 use crate::write::AsyncWriteAllOperation;
 use crate::write::AsyncWriteAllOperationFailure;
 use crate::write::RejectedAsyncWriter;
+use crate::write::WriteDisposition;
 use crate::write::WriteOptions;
 
 /// Application-facing asynchronous filesystem facade.
@@ -268,6 +269,7 @@ impl AsyncFileSystem {
             .map_err(|error| OpenFailure::new(error, OpenFailureStage::Preflight, None))?;
         let atomicity = options.atomicity();
         let durability = options.durability();
+        let append = options.disposition() == WriteDisposition::Append;
         let opened = self
             .spi
             .open_writer(OpenWriterRequest::new(path, ResolvedWriteOptions::new(options)))
@@ -296,6 +298,7 @@ impl AsyncFileSystem {
             session,
             atomicity,
             durability,
+            append,
             self.properties().info().provider_id(),
             self.properties().limits().max_write_bytes().maximum(),
         ))

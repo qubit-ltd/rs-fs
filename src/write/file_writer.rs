@@ -69,6 +69,8 @@ pub struct FileWriter {
     atomicity: AtomicityRequirement,
     /// Durability required by the caller.
     durability: DurabilityRequirement,
+    /// Whether this writer appends to an existing destination.
+    append: bool,
     /// Provider identifier attached to facade-generated errors.
     provider: Box<str>,
     /// Optional inclusive byte limit for this write session.
@@ -83,6 +85,7 @@ impl FileWriter {
     /// # Parameters
     /// - `session`: Provider session accepting file bytes.
     /// - `info`: File identity and optional open-time metadata snapshot.
+    /// - `append`: Whether this writer appends to an existing destination.
     ///
     /// # Returns
     /// A concrete writer in [`WriterState::Open`].
@@ -93,6 +96,7 @@ impl FileWriter {
         session: Box<dyn FileWriterSpi>,
         atomicity: AtomicityRequirement,
         durability: DurabilityRequirement,
+        append: bool,
         provider: &str,
         max_write_bytes: Option<u64>,
     ) -> Self {
@@ -103,6 +107,7 @@ impl FileWriter {
             abort_completed: false,
             atomicity,
             durability,
+            append,
             provider: provider.into(),
             write_budget: max_write_bytes
                 .map(|maximum| FacadeCore::byte_budget(FileSystemResource::WriteBytes, maximum)),
@@ -378,11 +383,30 @@ impl Output for FileWriter {
                     self.state = WriterState::Indeterminate;
                     return Err(error);
                 }
+                if count > 0 && value == 0 && self.written_bytes > 0 && self.append {
+                    self.state = WriterState::Indeterminate;
+                }
                 Ok(value)
             }
             Err(error) => {
-                self.state = WriterState::Indeterminate;
-                Err(error)
+                if error.kind() == IoErrorKind::Interrupted {
+                    let typed_error = error.get_ref().and_then(|source| source.downcast_ref::<FsError>());
+                    let has_unchanged_fact = typed_error.is_some_and(|typed_error| {
+                        typed_error.kind() != FsErrorKind::Indeterminate
+                            && typed_error.effect_state() == Some(FsEffectState::Unchanged)
+                    });
+                    if typed_error.is_none() || has_unchanged_fact {
+                        return Err(error);
+                    }
+                    self.state = WriterState::Indeterminate;
+                    let source = error
+                        .into_inner()
+                        .expect("typed Interrupted error must retain its source");
+                    Err(IoError::other(source))
+                } else {
+                    self.state = WriterState::Indeterminate;
+                    Err(error)
+                }
             }
         }
     }
