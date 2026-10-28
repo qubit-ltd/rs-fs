@@ -35,6 +35,7 @@ pub enum DirectoryStreamState {
     Open,
     /// The provider reported the end of enumeration.
     Exhausted,
-    /// Enumeration stopped because validation or provider I/O failed.
+    /// Enumeration stopped because validation, provider I/O, or cancellation
+    /// of a pending asynchronous next request failed the stream.
     Failed,
 }

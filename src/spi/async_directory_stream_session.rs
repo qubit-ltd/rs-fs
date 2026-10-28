@@ -31,6 +31,9 @@ pub trait AsyncDirectoryStreamSession: Send {
     /// A future resolving to the next entry, or `None` when enumeration is
     /// complete. Providers return [`FsResult::Err`] when enumeration fails;
     /// the error retains the filesystem context available to the provider.
+    /// The provider may advance its session while this future is polled. If a
+    /// caller drops a pending facade request, the facade marks that stream
+    /// failed; callers must open a new stream to enumerate again.
     ///
     /// # Errors
     /// The future resolves to an error when the provider cannot continue

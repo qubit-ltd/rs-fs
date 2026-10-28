@@ -16,6 +16,7 @@ use crate::directory::DirectoryStreamState;
 use crate::directory::ListOptions;
 use crate::directory::ListScope;
 use crate::directory::ListStreamPolicy;
+use crate::directory::internal::ListNextCancellationGuard;
 use crate::error::FsResult;
 use crate::metadata::DirEntry;
 use crate::metadata::FileSystemLimits;
@@ -27,6 +28,8 @@ use crate::spi::SpiFuture;
 ///
 /// The stream validates each provider entry before yielding it and preserves
 /// terminal state across asynchronous calls.
+/// Dropping a pending `next_entry_async` future makes the stream failed;
+/// reopen the stream to continue enumeration.
 ///
 /// # Examples
 ///
@@ -106,12 +109,16 @@ impl AsyncDirectoryStream {
     /// # Errors
     /// Returns a provider error, a validation or resource-limit error, or an
     /// invalid-state error if enumeration has already reached a terminal
-    /// state. Any such error makes the stream terminal.
+    /// state. Any such error makes the stream terminal. Dropping this future
+    /// after polling it makes the stream failed because the provider may have
+    /// advanced before cancellation; reopen the stream to enumerate again.
     pub fn next_entry_async(&mut self) -> SpiFuture<'_, FsResult<Option<DirEntry>>> {
         Box::pin(async move {
             self.policy.before_next(Instant::now())?;
-            let result = self.session.next_entry_async().await;
-            self.policy.finish_next(result, Instant::now())
+            let Self { session, policy } = self;
+            let guard = ListNextCancellationGuard::new(policy);
+            let result = session.next_entry_async().await;
+            guard.finish(result, Instant::now())
         })
     }
 }

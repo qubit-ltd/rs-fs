@@ -88,6 +88,12 @@ impl ListStreamPolicy {
         self.state
     }
 
+    /// Makes an interrupted asynchronous next request terminal.
+    #[cfg(feature = "async")]
+    pub(crate) fn mark_cancelled(&mut self) {
+        self.state = DirectoryStreamState::Failed;
+    }
+
     /// Checks terminal state and deadline immediately before provider dispatch.
     pub(crate) fn before_next(&mut self, now: Instant) -> FsResult<()> {
         if self.state != DirectoryStreamState::Open {

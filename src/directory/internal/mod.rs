@@ -13,3 +13,8 @@ pub(crate) use list_selection::select;
 
 mod list_stream_policy;
 pub(crate) use list_stream_policy::ListStreamPolicy;
+
+#[cfg(feature = "async")]
+mod list_next_cancellation_guard;
+#[cfg(feature = "async")]
+pub(crate) use list_next_cancellation_guard::ListNextCancellationGuard;
