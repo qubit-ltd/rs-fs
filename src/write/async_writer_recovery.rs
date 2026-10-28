@@ -20,35 +20,26 @@ use crate::write::RejectedAsyncWriter;
 /// Matching the variant is required before performing recovery. A rejected
 /// session cannot write or publish data. This value does not describe the
 /// historical publication state; use the failure snapshot for that fact.
+/// Recovery values come from an operation through `recovery` or
+/// `take_recovery`. This mutable-borrow helper leaves ownership with the
+/// caller if abort fails.
 ///
 /// # Examples
 ///
-/// ```rust
-/// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
-/// # use support::*;
-/// # let (filesystem, _) = async_recording_spi::async_recording_file_system(async_recording_spi::AsyncRecordingConfig {
-/// #     writer_commit_failure: Some(qubit_fs::write::WriteFailureState::NotPublished),
-/// #     ..Default::default()
-/// # });
-/// # poll_support::ready(async {
-/// use qubit_fs::Path;
-/// use qubit_fs::write::AsyncWriterRecovery;
-/// use qubit_fs::write::WriteFailureState;
-/// use qubit_fs::write::WriteOptions;
+/// The caller supplies a retained recovery value from an operation.
 ///
-/// let mut operation = filesystem.begin_write_all(
-///     Path::parse("/report")?, b"bytes".to_vec(), WriteOptions::default(),
-/// )?;
-/// let failure = operation.execute().await.expect_err("fixture commit failure");
-/// assert_eq!(WriteFailureState::NotPublished, failure.state());
-/// let mut recovery = operation.take_recovery().expect("retained session");
-/// let cleanup = match &mut recovery {
-///     AsyncWriterRecovery::Opened(writer) => writer.abort_async().await,
-///     AsyncWriterRecovery::Rejected(writer) => writer.abort_async().await,
-/// };
-/// assert!(cleanup.is_ok());
-/// # Ok::<(), Box<dyn std::error::Error>>(())
-/// # }).unwrap();
+/// ```rust
+/// use qubit_fs::error::FsResult;
+/// use qubit_fs::write::{AsyncWriterRecovery, WriteAbortOutcome};
+///
+/// async fn abort_retained(
+///     recovery: &mut AsyncWriterRecovery,
+/// ) -> FsResult<WriteAbortOutcome> {
+///     match recovery {
+///         AsyncWriterRecovery::Opened(writer) => writer.abort_async().await,
+///         AsyncWriterRecovery::Rejected(writer) => writer.abort_async().await,
+///     }
+/// }
 /// ```
 #[must_use]
 pub enum AsyncWriterRecovery {

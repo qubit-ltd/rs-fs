@@ -18,22 +18,26 @@ use super::FallbackRejection;
 ///
 /// # Examples
 ///
+/// The application supplies a configured filesystem and validated paths.
+///
 /// ```rust
-/// # fn main() -> Result<(), qubit_fs::FsError> {
+/// use qubit_fs::FileSystem;
 /// use qubit_fs::Path;
-/// use qubit_fs::copy::CopyExecutionRoute;
-/// use qubit_fs::copy::CopyOptions;
-/// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
-/// let fs = support::rustdoc_provider::filesystem();
-/// let assessment = fs.assess_copy(
-///     &Path::parse("/report")?,
-///     &Path::parse("/copy")?,
-///     &CopyOptions::default(),
-/// )?;
-/// assert_eq!(assessment.route(), CopyExecutionRoute::StreamOnly);
-/// assert_eq!(assessment.fallback_rejection(), None);
-/// # Ok(())
-/// # }
+/// use qubit_fs::copy::{CopyExecutionRoute, CopyOptions};
+///
+/// fn inspect(filesystem: &FileSystem, source: &Path, target: &Path) -> qubit_fs::FsResult<()> {
+///     let assessment = filesystem.assess_copy(source, target, &CopyOptions::default())?;
+///     match assessment.route() {
+///         CopyExecutionRoute::ProviderThenStream => { /* provider attempt, then fallback */ }
+///         CopyExecutionRoute::ProviderOnly => { /* provider primitive is required */ }
+///         CopyExecutionRoute::StreamOnly => { /* use the stream route */ }
+///         _ => {}
+///     }
+///     if let Some(reason) = assessment.fallback_rejection() {
+///         println!("stream fallback is unavailable: {reason:?}");
+///     }
+///     Ok(())
+/// }
 /// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[must_use]

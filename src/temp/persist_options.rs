@@ -17,12 +17,27 @@ use crate::metadata::FileSystemCapability;
 
 /// Options controlling temporary resource persistence.
 ///
+/// Defaults are `overwrite = false`, `atomicity = Required`,
+/// `preserve_metadata = Portable`, and `create_parent = false`. Required
+/// atomicity does not establish a durability guarantee. When the application
+/// can accept weaker atomicity, it may request `Preferred`; that request does
+/// not guarantee that persistence will succeed.
+///
 /// # Examples
 ///
 /// ```rust
+/// use qubit_fs::metadata::AtomicityRequirement;
 /// use qubit_fs::temp::PersistOptions;
 ///
-/// assert!(!PersistOptions::default().overwrite());
+/// let defaults = PersistOptions::default();
+/// assert!(!defaults.overwrite());
+/// assert_eq!(AtomicityRequirement::Required, defaults.atomicity());
+/// assert_eq!(qubit_fs::copy::MetadataPreservePolicy::Portable, defaults.preserve_metadata());
+/// assert!(!defaults.creates_parent());
+///
+/// // Use only when the application can accept a preferred atomicity level.
+/// let preferred = defaults.with_atomicity(AtomicityRequirement::Preferred);
+/// assert_eq!(AtomicityRequirement::Preferred, preferred.atomicity());
 /// ```
 #[non_exhaustive]
 #[derive(Clone, Debug, Eq, PartialEq)]

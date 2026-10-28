@@ -18,10 +18,15 @@
 /// match state {
 ///     WriteFailureState::RetryableNotPublished => println!("retry the commit"),
 ///     WriteFailureState::NotPublished => println!("clean up the unpublished target"),
-///     WriteFailureState::Published => println!("clean up the published target"),
+///     WriteFailureState::Published => println!("preserve the published target; clean up only the session or staging resources"),
 ///     WriteFailureState::Indeterminate => println!("resolve publication status"),
 /// }
 /// ```
+///
+/// `Published` means the destination must be preserved; do not retry
+/// publication as though it had failed. Cleanup applies only to resources still
+/// owned by the writer, such as a session or staging data. Successful cleanup
+/// does not roll back the published target.
 #[must_use]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WriteFailureState {

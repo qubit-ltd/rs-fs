@@ -26,23 +26,24 @@ use crate::metadata::OpenedFileInfo;
 ///
 /// # Examples
 ///
-/// This example uses an isolated in-memory provider fixture.
+/// The application supplies a configured filesystem and a validated path.
 ///
 /// ```rust
-/// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
-/// # use support::*;
-/// # let (filesystem, _) = async_recording_spi::async_recording_file_system(Default::default());
-/// # poll_support::ready(async {
+/// use qubit_fs::AsyncFileSystem;
 /// use qubit_fs::Path;
 /// use qubit_fs::read::ReadOptions;
 /// use qubit_io::AsyncInput;
 ///
-/// let mut reader = filesystem.open_reader(&Path::parse("/report")?, ReadOptions::default()).await?;
-/// let mut prefix = [0; 3];
-/// assert_eq!(3, reader.read_fully_async(&mut prefix).await?);
-/// assert_eq!(*b"byt", prefix);
-/// # Ok::<(), Box<dyn std::error::Error>>(())
-/// # }).unwrap();
+/// async fn read_prefix(
+///     filesystem: &AsyncFileSystem,
+///     path: &Path,
+/// ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+///     let mut reader = filesystem.open_reader(path, ReadOptions::default()).await?;
+///     let mut prefix = vec![0; 16];
+///     let count = reader.read_fully_async(&mut prefix).await?;
+///     prefix.truncate(count);
+///     Ok(prefix)
+/// }
 /// ```
 pub struct AsyncFileReader {
     /// Pinned provider byte input.

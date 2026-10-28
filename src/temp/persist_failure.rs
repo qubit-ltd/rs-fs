@@ -16,7 +16,9 @@ use crate::error::FsError;
 use crate::path::Path;
 use crate::temp::PersistFailureState;
 
-/// Persistence error paired with provider-confirmed partial progress.
+/// Persistence error paired with a retained snapshot of provider-confirmed
+/// partial progress. That snapshot may include publication history from an
+/// earlier persist attempt, not only the operation that just failed.
 ///
 /// # Examples
 ///
@@ -59,10 +61,11 @@ impl PersistFailure {
         }
     }
 
-    /// Returns provider-confirmed partial progress.
+    /// Returns the retained provider-confirmed progress snapshot.
     ///
     /// # Returns
-    /// The recovery state for this persist attempt.
+    /// The current retained recovery state, which may include an earlier
+    /// publication fact.
     #[inline]
     #[must_use]
     pub const fn state(&self) -> PersistFailureState {
@@ -79,14 +82,27 @@ impl PersistFailure {
         &self.error
     }
 
-    /// Returns the target associated with the retained recovery fact.
+    /// Returns the most recently retained path for a positively confirmed
+    /// publication, if one is known.
+    ///
+    /// `Some(path)` identifies that historical publication; it is not
+    /// necessarily the target of the persist call that most recently failed.
+    /// `None` means no confirmed publication path was retained, not that the
+    /// failed operation definitely published nothing.
+    ///
+    /// # Returns
+    /// The latest retained confirmed publication path, or `None` when no path
+    /// is available in the recovery snapshot.
     #[inline]
     #[must_use]
     pub fn publication_target(&self) -> Option<&Path> {
         self.publication_target.as_ref()
     }
 
-    /// Consumes this failure and returns the underlying filesystem error.
+    /// Consumes this failure and returns only the underlying filesystem error.
+    ///
+    /// This discards the retained progress state and publication target. Use
+    /// [`Self::into_recovery_parts`] when recovery facts may matter.
     ///
     /// # Returns
     /// The owned filesystem error.
@@ -95,14 +111,24 @@ impl PersistFailure {
         self.error
     }
 
-    /// Splits this facade failure into its causal error and state.
+    /// Splits this facade failure into its causal error and state, omitting the
+    /// retained publication target.
+    ///
+    /// The returned state may describe publication history; the target path is
+    /// lost. Use [`Self::into_recovery_parts`] to retain the complete snapshot.
     #[must_use = "retain or inspect the causal error and recovery state"]
     #[inline]
     pub fn into_parts(self) -> (FsError, PersistFailureState) {
         (self.error, self.state)
     }
 
-    /// Consumes the failure and returns its complete recovery snapshot.
+    /// Consumes the failure and returns its complete retained recovery
+    /// snapshot.
+    ///
+    /// The state and optional target may describe an earlier confirmed
+    /// publication, rather than the target of the persist call that just
+    /// failed. Preserve all three values when reconciling publication and
+    /// source cleanup.
     #[must_use = "retain or inspect the causal error and complete recovery snapshot"]
     #[inline]
     pub fn into_recovery_parts(self) -> (FsError, PersistFailureState, Option<Path>) {
