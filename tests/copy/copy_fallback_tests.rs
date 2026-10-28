@@ -1455,7 +1455,7 @@ fn test_copy_completed_overwritten_stats_violate_fail_conflict_policy() {
     let failure = filesystem
         .copy(&path("/source"), &path("/target"), CopyOptions::default())
         .expect_err("overwritten stats must match the conflict policy");
-    assert_eq!(CopyFailureState::Published, failure.state());
+    assert_eq!(CopyFailureState::Indeterminate, failure.state());
     assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
 }
 

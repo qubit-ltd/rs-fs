@@ -312,6 +312,8 @@ impl CopyOutcome {
     }
 
     fn entry_count(&self) -> Option<u64> {
+        // These counters describe completed resources; skipped and failed
+        // entries are separate outcomes and cannot justify an overwrite.
         self.stats
             .files
             .checked_add(self.stats.directories)
@@ -324,6 +326,9 @@ impl CopyOutcome {
         let Some(entries) = self.entry_count() else {
             return Some("provider reported copy entry counters that overflow");
         };
+        if self.stats.overwritten > entries {
+            return Some("provider reported more overwritten entries than completed resources");
+        }
         if mode != CopyMode::File {
             return None;
         }
@@ -335,7 +340,6 @@ impl CopyOutcome {
         let valid_copied_file = entries == 1
             && self.stats.directories == 0
             && self.stats.prefixes == 0
-            && self.stats.overwritten <= entries
             && self.stats.skipped == 0
             && self.stats.failed == 0;
         if valid_copied_file || valid_skipped_file {
@@ -489,5 +493,26 @@ mod tests {
             CopyFailureState::Indeterminate,
             overflow.violation_failure_state(&CopyOptions::default())
         );
+    }
+
+    #[test]
+    fn test_all_modes_reject_overwritten_counts_above_completed_entries() {
+        let outcome = CopyOutcome::new(
+            CopyStats {
+                files: 1,
+                overwritten: 2,
+                ..CopyStats::default()
+            },
+            CopyMethod::Native,
+            crate::metadata::AchievedAtomicity::Atomic,
+        );
+
+        for options in [CopyOptions::default(), CopyOptions::tree()] {
+            assert!(outcome.contract_violation(&options).is_some());
+            assert_eq!(
+                CopyFailureState::Indeterminate,
+                outcome.violation_failure_state(&options)
+            );
+        }
     }
 }
