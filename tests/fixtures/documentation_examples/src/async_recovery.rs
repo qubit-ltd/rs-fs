@@ -104,11 +104,14 @@ pub async fn write_report(
     })))
 }
 
-/// Lists report keys across a configured flat namespace with a bounded result
-/// set.
+/// Collects all report keys in a flat namespace, rejecting listings above
+/// 1000 entries.
 ///
-/// This guide example uses a literal prefix and caps the returned entries to
-/// keep listing work bounded.
+/// Returns the complete collection only after reaching the end of the stream.
+/// A 1001st matching entry returns ResourceLimitExceeded; this helper returns
+/// no partial collection on error. The limit does not bound provider-side
+/// scanning or prefetch work. Applications that need partial progress should
+/// consume the directory stream directly and retain that progress themselves.
 pub async fn list_reports(filesystem: &AsyncFileSystem) -> Result<Vec<Path>, FsError> {
     let scope = ListScope::Namespace;
     let options = ListOptions::object_keys()

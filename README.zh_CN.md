@@ -127,7 +127,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## 测试
 
-如需手动验证本地 provider 集成示例，可运行：
+以下命令用于同级 Qubit 源码仓库环境，请从 `rs-fs` 根目录运行。fixture
+要求 `rs-fs-local`（`qubit-fs-local` 0.11）和 `rs-local-files`
+（`qubit-local-files` 0.5）与 `rs-fs`（`qubit-fs` 0.3）位于同一父目录；
+相关 manifests 中的其他本地 path 依赖也须满足：
+
+```text
+parent/
+├── rs-fs/
+├── rs-fs-local/
+├── rs-local-files/
+├── rs-redact/
+│   └── derive/
+├── rs-fs-registry/
+└── rs-json/
+```
+
+仅克隆 `rs-fs` 或下载 crate 源码包不包含该布局。独立体验发布包时，请在自己的
+Cargo 项目中使用“快速开始”的依赖配置与完整程序。手动运行本地集成示例：
 
 ```bash
 cargo test --manifest-path tests/fixtures/documentation_examples/Cargo.toml

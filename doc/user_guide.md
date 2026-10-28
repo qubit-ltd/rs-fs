@@ -380,11 +380,14 @@ pub async fn write_report(
     })))
 }
 
-/// Lists report keys across a configured flat namespace with a bounded result
-/// set.
+/// Collects all report keys in a flat namespace, rejecting listings above
+/// 1000 entries.
 ///
-/// This guide example uses a literal prefix and caps the returned entries to
-/// keep listing work bounded.
+/// Returns the complete collection only after reaching the end of the stream.
+/// A 1001st matching entry returns ResourceLimitExceeded; this helper returns
+/// no partial collection on error. The limit does not bound provider-side
+/// scanning or prefetch work. Applications that need partial progress should
+/// consume the directory stream directly and retain that progress themselves.
 pub async fn list_reports(filesystem: &AsyncFileSystem) -> Result<Vec<Path>, FsError> {
     let scope = ListScope::Namespace;
     let options = ListOptions::object_keys()
@@ -398,6 +401,15 @@ pub async fn list_reports(filesystem: &AsyncFileSystem) -> Result<Vec<Path>, FsE
     Ok(paths)
 }
 ```
+
+If the stream reaches EOF with at most 1000 matching entries, this helper
+returns the complete collection. The 1001st entry instead produces
+`ResourceLimitExceeded`, and the helper returns no `Vec` containing the entries
+it already collected. Do not treat that error as a complete directory
+snapshot. The entry limit does not bound provider-side scanning or prefetch.
+Applications that need partial progress must consume the directory stream
+directly and retain their own progress. If they stop early to truncate the
+listing, their result must explicitly say it is incomplete.
 
 An explicit error is in `primary`; cancellation has `primary == None` and leaves
 its state in `operation`. A failed abort leaves both `cleanup_error` and the

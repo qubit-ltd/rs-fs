@@ -342,11 +342,14 @@ pub async fn write_report(
     })))
 }
 
-/// Lists report keys across a configured flat namespace with a bounded result
-/// set.
+/// Collects all report keys in a flat namespace, rejecting listings above
+/// 1000 entries.
 ///
-/// This guide example uses a literal prefix and caps the returned entries to
-/// keep listing work bounded.
+/// Returns the complete collection only after reaching the end of the stream.
+/// A 1001st matching entry returns ResourceLimitExceeded; this helper returns
+/// no partial collection on error. The limit does not bound provider-side
+/// scanning or prefetch work. Applications that need partial progress should
+/// consume the directory stream directly and retain that progress themselves.
 pub async fn list_reports(filesystem: &AsyncFileSystem) -> Result<Vec<Path>, FsError> {
     let scope = ListScope::Namespace;
     let options = ListOptions::object_keys()
@@ -360,6 +363,11 @@ pub async fn list_reports(filesystem: &AsyncFileSystem) -> Result<Vec<Path>, FsE
     Ok(paths)
 }
 ```
+
+流中匹配条目不超过 1000 个且正常到达 EOF 时，函数才返回完整集合。出现第 1001 个条目时，
+函数会返回 `ResourceLimitExceeded`，不会把此前收集到的 `Vec` 一并返回；因此不能把这次
+失败的列举当成完整目录快照。条目上限不限制 provider 在后台扫描或预取的工作量。若应用需要
+保留部分进度，应直接消费目录流并自行保存；若主动提前停止以截断结果，还必须明确标记结果不完整。
 
 显式错误保存在 `primary` 中；取消时 `primary == None`，状态保存在 `operation`。
 abort 失败后，返回对象同时保留 `cleanup_error` 和 writer。成功时，清理结果保存在

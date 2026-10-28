@@ -144,7 +144,27 @@ Platform roots and authority boundaries come from the configured provider.
 
 ## Testing
 
-To manually check the local provider integration examples, run:
+Run these development fixture commands from the `rs-fs` repository root in a
+sibling Qubit checkout. The fixture uses local `rs-fs-local` (`qubit-fs-local`
+0.11) and `rs-local-files` (`qubit-local-files` 0.5) repositories beside
+`rs-fs` (`qubit-fs` 0.3). The participating manifests may require additional
+sibling path dependencies:
+
+```text
+parent/
+├── rs-fs/
+├── rs-fs-local/
+├── rs-local-files/
+├── rs-redact/
+│   └── derive/
+├── rs-fs-registry/
+└── rs-json/
+```
+
+A standalone checkout or crate source archive does not supply this layout. To
+try published packages independently, use the dependency block and complete
+program in Quick Start in your own Cargo project. From the `rs-fs` repository
+root, run:
 
 ```bash
 cargo test --manifest-path tests/fixtures/documentation_examples/Cargo.toml
