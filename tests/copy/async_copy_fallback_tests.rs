@@ -612,7 +612,8 @@ fn test_async_declined_copy_rejects_required_fallback_guarantees() {
     }
 }
 
-/// Covers cancellation after every fallback await point and preserves recovery.
+/// Covers cancellation during transfer, flush, and commit while preserving
+/// recovery.
 #[test]
 fn test_async_stream_fallback_cancellation_is_indeterminate_with_recovery() {
     for stage in [
@@ -652,6 +653,55 @@ fn test_async_stream_fallback_cancellation_is_indeterminate_with_recovery() {
         drop(operation);
         assert_eq!(calls_before_drop, probe.calls(), "drop must not call the SPI");
     }
+}
+
+#[test]
+fn test_async_copy_cancel_during_skip_abort_retains_recovery() {
+    let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig {
+        decline_copy: true,
+        writer_commit_failure: Some(WriteFailureState::RetryableNotPublished),
+        writer_commit_error: Some(FsErrorKind::AlreadyExists),
+        pending_stage: Some(AsyncCopyStage::WriterAbort),
+        ..AsyncRecordingConfig::default()
+    });
+    let mut operation = file_system
+        .begin_copy(
+            path("/source"),
+            path("/target"),
+            CopyOptions::default().with_conflict(CopyConflictPolicy::Skip),
+        )
+        .expect("copy preflight");
+    let mut future = Box::pin(operation.execute());
+    assert_pending(future.as_mut());
+    assert_eq!(1, probe.writer_commits());
+    assert_eq!(1, probe.writer_aborts());
+    let calls = probe.calls();
+    let confirmed = probe.written_bytes().len() as u64;
+    assert!(confirmed > 0, "fixture must reach abort after transfer");
+    let cancellations = probe.writer_cancellations();
+    drop(future);
+    assert_eq!(
+        AsyncCopyOperationState::Failed(CopyFailureState::Indeterminate),
+        operation.state()
+    );
+    match operation.recovery().expect("writer retained") {
+        AsyncWriterRecovery::Opened(writer) => {
+            assert_eq!(WriterState::Indeterminate, writer.state());
+        }
+        AsyncWriterRecovery::Rejected(_) => panic!("validated writer expected"),
+    }
+    for _ in 0..2 {
+        let failure = ready(operation.execute()).expect_err("execute is single-use");
+        assert_eq!(FsErrorKind::InvalidState, failure.error().kind());
+        assert_eq!(CopyFailureState::Indeterminate, failure.state());
+        assert_eq!(confirmed, failure.partial_stats().bytes);
+        assert!(operation.has_recovery());
+    }
+    drop(operation);
+    assert_eq!(calls, probe.calls());
+    assert_eq!(1, probe.writer_commits());
+    assert_eq!(1, probe.writer_aborts());
+    assert_eq!(cancellations, probe.writer_cancellations());
 }
 
 /// Covers cancellation before fallback has allocated a writer.

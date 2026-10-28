@@ -98,6 +98,7 @@ pub(crate) enum AsyncCopyStage {
     WriterWrite,
     WriterFlush,
     WriterCommit,
+    WriterAbort,
 }
 
 /// Controls the recording provider's externally observable behavior.
@@ -841,6 +842,9 @@ impl AsyncFileWriteSession for RecordingWriter {
         let this = self.get_mut();
         *this.writer_aborts.lock().expect("abort lock should succeed") += 1;
         let config = this.config.clone();
+        if config.pending_stage == Some(AsyncCopyStage::WriterAbort) {
+            return Box::pin(std::future::pending());
+        }
         let published = this.confirmed > 0 && config.writer_direct_append;
         Box::pin(async move {
             match config.writer_abort_failure {
