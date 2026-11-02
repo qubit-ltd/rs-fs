@@ -223,6 +223,113 @@ fn test_statistics_shape_legal_and_boundary_comparisons() {
     assert_eq!(CopyFailureState::Published, downgraded.state());
 }
 
+#[test]
+fn test_auto_and_tree_reject_bytes_without_completed_or_failed_resources() {
+    for options in [CopyOptions::default(), CopyOptions::tree()] {
+        let stats = CopyStats {
+            bytes: 42,
+            ..CopyStats::default()
+        };
+        let spi = CopyStatsSpi::new(stats, AchievedAtomicity::Atomic);
+        let calls = Arc::clone(&spi.calls);
+        let filesystem = spi.into_filesystem();
+        let failure = filesystem
+            .copy(&path("/source"), &path("/target"), options)
+            .expect_err("bytes without completed or failed resources must be rejected");
+
+        assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+        assert_eq!(CopyFailureState::Indeterminate, failure.state());
+        assert_eq!(stats, *failure.partial_stats());
+        assert_eq!(1, calls.load(Ordering::SeqCst), "provider must be called once");
+    }
+}
+
+#[test]
+fn test_statistics_shape_preserves_empty_and_partial_failure_boundaries() {
+    for options in [CopyOptions::default(), CopyOptions::tree()] {
+        assert!(
+            CopyStatsSpi::new(CopyStats::default(), AchievedAtomicity::Atomic)
+                .into_filesystem()
+                .copy(&path("/source"), &path("/target"), options.clone())
+                .is_ok()
+        );
+
+        assert!(
+            CopyStatsSpi::new(
+                CopyStats {
+                    files: 1,
+                    ..CopyStats::default()
+                },
+                AchievedAtomicity::Atomic,
+            )
+            .into_filesystem()
+            .copy(&path("/source"), &path("/target"), options.clone())
+            .is_ok()
+        );
+    }
+
+    assert!(
+        CopyStatsSpi::new(
+            CopyStats {
+                skipped: 1,
+                ..CopyStats::default()
+            },
+            AchievedAtomicity::Atomic,
+        )
+        .into_filesystem()
+        .copy(
+            &path("/source"),
+            &path("/target"),
+            CopyOptions::file().with_conflict(CopyConflictPolicy::Skip),
+        )
+        .is_ok()
+    );
+
+    let skipped_bytes = CopyStatsSpi::new(
+        CopyStats {
+            skipped: 1,
+            bytes: 42,
+            ..CopyStats::default()
+        },
+        AchievedAtomicity::Atomic,
+    )
+    .into_filesystem()
+    .copy(
+        &path("/source"),
+        &path("/target"),
+        CopyOptions::tree().with_conflict(CopyConflictPolicy::Skip),
+    )
+    .expect_err("skipped entries cannot account for copied bytes");
+    assert_eq!(FsErrorKind::ProviderContractViolation, skipped_bytes.error().kind());
+    assert_eq!(CopyFailureState::Indeterminate, skipped_bytes.state());
+    assert_eq!(42, skipped_bytes.partial_stats().bytes);
+
+    let partial = CopyStats {
+        bytes: 42,
+        failed: 1,
+        ..CopyStats::default()
+    };
+    assert!(
+        CopyStatsSpi::new(partial, AchievedAtomicity::Atomic)
+            .into_filesystem()
+            .copy(
+                &path("/source"),
+                &path("/target"),
+                CopyOptions::tree().with_continue_on_error(true),
+            )
+            .is_ok()
+    );
+
+    let disallowed_failure = CopyStatsSpi::new(partial, AchievedAtomicity::Atomic)
+        .into_filesystem()
+        .copy(&path("/source"), &path("/target"), CopyOptions::tree())
+        .expect_err("failed entries remain disallowed without continue-on-error");
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        disallowed_failure.error().kind()
+    );
+}
+
 impl CopyStatsSpi {
     fn into_filesystem(self) -> FileSystem {
         FileSystem::from_spi(self).expect("facade should construct")
@@ -364,6 +471,100 @@ mod asynchronous {
                 .expect("copy preflight should succeed");
             let result = ready(operation.execute());
             assert!(result.is_ok());
+        }
+    }
+
+    #[test]
+    fn test_async_auto_and_tree_reject_bytes_without_completed_or_failed_resources() {
+        for options in [CopyOptions::default(), CopyOptions::tree()] {
+            let stats = CopyStats {
+                bytes: 42,
+                ..CopyStats::default()
+            };
+            let spi = CopyStatsSpi::new(stats, AchievedAtomicity::Atomic);
+            let calls = Arc::clone(&spi.calls);
+            let mut operation = filesystem(spi)
+                .begin_copy(path("/source"), path("/target"), options)
+                .expect("copy preflight should succeed");
+            let failure =
+                ready(operation.execute()).expect_err("bytes without completed or failed resources must be rejected");
+
+            assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+            assert_eq!(CopyFailureState::Indeterminate, failure.state());
+            assert_eq!(stats, *failure.partial_stats());
+            assert_eq!(1, calls.load(Ordering::SeqCst), "provider must be called once");
+            assert_eq!(
+                AsyncCopyOperationState::Failed(CopyFailureState::Indeterminate),
+                operation.state()
+            );
+        }
+    }
+
+    #[test]
+    fn test_async_statistics_shape_preserves_empty_and_partial_failure_boundaries() {
+        for options in [CopyOptions::default(), CopyOptions::tree()] {
+            for stats in [
+                CopyStats::default(),
+                CopyStats {
+                    files: 1,
+                    ..CopyStats::default()
+                },
+            ] {
+                let mut operation = filesystem(CopyStatsSpi::new(stats, AchievedAtomicity::Atomic))
+                    .begin_copy(path("/source"), path("/target"), options.clone())
+                    .expect("copy preflight should succeed");
+                assert!(ready(operation.execute()).is_ok());
+            }
+        }
+
+        for (options, stats, should_succeed) in [
+            (
+                CopyOptions::file().with_conflict(CopyConflictPolicy::Skip),
+                CopyStats {
+                    skipped: 1,
+                    ..CopyStats::default()
+                },
+                true,
+            ),
+            (
+                CopyOptions::tree().with_conflict(CopyConflictPolicy::Skip),
+                CopyStats {
+                    skipped: 1,
+                    bytes: 42,
+                    ..CopyStats::default()
+                },
+                false,
+            ),
+            (
+                CopyOptions::tree().with_continue_on_error(true),
+                CopyStats {
+                    bytes: 42,
+                    failed: 1,
+                    ..CopyStats::default()
+                },
+                true,
+            ),
+            (
+                CopyOptions::tree(),
+                CopyStats {
+                    bytes: 42,
+                    failed: 1,
+                    ..CopyStats::default()
+                },
+                false,
+            ),
+        ] {
+            let mut operation = filesystem(CopyStatsSpi::new(stats, AchievedAtomicity::Atomic))
+                .begin_copy(path("/source"), path("/target"), options)
+                .expect("copy preflight should succeed");
+            let result = ready(operation.execute());
+            assert_eq!(should_succeed, result.is_ok());
+            if !should_succeed {
+                assert_eq!(
+                    AsyncCopyOperationState::Failed(CopyFailureState::Indeterminate),
+                    operation.state()
+                );
+            }
         }
     }
 }

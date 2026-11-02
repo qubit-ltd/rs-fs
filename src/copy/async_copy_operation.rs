@@ -30,7 +30,6 @@ use crate::error::FsError;
 use crate::error::FsErrorKind;
 use crate::error::FsOperation;
 use crate::error::OpenFailureStage;
-use crate::metadata::FileSystemCapability;
 use crate::metadata::SymlinkPolicy;
 use crate::path::Path;
 use crate::read::ReadOptions;
@@ -349,8 +348,8 @@ fn stream_copy_fallback<'a>(
             ));
         }
         filesystem
-            .require(FileSystemCapability::Read, FsOperation::Copy, source)
-            .and_then(|_| filesystem.require(FileSystemCapability::Write, FsOperation::Copy, target))
+            .core()
+            .require_stream_copy_primitives(source, target)
             .map_err(|error| {
                 filesystem.contextual_copy_failure(
                     error,

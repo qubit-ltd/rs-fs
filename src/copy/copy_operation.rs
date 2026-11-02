@@ -31,7 +31,6 @@ use crate::error::FsOperation;
 use crate::error::FsResult;
 use crate::error::OpenFailureStage;
 use crate::metadata::AchievedAtomicity;
-use crate::metadata::FileSystemCapability;
 use crate::path::Path;
 use crate::read::ReadOptions;
 use crate::spi::CopyAttempt;
@@ -195,12 +194,7 @@ impl<'a> CopyOperation<'a> {
         }
         self.filesystem
             .core()
-            .require(FileSystemCapability::Read, FsOperation::Copy, Some(self.source))
-            .and_then(|_| {
-                self.filesystem
-                    .core()
-                    .require(FileSystemCapability::Write, FsOperation::Copy, Some(self.target))
-            })
+            .require_stream_copy_primitives(self.source, self.target)
             .map_err(|error| self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None))?;
         let metadata = self
             .filesystem

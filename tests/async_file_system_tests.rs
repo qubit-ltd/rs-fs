@@ -293,7 +293,7 @@ fn test_async_spi_default_copy_declines_without_provider_override() {
         )
         .expect("copy preflight should accept advertised copy capability");
     let error = ready(operation.execute()).expect_err("fallback must require reader and writer capabilities");
-    assert_eq!(FsErrorKind::UnsupportedCapability, error.error().kind());
+    assert_eq!(FsErrorKind::RequirementNotMet, error.error().kind());
 }
 
 /// Exercises every optional asynchronous SPI default implementation through

@@ -792,7 +792,7 @@ fn test_async_facade_preflight_rejects_invalid_paths_options_and_capabilities() 
         .begin_copy(source.clone(), target.clone(), CopyOptions::default())
         .expect("copy preflight should allow fallback selection");
     let failure = ready(operation.execute()).expect_err("fallback should require read and write");
-    assert_eq!(FsErrorKind::UnsupportedCapability, failure.error().kind());
+    assert_eq!(FsErrorKind::RequirementNotMet, failure.error().kind());
     assert_eq!(CopyFailureState::Unchanged, failure.state());
 
     assert!(ready(file_system.rename(&relative, &target, RenameOptions::default())).is_err());

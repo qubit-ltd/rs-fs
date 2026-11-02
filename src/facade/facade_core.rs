@@ -127,17 +127,7 @@ impl FacadeCore {
         }
         let mut rejection = crate::copy::fallback_rejection(options, self.properties.symlink_policy());
         if rejection.is_none() {
-            if !self.properties.capabilities().supports(FileSystemCapability::Read)
-                || !self.provider_operations.supports(ProviderOperation::OpenReader)
-            {
-                rejection = Some(FallbackRejection::MissingRead);
-            } else if !self.properties.capabilities().supports(FileSystemCapability::Write)
-                || !self.provider_operations.supports(ProviderOperation::OpenWriter)
-            {
-                rejection = Some(FallbackRejection::MissingWrite);
-            } else if !self.provider_operations.supports(ProviderOperation::Stat) {
-                rejection = Some(FallbackRejection::MissingStat);
-            }
+            rejection = self.stream_copy_primitive_rejection();
         }
         let provider_copy = self.provider_operations.supports(ProviderOperation::TryCopy);
         match (provider_copy, rejection) {
@@ -151,6 +141,47 @@ impl FacadeCore {
             )
             .with_missing_context(source, Some(target), self.properties.info().provider_id())),
         }
+    }
+
+    /// Returns the first missing primitive required by streamed copy.
+    ///
+    /// This checks only the cached provider snapshot and performs no I/O.
+    /// The order is Read, Write, then Stat to preserve assessment behavior.
+    fn stream_copy_primitive_rejection(&self) -> Option<FallbackRejection> {
+        if !self.properties.capabilities().supports(FileSystemCapability::Read)
+            || !self.provider_operations.supports(ProviderOperation::OpenReader)
+        {
+            Some(FallbackRejection::MissingRead)
+        } else if !self.properties.capabilities().supports(FileSystemCapability::Write)
+            || !self.provider_operations.supports(ProviderOperation::OpenWriter)
+        {
+            Some(FallbackRejection::MissingWrite)
+        } else if !self.provider_operations.supports(ProviderOperation::Stat) {
+            Some(FallbackRejection::MissingStat)
+        } else {
+            None
+        }
+    }
+
+    /// Requires the cached primitives needed before streamed copy can do I/O.
+    ///
+    /// # Parameters
+    /// - `source`: Requested source path.
+    /// - `target`: Requested destination path.
+    ///
+    /// # Errors
+    /// Returns `RequirementNotMet` with source, target, and provider context
+    /// when any required reader, writer, or stat primitive is unavailable.
+    pub(crate) fn require_stream_copy_primitives(&self, source: &Path, target: &Path) -> FsResult<()> {
+        if self.stream_copy_primitive_rejection().is_none() {
+            return Ok(());
+        }
+        Err(FsError::new(
+            FsErrorKind::RequirementNotMet,
+            FsOperation::Copy,
+            "stream copy requires available metadata, reader, and writer primitives",
+        )
+        .with_missing_context(source, Some(target), self.properties.info().provider_id()))
     }
 
     /// Requires one capability before an operation can create provider I/O.

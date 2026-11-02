@@ -329,6 +329,9 @@ impl CopyOutcome {
         if self.stats.overwritten > entries {
             return Some("provider reported more overwritten entries than completed resources");
         }
+        if entries == 0 && self.stats.failed == 0 && self.stats.bytes != 0 {
+            return Some("provider reported copied bytes without completed or failed resources");
+        }
         if mode != CopyMode::File {
             return None;
         }
