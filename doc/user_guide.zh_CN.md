@@ -412,9 +412,15 @@ portable metadata，且不创建父目录。Required 原子性不等于持久性
 时，才显式设置 `with_atomicity(AtomicityRequirement::Preferred)`；这也不保证持久化一定成功。
 选项和默认值见 [`PersistOptions` Rustdoc](https://docs.rs/qubit-fs/0.3/qubit_fs/temp/struct.PersistOptions.html)。
 
-没有原生 copy，或提供者明确无副作用地拒绝 fast path 后，门面可以执行允许范围内的普通文件
-流式复制；原生复制失败不会触发自动重试。要求服务端、原子或持久复制、目录树模式，以及改变
-符号链接策略的请求不能使用该 fallback。`CopyOptions::deadline` 是从 operation 构造时开始
+没有原生 copy，或提供者明确无副作用地拒绝 fast path 后，门面可以执行允许范围内的文件
+流式复制；原生复制失败不会触发自动重试。要求原子性并不一律排除流式回退。复制文件或对象时，
+若使用 `Fail` 冲突策略，且 `CopyOptions::validate_against` 接受所需的 `AtomicFileCopy` 能力、
+目标 writer 支持 `AtomicReplace`，则原生路径无副作用地拒绝后仍可回退。仅有 `AtomicReplace`
+不足以通过复制预检。门面向 `CreateNew` writer 传递 Required 原子性，并在提交后核验实际结果。
+`Skip` 与 Required 的组合、`Overwrite` 仍不能回退；要求服务端或持久复制、目录树模式、元数据保留、
+创建父目录、continue-on-error、改变符号链接策略也保持原有限制。实际源必须是文件或对象。
+Required 原子性不等于持久性。writer 若以非原子方式发布，门面会返回 provider 契约违例并保留
+`Published` 事实；不得重试或回滚这次复制。`CopyOptions::deadline` 是从 operation 构造时开始
 累计的协作式预算，在阶段边界检查，不是能打断任意 Pending future 的定时器。提供者错误仍是主错误。
 
 临时文件和目录有独立的所有权生命周期，提供 `cleanup`、`keep` 和 `persist`。0.3 的

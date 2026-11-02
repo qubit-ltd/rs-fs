@@ -135,8 +135,15 @@ payload 或 provider session。旧异步 `write_all` 和错误包装已删除；
 ## 复制、列举、期限与保证
 
 原生 `try_copy` 可以完成、明确无副作用地拒绝，或失败。前两种结果才允许直接成功或执行
-符合条件的 fallback。fallback 是有界的普通文件流式传输，不能替代服务端／原子／持久复制，
-不能处理目录树复制或改变符号链接策略。在可静态判定时，不可能满足的要求应在副作用前拒绝。
+符合条件的 fallback。fallback 是有界的文件或对象流式传输。要求原子性并不一律排除流式回退：
+使用 `Fail` 冲突策略时，`CopyOptions::validate_against` 接受所需的 `AtomicFileCopy` 能力，且目标
+writer 支持 `AtomicReplace`，原生路径无副作用地拒绝后仍可回退；仅有 `AtomicReplace` 不足以通过
+复制预检。门面向 `CreateNew` writer 传递 Required 原子性，并在提交后核验实际原子性。
+`Skip` 与 Required 的组合、`Overwrite` 仍不能回退；要求服务端或持久复制、目录树复制、元数据保留、
+创建父目录、continue-on-error 和改变符号链接策略仍受原有限制；实际源必须是文件或对象。
+Required 原子性不等于持久性。在可静态判定时，不可能满足的要求应在副作用前拒绝。
+writer 若以非原子方式发布，门面会返回 provider 契约违例并保留 `Published` 事实；不得重试或回滚
+这次复制。
 
 copy deadline 是从 operation 构造起累计的协作式预算，在提供者调用和流式阶段前后检查。
 它不能打断任意 Pending future。提供者错误仍为主错误；已确认发布后的超时保留发布事实和

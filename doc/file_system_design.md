@@ -171,9 +171,22 @@ and cleanup errors.
 
 Native `try_copy` may complete, explicitly decline without effects, or fail.
 Only the first two outcomes allow success or eligible fallback. The fallback is
-bounded regular-file streaming, not a replacement for server-side/atomic/durable
-copy, tree copying, or a changed symlink policy. Requirements that cannot be
-satisfied are rejected before side effects where determinable.
+bounded file-like streaming. Required atomicity does not categorically exclude
+it: with the `Fail` conflict policy, a file or object copy can stream after a
+side-effect-free decline. For that path, `CopyOptions::validate_against`
+must accept the required `AtomicFileCopy` capability and the target writer
+must satisfy `AtomicReplace`; `AtomicReplace` alone is insufficient for copy
+preflight. The facade passes Required atomicity to its `CreateNew` writer and
+validates the achieved atomicity at commit. `Skip` with Required atomicity and
+`Overwrite` remain ineligible.
+Required server-side or durable copy, tree copying, metadata preservation,
+parent creation, continue-on-error, and a changed symlink policy remain outside
+the fallback policy; the actual source must be file-like. Required atomicity
+does not imply durability. Requirements that cannot be satisfied are rejected
+before side effects where determinable.
+If the writer publishes non-atomically, the facade reports a provider-contract
+violation while retaining the `Published` fact; do not retry or roll back that
+copy.
 
 Copy deadlines are cooperative cumulative budgets starting at operation
 construction. Checks surround provider work and stream stages. They do not

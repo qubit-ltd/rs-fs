@@ -467,10 +467,22 @@ When the application can accept a weaker atomicity requirement, set
 guarantee that persistence will succeed. See [`PersistOptions` Rustdoc](https://docs.rs/qubit-fs/0.3/qubit_fs/temp/struct.PersistOptions.html)
 for the options and defaults.
 
-The facade can perform allowlisted regular-file stream copy without native
+The facade can perform allowlisted file-like stream copy without native
 copy, or after a provider explicitly declines without effects. It does not
-retry a failed native copy. Required server-side, atomic, or durable copy,
-tree mode, and a changed symlink policy cannot use that fallback.
+retry a failed native copy. Required atomicity does not categorically exclude
+streamed fallback: a file or object copy using the `Fail` conflict policy can
+stream after a side-effect-free provider decline. For that path,
+`CopyOptions::validate_against` must accept the required `AtomicFileCopy`
+capability and the target writer must satisfy `AtomicReplace`; `AtomicReplace`
+alone does not satisfy copy preflight. The facade passes Required atomicity to
+its `CreateNew` writer and validates the achieved atomicity at commit. `Skip`
+with Required atomicity remains ineligible, as do `Overwrite`, required
+server-side or durable copy, tree mode, metadata preservation, parent creation,
+continue-on-error, and a changed symlink policy. The actual source must be a
+file-like resource. Required atomicity does not imply durability.
+If the writer publishes non-atomically, the facade reports a provider-contract
+violation while retaining the `Published` fact; do not retry or roll back that
+copy.
 `CopyOptions::deadline` is a cooperative cumulative budget starting at operation
 construction. It is checked around stages; it is not a timer that interrupts
 an arbitrary pending provider future. Provider failures remain the primary error.
