@@ -721,4 +721,30 @@ mod asynchronous {
         assert_eq!(stats, *failure.partial_stats());
         assert_eq!(1, calls.load(Ordering::SeqCst));
     }
+
+    #[test]
+    fn test_async_entry_budget_rejection_preserves_published_state_and_statistics() {
+        let stats = CopyStats {
+            files: 1,
+            skipped: 1,
+            ..CopyStats::default()
+        };
+        let spi = CopyStatsSpi::new(stats, AchievedAtomicity::Atomic);
+        let calls = Arc::clone(&spi.calls);
+        let mut operation = filesystem(spi)
+            .begin_copy(
+                path("/source"),
+                path("/target"),
+                CopyOptions::tree()
+                    .with_conflict(CopyConflictPolicy::Skip)
+                    .with_max_entries(Some(1)),
+            )
+            .expect("copy preflight should succeed");
+        let failure = ready(operation.execute()).expect_err("completed plus skipped entries exceed the budget");
+
+        assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+        assert_eq!(CopyFailureState::Published, failure.state());
+        assert_eq!(stats, *failure.partial_stats());
+        assert_eq!(1, calls.load(Ordering::SeqCst));
+    }
 }
