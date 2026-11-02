@@ -61,8 +61,11 @@ impl<'a> ReadOperation<'a> {
             let read_len =
                 usize::try_from(remaining.saturating_add(1)).map_or(buffer.len(), |value| value.min(buffer.len()));
             let read = read_retry_interrupted(&mut reader, &mut buffer[..read_len], || Ok(())).map_err(|error| {
-                FsError::from_stream_io(error, FsOperation::Read, path)
-                    .with_provider(self.filesystem.properties().info().provider_id())
+                self.filesystem.core().enrich(
+                    FsError::from_stream_io(error, FsOperation::Read, path),
+                    Some(path),
+                    FsOperation::Read,
+                )
             })?;
             if read == 0 {
                 return Ok(result.into_vec());
@@ -124,8 +127,11 @@ impl<'a> ReadOperation<'a> {
         while result.len() < max_bytes {
             let read_len = FacadeCore::next_prefix_read_len(result.len(), max_bytes);
             let read = read_retry_interrupted(&mut reader, &mut buffer[..read_len], || Ok(())).map_err(|error| {
-                FsError::from_stream_io(error, FsOperation::Read, path)
-                    .with_provider(self.filesystem.properties().info().provider_id())
+                self.filesystem.core().enrich(
+                    FsError::from_stream_io(error, FsOperation::Read, path),
+                    Some(path),
+                    FsOperation::Read,
+                )
             })?;
             if read == 0 {
                 termination = PrefixReadTermination::StreamEnded;

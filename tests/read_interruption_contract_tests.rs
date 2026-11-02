@@ -45,6 +45,7 @@ use qubit_io::Input;
 
 const REQUEST_PATH: &str = "/payload";
 const PROVIDER_ID: &str = "read-interrupt";
+const CUSTOM_PROVIDER_ID: &str = "read-custom";
 
 #[derive(Clone, Copy)]
 enum TypedEffect {
@@ -58,6 +59,7 @@ enum Step {
     Data(&'static [u8]),
     OrdinaryInterrupted,
     TypedInterrupted(TypedEffect),
+    TypedInterruptedFromCustomProvider,
     OrdinaryError,
     Eof,
 }
@@ -99,6 +101,17 @@ impl Input for ScriptReader {
                         TypedEffect::State(state) => error.with_effect_state(state),
                     };
                     return Err(error.into_io_error());
+                }
+                Step::TypedInterruptedFromCustomProvider => {
+                    return Err(FsError::with_source(
+                        FsErrorKind::Interrupted,
+                        FsOperation::Read,
+                        "scripted typed interruption",
+                        SourceMarker,
+                    )
+                    .with_provider(CUSTOM_PROVIDER_ID)
+                    .with_effect_state(FsEffectState::Applied)
+                    .into_io_error());
                 }
                 Step::OrdinaryError => {
                     return Err(io::Error::other("scripted ordinary read error"));
@@ -281,6 +294,22 @@ fn test_read_all_stops_on_typed_interruption_with_uncertain_or_applied_effect() 
 }
 
 #[test]
+fn test_read_all_preserves_typed_error_provider() {
+    let (filesystem, calls) = filesystem([Step::TypedInterruptedFromCustomProvider]);
+    let path = Path::parse(REQUEST_PATH).expect("path");
+    let error = filesystem
+        .read_all(&path, ReadOptions::default(), 128)
+        .expect_err("typed error must be returned");
+    assert_eq!(FsErrorKind::Interrupted, error.kind());
+    assert_eq!(FsOperation::Read, error.operation());
+    assert_eq!(Some(&path), error.path());
+    assert_eq!(Some(CUSTOM_PROVIDER_ID), error.provider());
+    assert_eq!(Some(FsEffectState::Applied), error.effect_state());
+    assert!(Error::source(&error).is_some_and(|source| source.is::<SourceMarker>()));
+    assert_eq!(1, calls.load(Ordering::SeqCst));
+}
+
+#[test]
 fn test_read_all_returns_non_interruption_error_without_retry() {
     let (filesystem, calls) = filesystem([Step::OrdinaryError, Step::Eof]);
     let path = Path::parse(REQUEST_PATH).expect("path");
@@ -291,6 +320,12 @@ fn test_read_all_returns_non_interruption_error_without_retry() {
     assert_eq!(FsOperation::Read, error.operation());
     assert_eq!(Some(&path), error.path());
     assert_eq!(Some(PROVIDER_ID), error.provider());
+    assert_eq!(None, error.effect_state());
+    assert!(Error::source(&error).is_some_and(|source| {
+        source
+            .downcast_ref::<io::Error>()
+            .is_some_and(|source| source.kind() == io::ErrorKind::Other)
+    }));
     assert_eq!(1, calls.load(Ordering::SeqCst));
 }
 
@@ -373,6 +408,22 @@ fn test_read_prefix_stops_on_typed_interruption_with_uncertain_or_applied_effect
 }
 
 #[test]
+fn test_read_prefix_preserves_typed_error_provider() {
+    let (filesystem, calls) = filesystem([Step::TypedInterruptedFromCustomProvider]);
+    let path = Path::parse(REQUEST_PATH).expect("path");
+    let error = filesystem
+        .read_prefix(&path, ReadOptions::default(), 64)
+        .expect_err("typed error must be returned");
+    assert_eq!(FsErrorKind::Interrupted, error.kind());
+    assert_eq!(FsOperation::Read, error.operation());
+    assert_eq!(Some(&path), error.path());
+    assert_eq!(Some(CUSTOM_PROVIDER_ID), error.provider());
+    assert_eq!(Some(FsEffectState::Applied), error.effect_state());
+    assert!(Error::source(&error).is_some_and(|source| source.is::<SourceMarker>()));
+    assert_eq!(1, calls.load(Ordering::SeqCst));
+}
+
+#[test]
 fn test_read_prefix_returns_non_interruption_error_without_retry() {
     let (filesystem, calls) = filesystem([Step::OrdinaryError, Step::Eof]);
     let path = Path::parse(REQUEST_PATH).expect("path");
@@ -383,6 +434,12 @@ fn test_read_prefix_returns_non_interruption_error_without_retry() {
     assert_eq!(FsOperation::Read, error.operation());
     assert_eq!(Some(&path), error.path());
     assert_eq!(Some(PROVIDER_ID), error.provider());
+    assert_eq!(None, error.effect_state());
+    assert!(Error::source(&error).is_some_and(|source| {
+        source
+            .downcast_ref::<io::Error>()
+            .is_some_and(|source| source.kind() == io::ErrorKind::Other)
+    }));
     assert_eq!(1, calls.load(Ordering::SeqCst));
 }
 
