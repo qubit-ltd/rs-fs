@@ -8,10 +8,11 @@
 //! Unforgeable requests passed from the facade to providers.
 //!
 //! ```compile_fail
-//! use qubit_fs::{Path, spi::StatRequest};
+//! use qubit_fs::Path;
+//! use qubit_fs::spi::StatRequest;
 //!
 //! let path = Path::root();
-//! let _ = StatRequest::new(&path);
+//! let _ = StatRequest::new(&path, ());
 //! ```
 
 mod copy_request;
