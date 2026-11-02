@@ -1,3 +1,5 @@
+#![cfg(feature = "async")]
+
 //! Runtime-neutral async random-access contracts, including cancellation.
 use std::future::Future;
 use std::future::poll_fn;
