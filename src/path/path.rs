@@ -288,7 +288,8 @@ impl Path {
 
     /// Joins an already validated suffix to this path.
     fn append(&self, suffix: &str) -> Self {
-        let text = if self.text == "/" {
+        let hierarchical_root = self.semantics == PathSemantics::Hierarchical && !self.literal && self.text == "/";
+        let text = if hierarchical_root {
             format!("/{suffix}")
         } else {
             format!("{}/{}", self.text, suffix)

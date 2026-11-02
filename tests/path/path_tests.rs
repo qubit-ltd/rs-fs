@@ -34,6 +34,26 @@ fn test_path_literal_parse_preserves_repeated_separator_and_dot_text() {
     assert_eq!(path.as_str(), "key//./value");
 }
 
+#[test]
+fn test_literal_append_preserves_slash_only_prefix() {
+    let component = PathComponent::parse("x").expect("component");
+    let relative = RelativePath::parse("x/y").expect("relative path");
+    for semantics in [PathSemantics::ObjectKey, PathSemantics::ProviderSpecific] {
+        for (base, child, joined) in [
+            ("/", "//x", "//x/y"),
+            ("//", "///x", "///x/y"),
+            ("a/", "a//x", "a//x/y"),
+        ] {
+            let path = Path::parse_with_semantics(base, semantics).expect("literal path");
+            assert_eq!(path.child(&component).as_str(), child);
+            assert_eq!(path.join(&relative).as_str(), joined);
+            assert_eq!(path.child(&component).semantics(), semantics);
+        }
+    }
+    assert_eq!(Path::root().child(&component).as_str(), "/x");
+    assert_eq!(Path::root().join(&relative).as_str(), "/x/y");
+}
+
 /// Verifies a hierarchical root is represented separately from components.
 #[test]
 fn test_path_components_do_not_emit_a_root_placeholder() {
