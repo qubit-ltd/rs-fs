@@ -134,6 +134,14 @@ is terminal and allows only a valid abort. `Published` must not be resent, and
 `Indeterminate` requires reconciliation. No write/copy failure triggers an
 implicit retry.
 
+For streamed copy, an opened `WriterState::Open` does not establish destination
+isolation. A read, write, or deadline failure before a confirmed commit or abort
+result is `Indeterminate`, including when no bytes were accepted; commit
+failures use the provider's typed `WriteFailureState`. `Unchanged` requires
+explicit non-publication evidence. Recovery or abort after failure preserves
+the original copy-failure state and statistics snapshot, so later cleanup
+facts remain separate. Never infer retry safety from the absence of commit.
+
 Direct synchronous and asynchronous writers keep two additional facts without
 changing `WriterState`: `has_confirmed_publication()` is monotonic history for
 explicitly confirmed publication, while `cleanup_state()` records cleanup
@@ -218,6 +226,17 @@ An expired deadline after an eligible Skip returns the deadline error with the
 skipped count and known publication state retained; callers must not interpret
 that error as a completed copy.
 
+`NonSensitiveMetadata` rejects keys recognized as sensitive by the standard
+policy when added and hides values from automatic `Debug` output. It retains
+values unchanged: reading them through an accessor does not make them safe to
+log. Providers sanitize native errors, URIs, and SDK output before storing
+diagnostics, while applications apply their own policy before explicit export.
+
+`CopyMethod::Streamed` names only the facade-owned streamed fallback. A provider
+must not report it in a completed `try_copy` outcome; provider-managed
+client-side streaming reports `CopyMethod::Native`. `Clone`, `ServerSide`, and
+`Mixed` retain their corresponding provider strategy classifications.
+
 Directory streams are incremental and can fail after earlier entries. They are
 not snapshots. `Subtree` preserves hierarchical boundaries. `LiteralPrefix`
 compares raw object-key text relative to `ListScope::Path`, or complete logical
@@ -295,8 +314,8 @@ filesystem permission or symlink boundary.
 (`Complete`) from successful publication with residual private data
 (`ResidualTemporaryContainer`). The latter is not a publication failure and
 does not keep the published source under handle control. The outcome preserves
-validated non-sensitive diagnostics for providers' existing operational
-mechanisms; the portable API exposes no private-container locator or cleanup
+diagnostics whose keys passed sensitivity checks, with values unchanged;
+providers must sanitize values before storage. The portable API exposes no private-container locator or cleanup
 retry. A `Persisted` or `Kept` handle is terminal, so later `cleanup`, `persist`,
 and `keep` calls are rejected.
 

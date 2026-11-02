@@ -5,15 +5,22 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-//! Validated metadata that is safe for automatic structural formatting.
+//! Metadata whose keys passed sensitivity checks and whose values are hidden by
+//! `Debug`.
 
 use crate::metadata::UserMetadata;
 
 /// Flat metadata whose keys have passed credential-sensitivity checks.
 ///
-/// [`UserMetadata`] stores ordered string pairs and rejects credential-like
-/// keys when each pair is added. This type's [`Debug`] implementation prints
-/// keys only and never automatically exposes values.
+/// [`UserMetadata`] rejects keys recognized as sensitive by the standard
+/// policy when each pair is added. Values are retained unchanged; this type's
+/// [`Debug`] implementation prints keys only and never automatically formats
+/// values. Reading a value with [`get`](Self::get),
+/// [`iter`](UserMetadata::iter), or [`as_metadata`](Self::as_metadata) does not
+/// establish that it is safe to log or expose. Providers must sanitize native
+/// errors, URIs, and SDK output before storing diagnostic values here, and
+/// applications must apply their own logging policy before explicitly exporting
+/// values.
 ///
 /// The inner [`UserMetadata`] is not mutably exposed, so every value of this
 /// type retains the wrapper invariant after construction.
@@ -31,7 +38,7 @@ use crate::metadata::UserMetadata;
 /// ```
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct NonSensitiveMetadata(
-    /// Validated metadata whose keys do not resemble credential material.
+    /// Metadata whose keys passed sensitivity checks; values are unchanged.
     UserMetadata,
 );
 

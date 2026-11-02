@@ -189,6 +189,13 @@ pub trait AsyncFileSystemSpi: Send + Sync {
     /// statistics; the facade may stream-fallback only after a side-effect-free
     /// decline.
     ///
+    /// A provider that completes a client-side streamed transfer internally
+    /// must report [`crate::copy::CopyMethod::Native`].
+    /// [`crate::copy::CopyMethod::Streamed`] is reserved for the facade-owned
+    /// fallback and is rejected in completed outcomes; report `Clone`,
+    /// `ServerSide`, or `Mixed` when those classifications describe the
+    /// provider's actual strategy.
+    ///
     /// # Parameters
     /// - `_request`: Facade-validated copy request.
     ///

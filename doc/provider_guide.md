@@ -485,6 +485,15 @@ A copy collision during opening can count as Skip only when the provider failed 
 unchanged effects and no rejected session. Invalid opened identities remain
 indeterminate failures.
 
+For streamed fallback, an opened writer in `WriterState::Open` does not prove
+that the destination is isolated or unchanged. A read, write, or deadline
+failure before a confirmed commit or abort result is `Indeterminate`; commit
+failures use their typed `WriteFailureState`. Report `Unchanged` only with
+explicit non-publication evidence. Keep the recovery writer for explicit
+cleanup or reconciliation. Those later results do not rewrite the original
+copy failure state or statistics snapshot, so callers must treat them separately
+and must not retry solely because commit was not reached.
+
 The core cannot retain a session a provider has not returned. Providers remain
 responsible for resources created internally during failed or cancelled opening.
 
@@ -538,14 +547,23 @@ change and left no cleanup responsibility. If it changed external state or the
 effects are uncertain, return `SpiCopyFailure` with the known publication
 state and statistics. The facade selects streaming fallback directly after a
 side-effect-free decline; a failed native attempt is not eligible for fallback.
+`CopyMethod::Streamed` is reserved for that facade-owned fallback and must not
+be returned in a completed `try_copy` outcome. A provider that completes its
+own client-side streamed transfer reports `CopyMethod::Native`; report
+`Clone`, `ServerSide`, or `Mixed` when those describe the actual strategy.
+
+`NonSensitiveMetadata` checks diagnostic keys against the standard sensitivity
+policy and hides values from automatic `Debug` output, but it retains values
+unchanged. Providers must sanitize native errors, URIs, and SDK output before
+storing diagnostics; reading a value does not make it safe to log.
 
 `PersistOutcome` confirms publication even when
 `cleanup_state()` is `ResidualTemporaryContainer`. Preserve that success and do
 not publish again or clean up the published target. The portable API provides
 no private-container locator or cleanup retry operation, and does not promise
-provider background cleanup. The outcome retains validated non-sensitive
-`diagnostics()`; providers can use these with their existing operational
-mechanisms to handle private residuals. A handle in `Persisted` or `Kept` state
+provider background cleanup. The outcome retains `diagnostics()` whose keys
+passed sensitivity checks, with values unchanged; providers must sanitize
+values before storing them. A handle in `Persisted` or `Kept` state
 is terminal: further `cleanup`, `persist`, or `keep` calls are rejected.
 
 ## Metadata preservation

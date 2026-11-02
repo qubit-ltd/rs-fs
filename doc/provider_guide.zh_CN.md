@@ -437,6 +437,12 @@ provider 无需新增 SPI 方法或 abort outcome。`WriteAbortOutcome` 仍只�
 已确认字节数和恢复会话。对于打开阶段的 copy 碰撞，只有 provider 打开失败、明确证明无副作用且没有隔离会话
 时，才能把碰撞按 Skip 处理；打开身份违例仍是结果不确定的失败。
 
+对流式回退而言，已打开 writer 的 `WriterState::Open` 不能证明目标处于隔离状态或未发生变化。
+在确认 commit 或 abort 结果前发生读取、写入或 deadline 错误时，失败状态为 `Indeterminate`；commit
+失败则采用其类型化 `WriteFailureState`。只有明确证明未发布时才能报告 `Unchanged`。保留恢复 writer，
+以便显式清理或核查。后续结果不会改写原始复制失败的状态和统计快照，调用方须分别处理；不能仅因尚未
+执行 commit 就重试。
+
 provider 尚未交回的会话无法由核心接管。打开失败或取消之前在 provider 内部创建的资源，
 仍由 provider 负责保留和回收。
 
@@ -478,11 +484,17 @@ provider，门面仍独立校验该计数。
 只有原生复制尝试没有造成外部变更、也没有留下清理责任时，才能返回
 `CopyAttempt::Declined`。若外部状态已变化或效果不确定，应返回带已知发布状态和统计信息的
 `SpiCopyFailure`。无副作用拒绝后，门面会直接选择流式回退；原生尝试失败不能回退。
+`CopyMethod::Streamed` 仅供门面拥有的流式回退使用，provider 不得在已完成的 `try_copy` outcome
+中返回它。Provider 自行完成客户端流式传输时应报告 `CopyMethod::Native`；实际使用 clone、服务端
+或混合策略时分别报告 `Clone`、`ServerSide` 或 `Mixed`。
+
+`NonSensitiveMetadata` 按标准敏感性策略检查诊断键名，并在自动 `Debug` 输出中隐藏值，但会原样保存值。
+Provider 在保存诊断前负责清洗原生错误、URI 和 SDK 输出；显式读取值不代表它可以安全记录。
 
 即使 `PersistOutcome::cleanup_state()` 为 `ResidualTemporaryContainer`，该结果仍确认发布成功。
 应保留成功事实，不要再次发布或清理已发布目标。portable API 不提供私有容器定位或清理重试接口，
-也不承诺 provider 在后台自动清理。outcome 保留经过校验的非敏感 `diagnostics()`；provider 可沿用
-既有运维机制处理私有残留。句柄处于 `Persisted` 或 `Kept` 状态后即为终态，后续 `cleanup`、`persist`
+也不承诺 provider 在后台自动清理。outcome 保留键名通过敏感性检查的 `diagnostics()`，值原样保存；
+provider 在保存诊断前负责清洗值。句柄处于 `Persisted` 或 `Kept` 状态后即为终态，后续 `cleanup`、`persist`
 或 `keep` 调用都会被拒绝。
 
 ## 元数据保留

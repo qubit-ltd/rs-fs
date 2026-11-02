@@ -35,7 +35,7 @@ pub struct WriteOutcome {
     method: PublicationMethod,
     /// Whether data and namespace publication were durably synchronized.
     durable: bool,
-    /// Provider-native non-sensitive diagnostics.
+    /// Provider diagnostics whose keys passed sensitivity checks.
     diagnostics: NonSensitiveMetadata,
 }
 
@@ -94,7 +94,11 @@ impl WriteOutcome {
         self.durable
     }
 
-    /// Returns provider-native non-sensitive diagnostics.
+    /// Returns provider diagnostics whose keys passed sensitivity checks.
+    ///
+    /// Values are retained unchanged. Providers are responsible for sanitizing
+    /// diagnostic values before storing them; explicitly reading a value does
+    /// not make it safe to log.
     #[inline]
     #[must_use]
     pub const fn diagnostics(&self) -> &NonSensitiveMetadata {
@@ -126,8 +130,9 @@ impl WriteOutcome {
         self
     }
 
-    /// Replaces provider-native diagnostics that have already passed key
-    /// validation.
+    /// Replaces provider diagnostics after their values have been sanitized.
+    ///
+    /// Keys are checked when added, while values are retained unchanged.
     #[inline]
     #[must_use]
     pub fn with_diagnostics(mut self, diagnostics: UserMetadata) -> Self {

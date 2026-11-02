@@ -21,9 +21,10 @@ use crate::path::Path;
 /// clean up the published target in that case. The portable API does not expose
 /// a private-container locator or retry operation; providers must report the
 /// residual state without promising automatic background cleanup. The outcome
-/// retains validated non-sensitive provider diagnostics for the provider's
-/// existing operational mechanisms. Once a handle is `Persisted` or `Kept`, it
-/// cannot be cleaned up, persisted, or kept again.
+/// retains provider diagnostics whose keys passed sensitivity checks; values
+/// are unchanged, so providers must sanitize them before storage. Once a
+/// handle is `Persisted` or `Kept`, it cannot be cleaned up, persisted, or kept
+/// again.
 ///
 /// # Examples
 ///
@@ -48,7 +49,7 @@ pub struct PersistOutcome {
     atomicity: AchievedAtomicity,
     /// Concrete publication method used.
     method: PublicationMethod,
-    /// Provider-native non-sensitive diagnostics.
+    /// Provider diagnostics whose keys passed sensitivity checks.
     diagnostics: NonSensitiveMetadata,
     /// Cleanup state of the private temporary container.
     cleanup_state: PersistCleanupState,
@@ -97,12 +98,12 @@ impl PersistOutcome {
         self.method
     }
 
-    /// Returns provider-native non-sensitive diagnostics already validated
-    /// when the outcome was constructed.
+    /// Returns provider diagnostics whose keys passed sensitivity checks when
+    /// the outcome was constructed.
     ///
-    /// Providers may use these diagnostics with their existing operational
-    /// mechanisms to investigate residual private containers; this accessor
-    /// does not expose a portable cleanup or retry operation.
+    /// Values are retained unchanged. Providers must sanitize them before
+    /// storage; explicitly reading a value does not make it safe to log.
+    /// This accessor does not expose a portable cleanup or retry operation.
     #[inline]
     #[must_use]
     pub const fn diagnostics(&self) -> &NonSensitiveMetadata {
@@ -129,8 +130,9 @@ impl PersistOutcome {
         self
     }
 
-    /// Replaces provider-native diagnostics that have already passed key
-    /// validation.
+    /// Replaces provider diagnostics after their values have been sanitized.
+    ///
+    /// Keys are checked when added, while values are retained unchanged.
     #[inline]
     #[must_use]
     pub fn with_diagnostics(mut self, diagnostics: UserMetadata) -> Self {

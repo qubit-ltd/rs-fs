@@ -475,6 +475,14 @@ perform required asynchronous cleanup; await cleanup when confirmation matters.
 
 ## Errors and Diagnostics
 
+`NonSensitiveMetadata` checks metadata keys against the standard sensitivity
+policy when values are added, but retains values unchanged. Its automatic
+`Debug` output includes keys only. Reading a value through `get`, `iter`, or
+`as_metadata` does not establish that the value is safe to log or expose.
+Providers must sanitize native errors, URIs, and SDK output before storing
+diagnostic values; applications must apply their own logging policy before
+explicitly exporting values.
+
 ### Guarantees and error decisions
 
 Writer opening only proves no side effects when the provider explicitly reports
@@ -515,7 +523,9 @@ for the options and defaults.
 
 The facade can perform allowlisted file-like stream copy without native
 copy, or after a provider explicitly declines without effects. It does not
-retry a failed native copy. Required atomicity does not categorically exclude
+retry a failed native copy. `CopyMethod::Streamed` describes only this
+facade-owned fallback; providers that complete client-side streaming internally
+report `CopyMethod::Native`. Required atomicity does not categorically exclude
 streamed fallback: a file or object copy using the `Fail` conflict policy can
 stream after a side-effect-free provider decline. For that path,
 `CopyOptions::validate_against` must accept the required `AtomicFileCopy`
@@ -545,6 +555,16 @@ entry, while failures before a writer opens may have no partial statistics.
 Use `CopyFailure::state()` or `AsyncCopyFailure::state()` for publication
 certainty; neither `failed` nor the statistics snapshot determines what was
 published or whether copying continued.
+After a streamed fallback opens its destination writer, `WriterState::Open`
+does not prove that the target is isolated or unchanged. The failure is
+`Indeterminate` when a read, write, or deadline error occurs before a confirmed
+commit or abort result. Commit failures use the provider's typed publication
+state. `Unchanged` must not be inferred from the absence of a commit or accepted
+bytes; it requires explicit non-publication evidence.
+Retain the recovery writer for explicit abort or reconciliation. Later recovery
+results do not rewrite the original copy failure state or statistics snapshot,
+and must be considered separately. Do not retry automatically from the fact
+that commit was not reached.
 `CopyOptions::deadline` is a cooperative cumulative budget starting at operation
 construction. It is checked around stages; it is not a timer that interrupts
 an arbitrary pending provider future. Provider failures remain the primary error.
@@ -675,8 +695,9 @@ A successful `PersistOutcome` remains successful when its cleanup state is
 published target. `Complete` means the private temporary container was removed;
 `ResidualTemporaryContainer` means publication succeeded but private data
 remains. It is not a publication failure and does not leave the published source
-under the handle's control. The outcome retains validated non-sensitive
-`diagnostics()` for providers' existing operational mechanisms. The portable API
+under the handle's control. The outcome retains `diagnostics()` whose keys
+passed sensitivity checks, with values unchanged. Providers must sanitize
+diagnostic values before storing them. The portable API
 does not locate or retry cleanup of a private container, and providers do not
 promise background cleanup. A handle in `Persisted` or `Kept` state is terminal;
 later `cleanup`, `persist`, and `keep` calls are rejected.

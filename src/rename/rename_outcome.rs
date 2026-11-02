@@ -43,7 +43,7 @@ pub struct RenameOutcome {
     source: Path,
     /// Destination identity confirmed by the provider.
     target: Path,
-    /// Scrubbed provider diagnostics.
+    /// Provider diagnostics whose keys passed sensitivity checks.
     diagnostics: NonSensitiveMetadata,
 }
 
@@ -87,8 +87,9 @@ impl RenameOutcome {
         self
     }
 
-    /// Replaces provider-native diagnostics that have already passed key
-    /// validation.
+    /// Replaces provider diagnostics after their values have been sanitized.
+    ///
+    /// Keys are checked when added, while values are retained unchanged.
     #[inline]
     #[must_use]
     pub fn with_diagnostics(mut self, diagnostics: UserMetadata) -> Self {
@@ -127,7 +128,11 @@ impl RenameOutcome {
     pub const fn durable(&self) -> bool {
         self.durable
     }
-    /// Returns provider diagnostics that are safe to expose.
+    /// Returns provider diagnostics whose keys passed sensitivity checks.
+    ///
+    /// Values are retained unchanged. Providers must sanitize diagnostic
+    /// values before storing them; explicitly reading a value does not make it
+    /// safe to log.
     #[inline]
     #[must_use]
     pub const fn diagnostics(&self) -> &NonSensitiveMetadata {

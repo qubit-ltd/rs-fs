@@ -417,6 +417,11 @@ abort 失败后，返回对象同时保留 `cleanup_error` 和 writer。成功�
 
 ## 错误与诊断
 
+`NonSensitiveMetadata` 在加入 metadata 时按标准敏感性策略检查键名，但值会原样保存。自动
+`Debug` 输出只包含键名。通过 `get`、`iter` 或 `as_metadata` 显式读取值，不代表该值可以安全记录
+或暴露。Provider 在保存诊断值前负责清洗原生错误、URI 和 SDK 输出；应用显式导出值前仍须遵循
+自身的日志策略。
+
 ### 保证与错误决策
 
 打开 writer 失败时，只有提供者明确报告 `FsEffectState::Unchanged` 且没有不确定错误，
@@ -445,7 +450,9 @@ portable metadata，且不创建父目录。Required 原子性不等于持久性
 选项和默认值见 [`PersistOptions` Rustdoc](https://docs.rs/qubit-fs/0.3/qubit_fs/temp/struct.PersistOptions.html)。
 
 没有原生 copy，或提供者明确无副作用地拒绝 fast path 后，门面可以执行允许范围内的文件
-流式复制；原生复制失败不会触发自动重试。要求原子性并不一律排除流式回退。复制文件或对象时，
+流式复制；原生复制失败不会触发自动重试。`CopyMethod::Streamed` 仅表示门面拥有的流式回退；
+provider 自行完成客户端流式传输时报告 `CopyMethod::Native`。要求原子性并不一律排除流式回退。
+复制文件或对象时，
 若使用 `Fail` 冲突策略，且 `CopyOptions::validate_against` 接受所需的 `AtomicFileCopy` 能力、
 目标 writer 支持 `AtomicReplace`，则原生路径无副作用地拒绝后仍可回退。仅有 `AtomicReplace`
 不足以通过复制预检。门面向 `CreateNew` writer 传递 Required 原子性，并在提交后核验实际结果。
@@ -462,6 +469,11 @@ Conditional 支持允许 provider 尝试该请求，但成功 outcome 仍须报�
 流式回退在目标 writer 打开后失败时会记录一个失败条目；writer 打开前失败则可能没有部分统计。
 应使用 `CopyFailure::state()` 或 `AsyncCopyFailure::state()` 判断发布确定性；不能从 `failed` 或统计快照
 推导目标是否已发布，也不能据此判断是否启用了继续执行。
+流式回退打开目标 writer 后，`WriterState::Open` 不能证明目标处于隔离状态或未发生变化。在 provider
+在确认 commit 或 abort 结果前发生读取、写入或 deadline 错误时，失败状态为 `Indeterminate`；commit
+失败则采用 provider 提供的类型化发布状态。不能仅凭尚未 commit 或没有确认写入字节推断 `Unchanged`，
+该状态需要明确的未发布证据。保留恢复 writer 以执行显式 abort 或核查。后续恢复结果不会改写原始复制失败
+的状态和统计快照，须单独处理。不能仅因尚未执行 commit 就自动重试。
 
 临时文件和目录有独立的所有权生命周期，提供 `cleanup`、`keep` 和 `persist`。0.3 的
 恢复快照包含两个相互独立的维度：保留的目标发布事实，以及当前源资格。
@@ -561,8 +573,8 @@ metadata，流会失败，不会返回缺少 metadata 的条目。同步 `Direct
 
 即使成功的 `PersistOutcome` 将清理状态报告为 `ResidualTemporaryContainer`，发布仍然成功。
 `Complete` 表示私有临时容器已移除；`ResidualTemporaryContainer` 表示发布成功但私有数据仍存在。
-它不代表发布失败，也不表示已发布源仍由句柄控制。outcome 保留经过校验的非敏感 `diagnostics()`，
-供 provider 沿用既有运维机制。portable API 不提供私有容器定位或清理重试能力，provider 也不承诺
+它不代表发布失败，也不表示已发布源仍由句柄控制。outcome 保留键名通过敏感性检查的
+`diagnostics()`，值原样保存；provider 在保存诊断前负责清洗值。portable API 不提供私有容器定位或清理重试能力，provider 也不承诺
 后台清理。不要重复发布或清理已发布目标。句柄进入 `Persisted` 或 `Kept` 状态后即为终态，之后调用
 `cleanup`、`persist` 或 `keep` 都会被拒绝。
 

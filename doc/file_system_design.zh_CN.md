@@ -105,6 +105,11 @@ I/O，因此标记 unchanged。适配器可以注记纯路径／选项转换失�
 `Indeterminate` 需要核查。后续保证校验或清理失败，不能抹去已确认的发布。没有 writer 或
 清理成功均不能证明目标没有副作用。write/copy 失败不会触发隐式重试。
 
+对于流式复制，已打开的 `WriterState::Open` 不足以证明目标隔离。在确认 commit 或 abort 结果前发生读取、
+写入或 deadline 错误时，失败状态为 `Indeterminate`，即使没有确认写入字节也一样；commit 失败采用 provider
+的类型化 `WriteFailureState`。`Unchanged` 必须有明确的未发布证据。失败后的恢复或 abort 不会改写原始复制失败
+的状态和统计快照，后续清理事实应单独处理。不能只凭尚未 commit 推断可安全重试。
+
 同步和异步 writer 另外独立保留两项事实，不改变 `WriterState`：
 `has_confirmed_publication()` 是针对明确发布证据的单调历史，`cleanup_state()` 记录清理进度。
 发布历史为 `false` 不能证明没有副作用。提交成功、提交失败状态为 `Published`，或 abort 返回
@@ -164,6 +169,14 @@ copy deadline 是从 operation 构造起累计的协作式预算，在提供者�
 成功统计。符合 Skip 条件的操作若在成功出口超时，会以错误返回，同时保留 skipped 计数及
 已知发布状态；调用方不能将该错误解释为完成复制。
 
+`NonSensitiveMetadata` 在加入时按标准策略拒绝敏感键名，并在自动 `Debug` 输出中隐藏值，但会原样
+保存值。通过访问器读取值不代表它可以安全记录。Provider 在保存诊断前清洗原生错误、URI 和 SDK
+输出；应用显式导出值前遵循自身策略。
+
+`CopyMethod::Streamed` 仅表示门面拥有的流式回退，provider 不得在已完成的 `try_copy` outcome 中
+返回它。Provider 自行完成客户端流式传输时报告 `CopyMethod::Native`；`Clone`、`ServerSide` 和
+`Mixed` 分别保留其对应的 provider 策略分类。
+
 目录流逐步返回条目，可能在已经处理部分条目后失败，不提供快照保证。`Subtree` 保留层级
 边界；`LiteralPrefix` 相对于 `ListScope::Path` 匹配原始对象键文本，
 对于 `ListScope::Namespace` 则匹配完整逻辑键，不解码或规范化键。
@@ -215,7 +228,7 @@ cleanup；该操作可能阻塞，清理错误会被忽略。需要确认结果�
 
 `PersistOutcome` 区分私有容器清理成功（`Complete`）与发布成功但仍有私有残留
 （`ResidualTemporaryContainer`）。后者不代表发布失败，也不表示已发布源仍由句柄控制。outcome
-保留经过校验的非敏感诊断信息，供 provider 沿用既有运维机制；portable API 不提供私有容器定位或
+保留键名通过敏感性检查的诊断信息，值原样保存；provider 负责在保存前清洗值。portable API 不提供私有容器定位或
 清理重试。句柄进入 `Persisted` 或 `Kept` 后即为终态，后续 `cleanup`、`persist` 和 `keep` 调用都会被拒绝。
 
 | 持久化失败状态 | 目标事实 | 源责任 |

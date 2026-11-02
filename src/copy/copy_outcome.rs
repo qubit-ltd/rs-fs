@@ -32,8 +32,13 @@ use crate::metadata::UserMetadata;
 /// use qubit_fs::copy::{CopyMethod, CopyOutcome, CopyStats};
 /// use qubit_fs::metadata::AchievedAtomicity;
 ///
-/// let outcome = CopyOutcome::new(CopyStats::default(), CopyMethod::Streamed, AchievedAtomicity::Atomic);
-/// assert_eq!(CopyMethod::Streamed, outcome.method());
+/// let outcome = CopyOutcome::new(
+///     CopyStats { files: 1, ..CopyStats::default() },
+///     CopyMethod::Native,
+///     AchievedAtomicity::NonAtomic,
+/// );
+/// assert_eq!(CopyMethod::Native, outcome.method());
+/// assert!(!outcome.used_fallback());
 /// ```
 #[derive(Clone, Debug, PartialEq)]
 pub struct CopyOutcome {
@@ -51,7 +56,7 @@ pub struct CopyOutcome {
     target_version: Option<ResourceVersion>,
     /// Whether the facade completed the copy after provider decline.
     used_fallback: bool,
-    /// Scrubbed provider diagnostics.
+    /// Provider diagnostics whose keys passed sensitivity checks.
     diagnostics: NonSensitiveMetadata,
 }
 
@@ -179,24 +184,30 @@ impl CopyOutcome {
         self.used_fallback
     }
 
-    /// Returns provider diagnostics that are safe to expose.
+    /// Returns provider diagnostics whose keys passed sensitivity checks.
+    ///
+    /// Values are retained unchanged. Providers must sanitize diagnostic
+    /// values before storing them; explicitly reading a value does not make it
+    /// safe to log.
     ///
     /// # Returns
-    /// A borrow of validated diagnostics with sensitive keys removed.
+    /// A borrow of diagnostics whose keys passed sensitivity checks.
     #[inline]
     #[must_use]
     pub const fn diagnostics(&self) -> &NonSensitiveMetadata {
         &self.diagnostics
     }
 
-    /// Replaces provider-native diagnostics that have already passed key
-    /// validation.
+    /// Replaces provider diagnostics whose keys are checked when added.
+    ///
+    /// Values are stored unchanged. Providers must sanitize diagnostic values
+    /// before storing them.
     ///
     /// # Parameters
-    /// - `diagnostics`: Provider metadata whose keys have passed validation.
+    /// - `diagnostics`: Provider metadata to add after sanitizing its values.
     ///
     /// # Returns
-    /// This outcome with the validated diagnostics stored for safe exposure.
+    /// This outcome with diagnostics whose keys passed sensitivity checks.
     #[inline]
     #[must_use]
     pub fn with_diagnostics(mut self, diagnostics: UserMetadata) -> Self {

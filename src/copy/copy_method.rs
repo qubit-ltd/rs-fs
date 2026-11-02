@@ -18,11 +18,11 @@
 /// use qubit_fs::metadata::AchievedAtomicity;
 ///
 /// let outcome = CopyOutcome::new(
-///     CopyStats::default(),
-///     CopyMethod::Streamed,
-///     AchievedAtomicity::Atomic,
+///     CopyStats { files: 1, ..CopyStats::default() },
+///     CopyMethod::Native,
+///     AchievedAtomicity::NonAtomic,
 /// );
-/// assert_eq!(outcome.method(), CopyMethod::Streamed);
+/// assert_eq!(outcome.method(), CopyMethod::Native);
 /// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CopyMethod {
@@ -32,7 +32,9 @@ pub enum CopyMethod {
     Clone,
     /// Server-side copy.
     ServerSide,
-    /// Client-side stream copy.
+    /// Facade-owned streamed fallback. Providers must not return this method in
+    /// a completed `try_copy` outcome; provider-managed client-side transfer
+    /// uses [`Native`](Self::Native).
     Streamed,
     /// Mixed copy strategy.
     Mixed,
