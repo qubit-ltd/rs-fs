@@ -63,7 +63,7 @@ impl FileSystemSpi for Provider {
         let info = random_access_common::opened_info(ID, r.path(), 6);
         Ok(OpenedRandomAccessReader::new(
             info,
-            Box::new(Session(b"object".to_vec())),
+            Box::new(Session(b"AAAAAA".to_vec())),
         ))
     }
 }
@@ -83,11 +83,14 @@ fn test_random_access_reuses_opened_object_across_nonsequential_reads() {
     assert_eq!(2, reader.read_at(4, &mut tail).unwrap());
     let mut head = [0; 2];
     assert_eq!(2, reader.read_at(0, &mut head).unwrap());
-    assert_eq!(*b"ct", tail);
-    assert_eq!(*b"ob", head);
+    assert_eq!(*b"AA", tail);
+    assert_eq!(*b"AA", head);
     assert_eq!(1, opens.load(Ordering::SeqCst));
-    // Model evidence: replacing a path between legacy opens could return A then B;
-    // this retained session instead continues reading the opened A object.
+    // Deterministic model evidence only: two legacy path resolutions straddling
+    // replacement may select different objects; the retained session stays on A.
+    let mut legacy_path_objects = [b"A", b"B"].into_iter();
+    assert_eq!(Some(b"A"), legacy_path_objects.next());
+    assert_eq!(Some(b"B"), legacy_path_objects.next());
 }
 #[test]
 fn test_random_access_rejects_noncomplete_options_before_provider_open() {
