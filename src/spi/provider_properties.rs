@@ -185,7 +185,7 @@ impl ProviderProperties {
             return Err(FsError::new(
                 FsErrorKind::InvalidOptions,
                 FsOperation::ValidateProperties,
-                "open random-access reader requires declared Read capability",
+                "provider operation OpenRandomAccessReader requires declared Read capability",
             )
             .with_required_capability(FileSystemCapability::Read));
         }
@@ -287,6 +287,7 @@ impl ProviderProperties {
 #[cfg(test)]
 mod tests {
     use super::ProviderProperties;
+    use crate::error::FsErrorKind;
     use crate::error::FsOperation;
     use crate::metadata::FileSystemCapabilities;
     use crate::metadata::FileSystemCapability;
@@ -337,6 +338,62 @@ mod tests {
             }
         }
         operations
+    }
+
+    fn validate_new_random_access_properties(
+        operations: ProviderOperations,
+        capabilities: FileSystemCapabilities,
+    ) -> crate::error::FsResult<ProviderProperties> {
+        ProviderProperties::new(
+            FileSystemInfo::new(
+                FileSystemId::new("random-access-property-test")
+                    .expect("test filesystem id should be valid"),
+                "random-access-property-test",
+                PathSemantics::Hierarchical,
+            ),
+            operations,
+            capabilities,
+            FileSystemLimits::unknown(),
+            PathConstraints::absolute(),
+            SymlinkPolicy::Reject,
+        )
+    }
+
+    #[test]
+    fn test_random_access_operation_requires_declared_read_capability() {
+        let error = validate_new_random_access_properties(
+            ProviderOperations::new().with(ProviderOperation::OpenRandomAccessReader),
+            FileSystemCapabilities::new(),
+        )
+        .expect_err("random-access operation requires Read capability");
+
+        assert_eq!(FsErrorKind::InvalidOptions, error.kind());
+        assert_eq!(FsOperation::ValidateProperties, error.operation());
+        assert_eq!(Some(FileSystemCapability::Read), error.required_capability());
+        assert!(error.to_string().contains("OpenRandomAccessReader"));
+        assert!(error.to_string().contains("Read"));
+    }
+
+    #[test]
+    fn test_random_access_operation_is_valid_with_read_and_open_reader() {
+        let properties = validate_new_random_access_properties(
+            ProviderOperations::new()
+                .with(ProviderOperation::OpenReader)
+                .with(ProviderOperation::OpenRandomAccessReader),
+            FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::Read),
+        )
+        .expect("Read and the random-access operation form a valid property snapshot");
+
+        assert!(
+            properties
+                .operations()
+                .supports(ProviderOperation::OpenRandomAccessReader)
+        );
+        assert!(
+            properties
+                .declared_capabilities()
+                .guarantees(FileSystemCapability::Read)
+        );
     }
 
     /// Verifies every capability maps directly to its own required operation

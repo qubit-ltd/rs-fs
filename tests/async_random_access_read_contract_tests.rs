@@ -10,7 +10,7 @@ mod random_access_common;
 use qubit_fs::error::{FsError, FsErrorKind, FsOperation};
 use qubit_fs::metadata::{
     FileKind, FileMetadata, FileSystemCapabilities, FileSystemCapability, FileSystemId,
-    FileSystemInfo, FileSystemLimits, OpenedFileInfo, SymlinkPolicy,
+    FileSystemInfo, FileSystemLimit, FileSystemLimits, OpenedFileInfo, SymlinkPolicy,
 };
 use qubit_fs::path::{PathConstraints, PathSemantics};
 use qubit_fs::read::{ChecksumPolicy, ReadOptions};
@@ -44,6 +44,7 @@ struct Provider {
     metadata: MetadataMode,
     supported: bool,
     pending_first: bool,
+    limit: FileSystemLimit,
 }
 struct Session {
     reads: Arc<AtomicUsize>,
@@ -106,6 +107,7 @@ impl Provider {
             metadata: MetadataMode::Valid,
             supported: true,
             pending_first: false,
+            limit: FileSystemLimit::Unknown,
         }
     }
     fn filesystem(&self) -> AsyncFileSystem {
@@ -117,6 +119,7 @@ impl Provider {
             metadata: self.metadata,
             supported: self.supported,
             pending_first: self.pending_first,
+            limit: self.limit,
         })
         .unwrap()
     }
@@ -135,7 +138,7 @@ impl AsyncFileSystemSpi for Provider {
             ),
             ops,
             FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::Read),
-            FileSystemLimits::unknown(),
+            FileSystemLimits::unknown().with_max_read_range_bytes(self.limit),
             PathConstraints::absolute(),
             SymlinkPolicy::Reject,
         )
@@ -353,6 +356,35 @@ fn test_async_short_eof_overreport_and_typed_error() {
         Some("async source".to_owned()),
         std::error::Error::source(&error).map(ToString::to_string)
     );
+}
+
+#[test]
+fn test_async_empty_eof_overflow_and_finite_range_limit_do_not_dispatch() {
+    let mut provider = Provider::new();
+    provider.limit = FileSystemLimit::Maximum(2);
+    let fs = provider.filesystem();
+    let path = Path::parse("/same").unwrap();
+    let mut reader = ready(fs.open_random_access_reader(&path, ReadOptions::default())).unwrap();
+    assert_eq!(0, ready(reader.read_at(0, &mut [])).unwrap());
+    assert_eq!(0, ready(reader.read_at(6, &mut [0; 1])).unwrap());
+    assert_eq!(0, provider.reads.load(Ordering::SeqCst));
+
+    let overflow = ready(reader.read_at(u64::MAX, &mut [0; 2])).unwrap_err();
+    assert_eq!(FsErrorKind::InvalidOptions, overflow.kind());
+    assert_eq!(FsOperation::Read, overflow.operation());
+    assert_eq!(Some(&path), overflow.path());
+    assert_eq!(Some("fixture"), overflow.provider());
+    assert_eq!(0, provider.reads.load(Ordering::SeqCst));
+
+    let over_limit = ready(reader.read_at(0, &mut [0; 3])).unwrap_err();
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, over_limit.kind());
+    assert_eq!(FsOperation::Read, over_limit.operation());
+    assert_eq!(Some(&path), over_limit.path());
+    assert_eq!(Some("fixture"), over_limit.provider());
+    assert_eq!(0, provider.reads.load(Ordering::SeqCst));
+
+    assert_eq!(2, ready(reader.read_at(0, &mut [0; 2])).unwrap());
+    assert_eq!(1, provider.reads.load(Ordering::SeqCst));
 }
 
 #[test]
