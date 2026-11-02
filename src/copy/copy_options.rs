@@ -55,7 +55,7 @@ pub struct CopyOptions {
     durability: DurabilityRequirement,
     /// Maximum descendant depth for tree copy.
     max_depth: Option<usize>,
-    /// Maximum number of source entries copied by the operation.
+    /// Maximum number of source entries the provider may process.
     ///
     /// A file-mode copy always consumes exactly one entry, so `Some(0)`
     /// rejects it before provider I/O. Tree-mode copies count files,
@@ -368,7 +368,10 @@ impl CopyOptions {
     /// `None` leaves the entry count unbounded. The count includes every
     /// source resource represented in the completed
     /// [`CopyOutcome`](crate::copy::CopyOutcome) statistics, including
-    /// directories and prefixes.
+    /// directories and prefixes. The facade checks these statistics as a
+    /// lower bound; they cannot prove the total number of entries scanned or
+    /// processed by the provider. Providers must enforce this budget before
+    /// processing each source entry.
     ///
     /// # Returns
     /// `Some(limit)` for a configured maximum, or `None` when the entry count
@@ -431,9 +434,11 @@ impl CopyOptions {
 
     /// Validates required copy semantics before provider side effects.
     ///
-    /// Preferred server-side copy may fall back and report its actual method.
-    /// Required server-side copy must fail this preflight when the configured
-    /// filesystem does not guarantee it.
+    /// Required server-side copy is rejected before dispatch when unsupported.
+    /// Conditional support permits a provider attempt for this request;
+    /// successful outcomes must still report
+    /// [`crate::copy::CopyMethod::ServerSide`], and streamed fallback is
+    /// not permitted.
     ///
     /// # Parameters
     /// `capabilities` describes the guarantees available from the filesystem.

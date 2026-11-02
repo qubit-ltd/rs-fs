@@ -398,7 +398,7 @@ impl FileSystem {
                 )
             })?;
         let (info, session) = opened.into_parts();
-        if let Err(cause) = self.validate_temp_info(&info, FileKind::File) {
+        if let Err(cause) = self.validate_temp_info(&info, FileKind::File, parent.as_ref()) {
             let error = FsError::with_source(
                 FsErrorKind::ProviderContractViolation,
                 FsOperation::ValidateProviderOutcome,
@@ -461,7 +461,7 @@ impl FileSystem {
                 )
             })?;
         let (info, session) = opened.into_parts();
-        if let Err(cause) = self.validate_temp_info(&info, FileKind::Directory) {
+        if let Err(cause) = self.validate_temp_info(&info, FileKind::Directory, parent.as_ref()) {
             let error = FsError::with_source(
                 FsErrorKind::ProviderContractViolation,
                 FsOperation::ValidateProviderOutcome,
@@ -911,7 +911,12 @@ impl FileSystem {
     ///
     /// # Errors
     /// Returns a provider-contract error when any identity is inconsistent.
-    fn validate_temp_info(&self, info: &OpenedFileInfo, expected_kind: FileKind) -> FsResult<()> {
+    fn validate_temp_info(
+        &self,
+        info: &OpenedFileInfo,
+        expected_kind: FileKind,
+        requested_parent: Option<&Path>,
+    ) -> FsResult<()> {
         if info.filesystem_id() != self.properties().info().id() {
             return Err(self.contract_error(
                 info.path(),
@@ -933,6 +938,7 @@ impl FileSystem {
                 "provider returned a temporary handle with an inconsistent resource kind",
             ));
         }
+        self.core.validate_temp_location(requested_parent, info.path())?;
         Ok(())
     }
 }

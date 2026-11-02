@@ -479,7 +479,7 @@ impl AsyncFileSystem {
                 )
             })?;
         let (info, session) = opened.into_parts();
-        if let Err(cause) = self.validate_temp_info(&info, crate::metadata::FileKind::File) {
+        if let Err(cause) = self.validate_temp_info(&info, crate::metadata::FileKind::File, parent.as_ref()) {
             let error = FsError::with_source(
                 FsErrorKind::ProviderContractViolation,
                 FsOperation::ValidateProviderOutcome,
@@ -541,7 +541,7 @@ impl AsyncFileSystem {
                 )
             })?;
         let (info, session) = opened.into_parts();
-        if let Err(cause) = self.validate_temp_info(&info, crate::metadata::FileKind::Directory) {
+        if let Err(cause) = self.validate_temp_info(&info, crate::metadata::FileKind::Directory, parent.as_ref()) {
             let error = FsError::with_source(
                 FsErrorKind::ProviderContractViolation,
                 FsOperation::ValidateProviderOutcome,
@@ -779,6 +779,7 @@ impl AsyncFileSystem {
         &self,
         info: &crate::metadata::OpenedFileInfo,
         expected_kind: crate::metadata::FileKind,
+        requested_parent: Option<&Path>,
     ) -> FsResult<()> {
         if info.filesystem_id() != self.properties().info().id() {
             return Err(self.contract_error(
@@ -798,6 +799,7 @@ impl AsyncFileSystem {
                 "provider returned a temporary handle with an inconsistent resource kind",
             ));
         }
+        self.core.validate_temp_location(requested_parent, info.path())?;
         Ok(())
     }
 

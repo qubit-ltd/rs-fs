@@ -38,6 +38,25 @@ fn test_required_server_side_copy_is_checked_before_side_effects() {
 }
 
 #[test]
+fn test_required_server_side_copy_accepts_conditional_support() {
+    let options = CopyOptions::file().with_server_side(ServerSidePreference::Require);
+    let unsupported = options
+        .validate_against(FileSystemCapabilities::new())
+        .expect_err("unsupported required copy must fail");
+    assert_eq!(
+        Some(FileSystemCapability::ServerSideCopy),
+        unsupported.required_capability()
+    );
+
+    for capabilities in [
+        FileSystemCapabilities::new().with_conditional(FileSystemCapability::ServerSideCopy),
+        FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::ServerSideCopy),
+    ] {
+        assert!(options.validate_against(capabilities).is_ok());
+    }
+}
+
+#[test]
 fn test_copy_options_full_configuration_is_usable() {
     let options = CopyOptions::default()
         .with_mode(CopyMode::Tree)
