@@ -84,6 +84,12 @@ it is rejected for hierarchical filesystems, whose root is `ListScope::Path(Path
 `Path` still rejects empty strings. Namespace does not permit access beyond the
 configured filesystem, and cannot be used to open, stat, or write a resource.
 
+`Path::child` and `Path::join` preserve literal object-key text. For a
+hierarchical root `/`, appending `x` produces `/x`; for a literal object-key
+path whose text is `/`, appending `x` produces `//x`. Appending does not parse
+or normalize provider text. Code that relied on the former slash-only literal
+special case should construct the complete key it needs.
+
 For a hierarchical listing rooted at `/root`, `ListFilter::Subtree("nested")`
 selects `/root/nested` and its descendants, including a deeper entry such as
 `/root/nested/child/report.txt`, even when `recursive` is false. Without a
@@ -451,6 +457,14 @@ not a reason to resend; cleanup may still be necessary. Never infer safe retry
 from an error kind alone. `exists` returns false only for `NotFound`; permission,
 authentication, timeout, and I/O failures remain errors.
 
+Direct `FileWriter` and `AsyncFileWriter` users can inspect
+`has_confirmed_publication()` and `cleanup_state()` separately from `state()`.
+The publication accessor records whether this writer session has ever received
+confirmed publication evidence; `false` does not prove that nothing happened.
+After publication is confirmed, do not submit the write again. Inspect cleanup
+state and retain the original commit and cleanup errors when reconciliation is
+needed. A later abort result cannot erase publication history.
+
 Requests distinguish optional and required guarantees. `WriteOutcome`,
 `RenameOutcome`, and `CopyOutcome` expose durability facts. `PersistOutcome`
 reports publication and cleanup but has no durability field; successful temporary
@@ -483,6 +497,15 @@ file-like resource. Required atomicity does not imply durability.
 If the writer publishes non-atomically, the facade reports a provider-contract
 violation while retaining the `Published` fact; do not retry or roll back that
 copy.
+An unsupported required server-side request is rejected before dispatch;
+conditional support allows a provider attempt for that request, but the
+completed outcome must still report `CopyMethod::ServerSide`. Such a request
+does not permit streamed fallback.
+`CopyOptions::max_entries` is sent to the provider as a source-entry processing
+budget. The facade checks completed-resource and skipped counts as a verifiable
+lower bound, and checks `failed` separately; `CopyStats` cannot prove the total
+number of entries a provider scanned or processed. Do not treat this outcome
+check as a complete scan quota.
 `CopyOptions::deadline` is a cooperative cumulative budget starting at operation
 construction. It is checked around stages; it is not a timer that interrupts
 an arbitrary pending provider future. Provider failures remain the primary error.
@@ -534,6 +557,13 @@ session's actual ownership, not an unvalidated diagnostic path. Public cleanup
 context contains only the configured provider and known request path; a temporary
 request without a parent has no invented path. Preserve the original failure and
 any cleanup error together.
+
+When a temporary request specifies `parent`, the facade checks the returned
+path against that requested location: hierarchical paths must be strict
+component descendants, and object-key paths must retain the raw prefix (the
+returned key may equal that prefix). Provider-specific paths and requests with
+no parent remain provider-defined. This lexical check does not establish host
+filesystem permissions or symlink isolation.
 
 Whole-write and copy recovery uses `WriterRecovery` / `AsyncWriterRecovery`:
 match `Opened` for a validated writer and `Rejected` for cleanup-only authority.

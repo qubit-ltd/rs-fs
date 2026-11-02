@@ -41,6 +41,9 @@ A registry resolution binds a facade, logical path, and canonical URI.
 accepted absolute/relative forms and declared component/path limits. Host-path
 conversion belongs to the local adapter, including non-UTF-8 and percent-escape
 handling. Core parsing cannot enforce a native root authority by itself.
+Appending to a hierarchical `/` root omits one separator; literal object-key
+paths preserve their text, so appending to `/` produces `//x`. Append does not
+reparse or normalize provider text.
 
 `Uri` is secret-free canonical text interpreted with filesystem context.
 Username-only authority is allowed; passwords, sensitive query fields and
@@ -131,6 +134,17 @@ is terminal and allows only a valid abort. `Published` must not be resent, and
 `Indeterminate` requires reconciliation. No write/copy failure triggers an
 implicit retry.
 
+Direct synchronous and asynchronous writers keep two additional facts without
+changing `WriterState`: `has_confirmed_publication()` is monotonic history for
+explicitly confirmed publication, while `cleanup_state()` records cleanup
+progress independently. `false` publication history is not proof of no side
+effects. A successful commit, a `Published` commit failure, or an abort that
+reports `Published` confirms history; later cleanup cannot retract it. Every
+successful abort completes cleanup regardless of its publication outcome, and
+an error or cancellation after polling leaves cleanup `Indeterminate`. An
+unpolled async abort changes neither fact. Drop eligibility continues to follow
+the existing lifecycle state and cleanup completion rules.
+
 ## Owning asynchronous whole-file writes
 
 The public entry point consumes `Path`, `Vec<u8>`, and `WriteOptions`, returning
@@ -184,6 +198,14 @@ parent creation, continue-on-error, and a changed symlink policy remain outside
 the fallback policy; the actual source must be file-like. Required atomicity
 does not imply durability. Requirements that cannot be satisfied are rejected
 before side effects where determinable.
+An unsupported required server-side request is rejected before dispatch.
+Conditional `ServerSideCopy` support permits an attempt, but the completed
+outcome must report `CopyMethod::ServerSide`; streamed fallback is not allowed.
+`max_entries` is a source-entry processing budget that providers must enforce
+before handling each entry. Completed-resource and skipped statistics provide
+a checked lower bound for facade validation; failed counts are checked
+independently because the summary does not prove disjointness. `overwritten` is
+not counted again. These fields cannot prove the provider's total scan count.
 If the writer publishes non-atomically, the facade reports a provider-contract
 violation while retaining the `Published` fact; do not retry or roll back that
 copy.
@@ -241,6 +263,13 @@ Temporary file/directory handles own cleanup responsibility and expose explicit
 `cleanup`, `keep`, and `persist`. Child creation validates relative paths and
 prevents escaping the owned temporary namespace. Drop cleanup is best effort
 where supported and is not a substitute for confirmation.
+
+When a request supplies a parent, the facade also validates the returned
+location after filesystem identity and resource-kind checks. Hierarchical paths
+must be strict component descendants; object keys must begin with the raw parent
+prefix, with equality permitted. Provider-specific semantics and an absent
+parent have no inferred location rule. This lexical relation is not a host
+filesystem permission or symlink boundary.
 
 `PersistOutcome` distinguishes successful private-container removal
 (`Complete`) from successful publication with residual private data

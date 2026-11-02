@@ -451,6 +451,21 @@ context contains only the configured provider and known request path; a temporar
 request without a parent has no invented path. Preserve the original failure and
 any cleanup error together.
 
+When `TempOptions::parent()` is set, return the temporary identity beneath that
+requested location: hierarchical paths use strict component descendants and
+object keys use their raw prefix. The facade validates this relation after
+checking the returned filesystem identity and resource kind. Provider-specific
+semantics and requests without a parent do not receive an inferred relation.
+This lexical check does not replace the provider's filesystem authority and
+symlink protections.
+
+Direct writer handles also expose whether publication was ever confirmed and
+the independent cleanup state. This is facade-owned history; providers do not
+need a new SPI method or a new abort outcome. `WriteAbortOutcome` still reports
+the result of that cleanup attempt. A later `NotPublished` cleanup result does
+not retract an earlier confirmed publication, and successful cleanup does not
+prove that a published target was rolled back.
+
 Whole-write and copy recovery uses `WriterRecovery` / `AsyncWriterRecovery`:
 match `Opened` for a validated writer and `Rejected` for cleanup-only authority.
 Use `recovery`, `recovery_mut` where available, and `take_recovery` instead of the
@@ -495,6 +510,20 @@ range support, so automatic prefix narrowing still requires a provider advertisi
 - Review publication, cleanup, cancellation, and error-state behavior.
 
 ## Copy and persistence outcomes
+
+Enforce `CopyOptions::max_entries()` before processing each source entry. The
+facade validates the returned completed-resource count plus `skipped` as a
+checked lower bound, and checks `failed` independently because summary fields
+do not prove those entries are disjoint. `overwritten` describes a policy
+outcome and is not an additional source entry count. Do not treat facade
+outcome validation as proof of the provider's total scan count.
+
+The current local adapter forwards this limit to `rs-local-files`: Host and
+Rooted copies charge the source root before work begins, and recursive copying
+charges each child before processing it. Its successful outcome maps completed
+files and directories plus skipped and overwritten counts, but no failed count.
+This supports the completed-plus-skipped lower bound for that adapter; the
+facade still validates `failed` independently for providers that report it.
 
 Return `CopyAttempt::Declined` only when the native attempt caused no external
 change and left no cleanup responsibility. If it changed external state or the

@@ -80,6 +80,10 @@ tempfile = "3"
 匹配过程不补分隔符，也不规范化键文本。Namespace 的过滤器匹配完整逻辑键。
 打开流之前，会按 provider 的路径文本上限检查根与过滤器合并后的长度。
 
+`Path::child` 和 `Path::join` 保留字面对象键文本。层级根 `/` 追加 `x` 得到 `/x`；
+文本为 `/` 的字面对象键路径追加 `x` 得到 `//x`。追加不会重新解析或规范化 provider 文本。
+若代码依赖过去对单斜线字面键采用的根特例，应直接构造所需的完整键。
+
 列举 deadline 从目录流构造完成时开始计算，每次调用 provider 前后都会检查。
 到期后收到的成功条目或 EOF 会被拒绝；实际 provider 错误保留原类型和错误链。
 这是一种协作式预算，不能中断永久 Pending 的 future。只构造再丢弃未经 poll 的
@@ -401,6 +405,11 @@ write/copy 归为 `Indeterminate`。打开步骤已生效不代表整文件已�
 不要只凭错误名称判断能否重试。`exists` 仅对 `NotFound` 返回 false；权限、认证、超时和 I/O
 错误都会继续返回错误。
 
+直接使用 `FileWriter` 或 `AsyncFileWriter` 时，可分别查看 `state()`、
+`has_confirmed_publication()` 和 `cleanup_state()`。发布访问器记录本会话曾有过的明确发布证据；
+`false` 不证明没有副作用。确认发布后不要重新提交写入；需要核查时检查清理状态，并同时保留
+原始提交错误和清理错误。后续 abort 结果不会抹去发布历史。
+
 请求区分尽力而为和必须满足的保证。`WriteOutcome`、`RenameOutcome` 和 `CopyOutcome`
 报告 durability 信息；`PersistOutcome` 报告发布和清理，但没有 durability 字段，临时资源
 持久化成功本身不能证明已完成持久同步。原子性与持久性不同，二者不能互相
@@ -420,7 +429,11 @@ portable metadata，且不创建父目录。Required 原子性不等于持久性
 `Skip` 与 Required 的组合、`Overwrite` 仍不能回退；要求服务端或持久复制、目录树模式、元数据保留、
 创建父目录、continue-on-error、改变符号链接策略也保持原有限制。实际源必须是文件或对象。
 Required 原子性不等于持久性。writer 若以非原子方式发布，门面会返回 provider 契约违例并保留
-`Published` 事实；不得重试或回滚这次复制。`CopyOptions::deadline` 是从 operation 构造时开始
+`Published` 事实；不得重试或回滚这次复制。必需的服务端复制若不受支持，会在分派前拒绝；
+Conditional 支持允许 provider 尝试该请求，但成功 outcome 仍须报告 `CopyMethod::ServerSide`，
+且不允许流式回退。`CopyOptions::max_entries` 会作为源条目处理预算交给 provider。门面只将
+已完成资源数与 skipped 数校验为可验证下界，并单独检查 `failed`；`CopyStats` 无法证明 provider
+实际扫描或处理的总条目数，因此该校验不等于完整扫描配额。`CopyOptions::deadline` 是从 operation 构造时开始
 累计的协作式预算，在阶段边界检查，不是能打断任意 Pending future 的定时器。提供者错误仍是主错误。
 
 临时文件和目录有独立的所有权生命周期，提供 `cleanup`、`keep` 和 `persist`。0.3 的
@@ -461,6 +474,10 @@ persist 或原始 session。应用应保留错误，或用 `take_recovery` 接�
 `cancel_on_drop`。清理必须依据 session 实际拥有的资源，不能依据未校验的诊断路径。
 公开清理错误只使用已配置的 provider 和已知请求路径；没有 parent 的临时请求不伪造路径。
 主失败和清理错误应同时保留。
+
+临时请求指定 `parent` 时，门面会核对返回路径与请求位置：层级路径必须是组件级严格后代，
+ObjectKey 路径必须保留原始前缀（返回键可以等于此前缀）。ProviderSpecific 路径及未指定
+parent 的请求由 provider 决定位置。该词法校验不构成宿主文件权限或符号链接隔离保证。
 
 整文件写入和复制通过 `WriterRecovery` / `AsyncWriterRecovery` 交回资源：
 `Opened` 是已验证 writer，`Rejected` 只有清理权限。用 `recovery`、适用时的

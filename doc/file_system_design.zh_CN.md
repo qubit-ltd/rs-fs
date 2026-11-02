@@ -35,6 +35,8 @@ directory/temp 等领域组织，私有辅助类型归属对应领域。同步�
 `Path` 区分层级路径与保留原始文本的对象键语义。门面校验绝对／相对形式及路径、分量限制。
 本机路径转换由 local adapter 处理，包括非 UTF-8 和百分号转义；核心路径解析无法单独落实
 本机根目录权限边界。
+层级根 `/` 追加子项时不会多插一个分隔符；字面对象键保留原文，因此 `/` 追加 `x` 会得到
+`//x`。追加不会重新解析或规范化 provider 文本。
 
 `Uri` 是结合文件系统上下文解释的规范文本，不携带 secret。它允许仅含用户名的 authority，
 拒绝密码、敏感查询字段和 fragment。`ConnectionUri` 用于配置入口，在受控边界保留原文访问
@@ -103,6 +105,13 @@ I/O，因此标记 unchanged。适配器可以注记纯路径／选项转换失�
 `Indeterminate` 需要核查。后续保证校验或清理失败，不能抹去已确认的发布。没有 writer 或
 清理成功均不能证明目标没有副作用。write/copy 失败不会触发隐式重试。
 
+同步和异步 writer 另外独立保留两项事实，不改变 `WriterState`：
+`has_confirmed_publication()` 是针对明确发布证据的单调历史，`cleanup_state()` 记录清理进度。
+发布历史为 `false` 不能证明没有副作用。提交成功、提交失败状态为 `Published`，或 abort 返回
+`Published` 都会确认发布历史；后续清理不能撤销它。任意成功 abort 都将清理标记为完成，
+清理错误或 poll 后取消会留下 `Indeterminate`；未轮询的异步 abort 不改变这两项事实。
+Drop 是否清理仍由既有生命周期状态和清理完成条件决定。
+
 ## 拥有请求的异步整文件写入
 
 公共入口消费 `Path`、`Vec<u8>` 和 `WriteOptions`，返回
@@ -142,6 +151,11 @@ writer 支持 `AtomicReplace`，原生路径无副作用地拒绝后仍可回退
 `Skip` 与 Required 的组合、`Overwrite` 仍不能回退；要求服务端或持久复制、目录树复制、元数据保留、
 创建父目录、continue-on-error 和改变符号链接策略仍受原有限制；实际源必须是文件或对象。
 Required 原子性不等于持久性。在可静态判定时，不可能满足的要求应在副作用前拒绝。
+必需的服务端复制若不受支持，会在分派前拒绝。`ServerSideCopy` 为 Conditional 时允许尝试，
+但完成 outcome 仍须报告 `CopyMethod::ServerSide`，不允许流式回退。
+`max_entries` 是由 provider 在处理源条目前落实的预算。门面对已完成资源数与 skipped 做
+checked-add 下界检查，并单独检查 failed，因为汇总字段不能证明它们互斥；overwritten 不重复计数。
+这些统计无法证明 provider 实际扫描的总条目数。
 writer 若以非原子方式发布，门面会返回 provider 契约违例并保留 `Published` 事实；不得重试或回滚
 这次复制。
 
@@ -182,6 +196,10 @@ durability 字段，持久化成功不能证明已完成持久同步。
 
 临时文件和目录句柄拥有清理责任，提供显式 `cleanup`、`keep`、`persist`。创建子资源时校验
 相对路径，防止逃出所拥有的临时命名空间。支持的 Drop 清理仅尽力执行，不能替代完成确认。
+
+请求指定 parent 时，门面还会在校验 filesystem 身份和资源 kind 后验证返回位置。层级路径必须
+是组件级严格后代；对象键必须以原始 parent 文本开头，允许返回路径等于此前缀。ProviderSpecific
+语义及没有 parent 时不推断位置关系。该词法关系不构成本机文件权限或符号链接边界。
 
 `PersistOutcome` 区分私有容器清理成功（`Complete`）与发布成功但仍有私有残留
 （`ResidualTemporaryContainer`）。后者不代表发布失败，也不表示已发布源仍由句柄控制。outcome

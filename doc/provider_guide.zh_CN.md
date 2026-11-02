@@ -417,6 +417,15 @@ persist 或原始 session。应用应保留错误，或用 `take_recovery` 接�
 公开清理错误只使用已配置的 provider 和已知请求路径；没有 parent 的临时请求不伪造路径。
 主失败和清理错误应同时保留。
 
+设置 `TempOptions::parent()` 时，应在该请求位置下返回临时资源：层级路径按组件判断严格后代，
+ObjectKey 按原始文本前缀判断。门面会在校验 filesystem 身份和资源 kind 后检查位置。
+ProviderSpecific 语义和未指定 parent 的请求不推断通用位置关系。词法校验不能替代 provider
+对文件系统 authority 和符号链接的保护。
+
+直接 writer 句柄还会分别暴露“本会话曾确认发布”和当前清理状态。这是门面保留的历史事实，
+provider 无需新增 SPI 方法或 abort outcome。`WriteAbortOutcome` 仍只表示本次清理尝试的结果。
+后续清理返回 `NotPublished` 不能撤销此前确认的发布；清理成功也不能证明已发布目标被回滚。
+
 整文件写入和复制通过 `WriterRecovery` / `AsyncWriterRecovery` 交回资源：
 `Opened` 是已验证 writer，`Rejected` 只有清理权限。用 `recovery`、适用时的
 `recovery_mut` 及 `take_recovery` 替代旧的 writer 专用访问器。
@@ -452,6 +461,16 @@ Guaranteed `RangeRead` 的 provider 生效。
 - 审查发布、清理、取消和错误状态的行为。
 
 ## 复制与持久化结果
+
+处理每个源条目前应先执行 `CopyOptions::max_entries()` 预算。门面对返回的已完成资源数与
+`skipped` 做 checked-add 下界校验，并单独检查 `failed`，因为统计字段不能证明这几类条目互斥。
+`overwritten` 是策略结果，不能再作为一个源条目累加。不能把门面的 outcome 校验当作 provider
+实际扫描总量的证明。
+
+当前本地适配器会把该限制传给 `rs-local-files`：Host 和 Rooted 复制在开始工作前先计入源根条目，
+递归调度器在处理每个子条目前计费。成功结果映射已完成的文件、目录以及 skipped 和 overwritten，
+但不映射 failed。这支持该适配器使用“已完成资源数加 skipped”作为下界；对于会报告 failed 的
+provider，门面仍独立校验该计数。
 
 只有原生复制尝试没有造成外部变更、也没有留下清理责任时，才能返回
 `CopyAttempt::Declined`。若外部状态已变化或效果不确定，应返回带已知发布状态和统计信息的
