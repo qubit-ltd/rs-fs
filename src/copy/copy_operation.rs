@@ -546,6 +546,11 @@ mod tests {
     use crate::write::WriteAbortOutcome;
     use crate::write::WriteFailureState;
 
+    const SKIP_AFTER_OPEN: u8 = 1;
+    const SKIP_AFTER_COMMIT_NOT_PUBLISHED: u8 = 2;
+    const SKIP_AFTER_COMMIT_PUBLISHED: u8 = 3;
+    const SKIP_AFTER_COMMIT_INDETERMINATE: u8 = 4;
+
     thread_local! {
         static NOW: Cell<Option<Instant>> = const { Cell::new(None) };
         static ADVANCE_ON_FLUSH: Cell<bool> = const { Cell::new(false) };
@@ -554,6 +559,9 @@ mod tests {
         static WRITE_CALLS: Cell<usize> = const { Cell::new(0) };
         static FLUSH_CALLS: Cell<usize> = const { Cell::new(0) };
         static COMMIT_CALLS: Cell<usize> = const { Cell::new(0) };
+        static OPEN_WRITER_CALLS: Cell<usize> = const { Cell::new(0) };
+        static ABORT_CALLS: Cell<usize> = const { Cell::new(0) };
+        static SKIP_STAGE: Cell<u8> = const { Cell::new(0) };
         static WRITTEN: std::cell::RefCell<Vec<u8>> = const { std::cell::RefCell::new(Vec::new()) };
     }
 
@@ -620,6 +628,16 @@ mod tests {
         }
 
         fn open_writer(&self, request: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
+            OPEN_WRITER_CALLS.with(|calls| calls.set(calls.get() + 1));
+            if SKIP_STAGE.with(Cell::get) == SKIP_AFTER_OPEN {
+                advance_clock();
+                return Err(FsError::new(
+                    FsErrorKind::AlreadyExists,
+                    FsOperation::OpenWriter,
+                    "injected existing target",
+                )
+                .with_effect_state(crate::error::FsEffectState::Unchanged));
+            }
             let info = OpenedFileInfo::new(
                 FileSystemId::new("deadline-test").expect("valid id"),
                 request.path().clone(),
@@ -701,6 +719,17 @@ mod tests {
     impl FileWriterSpi for StageWriter {
         fn commit(&mut self) -> Result<WriteOutcome, SpiWriteFailure> {
             COMMIT_CALLS.with(|calls| calls.set(calls.get() + 1));
+            if (SKIP_AFTER_COMMIT_NOT_PUBLISHED..=SKIP_AFTER_COMMIT_INDETERMINATE).contains(&SKIP_STAGE.with(Cell::get))
+            {
+                return Err(SpiWriteFailure::new(
+                    FsError::new(
+                        FsErrorKind::AlreadyExists,
+                        FsOperation::CommitWriter,
+                        "injected conflict",
+                    ),
+                    WriteFailureState::RetryableNotPublished,
+                ));
+            }
             if ADVANCE_ON_COMMIT.with(Cell::get) {
                 advance_clock();
             }
@@ -716,7 +745,16 @@ mod tests {
             )
         }
         fn abort(&mut self) -> FsResult<WriteAbortOutcome> {
-            Ok(WriteAbortOutcome::NotPublished)
+            ABORT_CALLS.with(|calls| calls.set(calls.get() + 1));
+            let mode = SKIP_STAGE.with(Cell::get);
+            if (SKIP_AFTER_COMMIT_NOT_PUBLISHED..=SKIP_AFTER_COMMIT_INDETERMINATE).contains(&mode) {
+                advance_clock();
+            }
+            Ok(match mode {
+                SKIP_AFTER_COMMIT_PUBLISHED => WriteAbortOutcome::Published,
+                SKIP_AFTER_COMMIT_INDETERMINATE => WriteAbortOutcome::Indeterminate,
+                _ => WriteAbortOutcome::NotPublished,
+            })
         }
     }
 
@@ -737,12 +775,25 @@ mod tests {
         WRITTEN.with(|bytes| bytes.borrow_mut().clear());
         FLUSH_CALLS.with(|value| value.set(0));
         COMMIT_CALLS.with(|value| value.set(0));
+        OPEN_WRITER_CALLS.with(|value| value.set(0));
+        ABORT_CALLS.with(|value| value.set(0));
+        SKIP_STAGE.with(|value| value.set(0));
         let mut operation = CopyOperation::new(
             filesystem,
             source,
             target,
             CopyOptions::file().with_deadline(Some(Duration::from_secs(1))),
         );
+        operation.deadline = super::CopyDeadline::new(Some(Duration::from_secs(1)), test_now);
+        operation
+    }
+
+    fn skip_operation(stage: u8) -> CopyOperation<'static> {
+        let mut operation = operation(false);
+        SKIP_STAGE.with(|value| value.set(stage));
+        operation.options = CopyOptions::file()
+            .with_conflict(crate::copy::CopyConflictPolicy::Skip)
+            .with_deadline(Some(Duration::from_secs(1)));
         operation.deadline = super::CopyDeadline::new(Some(Duration::from_secs(1)), test_now);
         operation
     }
@@ -855,5 +906,41 @@ mod tests {
         ADVANCE_ON_COMMIT.with(|advance| advance.set(false));
         assert_eq!(FsErrorKind::Io, failure.error().kind());
         assert_eq!(CopyFailureState::Unchanged, failure.state());
+    }
+
+    #[test]
+    fn test_copy_skip_deadline_after_open_with_controlled_clock() {
+        let failure = skip_operation(SKIP_AFTER_OPEN)
+            .execute()
+            .expect_err("deadline after open conflict must fail");
+
+        assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
+        assert_eq!(CopyFailureState::Unchanged, failure.state());
+        assert_eq!(1, failure.partial_stats().skipped);
+        assert_eq!(1, OPEN_WRITER_CALLS.with(Cell::get));
+        assert_eq!(0, COMMIT_CALLS.with(Cell::get));
+        assert_eq!(0, ABORT_CALLS.with(Cell::get));
+        assert!(!failure.has_recovery());
+    }
+
+    #[test]
+    fn test_copy_skip_deadline_after_commit_abort_with_controlled_clock() {
+        for (stage, expected_state) in [
+            (SKIP_AFTER_COMMIT_NOT_PUBLISHED, CopyFailureState::Unchanged),
+            (SKIP_AFTER_COMMIT_PUBLISHED, CopyFailureState::Published),
+            (SKIP_AFTER_COMMIT_INDETERMINATE, CopyFailureState::Indeterminate),
+        ] {
+            let failure = skip_operation(stage)
+                .execute()
+                .expect_err("deadline after commit conflict cleanup must fail");
+
+            assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
+            assert_eq!(expected_state, failure.state());
+            assert_eq!(1, failure.partial_stats().skipped);
+            assert_eq!(1, OPEN_WRITER_CALLS.with(Cell::get));
+            assert_eq!(1, COMMIT_CALLS.with(Cell::get));
+            assert_eq!(1, ABORT_CALLS.with(Cell::get));
+            assert!(!failure.has_recovery());
+        }
     }
 }
