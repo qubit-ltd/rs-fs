@@ -93,9 +93,11 @@ impl Input for ScriptReader {
                         "scripted typed interruption",
                         SourceMarker,
                     );
-                    if let TypedEffect::State(state) = effect {
-                        error = error.with_effect_state(state);
-                    }
+                    error = match effect {
+                        TypedEffect::None => error,
+                        TypedEffect::Unchanged => error.with_effect_state(FsEffectState::Unchanged),
+                        TypedEffect::State(state) => error.with_effect_state(state),
+                    };
                     return Err(error.into_io_error());
                 }
                 Step::OrdinaryError => {
@@ -104,6 +106,30 @@ impl Input for ScriptReader {
                 Step::Eof => return Ok(0),
             }
         }
+    }
+}
+
+#[test]
+fn test_script_reader_preserves_typed_effect_evidence() {
+    for (typed_effect, expected_effect) in [
+        (TypedEffect::None, None),
+        (TypedEffect::Unchanged, Some(FsEffectState::Unchanged)),
+        (TypedEffect::State(FsEffectState::Applied), Some(FsEffectState::Applied)),
+    ] {
+        let mut reader = ScriptReader {
+            steps: [Step::TypedInterrupted(typed_effect)].into_iter().collect(),
+            data: None,
+            calls: Arc::new(AtomicUsize::new(0)),
+        };
+        let mut output = [0; 1];
+        let io_error = unsafe { reader.read_unchecked(&mut output, 0, 1) }.expect_err("typed interruption");
+        assert_eq!(io::ErrorKind::Interrupted, io_error.kind());
+        let fs_error = io_error
+            .get_ref()
+            .and_then(|source| source.downcast_ref::<FsError>())
+            .expect("typed FsError");
+        assert_eq!(expected_effect, fs_error.effect_state());
+        assert!(Error::source(fs_error).is_some_and(|source| source.is::<SourceMarker>()));
     }
 }
 
