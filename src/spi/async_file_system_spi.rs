@@ -21,6 +21,7 @@ use super::OpenReaderRequest;
 use super::OpenWriterRequest;
 use super::OpenedAsyncDirectoryStream;
 use super::OpenedAsyncReader;
+use super::OpenedAsyncRandomAccessReader;
 use super::OpenedAsyncTempDirectory;
 use super::OpenedAsyncTempFile;
 use super::OpenedAsyncWriter;
@@ -112,6 +113,11 @@ pub trait AsyncFileSystemSpi: Send + Sync {
     /// # Errors
     /// Resolves to the provider open failure with filesystem context.
     fn open_reader<'a>(&'a self, request: OpenReaderRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
+        Box::pin(async move { Err(unsupported(FsOperation::OpenReader, request.path())) })
+    }
+
+    /// Opens a complete object for provider-bound offset reads. The default performs no I/O.
+    fn open_random_access_reader<'a>(&'a self, request: OpenReaderRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncRandomAccessReader>> {
         Box::pin(async move { Err(unsupported(FsOperation::OpenReader, request.path())) })
     }
 

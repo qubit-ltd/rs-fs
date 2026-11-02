@@ -20,6 +20,7 @@ use super::OpenReaderRequest;
 use super::OpenWriterRequest;
 use super::OpenedDirectoryStream;
 use super::OpenedReader;
+use super::OpenedRandomAccessReader;
 use super::OpenedTempDirectory;
 use super::OpenedTempFile;
 use super::OpenedWriter;
@@ -99,6 +100,10 @@ pub trait FileSystemSpi: Send + Sync {
     /// # Errors
     /// Returns the provider open failure with filesystem context.
     fn open_reader(&self, request: OpenReaderRequest<'_>) -> FsResult<OpenedReader> {
+        Err(unsupported(FsOperation::OpenReader, request.path()))
+    }
+    /// Opens a complete object for provider-bound offset reads.
+    fn open_random_access_reader(&self, request: OpenReaderRequest<'_>) -> FsResult<OpenedRandomAccessReader> {
         Err(unsupported(FsOperation::OpenReader, request.path()))
     }
     /// Opens a writer.

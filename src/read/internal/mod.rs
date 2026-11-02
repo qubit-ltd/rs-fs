@@ -7,6 +7,8 @@
 // =============================================================================
 //! Shared bounded allocation policy for aggregate readers.
 
+mod random_access_read_policy;
+pub(crate) use random_access_read_policy::RandomAccessReadPolicy;
 mod interrupted_read;
 mod read_buffer;
 

@@ -37,6 +37,8 @@ use crate::metadata::OpenedFileInfo;
 use crate::metadata::WriteOutcome;
 use crate::path::Path;
 use crate::read::FileReader;
+use crate::read::RandomAccessReader;
+use crate::read::RandomAccessReadPolicy;
 use crate::read::PrefixReadOutcome;
 use crate::read::ReadOperation;
 use crate::read::ReadOptions;
@@ -52,6 +54,7 @@ use crate::spi::DeleteDirectoryRequest;
 use crate::spi::DeleteFileRequest;
 use crate::spi::FileSystemSpi;
 use crate::spi::OpenReaderRequest;
+use crate::spi::ProviderOperation;
 use crate::spi::OpenWriterRequest;
 use crate::spi::RenameRequest;
 use crate::spi::ResolvedCreateDirectoryOptions;
@@ -311,6 +314,23 @@ impl FileSystem {
     /// A reader bound to the validated provider handle.
     pub fn open_reader(&self, path: &Path, options: ReadOptions) -> FsResult<FileReader> {
         self.open_reader_resolved(path, ResolvedReadOptions::new(options))
+    }
+
+    /// Opens a complete file for explicit-offset reads on one opened object.
+    /// The observed length is an upper bound, not a content snapshot.
+    pub fn open_random_access_reader(&self, path: &Path, options: ReadOptions) -> FsResult<RandomAccessReader> {
+        self.validate_path(path, FsOperation::OpenReader)?;
+        RandomAccessReadPolicy::validate_open(&options).map_err(|e| self.enrich(e, path, FsOperation::OpenReader))?;
+        options.validate_against(self.properties().capabilities()).map_err(|e| self.enrich(e, path, FsOperation::OpenReader))?;
+        self.require(FileSystemCapability::Read, FsOperation::OpenReader, path)?;
+        if !self.core.provider_supports(ProviderOperation::OpenRandomAccessReader) {
+            return Err(self.enrich(FsError::new(FsErrorKind::UnsupportedOperation, FsOperation::OpenReader, "provider does not implement random-access sessions"), path, FsOperation::OpenReader));
+        }
+        let opened = self.spi.open_random_access_reader(OpenReaderRequest::new(path, ResolvedReadOptions::new(options))).map_err(|e| self.enrich(e, path, FsOperation::OpenReader))?;
+        let (info, session) = opened.into_parts();
+        self.validate_opened_info(&info, path)?;
+        let len = RandomAccessReadPolicy::opened_len(info.metadata()).map_err(|e| self.enrich(e, path, FsOperation::OpenReader))?;
+        Ok(RandomAccessReader::new(info, len, self.properties().limits().max_read_range_bytes(), self.properties().info().provider_id().to_owned(), session))
     }
 
     /// Opens a provider writer after local option validation.

@@ -11,3 +11,6 @@
 pub(crate) mod async_recording_spi;
 #[allow(dead_code)]
 pub(crate) mod poll_support;
+
+#[allow(dead_code)]
+pub(crate) mod random_access;

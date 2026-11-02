@@ -42,4 +42,6 @@ pub enum ProviderOperation {
     CreateTempFile = 9,
     /// Creates a temporary directory.
     CreateTempDirectory = 10,
+    /// Opens a random-access session bound to one opened object.
+    OpenRandomAccessReader = 11,
 }

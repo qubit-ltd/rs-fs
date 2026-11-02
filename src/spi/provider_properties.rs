@@ -179,6 +179,16 @@ impl ProviderProperties {
             self.path_constraints.clone(),
             self.symlink_policy,
         )?;
+        if self.operations.supports(ProviderOperation::OpenRandomAccessReader)
+            && !self.declared_capabilities.supports(FileSystemCapability::Read)
+        {
+            return Err(FsError::new(
+                FsErrorKind::InvalidOptions,
+                FsOperation::ValidateProperties,
+                "open random-access reader requires declared Read capability",
+            )
+            .with_required_capability(FileSystemCapability::Read));
+        }
         let error = FileSystemCapability::ALL.iter().copied().find_map(|capability| {
             if self.declared_capabilities.supports(capability) {
                 self.missing_capability_operation_error(capability)

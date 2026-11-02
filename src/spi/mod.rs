@@ -20,6 +20,12 @@ mod copy_attempt;
 mod copy_decline_reason;
 mod directory_stream_spi;
 mod file_system_spi;
+#[cfg(feature = "async")]
+mod async_random_access_read_session;
+mod random_access_read_session;
+mod opened_random_access_reader;
+#[cfg(feature = "async")]
+mod opened_async_random_access_reader;
 mod file_writer_spi;
 mod internal;
 #[cfg(feature = "async")]
@@ -70,6 +76,12 @@ pub use copy_attempt::CopyAttempt;
 pub use copy_decline_reason::CopyDeclineReason;
 pub use directory_stream_spi::DirectoryStreamSpi;
 pub use file_system_spi::FileSystemSpi;
+#[cfg(feature = "async")]
+pub use async_random_access_read_session::AsyncRandomAccessReadSession;
+pub use random_access_read_session::RandomAccessReadSession;
+pub use opened_random_access_reader::OpenedRandomAccessReader;
+#[cfg(feature = "async")]
+pub use opened_async_random_access_reader::OpenedAsyncRandomAccessReader;
 pub use file_writer_spi::FileWriterSpi;
 #[cfg(feature = "async")]
 pub use opened_async_directory_stream::OpenedAsyncDirectoryStream;
