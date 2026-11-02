@@ -520,23 +520,76 @@ fn stream_copy_fallback<'a>(
                     target,
                 )
             })?;
-            writer.write_fully_async(&buffer[..read]).await.map_err(|error| {
-                filesystem.contextual_copy_failure(
-                    FsError::from_stream_io(error, FsOperation::Write, target),
-                    from_writer_state(writer.state()),
-                    fallback_failure_stats(writer.written_bytes()),
-                    source,
-                    target,
-                )
-            })?;
-            if deadline.expired() {
-                return Err(filesystem.contextual_copy_failure(
-                    budget_error(source, target, "copy deadline was exceeded"),
-                    from_writer_state(writer.state()),
-                    fallback_failure_stats(writer.written_bytes()),
-                    source,
-                    target,
-                ));
+            let mut offset = 0;
+            let mut ready_short_writes = 0;
+            while offset < read {
+                if deadline.expired() {
+                    return Err(filesystem.contextual_copy_failure(
+                        budget_error(source, target, "copy deadline was exceeded"),
+                        from_writer_state(writer.state()),
+                        fallback_failure_stats(writer.written_bytes()),
+                        source,
+                        target,
+                    ));
+                }
+                let remaining = read - offset;
+                let written = match writer.write_async(&buffer[offset..read]).await {
+                    Ok(written) => written,
+                    Err(error) => {
+                        return Err(filesystem.contextual_copy_failure(
+                            FsError::from_stream_io(error, FsOperation::Write, target),
+                            from_writer_state(writer.state()),
+                            fallback_failure_stats(writer.written_bytes()),
+                            source,
+                            target,
+                        ));
+                    }
+                };
+                if written == 0 {
+                    return Err(filesystem.contextual_copy_failure(
+                        FsError::from_stream_io(
+                            std::io::Error::new(
+                                std::io::ErrorKind::WriteZero,
+                                "failed to write the complete copy buffer",
+                            ),
+                            FsOperation::Write,
+                            target,
+                        ),
+                        from_writer_state(writer.state()),
+                        fallback_failure_stats(writer.written_bytes()),
+                        source,
+                        target,
+                    ));
+                }
+                offset += written;
+                if deadline.expired() {
+                    return Err(filesystem.contextual_copy_failure(
+                        budget_error(source, target, "copy deadline was exceeded"),
+                        from_writer_state(writer.state()),
+                        fallback_failure_stats(writer.written_bytes()),
+                        source,
+                        target,
+                    ));
+                }
+                if written < remaining {
+                    ready_short_writes += 1;
+                    if ready_short_writes == 64 && offset < read {
+                        let mut yielded = false;
+                        std::future::poll_fn(|cx| {
+                            if yielded {
+                                std::task::Poll::Ready(())
+                            } else {
+                                yielded = true;
+                                cx.waker().wake_by_ref();
+                                std::task::Poll::Pending
+                            }
+                        })
+                        .await;
+                        ready_short_writes = 0;
+                    }
+                } else {
+                    ready_short_writes = 0;
+                }
             }
             bytes = next_bytes;
         }
@@ -698,6 +751,9 @@ mod tests {
     use std::cell::Cell;
     use std::io::Result as IoResult;
     use std::pin::Pin;
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
     use std::task::Context;
     use std::task::Poll;
     use std::task::Waker;
@@ -771,6 +827,19 @@ mod tests {
         skip_open: bool,
         skip_commit: bool,
         abort_outcome: WriteAbortOutcome,
+        source_len: usize,
+        write_limit: usize,
+        write_pending_once: bool,
+        write_zero: bool,
+        write_error: bool,
+        calls: Arc<StageCalls>,
+    }
+    #[derive(Default)]
+    struct StageCalls {
+        writes: AtomicUsize,
+        flushes: AtomicUsize,
+        commits: AtomicUsize,
+        aborts: AtomicUsize,
     }
     impl StageSpi {
         fn info(&self, path: &Path) -> OpenedFileInfo {
@@ -812,7 +881,16 @@ mod tests {
         }
         fn open_reader<'a>(&'a self, request: OpenReaderRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
             let info = self.info(request.path());
-            Box::pin(async move { Ok(OpenedAsyncReader::new(info, Box::new(StageReader { read: false }))) })
+            let source_len = self.source_len;
+            Box::pin(async move {
+                Ok(OpenedAsyncReader::new(
+                    info,
+                    Box::new(StageReader {
+                        read: false,
+                        source_len,
+                    }),
+                ))
+            })
         }
         fn open_writer<'a>(&'a self, request: OpenWriterRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
             let info = self.info(request.path());
@@ -821,6 +899,11 @@ mod tests {
             let skip_open = self.skip_open;
             let skip_commit = self.skip_commit;
             let abort_outcome = self.abort_outcome;
+            let write_limit = self.write_limit;
+            let write_pending_once = self.write_pending_once;
+            let write_zero = self.write_zero;
+            let write_error = self.write_error;
+            let calls = self.calls.clone();
             if skip_open {
                 let mut yielded = false;
                 return Box::pin(std::future::poll_fn(move |_| {
@@ -845,6 +928,11 @@ mod tests {
                         skip_commit,
                         abort_outcome,
                         flush_pending: false,
+                        write_limit,
+                        write_pending_once,
+                        write_zero,
+                        write_error,
+                        calls,
                     }),
                 ))
             })
@@ -853,6 +941,7 @@ mod tests {
 
     struct StageReader {
         read: bool,
+        source_len: usize,
     }
     impl AsyncInput for StageReader {
         type Item = u8;
@@ -867,9 +956,11 @@ mod tests {
             if this.read || count == 0 {
                 return Poll::Ready(Ok(0));
             }
-            output[index] = b'x';
+            for offset in 0..count.min(this.source_len) {
+                output[index + offset] = b'x';
+            }
             this.read = true;
-            Poll::Ready(Ok(1))
+            Poll::Ready(Ok(count.min(this.source_len)))
         }
     }
     struct StageWriter {
@@ -878,20 +969,42 @@ mod tests {
         skip_commit: bool,
         abort_outcome: WriteAbortOutcome,
         flush_pending: bool,
+        write_limit: usize,
+        write_pending_once: bool,
+        write_zero: bool,
+        write_error: bool,
+        calls: Arc<StageCalls>,
     }
     impl AsyncOutput for StageWriter {
         type Item = u8;
         unsafe fn poll_write_unchecked(
             self: Pin<&mut Self>,
-            _: &mut Context<'_>,
+            cx: &mut Context<'_>,
             _: &[u8],
             _: usize,
             count: usize,
         ) -> Poll<IoResult<usize>> {
-            Poll::Ready(Ok(count))
+            let this = self.get_mut();
+            let attempts = this.calls.writes.fetch_add(1, Ordering::SeqCst);
+            if this.write_pending_once && attempts == 0 {
+                cx.waker().wake_by_ref();
+                return Poll::Pending;
+            }
+            if attempts == usize::from(this.write_pending_once) && this.write_limit == 1 && count > 1 {
+                advance_clock();
+            }
+            if this.write_zero {
+                return Poll::Ready(Ok(0));
+            }
+            if this.write_error {
+                advance_clock();
+                return Poll::Ready(Err(std::io::Error::other("provider write failed")));
+            }
+            Poll::Ready(Ok(count.min(this.write_limit.max(1))))
         }
         fn poll_flush(mut self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<IoResult<()>> {
             let this = self.as_mut().get_mut();
+            this.calls.flushes.fetch_add(1, Ordering::SeqCst);
             if matches!(this.suspend_at, SuspendAt::Flush) && !this.flush_pending {
                 this.flush_pending = true;
                 Poll::Pending
@@ -903,6 +1016,7 @@ mod tests {
     impl AsyncFileWriteSession for StageWriter {
         fn commit_async<'a>(mut self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
             let this = self.as_mut().get_mut();
+            this.calls.commits.fetch_add(1, Ordering::SeqCst);
             let fail = this.fail_commit;
             let skip = this.skip_commit;
             let suspend = matches!(this.suspend_at, SuspendAt::Commit) || skip;
@@ -932,7 +1046,9 @@ mod tests {
             }))
         }
         fn abort_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<WriteAbortOutcome>> {
-            let outcome = self.get_mut().abort_outcome;
+            let this = self.get_mut();
+            this.calls.aborts.fetch_add(1, Ordering::SeqCst);
+            let outcome = this.abort_outcome;
             Box::pin(async move {
                 advance_clock();
                 Ok(outcome)
@@ -940,13 +1056,55 @@ mod tests {
         }
     }
 
+    struct WriteTestConfig {
+        suspend_at: SuspendAt,
+        fail_commit: bool,
+        source_len: usize,
+        write_limit: usize,
+        write_pending_once: bool,
+        write_zero: bool,
+        write_error: bool,
+        with_deadline: bool,
+        calls: Arc<StageCalls>,
+    }
+    impl Default for WriteTestConfig {
+        fn default() -> Self {
+            Self {
+                suspend_at: SuspendAt::Commit,
+                fail_commit: false,
+                source_len: 1,
+                write_limit: 1,
+                write_pending_once: false,
+                write_zero: false,
+                write_error: false,
+                with_deadline: true,
+                calls: Arc::new(StageCalls::default()),
+            }
+        }
+    }
+
     fn operation(suspend_at: SuspendAt, fail_commit: bool) -> AsyncCopyOperation {
-        let file_system = crate::AsyncFileSystem::from_spi(StageSpi {
+        operation_with_writes(WriteTestConfig {
             suspend_at,
             fail_commit,
+            ..WriteTestConfig::default()
+        })
+    }
+
+    fn operation_with_writes(config: WriteTestConfig) -> AsyncCopyOperation {
+        let with_deadline = config.with_deadline;
+        let file_system = crate::AsyncFileSystem::from_spi(StageSpi {
+            suspend_at: config.suspend_at,
+            fail_commit: config.fail_commit,
             skip_open: false,
             skip_commit: false,
             abort_outcome: WriteAbortOutcome::NotPublished,
+            source_len: config.source_len,
+            write_limit: config.write_limit,
+            write_pending_once: config.write_pending_once,
+            write_zero: config.write_zero,
+            write_error: config.write_error,
+            calls: config.calls,
         })
         .expect("valid async filesystem");
         let start = Instant::now();
@@ -955,10 +1113,14 @@ mod tests {
             file_system,
             Path::parse("/source").expect("source"),
             Path::parse("/target").expect("target"),
-            CopyOptions::file().with_deadline(Some(Duration::from_secs(1))),
+            if with_deadline {
+                CopyOptions::file().with_deadline(Some(Duration::from_secs(1)))
+            } else {
+                CopyOptions::file()
+            },
             SymlinkPolicy::Reject,
         );
-        operation.deadline = CopyDeadline::new(Some(Duration::from_secs(1)), test_now);
+        operation.deadline = CopyDeadline::new(with_deadline.then_some(Duration::from_secs(1)), test_now);
         operation
     }
 
@@ -969,6 +1131,12 @@ mod tests {
             skip_open,
             skip_commit: !skip_open,
             abort_outcome,
+            source_len: 1,
+            write_limit: usize::MAX,
+            write_pending_once: false,
+            write_zero: false,
+            write_error: false,
+            calls: Arc::new(StageCalls::default()),
         })
         .expect("valid async filesystem");
         let start = Instant::now();
@@ -1115,5 +1283,158 @@ mod tests {
         drop(future);
         assert_eq!(1, outcome.stats().skipped);
         assert_eq!(AsyncCopyOperationState::Completed, operation.state());
+    }
+
+    #[test]
+    fn test_async_copy_deadline_after_first_short_write_stops_before_second_write() {
+        let calls = Arc::new(StageCalls::default());
+        let mut operation = operation_with_writes(WriteTestConfig {
+            source_len: 4,
+            calls: calls.clone(),
+            ..WriteTestConfig::default()
+        });
+        let mut future = Box::pin(operation.execute());
+        let mut context = Context::from_waker(Waker::noop());
+        let failure = match future.as_mut().poll(&mut context) {
+            Poll::Ready(Err(failure)) => failure,
+            _ => panic!("deadline after first short write must fail"),
+        };
+        drop(future);
+        assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
+        assert_eq!(1, failure.partial_stats().bytes);
+        assert_eq!(1, calls.writes.load(Ordering::SeqCst));
+        assert_eq!(0, calls.flushes.load(Ordering::SeqCst));
+        assert_eq!(0, calls.commits.load(Ordering::SeqCst));
+        assert_eq!(0, calls.aborts.load(Ordering::SeqCst));
+        assert_eq!(0, failure.partial_stats().files);
+        assert!(operation.has_recovery());
+    }
+
+    #[test]
+    fn test_async_copy_deadline_after_pending_then_short_write_stops_before_second_write() {
+        let calls = Arc::new(StageCalls::default());
+        let mut operation = operation_with_writes(WriteTestConfig {
+            source_len: 4,
+            write_pending_once: true,
+            calls: calls.clone(),
+            ..WriteTestConfig::default()
+        });
+        let mut future = Box::pin(operation.execute());
+        let mut context = Context::from_waker(Waker::noop());
+        assert!(future.as_mut().poll(&mut context).is_pending());
+        let failure = match future.as_mut().poll(&mut context) {
+            Poll::Ready(Err(failure)) => failure,
+            _ => panic!("deadline after pending write must fail"),
+        };
+        drop(future);
+        assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
+        assert_eq!(1, failure.partial_stats().bytes);
+        assert_eq!(2, calls.writes.load(Ordering::SeqCst));
+        assert_eq!(0, calls.flushes.load(Ordering::SeqCst));
+        assert_eq!(0, calls.commits.load(Ordering::SeqCst));
+        assert_eq!(0, calls.aborts.load(Ordering::SeqCst));
+        assert!(operation.has_recovery());
+    }
+
+    #[test]
+    fn test_async_copy_short_writes_without_deadline_complete() {
+        let calls = Arc::new(StageCalls::default());
+        let mut operation = operation_with_writes(WriteTestConfig {
+            source_len: 4,
+            with_deadline: false,
+            calls: calls.clone(),
+            ..WriteTestConfig::default()
+        });
+        let mut future = Box::pin(operation.execute());
+        let mut context = Context::from_waker(Waker::noop());
+        assert!(future.as_mut().poll(&mut context).is_pending());
+        let outcome = match future.as_mut().poll(&mut context) {
+            Poll::Ready(Ok(outcome)) => outcome,
+            _ => panic!("short writes should complete without a deadline"),
+        };
+        assert_eq!(4, outcome.stats().bytes);
+        assert_eq!(4, calls.writes.load(Ordering::SeqCst));
+        assert_eq!(1, calls.flushes.load(Ordering::SeqCst));
+        assert_eq!(1, calls.commits.load(Ordering::SeqCst));
+        assert_eq!(0, calls.aborts.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn test_async_copy_zero_progress_preserves_write_zero_error() {
+        let calls = Arc::new(StageCalls::default());
+        let mut operation = operation_with_writes(WriteTestConfig {
+            source_len: 4,
+            write_zero: true,
+            with_deadline: false,
+            calls: calls.clone(),
+            ..WriteTestConfig::default()
+        });
+        let mut future = Box::pin(operation.execute());
+        let mut context = Context::from_waker(Waker::noop());
+        let failure = match future.as_mut().poll(&mut context) {
+            Poll::Ready(Err(failure)) => failure,
+            _ => panic!("zero progress must fail"),
+        };
+        drop(future);
+        let source = std::error::Error::source(failure.error()).expect("stream error source");
+        assert_eq!(
+            Some(std::io::ErrorKind::WriteZero),
+            source.downcast_ref::<std::io::Error>().map(std::io::Error::kind),
+        );
+        assert_eq!(0, failure.partial_stats().bytes);
+        assert_eq!(1, calls.writes.load(Ordering::SeqCst));
+        assert_eq!(0, calls.flushes.load(Ordering::SeqCst));
+        assert_eq!(0, calls.commits.load(Ordering::SeqCst));
+        assert_eq!(0, calls.aborts.load(Ordering::SeqCst));
+        assert!(operation.has_recovery());
+    }
+
+    #[test]
+    fn test_async_copy_provider_write_error_wins_when_deadline_expires() {
+        let calls = Arc::new(StageCalls::default());
+        let mut operation = operation_with_writes(WriteTestConfig {
+            source_len: 4,
+            write_error: true,
+            calls: calls.clone(),
+            ..WriteTestConfig::default()
+        });
+        let mut future = Box::pin(operation.execute());
+        let mut context = Context::from_waker(Waker::noop());
+        let failure = match future.as_mut().poll(&mut context) {
+            Poll::Ready(Err(failure)) => failure,
+            _ => panic!("provider write error must win"),
+        };
+        assert_eq!(FsErrorKind::Io, failure.error().kind());
+        assert_eq!(0, failure.partial_stats().bytes);
+        assert_eq!(1, calls.writes.load(Ordering::SeqCst));
+        assert_eq!(0, calls.flushes.load(Ordering::SeqCst));
+        assert_eq!(0, calls.commits.load(Ordering::SeqCst));
+        assert_eq!(0, calls.aborts.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn test_async_copy_ready_short_writes_yield_after_sixty_four_calls() {
+        let calls = Arc::new(StageCalls::default());
+        let mut operation = operation_with_writes(WriteTestConfig {
+            source_len: 65,
+            with_deadline: false,
+            calls: calls.clone(),
+            ..WriteTestConfig::default()
+        });
+        let mut future = Box::pin(operation.execute());
+        let mut context = Context::from_waker(Waker::noop());
+        assert!(future.as_mut().poll(&mut context).is_pending());
+        assert_eq!(64, calls.writes.load(Ordering::SeqCst));
+        loop {
+            match future.as_mut().poll(&mut context) {
+                Poll::Pending => continue,
+                Poll::Ready(Ok(outcome)) => {
+                    assert_eq!(65, outcome.stats().bytes);
+                    break;
+                }
+                Poll::Ready(Err(failure)) => panic!("copy failed: {}", failure.error()),
+            }
+        }
+        assert_eq!(65, calls.writes.load(Ordering::SeqCst));
     }
 }
