@@ -25,6 +25,7 @@ use crate::facade::internal::FileSystemResource;
 use crate::metadata::FileSystemCapability;
 use crate::metadata::FileSystemProperties;
 use crate::path::Path;
+use crate::path::PathSemantics;
 use crate::spi::ProviderOperation;
 use crate::spi::ProviderOperations;
 use crate::spi::ProviderProperties;
@@ -84,6 +85,35 @@ impl FacadeCore {
     /// does not satisfy the cached filesystem rules.
     pub(crate) fn validate_temp_parent(&self, parent: Option<&Path>) -> FsResult<()> {
         parent.map_or(Ok(()), |path| self.validate_path(path, FsOperation::CreateTemp))
+    }
+
+    /// Validates a temporary resource's logical location under an explicit
+    /// parent when the provider's path semantics define that relationship.
+    pub(crate) fn validate_temp_location(&self, requested_parent: Option<&Path>, returned_path: &Path) -> FsResult<()> {
+        let Some(parent) = requested_parent else {
+            return Ok(());
+        };
+        let valid = match self.properties.info().path_semantics() {
+            PathSemantics::Hierarchical => {
+                parent.is_absolute() == returned_path.is_absolute()
+                    && parent
+                        .components()
+                        .zip(returned_path.components())
+                        .all(|(parent_component, returned_component)| parent_component == returned_component)
+                    && returned_path.components().count() > parent.components().count()
+            }
+            PathSemantics::ObjectKey => returned_path.as_str().starts_with(parent.as_str()),
+            PathSemantics::ProviderSpecific => true,
+        };
+        if valid {
+            Ok(())
+        } else {
+            Err(self.contract_error(
+                parent,
+                FsOperation::ValidateProviderOutcome,
+                "provider returned a temporary resource outside the requested parent location",
+            ))
+        }
     }
 
     /// Validates a writer path, options, and required write capability.

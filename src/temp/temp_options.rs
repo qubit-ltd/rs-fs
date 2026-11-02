@@ -44,7 +44,7 @@ impl TempOptions {
         }
     }
 
-    /// Returns the optional parent directory or prefix.
+    /// Returns the requested temporary-resource location, if any.
     #[inline]
     pub const fn parent(&self) -> Option<&Path> {
         self.parent.as_ref()
@@ -71,7 +71,12 @@ impl TempOptions {
         self.create_parent
     }
 
-    /// Replaces the optional parent directory or prefix.
+    /// Replaces the requested temporary-resource location.
+    ///
+    /// When set, the facade requires hierarchical temporary paths to be strict
+    /// descendants of this path and object-key paths to retain its raw prefix.
+    /// Provider-specific path semantics remain provider-defined. When `None`,
+    /// the provider selects the location.
     #[inline]
     #[must_use]
     pub fn with_parent(mut self, parent: Option<Path>) -> Self {
