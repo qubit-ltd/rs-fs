@@ -694,8 +694,18 @@ impl FileSystem {
         target: &Path,
         options: &PersistOptions,
     ) -> FsResult<()> {
-        self.validate_path(source, FsOperation::PersistTemp)?;
-        self.validate_path(target, FsOperation::PersistTemp)?;
+        self.validate_path(source, FsOperation::PersistTemp).map_err(|error| {
+            self.enrich(error, source, FsOperation::PersistTemp)
+                .with_failure_path(source.clone())
+                .with_path(source.clone())
+                .with_target(target.clone())
+        })?;
+        self.validate_path(target, FsOperation::PersistTemp).map_err(|error| {
+            self.enrich(error, source, FsOperation::PersistTemp)
+                .with_failure_target(target.clone())
+                .with_path(source.clone())
+                .with_target(target.clone())
+        })?;
         options
             .validate_against(self.properties().capabilities())
             .map_err(|error| {

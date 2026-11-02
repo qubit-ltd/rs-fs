@@ -465,6 +465,55 @@ fn test_unpublished_failure_has_no_publication_target() {
     assert_eq!(None, retry.publication_target());
 }
 
+#[test]
+fn test_sync_preflight_temp_persist_rejects_relative_targets_with_context() {
+    let target = Path::parse("relative").expect("relative target");
+    let (filesystem, _, persist_calls) =
+        handle_support::implementation_tests::temp_failure_filesystem(PersistFailureState::NotPublished);
+    let original_message = filesystem
+        .properties()
+        .validate_path(&target, FsOperation::PersistTemp)
+        .expect_err("relative target validation")
+        .to_string();
+    let mut file = filesystem.create_temp_file(TempOptions::default()).expect("file");
+    let failure = file
+        .persist(&target, PersistOptions::default())
+        .expect_err("relative target must be rejected before provider persist");
+    assert_persist_target_context(failure.error(), &target, &original_message);
+    assert_eq!(0, *persist_calls.lock().expect("persist calls"));
+    file.cleanup().expect("owned temporary file remains cleanable");
+
+    let (filesystem, _, persist_calls) =
+        handle_support::implementation_tests::temp_failure_filesystem(PersistFailureState::NotPublished);
+    let original_message = filesystem
+        .properties()
+        .validate_path(&target, FsOperation::PersistTemp)
+        .expect_err("relative target validation")
+        .to_string();
+    let mut directory = filesystem
+        .create_temp_directory(TempOptions::default())
+        .expect("directory");
+    let failure = directory
+        .persist(&target, PersistOptions::default())
+        .expect_err("relative target must be rejected before provider persist");
+    assert_persist_target_context(failure.error(), &target, &original_message);
+    assert_eq!(0, *persist_calls.lock().expect("persist calls"));
+    directory
+        .cleanup()
+        .expect("owned temporary directory remains cleanable");
+}
+
+fn assert_persist_target_context(error: &FsError, target: &Path, original_message: &str) {
+    assert_eq!(Some(&Path::parse("/temporary").expect("source")), error.path());
+    assert_eq!(Some(target), error.target());
+    assert_eq!(Some(target), error.failure_target());
+    assert_eq!(None, error.failure_path());
+    assert_eq!(FsOperation::PersistTemp, error.operation());
+    assert_eq!(FsErrorKind::InvalidPath, error.kind());
+    assert_eq!(Some("handles-test"), error.provider());
+    assert_eq!(original_message, error.to_string());
+}
+
 /// Source uncertainty cannot regain mutation authority through invalid retries.
 #[test]
 fn test_temp_file_source_failure_states_are_sticky() {

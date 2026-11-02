@@ -820,6 +820,44 @@ fn test_async_facade_preflight_rejects_invalid_paths_options_and_capabilities() 
     assert!(ready(temporary.persist(&relative, PersistOptions::default())).is_err());
 }
 
+#[test]
+fn test_async_preflight_temp_persist_rejects_relative_targets_with_context() {
+    let target = path("relative");
+    for directory in [false, true] {
+        let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig::default());
+        let original_message = file_system
+            .properties()
+            .validate_path(&target, FsOperation::PersistTemp)
+            .expect_err("relative target validation")
+            .to_string();
+        let failure = if directory {
+            let mut temporary = ready(file_system.create_temp_directory(TempOptions::default()))
+                .expect("temporary directory should be created");
+            let failure = ready(temporary.persist(&target, PersistOptions::default()))
+                .expect_err("relative target must be rejected before provider persist");
+            ready(temporary.cleanup()).expect("owned temporary directory remains cleanable");
+            failure
+        } else {
+            let mut temporary =
+                ready(file_system.create_temp_file(TempOptions::default())).expect("temporary file should be created");
+            let failure = ready(temporary.persist(&target, PersistOptions::default()))
+                .expect_err("relative target must be rejected before provider persist");
+            ready(temporary.cleanup()).expect("owned temporary file remains cleanable");
+            failure
+        };
+        let error = failure.error();
+        assert_eq!(Some(&path("/tmp/recording")), error.path());
+        assert_eq!(Some(&target), error.target());
+        assert_eq!(Some(&target), error.failure_target());
+        assert_eq!(None, error.failure_path());
+        assert_eq!(FsOperation::PersistTemp, error.operation());
+        assert_eq!(FsErrorKind::InvalidPath, error.kind());
+        assert_eq!(Some("async-recording"), error.provider());
+        assert_eq!(original_message, error.to_string());
+        assert!(!probe.calls().contains(&"persist"));
+    }
+}
+
 /// Covers a completed native-copy outcome that satisfies the requested policy.
 #[test]
 fn test_async_facade_returns_valid_completed_copy_outcome() {
