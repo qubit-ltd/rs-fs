@@ -77,6 +77,8 @@ use qubit_fs::temp::TempResourceState;
 struct ResidualProbe {
     kind: FileKind,
     cleanup_calls: Arc<AtomicUsize>,
+    keep_calls: Arc<AtomicUsize>,
+    persist_calls: Arc<AtomicUsize>,
 }
 
 impl ResidualProbe {
@@ -97,10 +99,12 @@ impl ResidualProbe {
 
 impl TempResourceSpi for ResidualProbe {
     fn persist(&mut self, request: PersistRequest<'_>) -> Result<PersistOutcome, SpiPersistFailure> {
+        self.persist_calls.fetch_add(1, Ordering::SeqCst);
         Ok(self.outcome(request.target()))
     }
 
     fn keep(&mut self) -> Result<PersistOutcome, SpiPersistFailure> {
+        self.keep_calls.fetch_add(1, Ordering::SeqCst);
         let target = self.keep_target();
         Ok(self.outcome(&target))
     }
@@ -123,6 +127,7 @@ impl AsyncTempResourceSpi for ResidualProbe {
     fn keep<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<PersistOutcome, SpiPersistFailure>> {
         Box::pin(async move {
             let this = self.get_mut();
+            this.keep_calls.fetch_add(1, Ordering::SeqCst);
             let target = this.keep_target();
             Ok(this.outcome(&target))
         })
@@ -132,7 +137,11 @@ impl AsyncTempResourceSpi for ResidualProbe {
         self: Pin<&'a mut Self>,
         request: PersistRequest<'a>,
     ) -> SpiFuture<'a, Result<PersistOutcome, SpiPersistFailure>> {
-        Box::pin(async move { Ok(self.get_mut().outcome(request.target())) })
+        Box::pin(async move {
+            let this = self.get_mut();
+            this.persist_calls.fetch_add(1, Ordering::SeqCst);
+            Ok(this.outcome(request.target()))
+        })
     }
 }
 
@@ -163,6 +172,8 @@ fn residual_properties() -> ProviderProperties {
 struct ResidualProvider {
     properties: ProviderProperties,
     cleanup_calls: Arc<AtomicUsize>,
+    keep_calls: Arc<AtomicUsize>,
+    persist_calls: Arc<AtomicUsize>,
 }
 
 impl ResidualProvider {
@@ -183,6 +194,8 @@ impl ResidualProvider {
         Box::new(ResidualProbe {
             kind,
             cleanup_calls: Arc::clone(&self.cleanup_calls),
+            keep_calls: Arc::clone(&self.keep_calls),
+            persist_calls: Arc::clone(&self.persist_calls),
         })
     }
 }
@@ -272,9 +285,13 @@ fn test_sync_temp_handles_preserve_residual_persist_and_keep_outcomes() {
     for kind in [FileKind::File, FileKind::Directory] {
         for persist in [true, false] {
             let cleanup_calls = Arc::new(AtomicUsize::new(0));
+            let keep_calls = Arc::new(AtomicUsize::new(0));
+            let persist_calls = Arc::new(AtomicUsize::new(0));
             let provider = ResidualProvider {
                 properties: residual_properties(),
                 cleanup_calls: Arc::clone(&cleanup_calls),
+                keep_calls: Arc::clone(&keep_calls),
+                persist_calls: Arc::clone(&persist_calls),
             };
             let filesystem = FileSystem::from_spi(provider).expect("filesystem");
             let requested_target = Path::parse("/published").expect("target");
@@ -361,9 +378,13 @@ fn test_async_temp_handles_preserve_residual_persist_and_keep_outcomes() {
     for kind in [FileKind::File, FileKind::Directory] {
         for persist in [true, false] {
             let cleanup_calls = Arc::new(AtomicUsize::new(0));
+            let keep_calls = Arc::new(AtomicUsize::new(0));
+            let persist_calls = Arc::new(AtomicUsize::new(0));
             let provider = ResidualProvider {
                 properties: residual_properties(),
                 cleanup_calls: Arc::clone(&cleanup_calls),
+                keep_calls: Arc::clone(&keep_calls),
+                persist_calls: Arc::clone(&persist_calls),
             };
             let filesystem = AsyncFileSystem::from_spi(provider).expect("filesystem");
             let requested_target = Path::parse("/published").expect("target");
@@ -436,6 +457,64 @@ fn test_async_temp_handles_preserve_residual_persist_and_keep_outcomes() {
             assert_eq!(0, cleanup_calls.load(Ordering::SeqCst));
         }
     }
+}
+
+#[test]
+#[cfg(feature = "async")]
+fn test_async_temp_invalid_state_context_preserves_current_and_published_targets() {
+    let cleanup_calls = Arc::new(AtomicUsize::new(0));
+    let keep_calls = Arc::new(AtomicUsize::new(0));
+    let persist_calls = Arc::new(AtomicUsize::new(0));
+    let provider = ResidualProvider {
+        properties: residual_properties(),
+        cleanup_calls: Arc::clone(&cleanup_calls),
+        keep_calls: Arc::clone(&keep_calls),
+        persist_calls: Arc::clone(&persist_calls),
+    };
+    let filesystem = AsyncFileSystem::from_spi(provider).expect("filesystem");
+    let published_target = Path::parse("/published-a").expect("published target");
+    let retry_target = Path::parse("/retry-b").expect("retry target");
+
+    let mut file = poll_ready(filesystem.create_temp_file(TempOptions::default())).expect("temp file");
+    poll_ready(file.persist(&published_target, PersistOptions::default())).expect("publish file A");
+    let file_failure = poll_ready(file.persist(&retry_target, PersistOptions::default())).expect_err("reject file B");
+    assert_eq!(FsErrorKind::InvalidState, file_failure.error().kind());
+    assert_eq!(Some("residual-probe"), file_failure.error().provider());
+    assert_eq!(Some(&retry_target), file_failure.error().target());
+    assert_eq!(FsOperation::PersistTemp, file_failure.error().operation());
+    assert_eq!(Some(&published_target), file_failure.publication_target());
+    let file_keep = poll_ready(file.keep()).expect_err("reject keep after publish");
+    assert_eq!(Some("residual-probe"), file_keep.error().provider());
+    assert_eq!(None, file_keep.error().target());
+    assert_eq!(FsOperation::KeepTemp, file_keep.error().operation());
+    let file_cleanup = poll_ready(file.cleanup()).expect_err("reject cleanup after publish");
+    assert_eq!(Some("residual-probe"), file_cleanup.provider());
+    assert_eq!(None, file_cleanup.target());
+    assert_eq!(FsOperation::CleanupTemp, file_cleanup.operation());
+    assert_eq!(1, persist_calls.load(Ordering::SeqCst));
+    assert_eq!(0, cleanup_calls.load(Ordering::SeqCst));
+    assert_eq!(0, keep_calls.load(Ordering::SeqCst));
+
+    let mut directory = poll_ready(filesystem.create_temp_directory(TempOptions::default())).expect("temp dir");
+    poll_ready(directory.persist(&published_target, PersistOptions::default())).expect("publish directory A");
+    let directory_failure =
+        poll_ready(directory.persist(&retry_target, PersistOptions::default())).expect_err("reject directory B");
+    assert_eq!(FsErrorKind::InvalidState, directory_failure.error().kind());
+    assert_eq!(Some("residual-probe"), directory_failure.error().provider());
+    assert_eq!(Some(&retry_target), directory_failure.error().target());
+    assert_eq!(FsOperation::PersistTemp, directory_failure.error().operation());
+    assert_eq!(Some(&published_target), directory_failure.publication_target());
+    let directory_keep = poll_ready(directory.keep()).expect_err("reject keep after publish");
+    assert_eq!(Some("residual-probe"), directory_keep.error().provider());
+    assert_eq!(None, directory_keep.error().target());
+    assert_eq!(FsOperation::KeepTemp, directory_keep.error().operation());
+    let directory_cleanup = poll_ready(directory.cleanup()).expect_err("reject cleanup after publish");
+    assert_eq!(Some("residual-probe"), directory_cleanup.provider());
+    assert_eq!(None, directory_cleanup.target());
+    assert_eq!(FsOperation::CleanupTemp, directory_cleanup.operation());
+    assert_eq!(2, persist_calls.load(Ordering::SeqCst));
+    assert_eq!(0, cleanup_calls.load(Ordering::SeqCst));
+    assert_eq!(0, keep_calls.load(Ordering::SeqCst));
 }
 
 #[test]
@@ -516,7 +595,7 @@ fn assert_persist_target_context(error: &FsError, target: &Path, original_messag
 
 /// Source uncertainty cannot regain mutation authority through invalid retries.
 #[test]
-fn test_temp_file_source_failure_states_are_sticky() {
+fn test_temp_file_source_failure_states_are_sticky_with_invalid_state_context() {
     for (state, expected, published) in [
         (
             PersistFailureState::NotPublishedSourceIndeterminate,
@@ -544,20 +623,26 @@ fn test_temp_file_source_failure_states_are_sticky() {
         assert_eq!(state, failure.state());
         assert_eq!(expected, temporary.state());
         assert_eq!(published.then_some(&target), failure.publication_target());
+        let retry_target = Path::parse("relative").expect("relative");
         let retry = temporary
-            .persist(&Path::parse("relative").expect("relative"), PersistOptions::default())
+            .persist(&retry_target, PersistOptions::default())
             .expect_err("not owned");
         assert_eq!(FsErrorKind::InvalidState, retry.error().kind());
         assert_eq!(state, retry.state());
+        assert_eq!(Some("handles-test"), retry.error().provider());
+        assert_eq!(Some(&retry_target), retry.error().target());
+        assert_eq!(FsOperation::PersistTemp, retry.error().operation());
         assert_eq!(published.then_some(&target), retry.publication_target());
         let keep = temporary.keep().expect_err("not owned");
         assert_eq!(state, keep.state());
+        assert_eq!(Some("handles-test"), keep.error().provider());
+        assert_eq!(None, keep.error().target());
         assert_eq!(published.then_some(&target), keep.publication_target());
         if expected == TempResourceState::Indeterminate {
-            assert_eq!(
-                FsErrorKind::InvalidState,
-                temporary.cleanup().expect_err("uncertain source").kind()
-            );
+            let cleanup = temporary.cleanup().expect_err("uncertain source");
+            assert_eq!(FsErrorKind::InvalidState, cleanup.kind());
+            assert_eq!(Some("handles-test"), cleanup.provider());
+            assert_eq!(None, cleanup.target());
             assert_eq!(expected, temporary.state());
         } else {
             temporary.cleanup().expect("remaining sandbox cleanup");
@@ -576,7 +661,7 @@ fn test_temp_file_source_failure_states_are_sticky() {
 
 /// Source uncertainty cannot regain mutation authority through invalid retries.
 #[test]
-fn test_temp_directory_source_failure_states_are_sticky() {
+fn test_temp_directory_source_failure_states_are_sticky_with_invalid_state_context() {
     for (state, expected, published) in [
         (
             PersistFailureState::NotPublishedSourceIndeterminate,
@@ -606,20 +691,26 @@ fn test_temp_directory_source_failure_states_are_sticky() {
         assert_eq!(state, failure.state());
         assert_eq!(expected, temporary.state());
         assert_eq!(published.then_some(&target), failure.publication_target());
+        let retry_target = Path::parse("relative").expect("relative");
         let retry = temporary
-            .persist(&Path::parse("relative").expect("relative"), PersistOptions::default())
+            .persist(&retry_target, PersistOptions::default())
             .expect_err("not owned");
         assert_eq!(FsErrorKind::InvalidState, retry.error().kind());
         assert_eq!(state, retry.state());
+        assert_eq!(Some("handles-test"), retry.error().provider());
+        assert_eq!(Some(&retry_target), retry.error().target());
+        assert_eq!(FsOperation::PersistTemp, retry.error().operation());
         assert_eq!(published.then_some(&target), retry.publication_target());
         let keep = temporary.keep().expect_err("not owned");
         assert_eq!(state, keep.state());
+        assert_eq!(Some("handles-test"), keep.error().provider());
+        assert_eq!(None, keep.error().target());
         assert_eq!(published.then_some(&target), keep.publication_target());
         if expected == TempResourceState::Indeterminate {
-            assert_eq!(
-                FsErrorKind::InvalidState,
-                temporary.cleanup().expect_err("uncertain source").kind()
-            );
+            let cleanup = temporary.cleanup().expect_err("uncertain source");
+            assert_eq!(FsErrorKind::InvalidState, cleanup.kind());
+            assert_eq!(Some("handles-test"), cleanup.provider());
+            assert_eq!(None, cleanup.target());
             assert_eq!(expected, temporary.state());
         } else {
             temporary.cleanup().expect("remaining sandbox cleanup");

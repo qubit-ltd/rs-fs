@@ -107,7 +107,7 @@ impl TempFile {
     pub fn persist(&mut self, target: &Path, options: PersistOptions) -> Result<PersistOutcome, PersistFailure> {
         if self.lifecycle.state() != TempResourceState::Owned {
             return Err(PersistFailure::new(
-                self.invalid_state(FsOperation::PersistTemp),
+                self.invalid_state(FsOperation::PersistTemp).with_target(target.clone()),
                 self.lifecycle.failure_state(),
             )
             .with_publication_target(self.lifecycle.publication_target()));
@@ -262,6 +262,7 @@ impl TempFile {
             "temporary file cannot perform this lifecycle operation",
         )
         .with_path(self.path.clone())
+        .with_provider(self.filesystem.properties().info().provider_id())
     }
 }
 

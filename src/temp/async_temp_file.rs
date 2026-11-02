@@ -209,7 +209,9 @@ impl AsyncTempFile {
         options: PersistOptions,
     ) -> SpiFuture<'a, Result<PersistOutcome, PersistFailure>> {
         if self.lifecycle.state() != TempResourceState::Owned {
-            let error = self.invalid_state(FsOperation::PersistTemp, "cannot be persisted now");
+            let error = self
+                .invalid_state(FsOperation::PersistTemp, "cannot be persisted now")
+                .with_target(target.clone());
             return Box::pin(async move {
                 Err(PersistFailure::new(error, self.lifecycle.failure_state())
                     .with_publication_target(self.lifecycle.publication_target()))
@@ -345,10 +347,13 @@ impl AsyncTempFile {
     /// - `action`: Stable action text describing the rejected operation.
     ///
     /// # Returns
-    /// A contextual invalid-state error containing the temporary path.
+    /// A contextual invalid-state error containing the temporary path and
+    /// provider.
     fn invalid_state(&self, operation: FsOperation, action: &str) -> FsError {
         let message = format!("{} {}", self.resource_name, action);
-        FsError::new(FsErrorKind::InvalidState, operation, &message).with_path(self.path.clone())
+        FsError::new(FsErrorKind::InvalidState, operation, &message)
+            .with_path(self.path.clone())
+            .with_provider(self.file_system.properties().info().provider_id())
     }
 
     /// Adds only missing facade facts to a provider persistence error.
