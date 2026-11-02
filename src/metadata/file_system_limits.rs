@@ -78,6 +78,9 @@ impl FileSystemLimits {
     }
 
     /// Returns a copy with the write-session byte limit replaced by `limit`.
+    ///
+    /// A finite maximum of zero is valid and permits only empty write
+    /// sessions when the limits are used to construct filesystem properties.
     #[inline]
     #[must_use]
     pub const fn with_max_write_bytes(mut self, limit: FileSystemLimit) -> Self {
@@ -117,6 +120,8 @@ impl FileSystemLimits {
     }
 
     /// Returns the maximum total byte count accepted by one write session.
+    ///
+    /// A finite maximum of zero permits only empty write sessions.
     #[inline]
     #[must_use]
     pub const fn max_write_bytes(&self) -> FileSystemLimit {

@@ -43,12 +43,42 @@ fn test_properties(path_semantics: PathSemantics) -> FileSystemProperties {
 /// construction.
 #[test]
 fn test_file_system_properties_rejects_invalid_limit_value() {
+    let invalid_limits = [
+        FileSystemLimits::unknown().with_max_path_text_bytes(FileSystemLimit::Maximum(0)),
+        FileSystemLimits::unknown().with_max_component_text_bytes(FileSystemLimit::Maximum(0)),
+        FileSystemLimits::unknown().with_max_read_range_bytes(FileSystemLimit::Maximum(0)),
+        FileSystemLimits::unknown().with_max_list_page_entries(FileSystemLimit::Maximum(0)),
+    ];
+
+    for limits in invalid_limits {
+        let info = FileSystemInfo::new(
+            FileSystemId::new("test-fs").expect("id should parse"),
+            "test-provider",
+            PathSemantics::Hierarchical,
+        );
+        assert!(
+            FileSystemProperties::new(
+                info,
+                FileSystemCapabilities::new(),
+                limits,
+                PathConstraints::either(),
+                SymlinkPolicy::Reject,
+            )
+            .is_err()
+        );
+    }
+}
+
+/// Verifies a zero-byte write limit accepts a property snapshot.
+#[test]
+fn test_file_system_properties_accepts_zero_write_limit() {
     let info = FileSystemInfo::new(
         FileSystemId::new("test-fs").expect("id should parse"),
         "test-provider",
         PathSemantics::Hierarchical,
     );
-    let limits = FileSystemLimits::unknown().with_max_path_text_bytes(FileSystemLimit::Maximum(0));
+    let limits = FileSystemLimits::unknown().with_max_write_bytes(FileSystemLimit::Maximum(0));
+
     assert!(
         FileSystemProperties::new(
             info,
@@ -57,7 +87,7 @@ fn test_file_system_properties_rejects_invalid_limit_value() {
             PathConstraints::either(),
             SymlinkPolicy::Reject,
         )
-        .is_err()
+        .is_ok()
     );
 }
 

@@ -84,7 +84,9 @@ impl FileSystemProperties {
     /// # Errors
     /// Returns an invalid-options error when the provider identity is invalid,
     /// advertised capabilities violate dependencies, or path configuration is
-    /// internally inconsistent.
+    /// internally inconsistent. Finite path-text, component-text, range-read,
+    /// and list-page limits must be positive. A zero write-session limit is
+    /// valid and permits only empty write sessions.
     #[inline]
     pub fn new(
         info: FileSystemInfo,
@@ -242,14 +244,13 @@ impl FileSystemProperties {
             self.limits.max_path_text_bytes(),
             self.limits.max_component_text_bytes(),
             self.limits.max_read_range_bytes(),
-            self.limits.max_write_bytes(),
             self.limits.max_list_page_entries(),
         ]
         .into_iter()
         .any(|limit| matches!(limit, crate::metadata::FileSystemLimit::Maximum(0)))
         {
             return Err(invalid_properties(
-                "finite filesystem limits must have a positive value",
+                "finite path, component, range-read, and list-page limits must have a positive value",
             ));
         }
         if self.info.path_semantics() != PathSemantics::Hierarchical
