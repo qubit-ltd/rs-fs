@@ -16,10 +16,20 @@ use std::fmt::{Debug, Formatter, Result as FmtResult};
 /// fn sample(filesystem: &FileSystem, path: &Path) -> FsResult<Vec<u8>> {
 ///     let mut reader: RandomAccessReader = filesystem.open_random_access_reader(path, ReadOptions::default())?;
 ///     let mut bytes = [0; 16];
-///     let count = reader.read_at(0, &mut bytes)?;
-///     Ok(bytes[..count].to_vec())
+///     let mut filled = 0;
+///     while filled < bytes.len() {
+///         match reader.read_at(filled as u64, &mut bytes[filled..])? {
+///             0 => break, // EOF; a short read is not an error.
+///             count => filled += count,
+///         }
+///     }
+///     Ok(bytes[..filled].to_vec())
 /// }
 /// ```
+///
+/// If `read_at` returns `Err`, the output may already contain partial bytes;
+/// discard the incomplete sample. The open-time length is not a content
+/// snapshot.
 pub struct RandomAccessReader {
     info: OpenedFileInfo,
     len: u64,
@@ -56,6 +66,21 @@ impl RandomAccessReader {
         self.len == 0
     }
     /// Reads into caller storage at an explicit offset. Requests past `len` are clipped.
+    ///
+    /// # Parameters
+    /// - `offset`: Byte offset from the beginning of the opened object.
+    /// - `output`: Caller-owned destination buffer.
+    ///
+    /// # Returns
+    /// The number of bytes initialized, possibly less than `output.len()`;
+    /// zero means this request observed EOF.
+    ///
+    /// # Errors
+    /// Returns `InvalidOptions` for an overflowing offset range,
+    /// `ResourceLimitExceeded` when the clipped request exceeds the provider
+    /// limit, a provider read error with path/provider/source context, or
+    /// `ProviderContractViolation` if the provider over-reports bytes. On an
+    /// error, the buffer may contain partial bytes and should be discarded.
     pub fn read_at(&mut self, offset: u64, output: &mut [u8]) -> FsResult<usize> {
         let count =
             RandomAccessReadPolicy::validate_read(offset, output.len(), self.len, self.limit)

@@ -231,19 +231,60 @@ impl AsyncFileSystem {
 
     /// Opens a complete file for explicit-offset reads on one opened object.
     /// The observed length is an upper bound, not a content snapshot.
-    pub async fn open_random_access_reader(&self, path: &Path, options: ReadOptions) -> FsResult<AsyncRandomAccessReader> {
+    ///
+    /// # Parameters
+    /// - `path`: Logical file path to open.
+    /// - `options`: Read options. Only no offset or offset zero, no length,
+    ///   and no checksum validation are accepted; version conditions are kept.
+    ///
+    /// # Returns
+    /// A handle whose reads use the object opened by the provider.
+    ///
+    /// # Errors
+    /// Returns path/option errors, missing read or operation errors, the
+    /// provider open error, or a provider-contract error for mismatched
+    /// identity, missing metadata, non-file kind, or unknown length.
+    pub async fn open_random_access_reader(
+        &self,
+        path: &Path,
+        options: ReadOptions,
+    ) -> FsResult<AsyncRandomAccessReader> {
         self.validate_path(path, FsOperation::OpenReader)?;
-        RandomAccessReadPolicy::validate_open(&options).map_err(|e| self.enrich(e, path, FsOperation::OpenReader))?;
-        options.validate_against(self.properties().capabilities()).map_err(|e| self.enrich(e, path, FsOperation::OpenReader))?;
+        RandomAccessReadPolicy::validate_open(&options)
+            .map_err(|e| self.enrich(e, path, FsOperation::OpenReader))?;
+        RandomAccessReadPolicy::validate_capabilities(&options, self.properties().capabilities())
+            .map_err(|e| self.enrich(e, path, FsOperation::OpenReader))?;
         self.require(FileSystemCapability::Read, FsOperation::OpenReader, path)?;
         if !self.core.provider_supports(ProviderOperation::OpenRandomAccessReader) {
-            return Err(self.enrich(FsError::new(FsErrorKind::UnsupportedOperation, FsOperation::OpenReader, "provider does not implement random-access sessions"), path, FsOperation::OpenReader));
+            return Err(self.enrich(
+                FsError::new(
+                    FsErrorKind::UnsupportedOperation,
+                    FsOperation::OpenReader,
+                    "provider does not implement random-access sessions",
+                ),
+                path,
+                FsOperation::OpenReader,
+            ));
         }
-        let opened = self.spi.open_random_access_reader(OpenReaderRequest::new(path, ResolvedReadOptions::new(options))).await.map_err(|e| self.enrich(e, path, FsOperation::OpenReader))?;
+        let opened = self
+            .spi
+            .open_random_access_reader(OpenReaderRequest::new(
+                path,
+                ResolvedReadOptions::new(options),
+            ))
+            .await
+            .map_err(|e| self.enrich(e, path, FsOperation::OpenReader))?;
         let (info, session) = opened.into_parts();
         self.validate_opened_info(&info, path)?;
-        let len = RandomAccessReadPolicy::opened_len(info.metadata()).map_err(|e| self.enrich(e, path, FsOperation::OpenReader))?;
-        Ok(AsyncRandomAccessReader::new(info, len, self.properties().limits().max_read_range_bytes(), self.properties().info().provider_id().to_owned(), session))
+        let len = RandomAccessReadPolicy::opened_len(info.metadata())
+            .map_err(|e| self.enrich(e, path, FsOperation::OpenReader))?;
+        Ok(AsyncRandomAccessReader::new(
+            info,
+            len,
+            self.properties().limits().max_read_range_bytes(),
+            self.properties().info().provider_id().to_owned(),
+            session,
+        ))
     }
 
     /// Asynchronously reads an entire file while enforcing a strict byte cap.

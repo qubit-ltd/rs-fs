@@ -1,5 +1,6 @@
 //! Shared validation for random-access opens and reads.
 use crate::error::{FsError, FsErrorKind, FsOperation, FsResult};
+use crate::metadata::FileSystemCapabilities;
 use crate::metadata::{FileKind, FileMetadata, FileSystemLimit};
 use crate::read::ReadOptions;
 
@@ -21,6 +22,17 @@ impl RandomAccessReadPolicy {
             ));
         }
         Ok(())
+    }
+    pub(crate) fn validate_capabilities(
+        options: &ReadOptions,
+        capabilities: FileSystemCapabilities,
+    ) -> FsResult<()> {
+        let checked = if options.offset() == Some(0) {
+            options.clone().with_offset(None)
+        } else {
+            options.clone()
+        };
+        checked.validate_against(capabilities)
     }
     pub(crate) fn opened_len(metadata: Option<&FileMetadata>) -> FsResult<u64> {
         let metadata = metadata

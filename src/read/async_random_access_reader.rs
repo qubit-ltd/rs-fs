@@ -17,10 +17,20 @@ use std::pin::Pin;
 /// async fn sample(filesystem: &AsyncFileSystem, path: &Path) -> Result<Vec<u8>, qubit_fs::FsError> {
 ///     let mut reader = filesystem.open_random_access_reader(path, ReadOptions::default()).await?;
 ///     let mut bytes = [0; 16];
-///     let count = reader.read_at(0, &mut bytes).await?;
-///     Ok(bytes[..count].to_vec())
+///     let mut filled = 0;
+///     while filled < bytes.len() {
+///         match reader.read_at(filled as u64, &mut bytes[filled..]).await? {
+///             0 => break,
+///             count => filled += count,
+///         }
+///     }
+///     Ok(bytes[..filled].to_vec())
 /// }
 /// ```
+///
+/// A short read is allowed. If a call returns `Err` or its future is dropped,
+/// the output may contain partial bytes; discard the incomplete sample. The
+/// cached length is not a content snapshot.
 pub struct AsyncRandomAccessReader {
     info: OpenedFileInfo,
     len: u64,
@@ -57,6 +67,23 @@ impl AsyncRandomAccessReader {
         self.len == 0
     }
     /// Reads into caller storage at an explicit offset; cancellation does not change session identity.
+    ///
+    /// # Parameters
+    /// - `offset`: Byte offset from the beginning of the opened object.
+    /// - `output`: Caller-owned destination buffer borrowed until the future
+    ///   completes or is dropped.
+    ///
+    /// # Returns
+    /// The number of bytes initialized, possibly less than the buffer length;
+    /// zero means this request observed EOF.
+    ///
+    /// # Errors
+    /// Returns `InvalidOptions` for an overflowing offset range,
+    /// `ResourceLimitExceeded` when the clipped request exceeds the provider
+    /// limit, a provider error with path/provider/source context, or
+    /// `ProviderContractViolation` when the provider over-reports bytes. The
+    /// buffer may contain partial bytes after an error or cancellation and
+    /// must be discarded.
     pub async fn read_at(&mut self, offset: u64, output: &mut [u8]) -> FsResult<usize> {
         let count =
             RandomAccessReadPolicy::validate_read(offset, output.len(), self.len, self.limit)
