@@ -450,3 +450,29 @@ These are returned-length and consumption bounds, not process RSS bounds or
 limits on provider/network prefetch. The local provider advertises conditional
 range support, so automatic prefix narrowing still requires a provider advertising
 `RangeRead` as Guaranteed.
+
+## Optional random-access sessions
+
+`open_random_access_reader` is a separate optional facade operation for
+consumers that need several non-sequential samples from one object. Providers
+declare `ProviderOperation::OpenRandomAccessReader` (value 11), which depends
+on `Read`; the default SPI method returns `UnsupportedOperation` without I/O.
+No global capability is added and support is not inferred from `RangeRead`.
+
+The provider returns one session with identity and metadata captured from that
+same opened object. The facade validates the envelope and caches its length as
+the readable upper bound. It is not a content snapshot: in-place mutation may
+be visible, truncation may cause short reads or EOF, and growth beyond the
+cached length is not exposed. Reads use caller buffers and independent offsets;
+the provider must not resolve the path again. Short reads are valid, zero is
+observed EOF, and an over-reported count is a contract violation. On errors,
+the buffer may contain partial data and must be discarded. Applications may
+fall back to legacy path reads only when opening reports
+`UnsupportedOperation` or `UnsupportedCapability`; after another open error,
+or after a read error, they must not reopen by path.
+
+The async session uses an exclusive pinned borrow. Dropping an unpolled future
+performs no provider I/O; cancellation of a pending future ends the buffer
+borrow but does not guarantee remote work stopped. The provider must preserve
+the opened-object binding, permit a later request at a new offset, and ensure
+no background work retains or mutates the buffer after cancellation.

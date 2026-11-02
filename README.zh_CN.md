@@ -111,6 +111,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   集合。
 - 列举范围由 `ListScope::Path` 或平面命名空间 `ListScope::Namespace` 明确指定；前缀读取
   仅在 `RangeRead` 为 Guaranteed 时自动添加范围。
+- 需要反复从不同位置采样时，可用 `open_random_access_reader` 固定一次打开的对象，再按偏移
+  将数据读入调用方缓冲区。缓存长度只限定本次会话在打开时观察到的可访问范围，不是内容快照；
+  provider 可以不支持这一可选 operation。回退和 provider 实现规则见用户手册与 provider 指南。
 
 核心 crate 不含内置后端，也不会替应用选择异步运行时。它不提供跨文件系统 move，
 不保证所有 provider 都支持全部能力，也不会在无 provider 规则的情况下把对象键自动

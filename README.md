@@ -127,6 +127,11 @@ The facade makes these semantics explicit:
   instead of assuming that a directory is a preloaded collection.
 - Listing uses explicit `ListScope::Path` or flat `ListScope::Namespace`; prefix
   reads add a byte range only when `RangeRead` is Guaranteed.
+- Repeated, non-sequential sampling can use `open_random_access_reader` to keep
+  one opened object and read into caller-owned buffers by offset. Its cached
+  length is an open-time bound, not a content snapshot; providers may leave the
+  optional operation unsupported. See the user guide and provider guide for
+  fallback and implementation rules.
 
 The core crate has no built-in backend and does not select an async runtime.
 It does not implement cross-filesystem move, guarantee every provider capability,

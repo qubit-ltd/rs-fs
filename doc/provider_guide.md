@@ -42,7 +42,9 @@ and the facade rejects inconsistent declarations before use.
 ## 5. A complete minimal provider
 
 The following provider exposes one read-only health resource. This exact code
-is compiled by the documentation fixture.
+is compiled by the documentation fixture. It intentionally implements only
+the declared sequential `OpenReader` operation; random access remains optional
+and the SPI default reports `UnsupportedOperation`.
 
 <!-- example: provider-minimal -->
 ```rust
@@ -227,7 +229,7 @@ pub fn read_health() -> FsResult<Vec<u8>> {
 
 ### Minimal asynchronous provider
 
-This metadata-only provider shows the runtime-neutral `AsyncFileSystemSpi` boundary. It advertises only `Stat`; the boxed future does not perform provider work until polled. The documentation fixture compiles and executes this exact example.
+This metadata-only provider shows the runtime-neutral `AsyncFileSystemSpi` boundary. It advertises only `Stat`; the boxed future does not perform provider work until polled. It does not implement the optional random-access operation. The documentation fixture compiles and executes this exact example.
 
 <!-- example: provider-minimal-async -->
 ```rust
@@ -516,6 +518,34 @@ These are returned-length and consumption bounds, not process RSS bounds or
 limits on provider/network prefetch. The local provider advertises conditional
 range support, so automatic prefix narrowing still requires a provider advertising
 `RangeRead` as Guaranteed.
+
+## Optional random-access sessions
+
+`ProviderOperation::OpenRandomAccessReader` is the optional operation with
+stable value 11. It requires the existing `Read` capability. Providers that do
+not implement it should leave it undeclared: the default
+`FileSystemSpi::open_random_access_reader` returns `UnsupportedOperation`
+without I/O, and the facade also rejects an undeclared operation before SPI
+dispatch. It is not inferred from `RangeRead`.
+
+An implementation opens once and returns `OpenedRandomAccessReader` with
+`OpenedFileInfo` observed from that same opened object. The returned session
+must remain bound to that object or immutable version for every offset; do not
+stat or reopen a bare path to obtain metadata or service `read_at`. The facade
+requires matching identity, file kind, and length. `len()` is cached as the
+session's readable upper bound, not a content snapshot or promise against
+in-place mutation.
+
+`read_at` may return a short count; only the prefix of the caller's buffer up
+to that count is valid, and zero means observed EOF. Return typed read errors
+with their source intact. Do not turn errors into EOF or reopen the path. The
+async SPI follows the same contract: after a pending future is cancelled, the
+provider must not retain or later modify its borrowed buffer, and the next call
+must still use the same object at its requested offset. No background work may
+continue to borrow that buffer after the future ends. The minimal sequential
+provider examples in this guide intentionally omit operation 11 and remain
+valid providers; they demonstrate the default unsupported behavior rather
+than making random access a required method.
 
 ## 14. Release checklist
 

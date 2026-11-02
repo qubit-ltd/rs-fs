@@ -333,3 +333,21 @@ provider 尚未交回的会话无法由核心接管。打开失败或取消之�
 上限以外的探测字节。这些上限约束返回长度和消费量，不等于进程 RSS 或 provider／网络
 预取上限。本地 provider 的范围能力为 Conditional，自动缩小前缀请求仍只对声明
 Guaranteed `RangeRead` 的 provider 生效。
+
+## 可选的随机读取会话
+
+`open_random_access_reader` 是独立的可选门面操作，供需要从同一对象的不同位置多次采样的
+调用方使用。Provider 通过 `ProviderOperation::OpenRandomAccessReader`（值为 11）声明支持，
+该 operation 依赖已有的 `Read`；默认 SPI 方法不执行 I/O，直接返回
+`UnsupportedOperation`。本设计不增加全局 capability，也不从 `RangeRead` 推断随机读取能力。
+
+Provider 只打开一次，并返回绑定该对象的 session 及从同一对象取得的身份和 metadata。门面校验
+envelope，并缓存长度作为本会话可读取范围上界。这不是内容快照：原地修改可能被读到，缩短可能
+造成短读或 EOF，增长部分则超出缓存长度范围。每次读取使用调用方缓冲区和独立偏移；provider
+不能重新解析路径。短读合法，返回 0 表示观察到 EOF，超报计数属于契约违例。读取报错时缓冲区
+可能已有部分数据，调用方应丢弃。仅当打开返回 `UnsupportedOperation` 或
+`UnsupportedCapability` 时，应用可以退回旧的按路径读取；其他打开错误或读取错误后都不能按路径重开。
+
+异步 session 使用独占的 pinned 借用。丢弃未 poll 的 future 不执行 provider I/O；取消 Pending
+future 会结束缓冲区借用，但不保证远端工作已停止。Provider 必须保留已打开对象绑定，允许后续
+请求从新偏移继续，并确保取消后没有后台工作继续持有或修改缓冲区。

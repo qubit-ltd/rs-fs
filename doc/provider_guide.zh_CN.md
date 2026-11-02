@@ -34,7 +34,8 @@ Capability 有 `Conditional` 和 `Guaranteed` 两种支持强度。`Conditional`
 
 ## 5. 一个完整的最小 provider
 
-下面的 provider 暴露一个只读健康资源。这段完整代码由文档 fixture 编译验证。
+下面的 provider 暴露一个只读健康资源。这段完整代码由文档 fixture 编译验证。它只实现已声明的
+顺序 `OpenReader` operation；随机读取仍是可选能力，SPI 默认方法返回 `UnsupportedOperation`。
 
 <!-- example: provider-minimal -->
 ```rust
@@ -219,7 +220,7 @@ pub fn read_health() -> FsResult<Vec<u8>> {
 
 ### 最小异步 provider
 
-这个只提供 metadata 的示例展示与运行时无关的 `AsyncFileSystemSpi` 边界。它只声明 `Stat`；返回的 boxed future 在被轮询前不执行 provider 工作。文档 fixture 会编译并执行这段完整代码。
+这个只提供 metadata 的示例展示与运行时无关的 `AsyncFileSystemSpi` 边界。它只声明 `Stat`；返回的 boxed future 在被轮询前不执行 provider 工作。它没有实现可选的随机读取 operation。文档 fixture 会编译并执行这段完整代码。
 
 <!-- example: provider-minimal-async -->
 ```rust
@@ -460,6 +461,26 @@ provider 尚未交回的会话无法由核心接管。打开失败或取消之�
 上限以外的探测字节。这些上限约束返回长度和消费量，不等于进程 RSS 或 provider／网络
 预取上限。本地 provider 的范围能力为 Conditional，自动缩小前缀请求仍只对声明
 Guaranteed `RangeRead` 的 provider 生效。
+
+## 可选的随机读取会话
+
+`ProviderOperation::OpenRandomAccessReader` 是可选 operation，固定值为 11，依赖已有的
+`Read` capability。未实现该功能的 provider 应保持 operation 未声明：默认的
+`FileSystemSpi::open_random_access_reader` 会返回 `UnsupportedOperation`，且不执行 I/O；
+门面也会在分派 SPI 之前拒绝未声明的 operation。不能根据 `RangeRead` 推断支持随机读取。
+
+实现时应只打开一次，并用同一个已打开对象上的信息构造
+`OpenedRandomAccessReader` 与 `OpenedFileInfo`。此后每个偏移请求都必须继续访问该对象或
+不可变版本；不能按裸路径重新 stat 来补 metadata，也不能重新打开路径来实现 `read_at`。
+门面要求身份匹配、对象类型为文件且 metadata 含长度。`len()` 会缓存为本会话可读取长度上界，
+但它不是内容快照，也不保证对象不会被原地修改。
+
+`read_at` 可以短读；调用方缓冲区中只有返回计数以内的前缀有效，返回 0 表示观察到 EOF。
+应保留带类型的读取错误及其 source，不能把错误当成 EOF 或改按路径重开。异步 SPI 遵循相同
+契约：Pending future 被取消后，provider 不得继续持有或修改借用的缓冲区；下一次调用仍须从
+指定偏移读取同一对象。future 结束后不能有后台任务继续借用缓冲区。本指南中的最小顺序读取
+provider 示例有意不声明 operation 11，仍是有效 provider；它们展示默认不支持行为，不会让
+随机读取成为所有 provider 的必需方法。
 
 ## 14. 发布前检查清单
 

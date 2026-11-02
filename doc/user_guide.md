@@ -679,6 +679,44 @@ limits on provider/network prefetch. The local provider advertises conditional
 range support, so automatic prefix narrowing still requires a provider advertising
 `RangeRead` as Guaranteed.
 
+### Sampling the same opened object at several offsets
+
+Use the optional random-access session when one task needs disjoint samples,
+such as a file header and a trailer. Open it once, then pass caller-owned
+buffers to `read_at`; each call names its own offset and does not share a public
+cursor:
+
+```rust
+let mut reader = filesystem
+    .open_random_access_reader(&path, ReadOptions::default())?;
+let opened_len = reader.len();
+let mut header = [0; 8];
+let header_count = reader.read_at(0, &mut header)?;
+// A short count is valid; header[..header_count] contains this call's data.
+let mut tail = [0; 8];
+let tail_offset = opened_len.saturating_sub(tail.len() as u64);
+let tail_count = reader.read_at(tail_offset, &mut tail)?;
+// Use tail[..tail_count], and retain `reader` through all samples.
+```
+
+The cached `len()` is the length observed from metadata on the opened object
+and bounds this session. It is not a content snapshot: in-place writes may be
+visible, and truncation may produce a short read or EOF. Growth beyond the
+open-time length is outside the session's readable range. Handle short reads
+by advancing the offset and slicing the remaining buffer; a zero count means
+EOF. Discard a sample buffer after an error because a provider may have filled
+part of it before failing.
+
+The operation is optional. If opening returns `UnsupportedOperation` or
+`UnsupportedCapability`, an application that has a legacy path-based workflow
+may use that workflow. Do not retry by path after any other open error, and do
+not reopen by path after a session read error or cancellation: that could mix
+bytes from another object. See the provider guide for the default SPI behavior.
+For async reads, the future borrows the destination until it completes or is
+dropped. Cancellation ends that borrow but does not promise remote work stopped;
+discard any partial sample, then use the same reader for a new offset. Providers
+must not keep or mutate the buffer after the future ends.
+
 ### Listing metadata and stream completion
 
 `ListOptions::with_include_metadata(true)` requires metadata on every returned

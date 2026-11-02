@@ -562,6 +562,36 @@ provider 尚未交回的会话无法由核心接管。打开失败或取消之�
 预取上限。本地 provider 的范围能力为 Conditional，自动缩小前缀请求仍只对声明
 Guaranteed `RangeRead` 的 provider 生效。
 
+### 从同一已打开对象的多个位置采样
+
+当一次任务要读取互不相邻的数据（例如文件头和尾部）时，可使用可选的随机读取会话。
+只打开一次，再把调用方缓冲区和偏移传给 `read_at`；每次读取都显式指定位置，不共享公开游标：
+
+```rust
+let mut reader = filesystem
+    .open_random_access_reader(&path, ReadOptions::default())?;
+let opened_len = reader.len();
+let mut header = [0; 8];
+let header_count = reader.read_at(0, &mut header)?;
+// 短读是允许的；header[..header_count] 是本次调用读出的有效数据。
+let mut tail = [0; 8];
+let tail_offset = opened_len.saturating_sub(tail.len() as u64);
+let tail_count = reader.read_at(tail_offset, &mut tail)?;
+// 使用 tail[..tail_count]，并在所有采样结束前保留 reader。
+```
+
+缓存的 `len()` 来自打开对象的 metadata，限定本会话可读取的范围。它不是内容快照：原地修改
+可能被读到，文件缩短可能导致短读或 EOF；打开后增长的部分不属于本会话范围。遇到短读时，
+应推进偏移并切片剩余缓冲区；返回 0 表示观察到 EOF。读取报错后应丢弃缓冲区，因为 provider
+可能已在返回错误前写入部分数据。
+
+该 operation 是可选的。打开时若返回 `UnsupportedOperation` 或 `UnsupportedCapability`，
+应用可以改用已有的按路径读取流程。其他打开错误不能触发这种回退；会话读取报错或取消后，
+也不能按路径重新打开，否则不同对象的数据可能混在同一结果中。SPI 默认行为见 provider 指南。
+异步读取的 future 会独占借用目标缓冲区，直到完成或被丢弃。取消会结束这次借用，但不代表
+远端操作已停止；丢弃可能含有部分数据的缓冲区，再用同一个 reader 从新偏移读取。Provider
+不得在 future 结束后继续持有或修改该缓冲区。
+
 ### 列表 metadata 与流结束
 
 `ListOptions::with_include_metadata(true)` 要求每个返回条目都带 metadata。若某条目缺少
