@@ -560,7 +560,9 @@ any cleanup error together.
 
 When a temporary request specifies `parent`, the facade checks the returned
 path against that requested location: hierarchical paths must be strict
-component descendants, and object-key paths must retain the raw prefix (the
+component descendants. A provider may project a relative parent to an absolute
+logical path when it preserves the exact component prefix; an absolute parent
+requires an absolute result. Object-key paths must retain the raw prefix (the
 returned key may equal that prefix). Provider-specific paths and requests with
 no parent remain provider-defined. This lexical check does not establish host
 filesystem permissions or symlink isolation.

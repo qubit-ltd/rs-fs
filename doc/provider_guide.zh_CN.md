@@ -418,7 +418,8 @@ persist 或原始 session。应用应保留错误，或用 `take_recovery` 接�
 主失败和清理错误应同时保留。
 
 设置 `TempOptions::parent()` 时，应在该请求位置下返回临时资源：层级路径按组件判断严格后代，
-ObjectKey 按原始文本前缀判断。门面会在校验 filesystem 身份和资源 kind 后检查位置。
+ObjectKey 按原始文本前缀判断。provider 可以把相对层级 parent 投影为绝对逻辑路径，但必须保留完全相同的
+组件前缀；绝对 parent 要求返回绝对路径。门面会在校验 filesystem 身份和资源 kind 后检查位置。
 ProviderSpecific 语义和未指定 parent 的请求不推断通用位置关系。词法校验不能替代 provider
 对文件系统 authority 和符号链接的保护。
 

@@ -95,7 +95,7 @@ impl FacadeCore {
         };
         let valid = match self.properties.info().path_semantics() {
             PathSemantics::Hierarchical => {
-                parent.is_absolute() == returned_path.is_absolute()
+                (!parent.is_absolute() || returned_path.is_absolute())
                     && parent
                         .components()
                         .zip(returned_path.components())

@@ -198,7 +198,8 @@ durability 字段，持久化成功不能证明已完成持久同步。
 相对路径，防止逃出所拥有的临时命名空间。支持的 Drop 清理仅尽力执行，不能替代完成确认。
 
 请求指定 parent 时，门面还会在校验 filesystem 身份和资源 kind 后验证返回位置。层级路径必须
-是组件级严格后代；对象键必须以原始 parent 文本开头，允许返回路径等于此前缀。ProviderSpecific
+是组件级严格后代；provider 可将相对 parent 投影为保留相同组件前缀的绝对逻辑路径，绝对 parent
+则要求返回绝对路径。对象键必须以原始 parent 文本开头，允许返回路径等于此前缀。ProviderSpecific
 语义及没有 parent 时不推断位置关系。该词法关系不构成本机文件权限或符号链接边界。
 
 `PersistOutcome` 区分私有容器清理成功（`Complete`）与发布成功但仍有私有残留

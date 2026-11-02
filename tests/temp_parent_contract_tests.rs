@@ -76,11 +76,7 @@ impl TempParentSpi {
                 .with_guaranteed(FileSystemCapability::TempFile)
                 .with_guaranteed(FileSystemCapability::TempDirectory),
             FileSystemLimits::unknown(),
-            if semantics == PathSemantics::Hierarchical {
-                PathConstraints::absolute()
-            } else {
-                PathConstraints::either()
-            },
+            PathConstraints::either(),
             SymlinkPolicy::Reject,
         )
         .expect("test properties should be valid")
@@ -240,6 +236,13 @@ fn test_sync_temp_parent_location_semantics_and_recovery() {
             "/reports/nested/temp",
             true,
         ),
+        (
+            PathSemantics::Hierarchical,
+            Some("reports"),
+            "/reports/nested/temp",
+            true,
+        ),
+        (PathSemantics::Hierarchical, Some("reports"), "/other/temp", false),
         (PathSemantics::Hierarchical, Some("/reports"), "/reports2/temp", false),
         (PathSemantics::Hierarchical, Some("/reports"), "/reports", false),
         (PathSemantics::Hierarchical, Some("/"), "/tmp/temp", true),
@@ -546,6 +549,13 @@ mod asynchronous {
                 "/reports/nested/temp",
                 true,
             ),
+            (
+                PathSemantics::Hierarchical,
+                Some("reports"),
+                "/reports/nested/temp",
+                true,
+            ),
+            (PathSemantics::Hierarchical, Some("reports"), "/other/temp", false),
             (PathSemantics::Hierarchical, Some("/reports"), "/reports2/temp", false),
             (PathSemantics::Hierarchical, Some("/reports"), "/reports", false),
             (PathSemantics::Hierarchical, Some("/"), "/tmp/temp", true),

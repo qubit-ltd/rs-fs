@@ -75,6 +75,8 @@ impl TempOptions {
     ///
     /// When set, the facade requires hierarchical temporary paths to be strict
     /// descendants of this path and object-key paths to retain its raw prefix.
+    /// A provider may return an absolute logical path for a relative
+    /// hierarchical parent when the exact component prefix is preserved.
     /// Provider-specific path semantics remain provider-defined. When `None`,
     /// the provider selects the location.
     #[inline]

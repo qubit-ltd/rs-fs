@@ -453,7 +453,9 @@ any cleanup error together.
 
 When `TempOptions::parent()` is set, return the temporary identity beneath that
 requested location: hierarchical paths use strict component descendants and
-object keys use their raw prefix. The facade validates this relation after
+object keys use their raw prefix. A provider may project a relative hierarchical
+parent to an absolute logical path if the returned components preserve the
+parent prefix; an absolute parent requires an absolute result. The facade validates this relation after
 checking the returned filesystem identity and resource kind. Provider-specific
 semantics and requests without a parent do not receive an inferred relation.
 This lexical check does not replace the provider's filesystem authority and

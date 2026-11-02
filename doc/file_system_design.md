@@ -266,7 +266,9 @@ where supported and is not a substitute for confirmation.
 
 When a request supplies a parent, the facade also validates the returned
 location after filesystem identity and resource-kind checks. Hierarchical paths
-must be strict component descendants; object keys must begin with the raw parent
+must be strict component descendants; a provider may project a relative parent
+to an absolute logical path when preserving its exact component prefix, while
+an absolute parent requires an absolute result. Object keys must begin with the raw parent
 prefix, with equality permitted. Provider-specific semantics and an absent
 parent have no inferred location rule. This lexical relation is not a host
 filesystem permission or symlink boundary.
