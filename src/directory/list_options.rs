@@ -286,16 +286,9 @@ impl ListOptions {
     /// # Errors
     ///
     /// Returns `FsError` with `InvalidOptions` when the page size is zero, a
-    /// subtree prefix is not canonical, or the deadline exceeds the platform
-    /// monotonic-clock range.
+    /// literal prefix contains NUL, a subtree prefix is not canonical, or the
+    /// deadline exceeds the platform monotonic-clock range.
     pub fn validate(&self) -> FsResult<()> {
-        if self.page_size == Some(0) {
-            return Err(FsError::new(
-                FsErrorKind::InvalidOptions,
-                FsOperation::List,
-                "list page size must be greater than zero",
-            ));
-        }
         self.validate_common()?;
         if let Some(ListFilter::Subtree(prefix)) = self.filter.as_ref() {
             let parsed = RelativePath::parse(prefix).map_err(|_| {
@@ -322,9 +315,10 @@ impl ListOptions {
     /// - `semantics`: Provider path semantics used to validate the filter.
     ///
     /// # Errors
-    /// Returns `FsError` with `InvalidOptions` when the page size is zero, the
-    /// deadline exceeds the platform monotonic-clock range, or the filter is
-    /// invalid or incompatible with `semantics`.
+    /// Returns `FsError` with `InvalidOptions` when the page size is zero, a
+    /// literal prefix contains NUL, the deadline exceeds the platform
+    /// monotonic-clock range, or the filter is invalid or incompatible with
+    /// `semantics`.
     pub fn validate_for(&self, semantics: PathSemantics) -> FsResult<()> {
         self.validate_common()?;
         self.validate_filter(semantics)
@@ -337,6 +331,13 @@ impl ListOptions {
                 FsErrorKind::InvalidOptions,
                 FsOperation::List,
                 "list page size must be greater than zero",
+            ));
+        }
+        if matches!(self.filter.as_ref(), Some(ListFilter::LiteralPrefix(prefix)) if prefix.contains('\0')) {
+            return Err(FsError::new(
+                FsErrorKind::InvalidOptions,
+                FsOperation::List,
+                "literal prefix contains NUL",
             ));
         }
         if self
@@ -383,15 +384,6 @@ impl ListOptions {
                     FsErrorKind::InvalidOptions,
                     FsOperation::List,
                     "subtree filter requires hierarchical path semantics",
-                ));
-            }
-            (PathSemantics::ObjectKey | PathSemantics::ProviderSpecific, Some(ListFilter::LiteralPrefix(prefix)))
-                if prefix.contains('\0') =>
-            {
-                return Err(FsError::new(
-                    FsErrorKind::InvalidOptions,
-                    FsOperation::List,
-                    "literal prefix contains NUL",
                 ));
             }
             _ => {}

@@ -8,10 +8,12 @@
 
 use std::time::Duration;
 
+use qubit_fs::directory::ListFilter;
 use qubit_fs::directory::ListOptions;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::error::FsOperation;
 use qubit_fs::metadata::SymlinkPolicy;
+use qubit_fs::path::PathSemantics;
 
 #[test]
 fn test_list_options_full_configuration_is_usable() {
@@ -58,5 +60,30 @@ fn test_list_options_reject_invalid_page_size_and_noncanonical_prefix() {
         let error = options.validate().expect_err("invalid list option must be rejected");
         assert_eq!(FsErrorKind::InvalidOptions, error.kind());
         assert_eq!(FsOperation::List, error.operation());
+    }
+}
+
+#[test]
+fn test_list_options_reject_nul_literal_prefix_in_both_validators() {
+    let options = ListOptions::object_keys().with_filter(Some(ListFilter::LiteralPrefix("a\0b".to_owned())));
+    for result in [
+        options.validate(),
+        options.validate_for(PathSemantics::ObjectKey),
+        options.validate_for(PathSemantics::ProviderSpecific),
+    ] {
+        let error = result.expect_err("NUL must be rejected before dispatch");
+        assert_eq!(FsErrorKind::InvalidOptions, error.kind());
+        assert_eq!(FsOperation::List, error.operation());
+    }
+}
+
+#[test]
+fn test_list_options_preserve_valid_literal_prefixes() {
+    for prefix in ["", "报告/日", "a//b/../c"] {
+        let options = ListOptions::object_keys().with_filter(Some(ListFilter::LiteralPrefix(prefix.to_owned())));
+        assert!(options.validate().is_ok());
+        assert!(options.validate_for(PathSemantics::ObjectKey).is_ok());
+        assert!(options.validate_for(PathSemantics::ProviderSpecific).is_ok());
+        assert_eq!(Some(&ListFilter::LiteralPrefix(prefix.to_owned())), options.filter());
     }
 }
