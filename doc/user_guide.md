@@ -94,7 +94,9 @@ For a hierarchical listing rooted at `/root`, `ListFilter::Subtree("nested")`
 selects `/root/nested` and its descendants, including a deeper entry such as
 `/root/nested/child/report.txt`, even when `recursive` is false. Without a
 filter, `recursive = false` limits results to immediate children; `max_depth`
-limits descendant depth relative to `/root`.
+limits descendant depth relative to `/root`. A provider may also return the
+listed root itself. Applications that recursively enumerate returned
+directories must skip an entry whose path equals the root used for that list.
 
 For flat keys, `LiteralPrefix` is relative to the selected scope. A root `folder/`
 and filter `a` match `folder/a` and `folder/ab`. A root `folder` also matches
@@ -173,6 +175,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 ```
+
+`WriteOptions::default()` replaces an existing destination. To refuse an
+existing target, configure `CreateNew` and pass the options to `write_all`:
+
+```rust
+use qubit_fs::write::WriteDisposition;
+use qubit_fs::write::WriteOptions;
+
+let options = WriteOptions::default().with_disposition(WriteDisposition::CreateNew);
+filesystem.write_all(&path, b"report ready", options)?;
+```
+
+`CreateNew` rejects an existing destination. It does not guarantee atomicity or
+durability; request those requirements explicitly and check the write outcome
+when the application depends on them. Do not check whether a target exists and
+then write: that creates a race window.
 
 Logical `/report.txt` is inside that root; it is not the host path `/report.txt`.
 Use `host_path_to_logical` from `qubit-fs-local` when converting a native host

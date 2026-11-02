@@ -72,6 +72,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+`WriteOptions::default()` 会替换已有目标；使用 `CreateNew` 可拒绝覆盖。配置方式见
+[中文用户手册](doc/user_guide.zh_CN.md)。
+
 如果报告需要分多次写入，可先在同一逻辑父目录创建临时文件，通过返回的路径写入，全部生成
 完成后再调用 `persist`。这样最终报告名称不会提前暴露未完成内容。发布失败时，应结合保留的
 发布事实、源资格和 `publication_target()`，在重试、cleanup 与只读核查之间作出选择。

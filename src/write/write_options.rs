@@ -22,6 +22,14 @@ use crate::write::WritePrecondition;
 
 /// Options controlling a write operation.
 ///
+/// By default, `create_parent` is `false`, `disposition` is
+/// [`WriteDisposition::CreateOrReplace`], `atomicity` is
+/// [`AtomicityRequirement::Preferred`], `durability` is
+/// [`DurabilityRequirement::NotRequired`], and `precondition` is
+/// [`WritePrecondition::None`]. Content type and checksum are `None`, and user
+/// metadata is empty. These are request policies; provider support and
+/// successful completion are reported separately.
+///
 /// # Examples
 /// ```rust
 /// use qubit_fs::write::WriteOptions;
@@ -29,6 +37,16 @@ use crate::write::WritePrecondition;
 /// use qubit_fs::metadata::FileSystemCapabilities;
 /// let options = WriteOptions::default().with_atomicity(AtomicityRequirement::Required);
 /// assert!(options.validate_against(FileSystemCapabilities::new()).is_err());
+/// ```
+///
+/// Refuse to replace an existing destination:
+/// ```rust
+/// use qubit_fs::write::WriteDisposition;
+/// use qubit_fs::write::WriteOptions;
+///
+/// let options = WriteOptions::default()
+///     .with_disposition(WriteDisposition::CreateNew);
+/// assert_eq!(options.disposition(), WriteDisposition::CreateNew);
 /// ```
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]

@@ -169,6 +169,8 @@ copy deadline 是从 operation 构造起累计的协作式预算，在提供者�
 对于 `ListScope::Namespace` 则匹配完整逻辑键，不解码或规范化键。
 层级路径的 `Subtree` 选择指定路径及其后代；`recursive = false` 不会取消过滤范围，
 `max_depth` 则按列举根目录限制返回的后代深度。
+无过滤器时，非递归列举将后代限制为直接子项；提供者也可能返回列举根自身。
+应用递归处理返回的目录时，应跳过路径等于列举根的条目。
 list/copy 的符号链接覆盖策略仅对本次操作生效。
 
 丢弃已经 poll 的 `AsyncDirectoryStream::next_entry_async()` future 会使流进入 `Failed`，因为

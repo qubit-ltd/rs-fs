@@ -76,6 +76,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+`WriteOptions::default()` replaces an existing target; use `CreateNew` to
+refuse replacement. See the [user guide](doc/user_guide.md) for the configuration.
+
 For a report assembled in several writes, create a temporary file under the
 same logical parent, write through its returned path, and call `persist` only
 when generation is complete. The final report name then stays free of

@@ -225,6 +225,9 @@ keys for `ListScope::Namespace`; it does not decode or normalize keys. List/copy
 For hierarchical paths, `Subtree` selects the named path and its descendants;
 `recursive = false` does not remove that filter scope, while `max_depth` bounds
 returned descendant depth from the list root.
+Without a filter, non-recursive listing limits descendants to immediate
+children, and a provider may also return the listed root itself. Applications
+that recurse through returned directories must skip an entry equal to that root.
 
 Dropping a polled `AsyncDirectoryStream::next_entry_async()` future marks the
 stream `Failed`, because the provider may have advanced. Further reads return

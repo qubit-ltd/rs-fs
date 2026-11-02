@@ -73,7 +73,8 @@ tempfile = "3"
 层级列举以 `/root` 为根、过滤器为 `ListFilter::Subtree("nested")` 时，会选择
 `/root/nested` 及其后代，例如更深的 `/root/nested/child/report.txt`；即使
 `recursive` 为 false，该过滤范围也不会缩窄。无过滤器时，`recursive = false` 只返回
-直接子项；`max_depth` 限制相对 `/root` 的后代深度。
+直接子项；`max_depth` 限制相对 `/root` 的后代深度。提供者也可能返回列举根自身。
+应用递归列举返回的目录时，应跳过路径等于本次列举根的条目。
 
 平面键的 `LiteralPrefix` 相对于所选范围匹配。例如根为 `folder/`、过滤器为 `a`
 时匹配 `folder/a` 和 `folder/ab`；根为 `folder` 时还会匹配 `folderish`。
@@ -146,6 +147,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 ```
+
+`WriteOptions::default()` 会替换同名目标。若要拒绝已有目标，请配置 `CreateNew` 并将选项传给
+`write_all`：
+
+```rust
+use qubit_fs::write::WriteDisposition;
+use qubit_fs::write::WriteOptions;
+
+let options = WriteOptions::default().with_disposition(WriteDisposition::CreateNew);
+filesystem.write_all(&path, b"report ready", options)?;
+```
+
+`CreateNew` 会拒绝已有目标，但不保证原子性或持久性。业务依赖这些保证时，应显式提出要求并检查
+写入 outcome。不要先检查目标是否存在再写入，因为两步之间存在竞争窗口。
 
 逻辑路径 `/report.txt` 位于所配置的根目录内，不是主机的 `/report.txt`。如果输入来自本机
 路径 API，应使用 `qubit-fs-local` 的 `host_path_to_logical` 转换，不能直接把任意操作系统

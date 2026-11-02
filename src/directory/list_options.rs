@@ -45,9 +45,11 @@ use crate::path::RelativePath;
 pub struct ListOptions {
     /// Whether listing should recurse into child containers.
     ///
-    /// Without a filter, `false` limits traversal to immediate children. A
-    /// [`ListFilter::Subtree`] still selects that subtree and its descendants;
-    /// `max_depth` controls how far below the list root results may extend.
+    /// Without a filter, `false` limits descendant entries to immediate
+    /// children. A provider may also return the listed root itself.
+    /// Applications that recursively enumerate returned directories must
+    /// skip an entry equal to that root. A [`ListFilter::Subtree`] and
+    /// `max_depth` retain their documented selection and depth rules.
     recursive: bool,
     /// Optional symbolic-link policy overriding the filesystem default.
     symlink_policy: Option<SymlinkPolicy>,
@@ -86,9 +88,11 @@ impl ListOptions {
 
     /// Returns whether traversal recurses into child containers.
     ///
-    /// When a subtree filter is present, the filter still selects its
-    /// descendants; `max_depth` bounds their depth. Without a filter,
-    /// `false` selects immediate children only.
+    /// Without a filter, `false` limits descendant entries to immediate
+    /// children. A provider may also return the listed root itself.
+    /// Applications that recursively enumerate returned directories must
+    /// skip an entry equal to that root. A subtree filter and `max_depth`
+    /// retain their documented selection and depth rules.
     #[inline]
     #[must_use]
     pub const fn recursive(&self) -> bool {
