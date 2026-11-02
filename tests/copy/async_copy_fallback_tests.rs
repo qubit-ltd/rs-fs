@@ -345,6 +345,15 @@ fn test_async_stream_fallback_failures_retain_recovery_writer() {
         let failure = ready(operation.execute()).expect_err("injected stage should fail");
         assert_eq!(expected, failure.state());
         assert_eq!(FsErrorKind::Io, failure.error().kind());
+        if matches!(
+            stage,
+            AsyncCopyStage::ReaderRead
+                | AsyncCopyStage::WriterWrite
+                | AsyncCopyStage::WriterFlush
+                | AsyncCopyStage::WriterCommit
+        ) {
+            assert_eq!(1, failure.partial_stats().failed);
+        }
         assert!(operation.has_recovery(), "{stage:?} should retain writer");
         assert_eq!(AsyncCopyOperationState::Failed(expected), operation.state());
         assert_eq!(

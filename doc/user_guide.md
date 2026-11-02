@@ -520,6 +520,13 @@ budget. The facade checks completed-resource and skipped counts as a verifiable
 lower bound, and checks `failed` separately; `CopyStats` cannot prove the total
 number of entries a provider scanned or processed. Do not treat this outcome
 check as a complete scan quota.
+The `failed` counter describes failures represented in that snapshot; it can
+be nonzero in partial failure statistics with continue-on-error disabled. A
+stream fallback failure after its destination writer opens reports one failed
+entry, while failures before a writer opens may have no partial statistics.
+Use `CopyFailure::state()` or `AsyncCopyFailure::state()` for publication
+certainty; neither `failed` nor the statistics snapshot determines what was
+published or whether copying continued.
 `CopyOptions::deadline` is a cooperative cumulative budget starting at operation
 construction. It is checked around stages; it is not a timer that interrupts
 an arbitrary pending provider future. Provider failures remain the primary error.

@@ -443,6 +443,10 @@ Conditional 支持允许 provider 尝试该请求，但成功 outcome 仍须报�
 已完成资源数与 skipped 数校验为可验证下界，并单独检查 `failed`；`CopyStats` 无法证明 provider
 实际扫描或处理的总条目数，因此该校验不等于完整扫描配额。`CopyOptions::deadline` 是从 operation 构造时开始
 累计的协作式预算，在阶段边界检查，不是能打断任意 Pending future 的定时器。提供者错误仍是主错误。
+`failed` 表示该统计快照所记录的失败；即使 continue-on-error 已关闭，失败部分统计中的该值也可能非零。
+流式回退在目标 writer 打开后失败时会记录一个失败条目；writer 打开前失败则可能没有部分统计。
+应使用 `CopyFailure::state()` 或 `AsyncCopyFailure::state()` 判断发布确定性；不能从 `failed` 或统计快照
+推导目标是否已发布，也不能据此判断是否启用了继续执行。
 
 临时文件和目录有独立的所有权生命周期，提供 `cleanup`、`keep` 和 `persist`。0.3 的
 恢复快照包含两个相互独立的维度：保留的目标发布事实，以及当前源资格。

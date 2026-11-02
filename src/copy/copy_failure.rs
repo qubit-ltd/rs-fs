@@ -91,7 +91,11 @@ impl CopyFailure {
     pub const fn state(&self) -> CopyFailureState {
         self.parts.state
     }
-    /// Returns statistics accumulated before failure.
+    /// Returns the statistics snapshot retained at failure.
+    ///
+    /// The snapshot may be incomplete. Its `failed` counter can be nonzero
+    /// even when continue-on-error is disabled, and does not establish
+    /// destination publication certainty; use [`Self::state`] for that fact.
     ///
     /// # Returns
     /// A reference to the progress counters accumulated before failure.

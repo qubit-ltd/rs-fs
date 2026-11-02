@@ -40,7 +40,12 @@ pub struct CopyStats {
     pub overwritten: u64,
     /// Number of entries skipped.
     pub skipped: u64,
-    /// Number of failed entries when continue-on-error is enabled.
+    /// Number of failed entries represented by this statistics snapshot.
+    ///
+    /// This can be nonzero in failure partial statistics even when
+    /// continue-on-error is disabled. A stream fallback failure after the
+    /// destination writer has opened reports one failed entry. This counter
+    /// alone does not describe destination publication certainty.
     pub failed: u64,
 }
 

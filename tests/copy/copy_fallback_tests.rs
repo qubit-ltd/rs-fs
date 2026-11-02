@@ -1108,11 +1108,21 @@ fn test_copy_stream_fallback_reports_each_sync_io_stage_state() {
             WriterState::NotPublished,
         ),
     ] {
+        let expect_failed_stat = matches!(
+            response,
+            CopyResponse::DeclinedReadFailure
+                | CopyResponse::DeclinedWriteFailure
+                | CopyResponse::DeclinedFlushFailure
+                | CopyResponse::DeclinedCommitFailure
+        );
         let (filesystem, _, _) = recording_filesystem(response);
         let failure = filesystem
             .copy(&path("/source"), &path("/target"), CopyOptions::default())
             .expect_err("injected fallback stage should fail");
         assert_eq!(expected, failure.state());
+        if expect_failed_stat {
+            assert_eq!(1, failure.partial_stats().failed);
+        }
         assert_eq!(
             writer_state,
             failure
