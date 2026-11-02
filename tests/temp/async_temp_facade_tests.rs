@@ -715,7 +715,14 @@ fn test_async_temp_file_cancellation_retains_uncertainty() {
         let calls = probe.calls();
         let retry = ready(temporary.persist(&path("relative"), PersistOptions::default())).expect_err("cancelled");
         assert_eq!(FsErrorKind::InvalidState, retry.error().kind());
-        assert_eq!(PersistFailureState::Indeterminate, retry.state());
+        assert_eq!(
+            if operation == FsOperation::CleanupTemp {
+                PersistFailureState::PublishedSourceIndeterminate
+            } else {
+                PersistFailureState::Indeterminate
+            },
+            retry.state()
+        );
         assert_eq!(
             (operation == FsOperation::CleanupTemp).then_some(&target),
             retry.publication_target()
@@ -724,6 +731,12 @@ fn test_async_temp_file_cancellation_retains_uncertainty() {
             FsErrorKind::InvalidState,
             ready(temporary.cleanup()).expect_err("uncertain").kind()
         );
+        if operation == FsOperation::CleanupTemp {
+            let failure = ready(temporary.keep()).expect_err("source uncertain");
+            assert_eq!(FsErrorKind::InvalidState, failure.error().kind());
+            assert_eq!(PersistFailureState::PublishedSourceIndeterminate, failure.state());
+            assert_eq!(Some(&target), failure.publication_target());
+        }
         drop(temporary);
         assert_eq!(calls, probe.calls());
         assert_eq!(0, probe.temp_cancellations());
@@ -769,7 +782,14 @@ fn test_async_temp_directory_cancellation_retains_uncertainty() {
         let calls = probe.calls();
         let retry = ready(temporary.persist(&path("relative"), PersistOptions::default())).expect_err("cancelled");
         assert_eq!(FsErrorKind::InvalidState, retry.error().kind());
-        assert_eq!(PersistFailureState::Indeterminate, retry.state());
+        assert_eq!(
+            if operation == FsOperation::CleanupTemp {
+                PersistFailureState::PublishedSourceIndeterminate
+            } else {
+                PersistFailureState::Indeterminate
+            },
+            retry.state()
+        );
         assert_eq!(
             (operation == FsOperation::CleanupTemp).then_some(&target),
             retry.publication_target()
@@ -778,6 +798,104 @@ fn test_async_temp_directory_cancellation_retains_uncertainty() {
             FsErrorKind::InvalidState,
             ready(temporary.cleanup()).expect_err("uncertain").kind()
         );
+        if operation == FsOperation::CleanupTemp {
+            let failure = ready(temporary.keep()).expect_err("source uncertain");
+            assert_eq!(FsErrorKind::InvalidState, failure.error().kind());
+            assert_eq!(PersistFailureState::PublishedSourceIndeterminate, failure.state());
+            assert_eq!(Some(&target), failure.publication_target());
+        }
+        drop(temporary);
+        assert_eq!(calls, probe.calls());
+        assert_eq!(0, probe.temp_cancellations());
+    }
+}
+
+/// Cleanup cancellation preserves confirmed non-publication for files.
+#[test]
+fn test_async_temp_file_cleanup_cancellation_preserves_not_published() {
+    for initial_failure in [None, Some(PersistFailureState::NotPublishedSourceCleanupRequired)] {
+        let (filesystem, probe) = async_recording_file_system(AsyncRecordingConfig {
+            atomic_temp_persist: true,
+            temp_pending_operation: Some(FsOperation::CleanupTemp),
+            temp_persist_failure: initial_failure,
+            ..AsyncRecordingConfig::default()
+        });
+        let mut temporary = ready(filesystem.create_temp_file(TempOptions::default())).expect("resource");
+        let target = path("/unpublished");
+        if let Some(expected) = initial_failure {
+            let failure = ready(temporary.persist(&target, PersistOptions::default())).expect_err("not published");
+            assert_eq!(expected, failure.state());
+        }
+        let previous_state = temporary.state();
+        let calls = probe.calls();
+        drop(temporary.cleanup());
+        assert_eq!(previous_state, temporary.state());
+        assert_eq!(calls, probe.calls());
+        {
+            let mut pending = temporary.cleanup();
+            assert_pending(pending.as_mut());
+        }
+        assert_eq!(TempResourceState::Indeterminate, temporary.state());
+        let calls = probe.calls();
+        let failure = ready(temporary.persist(&target, PersistOptions::default())).expect_err("source uncertain");
+        assert_eq!(FsErrorKind::InvalidState, failure.error().kind());
+        assert_eq!(PersistFailureState::NotPublishedSourceIndeterminate, failure.state());
+        assert_eq!(None, failure.publication_target());
+        let failure = ready(temporary.keep()).expect_err("source uncertain");
+        assert_eq!(FsErrorKind::InvalidState, failure.error().kind());
+        assert_eq!(PersistFailureState::NotPublishedSourceIndeterminate, failure.state());
+        assert_eq!(None, failure.publication_target());
+        assert_eq!(
+            FsErrorKind::InvalidState,
+            ready(temporary.cleanup()).expect_err("source uncertain").kind()
+        );
+        assert_eq!(calls, probe.calls());
+        drop(temporary);
+        assert_eq!(calls, probe.calls());
+        assert_eq!(0, probe.temp_cancellations());
+    }
+}
+
+/// Cleanup cancellation preserves confirmed non-publication for directories.
+#[test]
+fn test_async_temp_directory_cleanup_cancellation_preserves_not_published() {
+    for initial_failure in [None, Some(PersistFailureState::NotPublishedSourceCleanupRequired)] {
+        let (filesystem, probe) = async_recording_file_system(AsyncRecordingConfig {
+            atomic_temp_persist: true,
+            temp_pending_operation: Some(FsOperation::CleanupTemp),
+            temp_persist_failure: initial_failure,
+            ..AsyncRecordingConfig::default()
+        });
+        let mut temporary = ready(filesystem.create_temp_directory(TempOptions::default())).expect("resource");
+        let target = path("/unpublished");
+        if let Some(expected) = initial_failure {
+            let failure = ready(temporary.persist(&target, PersistOptions::default())).expect_err("not published");
+            assert_eq!(expected, failure.state());
+        }
+        let previous_state = temporary.state();
+        let calls = probe.calls();
+        drop(temporary.cleanup());
+        assert_eq!(previous_state, temporary.state());
+        assert_eq!(calls, probe.calls());
+        {
+            let mut pending = temporary.cleanup();
+            assert_pending(pending.as_mut());
+        }
+        assert_eq!(TempResourceState::Indeterminate, temporary.state());
+        let calls = probe.calls();
+        let failure = ready(temporary.persist(&target, PersistOptions::default())).expect_err("source uncertain");
+        assert_eq!(FsErrorKind::InvalidState, failure.error().kind());
+        assert_eq!(PersistFailureState::NotPublishedSourceIndeterminate, failure.state());
+        assert_eq!(None, failure.publication_target());
+        let failure = ready(temporary.keep()).expect_err("source uncertain");
+        assert_eq!(FsErrorKind::InvalidState, failure.error().kind());
+        assert_eq!(PersistFailureState::NotPublishedSourceIndeterminate, failure.state());
+        assert_eq!(None, failure.publication_target());
+        assert_eq!(
+            FsErrorKind::InvalidState,
+            ready(temporary.cleanup()).expect_err("source uncertain").kind()
+        );
+        assert_eq!(calls, probe.calls());
         drop(temporary);
         assert_eq!(calls, probe.calls());
         assert_eq!(0, probe.temp_cancellations());

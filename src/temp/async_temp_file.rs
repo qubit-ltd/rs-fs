@@ -130,6 +130,13 @@ impl AsyncTempFile {
 
     /// Asynchronously confirms cleanup of this temporary resource.
     ///
+    /// Dropping an unpolled cleanup future changes nothing. Cancelling cleanup
+    /// after it returns `Pending` leaves source authority indeterminate while
+    /// preserving whether the target was already known to be published or not
+    /// published. Later `persist` or `keep` calls are rejected and retain that
+    /// distinction in their failure snapshot. This does not authorize another
+    /// source mutation.
+    ///
     /// # Returns
     /// A future resolving after provider cleanup is confirmed.
     ///
@@ -323,7 +330,7 @@ impl AsyncTempFile {
         }
         Box::pin(async move {
             let previous_lifecycle = self.lifecycle.clone();
-            self.lifecycle.begin_pending();
+            self.lifecycle.begin_cleanup_pending();
             let result = call(self.session.as_mut()).await;
             self.lifecycle = previous_lifecycle;
             match &result {

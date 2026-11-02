@@ -93,6 +93,13 @@ impl AsyncTempDirectory {
 
     /// Asynchronously confirms cleanup of this temporary directory.
     ///
+    /// Dropping an unpolled cleanup future changes nothing. Cancelling cleanup
+    /// after it returns `Pending` leaves source authority indeterminate while
+    /// preserving whether the target was already known to be published or not
+    /// published. Later `persist` or `keep` calls are rejected and retain that
+    /// distinction in their failure snapshot. This does not authorize another
+    /// source mutation.
+    ///
     /// # Returns
     /// A future resolving after provider cleanup is confirmed.
     ///

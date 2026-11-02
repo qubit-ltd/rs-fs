@@ -585,6 +585,10 @@ metadata，流会失败，不会返回缺少 metadata 的条目。同步 `Direct
 `Indeterminate` 状态时，门面不会在 Drop 中调用 session cleanup。异步句柄和 rejected 句柄遵循各自的
 取消及显式恢复契约；不能推断所有临时句柄都会自动删除资源。详见[架构中的临时资源](file_system_design.zh_CN.md#临时资源)。
 
+丢弃未轮询的 cleanup future 不改变状态。cleanup 返回 Pending 后被取消，只使源变更权限不确定，
+保留目标此前已确认发布或未发布的事实。后续 persist 或 keep 仍被拒绝，其失败快照保留这一区分；
+该信息不构成再次变更源资源的权限。
+
 ## 延伸阅读
 
 - [README](../README.zh_CN.md)

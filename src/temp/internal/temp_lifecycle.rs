@@ -68,6 +68,35 @@ impl TempLifecycle {
         self.state = TempResourceState::Indeterminate;
         self.failure_state = PersistFailureState::Indeterminate;
     }
+    /// Marks source authority uncertain while preserving known publication
+    /// facts.
+    ///
+    /// Cleanup cannot publish a target. Cancelling a pending cleanup therefore
+    /// changes source certainty without retracting confirmed publication
+    /// history.
+    #[cfg(feature = "async")]
+    #[inline]
+    pub(crate) fn begin_cleanup_pending(&mut self) {
+        self.state = TempResourceState::Indeterminate;
+        self.failure_state = if self.publication_target.is_some() {
+            PersistFailureState::PublishedSourceIndeterminate
+        } else {
+            match self.failure_state {
+                PersistFailureState::NotPublished
+                | PersistFailureState::NotPublishedSourceCleanupRequired
+                | PersistFailureState::NotPublishedSourceReleased
+                | PersistFailureState::NotPublishedSourceIndeterminate => {
+                    PersistFailureState::NotPublishedSourceIndeterminate
+                }
+                PersistFailureState::PublishedSourceRetained
+                | PersistFailureState::PublishedSourceReleased
+                | PersistFailureState::PublishedSourceIndeterminate => {
+                    PersistFailureState::PublishedSourceIndeterminate
+                }
+                PersistFailureState::Indeterminate => PersistFailureState::Indeterminate,
+            }
+        };
+    }
     /// Records successful publication and release of source cleanup ownership.
     ///
     /// `kept` distinguishes a retained resource from one whose source was

@@ -713,6 +713,12 @@ state. Async handles and rejected handles follow their separate cancellation
 and explicit-recovery contracts; do not infer that every temporary handle
 automatically deletes its resource. See [temporary resources in the design](file_system_design.md#temporary-resources).
 
+Dropping an unpolled cleanup future changes nothing. Cancelling cleanup after it
+returns `Pending` leaves source authority indeterminate while preserving whether
+the target was already known to be published or not published. Later `persist`
+or `keep` calls are rejected and retain that distinction in their failure
+snapshot. This does not authorize another source mutation.
+
 ## Further reading
 
 - [README](../README.md)
