@@ -23,9 +23,11 @@ use crate::error::FsEffectState;
 use crate::error::FsError;
 use crate::error::FsErrorKind;
 use crate::error::FsOperation;
+use crate::error::RecoveryCleanupState;
 use crate::facade::facade_core::FacadeCore;
 use crate::facade::internal::ByteBudget;
 use crate::facade::internal::FileSystemResource;
+use crate::facade::internal::RecoveryCleanupGuard;
 use crate::metadata::AchievedAtomicity;
 use crate::metadata::AtomicityRequirement;
 use crate::metadata::DurabilityRequirement;
@@ -68,8 +70,10 @@ pub struct AsyncFileWriter {
     info: OpenedFileInfo,
     /// Current publication lifecycle state.
     state: WriterState,
-    /// Whether explicit provider cleanup has completed.
-    abort_completed: bool,
+    /// Whether this session has ever had confirmed publication evidence.
+    confirmed_publication: bool,
+    /// Current state of explicit provider cleanup.
+    cleanup_state: RecoveryCleanupState,
     /// Atomicity required by the caller.
     atomicity: AtomicityRequirement,
     /// Durability required by the caller.
@@ -109,7 +113,8 @@ impl AsyncFileWriter {
             session: Box::into_pin(session),
             info,
             state: WriterState::Open,
-            abort_completed: false,
+            confirmed_publication: false,
+            cleanup_state: RecoveryCleanupState::Pending,
             atomicity,
             durability,
             append,
@@ -140,6 +145,28 @@ impl AsyncFileWriter {
         self.state
     }
 
+    /// Returns whether this writer session has confirmed publication at any
+    /// time.
+    ///
+    /// # Returns
+    /// `true` when a commit or abort outcome confirmed publication. `false`
+    /// does not prove that publication did not occur.
+    #[inline]
+    #[must_use]
+    pub const fn has_confirmed_publication(&self) -> bool {
+        self.confirmed_publication
+    }
+
+    /// Returns the state of explicit provider cleanup for this session.
+    ///
+    /// # Returns
+    /// The latest cleanup state, independently of publication history.
+    #[inline]
+    #[must_use]
+    pub const fn cleanup_state(&self) -> RecoveryCleanupState {
+        self.cleanup_state
+    }
+
     /// Asynchronously publishes bytes accepted by this session.
     ///
     /// A definite failure retains the open session for retry or abort. An
@@ -161,7 +188,11 @@ impl AsyncFileWriter {
     /// contract. The failure state records what is known about publication.
     pub fn commit_async(&mut self) -> SpiFuture<'_, Result<WriteOutcome, WriteFailure>> {
         if self.state != WriterState::Open {
-            let publication_state = self.state.publication_failure_state();
+            let publication_state = if self.confirmed_publication {
+                WriteFailureState::Published
+            } else {
+                self.state.publication_failure_state()
+            };
             let error = self.invalid_state(
                 FsOperation::CommitWriter,
                 "writer cannot be committed in its current state",
@@ -173,6 +204,7 @@ impl AsyncFileWriter {
             let result = self.session.as_mut().commit_async().await;
             match result {
                 Ok(outcome) => {
+                    self.confirmed_publication = true;
                     self.state = WriterState::Committed;
                     if self.atomicity == AtomicityRequirement::Required
                         && outcome.atomicity() != AchievedAtomicity::Atomic
@@ -223,6 +255,9 @@ impl AsyncFileWriter {
                     Ok(outcome)
                 }
                 Err(failure) => {
+                    if failure.state() == WriteFailureState::Published {
+                        self.confirmed_publication = true;
+                    }
                     self.state = match failure.state() {
                         WriteFailureState::RetryableNotPublished => WriterState::Open,
                         WriteFailureState::NotPublished => WriterState::NotPublished,
@@ -255,7 +290,7 @@ impl AsyncFileWriter {
     /// The future returns an [`FsError`] when provider cleanup fails. The error
     /// includes the operation context available from the facade.
     pub fn abort_async(&mut self) -> SpiFuture<'_, crate::error::FsResult<WriteAbortOutcome>> {
-        if self.abort_completed
+        if self.cleanup_state == RecoveryCleanupState::Completed
             || !matches!(
                 self.state,
                 WriterState::Open | WriterState::NotPublished | WriterState::Published | WriterState::Indeterminate
@@ -270,9 +305,15 @@ impl AsyncFileWriter {
         Box::pin(async move {
             let previous_state = self.state;
             self.state = WriterState::Indeterminate;
-            match self.session.as_mut().abort_async().await {
+            let mut cleanup = RecoveryCleanupGuard::start(&mut self.cleanup_state);
+            let result = self.session.as_mut().abort_async().await;
+            cleanup.finish(result.is_ok());
+            drop(cleanup);
+            match result {
                 Ok(outcome) => {
-                    self.abort_completed = true;
+                    if outcome == WriteAbortOutcome::Published {
+                        self.confirmed_publication = true;
+                    }
                     self.state = match outcome {
                         WriteAbortOutcome::NotPublished => WriterState::Aborted,
                         WriteAbortOutcome::Published => WriterState::Published,
@@ -474,7 +515,7 @@ impl Debug for AsyncFileWriter {
 
 impl Drop for AsyncFileWriter {
     fn drop(&mut self) {
-        if !self.abort_completed
+        if self.cleanup_state != RecoveryCleanupState::Completed
             && matches!(
                 self.state,
                 WriterState::Open | WriterState::NotPublished | WriterState::Published

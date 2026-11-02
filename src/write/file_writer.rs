@@ -21,9 +21,11 @@ use crate::error::FsError;
 use crate::error::FsErrorKind;
 use crate::error::FsOperation;
 use crate::error::FsResult;
+use crate::error::RecoveryCleanupState;
 use crate::facade::facade_core::FacadeCore;
 use crate::facade::internal::ByteBudget;
 use crate::facade::internal::FileSystemResource;
+use crate::facade::internal::RecoveryCleanupGuard;
 use crate::metadata::AchievedAtomicity;
 use crate::metadata::AtomicityRequirement;
 use crate::metadata::DurabilityRequirement;
@@ -63,8 +65,10 @@ pub struct FileWriter {
     info: OpenedFileInfo,
     /// Current publication lifecycle state.
     state: WriterState,
-    /// Whether explicit provider cleanup has completed.
-    abort_completed: bool,
+    /// Whether this session has ever had confirmed publication evidence.
+    confirmed_publication: bool,
+    /// Current state of explicit provider cleanup.
+    cleanup_state: RecoveryCleanupState,
     /// Atomicity required by the caller.
     atomicity: AtomicityRequirement,
     /// Durability required by the caller.
@@ -104,7 +108,8 @@ impl FileWriter {
             session,
             info,
             state: WriterState::Open,
-            abort_completed: false,
+            confirmed_publication: false,
+            cleanup_state: RecoveryCleanupState::Pending,
             atomicity,
             durability,
             append,
@@ -135,6 +140,28 @@ impl FileWriter {
         self.state
     }
 
+    /// Returns whether this writer session has confirmed publication at any
+    /// time.
+    ///
+    /// # Returns
+    /// `true` when a commit or abort outcome confirmed publication. `false`
+    /// does not prove that publication did not occur.
+    #[inline]
+    #[must_use]
+    pub const fn has_confirmed_publication(&self) -> bool {
+        self.confirmed_publication
+    }
+
+    /// Returns the state of explicit provider cleanup for this session.
+    ///
+    /// # Returns
+    /// The latest cleanup state, independently of publication history.
+    #[inline]
+    #[must_use]
+    pub const fn cleanup_state(&self) -> RecoveryCleanupState {
+        self.cleanup_state
+    }
+
     /// Publishes bytes accepted by this session.
     ///
     /// This method borrows rather than consumes the writer. The provider's
@@ -149,7 +176,11 @@ impl FileWriter {
     /// provider publication error.
     pub fn commit(&mut self) -> Result<WriteOutcome, WriteFailure> {
         if self.state != WriterState::Open {
-            let publication_state = self.state.publication_failure_state();
+            let publication_state = if self.confirmed_publication {
+                WriteFailureState::Published
+            } else {
+                self.state.publication_failure_state()
+            };
             return Err(WriteFailure::new(
                 self.invalid_state(
                     FsOperation::CommitWriter,
@@ -161,6 +192,7 @@ impl FileWriter {
         let outcome = self.session.commit();
         match outcome {
             Ok(outcome) => {
+                self.confirmed_publication = true;
                 self.state = WriterState::Committed;
                 if self.atomicity == AtomicityRequirement::Required && outcome.atomicity() != AchievedAtomicity::Atomic
                 {
@@ -216,6 +248,9 @@ impl FileWriter {
                     WriteFailureState::Published => WriterState::Published,
                     WriteFailureState::Indeterminate => WriterState::Indeterminate,
                 };
+                if failure.state() == WriteFailureState::Published {
+                    self.confirmed_publication = true;
+                }
                 let (error, state) = failure.into_parts();
                 Err(WriteFailure::new(
                     self.contextual_error(error, FsOperation::CommitWriter),
@@ -241,7 +276,7 @@ impl FileWriter {
     /// Returns [`FsErrorKind::InvalidState`] after commit or a previous abort,
     /// or returns the provider cleanup error while retaining the session.
     pub fn abort(&mut self) -> FsResult<WriteAbortOutcome> {
-        if self.abort_completed
+        if self.cleanup_state == RecoveryCleanupState::Completed
             || !matches!(
                 self.state,
                 WriterState::Open | WriterState::NotPublished | WriterState::Published | WriterState::Indeterminate
@@ -252,9 +287,15 @@ impl FileWriter {
                 "writer cannot be aborted in its current state",
             ));
         }
-        match self.session.abort() {
+        let mut cleanup = RecoveryCleanupGuard::start(&mut self.cleanup_state);
+        let result = self.session.abort();
+        cleanup.finish(result.is_ok());
+        drop(cleanup);
+        match result {
             Ok(outcome) => {
-                self.abort_completed = true;
+                if outcome == WriteAbortOutcome::Published {
+                    self.confirmed_publication = true;
+                }
                 self.state = match outcome {
                     WriteAbortOutcome::NotPublished => WriterState::Aborted,
                     WriteAbortOutcome::Published => WriterState::Published,
@@ -450,7 +491,7 @@ impl Debug for FileWriter {
 
 impl Drop for FileWriter {
     fn drop(&mut self) {
-        if !self.abort_completed
+        if self.cleanup_state != RecoveryCleanupState::Completed
             && matches!(
                 self.state,
                 WriterState::Open | WriterState::NotPublished | WriterState::Published
