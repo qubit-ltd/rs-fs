@@ -257,12 +257,27 @@ guaranteeing persistence success. Required guarantees are validated both before
 dispatch where possible and after outcomes.
 Rename remains a same-filesystem primitive, not a cross-filesystem move protocol.
 
+Metadata-preservation policies select a requested category, not a portable
+field-by-field guarantee. Providers document required, best-effort, and
+excluded fields for each copy or persist operation. `CopyOutcome` records the
+provider's declared category and facade validation compares that category; it
+does not verify every target field. `PersistOutcome` has no field-level
+preservation evidence. See [provider metadata contracts](provider_guide.md#metadata-preservation).
+
 ## Temporary resources
 
 Temporary file/directory handles own cleanup responsibility and expose explicit
 `cleanup`, `keep`, and `persist`. Child creation validates relative paths and
 prevents escaping the owned temporary namespace. Drop cleanup is best effort
 where supported and is not a substitute for confirmation.
+
+For synchronous `TempFile` and `TempDirectory`, Drop calls provider cleanup on
+the current thread only in `Owned` and `CleanupRequired`; it may block and its
+cleanup error is ignored. Explicit `cleanup()` is required when the result
+matters. If cleanup fails while the state remains `CleanupRequired`, Drop may
+try again. In `Cleaned`, `Persisted`, `Kept`, and `Indeterminate`, the facade
+does not call session cleanup from Drop. Async and rejected handles retain
+their separate cancellation and recovery behavior. See the [user guide](user_guide.md#temporary-publication-cleanup).
 
 When a request supplies a parent, the facade also validates the returned
 location after filesystem identity and resource-kind checks. Hierarchical paths

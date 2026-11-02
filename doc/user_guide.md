@@ -202,6 +202,20 @@ The failure's publication state is a snapshot from the failed operation;
 For a rejected writer, the abort result describes cleanup of the isolated session,
 not the unvalidated identity returned by the provider.
 
+Metadata preservation policies select a provider-defined category for the
+operation; they do not guarantee that every `FileMetadata` field is copied.
+Check the provider's copy or persist documentation for its required,
+best-effort, and excluded fields, including platform and resource-kind limits.
+When a field is required by the application, verify it on the target. The
+`CopyOutcome` metadata value is the provider's declaration that it completed
+the requested category; the facade checks that declaration against the request,
+not each target field. `PersistOptions` makes a request as well, and
+`PersistOutcome` carries no field-by-field proof. See the
+[provider guide](provider_guide.md#metadata-preservation) for category meanings
+and the local-copy mapping. Do not automatically retry or remove a published
+target based only on a policy name or a field mismatch; first reconcile the
+operation's publication facts.
+
 <!-- example: sync-recovery -->
 ```rust
 use qubit_fs::FileSystem;
@@ -641,6 +655,17 @@ under the handle's control. The outcome retains validated non-sensitive
 does not locate or retry cleanup of a private container, and providers do not
 promise background cleanup. A handle in `Persisted` or `Kept` state is terminal;
 later `cleanup`, `persist`, and `keep` calls are rejected.
+
+Dropping a synchronous `TempFile` or `TempDirectory` in `Owned` or
+`CleanupRequired` state calls provider cleanup synchronously on the current
+thread. It may perform I/O or block, and Drop ignores cleanup errors. Call
+`cleanup()` explicitly when the result matters. If that call fails and the
+state remains `CleanupRequired`, Drop may make another best-effort attempt;
+cleanup is not guaranteed to be called only once. The facade does not call
+session cleanup from Drop in `Cleaned`, `Persisted`, `Kept`, or `Indeterminate`
+state. Async handles and rejected handles follow their separate cancellation
+and explicit-recovery contracts; do not infer that every temporary handle
+automatically deletes its resource. See [temporary resources in the design](file_system_design.md#temporary-resources).
 
 ## Further reading
 

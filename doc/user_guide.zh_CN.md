@@ -169,6 +169,14 @@ writer 必须显式提交，flush 成功本身不代表已经发布。
 `cleanup_outcome` 记录之后 abort 的结果，不会改写该快照。对于 rejected writer，abort 结果只
 说明隔离会话的清理情况，不代表 provider 返回的未经验证身份。
 
+元数据保留策略为当前操作选择 provider 定义的类别，不保证复制全部
+`FileMetadata` 字段。请查阅 provider 对 copy 或 persist 的说明，了解必需保留、尽力保留和排除的字段，
+以及平台和资源类型限制。业务依赖某个字段时，应检查目标上的实际值。`CopyOutcome` 中的 metadata 值是
+provider 声明已完成所请求类别；门面只检查该声明与请求的类别是否一致，不逐字段检查目标。
+`PersistOptions` 同样只是请求，`PersistOutcome` 不提供逐字段证明。类别含义和 local copy 映射见
+[provider 指南](provider_guide.zh_CN.md#元数据保留)。不能仅依据策略名称或字段不匹配就自动重试或删除已发布目标；
+应先核对操作的发布事实。
+
 <!-- example: sync-recovery -->
 ```rust
 use qubit_fs::FileSystem;
@@ -538,6 +546,13 @@ metadata，流会失败，不会返回缺少 metadata 的条目。同步 `Direct
 供 provider 沿用既有运维机制。portable API 不提供私有容器定位或清理重试能力，provider 也不承诺
 后台清理。不要重复发布或清理已发布目标。句柄进入 `Persisted` 或 `Kept` 状态后即为终态，之后调用
 `cleanup`、`persist` 或 `keep` 都会被拒绝。
+
+同步 `TempFile` 或 `TempDirectory` 句柄处于 `Owned` 或 `CleanupRequired` 状态时被丢弃，
+会在当前线程同步调用 provider cleanup；该调用可能执行 I/O 或阻塞，Drop 会忽略清理错误。
+需要判断结果时应显式调用 `cleanup()`。若显式调用失败且状态仍为 `CleanupRequired`，之后的 Drop
+可能再次尽力清理，因此不能假定 cleanup 总共只调用一次。处于 `Cleaned`、`Persisted`、`Kept` 或
+`Indeterminate` 状态时，门面不会在 Drop 中调用 session cleanup。异步句柄和 rejected 句柄遵循各自的
+取消及显式恢复契约；不能推断所有临时句柄都会自动删除资源。详见[架构中的临时资源](file_system_design.zh_CN.md#临时资源)。
 
 ## 延伸阅读
 

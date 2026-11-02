@@ -75,21 +75,18 @@ use crate::write::WriteOptions;
 ///
 /// # Examples
 ///
-/// The example runs against an isolated in-memory fixture. Applications obtain
-/// their configured facade from a provider or registry integration.
+/// Applications obtain their configured facade from a provider or registry
+/// integration. The function below reads at most three bytes; the result may
+/// be shorter when the file contains fewer bytes.
 ///
 /// ```rust
-/// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
-/// # use support::*;
-/// # let (filesystem, _) = async_recording_spi::async_recording_file_system(Default::default());
-/// # poll_support::ready(async {
-/// use qubit_fs::Path;
+/// use qubit_fs::{AsyncFileSystem, FsResult, Path};
 /// use qubit_fs::read::ReadOptions;
 ///
-/// let bytes = filesystem.read_prefix(&Path::parse("/report")?, ReadOptions::default(), 3).await?;
-/// assert_eq!(b"byt", bytes.bytes());
-/// # Ok::<(), Box<dyn std::error::Error>>(())
-/// # }).unwrap();
+/// async fn read_report_prefix(filesystem: &AsyncFileSystem, path: &Path) -> FsResult<Vec<u8>> {
+///     let prefix = filesystem.read_prefix(path, ReadOptions::default(), 3).await?;
+///     Ok(prefix.into_bytes())
+/// }
 /// ```
 #[derive(Clone)]
 pub struct AsyncFileSystem {

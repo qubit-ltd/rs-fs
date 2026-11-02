@@ -34,6 +34,20 @@ use crate::temp::internal::TempLifecycle;
 /// Temporary directory retaining the provider session until lifecycle
 /// completion.
 ///
+/// Dropping this synchronous handle while its state is
+/// [`TempResourceState::Owned`] or [`TempResourceState::CleanupRequired`] calls
+/// provider cleanup synchronously on the current thread. Cleanup may perform
+/// I/O and block, and any cleanup error is ignored. Call [`Self::cleanup`]
+/// explicitly when the result matters; if it fails and leaves the state as
+/// `CleanupRequired`, dropping the handle may make another best-effort cleanup
+/// attempt. The facade does not call cleanup on drop in the `Cleaned`,
+/// `Persisted`, `Kept`, or `Indeterminate` states.
+///
+/// This contract applies to synchronous handles. Async handles use their
+/// separate `cancel_on_drop` behavior, and rejected handles use their isolated
+/// recovery contract; neither implies synchronous cleanup by dropping this
+/// type.
+///
 /// # Examples
 ///
 /// ```rust
@@ -215,6 +229,11 @@ impl TempDirectory {
         }
     }
     /// Cleans the temporary directory.
+    ///
+    /// Call this method when cleanup success or failure must be observed.
+    /// Unlike dropping an owned handle, this returns the provider result. If
+    /// cleanup fails while the state remains `CleanupRequired`, a later drop
+    /// may make another best-effort attempt.
     ///
     /// # Errors
     /// Returns an invalid-state error when cleanup is no longer legal, or the

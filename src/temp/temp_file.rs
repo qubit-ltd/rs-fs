@@ -31,21 +31,33 @@ use crate::temp::internal::TempLifecycle;
 
 /// Temporary file retaining the provider session until its lifecycle completes.
 ///
+/// Dropping this synchronous handle while its state is
+/// [`TempResourceState::Owned`] or [`TempResourceState::CleanupRequired`] calls
+/// provider cleanup synchronously on the current thread. Cleanup may perform
+/// I/O and block, and any cleanup error is ignored. Call [`Self::cleanup`]
+/// explicitly when the result matters; if it fails and leaves the state as
+/// `CleanupRequired`, dropping the handle may make another best-effort cleanup
+/// attempt. The facade does not call cleanup on drop in the `Cleaned`,
+/// `Persisted`, `Kept`, or `Indeterminate` states.
+///
+/// This contract applies to synchronous handles. Async handles use their
+/// separate `cancel_on_drop` behavior, and rejected handles use their isolated
+/// recovery contract; neither implies synchronous cleanup by dropping this
+/// type.
+///
 /// # Examples
 ///
-/// This example uses an isolated in-memory provider fixture.
-///
 /// ```rust
-/// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
-/// # let filesystem = support::rustdoc_provider::filesystem();
-/// use qubit_fs::temp::TempOptions;
-/// use qubit_fs::temp::TempResourceState;
+/// use qubit_fs::FileSystem;
+/// use qubit_fs::temp::{TempOptions, TempResourceState};
 ///
-/// let mut temporary = filesystem.create_temp_file(TempOptions::default())?;
-/// assert_eq!(TempResourceState::Owned, temporary.state());
-/// temporary.cleanup()?;
-/// assert_eq!(TempResourceState::Cleaned, temporary.state());
-/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// fn create_and_cleanup(filesystem: &FileSystem) -> Result<(), Box<dyn std::error::Error>> {
+///     let mut temporary = filesystem.create_temp_file(TempOptions::default())?;
+///     assert_eq!(TempResourceState::Owned, temporary.state());
+///     temporary.cleanup()?;
+///     assert_eq!(TempResourceState::Cleaned, temporary.state());
+///     Ok(())
+/// }
 /// ```
 pub struct TempFile {
     /// Facade that owns validation and persistence policy.
@@ -179,6 +191,11 @@ impl TempFile {
         }
     }
     /// Cleans the source and releases the session responsibility.
+    ///
+    /// Call this method when cleanup success or failure must be observed.
+    /// Unlike dropping an owned handle, this returns the provider result. If
+    /// cleanup fails while the state remains `CleanupRequired`, a later drop
+    /// may make another best-effort attempt.
     ///
     /// # Errors
     /// Returns an invalid-state error when cleanup is no longer legal, or the

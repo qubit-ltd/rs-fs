@@ -46,7 +46,7 @@ pub struct PersistOptions {
     overwrite: bool,
     /// Required atomicity level.
     atomicity: AtomicityRequirement,
-    /// Metadata preservation policy.
+    /// Metadata preservation policy requested for persistence.
     preserve_metadata: MetadataPreservePolicy,
     /// Whether a missing destination parent is created before publication.
     create_parent: bool,
@@ -67,7 +67,12 @@ impl PersistOptions {
         self.atomicity
     }
 
-    /// Returns the metadata preservation policy.
+    /// Returns the metadata preservation policy requested from the provider.
+    ///
+    /// See [`MetadataPreservePolicy`](crate::copy::MetadataPreservePolicy) for
+    /// the category semantics. The provider documents the fields supported for
+    /// persistence; [`PersistOutcome`](super::PersistOutcome) does not provide
+    /// field-by-field evidence that metadata was preserved.
     #[inline]
     #[must_use]
     pub const fn preserve_metadata(&self) -> MetadataPreservePolicy {
@@ -105,7 +110,13 @@ impl PersistOptions {
         self
     }
 
-    /// Replaces the metadata preservation policy.
+    /// Replaces the metadata preservation policy requested for persistence.
+    ///
+    /// The policy selects a category; it does not guarantee a common field set
+    /// across providers. Consult the provider's persistence documentation for
+    /// supported, best-effort, and excluded fields. The resulting
+    /// [`PersistOutcome`](super::PersistOutcome) does not verify individual
+    /// metadata fields.
     #[inline]
     #[must_use]
     pub const fn with_preserve_metadata(mut self, preserve_metadata: MetadataPreservePolicy) -> Self {

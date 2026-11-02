@@ -542,6 +542,47 @@ provider background cleanup. The outcome retains validated non-sensitive
 mechanisms to handle private residuals. A handle in `Persisted` or `Kept` state
 is terminal: further `cleanup`, `persist`, or `keep` calls are rejected.
 
+## Metadata preservation
+
+`MetadataPreservePolicy` selects a category for one operation. It does not
+define a uniform cross-provider field set. Document the operation's supported
+fields and any platform or resource-kind differences in a field table that
+separates required, best-effort, and excluded fields. A best-effort field must
+remain within its published scope; do not silently downgrade a required field.
+
+| Policy | Contract |
+| --- | --- |
+| `None` | Requests no explicit source-metadata copying; native copy or rename may still give the target inherent properties. |
+| `Portable` | Requests the provider's documented, settable common-attribute category for this operation; it promises no common nonempty field set across providers. |
+| `UserMetadata` | Requests supported user-defined metadata; it does not implicitly include `Portable` or provider-native metadata. |
+| `ProviderNative` | Requests the provider's representable native category; document its support and best-effort limits. |
+| `All` | Requests the union of categories representable by this operation; exclude unrepresentable fields explicitly. It does not copy resource identity, generated versions, or every read-only observation. |
+
+When a requested category is unsupported, report `RequirementNotMet` when this
+can be determined before I/O. A field-setting failure during I/O must retain
+the real error and known publication facts. `CopyOutcome::metadata()` is the
+provider's completion declaration; facade validation compares the policy
+variant and does not read back every target field. `PersistOptions` is a
+request, while `PersistOutcome` has no field-level preservation evidence.
+Neither outcome should be documented as proof of individual fields. The
+defaults remain `CopyOptions::None` and `PersistOptions::Portable`.
+
+The current local adapter's **copy** mapping is:
+
+| Policy | Local copy mapping |
+| --- | --- |
+| `None` | Native `None` |
+| `Portable` | Native `Permissions` |
+| `UserMetadata`, `ProviderNative`, `All` | `RequirementNotMet` |
+
+The precise platform representation of permissions is defined by
+`rs-local-files`. This mapping does not promise timestamps, owner, ACL, xattr,
+or content type preservation. Do not reuse this table for local persist: its
+options map overwrite and parent creation separately, and its outcome does not
+prove field preservation. Native rename behavior is not a policy guarantee;
+applications with field requirements should consult the operation's provider
+documentation and inspect the target.
+
 ## 15. Further reading
 
 - [User guide](user_guide.md) · [中文用户指南](user_guide.zh_CN.md)

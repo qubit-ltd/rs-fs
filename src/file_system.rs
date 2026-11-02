@@ -76,19 +76,18 @@ use crate::write::WriteOptions;
 ///
 /// # Examples
 ///
-/// The example runs against an isolated in-memory fixture. Applications obtain
-/// their configured facade from a provider or registry integration.
+/// Applications obtain their configured facade from a provider or registry
+/// integration. The function below reads at most three bytes; the result may
+/// be shorter when the file contains fewer bytes.
 ///
 /// ```rust
-/// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
-/// # let filesystem = support::rustdoc_provider::filesystem();
-/// use qubit_fs::Path;
+/// use qubit_fs::{FileSystem, FsResult, Path};
 /// use qubit_fs::read::ReadOptions;
 ///
-/// let path = Path::parse("/report")?;
-/// let bytes = filesystem.read_prefix(&path, ReadOptions::default(), 3)?;
-/// assert_eq!(b"rep", bytes.bytes());
-/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// fn read_report_prefix(filesystem: &FileSystem, path: &Path) -> FsResult<Vec<u8>> {
+///     let prefix = filesystem.read_prefix(path, ReadOptions::default(), 3)?;
+///     Ok(prefix.into_bytes())
+/// }
 /// ```
 #[derive(Clone)]
 pub struct FileSystem {

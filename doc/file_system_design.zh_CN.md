@@ -192,10 +192,19 @@ durability 字段，持久化成功不能证明已完成持久同步。
 保证会在可行时于分派前检查，并在完成后根据 outcome 校验。rename 是同一文件系统的原语，
 不是跨文件系统 move 协议。
 
+元数据保留策略选择的是请求类别，不是可移植的逐字段保证。provider 应分别说明每个 copy 或 persist 操作的
+必需保留、尽力保留和排除字段。`CopyOutcome` 记录 provider 声明的类别，门面只校验类别，不逐字段验证目标；
+`PersistOutcome` 不提供字段级保留证据。详见 [provider 元数据契约](provider_guide.zh_CN.md#元数据保留)。
+
 ## 临时资源
 
 临时文件和目录句柄拥有清理责任，提供显式 `cleanup`、`keep`、`persist`。创建子资源时校验
 相对路径，防止逃出所拥有的临时命名空间。支持的 Drop 清理仅尽力执行，不能替代完成确认。
+
+同步 `TempFile` 和 `TempDirectory` 仅在 `Owned`、`CleanupRequired` 状态下由 Drop 在当前线程调用 provider
+cleanup；该操作可能阻塞，清理错误会被忽略。需要确认结果时应显式调用 `cleanup()`。若清理失败后状态仍为
+`CleanupRequired`，Drop 可能再次尝试。处于 `Cleaned`、`Persisted`、`Kept`、`Indeterminate` 状态时，门面不会
+在 Drop 中调用 session cleanup。异步和 rejected 句柄仍遵循各自的取消及恢复行为。详见[用户指南](user_guide.zh_CN.md#临时资源发布后的清理)。
 
 请求指定 parent 时，门面还会在校验 filesystem 身份和资源 kind 后验证返回位置。层级路径必须
 是组件级严格后代；provider 可将相对 parent 投影为保留相同组件前缀的绝对逻辑路径，绝对 parent

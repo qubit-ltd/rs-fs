@@ -483,6 +483,37 @@ provider，门面仍独立校验该计数。
 既有运维机制处理私有残留。句柄处于 `Persisted` 或 `Kept` 状态后即为终态，后续 `cleanup`、`persist`
 或 `keep` 调用都会被拒绝。
 
+## 元数据保留
+
+`MetadataPreservePolicy` 为单个操作选择一个类别，不定义跨 provider 统一的字段集合。provider 应按操作
+列出支持字段及平台、资源类型差异，并区分必需保留、尽力保留和排除字段。尽力保留字段必须处于已公开
+的范围内；不能静默降低必需字段的保证。
+
+| 策略 | 契约 |
+| --- | --- |
+| `None` | 不请求显式复制源 metadata；原生 copy 或 rename 仍可能使目标获得固有属性。 |
+| `Portable` | 请求该操作已公开说明的、可设置的通用属性类别；不承诺跨 provider 存在统一的非空字段集合。 |
+| `UserMetadata` | 请求受支持的用户自定义 metadata；不会自动包含 `Portable` 或 provider-native metadata。 |
+| `ProviderNative` | 请求 provider 可表示的原生类别；应说明支持范围与尽力处理边界。 |
+| `All` | 请求该操作可表示类别的并集；应明确排除不可表示字段。它不复制资源身份、生成的版本号或全部只读观测值。 |
+
+请求类别不受支持时，如能在 I/O 前判定，应返回 `RequirementNotMet`。I/O 中设置字段失败时必须保留真实错误
+和已知发布事实。`CopyOutcome::metadata()` 是 provider 对完成情况的声明；门面只比较策略枚举，不会读回并逐字段
+核验目标。`PersistOptions` 是请求，`PersistOutcome` 没有字段级保留证据。两个 outcome 都不应被文档描述为
+逐字段证明。默认值仍是 `CopyOptions::None` 和 `PersistOptions::Portable`。
+
+当前 local adapter 的 **copy** 映射如下：
+
+| 策略 | Local copy 映射 |
+| --- | --- |
+| `None` | Native `None` |
+| `Portable` | Native `Permissions` |
+| `UserMetadata`、`ProviderNative`、`All` | `RequirementNotMet` |
+
+权限的具体平台表示由 `rs-local-files` 定义。此映射不承诺保留时间戳、owner、ACL、xattr 或 content type。
+不能将此表用于 local persist：其选项分别映射 overwrite 和创建父目录，outcome 也不证明字段保留。
+原生 rename 行为不是策略保证；业务依赖字段时应查阅该操作的 provider 文档并检查目标。
+
 ## 15. 延伸阅读
 
 - [English user guide](user_guide.md) · [中文用户指南](user_guide.zh_CN.md)

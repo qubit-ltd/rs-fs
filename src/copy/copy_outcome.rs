@@ -144,7 +144,12 @@ impl CopyOutcome {
         self.durable
     }
 
-    /// Returns the metadata preservation result represented by this outcome.
+    /// Returns the metadata preservation category the provider reports as
+    /// achieved.
+    ///
+    /// This is the provider's completion declaration under the documented
+    /// policy; the facade checks that the reported category matches the
+    /// request, but does not read the destination to verify individual fields.
     ///
     /// # Returns
     /// The metadata preservation policy the provider reports as achieved.
@@ -213,14 +218,18 @@ impl CopyOutcome {
         self
     }
 
-    /// Records the metadata preservation policy actually achieved by the
-    /// provider.
+    /// Records the metadata preservation policy the provider declares as
+    /// achieved.
+    ///
+    /// The facade checks this category against the request. It does not verify
+    /// individual destination fields, so provider documentation defines the
+    /// fields covered by this declaration.
     ///
     /// # Parameters
     /// - `metadata`: The preservation policy the provider reports as achieved.
     ///
     /// # Returns
-    /// This outcome with the achieved metadata policy recorded.
+    /// This outcome with the provider-reported metadata policy recorded.
     #[inline]
     #[must_use]
     pub fn with_metadata(mut self, metadata: MetadataPreservePolicy) -> Self {
