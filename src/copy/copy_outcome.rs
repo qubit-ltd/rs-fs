@@ -288,10 +288,19 @@ impl CopyOutcome {
         if options.max_bytes().is_some_and(|maximum| self.stats.bytes > maximum) {
             return Some("provider reported copy bytes beyond the requested limit");
         }
-        let entries = self.entry_count();
-        if entries.is_none()
-            || options.max_entries().is_some_and(|maximum| {
-                u64::try_from(maximum).is_ok_and(|maximum| entries.is_some_and(|entries| entries > maximum))
+        let Some(entries) = self.entry_count() else {
+            return Some("provider reported copy entries beyond the requested limit");
+        };
+        if options
+            .max_entries()
+            .and_then(|maximum| u64::try_from(maximum).ok())
+            .is_some_and(|maximum| {
+                entries > maximum
+                    || self.stats.skipped > maximum
+                    || entries
+                        .checked_add(self.stats.skipped)
+                        .is_none_or(|processed_lower_bound| processed_lower_bound > maximum)
+                    || self.stats.failed > maximum
             })
         {
             return Some("provider reported copy entries beyond the requested limit");

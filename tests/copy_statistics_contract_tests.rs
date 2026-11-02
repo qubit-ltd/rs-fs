@@ -330,6 +330,134 @@ fn test_statistics_shape_preserves_empty_and_partial_failure_boundaries() {
     );
 }
 
+#[test]
+fn test_entry_budget_counts_skipped_and_completed_resources() {
+    let stats = CopyStats {
+        skipped: 2,
+        ..CopyStats::default()
+    };
+    let spi = CopyStatsSpi::new(stats, AchievedAtomicity::Atomic);
+    let calls = Arc::clone(&spi.calls);
+    let failure = spi.into_filesystem().copy(
+        &path("/source"),
+        &path("/target"),
+        CopyOptions::tree()
+            .with_conflict(CopyConflictPolicy::Skip)
+            .with_max_entries(Some(1)),
+    );
+
+    let failure = failure.expect_err("processed source entries exceed the requested budget");
+    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+    assert_eq!(CopyFailureState::Unchanged, failure.state());
+    assert_eq!(stats, *failure.partial_stats());
+    assert_eq!(1, calls.load(Ordering::SeqCst));
+
+    for (stats, options, should_succeed) in [
+        (
+            CopyStats {
+                skipped: 1,
+                ..CopyStats::default()
+            },
+            CopyOptions::tree().with_conflict(CopyConflictPolicy::Skip),
+            true,
+        ),
+        (
+            CopyStats {
+                files: 1,
+                skipped: 1,
+                ..CopyStats::default()
+            },
+            CopyOptions::tree().with_conflict(CopyConflictPolicy::Skip),
+            false,
+        ),
+        (
+            CopyStats {
+                files: 1,
+                overwritten: 1,
+                ..CopyStats::default()
+            },
+            CopyOptions::tree().with_conflict(CopyConflictPolicy::Overwrite),
+            true,
+        ),
+        (
+            CopyStats {
+                files: u64::MAX,
+                skipped: 1,
+                ..CopyStats::default()
+            },
+            CopyOptions::tree().with_conflict(CopyConflictPolicy::Skip),
+            false,
+        ),
+        (
+            CopyStats {
+                skipped: 2,
+                ..CopyStats::default()
+            },
+            CopyOptions::tree().with_conflict(CopyConflictPolicy::Skip),
+            true,
+        ),
+    ] {
+        let mut options = options;
+        if options.max_entries().is_some() {
+            options = options.with_max_entries(None);
+        }
+        // The final unbounded row exercises the no-limit case; other rows use
+        // a one-entry budget.
+        let is_unbounded = stats.skipped == 2 && stats.files == 0;
+        if !is_unbounded {
+            options = options.with_max_entries(Some(1));
+        }
+        let result = CopyStatsSpi::new(stats, AchievedAtomicity::Atomic)
+            .into_filesystem()
+            .copy(&path("/source"), &path("/target"), options);
+        assert_eq!(should_succeed, result.is_ok(), "stats={stats:?}");
+    }
+
+    let failed_stats = CopyStats {
+        failed: 2,
+        ..CopyStats::default()
+    };
+    let failure = CopyStatsSpi::new(failed_stats, AchievedAtomicity::Atomic)
+        .into_filesystem()
+        .copy(
+            &path("/source"),
+            &path("/target"),
+            CopyOptions::tree()
+                .with_continue_on_error(true)
+                .with_max_entries(Some(1)),
+        )
+        .expect_err("failed entries alone exceed the requested limit");
+    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+    assert_eq!(CopyFailureState::Indeterminate, failure.state());
+    assert_eq!(failed_stats, *failure.partial_stats());
+}
+
+#[test]
+fn test_entry_budget_rejection_preserves_published_state_and_statistics() {
+    let stats = CopyStats {
+        files: 1,
+        skipped: 1,
+        ..CopyStats::default()
+    };
+    let spi = CopyStatsSpi::new(stats, AchievedAtomicity::Atomic);
+    let calls = Arc::clone(&spi.calls);
+    let failure = spi
+        .into_filesystem()
+        .copy(
+            &path("/source"),
+            &path("/target"),
+            CopyOptions::tree()
+                .with_conflict(CopyConflictPolicy::Skip)
+                .with_max_entries(Some(1)),
+        )
+        .expect_err("completed plus skipped entries exceed the budget");
+
+    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+    assert_eq!(CopyFailureState::Published, failure.state());
+    assert_eq!(stats, *failure.partial_stats());
+    assert_eq!(1, calls.load(Ordering::SeqCst));
+}
+
 impl CopyStatsSpi {
     fn into_filesystem(self) -> FileSystem {
         FileSystem::from_spi(self).expect("facade should construct")
@@ -566,5 +694,31 @@ mod asynchronous {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_async_entry_budget_counts_skipped_and_completed_resources() {
+        let stats = CopyStats {
+            skipped: 2,
+            ..CopyStats::default()
+        };
+        let spi = CopyStatsSpi::new(stats, AchievedAtomicity::Atomic);
+        let calls = Arc::clone(&spi.calls);
+        let mut operation = filesystem(spi)
+            .begin_copy(
+                path("/source"),
+                path("/target"),
+                CopyOptions::tree()
+                    .with_conflict(CopyConflictPolicy::Skip)
+                    .with_max_entries(Some(1)),
+            )
+            .expect("copy preflight should succeed");
+        let result = ready(operation.execute());
+
+        let failure = result.expect_err("processed source entries exceed the requested budget");
+        assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+        assert_eq!(CopyFailureState::Unchanged, failure.state());
+        assert_eq!(stats, *failure.partial_stats());
+        assert_eq!(1, calls.load(Ordering::SeqCst));
     }
 }

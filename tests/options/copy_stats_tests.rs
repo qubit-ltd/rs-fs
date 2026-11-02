@@ -68,3 +68,25 @@ fn test_copy_stats_add_assign_rejects_overflow_atomically() {
     assert_eq!(FsOperation::Copy, error.operation());
     assert_eq!(u64::MAX, stats.files);
 }
+
+#[test]
+fn test_copy_stats_late_overflow_preserves_entire_receiver() {
+    let mut stats = CopyStats {
+        files: 3,
+        bytes: 7,
+        failed: u64::MAX,
+        ..CopyStats::default()
+    };
+    let before = stats;
+    let error = stats
+        .add_assign(&CopyStats {
+            files: 2,
+            bytes: 5,
+            failed: 1,
+            ..CopyStats::default()
+        })
+        .expect_err("late counter overflow must fail atomically");
+    assert_eq!(stats, before);
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, error.kind());
+    assert_eq!(FsOperation::Copy, error.operation());
+}
