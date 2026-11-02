@@ -456,6 +456,7 @@ fn stream_copy_fallback<'a>(
         }
         let mut bytes = 0_u64;
         let mut buffer = [0_u8; 8192];
+        let mut writes_since_yield = 0_usize;
         loop {
             if deadline.expired() {
                 let writer = writer_slot
@@ -521,7 +522,6 @@ fn stream_copy_fallback<'a>(
                 )
             })?;
             let mut offset = 0;
-            let mut ready_short_writes = 0;
             while offset < read {
                 if deadline.expired() {
                     return Err(filesystem.contextual_copy_failure(
@@ -532,7 +532,6 @@ fn stream_copy_fallback<'a>(
                         target,
                     ));
                 }
-                let remaining = read - offset;
                 let written = match writer.write_async(&buffer[offset..read]).await {
                     Ok(written) => written,
                     Err(error) => {
@@ -571,24 +570,20 @@ fn stream_copy_fallback<'a>(
                         target,
                     ));
                 }
-                if written < remaining {
-                    ready_short_writes += 1;
-                    if ready_short_writes == 64 && offset < read {
-                        let mut yielded = false;
-                        std::future::poll_fn(|cx| {
-                            if yielded {
-                                std::task::Poll::Ready(())
-                            } else {
-                                yielded = true;
-                                cx.waker().wake_by_ref();
-                                std::task::Poll::Pending
-                            }
-                        })
-                        .await;
-                        ready_short_writes = 0;
-                    }
-                } else {
-                    ready_short_writes = 0;
+                writes_since_yield += 1;
+                if writes_since_yield == 64 {
+                    let mut yielded = false;
+                    std::future::poll_fn(|cx| {
+                        if yielded {
+                            std::task::Poll::Ready(())
+                        } else {
+                            yielded = true;
+                            cx.waker().wake_by_ref();
+                            std::task::Poll::Pending
+                        }
+                    })
+                    .await;
+                    writes_since_yield = 0;
                 }
             }
             bytes = next_bytes;

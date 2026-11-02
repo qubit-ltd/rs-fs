@@ -9,8 +9,12 @@
 
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::task::Context;
 use std::task::Poll;
+use std::task::Wake;
 use std::task::Waker;
 use std::time::Duration;
 
@@ -69,6 +73,77 @@ use crate::poll_support::ready;
 /// Returns a stable absolute path for copy scenarios.
 fn path(value: &str) -> Path {
     Path::parse(value).expect("test path should parse")
+}
+
+struct FairnessWake(AtomicUsize);
+
+impl Wake for FairnessWake {
+    fn wake(self: Arc<Self>) {
+        self.0.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+#[test]
+fn test_async_copy_fairness_complete_and_short_reads() {
+    for (reader_chunk, length) in [(None, 8192 * 65), (Some(1), 65)] {
+        let input = vec![7_u8; length];
+        let (filesystem, probe) = async_recording_file_system(AsyncRecordingConfig {
+            decline_copy: true,
+            reader_bytes: Some(input.clone()),
+            reader_chunk,
+            ..AsyncRecordingConfig::default()
+        });
+        let mut operation = filesystem
+            .begin_copy(path("/source"), path("/target"), CopyOptions::default())
+            .expect("copy preflight");
+        let wake = Arc::new(FairnessWake(AtomicUsize::new(0)));
+        let waker = Waker::from(wake.clone());
+        let mut context = Context::from_waker(&waker);
+        let mut future = Box::pin(operation.execute());
+        assert!(future.as_mut().poll(&mut context).is_pending());
+        let progress = probe.written_bytes().len();
+        assert!(progress > 0 && progress < input.len());
+        assert_eq!(0, probe.writer_commits());
+        assert!(wake.0.load(Ordering::SeqCst) > 0);
+        let outcome = ready_repoll(future).expect("copy completes after repoll");
+        assert_eq!(input.len() as u64, outcome.stats().bytes);
+        assert_eq!(input, probe.written_bytes());
+        assert_eq!(1, probe.writer_commits());
+    }
+}
+
+#[test]
+fn test_async_copy_fairness_cancel_preserves_progress() {
+    let input = vec![7_u8; 65];
+    let (filesystem, probe) = async_recording_file_system(AsyncRecordingConfig {
+        decline_copy: true,
+        reader_bytes: Some(input),
+        reader_chunk: Some(1),
+        ..AsyncRecordingConfig::default()
+    });
+    let mut operation = filesystem
+        .begin_copy(path("/source"), path("/target"), CopyOptions::default())
+        .expect("copy preflight");
+    let mut future = Box::pin(operation.execute());
+    let mut context = Context::from_waker(Waker::noop());
+    assert!(future.as_mut().poll(&mut context).is_pending());
+    let progress = probe.written_bytes().len() as u64;
+    assert!(progress > 0);
+    drop(future);
+    assert_eq!(
+        AsyncCopyOperationState::Failed(CopyFailureState::Indeterminate),
+        operation.state()
+    );
+    assert!(operation.has_recovery());
+    match operation.recovery().expect("writer retained") {
+        AsyncWriterRecovery::Opened(writer) => assert_eq!(WriterState::Indeterminate, writer.state()),
+        AsyncWriterRecovery::Rejected(_) => panic!("validated writer expected"),
+    }
+    assert_eq!(0, probe.writer_commits());
+    assert_eq!(0, probe.writer_aborts());
+    let failure = ready(operation.execute()).expect_err("execute is single-use");
+    assert_eq!(FsErrorKind::InvalidState, failure.error().kind());
+    assert_eq!(progress, failure.partial_stats().bytes);
 }
 
 /// Repolls a deterministic test future when its provider intentionally yields.

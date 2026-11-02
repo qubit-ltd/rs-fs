@@ -116,6 +116,8 @@ pub(crate) struct AsyncRecordingConfig {
     pub(crate) invalid_stat_path: bool,
     pub(crate) stat_kind: Option<FileKind>,
     pub(crate) reader_bytes: Option<Vec<u8>>,
+    /// Maximum bytes returned by one successful reader call.
+    pub(crate) reader_chunk: Option<usize>,
     pub(crate) native_copy_stats: Option<CopyStats>,
     pub(crate) atomic_temp_persist: bool,
     pub(crate) completed_copy: Option<AchievedAtomicity>,
@@ -718,7 +720,10 @@ impl AsyncInput for RecordingInput {
         }
         let default_bytes = b"bytes";
         let bytes = this.config.reader_bytes.as_deref().unwrap_or(default_bytes);
-        let read = bytes[this.position..].len().min(count);
+        let read = bytes[this.position..]
+            .len()
+            .min(count)
+            .min(this.config.reader_chunk.unwrap_or(usize::MAX));
         output[index..index + read].copy_from_slice(&bytes[this.position..this.position + read]);
         this.position += read;
         Poll::Ready(Ok(read))
