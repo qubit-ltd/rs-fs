@@ -354,6 +354,12 @@ cleanup, and recovery failures separately. A failed cleanup is not proof that
 the target is absent. Follow the `CopyOutcome` and write recovery contracts;
 retain the primary failure and any cleanup error for observability.
 
+If a nonempty write accepts a prefix and a later write makes no progress, the
+publication state is indeterminate. The provider may have exposed accepted
+bytes directly, and the facade cannot infer isolation even when the provider
+uses staging internally. Keep the recovery value and use the explicit abort or
+reconciliation result; do not blindly retry commit.
+
 For temporary persistence, report the current call's publication fact and the
 source qualification independently. Use `NotPublishedSourceIndeterminate` when
 this call is known not to have published the target but source mutation

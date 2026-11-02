@@ -143,11 +143,10 @@ pub(crate) struct AsyncRecordingConfig {
     pub(crate) writer_chunk: Option<usize>,
     /// Successful bytes before an injected write suspension or failure.
     pub(crate) writer_progress_before_stop: usize,
-    /// Returns zero after the configured number of accepted direct-append
-    /// bytes.
+    /// Returns zero after the configured number of accepted bytes.
     pub(crate) writer_zero_progress_after: Option<usize>,
-    /// Makes accepted writer bytes immediately visible and advertises Append.
-    pub(crate) writer_direct_append: bool,
+    /// Makes accepted writer bytes immediately visible.
+    pub(crate) writer_direct: bool,
     pub(crate) range_read: bool,
     pub(crate) maximum_read_range_bytes: Option<u64>,
     pub(crate) maximum_write_bytes: Option<u64>,
@@ -297,7 +296,7 @@ impl AsyncRecordingSpi {
                 capabilities = capabilities.with_guaranteed(capability);
             }
         }
-        if self.config.writer_direct_append {
+        if self.config.writer_direct {
             capabilities = capabilities.with_guaranteed(FileSystemCapability::Append);
         }
         if self.config.completed_copy.is_some() {
@@ -845,7 +844,7 @@ impl AsyncFileWriteSession for RecordingWriter {
         if config.pending_stage == Some(AsyncCopyStage::WriterAbort) {
             return Box::pin(std::future::pending());
         }
-        let published = this.confirmed > 0 && config.writer_direct_append;
+        let published = this.confirmed > 0 && config.writer_direct;
         Box::pin(async move {
             match config.writer_abort_failure {
                 Some(kind) => Err(FsError::new(kind, FsOperation::AbortWriter, "injected abort failure")),

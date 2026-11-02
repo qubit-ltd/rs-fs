@@ -78,8 +78,6 @@ pub struct AsyncFileWriter {
     atomicity: AtomicityRequirement,
     /// Durability required by the caller.
     durability: DurabilityRequirement,
-    /// Whether this writer appends to an existing destination.
-    append: bool,
     /// Provider identifier attached to facade-generated errors.
     provider: Box<str>,
     /// Optional inclusive byte limit for this write session.
@@ -94,7 +92,6 @@ impl AsyncFileWriter {
     /// # Parameters
     /// - `session`: Runtime-neutral asynchronous write session.
     /// - `info`: File identity and optional open-time metadata snapshot.
-    /// - `append`: Whether this writer appends to an existing destination.
     ///
     /// # Returns
     /// A concrete writer in [`WriterState::Open`].
@@ -105,7 +102,6 @@ impl AsyncFileWriter {
         session: Box<dyn AsyncFileWriteSession>,
         atomicity: AtomicityRequirement,
         durability: DurabilityRequirement,
-        append: bool,
         provider: &str,
         max_write_bytes: Option<u64>,
     ) -> Self {
@@ -117,7 +113,6 @@ impl AsyncFileWriter {
             cleanup_state: RecoveryCleanupState::Pending,
             atomicity,
             durability,
-            append,
             provider: provider.into(),
             write_budget: max_write_bytes
                 .map(|maximum| FacadeCore::byte_budget(FileSystemResource::WriteBytes, maximum)),
@@ -473,7 +468,7 @@ impl AsyncOutput for AsyncFileWriter {
                     this.state = WriterState::Indeterminate;
                     return Poll::Ready(Err(error));
                 }
-                if count > 0 && written == 0 && this.written_bytes > 0 && this.append {
+                if count > 0 && written == 0 && this.written_bytes > 0 {
                     this.state = WriterState::Indeterminate;
                 }
                 Poll::Ready(Ok(written))
@@ -600,7 +595,6 @@ mod tests {
             Box::new(Session),
             AtomicityRequirement::default(),
             DurabilityRequirement::default(),
-            false,
             "async-writer-test",
             None,
         );

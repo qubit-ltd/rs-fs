@@ -73,8 +73,6 @@ pub struct FileWriter {
     atomicity: AtomicityRequirement,
     /// Durability required by the caller.
     durability: DurabilityRequirement,
-    /// Whether this writer appends to an existing destination.
-    append: bool,
     /// Provider identifier attached to facade-generated errors.
     provider: Box<str>,
     /// Optional inclusive byte limit for this write session.
@@ -89,7 +87,6 @@ impl FileWriter {
     /// # Parameters
     /// - `session`: Provider session accepting file bytes.
     /// - `info`: File identity and optional open-time metadata snapshot.
-    /// - `append`: Whether this writer appends to an existing destination.
     ///
     /// # Returns
     /// A concrete writer in [`WriterState::Open`].
@@ -100,7 +97,6 @@ impl FileWriter {
         session: Box<dyn FileWriterSpi>,
         atomicity: AtomicityRequirement,
         durability: DurabilityRequirement,
-        append: bool,
         provider: &str,
         max_write_bytes: Option<u64>,
     ) -> Self {
@@ -112,7 +108,6 @@ impl FileWriter {
             cleanup_state: RecoveryCleanupState::Pending,
             atomicity,
             durability,
-            append,
             provider: provider.into(),
             write_budget: max_write_bytes
                 .map(|maximum| FacadeCore::byte_budget(FileSystemResource::WriteBytes, maximum)),
@@ -436,7 +431,7 @@ impl Output for FileWriter {
                     self.state = WriterState::Indeterminate;
                     return Err(error);
                 }
-                if count > 0 && value == 0 && self.written_bytes > 0 && self.append {
+                if count > 0 && value == 0 && self.written_bytes > 0 {
                     self.state = WriterState::Indeterminate;
                 }
                 Ok(value)

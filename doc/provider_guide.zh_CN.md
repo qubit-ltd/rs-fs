@@ -343,6 +343,8 @@ pub async fn stat_health() -> FsResult<FileMetadata> {
 writer 和临时资源实现必须分别报告发布、清理和恢复失败。清理失败并不表示目标一定
 不存在。遵循 `CopyOutcome` 与写入恢复契约，保留主失败以及清理错误，便于观测和处置。
 
+非空写入已接受前缀、后续写入却没有进展时，发布状态为不确定。Provider 可能已直接暴露已接受的字节；即使 Provider 内部使用暂存，facade 也无法据此推断隔离成立。请保留恢复对象，并依据显式 abort 或核对结果处理；不要盲目重试 commit。
+
 临时资源持久化必须分别报告本次调用的发布事实和源资格：目标明确未发布、但源的变更权限
 不确定时使用 `NotPublishedSourceIndeterminate`；目标已发布、但源权限不确定时使用
 `PublishedSourceIndeterminate`；目标未发布且只允许清理残留资源时使用

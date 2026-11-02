@@ -44,6 +44,7 @@ use qubit_fs::write::WriteDisposition;
 use qubit_fs::write::WriteFailureState;
 use qubit_fs::write::WriteOptions;
 use qubit_fs::write::WriterRecovery;
+use qubit_fs::write::WriterState;
 use qubit_io::Output;
 
 type SharedBytes = std::sync::Arc<std::sync::Mutex<Vec<u8>>>;
@@ -221,7 +222,8 @@ fn test_write_all_interrupted_with_partial_effect_is_not_retried() {
 struct ZeroProgressAppendProbe {
     target: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
     staging: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
-    direct_append: bool,
+    direct: bool,
+    disposition: WriteDisposition,
     writes: std::sync::Arc<std::sync::Mutex<usize>>,
     commits: std::sync::Arc<std::sync::Mutex<usize>>,
     aborts: std::sync::Arc<std::sync::Mutex<usize>>,
@@ -230,7 +232,7 @@ struct ZeroProgressAppendProbe {
 struct ZeroProgressAppendWriter {
     target: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
     staging: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
-    direct_append: bool,
+    direct: bool,
     writes: std::sync::Arc<std::sync::Mutex<usize>>,
     commits: std::sync::Arc<std::sync::Mutex<usize>>,
     aborts: std::sync::Arc<std::sync::Mutex<usize>>,
@@ -246,7 +248,7 @@ impl Output for ZeroProgressAppendWriter {
             return Ok(0);
         }
         let accepted = count.min(2);
-        if self.direct_append {
+        if self.direct {
             self.target
                 .lock()
                 .expect("target lock")
@@ -268,7 +270,7 @@ impl Output for ZeroProgressAppendWriter {
 impl FileWriterSpi for ZeroProgressAppendWriter {
     fn commit(&mut self) -> Result<WriteOutcome, SpiWriteFailure> {
         *self.commits.lock().expect("commits lock") += 1;
-        if !self.direct_append {
+        if !self.direct {
             self.target
                 .lock()
                 .expect("target lock")
@@ -282,16 +284,14 @@ impl FileWriterSpi for ZeroProgressAppendWriter {
 
     fn abort(&mut self) -> FsResult<WriteAbortOutcome> {
         *self.aborts.lock().expect("aborts lock") += 1;
-        if !self.direct_append {
+        if !self.direct {
             self.staging.lock().expect("staging lock").clear();
         }
-        Ok(
-            if self.direct_append && !self.target.lock().expect("target lock").is_empty() {
-                WriteAbortOutcome::Published
-            } else {
-                WriteAbortOutcome::NotPublished
-            },
-        )
+        Ok(if self.direct && !self.target.lock().expect("target lock").is_empty() {
+            WriteAbortOutcome::Published
+        } else {
+            WriteAbortOutcome::NotPublished
+        })
     }
 }
 
@@ -321,20 +321,13 @@ impl FileSystemSpi for ZeroProgressAppendProbe {
     }
 
     fn open_writer(&self, request: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
-        assert_eq!(
-            if self.direct_append {
-                WriteDisposition::Append
-            } else {
-                WriteDisposition::CreateNew
-            },
-            request.options().options().disposition()
-        );
+        assert_eq!(self.disposition, request.options().options().disposition());
         Ok(OpenedWriter::new(
             OpenedFileInfo::new(self.properties().info().id().clone(), request.path().clone()),
             Box::new(ZeroProgressAppendWriter {
                 target: self.target.clone(),
                 staging: self.staging.clone(),
-                direct_append: self.direct_append,
+                direct: self.direct,
                 writes: self.writes.clone(),
                 commits: self.commits.clone(),
                 aborts: self.aborts.clone(),
@@ -343,7 +336,10 @@ impl FileSystemSpi for ZeroProgressAppendProbe {
     }
 }
 
-fn zero_progress_filesystem(direct_append: bool) -> (FileSystem, SharedBytes, SharedCount, SharedCount, SharedCount) {
+fn zero_progress_filesystem(
+    direct: bool,
+    disposition: WriteDisposition,
+) -> (FileSystem, SharedBytes, SharedCount, SharedCount, SharedCount) {
     let target = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let staging = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let writes = std::sync::Arc::new(std::sync::Mutex::new(0));
@@ -352,7 +348,8 @@ fn zero_progress_filesystem(direct_append: bool) -> (FileSystem, SharedBytes, Sh
     let filesystem = FileSystem::from_spi(ZeroProgressAppendProbe {
         target: target.clone(),
         staging,
-        direct_append,
+        direct,
+        disposition,
         writes: writes.clone(),
         commits: commits.clone(),
         aborts: aborts.clone(),
@@ -363,7 +360,7 @@ fn zero_progress_filesystem(direct_append: bool) -> (FileSystem, SharedBytes, Sh
 
 #[test]
 fn test_write_all_zero_progress_after_append_prefix_preserves_publication_facts() {
-    let (filesystem, target, writes, commits, aborts) = zero_progress_filesystem(true);
+    let (filesystem, target, writes, commits, aborts) = zero_progress_filesystem(true, WriteDisposition::Append);
     let mut failure = filesystem
         .write_all(
             &Path::parse("/target").expect("path"),
@@ -401,8 +398,32 @@ fn test_write_all_zero_progress_after_append_prefix_preserves_publication_facts(
 }
 
 #[test]
+fn test_write_all_zero_progress_after_direct_create_new_prefix_is_indeterminate() {
+    for disposition in [WriteDisposition::CreateNew, WriteDisposition::CreateOrReplace] {
+        let (filesystem, target, writes, commits, aborts) = zero_progress_filesystem(true, disposition);
+        let mut failure = filesystem
+            .write_all(
+                &Path::parse("/target").expect("path"),
+                b"abcd",
+                WriteOptions::default().with_disposition(disposition),
+            )
+            .expect_err("nonempty zero progress is WriteZero");
+        assert_eq!(b"ab", target.lock().expect("target").as_slice());
+        assert_eq!(2, failure.written_bytes());
+        assert_eq!(WriteFailureState::Indeterminate, failure.state());
+        assert_eq!(2, *writes.lock().expect("writes"));
+        assert_eq!(0, *commits.lock().expect("commits"));
+        assert_eq!(0, *aborts.lock().expect("aborts"));
+        let Some(WriterRecovery::Opened(writer)) = failure.recovery_mut() else {
+            panic!("direct writer retained for recovery");
+        };
+        assert_eq!(WriterState::Indeterminate, writer.state());
+    }
+}
+
+#[test]
 fn test_write_all_zero_progress_empty_payload_is_successful() {
-    let (filesystem, target, writes, commits, aborts) = zero_progress_filesystem(true);
+    let (filesystem, target, writes, commits, aborts) = zero_progress_filesystem(true, WriteDisposition::Append);
     let outcome = filesystem
         .write_all(
             &Path::parse("/empty").expect("path"),
@@ -419,7 +440,7 @@ fn test_write_all_zero_progress_empty_payload_is_successful() {
 
 #[test]
 fn test_write_all_zero_progress_after_staged_prefix_remains_unpublished() {
-    let (filesystem, target, writes, commits, aborts) = zero_progress_filesystem(false);
+    let (filesystem, target, writes, commits, aborts) = zero_progress_filesystem(false, WriteDisposition::CreateNew);
     let mut failure = filesystem
         .write_all(
             &Path::parse("/target").expect("path"),
@@ -430,20 +451,21 @@ fn test_write_all_zero_progress_after_staged_prefix_remains_unpublished() {
 
     assert!(target.lock().expect("target").is_empty());
     assert_eq!(2, failure.written_bytes());
-    assert_eq!(WriteFailureState::RetryableNotPublished, failure.state());
+    assert_eq!(WriteFailureState::Indeterminate, failure.state());
     assert_eq!(2, *writes.lock().expect("writes"));
     assert_eq!(0, *commits.lock().expect("commits"));
     assert_eq!(0, *aborts.lock().expect("aborts"));
     let Some(WriterRecovery::Opened(writer)) = failure.recovery_mut() else {
         panic!("staged writer retained for recovery");
     };
+    assert_eq!(WriterState::Indeterminate, writer.state());
     assert_eq!(
         WriteAbortOutcome::NotPublished,
         writer.abort().expect("staging cleanup succeeds")
     );
     assert_eq!(1, *aborts.lock().expect("aborts"));
     assert!(target.lock().expect("target").is_empty());
-    assert_eq!(WriteFailureState::RetryableNotPublished, failure.state());
+    assert_eq!(WriteFailureState::Indeterminate, failure.state());
     assert_eq!(2, failure.written_bytes());
 }
 
