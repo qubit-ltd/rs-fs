@@ -1,7 +1,16 @@
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
+
 //! Runtime-neutral provider session for asynchronous offset reads.
+use std::pin::Pin;
+
 use super::SpiFuture;
 use crate::error::FsResult;
-use std::pin::Pin;
 
 /// Asynchronously reads one opened object at explicit offsets.
 ///
@@ -33,9 +42,5 @@ pub trait AsyncRandomAccessReadSession: Send {
     /// Resolves to the provider's typed read error. The caller's buffer may
     /// contain partial bytes after an error, and must not be used as a complete
     /// sample.
-    fn read_at_async<'a>(
-        self: Pin<&'a mut Self>,
-        offset: u64,
-        output: &'a mut [u8],
-    ) -> SpiFuture<'a, FsResult<usize>>;
+    fn read_at_async<'a>(self: Pin<&'a mut Self>, offset: u64, output: &'a mut [u8]) -> SpiFuture<'a, FsResult<usize>>;
 }

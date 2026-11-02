@@ -1,3 +1,11 @@
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
+
 //! Provider-opened random-access reader envelope.
 use super::RandomAccessReadSession;
 use crate::metadata::OpenedFileInfo;
@@ -32,7 +40,8 @@ impl OpenedRandomAccessReader {
     /// Creates an envelope from metadata observed on the same opened object.
     ///
     /// # Parameters
-    /// - `info`: Identity and metadata captured from the object that was opened.
+    /// - `info`: Identity and metadata captured from the object that was
+    ///   opened.
     /// - `session`: Session retaining that same object or immutable version.
     ///
     /// # Returns

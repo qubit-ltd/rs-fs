@@ -1,10 +1,25 @@
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
+
 //! Application-facing asynchronous handle for bounded offset reads.
-use crate::error::{FsError, FsErrorKind, FsOperation, FsResult};
-use crate::metadata::{FileSystemLimit, OpenedFileInfo};
+use std::fmt::Debug;
+use std::fmt::Formatter;
+use std::fmt::Result as FmtResult;
+use std::pin::Pin;
+
+use crate::error::FsError;
+use crate::error::FsErrorKind;
+use crate::error::FsOperation;
+use crate::error::FsResult;
+use crate::metadata::FileSystemLimit;
+use crate::metadata::OpenedFileInfo;
 use crate::read::RandomAccessReadPolicy;
 use crate::spi::AsyncRandomAccessReadSession;
-use std::fmt::{Debug, Formatter, Result as FmtResult};
-use std::pin::Pin;
 
 /// An async random-access session bound to one opened object.
 ///
@@ -66,7 +81,8 @@ impl AsyncRandomAccessReader {
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }
-    /// Reads into caller storage at an explicit offset; cancellation does not change session identity.
+    /// Reads into caller storage at an explicit offset; cancellation does not
+    /// change session identity.
     ///
     /// # Parameters
     /// - `offset`: Byte offset from the beginning of the opened object.
@@ -85,12 +101,8 @@ impl AsyncRandomAccessReader {
     /// buffer may contain partial bytes after an error or cancellation and
     /// must be discarded.
     pub async fn read_at(&mut self, offset: u64, output: &mut [u8]) -> FsResult<usize> {
-        let count =
-            RandomAccessReadPolicy::validate_read(offset, output.len(), self.len, self.limit)
-                .map_err(|e| {
-                    e.with_path(self.info.path().clone())
-                        .with_provider(&self.provider_id)
-                })?;
+        let count = RandomAccessReadPolicy::validate_read(offset, output.len(), self.len, self.limit)
+            .map_err(|e| e.with_path(self.info.path().clone()).with_provider(&self.provider_id))?;
         if count == 0 {
             return Ok(0);
         }

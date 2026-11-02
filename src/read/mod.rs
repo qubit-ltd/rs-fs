@@ -10,31 +10,31 @@
 #[cfg(feature = "async")]
 mod async_file_reader;
 #[cfg(feature = "async")]
+mod async_random_access_reader;
+#[cfg(feature = "async")]
 mod async_read_operation;
 mod checksum_policy;
 mod file_reader;
-mod random_access_reader;
-#[cfg(feature = "async")]
-mod async_random_access_reader;
 mod internal;
 mod prefix_read_outcome;
 mod prefix_read_plan;
 mod prefix_read_termination;
+mod random_access_reader;
 mod read_operation;
 mod read_options;
 
 #[cfg(feature = "async")]
 pub use async_file_reader::AsyncFileReader;
 #[cfg(feature = "async")]
+pub use async_random_access_reader::AsyncRandomAccessReader;
+#[cfg(feature = "async")]
 pub(crate) use async_read_operation::AsyncReadOperation;
 pub use checksum_policy::ChecksumPolicy;
 pub use file_reader::FileReader;
-pub use random_access_reader::RandomAccessReader;
-#[cfg(feature = "async")]
-pub use async_random_access_reader::AsyncRandomAccessReader;
 pub(crate) use internal::RandomAccessReadPolicy;
 pub(crate) use internal::read_retry_interrupted;
 pub use prefix_read_outcome::PrefixReadOutcome;
 pub use prefix_read_termination::PrefixReadTermination;
+pub use random_access_reader::RandomAccessReader;
 pub(crate) use read_operation::ReadOperation;
 pub use read_options::ReadOptions;

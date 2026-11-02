@@ -37,9 +37,9 @@ use crate::metadata::OpenedFileInfo;
 use crate::metadata::WriteOutcome;
 use crate::path::Path;
 use crate::read::FileReader;
-use crate::read::RandomAccessReader;
-use crate::read::RandomAccessReadPolicy;
 use crate::read::PrefixReadOutcome;
+use crate::read::RandomAccessReadPolicy;
+use crate::read::RandomAccessReader;
 use crate::read::ReadOperation;
 use crate::read::ReadOptions;
 use crate::rename::RenameFailure;
@@ -54,8 +54,8 @@ use crate::spi::DeleteDirectoryRequest;
 use crate::spi::DeleteFileRequest;
 use crate::spi::FileSystemSpi;
 use crate::spi::OpenReaderRequest;
-use crate::spi::ProviderOperation;
 use crate::spi::OpenWriterRequest;
+use crate::spi::ProviderOperation;
 use crate::spi::RenameRequest;
 use crate::spi::ResolvedCreateDirectoryOptions;
 use crate::spi::ResolvedDeleteOptions;
@@ -321,8 +321,8 @@ impl FileSystem {
     ///
     /// # Parameters
     /// - `path`: Logical file path to open.
-    /// - `options`: Read options. Only no offset or offset zero, no length,
-    ///   and no checksum validation are accepted; version conditions are kept.
+    /// - `options`: Read options. Only no offset or offset zero, no length, and
+    ///   no checksum validation are accepted; version conditions are kept.
     ///
     /// # Returns
     /// A handle whose reads use the object opened by the provider.
@@ -331,14 +331,9 @@ impl FileSystem {
     /// Returns path/option errors, missing read or operation errors, the
     /// provider open error, or a provider-contract error for mismatched
     /// identity, missing metadata, non-file kind, or unknown length.
-    pub fn open_random_access_reader(
-        &self,
-        path: &Path,
-        options: ReadOptions,
-    ) -> FsResult<RandomAccessReader> {
+    pub fn open_random_access_reader(&self, path: &Path, options: ReadOptions) -> FsResult<RandomAccessReader> {
         self.validate_path(path, FsOperation::OpenReader)?;
-        RandomAccessReadPolicy::validate_open(&options)
-            .map_err(|e| self.enrich(e, path, FsOperation::OpenReader))?;
+        RandomAccessReadPolicy::validate_open(&options).map_err(|e| self.enrich(e, path, FsOperation::OpenReader))?;
         RandomAccessReadPolicy::validate_capabilities(&options, self.properties().capabilities())
             .map_err(|e| self.enrich(e, path, FsOperation::OpenReader))?;
         self.require(FileSystemCapability::Read, FsOperation::OpenReader, path)?;
@@ -355,10 +350,7 @@ impl FileSystem {
         }
         let opened = self
             .spi
-            .open_random_access_reader(OpenReaderRequest::new(
-                path,
-                ResolvedReadOptions::new(options),
-            ))
+            .open_random_access_reader(OpenReaderRequest::new(path, ResolvedReadOptions::new(options)))
             .map_err(|e| self.enrich(e, path, FsOperation::OpenReader))?;
         let (info, session) = opened.into_parts();
         self.validate_opened_info(&info, path)?;

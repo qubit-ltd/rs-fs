@@ -15,21 +15,19 @@ mod async_file_system_spi;
 #[cfg(feature = "async")]
 mod async_file_write_session;
 #[cfg(feature = "async")]
+mod async_random_access_read_session;
+#[cfg(feature = "async")]
 mod async_temp_resource_spi;
 mod copy_attempt;
 mod copy_decline_reason;
 mod directory_stream_spi;
 mod file_system_spi;
-#[cfg(feature = "async")]
-mod async_random_access_read_session;
-mod random_access_read_session;
-mod opened_random_access_reader;
-#[cfg(feature = "async")]
-mod opened_async_random_access_reader;
 mod file_writer_spi;
 mod internal;
 #[cfg(feature = "async")]
 mod opened_async_directory_stream;
+#[cfg(feature = "async")]
+mod opened_async_random_access_reader;
 #[cfg(feature = "async")]
 mod opened_async_reader;
 #[cfg(feature = "async")]
@@ -39,6 +37,7 @@ mod opened_async_temp_file;
 #[cfg(feature = "async")]
 mod opened_async_writer;
 mod opened_directory_stream;
+mod opened_random_access_reader;
 mod opened_reader;
 mod opened_temp_directory;
 mod opened_temp_file;
@@ -47,6 +46,7 @@ mod prefix_read_hint;
 mod provider_operation;
 mod provider_operations;
 mod provider_properties;
+mod random_access_read_session;
 mod request;
 mod resolved_copy_options;
 mod resolved_create_directory_options;
@@ -71,20 +71,18 @@ pub use async_file_system_spi::AsyncFileSystemSpi;
 #[cfg(feature = "async")]
 pub use async_file_write_session::AsyncFileWriteSession;
 #[cfg(feature = "async")]
+pub use async_random_access_read_session::AsyncRandomAccessReadSession;
+#[cfg(feature = "async")]
 pub use async_temp_resource_spi::AsyncTempResourceSpi;
 pub use copy_attempt::CopyAttempt;
 pub use copy_decline_reason::CopyDeclineReason;
 pub use directory_stream_spi::DirectoryStreamSpi;
 pub use file_system_spi::FileSystemSpi;
-#[cfg(feature = "async")]
-pub use async_random_access_read_session::AsyncRandomAccessReadSession;
-pub use random_access_read_session::RandomAccessReadSession;
-pub use opened_random_access_reader::OpenedRandomAccessReader;
-#[cfg(feature = "async")]
-pub use opened_async_random_access_reader::OpenedAsyncRandomAccessReader;
 pub use file_writer_spi::FileWriterSpi;
 #[cfg(feature = "async")]
 pub use opened_async_directory_stream::OpenedAsyncDirectoryStream;
+#[cfg(feature = "async")]
+pub use opened_async_random_access_reader::OpenedAsyncRandomAccessReader;
 #[cfg(feature = "async")]
 pub use opened_async_reader::OpenedAsyncReader;
 #[cfg(feature = "async")]
@@ -94,6 +92,7 @@ pub use opened_async_temp_file::OpenedAsyncTempFile;
 #[cfg(feature = "async")]
 pub use opened_async_writer::OpenedAsyncWriter;
 pub use opened_directory_stream::OpenedDirectoryStream;
+pub use opened_random_access_reader::OpenedRandomAccessReader;
 pub use opened_reader::OpenedReader;
 pub use opened_temp_directory::OpenedTempDirectory;
 pub use opened_temp_file::OpenedTempFile;
@@ -102,6 +101,7 @@ pub use prefix_read_hint::PrefixReadHint;
 pub use provider_operation::ProviderOperation;
 pub use provider_operations::ProviderOperations;
 pub use provider_properties::ProviderProperties;
+pub use random_access_read_session::RandomAccessReadSession;
 pub use request::CopyRequest;
 pub use request::CreateDirectoryRequest;
 pub use request::CreateTempDirectoryRequest;

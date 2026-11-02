@@ -1,9 +1,24 @@
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
+
 //! Application-facing handle for bounded offset reads.
-use crate::error::{FsError, FsErrorKind, FsOperation, FsResult};
-use crate::metadata::{FileSystemLimit, OpenedFileInfo};
+use std::fmt::Debug;
+use std::fmt::Formatter;
+use std::fmt::Result as FmtResult;
+
+use crate::error::FsError;
+use crate::error::FsErrorKind;
+use crate::error::FsOperation;
+use crate::error::FsResult;
+use crate::metadata::FileSystemLimit;
+use crate::metadata::OpenedFileInfo;
 use crate::read::RandomAccessReadPolicy;
 use crate::spi::RandomAccessReadSession;
-use std::fmt::{Debug, Formatter, Result as FmtResult};
 
 /// A random-access session bound to one opened object and its open-time length.
 ///
@@ -65,7 +80,8 @@ impl RandomAccessReader {
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }
-    /// Reads into caller storage at an explicit offset. Requests past `len` are clipped.
+    /// Reads into caller storage at an explicit offset. Requests past `len` are
+    /// clipped.
     ///
     /// # Parameters
     /// - `offset`: Byte offset from the beginning of the opened object.
@@ -82,23 +98,16 @@ impl RandomAccessReader {
     /// `ProviderContractViolation` if the provider over-reports bytes. On an
     /// error, the buffer may contain partial bytes and should be discarded.
     pub fn read_at(&mut self, offset: u64, output: &mut [u8]) -> FsResult<usize> {
-        let count =
-            RandomAccessReadPolicy::validate_read(offset, output.len(), self.len, self.limit)
-                .map_err(|e| {
-                    e.with_path(self.info.path().clone())
-                        .with_provider(&self.provider_id)
-                })?;
+        let count = RandomAccessReadPolicy::validate_read(offset, output.len(), self.len, self.limit)
+            .map_err(|e| e.with_path(self.info.path().clone()).with_provider(&self.provider_id))?;
         if count == 0 {
             return Ok(0);
         }
-        let n = self
-            .session
-            .read_at(offset, &mut output[..count])
-            .map_err(|e| {
-                e.with_path(self.info.path().clone())
-                    .with_provider(&self.provider_id)
-                    .with_operation(FsOperation::Read)
-            })?;
+        let n = self.session.read_at(offset, &mut output[..count]).map_err(|e| {
+            e.with_path(self.info.path().clone())
+                .with_provider(&self.provider_id)
+                .with_operation(FsOperation::Read)
+        })?;
         if n > count {
             return Err(FsError::new(
                 FsErrorKind::ProviderContractViolation,

@@ -346,8 +346,7 @@ mod tests {
     ) -> crate::error::FsResult<ProviderProperties> {
         ProviderProperties::new(
             FileSystemInfo::new(
-                FileSystemId::new("random-access-property-test")
-                    .expect("test filesystem id should be valid"),
+                FileSystemId::new("random-access-property-test").expect("test filesystem id should be valid"),
                 "random-access-property-test",
                 PathSemantics::Hierarchical,
             ),

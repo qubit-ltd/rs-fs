@@ -1,7 +1,20 @@
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
+
 //! Shared validation for random-access opens and reads.
-use crate::error::{FsError, FsErrorKind, FsOperation, FsResult};
+use crate::error::FsError;
+use crate::error::FsErrorKind;
+use crate::error::FsOperation;
+use crate::error::FsResult;
+use crate::metadata::FileKind;
+use crate::metadata::FileMetadata;
 use crate::metadata::FileSystemCapabilities;
-use crate::metadata::{FileKind, FileMetadata, FileSystemLimit};
+use crate::metadata::FileSystemLimit;
 use crate::read::ReadOptions;
 
 pub(crate) struct RandomAccessReadPolicy;
@@ -23,10 +36,7 @@ impl RandomAccessReadPolicy {
         }
         Ok(())
     }
-    pub(crate) fn validate_capabilities(
-        options: &ReadOptions,
-        capabilities: FileSystemCapabilities,
-    ) -> FsResult<()> {
+    pub(crate) fn validate_capabilities(options: &ReadOptions, capabilities: FileSystemCapabilities) -> FsResult<()> {
         let checked = if options.offset() == Some(0) {
             options.clone().with_offset(None)
         } else {
@@ -35,8 +45,7 @@ impl RandomAccessReadPolicy {
         checked.validate_against(capabilities)
     }
     pub(crate) fn opened_len(metadata: Option<&FileMetadata>) -> FsResult<u64> {
-        let metadata = metadata
-            .ok_or_else(|| contract("provider omitted metadata for opened random-access object"))?;
+        let metadata = metadata.ok_or_else(|| contract("provider omitted metadata for opened random-access object"))?;
         if metadata.kind() != &FileKind::File {
             return Err(contract("provider opened a non-file random-access object"));
         }
@@ -50,8 +59,7 @@ impl RandomAccessReadPolicy {
         opened_len: u64,
         limit: FileSystemLimit,
     ) -> FsResult<usize> {
-        let requested = u64::try_from(output_len)
-            .map_err(|_| invalid("buffer length cannot be represented"))?;
+        let requested = u64::try_from(output_len).map_err(|_| invalid("buffer length cannot be represented"))?;
         offset
             .checked_add(requested)
             .ok_or_else(|| invalid("read range overflows"))?;

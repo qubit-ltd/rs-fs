@@ -37,8 +37,8 @@ use crate::metadata::FileSystemProperties;
 use crate::path::Path;
 use crate::read::AsyncFileReader;
 use crate::read::AsyncRandomAccessReader;
-use crate::read::RandomAccessReadPolicy;
 use crate::read::AsyncReadOperation;
+use crate::read::RandomAccessReadPolicy;
 use crate::read::ReadOptions;
 use crate::rename::RenameFailure;
 use crate::rename::RenameFailureState;
@@ -50,8 +50,8 @@ use crate::spi::CreateDirectoryRequest;
 use crate::spi::DeleteDirectoryRequest;
 use crate::spi::DeleteFileRequest;
 use crate::spi::OpenReaderRequest;
-use crate::spi::ProviderOperation;
 use crate::spi::OpenWriterRequest;
+use crate::spi::ProviderOperation;
 use crate::spi::RenameRequest;
 use crate::spi::ResolvedCreateDirectoryOptions;
 use crate::spi::ResolvedDeleteOptions;
@@ -234,8 +234,8 @@ impl AsyncFileSystem {
     ///
     /// # Parameters
     /// - `path`: Logical file path to open.
-    /// - `options`: Read options. Only no offset or offset zero, no length,
-    ///   and no checksum validation are accepted; version conditions are kept.
+    /// - `options`: Read options. Only no offset or offset zero, no length, and
+    ///   no checksum validation are accepted; version conditions are kept.
     ///
     /// # Returns
     /// A handle whose reads use the object opened by the provider.
@@ -250,8 +250,7 @@ impl AsyncFileSystem {
         options: ReadOptions,
     ) -> FsResult<AsyncRandomAccessReader> {
         self.validate_path(path, FsOperation::OpenReader)?;
-        RandomAccessReadPolicy::validate_open(&options)
-            .map_err(|e| self.enrich(e, path, FsOperation::OpenReader))?;
+        RandomAccessReadPolicy::validate_open(&options).map_err(|e| self.enrich(e, path, FsOperation::OpenReader))?;
         RandomAccessReadPolicy::validate_capabilities(&options, self.properties().capabilities())
             .map_err(|e| self.enrich(e, path, FsOperation::OpenReader))?;
         self.require(FileSystemCapability::Read, FsOperation::OpenReader, path)?;
@@ -268,10 +267,7 @@ impl AsyncFileSystem {
         }
         let opened = self
             .spi
-            .open_random_access_reader(OpenReaderRequest::new(
-                path,
-                ResolvedReadOptions::new(options),
-            ))
+            .open_random_access_reader(OpenReaderRequest::new(path, ResolvedReadOptions::new(options)))
             .await
             .map_err(|e| self.enrich(e, path, FsOperation::OpenReader))?;
         let (info, session) = opened.into_parts();

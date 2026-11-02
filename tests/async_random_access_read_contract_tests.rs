@@ -1,3 +1,11 @@
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
+
 #![cfg(feature = "async")]
 
 //! Runtime-neutral async random-access contracts, including cancellation.
@@ -5,23 +13,43 @@ use std::future::Future;
 use std::future::poll_fn;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::task::{Context, Poll, Waker};
-#[path = "common/random_access.rs"]
-mod random_access_common;
-use qubit_fs::error::{FsError, FsErrorKind, FsOperation};
-use qubit_fs::metadata::{
-    FileKind, FileMetadata, FileSystemCapabilities, FileSystemCapability, FileSystemId,
-    FileSystemInfo, FileSystemLimit, FileSystemLimits, OpenedFileInfo, SymlinkPolicy,
-};
-use qubit_fs::path::{PathConstraints, PathSemantics};
-use qubit_fs::read::{ChecksumPolicy, ReadOptions};
-use qubit_fs::spi::{
-    AsyncFileSystemSpi, AsyncRandomAccessReadSession, OpenReaderRequest,
-    OpenedAsyncRandomAccessReader, ProviderOperation, ProviderOperations, ProviderProperties,
-    SpiFuture, StatRequest, StatResponse,
-};
-use qubit_fs::{AsyncFileSystem, FsResult, Path};
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::task::Context;
+use std::task::Poll;
+use std::task::Waker;
+mod common;
+use common::random_access as random_access_common;
+use qubit_fs::AsyncFileSystem;
+use qubit_fs::FsResult;
+use qubit_fs::Path;
+use qubit_fs::error::FsError;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
+use qubit_fs::metadata::FileKind;
+use qubit_fs::metadata::FileMetadata;
+use qubit_fs::metadata::FileSystemCapabilities;
+use qubit_fs::metadata::FileSystemCapability;
+use qubit_fs::metadata::FileSystemId;
+use qubit_fs::metadata::FileSystemInfo;
+use qubit_fs::metadata::FileSystemLimit;
+use qubit_fs::metadata::FileSystemLimits;
+use qubit_fs::metadata::OpenedFileInfo;
+use qubit_fs::metadata::SymlinkPolicy;
+use qubit_fs::path::PathConstraints;
+use qubit_fs::path::PathSemantics;
+use qubit_fs::read::ChecksumPolicy;
+use qubit_fs::read::ReadOptions;
+use qubit_fs::spi::AsyncFileSystemSpi;
+use qubit_fs::spi::AsyncRandomAccessReadSession;
+use qubit_fs::spi::OpenReaderRequest;
+use qubit_fs::spi::OpenedAsyncRandomAccessReader;
+use qubit_fs::spi::ProviderOperation;
+use qubit_fs::spi::ProviderOperations;
+use qubit_fs::spi::ProviderProperties;
+use qubit_fs::spi::SpiFuture;
+use qubit_fs::spi::StatRequest;
+use qubit_fs::spi::StatResponse;
 const ID: &str = "async-random-access-contract";
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum ReadMode {
@@ -60,11 +88,7 @@ impl Drop for Session {
     }
 }
 impl AsyncRandomAccessReadSession for Session {
-    fn read_at_async<'a>(
-        self: Pin<&'a mut Self>,
-        offset: u64,
-        out: &'a mut [u8],
-    ) -> SpiFuture<'a, FsResult<usize>> {
+    fn read_at_async<'a>(self: Pin<&'a mut Self>, offset: u64, out: &'a mut [u8]) -> SpiFuture<'a, FsResult<usize>> {
         Box::pin(async move {
             let this = self.get_mut();
             let call = this.reads.fetch_add(1, Ordering::SeqCst);
@@ -133,11 +157,7 @@ impl AsyncFileSystemSpi for Provider {
             ops = ops.with(ProviderOperation::OpenRandomAccessReader);
         }
         ProviderProperties::new(
-            FileSystemInfo::new(
-                FileSystemId::new(ID).unwrap(),
-                "fixture",
-                PathSemantics::Hierarchical,
-            ),
+            FileSystemInfo::new(FileSystemId::new(ID).unwrap(), "fixture", PathSemantics::Hierarchical),
             ops,
             FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::Read),
             FileSystemLimits::unknown().with_max_read_range_bytes(self.limit),
@@ -147,12 +167,7 @@ impl AsyncFileSystemSpi for Provider {
         .unwrap()
     }
     fn stat<'a>(&'a self, r: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
-        Box::pin(async move {
-            Ok(StatResponse::new(
-                r.path().clone(),
-                FileMetadata::new(FileKind::File),
-            ))
-        })
+        Box::pin(async move { Ok(StatResponse::new(r.path().clone(), FileMetadata::new(FileKind::File))) })
     }
     fn open_random_access_reader<'a>(
         &'a self,
@@ -169,17 +184,11 @@ impl AsyncFileSystemSpi for Provider {
             let info = match metadata {
                 MetadataMode::Valid => random_access_common::opened_info(ID, &path, 6),
                 MetadataMode::Missing => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path),
-                MetadataMode::Directory => {
-                    OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
-                        .with_metadata(FileMetadata::new(FileKind::Directory).with_len(Some(6)))
-                }
-                MetadataMode::MissingLength => {
-                    OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
-                        .with_metadata(FileMetadata::new(FileKind::File))
-                }
-                MetadataMode::WrongIdentity => {
-                    random_access_common::opened_info("wrong-id", &path, 6)
-                }
+                MetadataMode::Directory => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
+                    .with_metadata(FileMetadata::new(FileKind::Directory).with_len(Some(6))),
+                MetadataMode::MissingLength => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
+                    .with_metadata(FileMetadata::new(FileKind::File)),
+                MetadataMode::WrongIdentity => random_access_common::opened_info("wrong-id", &path, 6),
             };
             Ok(OpenedAsyncRandomAccessReader::new(
                 info,
@@ -237,10 +246,7 @@ fn test_async_open_preflight_matches_sync_error_classification() {
     let fs = provider.filesystem();
     let path = Path::parse("/same").unwrap();
     for (options, kind) in [
-        (
-            ReadOptions::default().with_length(Some(2)),
-            FsErrorKind::InvalidOptions,
-        ),
+        (ReadOptions::default().with_length(Some(2)), FsErrorKind::InvalidOptions),
         (
             ReadOptions::default().with_checksum(ChecksumPolicy::BestEffort),
             FsErrorKind::RequirementNotMet,
@@ -257,18 +263,14 @@ fn test_async_open_preflight_matches_sync_error_classification() {
         assert_eq!(Some("fixture"), error.provider());
         assert_eq!(0, provider.opens.load(Ordering::SeqCst));
     }
-    let error = ready(
-        fs.open_random_access_reader(&Path::parse("relative").unwrap(), ReadOptions::default()),
-    )
-    .unwrap_err();
+    let error =
+        ready(fs.open_random_access_reader(&Path::parse("relative").unwrap(), ReadOptions::default())).unwrap_err();
     assert_eq!(FsErrorKind::InvalidPath, error.kind());
     assert_eq!(FsOperation::OpenReader, error.operation());
     assert_eq!(Some("relative"), error.path().map(Path::as_str));
     assert_eq!(Some("fixture"), error.provider());
     assert_eq!(0, provider.opens.load(Ordering::SeqCst));
-    let zero_offset =
-        ready(fs.open_random_access_reader(&path, ReadOptions::default().with_offset(Some(0))))
-            .unwrap();
+    let zero_offset = ready(fs.open_random_access_reader(&path, ReadOptions::default().with_offset(Some(0)))).unwrap();
     assert_eq!(6, zero_offset.len());
     drop(zero_offset);
     assert_eq!(1, provider.opens.load(Ordering::SeqCst));
@@ -411,11 +413,7 @@ struct DefaultAsyncProvider;
 impl AsyncFileSystemSpi for DefaultAsyncProvider {
     fn properties(&self) -> ProviderProperties {
         ProviderProperties::new(
-            FileSystemInfo::new(
-                FileSystemId::new(ID).unwrap(),
-                "fixture",
-                PathSemantics::Hierarchical,
-            ),
+            FileSystemInfo::new(FileSystemId::new(ID).unwrap(), "fixture", PathSemantics::Hierarchical),
             ProviderOperations::new()
                 .with(ProviderOperation::OpenReader)
                 .with(ProviderOperation::OpenRandomAccessReader),
