@@ -627,7 +627,7 @@ fn stream_copy_fallback<'a>(
             Ok(outcome) => outcome,
             Err(failure)
                 if failure.error().kind() == FsErrorKind::AlreadyExists
-                    && plan.may_skip_conflict(from_writer_state(writer.state())) =>
+                    && plan.may_skip_conflict(from_write_failure_state(failure.state())) =>
             {
                 let error = failure.into_error();
                 if let Err(cleanup_error) = writer.abort_async().await {
@@ -664,9 +664,10 @@ fn stream_copy_fallback<'a>(
                 ));
             }
             Err(failure) => {
+                let (error, state) = failure.into_parts();
                 return Err(filesystem.contextual_copy_failure(
-                    failure.into_error(),
-                    from_writer_state(writer.state()),
+                    error,
+                    from_write_failure_state(state),
                     fallback_failure_stats(writer.written_bytes()),
                     source,
                     target,
@@ -1154,7 +1155,7 @@ mod tests {
     }
 
     #[test]
-    fn test_async_copy_deadline_after_flush_preserves_unpublished_recovery() {
+    fn test_async_copy_deadline_after_flush_preserves_indeterminate_recovery() {
         let mut operation = operation(SuspendAt::Flush, false);
         let mut future = Box::pin(operation.execute());
         let mut context = Context::from_waker(Waker::noop());
@@ -1168,11 +1169,11 @@ mod tests {
             _ => panic!("expired flush must fail"),
         };
         drop(future);
-        assert_eq!(CopyFailureState::Unchanged, failure.state());
+        assert_eq!(CopyFailureState::Indeterminate, failure.state());
         assert_eq!(1, failure.partial_stats().bytes);
         assert!(operation.has_recovery());
         assert_eq!(
-            AsyncCopyOperationState::Failed(CopyFailureState::Unchanged),
+            AsyncCopyOperationState::Failed(CopyFailureState::Indeterminate),
             operation.state()
         );
     }

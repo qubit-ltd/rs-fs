@@ -878,11 +878,11 @@ mod tests {
     }
 
     #[test]
-    fn test_copy_deadline_after_flush_retains_unpublished_writer_and_bytes() {
+    fn test_copy_deadline_after_flush_retains_indeterminate_writer_and_bytes() {
         ADVANCE_ON_FLUSH.with(|advance| advance.set(true));
         let failure = operation(false).execute().expect_err("deadline after flush must fail");
         ADVANCE_ON_FLUSH.with(|advance| advance.set(false));
-        assert_eq!(CopyFailureState::Unchanged, failure.state());
+        assert_eq!(CopyFailureState::Indeterminate, failure.state());
         assert_eq!(1, failure.partial_stats().bytes);
         assert!(failure.has_recovery());
     }

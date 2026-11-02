@@ -1015,7 +1015,7 @@ fn test_copy_declined_preserves_stream_and_writer_recovery_states() {
     for (response, expected, writer_state) in [
         (
             CopyResponse::DeclinedReadFailure,
-            CopyFailureState::Unchanged,
+            CopyFailureState::Indeterminate,
             WriterState::Open,
         ),
         (
@@ -1089,7 +1089,7 @@ fn test_copy_stream_fallback_reports_each_sync_io_stage_state() {
     for (response, expected, writer_state) in [
         (
             CopyResponse::DeclinedReadFailure,
-            CopyFailureState::Unchanged,
+            CopyFailureState::Indeterminate,
             WriterState::Open,
         ),
         (

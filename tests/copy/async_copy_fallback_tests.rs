@@ -391,7 +391,7 @@ fn test_async_stream_fallback_failures_retain_recovery_writer() {
     for (stage, expected, writer_state) in [
         (
             AsyncCopyStage::ReaderRead,
-            CopyFailureState::Unchanged,
+            CopyFailureState::Indeterminate,
             WriterState::Open,
         ),
         (

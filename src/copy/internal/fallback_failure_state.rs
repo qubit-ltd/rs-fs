@@ -16,9 +16,9 @@ use crate::write::WriterState;
 
 /// Maps an opened writer lifecycle state to a copy recovery state.
 ///
-/// The writer SPI publishes accepted bytes only at commit. An open,
-/// not-published, or aborted writer therefore has not published a destination
-/// effect.
+/// An open writer does not expose whether opening it or accepting bytes has
+/// already changed the destination. Only explicit not-published or aborted
+/// states establish that no destination effect remains.
 ///
 /// # Parameters
 ///
@@ -30,9 +30,9 @@ use crate::write::WriterState;
 #[inline]
 pub(crate) const fn from_writer_state(state: WriterState) -> CopyFailureState {
     match state {
-        WriterState::Open | WriterState::NotPublished | WriterState::Aborted => CopyFailureState::Unchanged,
+        WriterState::Open | WriterState::Indeterminate => CopyFailureState::Indeterminate,
+        WriterState::NotPublished | WriterState::Aborted => CopyFailureState::Unchanged,
         WriterState::Committed | WriterState::Published => CopyFailureState::Published,
-        WriterState::Indeterminate => CopyFailureState::Indeterminate,
     }
 }
 
