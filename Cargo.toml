@@ -40,7 +40,7 @@ qubit-budget = "^0.10"
 fluent-uri = "^0.4"
 qubit-io = "^0.19"
 
-qubit-redact = { path = "../rs-redact", version = "0.10", features = ["uri"] }
+qubit-redact = { version = "^0.10", features = ["uri"] }
 
 [dev-dependencies]
 criterion = "^0.8"

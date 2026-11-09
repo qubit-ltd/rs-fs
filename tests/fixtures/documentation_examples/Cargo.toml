@@ -12,11 +12,11 @@ default = ["async"]
 async = []
 
 [dependencies]
-qubit-fs = { path = "../../..", version = "0.3", features = ["async"] }
+qubit-fs = { path = "../../../", version = "^0.3", features = ["async"] }
 
-qubit-fs-local = { path = "../../../../rs-fs-local", version = "0.11" }
+qubit-fs-local = { path = "../../../../rs-fs-local", version = "^0.11" }
 
-qubit-io = "0.19"
+qubit-io = "^0.19"
 
 tempfile = "3"
 
