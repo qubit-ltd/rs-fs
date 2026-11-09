@@ -95,6 +95,9 @@ impl PersistOptions {
     }
 
     /// Replaces whether the destination may be overwritten.
+    ///
+    /// # Parameters
+    /// - `overwrite`: Whether an existing destination can be replaced.
     #[inline]
     #[must_use]
     pub const fn with_overwrite(mut self, overwrite: bool) -> Self {
@@ -103,6 +106,9 @@ impl PersistOptions {
     }
 
     /// Replaces the required atomicity level.
+    ///
+    /// # Parameters
+    /// - `atomicity`: Atomicity requirement for publication.
     #[inline]
     #[must_use]
     pub const fn with_atomicity(mut self, atomicity: AtomicityRequirement) -> Self {
@@ -117,6 +123,10 @@ impl PersistOptions {
     /// supported, best-effort, and excluded fields. The resulting
     /// [`PersistOutcome`](super::PersistOutcome) does not verify individual
     /// metadata fields.
+    ///
+    /// # Parameters
+    /// - `preserve_metadata`: Metadata-preservation category requested from the
+    ///   provider.
     #[inline]
     #[must_use]
     pub const fn with_preserve_metadata(mut self, preserve_metadata: MetadataPreservePolicy) -> Self {
@@ -129,6 +139,12 @@ impl PersistOptions {
     /// # Errors
     /// Returns [`FsErrorKind::RequirementNotMet`] when atomic persistence is
     /// required but the configured filesystem does not guarantee it.
+    ///
+    /// # Parameters
+    /// - `capabilities`: Capabilities advertised by the configured filesystem.
+    ///
+    /// # Returns
+    /// `Ok(())` when required guarantees are supported.
     pub fn validate_against(&self, capabilities: FileSystemCapabilities) -> Result<(), FsError> {
         if self.atomicity() == AtomicityRequirement::Required
             && !capabilities.supports(FileSystemCapability::AtomicTempPersist)
@@ -145,6 +161,7 @@ impl PersistOptions {
 }
 
 impl Default for PersistOptions {
+    /// Creates options requiring atomic persistence without overwrite.
     #[inline]
     fn default() -> Self {
         Self {

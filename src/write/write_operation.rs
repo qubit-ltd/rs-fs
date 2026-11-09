@@ -29,6 +29,8 @@ pub(crate) struct WriteOperation<'a> {
 
 impl<'a> WriteOperation<'a> {
     /// Creates a write operation bound to `filesystem`.
+    /// # Parameters
+    /// - `filesystem`: Filesystem whose provider stages execute this write.
     #[inline]
     #[must_use]
     pub(crate) const fn new(filesystem: &'a FileSystem) -> Self {

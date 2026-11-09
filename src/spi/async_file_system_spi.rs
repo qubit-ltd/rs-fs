@@ -300,6 +300,13 @@ pub trait AsyncFileSystemSpi: Send + Sync {
 }
 
 /// Builds a standard unsupported-operation error for a validated path request.
+///
+/// # Parameters
+/// - `operation`: Provider operation that is not implemented.
+/// - `path`: Validated path associated with the request.
+///
+/// # Returns
+/// An unsupported-operation error carrying the path context.
 fn unsupported(operation: FsOperation, path: &crate::path::Path) -> FsError {
     FsError::new(
         FsErrorKind::UnsupportedOperation,

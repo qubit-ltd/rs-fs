@@ -205,6 +205,10 @@ impl ProviderProperties {
     /// Builds exact validation context when `capability` lacks a required
     /// provider entry point.
     ///
+    /// # Parameters
+    /// - `capability`: Advertised capability whose required operation is
+    ///   missing.
+    ///
     /// # Returns
     /// `Some` error containing `capability` and the first missing operation, or
     /// `None` when the capability's operation contract is satisfied.
@@ -220,6 +224,10 @@ impl ProviderProperties {
 
     /// Returns the first provider entry point required by `capability` that is
     /// absent, or `None` when its operation contract is satisfied.
+    ///
+    /// # Parameters
+    /// - `capability`: Advertised capability whose operation requirements are
+    ///   checked.
     fn missing_capability_operation(&self, capability: FileSystemCapability) -> Option<ProviderOperation> {
         let operations = self.operations;
         match capability {

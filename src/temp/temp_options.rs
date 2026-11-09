@@ -79,6 +79,10 @@ impl TempOptions {
     /// hierarchical parent when the exact component prefix is preserved.
     /// Provider-specific path semantics remain provider-defined. When `None`,
     /// the provider selects the location.
+    ///
+    /// # Parameters
+    /// - `parent`: Requested temporary-resource parent, or `None` to let the
+    ///   provider choose the location.
     #[inline]
     #[must_use]
     pub fn with_parent(mut self, parent: Option<Path>) -> Self {
@@ -87,6 +91,9 @@ impl TempOptions {
     }
 
     /// Replaces the generated resource name prefix.
+    ///
+    /// # Parameters
+    /// - `prefix`: Name prefix converted into an owned string.
     #[inline]
     #[must_use]
     pub fn with_prefix(mut self, prefix: impl Into<String>) -> Self {
@@ -95,6 +102,9 @@ impl TempOptions {
     }
 
     /// Replaces the generated resource name suffix.
+    ///
+    /// # Parameters
+    /// - `suffix`: Name suffix converted into an owned string.
     #[inline]
     #[must_use]
     pub fn with_suffix(mut self, suffix: impl Into<String>) -> Self {
@@ -103,6 +113,9 @@ impl TempOptions {
     }
 
     /// Replaces whether missing parent directories are created.
+    ///
+    /// # Parameters
+    /// - `create`: Whether the provider should create a missing parent.
     #[inline]
     #[must_use]
     pub const fn with_create_parent(mut self, create: bool) -> Self {

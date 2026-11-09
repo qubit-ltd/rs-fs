@@ -12,11 +12,16 @@
 #[must_use]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PrefixReadHint {
+    /// Non-binding requested ceiling offered to a provider planning a prefix
+    /// read.
     max_bytes: u64,
 }
 
 impl PrefixReadHint {
     /// Creates a hint for a positive prefix size.
+    ///
+    /// # Parameters
+    /// - `max_bytes`: Positive upper bound suggested for the prefix read.
     #[inline]
     pub(crate) const fn new(max_bytes: u64) -> Self {
         Self { max_bytes }

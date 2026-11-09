@@ -36,10 +36,21 @@ use crate::error::FsResult;
 /// assert_eq!(0, session.read_at(3, &mut sample).unwrap()); // EOF
 /// ```
 pub trait RandomAccessReadSession: Send {
-    /// Reads at `offset`; returns zero when this request observes EOF.
+    /// Reads a non-empty, in-range request at `offset`; a zero result means
+    /// this provider request observed EOF. The facade handles empty requests
+    /// and requests at or beyond the open-time length without calling this
+    /// method, and those facade-level zero results do not indicate EOF.
     ///
     /// # Errors
     /// Returns the provider's typed read error. The buffer may have been
     /// partially modified when an error is returned.
+    ///
+    /// # Parameters
+    /// - `offset`: Starting byte offset within the opened object.
+    /// - `output`: Non-empty in-range destination buffer for the bytes read.
+    ///
+    /// # Returns
+    /// The number of bytes read; a short count is valid and zero means this
+    /// provider request observed EOF.
     fn read_at(&mut self, offset: u64, output: &mut [u8]) -> FsResult<usize>;
 }

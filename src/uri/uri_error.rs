@@ -13,6 +13,12 @@ use crate::error::FsErrorKind;
 use crate::error::FsOperation;
 
 /// Builds a sanitized invalid-URI error without retaining input text.
+///
+/// # Parameters
+/// - `message`: Static explanation that contains no untrusted URI input.
+///
+/// # Returns
+/// An invalid-URI error for parsing.
 pub(crate) fn invalid_uri(message: &'static str) -> FsError {
     FsError::new(FsErrorKind::InvalidUri, FsOperation::ParseUri, message)
 }

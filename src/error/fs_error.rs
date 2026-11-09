@@ -41,6 +41,7 @@ use crate::path::Path;
 ///     .with_path(path.clone());
 /// assert_eq!(FsErrorKind::NotFound, error.kind());
 /// assert_eq!(Some(&path), error.path());
+///
 /// # Ok::<(), qubit_fs::FsError>(())
 /// ```
 #[must_use = "inspect the filesystem error instead of silently discarding it"]
@@ -98,6 +99,10 @@ impl FsError {
     }
 
     /// Creates a filesystem error that wraps a lower-level source error.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `E`: Concrete error type preserved as the underlying error source.
     ///
     /// # Parameters
     /// - `kind`: Provider-neutral error category.
@@ -436,9 +441,12 @@ impl FsError {
 
     /// Replaces untrusted session locations with a known cleanup request.
     ///
-    /// Used only for quarantined sessions whose opening identity was invalid.
-    /// Diagnostic entry and target paths cannot be trusted in this case. The
-    /// original category, effect evidence, message, and source remain intact.
+    /// # Parameters
+    ///
+    /// - `operation`: Filesystem operation used for validation or error
+    ///   context.
+    /// - `path`: Logical path of the resource involved in this operation.
+    /// - `provider`: Provider identifier attached to contextual errors.
     pub(crate) fn with_trusted_cleanup_context(
         mut self,
         operation: FsOperation,
@@ -487,6 +495,10 @@ impl FsError {
     /// This is used by operations that have no meaningful logical path, such
     /// as provider capability checks performed before temporary resource
     /// creation.
+    ///
+    /// # Parameters
+    ///
+    /// - `provider`: Provider identifier attached to contextual errors.
     #[inline]
     pub(crate) fn with_missing_provider(mut self, provider: &str) -> Self {
         if self.provider.is_none() {
@@ -497,6 +509,11 @@ impl FsError {
 }
 
 impl Debug for FsError {
+    /// Formats safe error facts without expanding the underlying source.
+    ///
+    /// # Parameters
+    ///
+    /// - `formatter`: Formatter receiving the safe error representation.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter
@@ -517,6 +534,11 @@ impl Debug for FsError {
 }
 
 impl Display for FsError {
+    /// Formats the operation, category, and non-secret diagnostic message.
+    ///
+    /// # Parameters
+    ///
+    /// - `formatter`: Formatter receiving the non-secret error message.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         write!(
@@ -528,6 +550,11 @@ impl Display for FsError {
 }
 
 impl Error for FsError {
+    /// Returns the preserved lower-level error, if one was attached.
+    ///
+    /// # Parameters
+    ///
+    /// - `self`: Filesystem error whose lower-level source is requested.
     #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         self.source.as_deref().map(|source| source as &(dyn Error + 'static))

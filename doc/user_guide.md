@@ -70,7 +70,7 @@ For the runnable local example in this guide, use:
 ```toml
 [dependencies]
 qubit-fs = "0.3"
-qubit-fs-local = "0.11"
+qubit-fs-local = "^0.11"
 tempfile = "3"
 ```
 
@@ -242,8 +242,8 @@ use qubit_fs::copy::CopyFailure;
 use qubit_fs::copy::CopyOptions;
 use qubit_fs::copy::CopyOutcome;
 use qubit_fs::error::FsError;
-use qubit_fs::write::WriterRecovery;
 use qubit_fs::write::WriteAbortOutcome;
+use qubit_fs::write::WriterRecovery;
 
 /// Retains a copy failure and any error from aborting its writer.
 #[derive(Debug)]
@@ -260,11 +260,7 @@ pub struct CopyRecovery {
 ///
 /// If a writer remains available after failure, this function attempts to
 /// abort it. Aborting does not guarantee that the target was rolled back.
-pub fn copy_report(
-    filesystem: &FileSystem,
-    source: &Path,
-    target: &Path,
-) -> Result<CopyOutcome, CopyRecovery> {
+pub fn copy_report(filesystem: &FileSystem, source: &Path, target: &Path) -> Result<CopyOutcome, CopyRecovery> {
     match filesystem.copy(source, target, CopyOptions::default()) {
         Ok(outcome) => Ok(outcome),
         Err(mut failure) => {
@@ -363,7 +359,8 @@ pub enum WriteReportError {
     Recovery(Box<WriteRecovery>),
 }
 
-/// Writes report bytes and retains ambiguous outcomes for caller reconciliation.
+/// Writes report bytes and retains ambiguous outcomes for caller
+/// reconciliation.
 ///
 /// Cancellation applies only to execution. Once execution completes or is
 /// cancelled, any retained writer is aborted, and the operation state is
@@ -702,9 +699,12 @@ let tail_count = reader.read_at(tail_offset, &mut tail)?;
 The cached `len()` is the length observed from metadata on the opened object
 and bounds this session. It is not a content snapshot: in-place writes may be
 visible, and truncation may produce a short read or EOF. Growth beyond the
-open-time length is outside the session's readable range. Handle short reads
-by advancing the offset and slicing the remaining buffer; a zero count means
-EOF. Discard a sample buffer after an error because a provider may have filled
+open-time length is outside the session's readable range. An empty output
+buffer returns zero without observing EOF. A non-overflowing request at or
+beyond the open-time length also returns zero without provider I/O. For a
+non-empty request within that bound, a provider result of zero means that
+request observed EOF. Handle short reads by advancing the offset and slicing
+the remaining buffer. Discard a sample buffer after an error because a provider may have filled
 part of it before failing.
 
 The operation is optional. If opening returns `UnsupportedOperation` or

@@ -34,6 +34,9 @@ pub(crate) struct AsyncReadOperation<'a> {
 impl<'a> AsyncReadOperation<'a> {
     /// Creates read operations using `filesystem` for reader creation and error
     /// context.
+    ///
+    /// # Parameters
+    /// - `filesystem`: Facade borrowed for opening and contextualizing reads.
     #[inline]
     #[must_use]
     pub(crate) const fn new(filesystem: &'a AsyncFileSystem) -> Self {
@@ -51,6 +54,14 @@ impl<'a> AsyncReadOperation<'a> {
     ///
     /// Returns an error if the file cannot be opened or read, if its content
     /// exceeds `max_bytes`, or if the bounded read buffer cannot append data.
+    ///
+    /// # Parameters
+    /// - `path`: File to read.
+    /// - `options`: Options used to open the reader.
+    /// - `max_bytes`: Maximum aggregate byte count accepted.
+    ///
+    /// # Returns
+    /// The complete file contents when they fit within `max_bytes`.
     pub(crate) async fn read_all(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
         let mut reader = self.filesystem.open_reader(path, options).await?;
         let mut bytes = ReadBuffer::new(max_bytes);
@@ -108,6 +119,15 @@ impl<'a> AsyncReadOperation<'a> {
     /// Returns an error if read options cannot be resolved, the file cannot be
     /// opened or read, or the bounded read buffer cannot append data. Errors
     /// from the stream include filesystem context.
+    ///
+    /// # Parameters
+    /// - `path`: File whose prefix is read.
+    /// - `options`: Options used to open the reader.
+    /// - `max_bytes`: Maximum number of prefix bytes to accumulate.
+    ///
+    /// # Returns
+    /// The bytes read together with the termination reason and open-time
+    /// metadata.
     pub(crate) async fn read_prefix(
         &self,
         path: &Path,

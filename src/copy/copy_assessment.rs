@@ -42,12 +42,21 @@ use super::FallbackRejection;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[must_use]
 pub struct CopyAssessment {
+    /// Route selected for attempting the requested copy.
     route: CopyExecutionRoute,
+    /// Static reason the stream fallback cannot meet the request, if any.
     fallback_rejection: Option<FallbackRejection>,
 }
 
 impl CopyAssessment {
     /// Creates an assessment inside the facade.
+    ///
+    /// # Parameters
+    ///
+    /// - `route`: Copy execution route selected from provider and fallback
+    ///   support.
+    /// - `fallback_rejection`: Static reason the stream fallback cannot meet
+    ///   the request, if any.
     #[inline]
     pub(crate) const fn new(route: CopyExecutionRoute, fallback_rejection: Option<FallbackRejection>) -> Self {
         Self {

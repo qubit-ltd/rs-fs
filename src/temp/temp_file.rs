@@ -72,6 +72,14 @@ pub struct TempFile {
 
 impl TempFile {
     /// Creates the facade handle from validated provider parts.
+    ///
+    /// # Parameters
+    /// - `filesystem`: Facade that owns validation and persistence policy.
+    /// - `path`: Validated provider-local temporary file path.
+    /// - `session`: Provider lifecycle session for this file.
+    ///
+    /// # Returns
+    /// An owned temporary-file handle.
     pub(crate) fn new(filesystem: FileSystem, path: Path, session: Box<dyn TempResourceSpi>) -> Self {
         Self {
             filesystem,
@@ -213,6 +221,15 @@ impl TempFile {
             .map_err(|error| self.record_lifecycle_error(error, FsOperation::CleanupTemp))
     }
     /// Records provider partial persistence facts in facade state and error.
+    ///
+    /// # Parameters
+    /// - `failure`: Provider-reported failure and publication facts.
+    /// - `target`: Destination requested by the persistence operation.
+    /// - `operation`: Persistence or keep operation being contextualized.
+    ///
+    /// # Returns
+    /// A typed failure retaining provider state and the latest confirmed
+    /// target.
     fn record_persist_failure(
         &mut self,
         failure: SpiPersistFailure,
@@ -238,6 +255,13 @@ impl TempFile {
         .with_publication_target(self.lifecycle.publication_target())
     }
     /// Requires an owned, unpublished source.
+    ///
+    /// # Parameters
+    /// - `operation`: Lifecycle operation attempted by the caller.
+    ///
+    /// # Returns
+    /// `Ok(())` while this handle owns an unpublished source; otherwise an
+    /// invalid-state error.
     fn ensure_owned(&self, operation: FsOperation) -> FsResult<()> {
         if self.lifecycle.state() == TempResourceState::Owned {
             Ok(())
@@ -246,6 +270,13 @@ impl TempFile {
         }
     }
     /// Records a cleanup or ownership-transfer error with resource context.
+    ///
+    /// # Parameters
+    /// - `error`: Cleanup or ownership-transfer error to retain.
+    /// - `operation`: Lifecycle operation associated with the error.
+    ///
+    /// # Returns
+    /// The error enriched with path and provider context.
     fn record_lifecycle_error(&mut self, error: FsError, operation: FsOperation) -> FsError {
         self.lifecycle.record_cleanup_error(&error);
         error.with_operation(operation).with_missing_context(
@@ -255,6 +286,12 @@ impl TempFile {
         )
     }
     /// Builds a contextual invalid-state error.
+    ///
+    /// # Parameters
+    /// - `operation`: Lifecycle operation rejected by the current state.
+    ///
+    /// # Returns
+    /// An invalid-state error carrying this resource's path and provider.
     fn invalid_state(&self, operation: FsOperation) -> FsError {
         FsError::new(
             FsErrorKind::InvalidState,
@@ -267,6 +304,11 @@ impl TempFile {
 }
 
 impl Debug for TempFile {
+    /// Formats the handle's path and lifecycle state without exposing provider
+    /// internals.
+    ///
+    /// # Parameters
+    /// - `f`: Destination for the debug representation.
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         f.debug_struct("TempFile")
@@ -276,6 +318,7 @@ impl Debug for TempFile {
     }
 }
 impl Drop for TempFile {
+    /// Attempts best-effort cleanup while this handle still owns the resource.
     fn drop(&mut self) {
         if matches!(
             self.lifecycle.state(),

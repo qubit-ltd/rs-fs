@@ -20,6 +20,13 @@ use crate::path::PathSemantics;
 
 /// Validates the scope and combined raw query prefix without normalizing keys.
 ///
+/// # Parameters
+///
+/// - `properties`: Validated immutable properties captured from the provider.
+/// - `scope`: Requested directory or namespace listing scope.
+/// - `options`: Selection, recursion, page-size, and deadline settings for the
+///   listing.
+///
 /// # Errors
 /// Returns an invalid-options error when a namespace scope is used with
 /// hierarchical path semantics or the listing options do not match the path

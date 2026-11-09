@@ -112,6 +112,9 @@ impl AsyncTempFile {
     ///
     /// # Returns
     /// The path formed by appending `component` to this temporary file path.
+    ///
+    /// # Parameters
+    /// - `component`: Validated component appended to the temporary path.
     #[inline]
     #[must_use]
     pub fn child(&self, component: &PathComponent) -> Path {
@@ -122,6 +125,9 @@ impl AsyncTempFile {
     ///
     /// # Returns
     /// The path formed by joining `relative` to this temporary file path.
+    ///
+    /// # Parameters
+    /// - `relative`: Validated relative path joined below the temporary path.
     #[inline]
     #[must_use]
     pub fn descendant(&self, relative: &RelativePath) -> Path {
@@ -382,6 +388,10 @@ impl AsyncTempFile {
 }
 
 impl Drop for AsyncTempFile {
+    /// Invokes provider-local cancellation when this handle still owns it.
+    ///
+    /// This nonblocking hook does not start asynchronous cleanup or confirm
+    /// that remote cleanup completed.
     fn drop(&mut self) {
         if matches!(
             self.lifecycle.state(),

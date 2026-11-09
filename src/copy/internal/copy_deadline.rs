@@ -24,6 +24,12 @@ pub(crate) struct CopyDeadline {
 
 impl CopyDeadline {
     /// Starts tracking a copy operation.
+    ///
+    /// # Parameters
+    ///
+    /// - `maximum`: Maximum elapsed time allowed for the operation, if
+    ///   configured.
+    /// - `now`: Monotonic timestamp used to evaluate the current deadline.
     #[inline]
     #[must_use = "use the deadline to enforce the copy budget"]
     pub(crate) fn new(maximum: Option<Duration>, now: fn() -> Instant) -> Self {

@@ -36,7 +36,7 @@ The temporary directory is removed when the demo ends.
 ```toml
 [dependencies]
 qubit-fs = "0.3"
-qubit-fs-local = "0.11"
+qubit-fs-local = "^0.11"
 tempfile = "3"
 ```
 
@@ -152,35 +152,34 @@ Platform roots and authority boundaries come from the configured provider.
 
 ## Testing
 
-Run these development fixture commands from the `rs-fs` repository root in a
-sibling Qubit checkout. The fixture uses local `rs-fs-local` (`qubit-fs-local`
-0.11) and `rs-local-files` (`qubit-local-files` 0.5) repositories beside
-`rs-fs` (`qubit-fs` 0.3). The participating manifests may require additional
-sibling path dependencies:
+The dedicated documentation examples workflow checks the bilingual examples,
+then compiles, tests, and runs the fixture against fixed sibling repository
+revisions. Run the same integration check locally with
+`bash scripts/check-documentation-examples.sh` from the `rs-fs` root in a
+sibling Qubit checkout. The fixture uses `rs-fs-local` (`qubit-fs-local`
+0.11), `rs-local-files` (`qubit-local-files` 0.5), and `rs-redact` beside
+`rs-fs` (`qubit-fs` 0.3):
 
 ```text
 parent/
 ├── rs-fs/
 ├── rs-fs-local/
 ├── rs-local-files/
-├── rs-redact/
-│   └── derive/
-├── rs-fs-registry/
-└── rs-json/
+└── rs-redact/
+    └── derive/
 ```
 
-A standalone checkout or crate source archive does not supply this layout. To
-try published packages independently, use the dependency block and complete
-program in Quick Start in your own Cargo project. From the `rs-fs` repository
-root, run:
+A standalone checkout or crate source archive does not supply this local
+layout. To try published packages independently, use the dependency block and
+complete program in Quick Start in your own Cargo project. The local fixture
+entry point runs:
 
 ```bash
-cargo test --manifest-path tests/fixtures/documentation_examples/Cargo.toml
-cargo run --manifest-path tests/fixtures/documentation_examples/Cargo.toml --bin quick_start
+bash scripts/check-documentation-examples.sh
 ```
 
-These fixture commands are a local integration entry point; the core CI checks
-this crate and its documentation.
+This fixture entry point is also run by its independent workflow; the core CI
+continues to check this crate and its documentation.
 
 ```bash
 # Run tests with the default feature set

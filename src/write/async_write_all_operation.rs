@@ -74,6 +74,11 @@ pub struct AsyncWriteAllOperation {
 }
 impl AsyncWriteAllOperation {
     /// Creates an operation after facade preflight has succeeded.
+    /// # Parameters
+    /// - `filesystem`: Filesystem whose provider stages execute this write.
+    /// - `path`: Target path used for error context and provider requests.
+    /// - `bytes`: Payload retained for the whole-file write.
+    /// - `options`: Write policy applied to the provider request.
     pub(crate) fn new(filesystem: AsyncFileSystem, path: Path, bytes: Vec<u8>, options: WriteOptions) -> Self {
         Self {
             filesystem,
@@ -172,6 +177,12 @@ impl AsyncWriteAllOperation {
     }
 }
 /// Runs provider stages while keeping the session in the recovery slot.
+/// # Parameters
+/// - `filesystem`: Filesystem whose provider stages execute this write.
+/// - `path`: Target path used for error context and provider requests.
+/// - `bytes`: Payload retained for the whole-file write.
+/// - `options`: Write policy applied to the provider request.
+/// - `slot`: Recovery slot retaining the opened or rejected writer.
 async fn execute_write(
     filesystem: &AsyncFileSystem,
     path: &Path,
@@ -217,6 +228,10 @@ async fn execute_write(
     }
 }
 /// Restores filesystem and target context to a stream failure.
+/// # Parameters
+/// - `filesystem`: Filesystem whose provider stages execute this write.
+/// - `error`: Failure whose trusted filesystem context is being restored.
+/// - `path`: Target path used for error context and provider requests.
 fn contextual(filesystem: &AsyncFileSystem, error: IoError, path: &Path) -> FsError {
     filesystem.core().enrich(
         FsError::from_stream_io(error, FsOperation::Write, path),
@@ -225,6 +240,9 @@ fn contextual(filesystem: &AsyncFileSystem, error: IoError, path: &Path) -> FsEr
     )
 }
 /// Classifies a post-open stream failure using writer publication facts.
+/// # Parameters
+/// - `indeterminate`: Whether a completed stage left publication uncertain.
+/// - `state`: Publication state used to classify or retain this outcome.
 fn state_for(indeterminate: bool, state: WriterState) -> WriteFailureState {
     if indeterminate {
         WriteFailureState::Indeterminate
@@ -233,6 +251,9 @@ fn state_for(indeterminate: bool, state: WriterState) -> WriteFailureState {
     }
 }
 /// Builds a repeated-execution error without changing historical facts.
+/// # Parameters
+/// - `path`: Target path used for error context and provider requests.
+/// - `filesystem`: Filesystem whose provider stages execute this write.
 fn invalid_state(path: &Path, filesystem: &AsyncFileSystem) -> FsError {
     FsError::new(
         FsErrorKind::InvalidState,
@@ -245,6 +266,8 @@ fn invalid_state(path: &Path, filesystem: &AsyncFileSystem) -> FsError {
 
 impl Debug for AsyncWriteAllOperation {
     /// Formats lifecycle facts without payload or provider session contents.
+    /// # Parameters
+    /// - `formatter`: Formatter receiving the diagnostic representation.
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter
             .debug_struct("AsyncWriteAllOperation")

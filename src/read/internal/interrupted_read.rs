@@ -21,6 +21,13 @@ use crate::error::FsErrorKind;
 ///
 /// Filesystem errors are retryable only when their effect state is absent or
 /// explicitly unchanged; ordinary interrupted I/O errors are retryable.
+///
+/// # Parameters
+/// - `error`: I/O failure whose retry safety is being classified.
+///
+/// # Returns
+/// `true` only for an ordinary interrupted I/O error or a filesystem
+/// interruption known to have no effect.
 fn retryable(error: &io::Error) -> bool {
     if let Some(fs_error) = error.get_ref().and_then(|source| source.downcast_ref::<FsError>()) {
         return fs_error.kind() == FsErrorKind::Interrupted
@@ -36,6 +43,10 @@ fn retryable(error: &io::Error) -> bool {
 /// its effect state is absent or explicitly unchanged. Other errors, including
 /// filesystem interruptions with uncertain or applied effects, are returned
 /// immediately.
+///
+/// # Type Parameters
+/// - `I`: Byte-input implementation being read; unsized implementations are
+///   accepted behind a reference.
 ///
 /// # Parameters
 ///

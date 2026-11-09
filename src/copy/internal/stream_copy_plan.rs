@@ -25,14 +25,26 @@ use crate::write::WriteOptions;
 
 /// Immutable policy and progress decisions shared by sync and async fallback.
 pub(crate) struct StreamCopyPlan<'a> {
+    /// Copy guarantees and conflict policy used by the fallback.
     options: &'a CopyOptions,
+    /// Provider limits used to bound reads, writes, and accounting.
     limits: &'a FileSystemLimits,
+    /// Source resource whose contents are streamed.
     source: &'a Path,
+    /// Destination resource receiving the streamed contents.
     target: &'a Path,
 }
 
 impl<'a> StreamCopyPlan<'a> {
     /// Creates a plan for one validated copy request.
+    ///
+    /// # Parameters
+    ///
+    /// - `options`: Copy route, conflict, consistency, and metadata guarantees
+    ///   requested by the caller.
+    /// - `limits`: Provider resource limits applied to the operation.
+    /// - `source`: Logical path of the source resource.
+    /// - `target`: Destination logical path affected by the operation.
     #[inline]
     #[must_use]
     pub(crate) const fn new(
@@ -50,6 +62,11 @@ impl<'a> StreamCopyPlan<'a> {
     }
 
     /// Validates options that the stream fallback can faithfully implement.
+    ///
+    /// # Parameters
+    ///
+    /// - `symlink_policy`: Symlink policy to check against the fallback’s
+    ///   supported behavior.
     pub(crate) fn validate_options(&self, symlink_policy: SymlinkPolicy) -> Result<(), FsError> {
         if !fallback_options_supported(self.options, symlink_policy) {
             return Err(FsError::new(
@@ -65,6 +82,11 @@ impl<'a> StreamCopyPlan<'a> {
     }
 
     /// Validates source metadata before opening either stream handle.
+    ///
+    /// # Parameters
+    ///
+    /// - `metadata`: Provider metadata checked against the requested resource
+    ///   contract.
     pub(crate) fn validate_metadata(&self, metadata: &FileMetadata) -> Result<(), FsError> {
         if !matches!(metadata.kind(), FileKind::File | FileKind::Object) {
             return Err(FsError::new(
@@ -95,6 +117,11 @@ impl<'a> StreamCopyPlan<'a> {
     }
 
     /// Adds a read count and enforces the caller byte budget.
+    ///
+    /// # Parameters
+    ///
+    /// - `total`: Bytes already accounted for in the copy.
+    /// - `count`: Bytes in the next chunk to account for.
     pub(crate) fn next_bytes(&self, total: u64, count: usize) -> Result<u64, FsError> {
         let count = count as u64;
         let next = total
@@ -107,6 +134,11 @@ impl<'a> StreamCopyPlan<'a> {
     }
 
     /// Returns the fallback statistics for a completed file or object copy.
+    ///
+    /// # Parameters
+    ///
+    /// - `source_kind`: Kind of the source resource being copied.
+    /// - `bytes`: Payload to write as one complete resource.
     #[inline]
     #[must_use]
     pub(crate) fn completed_stats(source_kind: &FileKind, bytes: u64) -> CopyStats {
@@ -119,6 +151,10 @@ impl<'a> StreamCopyPlan<'a> {
     }
 
     /// Returns whether an unchanged conflict may be reported as skipped.
+    ///
+    /// # Parameters
+    ///
+    /// - `state`: Operation state used to classify confirmed side effects.
     #[inline]
     #[must_use]
     pub(crate) fn may_skip_conflict(&self, state: CopyFailureState) -> bool {
@@ -126,6 +162,10 @@ impl<'a> StreamCopyPlan<'a> {
     }
 
     /// Builds a stable caller-budget error with source and target context.
+    ///
+    /// # Parameters
+    ///
+    /// - `message`: Diagnostic message for the constructed filesystem error.
     pub(crate) fn budget_error(&self, message: &str) -> FsError {
         FsError::new(FsErrorKind::ResourceLimitExceeded, FsOperation::Copy, message)
             .with_path(self.source.clone())

@@ -89,6 +89,9 @@ impl WriteFailure {
 }
 
 impl Display for WriteFailure {
+    /// Formats the publication state together with its cause.
+    /// # Parameters
+    /// - `formatter`: Formatter receiving the diagnostic representation.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         write!(formatter, "write {:?}: {}", self.state, self.error)
@@ -96,6 +99,7 @@ impl Display for WriteFailure {
 }
 
 impl Error for WriteFailure {
+    /// Returns the provider or facade error that caused the write failure.
     #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(&self.error)

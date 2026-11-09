@@ -52,6 +52,11 @@ pub struct FileSystemInfo {
 
 impl FileSystemInfo {
     /// Creates a filesystem information snapshot without scheme aliases.
+    ///
+    /// # Parameters
+    /// - `id`: Stable identity for the configured filesystem.
+    /// - `provider_id`: Stable identifier of the provider implementation.
+    /// - `path_semantics`: Logical path model used by the provider.
     #[inline]
     #[must_use]
     pub fn new(id: FileSystemId, provider_id: impl Display, path_semantics: PathSemantics) -> Self {
@@ -69,6 +74,9 @@ impl FileSystemInfo {
     /// # Errors
     ///
     /// Returns an invalid-URI error when `scheme` is not a valid URI scheme.
+    ///
+    /// # Parameters
+    /// - `scheme`: URI scheme alias to validate and add if not already present.
     pub fn with_scheme(mut self, scheme: &str) -> FsResult<Self> {
         let mut characters = scheme.bytes();
         let valid = characters.next().is_some_and(|first| first.is_ascii_alphabetic())
@@ -92,6 +100,10 @@ impl FileSystemInfo {
     /// `metadata` has already rejected credential-like keys. Providers must
     /// expose secrets only through an external credential boundary, never
     /// through this debug-visible local snapshot.
+    ///
+    /// # Parameters
+    /// - `metadata`: User metadata whose keys have passed credential-name
+    ///   checks; values are retained as supplied.
     #[inline]
     #[must_use]
     pub fn with_provider_metadata(mut self, metadata: UserMetadata) -> Self {

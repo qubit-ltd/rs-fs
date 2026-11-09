@@ -354,6 +354,10 @@ impl ListOptions {
     }
 
     /// Validates the selected filter against provider path semantics.
+    ///
+    /// # Parameters
+    ///
+    /// - `semantics`: Path interpretation rules declared by the provider.
     fn validate_filter(&self, semantics: PathSemantics) -> FsResult<()> {
         match (semantics, self.filter.as_ref()) {
             (PathSemantics::Hierarchical, Some(ListFilter::Subtree(prefix))) => {

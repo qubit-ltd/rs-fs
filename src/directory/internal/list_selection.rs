@@ -13,6 +13,12 @@ use crate::metadata::DirEntry;
 use crate::path::Path;
 use crate::path::PathSemantics;
 /// Returns the entry suffix only when it lies within the requested namespace.
+///
+/// # Parameters
+///
+/// - `scope`: Requested directory or namespace listing scope.
+/// - `entry`: Provider-returned directory entry being validated or selected.
+/// - `semantics`: Path interpretation rules declared by the provider.
 pub(crate) fn relative_path<'a>(scope: &ListScope, entry: &'a Path, semantics: PathSemantics) -> Option<&'a str> {
     let Some(root) = scope.path() else {
         return Some(entry.as_str());
@@ -34,6 +40,14 @@ pub(crate) fn relative_path<'a>(scope: &ListScope, entry: &'a Path, semantics: P
     }
 }
 /// Validates a provider entry against selection and metadata requirements.
+///
+/// # Parameters
+///
+/// - `entry`: Provider-returned directory entry being validated or selected.
+/// - `scope`: Requested directory or namespace listing scope.
+/// - `options`: Selection, recursion, page-size, and deadline settings for the
+///   listing.
+/// - `semantics`: Path interpretation rules declared by the provider.
 ///
 /// # Errors
 /// Returns a fixed diagnostic when the provider entry violates the request.

@@ -11,6 +11,11 @@ use super::fs_error::FsError;
 
 /// Result type used by filesystem APIs.
 ///
+/// # Type Parameters
+///
+/// - `T`: Success value returned by an operation; failures are represented by
+///   [`FsError`].
+///
 /// # Examples
 ///
 /// ```

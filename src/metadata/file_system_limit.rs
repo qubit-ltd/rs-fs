@@ -44,6 +44,9 @@ impl FileSystemLimit {
     }
 
     /// Returns whether `actual` exceeds a declared finite maximum.
+    ///
+    /// # Parameters
+    /// - `actual`: Value to compare with the inclusive maximum, if present.
     #[inline]
     #[must_use]
     pub const fn is_exceeded_by(self, actual: u64) -> bool {

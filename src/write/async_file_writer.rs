@@ -340,6 +340,9 @@ impl AsyncFileWriter {
     }
 
     /// Builds a stable invalid-state error.
+    /// # Parameters
+    /// - `operation`: Filesystem operation associated with the error.
+    /// - `message`: Stable description included in the invalid-state error.
     fn invalid_state(&self, operation: FsOperation, message: &str) -> FsError {
         FsError::new(FsErrorKind::InvalidState, operation, message)
             .with_path(self.info.path().clone())
@@ -355,6 +358,8 @@ impl AsyncFileWriter {
     }
 
     /// Checks whether a provider write can fit in the session budget.
+    /// # Parameters
+    /// - `count`: Byte count checked against or added to the session budget.
     fn check_write_limit(&self, count: usize) -> IoResult<u64> {
         let count = FacadeCore::quantity_from_usize(count, FsOperation::Write, self.info.path(), &self.provider)
             .map_err(FsError::into_io_error)?;
@@ -378,6 +383,8 @@ impl AsyncFileWriter {
     ///
     /// Returns an I/O error when the native byte count or accumulated total
     /// cannot be represented by the filesystem API's `u64` byte counters.
+    /// # Parameters
+    /// - `count`: Byte count checked against or added to the session budget.
     fn record_written_bytes(&mut self, count: usize) -> IoResult<()> {
         let count = FacadeCore::quantity_from_usize(count, FsOperation::Write, self.info.path(), &self.provider)
             .map_err(FsError::into_io_error)?;
@@ -416,6 +423,9 @@ impl AsyncFileWriter {
     }
 
     /// Adds only missing facade context to a provider lifecycle error.
+    /// # Parameters
+    /// - `error`: Failure whose trusted filesystem context is being restored.
+    /// - `operation`: Filesystem operation associated with the error.
     fn contextual_error(&self, error: FsError, operation: FsOperation) -> FsError {
         error
             .with_operation(operation)
@@ -424,13 +434,24 @@ impl AsyncFileWriter {
 }
 
 impl AsyncOutput for AsyncFileWriter {
+    /// The byte unit accepted by this writer.
     type Item = u8;
 
+    /// Reports whether the provider session buffers output before flushing.
     #[inline]
     fn is_buffered(&self) -> bool {
         self.session.is_buffered()
     }
 
+    /// Polls a provider write while tracking accepted bytes and uncertainty.
+    ///
+    /// # Safety
+    /// `index` and `count` must identify a valid range within `input`.
+    /// # Parameters
+    /// - `cx`: Task context used to poll the provider session.
+    /// - `input`: Input bytes containing the requested range.
+    /// - `index`: Starting offset of the requested input range.
+    /// - `count`: Maximum number of bytes requested from the provider.
     unsafe fn poll_write_unchecked(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -481,6 +502,9 @@ impl AsyncOutput for AsyncFileWriter {
         }
     }
 
+    /// Polls the provider flush and marks the writer indeterminate on failure.
+    /// # Parameters
+    /// - `cx`: Task context used to poll the provider session.
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<IoResult<()>> {
         let this = self.get_mut();
         if this.state != WriterState::Open {
@@ -498,6 +522,9 @@ impl AsyncOutput for AsyncFileWriter {
 }
 
 impl Debug for AsyncFileWriter {
+    /// Formats lifecycle facts without exposing the provider session.
+    /// # Parameters
+    /// - `formatter`: Formatter receiving the diagnostic representation.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter
@@ -509,6 +536,7 @@ impl Debug for AsyncFileWriter {
 }
 
 impl Drop for AsyncFileWriter {
+    /// Requests provider cancellation when this writer still owns live work.
     fn drop(&mut self) {
         if self.cleanup_state != RecoveryCleanupState::Completed
             && matches!(
@@ -585,7 +613,7 @@ mod tests {
     }
 
     #[test]
-    fn zero_length_write_preserves_written_bytes_after_nonempty_write() {
+    fn test_zero_length_write_preserves_bytes_after_nonempty_write() {
         let info = OpenedFileInfo::new(
             FileSystemId::new("async-writer-test").unwrap(),
             Path::parse("/zero-write").unwrap(),

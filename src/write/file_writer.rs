@@ -315,6 +315,9 @@ impl FileWriter {
     }
 
     /// Builds a stable invalid-state error for this writer.
+    /// # Parameters
+    /// - `operation`: Filesystem operation associated with the error.
+    /// - `message`: Stable description included in the invalid-state error.
     fn invalid_state(&self, operation: FsOperation, message: &str) -> FsError {
         FsError::new(FsErrorKind::InvalidState, operation, message)
             .with_path(self.info.path().clone())
@@ -330,6 +333,8 @@ impl FileWriter {
     }
 
     /// Checks whether a provider write can fit in the session budget.
+    /// # Parameters
+    /// - `count`: Byte count checked against or added to the session budget.
     fn check_write_limit(&self, count: usize) -> IoResult<u64> {
         let count = FacadeCore::quantity_from_usize(count, FsOperation::Write, self.info.path(), &self.provider)
             .map_err(FsError::into_io_error)?;
@@ -353,6 +358,8 @@ impl FileWriter {
     ///
     /// Returns an I/O error when the native byte count or accumulated total
     /// cannot be represented by the filesystem API's `u64` byte counters.
+    /// # Parameters
+    /// - `count`: Byte count checked against or added to the session budget.
     fn record_written_bytes(&mut self, count: usize) -> IoResult<()> {
         let count = FacadeCore::quantity_from_usize(count, FsOperation::Write, self.info.path(), &self.provider)
             .map_err(FsError::into_io_error)?;
@@ -391,6 +398,9 @@ impl FileWriter {
     }
 
     /// Adds only missing facade context to a provider lifecycle error.
+    /// # Parameters
+    /// - `error`: Failure whose trusted filesystem context is being restored.
+    /// - `operation`: Filesystem operation associated with the error.
     fn contextual_error(&self, error: FsError, operation: FsOperation) -> FsError {
         error
             .with_operation(operation)
@@ -399,13 +409,23 @@ impl FileWriter {
 }
 
 impl Output for FileWriter {
+    /// The byte unit accepted by this writer.
     type Item = u8;
 
+    /// Reports whether the provider session buffers output before flushing.
     #[inline]
     fn is_buffered(&self) -> bool {
         self.session.is_buffered()
     }
 
+    /// Writes a range and records provider progress or uncertainty.
+    ///
+    /// # Safety
+    /// `index` and `count` must identify a valid range within `input`.
+    /// # Parameters
+    /// - `input`: Input bytes containing the requested range.
+    /// - `index`: Starting offset of the requested input range.
+    /// - `count`: Maximum number of bytes requested from the provider.
     unsafe fn write_unchecked(&mut self, input: &[u8], index: usize, count: usize) -> IoResult<usize> {
         if self.state != WriterState::Open {
             return Err(self.closed_io_error());
@@ -459,6 +479,7 @@ impl Output for FileWriter {
         }
     }
 
+    /// Flushes the provider session and marks it indeterminate on failure.
     fn flush(&mut self) -> IoResult<()> {
         if self.state != WriterState::Open {
             return Err(self.closed_io_error());
@@ -474,6 +495,9 @@ impl Output for FileWriter {
 }
 
 impl Debug for FileWriter {
+    /// Formats lifecycle facts without exposing the provider session.
+    /// # Parameters
+    /// - `formatter`: Formatter receiving the diagnostic representation.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter
@@ -485,6 +509,7 @@ impl Debug for FileWriter {
 }
 
 impl Drop for FileWriter {
+    /// Aborts provider work when this writer still owns a live session.
     fn drop(&mut self) {
         if self.cleanup_state != RecoveryCleanupState::Completed
             && matches!(

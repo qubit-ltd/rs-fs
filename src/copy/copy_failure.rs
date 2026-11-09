@@ -30,6 +30,7 @@ use crate::write::WriterRecovery;
 ///
 /// ```rust
 /// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
+///
 /// # let filesystem = support::rustdoc_provider::filesystem();
 /// use qubit_fs::Path;
 /// use qubit_fs::copy::CopyOptions;
@@ -41,6 +42,7 @@ use crate::write::WriterRecovery;
 /// assert_eq!(CopyFailureState::Unchanged, failure.state());
 /// assert_eq!(0, failure.partial_stats().bytes);
 /// assert!(!failure.has_recovery());
+///
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 #[must_use = "inspect or explicitly recover from the copy failure"]
@@ -160,6 +162,11 @@ impl CopyFailure {
 }
 impl Debug for CopyFailure {
     /// Formats safe failure facts without exposing a provider writer session.
+    ///
+    /// # Parameters
+    ///
+    /// - `formatter`: Formatter that receives the debug or display
+    ///   representation.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter
@@ -175,6 +182,11 @@ impl Debug for CopyFailure {
 impl Display for CopyFailure {
     /// Formats the wrapped file-system error while keeping the recovery state
     /// intentionally separate.
+    ///
+    /// # Parameters
+    ///
+    /// - `formatter`: Formatter that receives the debug or display
+    ///   representation.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         Display::fmt(self.error(), formatter)

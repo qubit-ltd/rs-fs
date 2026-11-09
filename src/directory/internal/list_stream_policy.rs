@@ -46,6 +46,18 @@ pub(crate) struct ListStreamPolicy {
 
 impl ListStreamPolicy {
     /// Creates a bounded policy using the caller-supplied monotonic instant.
+    ///
+    /// # Parameters
+    ///
+    /// - `scope`: Requested directory or namespace listing scope.
+    /// - `options`: Selection, recursion, page-size, and deadline settings for
+    ///   the listing.
+    /// - `provider`: Provider identifier attached to contextual errors.
+    /// - `path_semantics`: Provider path semantics used to interpret the
+    ///   logical paths.
+    /// - `limits`: Provider resource limits applied to the operation.
+    /// - `constraints`: Provider path constraints applied to returned entries.
+    /// - `now`: Monotonic timestamp used to evaluate the current deadline.
     pub(crate) fn new(
         scope: ListScope,
         options: ListOptions,
@@ -95,6 +107,10 @@ impl ListStreamPolicy {
     }
 
     /// Checks terminal state and deadline immediately before provider dispatch.
+    ///
+    /// # Parameters
+    ///
+    /// - `now`: Monotonic timestamp used to evaluate the current deadline.
     pub(crate) fn before_next(&mut self, now: Instant) -> FsResult<()> {
         if self.state != DirectoryStreamState::Open {
             return Err(self.contextual_error(FsError::new(
@@ -108,6 +124,11 @@ impl ListStreamPolicy {
 
     /// Rejects successful late results while retaining actual provider
     /// failures.
+    ///
+    /// # Parameters
+    ///
+    /// - `result`: Provider result to validate and record for this stream step.
+    /// - `now`: Monotonic timestamp used to evaluate the current deadline.
     pub(crate) fn finish_next(
         &mut self,
         result: FsResult<Option<DirEntry>>,
@@ -170,6 +191,10 @@ impl ListStreamPolicy {
     }
 
     /// Marks successful results at or after the inclusive deadline as failed.
+    ///
+    /// # Parameters
+    ///
+    /// - `now`: Monotonic timestamp used to evaluate the current deadline.
     fn check_deadline(&mut self, now: Instant) -> FsResult<()> {
         if self.deadline.is_some_and(|deadline| now >= deadline) {
             self.state = DirectoryStreamState::Failed;
@@ -179,6 +204,11 @@ impl ListStreamPolicy {
     }
 
     /// Adds only missing facade facts to a provider stream error.
+    ///
+    /// # Parameters
+    ///
+    /// - `error`: Filesystem error whose kind, source, and established facts
+    ///   are retained.
     fn contextual_error(&self, error: FsError) -> FsError {
         let error = error
             .with_operation(FsOperation::List)
@@ -190,6 +220,10 @@ impl ListStreamPolicy {
     }
 
     /// Builds a terminal caller-budget error with list context.
+    ///
+    /// # Parameters
+    ///
+    /// - `message`: Diagnostic message for the constructed filesystem error.
     fn resource_limit_error(&self, message: &str) -> FsError {
         self.contextual_error(FsError::new(
             FsErrorKind::ResourceLimitExceeded,

@@ -27,6 +27,7 @@ pub enum WriteDisposition {
 }
 
 impl Default for WriteDisposition {
+    /// Selects replacement semantics for a newly opened destination.
     #[inline]
     fn default() -> Self {
         Self::CreateOrReplace

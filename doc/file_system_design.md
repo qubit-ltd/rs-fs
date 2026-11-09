@@ -464,8 +464,11 @@ same opened object. The facade validates the envelope and caches its length as
 the readable upper bound. It is not a content snapshot: in-place mutation may
 be visible, truncation may cause short reads or EOF, and growth beyond the
 cached length is not exposed. Reads use caller buffers and independent offsets;
-the provider must not resolve the path again. Short reads are valid, zero is
-observed EOF, and an over-reported count is a contract violation. On errors,
+the provider must not resolve the path again. Short reads are valid. An empty
+buffer returns zero without observing EOF; a non-overflowing request at or
+beyond the open-time length also returns zero without provider I/O. For a
+non-empty in-range provider request, zero means that request observed EOF. An
+over-reported count is a contract violation. On errors,
 the buffer may contain partial data and must be discarded. Applications may
 fall back to legacy path reads only when opening reports
 `UnsupportedOperation` or `UnsupportedCapability`; after another open error,

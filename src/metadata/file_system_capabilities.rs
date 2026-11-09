@@ -81,6 +81,10 @@ impl FileSystemCapabilities {
     }
 
     /// Returns a copy with one additional conditional capability.
+    ///
+    /// # Parameters
+    /// - `capability`: Capability that may be attempted but is not guaranteed
+    ///   for every valid request.
     #[inline]
     #[must_use]
     pub const fn with_conditional(self, capability: FileSystemCapability) -> Self {
@@ -88,6 +92,9 @@ impl FileSystemCapabilities {
     }
 
     /// Returns a copy with one additional guaranteed capability.
+    ///
+    /// # Parameters
+    /// - `capability`: Capability promised for every valid request in scope.
     #[inline]
     #[must_use]
     pub const fn with_guaranteed(self, capability: FileSystemCapability) -> Self {
@@ -95,6 +102,10 @@ impl FileSystemCapabilities {
     }
 
     /// Replaces the support status of one capability.
+    ///
+    /// # Parameters
+    /// - `capability`: Capability whose current status is replaced.
+    /// - `support`: New support strength to record for that capability.
     #[inline]
     #[must_use]
     pub const fn set_support(mut self, capability: FileSystemCapability, support: FileSystemCapabilitySupport) -> Self {
@@ -114,6 +125,9 @@ impl FileSystemCapabilities {
     }
 
     /// Returns the support status of `capability`.
+    ///
+    /// # Parameters
+    /// - `capability`: Capability whose advertised support is queried.
     #[inline]
     pub const fn support(&self, capability: FileSystemCapability) -> FileSystemCapabilitySupport {
         let bit = capability.bit();
@@ -127,6 +141,10 @@ impl FileSystemCapabilities {
     }
 
     /// Returns whether the provider can attempt `capability`.
+    ///
+    /// # Parameters
+    /// - `capability`: Capability to test for conditional or guaranteed
+    ///   support.
     #[inline]
     #[must_use]
     pub const fn supports(&self, capability: FileSystemCapability) -> bool {
@@ -134,6 +152,9 @@ impl FileSystemCapabilities {
     }
 
     /// Returns whether `capability` is guaranteed in this filesystem scope.
+    ///
+    /// # Parameters
+    /// - `capability`: Capability to test for guaranteed support.
     #[inline]
     #[must_use]
     pub const fn guarantees(&self, capability: FileSystemCapability) -> bool {
@@ -216,6 +237,10 @@ impl Default for FileSystemCapabilities {
 }
 
 impl Debug for FileSystemCapabilities {
+    /// Formats each advertised capability with its support strength.
+    ///
+    /// # Parameters
+    /// - `formatter`: Destination for the debug map.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter.debug_map().entries(self.iter_with_support()).finish()

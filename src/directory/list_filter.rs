@@ -24,7 +24,13 @@ pub enum ListFilter {
     /// This filter defines the selected subtree independently of the
     /// `recursive` option. `max_depth` can cap returned descendant depth
     /// relative to the requested list root.
-    Subtree(String),
+    Subtree(
+        /// Relative path whose components select the requested subtree.
+        String,
+    ),
     /// Select keys by their raw string prefix.
-    LiteralPrefix(String),
+    LiteralPrefix(
+        /// Raw key prefix matched without adding or normalizing separators.
+        String,
+    ),
 }

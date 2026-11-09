@@ -139,12 +139,7 @@ impl HealthProvider {
         if path.as_str() == "/health" {
             Ok(())
         } else {
-            Err(FsError::new(
-                FsErrorKind::NotFound,
-                operation,
-                "health resource not found",
-            )
-            .with_path(path.clone()))
+            Err(FsError::new(FsErrorKind::NotFound, operation, "health resource not found").with_path(path.clone()))
         }
     }
 }
@@ -307,12 +302,10 @@ impl AsyncFileSystemSpi for AsyncHealthProvider {
         Box::pin(async move {
             let path = request.path();
             if path.as_str() != "/health" {
-                return Err(FsError::new(
-                    FsErrorKind::NotFound,
-                    FsOperation::Stat,
-                    "health resource not found",
-                )
-                .with_path(path.clone()));
+                return Err(
+                    FsError::new(FsErrorKind::NotFound, FsOperation::Stat, "health resource not found")
+                        .with_path(path.clone()),
+                );
             }
             Ok(StatResponse::new(
                 path.clone(),
@@ -475,8 +468,10 @@ Guaranteed `RangeRead` 的 provider 生效。
 门面要求身份匹配、对象类型为文件且 metadata 含长度。`len()` 会缓存为本会话可读取长度上界，
 但它不是内容快照，也不保证对象不会被原地修改。
 
-`read_at` 可以短读；调用方缓冲区中只有返回计数以内的前缀有效，返回 0 表示观察到 EOF。
-应保留带类型的读取错误及其 source，不能把错误当成 EOF 或改按路径重开。异步 SPI 遵循相同
+`read_at` 可以短读；调用方缓冲区中只有返回计数以内的前缀有效。空缓冲区或请求范围不溢出且偏移达到
+或超过打开时长度时，门面会在不调用 provider 的情况下返回 0；这两种情形都不表示观察到 EOF。
+对于上界内的非空 provider 请求，返回 0 才表示该请求观察到 EOF。应保留带类型的读取错误及其 source，
+不能把错误当成 EOF 或改按路径重开。异步 SPI 遵循相同
 契约：Pending future 被取消后，provider 不得继续持有或修改借用的缓冲区；下一次调用仍须从
 指定偏移读取同一对象。future 结束后不能有后台任务继续借用缓冲区。本指南中的最小顺序读取
 provider 示例有意不声明 operation 11，仍是有效 provider；它们展示默认不支持行为，不会让

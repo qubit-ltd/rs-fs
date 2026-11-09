@@ -22,12 +22,24 @@ use crate::write::WriteDisposition;
 use crate::write::WriteOptions;
 
 /// Returns true when copy options remain within the fallback policy allowlist.
+///
+/// # Parameters
+///
+/// - `options`: Copy route, conflict, consistency, and metadata guarantees
+///   requested by the caller.
+/// - `filesystem_symlink_policy`: Symlink policy configured for the filesystem.
 #[inline]
 pub(crate) fn fallback_options_supported(options: &CopyOptions, filesystem_symlink_policy: SymlinkPolicy) -> bool {
     fallback_rejection(options, filesystem_symlink_policy).is_none()
 }
 
 /// Returns the first static reason the stream fallback is unavailable.
+///
+/// # Parameters
+///
+/// - `options`: Copy route, conflict, consistency, and metadata guarantees
+///   requested by the caller.
+/// - `filesystem_symlink_policy`: Symlink policy configured for the filesystem.
 pub(crate) fn fallback_rejection(
     options: &CopyOptions,
     filesystem_symlink_policy: SymlinkPolicy,
@@ -66,6 +78,11 @@ pub(crate) fn fallback_rejection(
 }
 
 /// Builds the writer request used by a streamed copy fallback.
+///
+/// # Parameters
+///
+/// - `options`: Copy route, conflict, consistency, and metadata guarantees
+///   requested by the caller.
 #[inline]
 #[must_use]
 pub(crate) fn fallback_write_options(options: &CopyOptions) -> WriteOptions {
@@ -76,6 +93,13 @@ pub(crate) fn fallback_write_options(options: &CopyOptions) -> WriteOptions {
 }
 
 /// Validates stream-copy read/write size constraints using the provided limits.
+///
+/// # Parameters
+///
+/// - `limits`: Provider resource limits applied to the operation.
+/// - `_source`: Source-side limits used to check the requested copy length.
+/// - `target`: Destination logical path affected by the operation.
+/// - `length`: Length of the source resource to validate against copy limits.
 pub(crate) fn validate_stream_copy_length_limits(
     limits: &FileSystemLimits,
     _source: &Path,

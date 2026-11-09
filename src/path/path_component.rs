@@ -68,6 +68,9 @@ impl PathComponent {
 
 impl Display for PathComponent {
     /// Formats the validated component without changing its lexical spelling.
+    ///
+    /// # Parameters
+    /// - `formatter`: Destination for the component text.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter.write_str(self.as_str())

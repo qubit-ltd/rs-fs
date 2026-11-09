@@ -44,13 +44,21 @@ use crate::write::RejectedWriter;
 #[must_use]
 pub enum WriterRecovery {
     /// A validated writer retained for explicit recovery.
-    Opened(Box<FileWriter>),
+    Opened(
+        /// Validated writer that can perform writes, publication, or recovery.
+        Box<FileWriter>,
+    ),
     /// A provider session whose returned identity failed validation.
-    Rejected(RejectedWriter),
+    Rejected(
+        /// Rejected provider session restricted to explicit cleanup.
+        RejectedWriter,
+    ),
 }
 
 impl Debug for WriterRecovery {
     /// Formats the variant without exposing provider session internals.
+    /// # Parameters
+    /// - `formatter`: Formatter receiving the diagnostic representation.
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter.write_str(match self {
             Self::Opened(_) => "WriterRecovery::Opened",

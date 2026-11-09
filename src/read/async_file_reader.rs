@@ -82,13 +82,34 @@ impl AsyncFileReader {
 }
 
 impl AsyncInput for AsyncFileReader {
+    /// Byte value yielded by this asynchronous reader.
     type Item = u8;
 
+    /// Reports whether the provider input can satisfy reads from buffered data.
+    ///
+    /// # Returns
+    /// `true` when the wrapped input already buffers bytes for subsequent
+    /// reads.
     #[inline]
     fn is_buffered(&self) -> bool {
         self.inner.is_buffered()
     }
 
+    /// Polls the provider input using the caller's unsafe range contract.
+    ///
+    /// # Parameters
+    /// - `cx`: Task context used to register readiness when the read is
+    ///   pending.
+    /// - `output`: Destination storage receiving the read bytes.
+    /// - `index`: Start of the destination range.
+    /// - `count`: Maximum number of bytes requested.
+    ///
+    /// # Returns
+    /// The wrapped input's pending state or its ready byte count/error.
+    ///
+    /// # Safety
+    /// `index..index + count` must be a valid range within `output`, and the
+    /// addition must not overflow.
     #[inline]
     unsafe fn poll_read_unchecked(
         self: Pin<&mut Self>,
@@ -109,6 +130,10 @@ impl AsyncInput for AsyncFileReader {
 }
 
 impl Debug for AsyncFileReader {
+    /// Formats the open-time file information without exposing the input.
+    ///
+    /// # Parameters
+    /// - `formatter`: Destination for the debug representation.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter

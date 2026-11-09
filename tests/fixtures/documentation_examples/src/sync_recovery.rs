@@ -12,8 +12,8 @@ use qubit_fs::copy::CopyFailure;
 use qubit_fs::copy::CopyOptions;
 use qubit_fs::copy::CopyOutcome;
 use qubit_fs::error::FsError;
-use qubit_fs::write::WriterRecovery;
 use qubit_fs::write::WriteAbortOutcome;
+use qubit_fs::write::WriterRecovery;
 
 /// Retains a copy failure and any error from aborting its writer.
 #[derive(Debug)]
@@ -30,11 +30,7 @@ pub struct CopyRecovery {
 ///
 /// If a writer remains available after failure, this function attempts to
 /// abort it. Aborting does not guarantee that the target was rolled back.
-pub fn copy_report(
-    filesystem: &FileSystem,
-    source: &Path,
-    target: &Path,
-) -> Result<CopyOutcome, CopyRecovery> {
+pub fn copy_report(filesystem: &FileSystem, source: &Path, target: &Path) -> Result<CopyOutcome, CopyRecovery> {
     match filesystem.copy(source, target, CopyOptions::default()) {
         Ok(outcome) => Ok(outcome),
         Err(mut failure) => {

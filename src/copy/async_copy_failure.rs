@@ -23,11 +23,17 @@ use crate::error::FsError;
 ///
 /// ```rust
 /// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
+///
 /// # use support::*;
+///
 /// # use support::async_recording_spi::AsyncRecordingConfig;
+///
 /// # let (filesystem, _) = async_recording_spi::async_recording_file_system(
+///
 /// #     AsyncRecordingConfig { copy_failure: true, ..Default::default() },
+///
 /// # );
+///
 /// # poll_support::ready(async {
 /// use qubit_fs::Path;
 /// use qubit_fs::copy::CopyOptions;
@@ -41,7 +47,9 @@ use crate::error::FsError;
 /// assert_eq!(FsErrorKind::Io, error.kind());
 /// assert_eq!(0, stats.bytes);
 /// assert!(matches!(state, qubit_fs::copy::CopyFailureState::Indeterminate));
+///
 /// # Ok::<(), Box<dyn std::error::Error>>(())
+///
 /// # }).unwrap();
 /// ```
 #[must_use = "inspect the asynchronous copy failure and its publication state"]
@@ -56,6 +64,13 @@ pub struct AsyncCopyFailure {
 
 impl AsyncCopyFailure {
     /// Creates a failure from facade-confirmed facts.
+    ///
+    /// # Parameters
+    ///
+    /// - `error`: Filesystem error whose kind, source, and established facts
+    ///   are retained.
+    /// - `state`: Operation state used to classify confirmed side effects.
+    /// - `partial_stats`: Copy progress statistics accumulated before failure.
     pub(crate) fn new(error: FsError, state: CopyFailureState, partial_stats: CopyStats) -> Self {
         Self {
             error,
@@ -108,6 +123,11 @@ impl AsyncCopyFailure {
 
 impl Debug for AsyncCopyFailure {
     /// Formats failure facts without exposing a provider session.
+    ///
+    /// # Parameters
+    ///
+    /// - `formatter`: Formatter that receives the debug or display
+    ///   representation.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter
@@ -121,6 +141,11 @@ impl Debug for AsyncCopyFailure {
 
 impl Display for AsyncCopyFailure {
     /// Formats the wrapped file-system error.
+    ///
+    /// # Parameters
+    ///
+    /// - `formatter`: Formatter that receives the debug or display
+    ///   representation.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         Display::fmt(self.error(), formatter)

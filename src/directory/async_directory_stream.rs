@@ -35,13 +35,17 @@ use crate::spi::SpiFuture;
 ///
 /// ```
 /// # use qubit_fs::{AsyncFileSystem, FsResult, Path};
+///
 /// # use qubit_fs::directory::ListOptions;
+///
 /// # async fn visit(filesystem: &AsyncFileSystem, root: &Path) -> FsResult<()> {
 /// let mut stream = filesystem.list(&qubit_fs::directory::ListScope::Path(root.clone()), ListOptions::default()).await?;
 /// while let Some(entry) = stream.next_entry_async().await? {
 ///     println!("{}", entry.path);
 /// }
+///
 /// # Ok(())
+///
 /// # }
 /// ```
 pub struct AsyncDirectoryStream {
@@ -124,6 +128,11 @@ impl AsyncDirectoryStream {
 }
 
 impl Debug for AsyncDirectoryStream {
+    /// Formats the stream without exposing provider state.
+    ///
+    /// # Parameters
+    ///
+    /// - `formatter`: Formatter receiving the stream's debug representation.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter.debug_struct("AsyncDirectoryStream").finish_non_exhaustive()

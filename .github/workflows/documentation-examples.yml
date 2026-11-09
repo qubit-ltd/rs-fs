@@ -1,0 +1,85 @@
+name: Documentation Examples
+
+on:
+  push:
+    branches: [main, dev, dev-starfish]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  documentation-examples:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out rs-fs
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          path: rs-fs
+
+      - name: Read fixed sibling revisions
+        id: dependencies
+        working-directory: rs-fs
+        shell: bash
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import re
+          from pathlib import Path
+
+          dependencies = json.loads(
+              Path("scripts/documentation-example-dependencies.json").read_text()
+          )["dependencies"]
+          expected = {
+              "rs-fs-local": "https://github.com/qubit-ltd/rs-fs-local.git",
+              "rs-local-files": "https://github.com/qubit-ltd/rs-local-files.git",
+              "rs-redact": "https://github.com/qubit-ltd/rs-redact.git",
+          }
+          if {dependency["name"] for dependency in dependencies} != set(expected):
+              raise SystemExit("dependency names do not match the fixture path closure")
+          for dependency in dependencies:
+              name = dependency["name"]
+              revision = dependency["rev"]
+              if dependency["repository"] != expected[name]:
+                  raise SystemExit(f"unexpected repository URL for {name}")
+              if not re.fullmatch(r"[0-9a-f]{40}", revision):
+                  raise SystemExit(f"{name} revision is not a full Git SHA")
+              print(f"{name}_repository={dependency['repository']}")
+              print(f"{name}_rev={revision}")
+          PY
+
+      - name: Check out rs-fs-local
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: ${{ steps.dependencies.outputs['rs-fs-local_repository'] }}
+          ref: ${{ steps.dependencies.outputs['rs-fs-local_rev'] }}
+          path: rs-fs-local
+
+      - name: Check out rs-local-files
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: ${{ steps.dependencies.outputs['rs-local-files_repository'] }}
+          ref: ${{ steps.dependencies.outputs['rs-local-files_rev'] }}
+          path: rs-local-files
+
+      - name: Check out rs-redact
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: ${{ steps.dependencies.outputs['rs-redact_repository'] }}
+          ref: ${{ steps.dependencies.outputs['rs-redact_rev'] }}
+          path: rs-redact
+
+      - name: Install project Rust toolchain
+        run: |
+          rustup toolchain install 1.94.0 --profile minimal
+          rustup default 1.94.0
+
+      - name: Check documentation and examples
+        working-directory: rs-fs
+        run: |
+          python3 scripts/check-documentation.py
+          bash scripts/check-documentation-examples.sh

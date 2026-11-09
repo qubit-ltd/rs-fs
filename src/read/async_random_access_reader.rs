@@ -47,13 +47,32 @@ use crate::spi::AsyncRandomAccessReadSession;
 /// the output may contain partial bytes; discard the incomplete sample. The
 /// cached length is not a content snapshot.
 pub struct AsyncRandomAccessReader {
+    /// Identity and metadata captured when the object was opened.
     info: OpenedFileInfo,
+    /// Open-time readable upper bound; this is not a content snapshot.
     len: u64,
+    /// Maximum size of one request after clipping to `len`.
     limit: FileSystemLimit,
+    /// Provider identifier added to read errors for context.
     provider_id: String,
+    /// Pinned session retaining ownership of the already opened object.
     session: Pin<Box<dyn AsyncRandomAccessReadSession>>,
 }
 impl AsyncRandomAccessReader {
+    /// Builds a reader from the validated result of a provider open and pins
+    /// its session for the lifetime of the reader.
+    ///
+    /// # Parameters
+    /// - `info`: File identity and metadata captured at open time.
+    /// - `len`: Readable upper bound captured at open time.
+    /// - `limit`: Maximum size of each clipped provider request.
+    /// - `provider_id`: Provider identity included in read errors.
+    /// - `session`: Provider session owning the already-open object; it is
+    ///   pinned for the lifetime of the reader.
+    ///
+    /// # Returns
+    /// A reader that retains the open object and applies the supplied bound
+    /// and request limit.
     pub(crate) fn new(
         info: OpenedFileInfo,
         len: u64,
@@ -69,11 +88,14 @@ impl AsyncRandomAccessReader {
             session: Box::into_pin(session),
         }
     }
-    /// Returns open-time identity and metadata.
+    /// Returns the identity and metadata captured at open time.
     pub fn info(&self) -> &OpenedFileInfo {
         &self.info
     }
-    /// Returns the accessible upper bound observed when opened.
+    /// Returns the open-time readable upper bound.
+    ///
+    /// This bound does not change if the object grows and does not make the
+    /// object's contents a snapshot.
     pub fn len(&self) -> u64 {
         self.len
     }
@@ -90,8 +112,12 @@ impl AsyncRandomAccessReader {
     ///   completes or is dropped.
     ///
     /// # Returns
-    /// The number of bytes initialized, possibly less than the buffer length;
-    /// zero means this request observed EOF.
+    /// Returns the number of bytes read. An empty output buffer returns zero
+    /// without observing EOF. A non-overflowing request at or beyond the
+    /// open-time length also returns zero without provider I/O. For a non-empty
+    /// request within that bound, a provider result of zero indicates EOF
+    /// observed by that request. A positive count may be shorter than the
+    /// clipped request.
     ///
     /// # Errors
     /// Returns `InvalidOptions` for an overflowing offset range,
@@ -129,6 +155,11 @@ impl AsyncRandomAccessReader {
     }
 }
 impl Debug for AsyncRandomAccessReader {
+    /// Formats the open-time information and length without exposing the
+    /// provider session.
+    ///
+    /// # Parameters
+    /// - `f`: Destination for the debug representation.
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         f.debug_struct("AsyncRandomAccessReader")
             .field("info", &self.info)

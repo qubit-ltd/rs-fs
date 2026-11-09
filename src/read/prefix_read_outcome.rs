@@ -35,10 +35,15 @@ use crate::read::ReadOptions;
 #[must_use]
 #[derive(Debug)]
 pub struct PrefixReadOutcome {
+    /// Bytes accumulated before the stream ended or the limit was reached.
     bytes: Vec<u8>,
+    /// File identity and metadata captured when the reader was opened.
     info: OpenedFileInfo,
+    /// Original options used to configure the read.
     options: ReadOptions,
+    /// Maximum byte count requested for this prefix.
     max_bytes: usize,
+    /// Whether the stream ended or the requested limit was consumed.
     termination: PrefixReadTermination,
 }
 

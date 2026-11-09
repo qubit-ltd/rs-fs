@@ -35,7 +35,9 @@ use crate::spi::DirectoryStreamSpi;
 ///
 /// ```
 /// # use qubit_fs::{FileSystem, FsResult, Path};
+///
 /// # use qubit_fs::directory::ListOptions;
+///
 /// # fn visit(filesystem: &FileSystem, root: &Path) -> FsResult<()> {
 /// let mut stream = filesystem.list(
 ///     &qubit_fs::directory::ListScope::Path(root.clone()),
@@ -44,7 +46,9 @@ use crate::spi::DirectoryStreamSpi;
 /// while let Some(entry) = stream.next_entry()? {
 ///     println!("{}", entry.path);
 /// }
+///
 /// # Ok(())
+///
 /// # }
 /// ```
 pub struct DirectoryStream {
@@ -125,6 +129,11 @@ impl DirectoryStream {
 }
 
 impl Debug for DirectoryStream {
+    /// Formats the stream without exposing provider state.
+    ///
+    /// # Parameters
+    ///
+    /// - `formatter`: Formatter receiving the stream's debug representation.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter.debug_struct("DirectoryStream").finish_non_exhaustive()

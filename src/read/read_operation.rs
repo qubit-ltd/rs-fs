@@ -30,6 +30,9 @@ pub(crate) struct ReadOperation<'a> {
 
 impl<'a> ReadOperation<'a> {
     /// Creates a read operation bound to `filesystem`.
+    ///
+    /// # Parameters
+    /// - `filesystem`: Facade borrowed for opening and contextualizing reads.
     #[inline]
     pub(crate) const fn new(filesystem: &'a FileSystem) -> Self {
         Self { filesystem }
@@ -45,6 +48,14 @@ impl<'a> ReadOperation<'a> {
     ///
     /// Returns an error if the file cannot be opened or read, if its content
     /// exceeds `max_bytes`, or if the bounded read buffer cannot append data.
+    ///
+    /// # Parameters
+    /// - `path`: File to read.
+    /// - `options`: Options used to open the reader.
+    /// - `max_bytes`: Maximum aggregate byte count accepted.
+    ///
+    /// # Returns
+    /// The complete file contents when they fit within `max_bytes`.
     pub(crate) fn read_all(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
         let mut reader = self.filesystem.open_reader(path, options)?;
         let mut result = ReadBuffer::new(max_bytes);
@@ -102,6 +113,15 @@ impl<'a> ReadOperation<'a> {
     /// Returns an error if read options cannot be resolved, the file cannot be
     /// opened or read, or the bounded read buffer cannot append data. Errors
     /// from the stream include filesystem context.
+    ///
+    /// # Parameters
+    /// - `path`: File whose prefix is read.
+    /// - `options`: Options used to open the reader.
+    /// - `max_bytes`: Maximum number of prefix bytes to accumulate.
+    ///
+    /// # Returns
+    /// The bytes read together with the termination reason and open-time
+    /// metadata.
     pub(crate) fn read_prefix(
         &self,
         path: &Path,

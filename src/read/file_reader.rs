@@ -74,6 +74,7 @@ impl FileReader {
 }
 
 impl Input for FileReader {
+    /// Byte value yielded by this synchronous reader.
     type Item = u8;
 
     /// Reports whether the wrapped byte input can satisfy reads from its
@@ -85,6 +86,15 @@ impl Input for FileReader {
 
     /// Reads the requested byte range under the caller's `Input` safety
     /// contract.
+    ///
+    /// # Parameters
+    /// - `output`: Caller-owned destination buffer.
+    /// - `index`: Start index of the requested output range.
+    /// - `count`: Number of bytes requested from that range.
+    ///
+    /// # Safety
+    /// `index..index + count` must be a valid range within `output`, and the
+    /// addition must not overflow.
     #[inline]
     unsafe fn read_unchecked(&mut self, output: &mut [u8], index: usize, count: usize) -> IoResult<usize> {
         // SAFETY: The caller guarantees the same range contract required by
@@ -95,6 +105,9 @@ impl Input for FileReader {
 
 impl Debug for FileReader {
     /// Formats the reader's stable file information without exposing its input.
+    ///
+    /// # Parameters
+    /// - `formatter`: Destination for the debug representation.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter

@@ -106,6 +106,9 @@ impl WriteOutcome {
     }
 
     /// Records the byte count confirmed by the provider.
+    ///
+    /// # Parameters
+    /// - `bytes_written`: Number of bytes accepted by the committed write.
     #[inline]
     #[must_use]
     pub const fn with_bytes_written(mut self, bytes_written: u64) -> Self {
@@ -114,6 +117,9 @@ impl WriteOutcome {
     }
 
     /// Records the provider version, generation, or ETag.
+    ///
+    /// # Parameters
+    /// - `version`: Provider token identifying the resulting resource version.
     #[inline]
     #[must_use]
     pub fn with_version(mut self, version: ResourceVersion) -> Self {
@@ -123,6 +129,9 @@ impl WriteOutcome {
 
     /// Records whether data and namespace publication were durably
     /// synchronized.
+    ///
+    /// # Parameters
+    /// - `durable`: Whether the provider confirmed durable publication.
     #[inline]
     #[must_use]
     pub const fn with_durable(mut self, durable: bool) -> Self {
@@ -133,6 +142,10 @@ impl WriteOutcome {
     /// Replaces provider diagnostics after their values have been sanitized.
     ///
     /// Keys are checked when added, while values are retained unchanged.
+    ///
+    /// # Parameters
+    /// - `diagnostics`: Provider diagnostics with values already sanitized by
+    ///   the provider.
     #[inline]
     #[must_use]
     pub fn with_diagnostics(mut self, diagnostics: UserMetadata) -> Self {

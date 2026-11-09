@@ -70,6 +70,9 @@ impl RenameOptions {
     }
 
     /// Replaces whether the destination may be overwritten.
+    ///
+    /// # Parameters
+    /// - `overwrite`: Whether an existing destination may be replaced.
     #[inline]
     #[must_use]
     pub const fn with_overwrite(mut self, overwrite: bool) -> Self {
@@ -78,6 +81,9 @@ impl RenameOptions {
     }
 
     /// Replaces the required atomicity level.
+    ///
+    /// # Parameters
+    /// - `atomicity`: Atomicity requirement for the rename operation.
     #[inline]
     #[must_use]
     pub const fn with_atomicity(mut self, atomicity: AtomicityRequirement) -> Self {
@@ -86,6 +92,9 @@ impl RenameOptions {
     }
 
     /// Replaces the required destination durability level.
+    ///
+    /// # Parameters
+    /// - `durability`: Durability requirement for destination publication.
     #[inline]
     #[must_use]
     pub const fn with_durability(mut self, durability: DurabilityRequirement) -> Self {

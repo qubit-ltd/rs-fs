@@ -49,7 +49,8 @@ pub enum WriteReportError {
     Recovery(Box<WriteRecovery>),
 }
 
-/// Writes report bytes and retains ambiguous outcomes for caller reconciliation.
+/// Writes report bytes and retains ambiguous outcomes for caller
+/// reconciliation.
 ///
 /// Cancellation applies only to execution. Once execution completes or is
 /// cancelled, any retained writer is aborted, and the operation state is

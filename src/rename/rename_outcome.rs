@@ -90,6 +90,10 @@ impl RenameOutcome {
     /// Replaces provider diagnostics after their values have been sanitized.
     ///
     /// Keys are checked when added, while values are retained unchanged.
+    ///
+    /// # Parameters
+    /// - `diagnostics`: Provider diagnostics with values already sanitized by
+    ///   the provider.
     #[inline]
     #[must_use]
     pub fn with_diagnostics(mut self, diagnostics: UserMetadata) -> Self {

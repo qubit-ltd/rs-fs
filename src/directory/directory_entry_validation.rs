@@ -20,6 +20,14 @@ use crate::path::PathSemantics;
 
 /// Validates provider-controlled identity fields before applying list policy.
 ///
+/// # Parameters
+///
+/// - `entry`: Provider-returned directory entry being validated or selected.
+/// - `scope`: Requested directory or namespace listing scope.
+/// - `semantics`: Path interpretation rules declared by the provider.
+/// - `limits`: Provider resource limits applied to the operation.
+/// - `constraints`: Provider path constraints applied to returned entries.
+///
 /// # Errors
 ///
 /// Returns a provider-contract violation when the entry uses different path
@@ -80,6 +88,11 @@ pub(crate) fn validate_entry(
 }
 
 /// Builds a stable provider-contract error for list option filtering.
+///
+/// # Parameters
+///
+/// - `scope`: Requested directory or namespace listing scope.
+/// - `message`: Diagnostic message for the constructed filesystem error.
 pub(crate) fn option_error(scope: &ListScope, message: &'static str) -> FsError {
     let error = FsError::new(
         FsErrorKind::ProviderContractViolation,
@@ -93,6 +106,11 @@ pub(crate) fn option_error(scope: &ListScope, message: &'static str) -> FsError 
 }
 
 /// Returns the entry path relative to `root` when it remains in the root.
+///
+/// # Parameters
+///
+/// - `root`: Requested list root used to calculate an entry-relative path.
+/// - `entry`: Provider-returned directory entry being validated or selected.
 fn relative_path<'a>(root: &Path, entry: &'a Path) -> Option<&'a str> {
     if root == entry {
         Some("")
@@ -113,6 +131,11 @@ fn relative_path<'a>(root: &Path, entry: &'a Path) -> Option<&'a str> {
 /// Returns `Some(0)` when both paths identify the root, `Some(n)` for a
 /// descendant `n` components below it, and `None` when `entry` is outside the
 /// root.
+///
+/// # Parameters
+///
+/// - `root`: Requested list root used to calculate an entry-relative path.
+/// - `entry`: Provider-returned directory entry being validated or selected.
 pub(crate) fn entry_depth(root: &Path, entry: &Path) -> Option<usize> {
     let relative = relative_path(root, entry)?;
     if relative.is_empty() {
@@ -123,6 +146,11 @@ pub(crate) fn entry_depth(root: &Path, entry: &Path) -> Option<usize> {
 }
 
 /// Builds a provider-contract error for one invalid entry identity.
+///
+/// # Parameters
+///
+/// - `path`: Logical path of the resource involved in this operation.
+/// - `message`: Diagnostic message for the constructed filesystem error.
 fn contract_error(path: &Path, message: &'static str) -> FsError {
     FsError::new(
         FsErrorKind::ProviderContractViolation,

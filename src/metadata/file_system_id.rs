@@ -40,6 +40,10 @@ impl FileSystemId {
     ///
     /// Returns [`FsErrorKind::InvalidOptions`] for empty identities or control
     /// characters.
+    ///
+    /// # Parameters
+    /// - `id`: Provider-supplied stable identity; it must be non-empty and
+    ///   contain no control characters.
     pub fn new(id: &str) -> FsResult<Self> {
         if id.is_empty() || id.chars().any(char::is_control) {
             return Err(FsError::new(
@@ -60,6 +64,10 @@ impl FileSystemId {
 }
 
 impl Display for FileSystemId {
+    /// Writes the validated identity text without additional formatting.
+    ///
+    /// # Parameters
+    /// - `formatter`: Destination for the identity text.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter.write_str(self.as_str())

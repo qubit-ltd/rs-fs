@@ -37,7 +37,9 @@ use crate::metadata::OpenedFileInfo;
 /// # Ok::<(), FsError>(())
 /// ```
 pub struct OpenedAsyncRandomAccessReader {
+    /// Identity and open-time metadata for the same object held by `session`.
     info: OpenedFileInfo,
+    /// Asynchronous operations bound to the opened object or immutable version.
     session: Box<dyn AsyncRandomAccessReadSession>,
 }
 impl OpenedAsyncRandomAccessReader {
@@ -57,6 +59,13 @@ impl OpenedAsyncRandomAccessReader {
     pub fn info(&self) -> &OpenedFileInfo {
         &self.info
     }
+    /// Transfers the metadata and session together for facade validation.
+    ///
+    /// The pair must remain associated because the metadata describes the
+    /// object retained by the session.
+    ///
+    /// # Returns
+    /// The opened-object metadata and its corresponding asynchronous session.
     pub(crate) fn into_parts(self) -> (OpenedFileInfo, Box<dyn AsyncRandomAccessReadSession>) {
         (self.info, self.session)
     }

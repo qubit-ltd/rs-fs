@@ -255,6 +255,15 @@ impl TempDirectory {
             .map_err(|error| self.record_lifecycle_error(error, FsOperation::CleanupTemp))
     }
     /// Records provider partial persistence facts.
+    ///
+    /// # Parameters
+    /// - `failure`: Provider-reported failure and publication facts.
+    /// - `target`: Destination requested by the persistence operation.
+    /// - `operation`: Persistence or keep operation being contextualized.
+    ///
+    /// # Returns
+    /// A typed failure retaining provider state and the latest confirmed
+    /// target.
     fn record_persist_failure(
         &mut self,
         failure: SpiPersistFailure,
@@ -280,6 +289,13 @@ impl TempDirectory {
         .with_publication_target(self.lifecycle.publication_target())
     }
     /// Requires ownership of an unpublished source.
+    ///
+    /// # Parameters
+    /// - `operation`: Lifecycle operation attempted by the caller.
+    ///
+    /// # Returns
+    /// `Ok(())` while this handle owns an unpublished source; otherwise an
+    /// invalid-state error.
     fn ensure_owned(&self, operation: FsOperation) -> FsResult<()> {
         if self.lifecycle.state() == TempResourceState::Owned {
             Ok(())
@@ -288,6 +304,13 @@ impl TempDirectory {
         }
     }
     /// Records lifecycle error state with resource context.
+    ///
+    /// # Parameters
+    /// - `error`: Cleanup or ownership-transfer error to retain.
+    /// - `operation`: Lifecycle operation associated with the error.
+    ///
+    /// # Returns
+    /// The error enriched with path and provider context.
     fn record_lifecycle_error(&mut self, error: FsError, operation: FsOperation) -> FsError {
         self.lifecycle.record_cleanup_error(&error);
         error.with_operation(operation).with_missing_context(
@@ -297,6 +320,12 @@ impl TempDirectory {
         )
     }
     /// Builds a contextual invalid-state error.
+    ///
+    /// # Parameters
+    /// - `operation`: Lifecycle operation rejected by the current state.
+    ///
+    /// # Returns
+    /// An invalid-state error carrying this resource's path and provider.
     fn invalid_state(&self, operation: FsOperation) -> FsError {
         FsError::new(
             FsErrorKind::InvalidState,

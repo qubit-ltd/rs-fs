@@ -78,6 +78,12 @@ impl AsyncTempDirectory {
     }
 
     /// Returns one lexically safe child path.
+    ///
+    /// # Parameters
+    /// - `component`: Validated component appended to the temporary directory.
+    ///
+    /// # Returns
+    /// A logical child path without provider I/O.
     #[inline]
     #[must_use]
     pub fn child(&self, component: &PathComponent) -> Path {
@@ -85,6 +91,13 @@ impl AsyncTempDirectory {
     }
 
     /// Returns one lexically safe descendant path.
+    ///
+    /// # Parameters
+    /// - `relative`: Validated relative path joined below the temporary
+    ///   directory.
+    ///
+    /// # Returns
+    /// A logical descendant path without provider I/O.
     #[inline]
     #[must_use]
     pub fn descendant(&self, relative: &RelativePath) -> Path {

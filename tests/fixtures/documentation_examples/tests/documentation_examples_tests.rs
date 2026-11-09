@@ -115,7 +115,7 @@ fn test_async_example_cancellation_keeps_operation_without_writer() {
 
 #[test]
 fn test_async_example_success_publishes() {
-    let (filesystem, _) = async_recording_file_system(Default::default());
+    let (filesystem, probe) = async_recording_file_system(Default::default());
     ready(write_report(
         &filesystem,
         Path::parse("/report").unwrap(),
@@ -123,4 +123,6 @@ fn test_async_example_success_publishes() {
         std::future::pending(),
     ))
     .unwrap();
+    assert_eq!(1, probe.writer_commits());
+    assert_eq!(0, probe.writer_aborts());
 }

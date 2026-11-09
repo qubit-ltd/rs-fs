@@ -52,8 +52,7 @@ impl FileSystemSpi for PublishedThenCleanupFailure {
     fn properties(&self) -> ProviderProperties {
         ProviderProperties::new(
             FileSystemInfo::new(
-                FileSystemId::new("docs")
-                    .expect("documentation filesystem identity should be valid"),
+                FileSystemId::new("docs").expect("documentation filesystem identity should be valid"),
                 "docs",
                 PathSemantics::Hierarchical,
             ),
@@ -78,19 +77,13 @@ impl FileSystemSpi for PublishedThenCleanupFailure {
     }
     fn open_reader(&self, request: OpenReaderRequest<'_>) -> FsResult<OpenedReader> {
         Ok(OpenedReader::new(
-            OpenedFileInfo::new(
-                self.properties().info().id().clone(),
-                request.path().clone(),
-            ),
+            OpenedFileInfo::new(self.properties().info().id().clone(), request.path().clone()),
             Box::new(Cursor::new(b"bytes")),
         ))
     }
     fn open_writer(&self, request: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
         Ok(OpenedWriter::new(
-            OpenedFileInfo::new(
-                self.properties().info().id().clone(),
-                request.path().clone(),
-            ),
+            OpenedFileInfo::new(self.properties().info().id().clone(), request.path().clone()),
             Box::new(FailedWriter {
                 abort_outcome: self.abort_outcome.clone(),
             }),
@@ -133,7 +126,7 @@ fn test_synchronous_example_retains_publication_and_both_errors() {
     let filesystem = FileSystem::from_spi(PublishedThenCleanupFailure {
         abort_outcome: Err(FsErrorKind::Io),
     })
-        .expect("the fixture provider should produce a valid filesystem");
+    .expect("the fixture provider should produce a valid filesystem");
     let recovery = copy_report(
         &filesystem,
         &Path::parse("/source").expect("the source path should be valid"),

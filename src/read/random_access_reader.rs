@@ -46,13 +46,29 @@ use crate::spi::RandomAccessReadSession;
 /// discard the incomplete sample. The open-time length is not a content
 /// snapshot.
 pub struct RandomAccessReader {
+    /// Identity and metadata captured when the object was opened.
     info: OpenedFileInfo,
+    /// Open-time readable upper bound; this is not a content snapshot.
     len: u64,
+    /// Maximum size of one request after clipping to `len`.
     limit: FileSystemLimit,
+    /// Provider identifier added to read errors for context.
     provider_id: String,
+    /// Session retaining ownership of the already opened object.
     session: Box<dyn RandomAccessReadSession>,
 }
 impl RandomAccessReader {
+    /// Builds a reader from the validated result of a provider open.
+    ///
+    /// # Parameters
+    /// - `info`: File identity and metadata captured at open time.
+    /// - `len`: Readable upper bound captured at open time.
+    /// - `limit`: Maximum size of each clipped provider request.
+    /// - `provider_id`: Provider identity included in read errors.
+    /// - `session`: Provider session owning the already-open object.
+    ///
+    /// # Returns
+    /// A reader retaining the open object and applying the supplied bounds.
     pub(crate) fn new(
         info: OpenedFileInfo,
         len: u64,
@@ -68,11 +84,14 @@ impl RandomAccessReader {
             session,
         }
     }
-    /// Returns open-time identity and metadata.
+    /// Returns the identity and metadata captured at open time.
     pub fn info(&self) -> &OpenedFileInfo {
         &self.info
     }
-    /// Returns the accessible upper bound observed when opened.
+    /// Returns the open-time readable upper bound.
+    ///
+    /// This bound does not change if the object grows and does not make the
+    /// object's contents a snapshot.
     pub fn len(&self) -> u64 {
         self.len
     }
@@ -88,8 +107,12 @@ impl RandomAccessReader {
     /// - `output`: Caller-owned destination buffer.
     ///
     /// # Returns
-    /// The number of bytes initialized, possibly less than `output.len()`;
-    /// zero means this request observed EOF.
+    /// Returns the number of bytes read. An empty output buffer returns zero
+    /// without observing EOF. A non-overflowing request at or beyond the
+    /// open-time length also returns zero without provider I/O. For a non-empty
+    /// request within that bound, a provider result of zero indicates EOF
+    /// observed by that request. A positive count may be shorter than the
+    /// clipped request.
     ///
     /// # Errors
     /// Returns `InvalidOptions` for an overflowing offset range,
@@ -121,6 +144,11 @@ impl RandomAccessReader {
     }
 }
 impl Debug for RandomAccessReader {
+    /// Formats the open-time information and length without exposing the
+    /// provider session.
+    ///
+    /// # Parameters
+    /// - `f`: Destination for the debug representation.
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         f.debug_struct("RandomAccessReader")
             .field("info", &self.info)

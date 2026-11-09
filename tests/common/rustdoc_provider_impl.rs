@@ -130,8 +130,7 @@ impl FileSystemSpi for Memory {
                 files: Arc::clone(&self.files),
                 path: request.path().as_str().to_owned(),
                 bytes: Vec::new(),
-                create_new: request.options().options().disposition()
-                    == WriteDisposition::CreateNew,
+                create_new: request.options().options().disposition() == WriteDisposition::CreateNew,
             }),
         ))
     }
@@ -147,10 +146,7 @@ impl FileSystemSpi for Memory {
             }),
         ))
     }
-    fn create_temp_directory(
-        &self,
-        _: CreateTempDirectoryRequest,
-    ) -> FsResult<OpenedTempDirectory> {
+    fn create_temp_directory(&self, _: CreateTempDirectoryRequest) -> FsResult<OpenedTempDirectory> {
         let mut files = self.files.lock().unwrap();
         let path = Path::parse(&format!("/scratch-dir-{}", files.len())).unwrap();
         files.insert(path.as_str().to_owned(), Vec::new());
@@ -175,12 +171,7 @@ struct Writer {
 }
 impl Output for Writer {
     type Item = u8;
-    unsafe fn write_unchecked(
-        &mut self,
-        bytes: &[u8],
-        index: usize,
-        count: usize,
-    ) -> IoResult<usize> {
+    unsafe fn write_unchecked(&mut self, bytes: &[u8], index: usize, count: usize) -> IoResult<usize> {
         self.bytes.extend_from_slice(&bytes[index..index + count]);
         Ok(count)
     }
@@ -233,10 +224,7 @@ impl Temporary {
     }
 }
 impl TempResourceSpi for Temporary {
-    fn persist(
-        &mut self,
-        request: PersistRequest<'_>,
-    ) -> Result<PersistOutcome, SpiPersistFailure> {
+    fn persist(&mut self, request: PersistRequest<'_>) -> Result<PersistOutcome, SpiPersistFailure> {
         self.publish(request.target().clone())
     }
     fn keep(&mut self) -> Result<PersistOutcome, SpiPersistFailure> {

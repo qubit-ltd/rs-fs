@@ -86,6 +86,9 @@ impl UserMetadata {
     }
 
     /// Returns whether a metadata key is present.
+    ///
+    /// # Parameters
+    /// - `key`: Exact key to look up.
     #[must_use]
     #[inline]
     pub fn contains_key(&self, key: &str) -> bool {
@@ -101,6 +104,9 @@ impl UserMetadata {
 
 impl Debug for UserMetadata {
     /// Formats the metadata using its keys without exposing its values.
+    ///
+    /// # Parameters
+    /// - `formatter`: Destination for the safe structural representation.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter

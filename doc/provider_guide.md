@@ -148,12 +148,7 @@ impl HealthProvider {
         if path.as_str() == "/health" {
             Ok(())
         } else {
-            Err(FsError::new(
-                FsErrorKind::NotFound,
-                operation,
-                "health resource not found",
-            )
-            .with_path(path.clone()))
+            Err(FsError::new(FsErrorKind::NotFound, operation, "health resource not found").with_path(path.clone()))
         }
     }
 }
@@ -316,12 +311,10 @@ impl AsyncFileSystemSpi for AsyncHealthProvider {
         Box::pin(async move {
             let path = request.path();
             if path.as_str() != "/health" {
-                return Err(FsError::new(
-                    FsErrorKind::NotFound,
-                    FsOperation::Stat,
-                    "health resource not found",
-                )
-                .with_path(path.clone()));
+                return Err(
+                    FsError::new(FsErrorKind::NotFound, FsOperation::Stat, "health resource not found")
+                        .with_path(path.clone()),
+                );
             }
             Ok(StatResponse::new(
                 path.clone(),
@@ -537,8 +530,11 @@ session's readable upper bound, not a content snapshot or promise against
 in-place mutation.
 
 `read_at` may return a short count; only the prefix of the caller's buffer up
-to that count is valid, and zero means observed EOF. Return typed read errors
-with their source intact. Do not turn errors into EOF or reopen the path. The
+to that count is valid. The facade returns zero without provider I/O for an
+empty buffer or a non-overflowing request at or beyond the open-time length;
+neither case observes EOF. For a non-empty in-range provider request, zero
+means that request observed EOF. Return typed read errors with their source
+intact. Do not turn errors into EOF or reopen the path. The
 async SPI follows the same contract: after a pending future is cancelled, the
 provider must not retain or later modify its borrowed buffer, and the next call
 must still use the same object at its requested offset. No background work may

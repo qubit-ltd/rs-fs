@@ -126,6 +126,9 @@ impl Uri {
 
 impl Display for Uri {
     /// Formats the lossless validated URI spelling.
+    ///
+    /// # Parameters
+    /// - `formatter`: Destination for the canonical URI text.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter.write_str(self.as_str())
@@ -133,6 +136,13 @@ impl Display for Uri {
 }
 
 /// Parses a URI after normalizing only the case-insensitive scheme.
+///
+/// # Parameters
+/// - `text`: URI spelling to parse; its scheme is normalized to lowercase.
+///
+/// # Returns
+/// The parsed canonical URI, or an invalid-URI error for missing schemes or
+/// malformed syntax.
 pub(crate) fn parse_canonical(text: &str) -> FsResult<FluentUri<String>> {
     let (scheme, rest) = text
         .split_once(':')
@@ -145,6 +155,17 @@ pub(crate) fn parse_canonical(text: &str) -> FsResult<FluentUri<String>> {
 }
 
 /// Rejects fragments and URI components classified as sensitive.
+///
+/// # Parameters
+/// - `parsed`: Parsed URI whose fragment and components are inspected.
+/// - `policy`: Redaction policy used to classify sensitive components.
+///
+/// # Returns
+/// `Ok(())` when the URI contains no fragment or sensitive component.
+///
+/// # Errors
+/// Returns an invalid-URI error when a fragment, sensitive component, or
+/// uninspectable component is present.
 pub(crate) fn reject_secrets(parsed: &FluentUri<String>, policy: &RedactionPolicy) -> FsResult<()> {
     if parsed.fragment().is_some() {
         return Err(invalid_uri("URI fragments are not supported"));
@@ -162,6 +183,12 @@ pub(crate) fn reject_secrets(parsed: &FluentUri<String>, policy: &RedactionPolic
 }
 
 /// Classifies a raw metadata key through the shared URI query policy.
+///
+/// # Parameters
+/// - `key`: Metadata key to classify using the standard sensitivity policy.
+///
+/// # Returns
+/// `true` when the key is classified as sensitive.
 pub(crate) fn query_pair_is_sensitive(key: &str) -> bool {
     RedactionPolicy::standard().sensitivity_for(key).is_some()
 }

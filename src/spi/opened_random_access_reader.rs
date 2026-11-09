@@ -33,7 +33,9 @@ use crate::metadata::OpenedFileInfo;
 /// # Ok::<(), qubit_fs::FsError>(())
 /// ```
 pub struct OpenedRandomAccessReader {
+    /// Identity and open-time metadata for the same object held by `session`.
     info: OpenedFileInfo,
+    /// Operations bound to the opened object or immutable version.
     session: Box<dyn RandomAccessReadSession>,
 }
 impl OpenedRandomAccessReader {
@@ -53,6 +55,13 @@ impl OpenedRandomAccessReader {
     pub fn info(&self) -> &OpenedFileInfo {
         &self.info
     }
+    /// Transfers the metadata and session together for facade validation.
+    ///
+    /// The pair must remain associated because the metadata describes the
+    /// object retained by the session.
+    ///
+    /// # Returns
+    /// The opened-object metadata and its corresponding random-access session.
     pub(crate) fn into_parts(self) -> (OpenedFileInfo, Box<dyn RandomAccessReadSession>) {
         (self.info, self.session)
     }

@@ -103,6 +103,10 @@ impl FileSystem {
     /// Constructs a facade and caches the provider's single validated property
     /// snapshot.
     ///
+    /// # Type Parameters
+    ///
+    /// - `S`: Concrete provider SPI implementation type.
+    ///
     /// # Parameters
     /// - `spi`: Provider implementation whose properties and operations back
     ///   the facade.

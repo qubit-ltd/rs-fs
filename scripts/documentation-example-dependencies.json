@@ -1,0 +1,19 @@
+{
+  "dependencies": [
+    {
+      "name": "rs-fs-local",
+      "repository": "https://github.com/qubit-ltd/rs-fs-local.git",
+      "rev": "8998cb0c4d9a314e62e025a3e5adc36bf0bca301"
+    },
+    {
+      "name": "rs-local-files",
+      "repository": "https://github.com/qubit-ltd/rs-local-files.git",
+      "rev": "a3aee6d04cfa3117f5217fa2df0adb4fe76bade4"
+    },
+    {
+      "name": "rs-redact",
+      "repository": "https://github.com/qubit-ltd/rs-redact.git",
+      "rev": "d3116d19fc40d6e23db0fdca4db3748d0dede7d8"
+    }
+  ]
+}

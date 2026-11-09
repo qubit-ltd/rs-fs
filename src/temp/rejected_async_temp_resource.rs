@@ -57,6 +57,14 @@ pub struct RejectedAsyncTempResource {
 }
 impl RejectedAsyncTempResource {
     /// Takes ownership of a rejected session and trusted request context.
+    ///
+    /// # Parameters
+    /// - `session`: Rejected provider session retained for explicit cleanup.
+    /// - `provider`: Configured provider identity trusted for error context.
+    /// - `path`: Validated request path, when one is available.
+    ///
+    /// # Returns
+    /// A recovery handle isolated from the failed open operation.
     pub(crate) fn new(session: Box<dyn AsyncTempResourceSpi>, provider: &str, path: Option<Path>) -> Self {
         Self {
             session: Box::into_pin(session),
@@ -99,12 +107,22 @@ impl RejectedAsyncTempResource {
         })
     }
     /// Adds only trusted request context to a cleanup error.
+    ///
+    /// # Parameters
+    /// - `error`: Provider cleanup error to contextualize.
+    ///
+    /// # Returns
+    /// The error with cleanup operation, validated path, and configured
+    /// provider context.
     fn contextual_error(&self, error: FsError) -> FsError {
         error.with_trusted_cleanup_context(FsOperation::CleanupTemp, self.path.as_ref(), &self.provider)
     }
 }
 impl Debug for RejectedAsyncTempResource {
     /// Omits the session and unvalidated provider identity.
+    ///
+    /// # Parameters
+    /// - `f`: Destination for the safe cleanup-state representation.
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         f.debug_struct("RejectedAsyncTempResource")
             .field("cleanup_state", &self.state)

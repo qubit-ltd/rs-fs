@@ -100,6 +100,15 @@ pub struct AsyncFileSystem {
 
 impl AsyncFileSystem {
     /// Constructs a facade and caches one validated provider snapshot.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `S`: Concrete provider SPI implementation type.
+    ///
+    /// # Parameters
+    ///
+    /// - `spi`: Provider implementation whose properties and operations back
+    ///   this facade.
     #[inline]
     pub fn from_spi<S>(spi: S) -> FsResult<Self>
     where
@@ -109,6 +118,11 @@ impl AsyncFileSystem {
     }
 
     /// Constructs a facade from a shared provider implementation.
+    ///
+    /// # Parameters
+    ///
+    /// - `spi`: Provider implementation whose properties and operations back
+    ///   this facade.
     #[inline]
     pub fn from_shared_spi(spi: Arc<dyn AsyncFileSystemSpi>) -> FsResult<Self> {
         let core = FacadeCore::new(spi.properties())?;
@@ -126,11 +140,24 @@ impl AsyncFileSystem {
     }
 
     /// Validates a write request without opening a provider session.
+    ///
+    /// # Parameters
+    ///
+    /// - `path`: Logical path of the resource involved in this operation.
+    /// - `options`: Write behavior and guarantees to validate before provider
+    ///   work begins.
     pub fn validate_write(&self, path: &Path, options: &WriteOptions) -> FsResult<()> {
         self.core.validate_write_request(path, options)
     }
 
     /// Assesses copy routes without performing provider I/O.
+    ///
+    /// # Parameters
+    ///
+    /// - `source`: Logical path of the source resource.
+    /// - `target`: Destination logical path affected by the operation.
+    /// - `options`: Copy route, conflict, consistency, and metadata guarantees
+    ///   requested by the caller.
     ///
     /// # Errors
     /// Returns an invalid-options or requirement error when no provider or
@@ -153,9 +180,9 @@ impl AsyncFileSystem {
 
     /// Asynchronously reads metadata after local validation completes.
     ///
-    /// Local validation happens before this future reaches the provider. A
-    /// provider response is checked again after awaiting to bind the returned
-    /// metadata to the requested logical path.
+    /// # Parameters
+    ///
+    /// - `path`: Logical path of the resource involved in this operation.
     ///
     /// # Errors
     /// Returns a validation, provider, or provider-contract error when the
@@ -175,6 +202,10 @@ impl AsyncFileSystem {
 
     /// Asynchronously reports whether the path exists.
     ///
+    /// # Parameters
+    ///
+    /// - `path`: Logical path of the resource involved in this operation.
+    ///
     /// # Errors
     /// Returns the original filesystem error for failures other than an
     /// explicit `NotFound` response.
@@ -188,6 +219,12 @@ impl AsyncFileSystem {
 
     /// Asynchronously opens a validated directory stream.
     ///
+    /// # Parameters
+    ///
+    /// - `scope`: Requested directory or namespace listing scope.
+    /// - `options`: Selection, recursion, page-size, and deadline settings for
+    ///   the listing.
+    ///
     /// # Errors
     /// Returns an invalid-options, missing-capability, or provider error when
     /// the scope or options cannot be served.
@@ -197,6 +234,12 @@ impl AsyncFileSystem {
 
     /// Asynchronously opens a validated reader and verifies its identity.
     ///
+    /// # Parameters
+    ///
+    /// - `path`: Logical path of the resource involved in this operation.
+    /// - `options`: Read behavior and limits for opening or consuming the
+    ///   resource.
+    ///
     /// # Errors
     /// Returns a validation, capability, provider, or provider-contract error
     /// when the reader cannot be opened safely.
@@ -205,6 +248,12 @@ impl AsyncFileSystem {
     }
 
     /// Opens a facade-validated asynchronous reader with an internal hint.
+    ///
+    /// # Parameters
+    ///
+    /// - `path`: Logical path of the resource involved in this operation.
+    /// - `resolved`: Validated read options and the facade’s resolved
+    ///   read-planning hints.
     pub(crate) async fn open_reader_resolved(
         &self,
         path: &Path,
@@ -288,6 +337,14 @@ impl AsyncFileSystem {
     /// The cap applies to bytes actually read, even when opened metadata
     /// overestimates the resource length.
     ///
+    /// # Parameters
+    ///
+    /// - `path`: Logical path of the resource involved in this operation.
+    /// - `options`: Read behavior and limits for opening or consuming the
+    ///   resource.
+    /// - `max_bytes`: Maximum number of bytes this operation may return or
+    ///   consume.
+    ///
     /// # Errors
     /// Returns the reader or read error when validation, opening, or bounded
     /// reading fails.
@@ -296,6 +353,14 @@ impl AsyncFileSystem {
     }
 
     /// Asynchronously reads at most max_bytes from a file.
+    ///
+    /// # Parameters
+    ///
+    /// - `path`: Logical path of the resource involved in this operation.
+    /// - `options`: Read behavior and limits for opening or consuming the
+    ///   resource.
+    /// - `max_bytes`: Maximum number of bytes this operation may return or
+    ///   consume.
     ///
     /// # Errors
     /// Returns the reader or read error when validation, opening, or bounded
@@ -324,6 +389,12 @@ impl AsyncFileSystem {
     /// receiving no recovery does not prove that no side effect occurred.
     /// Keep the typed failure intact when recovery matters instead of using `?`
     /// to discard it.
+    ///
+    /// # Parameters
+    ///
+    /// - `path`: Logical path of the resource involved in this operation.
+    /// - `options`: Write behavior and guarantees to validate before provider
+    ///   work begins.
     ///
     /// # Errors
     /// Returns the contextual error, opening stage, and any isolated recovery
@@ -379,6 +450,13 @@ impl AsyncFileSystem {
     /// its `execute` future so publication facts and recovery
     /// responsibility remain available.
     ///
+    /// # Parameters
+    ///
+    /// - `path`: Logical path of the resource involved in this operation.
+    /// - `bytes`: Payload to write as one complete resource.
+    /// - `options`: Write behavior and guarantees to validate before provider
+    ///   work begins.
+    ///
     /// # Returns
     ///
     /// A ready operation that no longer borrows the caller's filesystem or
@@ -413,6 +491,12 @@ impl AsyncFileSystem {
 
     /// Asynchronously creates a directory after local validation.
     ///
+    /// # Parameters
+    ///
+    /// - `path`: Logical path of the resource involved in this operation.
+    /// - `options`: Options that define the operation and its requested
+    ///   guarantees.
+    ///
     /// # Errors
     /// Returns a validation, capability, provider, or provider-contract error
     /// when the directory cannot be created as requested.
@@ -444,6 +528,12 @@ impl AsyncFileSystem {
 
     /// Asynchronously deletes a file after local validation.
     ///
+    /// # Parameters
+    ///
+    /// - `path`: Logical path of the resource involved in this operation.
+    /// - `options`: Deletion behavior, including whether a missing target is
+    ///   acceptable.
+    ///
     /// # Errors
     /// Returns a validation, capability, provider, or provider-contract error
     /// when deletion cannot be confirmed.
@@ -454,6 +544,12 @@ impl AsyncFileSystem {
 
     /// Asynchronously deletes a directory after local validation.
     ///
+    /// # Parameters
+    ///
+    /// - `path`: Logical path of the resource involved in this operation.
+    /// - `options`: Deletion behavior, including whether a missing target is
+    ///   acceptable.
+    ///
     /// # Errors
     /// Returns a validation, capability, provider, or provider-contract error
     /// when deletion cannot be confirmed.
@@ -463,6 +559,13 @@ impl AsyncFileSystem {
     }
 
     /// Renames one resource through the single asynchronous provider primitive.
+    ///
+    /// # Parameters
+    ///
+    /// - `source`: Logical path of the source resource.
+    /// - `target`: Destination logical path affected by the operation.
+    /// - `options`: Overwrite, atomicity, and durability requirements for the
+    ///   rename.
     ///
     /// # Errors
     /// Returns [`RenameFailure`] with the confirmed transition state when
@@ -503,6 +606,11 @@ impl AsyncFileSystem {
 
     /// Asynchronously creates a temporary file and validates its provider
     /// identity.
+    ///
+    /// # Parameters
+    ///
+    /// - `options`: Parent, naming, and parent-creation settings for the
+    ///   temporary resource.
     ///
     /// # Errors
     /// Returns [`OpenFailure`] when preflight, provider creation, or temporary
@@ -561,6 +669,11 @@ impl AsyncFileSystem {
     }
 
     /// Asynchronously creates a temporary directory and validates its identity.
+    ///
+    /// # Parameters
+    ///
+    /// - `options`: Parent, naming, and parent-creation settings for the
+    ///   temporary resource.
     ///
     /// # Errors
     /// Returns [`OpenFailure`] when preflight, provider creation, or temporary
@@ -625,6 +738,13 @@ impl AsyncFileSystem {
     /// only its `execute` future. The operation then remains available to
     /// inspect publication state and take any retained writer recovery.
     ///
+    /// # Parameters
+    ///
+    /// - `source`: Logical path of the source resource.
+    /// - `target`: Destination logical path affected by the operation.
+    /// - `options`: Copy route, conflict, consistency, and metadata guarantees
+    ///   requested by the caller.
+    ///
     /// # Errors
     /// Returns [`AsyncCopyFailure`] when local preflight rejects the request.
     #[allow(clippy::result_large_err)]
@@ -656,6 +776,15 @@ impl AsyncFileSystem {
     }
 
     /// Rechecks provider-reported success against requested copy guarantees.
+    ///
+    /// # Parameters
+    ///
+    /// - `outcome`: Provider-reported copy outcome to validate against the
+    ///   request.
+    /// - `options`: Copy route, conflict, consistency, and metadata guarantees
+    ///   requested by the caller.
+    /// - `source`: Logical path of the source resource.
+    /// - `target`: Destination logical path affected by the operation.
     #[allow(clippy::result_large_err)]
     pub(crate) fn verify_completed_copy(
         &self,
@@ -677,6 +806,13 @@ impl AsyncFileSystem {
     }
 
     /// Performs all no-I/O copy validation required before an operation exists.
+    ///
+    /// # Parameters
+    ///
+    /// - `source`: Logical path of the source resource.
+    /// - `target`: Destination logical path affected by the operation.
+    /// - `options`: Copy route, conflict, consistency, and metadata guarantees
+    ///   requested by the caller.
     fn copy_preflight(&self, source: &Path, target: &Path, options: &CopyOptions) -> FsResult<()> {
         self.validate_path(source, FsOperation::Copy)?;
         self.validate_path(target, FsOperation::Copy)?;
@@ -699,6 +835,13 @@ impl AsyncFileSystem {
     }
 
     /// Performs no-I/O validation for the single rename primitive.
+    ///
+    /// # Parameters
+    ///
+    /// - `source`: Logical path of the source resource.
+    /// - `target`: Destination logical path affected by the operation.
+    /// - `options`: Overwrite, atomicity, and durability requirements for the
+    ///   rename.
     fn rename_preflight(&self, source: &Path, target: &Path, options: &RenameOptions) -> FsResult<()> {
         self.validate_path(source, FsOperation::Rename)?;
         self.validate_path(target, FsOperation::Rename)?;
@@ -722,6 +865,13 @@ impl AsyncFileSystem {
     }
 
     /// Dispatches the selected deletion primitive after local validation.
+    ///
+    /// # Parameters
+    ///
+    /// - `path`: Logical path of the resource involved in this operation.
+    /// - `options`: Deletion behavior, including whether a missing target is
+    ///   acceptable.
+    /// - `directory`: Whether the delete request targets a directory.
     async fn delete(&self, path: &Path, options: DeleteOptions, directory: bool) -> FsResult<DeleteOutcome> {
         self.validate_path(path, FsOperation::Delete)?;
         options
@@ -751,11 +901,24 @@ impl AsyncFileSystem {
     }
 
     /// Validates a logical path against the cached provider snapshot.
+    ///
+    /// # Parameters
+    ///
+    /// - `path`: Logical path of the resource involved in this operation.
+    /// - `operation`: Filesystem operation used for validation or error
+    ///   context.
     fn validate_path(&self, path: &Path, operation: FsOperation) -> FsResult<()> {
         self.core.validate_path(path, operation)
     }
 
     /// Requires a provider-advertised capability before operation creation.
+    ///
+    /// # Parameters
+    ///
+    /// - `capability`: Capability required before provider work can begin.
+    /// - `operation`: Filesystem operation used for validation or error
+    ///   context.
+    /// - `path`: Logical path of the resource involved in this operation.
     pub(crate) fn require(
         &self,
         capability: FileSystemCapability,
@@ -767,6 +930,15 @@ impl AsyncFileSystem {
 
     /// Contextualizes a copy failure with its source, target, and provider
     /// facts.
+    ///
+    /// # Parameters
+    ///
+    /// - `error`: Filesystem error whose kind, source, and established facts
+    ///   are retained.
+    /// - `state`: Operation state used to classify confirmed side effects.
+    /// - `stats`: Copy progress statistics reported by the operation.
+    /// - `source`: Logical path of the source resource.
+    /// - `target`: Destination logical path affected by the operation.
     pub(crate) fn contextual_copy_failure(
         &self,
         error: FsError,
@@ -788,6 +960,14 @@ impl AsyncFileSystem {
 
     /// Adds source, target, and provider facts to an asynchronous rename
     /// failure.
+    ///
+    /// # Parameters
+    ///
+    /// - `error`: Filesystem error whose kind, source, and established facts
+    ///   are retained.
+    /// - `state`: Operation state used to classify confirmed side effects.
+    /// - `source`: Logical path of the source resource.
+    /// - `target`: Destination logical path affected by the operation.
     fn contextual_rename_failure(
         &self,
         error: FsError,
@@ -806,11 +986,24 @@ impl AsyncFileSystem {
     }
 
     /// Adds missing public context to a provider error.
+    ///
+    /// # Parameters
+    ///
+    /// - `error`: Filesystem error whose kind, source, and established facts
+    ///   are retained.
+    /// - `path`: Logical path of the resource involved in this operation.
+    /// - `operation`: Filesystem operation used for validation or error
+    ///   context.
     fn enrich(&self, error: FsError, path: &Path, operation: FsOperation) -> FsError {
         self.core.enrich(error, Some(path), operation)
     }
 
     /// Creates a provider-contract violation bound to the requested path.
+    ///
+    /// # Parameters
+    ///
+    /// - `path`: Logical path of the resource involved in this operation.
+    /// - `message`: Diagnostic message for the constructed filesystem error.
     fn contract_error(&self, path: &Path, message: &'static str) -> FsError {
         self.core
             .contract_error(path, FsOperation::ValidateProviderOutcome, message)
@@ -818,6 +1011,12 @@ impl AsyncFileSystem {
 
     /// Validates a provider-opened handle identity before exposing it to
     /// callers.
+    ///
+    /// # Parameters
+    ///
+    /// - `info`: Opened-resource identity and metadata returned by the
+    ///   provider.
+    /// - `path`: Logical path of the resource involved in this operation.
     fn validate_opened_info(&self, info: &crate::metadata::OpenedFileInfo, path: &Path) -> FsResult<()> {
         if info.filesystem_id() != self.properties().info().id() || info.path() != path {
             return Err(self.contract_error(path, "provider returned an opened handle with a different identity"));
@@ -826,6 +1025,14 @@ impl AsyncFileSystem {
     }
 
     /// Validates a provider-created temporary resource before exposing it.
+    ///
+    /// # Parameters
+    ///
+    /// - `info`: Opened-resource identity and metadata returned by the
+    ///   provider.
+    /// - `expected_kind`: Resource kind required for the opened object.
+    /// - `requested_parent`: Optional parent location supplied for temporary
+    ///   creation.
     fn validate_temp_info(
         &self,
         info: &crate::metadata::OpenedFileInfo,
@@ -855,6 +1062,13 @@ impl AsyncFileSystem {
     }
 
     /// Performs no-I/O preflight for asynchronous temporary persistence.
+    ///
+    /// # Parameters
+    ///
+    /// - `source`: Logical path of the source resource.
+    /// - `target`: Destination logical path affected by the operation.
+    /// - `options`: Options that define the operation and its requested
+    ///   guarantees.
     pub(crate) fn preflight_temp_persist(
         &self,
         source: &Path,
@@ -882,6 +1096,11 @@ impl AsyncFileSystem {
     }
 
     /// Validates a provider-generated target reported by temporary keep.
+    ///
+    /// # Parameters
+    ///
+    /// - `source`: Logical path of the source resource.
+    /// - `target`: Destination logical path affected by the operation.
     pub(crate) fn validate_temp_keep_target(&self, source: &Path, target: &Path) -> FsResult<()> {
         self.validate_path(target, FsOperation::KeepTemp).map_err(|_| {
             self.contract_error(

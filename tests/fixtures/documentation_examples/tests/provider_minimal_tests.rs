@@ -12,8 +12,6 @@ use qubit_fs_documentation_examples::provider_minimal::read_health;
 fn test_provider_guide_example_reads_health_resource() {
     assert_eq!(
         b"ok",
-        read_health()
-            .expect("health resource should be readable")
-            .as_slice()
+        read_health().expect("health resource should be readable").as_slice()
     );
 }

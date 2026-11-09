@@ -32,7 +32,7 @@ qubit-fs = { version = "0.3", features = ["async"] }
 ```toml
 [dependencies]
 qubit-fs = "0.3"
-qubit-fs-local = "0.11"
+qubit-fs-local = "^0.11"
 tempfile = "3"
 ```
 
@@ -133,31 +133,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## 测试
 
-以下命令用于同级 Qubit 源码仓库环境，请从 `rs-fs` 根目录运行。fixture
-要求 `rs-fs-local`（`qubit-fs-local` 0.11）和 `rs-local-files`
-（`qubit-local-files` 0.5）与 `rs-fs`（`qubit-fs` 0.3）位于同一父目录；
-相关 manifests 中的其他本地 path 依赖也须满足：
+独立的文档示例 workflow 会检查双语示例，再使用固定的同级仓库版本编译、测试并运行
+fixture。在同级 Qubit 源码仓库中，也可从 `rs-fs` 根目录运行
+`bash scripts/check-documentation-examples.sh` 完成相同的集成验证。fixture
+需要 `rs-fs-local`（`qubit-fs-local` 0.11）、`rs-local-files`
+（`qubit-local-files` 0.5）和 `rs-redact` 与 `rs-fs`（`qubit-fs` 0.3）位于同一父目录：
 
 ```text
 parent/
 ├── rs-fs/
 ├── rs-fs-local/
 ├── rs-local-files/
-├── rs-redact/
-│   └── derive/
-├── rs-fs-registry/
-└── rs-json/
+└── rs-redact/
+    └── derive/
 ```
 
-仅克隆 `rs-fs` 或下载 crate 源码包不包含该布局。独立体验发布包时，请在自己的
-Cargo 项目中使用“快速开始”的依赖配置与完整程序。手动运行本地集成示例：
+仅克隆 `rs-fs` 或下载 crate 源码包不包含该本地布局。独立体验发布包时，请在自己的
+Cargo 项目中使用“快速开始”的依赖配置与完整程序。本地集成入口运行：
 
 ```bash
-cargo test --manifest-path tests/fixtures/documentation_examples/Cargo.toml
-cargo run --manifest-path tests/fixtures/documentation_examples/Cargo.toml --bin quick_start
+bash scripts/check-documentation-examples.sh
 ```
 
-这些 fixture 命令用于本地集成验证；核心 CI 检查本 crate 及其文档。
+该 fixture 入口也由独立 workflow 持续运行；核心 CI 仍检查本 crate 及其文档。
 
 ```bash
 # 使用默认 feature 集运行测试

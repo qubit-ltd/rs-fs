@@ -23,13 +23,17 @@ use crate::path::Path;
 /// let scope = ListScope::Path(Path::parse_literal("reports/")?);
 /// assert_eq!(scope.path().map(Path::as_str), Some("reports/"));
 /// assert!(ListScope::Namespace.path().is_none());
+///
 /// # Ok::<(), qubit_fs::FsError>(())
 /// ```
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum ListScope {
     /// Enumerates a directory or raw key prefix using its existing path rules.
-    Path(Path),
+    Path(
+        /// Logical path used as the directory root or flat-key prefix.
+        Path,
+    ),
     /// Enumerates the entire configured flat namespace without an empty path.
     Namespace,
 }

@@ -24,6 +24,9 @@ pub(crate) struct ReadBuffer {
 
 impl ReadBuffer {
     /// Creates an empty buffer without allocating memory.
+    ///
+    /// # Parameters
+    /// - `maximum`: Logical byte ceiling for accumulated contents.
     pub(crate) const fn new(maximum: usize) -> Self {
         Self {
             bytes: Vec::new(),
@@ -42,6 +45,9 @@ impl ReadBuffer {
     /// Returns ResourceLimitExceeded for logical overflow or allocation
     /// failure. Allocation failures retain their source; the caller adds
     /// path context.
+    ///
+    /// # Parameters
+    /// - `chunk`: Bytes to append if they fit within the logical ceiling.
     pub(crate) fn try_append(&mut self, chunk: &[u8]) -> FsResult<()> {
         self.try_append_with(chunk, Vec::try_reserve_exact)
     }
@@ -55,6 +61,15 @@ impl ReadBuffer {
     ///
     /// `reserve` must implement Vec's additional-capacity contract. It is only
     /// called when the existing capacity cannot hold `chunk`.
+    ///
+    /// # Parameters
+    /// - `chunk`: Bytes to append after capacity is reserved.
+    /// - `reserve`: Fallible capacity-reservation operation used when growth is
+    ///   needed; it receives the additional capacity requested.
+    ///
+    /// # Returns
+    /// `Ok(())` after appending all bytes, or a resource-limit error without
+    /// modifying the accumulated bytes when size or allocation fails.
     fn try_append_with(
         &mut self,
         chunk: &[u8],

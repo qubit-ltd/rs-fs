@@ -58,6 +58,14 @@ pub(crate) struct CopyOperation<'a> {
 
 impl<'a> CopyOperation<'a> {
     /// Creates a pending synchronous copy operation.
+    ///
+    /// # Parameters
+    ///
+    /// - `filesystem`: Filesystem facade supplying the cached provider policy.
+    /// - `source`: Logical path of the source resource.
+    /// - `target`: Destination logical path affected by the operation.
+    /// - `options`: Copy route, conflict, consistency, and metadata guarantees
+    ///   requested by the caller.
     #[inline]
     pub(crate) fn new(filesystem: &'a FileSystem, source: &'a Path, target: &'a Path, options: CopyOptions) -> Self {
         let deadline = CopyDeadline::new(options.deadline(), std::time::Instant::now);
@@ -141,6 +149,11 @@ impl<'a> CopyOperation<'a> {
     }
 
     /// Verifies that provider success honors requested guarantees.
+    ///
+    /// # Parameters
+    ///
+    /// - `outcome`: Provider-reported copy outcome to validate against the
+    ///   request.
     #[allow(clippy::result_large_err)]
     fn verify_completed_copy(&self, outcome: CopyOutcome) -> Result<CopyOutcome, CopyFailure> {
         if let Some(message) = outcome.contract_violation(&self.options) {
@@ -445,6 +458,14 @@ impl<'a> CopyOperation<'a> {
     }
 
     /// Builds a typed copy failure with operation context.
+    ///
+    /// # Parameters
+    ///
+    /// - `error`: Filesystem error whose kind, source, and established facts
+    ///   are retained.
+    /// - `state`: Operation state used to classify confirmed side effects.
+    /// - `stats`: Copy progress statistics reported by the operation.
+    /// - `writer`: Writer recovery state retained by the failed copy.
     fn failure(
         &self,
         error: FsError,
@@ -461,6 +482,10 @@ impl<'a> CopyOperation<'a> {
     }
 
     /// Adds source, target, and provider facts to a copy failure.
+    ///
+    /// # Parameters
+    ///
+    /// - `failure`: Copy failure whose missing context is to be completed.
     fn contextualize_failure(&self, failure: CopyFailure) -> CopyFailure {
         let (error, state, stats, writer) = failure.into_parts();
         CopyFailure::new(
@@ -476,11 +501,23 @@ impl<'a> CopyOperation<'a> {
     }
 
     /// Creates a contextual stream I/O error.
+    ///
+    /// # Parameters
+    ///
+    /// - `path`: Logical path of the resource involved in this operation.
+    /// - `operation`: Filesystem operation used for validation or error
+    ///   context.
+    /// - `error`: Filesystem error whose kind, source, and established facts
+    ///   are retained.
     fn io_error(&self, path: &Path, operation: FsOperation, error: std::io::Error) -> FsError {
         FsError::from_stream_io(error, operation, path).with_provider(self.filesystem.properties().info().provider_id())
     }
 
     /// Returns a caller-budget error when the elapsed-time limit expired.
+    ///
+    /// # Parameters
+    ///
+    /// - `message`: Diagnostic message for the constructed filesystem error.
     fn deadline_error(&self) -> Option<FsError> {
         if self.deadline.expired() {
             return Some(self.budget_error("copy deadline was exceeded"));
@@ -489,6 +526,10 @@ impl<'a> CopyOperation<'a> {
     }
 
     /// Builds a caller-budget error with stable copy context.
+    ///
+    /// # Parameters
+    ///
+    /// - `message`: Diagnostic message for the constructed filesystem error.
     fn budget_error(&self, message: &str) -> FsError {
         FsError::new(FsErrorKind::ResourceLimitExceeded, FsOperation::Copy, message)
             .with_path(self.source.clone())

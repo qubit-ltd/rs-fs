@@ -87,6 +87,10 @@ impl RenameFailure {
 }
 impl Debug for RenameFailure {
     /// Formats the safe typed failure facts.
+    ///
+    /// # Parameters
+    /// - `formatter`: Destination for the contextual error and transition
+    ///   state.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter
@@ -99,6 +103,9 @@ impl Debug for RenameFailure {
 
 impl Display for RenameFailure {
     /// Formats the wrapped file-system error.
+    ///
+    /// # Parameters
+    /// - `formatter`: Destination for the underlying error text.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         Display::fmt(&self.error, formatter)

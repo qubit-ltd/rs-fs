@@ -25,6 +25,10 @@ pub(crate) struct DirectoryOperation<'a> {
 
 impl<'a> DirectoryOperation<'a> {
     /// Creates a directory operation bound to `filesystem`.
+    ///
+    /// # Parameters
+    ///
+    /// - `filesystem`: Filesystem facade supplying the cached provider policy.
     #[inline]
     pub(crate) const fn new(filesystem: &'a FileSystem) -> Self {
         Self { filesystem }
@@ -36,6 +40,12 @@ impl<'a> DirectoryOperation<'a> {
     /// The requested page size is clamped to the filesystem limit before
     /// dispatch. The stream retains the effective symlink policy and
     /// provider path semantics for subsequent entries.
+    ///
+    /// # Parameters
+    ///
+    /// - `scope`: Requested directory or namespace listing scope.
+    /// - `options`: Selection, recursion, page-size, and deadline settings for
+    ///   the listing.
     ///
     /// # Errors
     ///

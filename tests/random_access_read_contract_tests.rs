@@ -72,11 +72,13 @@ struct Provider {
     limit: FileSystemLimit,
     random_opens: Arc<AtomicUsize>,
     path_opens: Arc<AtomicUsize>,
+    reads: Arc<AtomicUsize>,
     drops: Arc<AtomicUsize>,
 }
 struct Session {
     bytes: Arc<[u8]>,
     mode: ReadMode,
+    reads: Arc<AtomicUsize>,
     drops: Arc<AtomicUsize>,
 }
 impl Drop for Session {
@@ -86,6 +88,7 @@ impl Drop for Session {
 }
 impl RandomAccessReadSession for Session {
     fn read_at(&mut self, offset: u64, out: &mut [u8]) -> FsResult<usize> {
+        self.reads.fetch_add(1, Ordering::SeqCst);
         if self.mode == ReadMode::Error {
             if let Some(first) = out.first_mut() {
                 *first = b'P';
@@ -117,6 +120,7 @@ impl Provider {
             limit: FileSystemLimit::Unknown,
             random_opens: Arc::new(AtomicUsize::new(0)),
             path_opens: Arc::new(AtomicUsize::new(0)),
+            reads: Arc::new(AtomicUsize::new(0)),
             drops: Arc::new(AtomicUsize::new(0)),
         }
     }
@@ -132,6 +136,7 @@ impl Provider {
             limit: self.limit,
             random_opens: self.random_opens.clone(),
             path_opens: self.path_opens.clone(),
+            reads: self.reads.clone(),
             drops: self.drops.clone(),
         }
     }
@@ -183,6 +188,7 @@ impl FileSystemSpi for Provider {
             Box::new(Session {
                 bytes,
                 mode: self.read_mode,
+                reads: self.reads.clone(),
                 drops: self.drops.clone(),
             }),
         ))
@@ -364,16 +370,19 @@ fn test_empty_eof_overflow_limit_and_drop_once() {
         .unwrap();
     assert_eq!(0, reader.read_at(0, &mut []).unwrap());
     assert_eq!(0, reader.read_at(6, &mut [0; 1]).unwrap());
+    assert_eq!(0, provider.reads.load(Ordering::SeqCst));
     let limit_error = reader.read_at(0, &mut [0; 3]).unwrap_err();
     assert_eq!(FsErrorKind::ResourceLimitExceeded, limit_error.kind());
     assert_eq!(FsOperation::Read, limit_error.operation());
     assert_eq!(Some(&path), limit_error.path());
     assert_eq!(Some("fixture"), limit_error.provider());
+    assert_eq!(0, provider.reads.load(Ordering::SeqCst));
     let overflow_error = reader.read_at(u64::MAX, &mut [0; 2]).unwrap_err();
     assert_eq!(FsErrorKind::InvalidOptions, overflow_error.kind());
     assert_eq!(FsOperation::Read, overflow_error.operation());
     assert_eq!(Some(&path), overflow_error.path());
     assert_eq!(Some("fixture"), overflow_error.provider());
+    assert_eq!(0, provider.reads.load(Ordering::SeqCst));
     drop(reader);
     assert_eq!(1, provider.drops.load(Ordering::SeqCst));
 }

@@ -89,12 +89,10 @@ impl AsyncFileSystemSpi for AsyncHealthProvider {
         Box::pin(async move {
             let path = request.path();
             if path.as_str() != "/health" {
-                return Err(FsError::new(
-                    FsErrorKind::NotFound,
-                    FsOperation::Stat,
-                    "health resource not found",
-                )
-                .with_path(path.clone()));
+                return Err(
+                    FsError::new(FsErrorKind::NotFound, FsOperation::Stat, "health resource not found")
+                        .with_path(path.clone()),
+                );
             }
             Ok(StatResponse::new(
                 path.clone(),

@@ -507,6 +507,9 @@ impl CopyOptions {
 }
 
 impl Default for CopyOptions {
+    /// Creates options that let the facade choose a supported copy route,
+    /// fail on conflicts, and request the default consistency and metadata
+    /// behavior.
     #[inline]
     fn default() -> Self {
         Self {

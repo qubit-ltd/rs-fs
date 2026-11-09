@@ -34,5 +34,8 @@ pub enum AsyncWriteAllOperationState {
     /// The target was published successfully.
     Completed,
     /// The operation stopped with the paired publication state.
-    Failed(WriteFailureState),
+    Failed(
+        /// Publication state associated with the failed operation.
+        WriteFailureState,
+    ),
 }

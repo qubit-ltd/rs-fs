@@ -50,6 +50,12 @@ pub struct WriteAllFailure {
 
 impl WriteAllFailure {
     /// Builds a failure within the facade after a write or commit error.
+    /// # Parameters
+    /// - `error`: Failure whose trusted filesystem context is being restored.
+    /// - `state`: Publication state used to classify or retain this outcome.
+    /// - `written_bytes`: Value used by `new` to preserve the writer operation
+    ///   contract.
+    /// - `writer`: Retained writer slot updated by cancellation tracking.
     pub(crate) fn new(
         error: FsError,
         state: WriteFailureState,
@@ -129,6 +135,8 @@ impl WriteAllFailure {
 
 impl Display for WriteAllFailure {
     /// Formats the causal failure without exposing writer internals.
+    /// # Parameters
+    /// - `formatter`: Formatter receiving the diagnostic representation.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         Display::fmt(&self.error, formatter)
@@ -137,6 +145,8 @@ impl Display for WriteAllFailure {
 
 impl Debug for WriteAllFailure {
     /// Formats the causal error and whether recovery is available.
+    /// # Parameters
+    /// - `formatter`: Formatter receiving the diagnostic representation.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter

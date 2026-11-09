@@ -57,7 +57,7 @@
 ```toml
 [dependencies]
 qubit-fs = "0.3"
-qubit-fs-local = "0.11"
+qubit-fs-local = "^0.11"
 tempfile = "3"
 ```
 
@@ -200,8 +200,8 @@ use qubit_fs::copy::CopyFailure;
 use qubit_fs::copy::CopyOptions;
 use qubit_fs::copy::CopyOutcome;
 use qubit_fs::error::FsError;
-use qubit_fs::write::WriterRecovery;
 use qubit_fs::write::WriteAbortOutcome;
+use qubit_fs::write::WriterRecovery;
 
 /// Retains a copy failure and any error from aborting its writer.
 #[derive(Debug)]
@@ -218,11 +218,7 @@ pub struct CopyRecovery {
 ///
 /// If a writer remains available after failure, this function attempts to
 /// abort it. Aborting does not guarantee that the target was rolled back.
-pub fn copy_report(
-    filesystem: &FileSystem,
-    source: &Path,
-    target: &Path,
-) -> Result<CopyOutcome, CopyRecovery> {
+pub fn copy_report(filesystem: &FileSystem, source: &Path, target: &Path) -> Result<CopyOutcome, CopyRecovery> {
     match filesystem.copy(source, target, CopyOptions::default()) {
         Ok(outcome) => Ok(outcome),
         Err(mut failure) => {
@@ -314,7 +310,8 @@ pub enum WriteReportError {
     Recovery(Box<WriteRecovery>),
 }
 
-/// Writes report bytes and retains ambiguous outcomes for caller reconciliation.
+/// Writes report bytes and retains ambiguous outcomes for caller
+/// reconciliation.
 ///
 /// Cancellation applies only to execution. Once execution completes or is
 /// cancelled, any retained writer is aborted, and the operation state is
@@ -581,8 +578,10 @@ let tail_count = reader.read_at(tail_offset, &mut tail)?;
 ```
 
 缓存的 `len()` 来自打开对象的 metadata，限定本会话可读取的范围。它不是内容快照：原地修改
-可能被读到，文件缩短可能导致短读或 EOF；打开后增长的部分不属于本会话范围。遇到短读时，
-应推进偏移并切片剩余缓冲区；返回 0 表示观察到 EOF。读取报错后应丢弃缓冲区，因为 provider
+可能被读到，文件缩短可能导致短读或 EOF；打开后增长的部分不属于本会话范围。空输出缓冲区返回 0
+但不表示观察到 EOF。请求范围不溢出且偏移达到或超过打开时长度时，也会在不调用 provider 的情况下
+返回 0。对于该上界内的非空请求，provider 返回 0 才表示该请求观察到 EOF。遇到短读时，应推进偏移并切片
+剩余缓冲区。读取报错后应丢弃缓冲区，因为 provider
 可能已在返回错误前写入部分数据。
 
 该 operation 是可选的。打开时若返回 `UnsupportedOperation` 或 `UnsupportedCapability`，

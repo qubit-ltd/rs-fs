@@ -136,6 +136,9 @@ impl PersistFailure {
     }
 
     /// Retains the destination associated with a known publication attempt.
+    ///
+    /// # Parameters
+    /// - `target`: Confirmed publication target to retain, if known.
     pub(crate) fn with_publication_target(mut self, target: Option<&Path>) -> Self {
         self.publication_target = target.cloned();
         self
@@ -143,6 +146,10 @@ impl PersistFailure {
 }
 
 impl Display for PersistFailure {
+    /// Formats the persistence state and its underlying error.
+    ///
+    /// # Parameters
+    /// - `formatter`: Destination for the failure text.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         write!(formatter, "persist {:?}: {}", self.state, self.error)
@@ -150,6 +157,10 @@ impl Display for PersistFailure {
 }
 
 impl Error for PersistFailure {
+    /// Returns the underlying filesystem error as the causal source.
+    ///
+    /// # Returns
+    /// The retained filesystem error.
     #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(&self.error)

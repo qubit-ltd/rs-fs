@@ -23,10 +23,15 @@ use super::OpenFailureStage;
 /// confirm cleanup. There is deliberately no conversion into `FsError` that
 /// discards recovery.
 ///
+/// # Type Parameters
+///
+/// - `R`: Recovery session type retained after the provider open fails.
+///
 /// # Examples
 ///
 /// ```rust
 /// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
+///
 /// # let filesystem = support::rustdoc_provider::filesystem();
 /// use qubit_fs::Path;
 /// use qubit_fs::write::WriteOptions;
@@ -40,8 +45,13 @@ use super::OpenFailureStage;
 /// let failure = result.expect_err("the fixture does not guarantee atomic writes");
 /// assert_eq!(failure.stage(), qubit_fs::error::OpenFailureStage::Preflight);
 /// assert_eq!(failure.error().operation(), qubit_fs::error::FsOperation::OpenWriter);
+///
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
+///
+/// # Type Parameters
+///
+/// - `R`: Recovery session type retained after the provider open fails.
 #[must_use = "inspect and retain recovery ownership before abandoning an open failure"]
 pub struct OpenFailure<R> {
     /// Original contextual failure, unchanged by later recovery.
@@ -56,6 +66,13 @@ pub struct OpenFailure<R> {
 impl<R> OpenFailure<R> {
     /// Creates a failure after classifying the stage and transferring
     /// ownership.
+    ///
+    /// # Parameters
+    ///
+    /// - `error`: Filesystem error whose kind, source, and established facts
+    ///   are retained.
+    /// - `stage`: Stage at which the open operation failed.
+    /// - `recovery`: Optional isolated session retained for safe recovery.
     pub(crate) fn new(error: FsError, stage: OpenFailureStage, recovery: Option<R>) -> Self {
         Self {
             error: Box::new(error),
@@ -110,6 +127,10 @@ impl<R> OpenFailure<R> {
 impl<R> Debug for OpenFailure<R> {
     /// Formats failure facts without formatting the session or its claimed
     /// identity.
+    ///
+    /// # Parameters
+    ///
+    /// - `f`: Formatter that receives the debug or display representation.
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         f.debug_struct("OpenFailure")
             .field("error", &self.error)
@@ -121,6 +142,10 @@ impl<R> Debug for OpenFailure<R> {
 
 impl<R> Display for OpenFailure<R> {
     /// Formats only the original contextual failure.
+    ///
+    /// # Parameters
+    ///
+    /// - `f`: Formatter that receives the debug or display representation.
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         Display::fmt(&self.error, f)
     }

@@ -70,6 +70,7 @@ pub struct WriteOptions {
 }
 
 impl Default for WriteOptions {
+    /// Uses conservative defaults: no parent creation and replacement behavior.
     #[inline]
     fn default() -> Self {
         Self {
@@ -141,6 +142,8 @@ impl WriteOptions {
     }
 
     /// Returns a copy with parent creation replaced.
+    /// # Parameters
+    /// - `create`: Whether parent directories should be created.
     #[inline]
     #[must_use]
     pub const fn with_create_parent(mut self, create: bool) -> Self {
@@ -149,6 +152,8 @@ impl WriteOptions {
     }
 
     /// Returns a copy with the destination disposition replaced.
+    /// # Parameters
+    /// - `disposition`: Destination creation or replacement behavior.
     #[inline]
     #[must_use]
     pub const fn with_disposition(mut self, disposition: WriteDisposition) -> Self {
@@ -157,6 +162,8 @@ impl WriteOptions {
     }
 
     /// Returns a copy with the atomicity requirement replaced.
+    /// # Parameters
+    /// - `atomicity`: Required atomic publication behavior.
     #[inline]
     #[must_use]
     pub const fn with_atomicity(mut self, atomicity: AtomicityRequirement) -> Self {
@@ -165,6 +172,8 @@ impl WriteOptions {
     }
 
     /// Returns a copy with the durability requirement replaced.
+    /// # Parameters
+    /// - `durability`: Required durability after publication.
     #[inline]
     #[must_use]
     pub const fn with_durability(mut self, durability: DurabilityRequirement) -> Self {
@@ -173,6 +182,8 @@ impl WriteOptions {
     }
 
     /// Returns a copy with the version precondition replaced.
+    /// # Parameters
+    /// - `precondition`: Version condition required before publication.
     #[inline]
     #[must_use]
     pub fn with_precondition(mut self, precondition: WritePrecondition) -> Self {
@@ -181,6 +192,8 @@ impl WriteOptions {
     }
 
     /// Returns a copy with the content type replaced.
+    /// # Parameters
+    /// - `content_type`: Optional content type associated with the new file.
     #[inline]
     #[must_use]
     pub fn with_content_type(mut self, content_type: Option<String>) -> Self {
@@ -189,6 +202,8 @@ impl WriteOptions {
     }
 
     /// Returns a copy with the expected checksum replaced.
+    /// # Parameters
+    /// - `checksum`: Optional expected checksum for the written content.
     #[inline]
     #[must_use]
     pub fn with_checksum(mut self, checksum: Option<Checksum>) -> Self {
@@ -197,6 +212,8 @@ impl WriteOptions {
     }
 
     /// Replaces user-defined metadata that has already passed key validation.
+    /// # Parameters
+    /// - `metadata`: Validated user metadata associated with the new file.
     #[inline]
     #[must_use]
     pub fn with_user_metadata(mut self, metadata: UserMetadata) -> Self {
@@ -244,6 +261,9 @@ impl WriteOptions {
     /// Returns invalid-option errors from [`Self::validate`], or a typed
     /// [`FsErrorKind::RequirementNotMet`] for unsupported append, conditional,
     /// or required-atomic writes.
+    /// # Parameters
+    /// - `capabilities`: Capabilities against which the requested policy is
+    ///   checked.
     pub fn validate_against(&self, capabilities: FileSystemCapabilities) -> Result<(), FsError> {
         self.validate()?;
         if self.disposition == WriteDisposition::Append && !capabilities.supports(FileSystemCapability::Append) {
@@ -282,6 +302,9 @@ impl WriteOptions {
 
 /// Builds an error that identifies the unsupported capability required by a
 /// write.
+/// # Parameters
+/// - `capability`: Capability that the provider must support.
+/// - `message`: Stable description included in the invalid-state error.
 fn missing_requirement(capability: FileSystemCapability, message: &str) -> FsError {
     FsError::new(FsErrorKind::RequirementNotMet, FsOperation::OpenWriter, message).with_required_capability(capability)
 }

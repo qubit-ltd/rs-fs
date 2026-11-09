@@ -45,6 +45,10 @@ impl FacadeCore {
 
     /// Validates and captures one provider property snapshot.
     ///
+    /// # Parameters
+    ///
+    /// - `provider`: Provider identifier attached to contextual errors.
+    ///
     /// # Errors
     /// Returns the provider-property validation error when the declared
     /// capabilities and concrete operations are inconsistent.
@@ -64,12 +68,23 @@ impl FacadeCore {
     }
 
     /// Reports whether the captured provider exposes a concrete operation.
+    ///
+    /// # Parameters
+    ///
+    /// - `operation`: Filesystem operation used for validation or error
+    ///   context.
     #[inline]
     pub(crate) fn provider_supports(&self, operation: ProviderOperation) -> bool {
         self.provider_operations.supports(operation)
     }
 
     /// Validates one logical path against the cached provider snapshot.
+    ///
+    /// # Parameters
+    ///
+    /// - `path`: Logical path of the resource involved in this operation.
+    /// - `operation`: Filesystem operation used for validation or error
+    ///   context.
     ///
     /// # Errors
     /// Returns an enriched invalid-path or resource-limit error when the path
@@ -80,6 +95,11 @@ impl FacadeCore {
 
     /// Validates the optional parent used for temporary resource creation.
     ///
+    /// # Parameters
+    ///
+    /// - `parent`: Optional logical parent path for temporary resource
+    ///   creation.
+    ///
     /// # Errors
     /// Returns an enriched path-validation error when `parent` is present and
     /// does not satisfy the cached filesystem rules.
@@ -89,6 +109,13 @@ impl FacadeCore {
 
     /// Validates a temporary resource's logical location under an explicit
     /// parent when the provider's path semantics define that relationship.
+    ///
+    /// # Parameters
+    ///
+    /// - `requested_parent`: Optional parent location supplied for temporary
+    ///   creation.
+    /// - `returned_path`: Logical path returned by the provider for the
+    ///   temporary resource.
     pub(crate) fn validate_temp_location(&self, requested_parent: Option<&Path>, returned_path: &Path) -> FsResult<()> {
         let Some(parent) = requested_parent else {
             return Ok(());
@@ -117,6 +144,12 @@ impl FacadeCore {
     }
 
     /// Validates a writer path, options, and required write capability.
+    ///
+    /// # Parameters
+    ///
+    /// - `path`: Logical path of the resource involved in this operation.
+    /// - `options`: Write behavior and guarantees to validate before provider
+    ///   work begins.
     pub(crate) fn validate_write_request(&self, path: &Path, options: &WriteOptions) -> FsResult<()> {
         self.validate_path(path, FsOperation::OpenWriter)?;
         options
@@ -126,6 +159,13 @@ impl FacadeCore {
     }
 
     /// Assesses copy routes from the immutable provider snapshot without I/O.
+    ///
+    /// # Parameters
+    ///
+    /// - `source`: Logical path of the source resource.
+    /// - `target`: Destination logical path affected by the operation.
+    /// - `options`: Copy route, conflict, consistency, and metadata guarantees
+    ///   requested by the caller.
     ///
     /// # Errors
     /// Returns an invalid-options or requirement error when the paths or copy
@@ -196,6 +236,13 @@ impl FacadeCore {
     /// Requires the cached primitives needed before streamed copy can do I/O.
     ///
     /// # Parameters
+    ///
+    /// - `capability`: Capability required before provider work can begin.
+    /// - `operation`: Filesystem operation used for validation or error
+    ///   context.
+    /// - `path`: Logical path of the resource involved in this operation.
+    ///
+    /// # Parameters
     /// - `source`: Requested source path.
     /// - `target`: Requested destination path.
     ///
@@ -217,6 +264,13 @@ impl FacadeCore {
     /// Requires one capability before an operation can create provider I/O.
     ///
     /// `path` may be absent for operations that have no natural path context.
+    ///
+    /// # Parameters
+    ///
+    /// - `capability`: Capability required before provider work can begin.
+    /// - `operation`: Filesystem operation used for validation or error
+    ///   context.
+    /// - `path`: Logical path of the resource involved in this operation.
     ///
     /// # Errors
     /// Returns an enriched unsupported-capability error when the cached
@@ -248,6 +302,14 @@ impl FacadeCore {
     ///
     /// Existing provider-supplied context is preserved. `None` does not invent
     /// a path for pathless operations.
+    ///
+    /// # Parameters
+    ///
+    /// - `error`: Filesystem error whose kind, source, and established facts
+    ///   are retained.
+    /// - `path`: Logical path of the resource involved in this operation.
+    /// - `operation`: Filesystem operation used for validation or error
+    ///   context.
     pub(crate) fn enrich(&self, error: FsError, path: Option<&Path>, operation: FsOperation) -> FsError {
         let error = error
             .with_operation(operation)
@@ -259,6 +321,13 @@ impl FacadeCore {
     }
 
     /// Builds a provider-contract error bound to a requested path.
+    ///
+    /// # Parameters
+    ///
+    /// - `path`: Logical path of the resource involved in this operation.
+    /// - `operation`: Filesystem operation used for validation or error
+    ///   context.
+    /// - `message`: Diagnostic message for the constructed filesystem error.
     pub(crate) fn contract_error(&self, path: &Path, operation: FsOperation, message: &str) -> FsError {
         FsError::new(FsErrorKind::ProviderContractViolation, operation, message)
             .with_path(path.clone())
@@ -266,12 +335,26 @@ impl FacadeCore {
     }
 
     /// Creates a byte budget with the supplied inclusive limit.
+    ///
+    /// # Parameters
+    ///
+    /// - `resource`: Resource category tracked by this byte budget.
+    /// - `maximum`: Inclusive upper bound for this byte budget.
     #[inline]
     pub(crate) fn byte_budget(resource: FileSystemResource, maximum: u64) -> ByteBudget {
         ResourceBudget::new(resource, maximum)
     }
 
     /// Converts a platform-sized I/O count to the budget quantity type.
+    ///
+    /// # Parameters
+    ///
+    /// - `value`: Platform-sized I/O byte count to convert into resource
+    ///   accounting units.
+    /// - `operation`: Filesystem operation used for validation or error
+    ///   context.
+    /// - `path`: Logical path of the resource involved in this operation.
+    /// - `provider`: Provider identifier attached to contextual errors.
     ///
     /// # Errors
     /// Returns a contextual resource-limit error when `value` cannot be
@@ -296,6 +379,16 @@ impl FacadeCore {
     }
 
     /// Converts a budget failure into a contextual filesystem error.
+    ///
+    /// # Parameters
+    ///
+    /// - `error`: Filesystem error whose kind, source, and established facts
+    ///   are retained.
+    /// - `operation`: Filesystem operation used for validation or error
+    ///   context.
+    /// - `path`: Logical path of the resource involved in this operation.
+    /// - `provider`: Provider identifier attached to contextual errors.
+    /// - `message`: Diagnostic message for the constructed filesystem error.
     #[inline]
     pub(crate) fn budget_error(
         error: InsufficientBudgetError<FileSystemResource, u64>,
@@ -310,6 +403,11 @@ impl FacadeCore {
     }
 
     /// Returns the next bounded read length for an accumulated prefix.
+    ///
+    /// # Parameters
+    ///
+    /// - `accumulated`: Bytes already accumulated in the prefix buffer.
+    /// - `maximum`: Inclusive upper bound for this byte budget.
     #[inline]
     pub(crate) fn next_prefix_read_len(accumulated: usize, maximum: usize) -> usize {
         maximum.saturating_sub(accumulated).min(Self::PREFIX_BUFFER_SIZE)

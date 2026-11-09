@@ -81,6 +81,9 @@ impl RelativePath {
 
 impl Display for RelativePath {
     /// Formats the normalized relative path.
+    ///
+    /// # Parameters
+    /// - `formatter`: Destination for the normalized relative spelling.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter.write_str(self.as_str())

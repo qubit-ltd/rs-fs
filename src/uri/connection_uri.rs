@@ -143,6 +143,9 @@ impl ConnectionUri {
     /// The callback result is returned unchanged; callers must not use it to
     /// expose secret data through ordinary formatting or serialization.
     ///
+    /// # Type Parameters
+    /// - `R`: Callback result returned unchanged to the caller.
+    ///
     /// # Parameters
     ///
     /// - `inspect`: Callback that observes the unredacted URI text.
@@ -186,6 +189,9 @@ impl ConnectionUri {
 
 impl Display for ConnectionUri {
     /// Formats only the redacted connection URI.
+    ///
+    /// # Parameters
+    /// - `formatter`: Destination for the redacted URI text.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter.write_str(&self.redacted_text())
@@ -194,6 +200,9 @@ impl Display for ConnectionUri {
 
 impl Debug for ConnectionUri {
     /// Formats only the redacted connection URI for diagnostics.
+    ///
+    /// # Parameters
+    /// - `formatter`: Destination for the redacted debug representation.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         let redacted = self.redacted_text();

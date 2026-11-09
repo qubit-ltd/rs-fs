@@ -123,6 +123,10 @@ impl PersistOutcome {
     }
 
     /// Replaces the cleanup state reported by the provider.
+    ///
+    /// # Parameters
+    /// - `cleanup_state`: Provider-reported state of the private container
+    ///   after publication.
     #[inline]
     #[must_use]
     pub fn with_cleanup_state(mut self, cleanup_state: PersistCleanupState) -> Self {
@@ -133,6 +137,10 @@ impl PersistOutcome {
     /// Replaces provider diagnostics after their values have been sanitized.
     ///
     /// Keys are checked when added, while values are retained unchanged.
+    ///
+    /// # Parameters
+    /// - `diagnostics`: Provider diagnostics with values already sanitized by
+    ///   the provider.
     #[inline]
     #[must_use]
     pub fn with_diagnostics(mut self, diagnostics: UserMetadata) -> Self {

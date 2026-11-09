@@ -333,6 +333,11 @@ impl CopyOutcome {
     /// Statistics must form a coherent shape for the requested mode before
     /// they can establish publication. A request guarantee violation alone
     /// does not invalidate otherwise coherent statistics.
+    ///
+    /// # Parameters
+    ///
+    /// - `options`: Copy route, conflict, consistency, and metadata guarantees
+    ///   requested by the caller.
     pub(crate) fn violation_failure_state(&self, options: &CopyOptions) -> CopyFailureState {
         if self.statistics_shape_violation(options.mode()).is_some() {
             return CopyFailureState::Indeterminate;
@@ -340,6 +345,9 @@ impl CopyOutcome {
         crate::copy::internal::from_completed_stats(&self.stats)
     }
 
+    /// Returns the checked total of completed file and directory entries.
+    ///
+    /// Returns `None` if the provider-reported counters overflow.
     fn entry_count(&self) -> Option<u64> {
         // These counters describe completed resources; skipped and failed
         // entries are separate outcomes and cannot justify an overwrite.
@@ -351,6 +359,13 @@ impl CopyOutcome {
             .and_then(|value| value.checked_add(self.stats.prefixes))
     }
 
+    /// Checks whether the reported statistics match the requested copy mode.
+    ///
+    /// Returns a diagnostic when counters are inconsistent or overflow.
+    ///
+    /// # Parameters
+    ///
+    /// - `mode`: Copy mode whose counter requirements are checked.
     fn statistics_shape_violation(&self, mode: CopyMode) -> Option<&'static str> {
         let Some(entries) = self.entry_count() else {
             return Some("provider reported copy entry counters that overflow");

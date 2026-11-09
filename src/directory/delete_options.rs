@@ -152,6 +152,11 @@ impl DeleteOptions {
 ///
 /// The capability is retained in the error so callers can distinguish the
 /// missing requirement programmatically; `message` supplies its explanation.
+///
+/// # Parameters
+///
+/// - `capability`: Capability required before provider work can begin.
+/// - `message`: Diagnostic message for the constructed filesystem error.
 fn missing_requirement(capability: FileSystemCapability, message: &str) -> FsError {
     FsError::new(FsErrorKind::RequirementNotMet, FsOperation::Delete, message).with_required_capability(capability)
 }

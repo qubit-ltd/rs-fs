@@ -101,6 +101,10 @@ impl TempLifecycle {
     ///
     /// `kept` distinguishes a retained resource from one whose source was
     /// persisted, while `target` records the confirmed destination.
+    ///
+    /// # Parameters
+    /// - `kept`: Whether the temporary source remains retained after publish.
+    /// - `target`: Destination whose publication the provider confirmed.
     #[inline]
     pub(crate) fn record_success(&mut self, kept: bool, target: Path) {
         self.state = if kept {
@@ -117,6 +121,11 @@ impl TempLifecycle {
     /// failure state confirms publication. Otherwise an earlier confirmed
     /// target remains available. `kept` distinguishes released ownership from
     /// a retained resource when the source was published.
+    ///
+    /// # Parameters
+    /// - `state`: Provider-confirmed publication and source-release facts.
+    /// - `target`: Newly reported destination, if publication is confirmed.
+    /// - `kept`: Whether a successfully published source remains retained.
     #[inline]
     pub(crate) fn record_failure(&mut self, state: PersistFailureState, target: Option<Path>, kept: bool) {
         if matches!(
@@ -171,6 +180,10 @@ impl TempLifecycle {
     /// Errors with indeterminate effects make the source state uncertain.
     /// Other errors leave cleanup responsibility outstanding. Previously
     /// confirmed publication information is retained in either case.
+    ///
+    /// # Parameters
+    /// - `error`: Cleanup failure whose effect state determines source
+    ///   certainty.
     #[inline]
     pub(crate) fn record_cleanup_error(&mut self, error: &FsError) {
         if self.state == TempResourceState::Indeterminate {

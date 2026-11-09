@@ -66,6 +66,10 @@ impl Path {
     /// string. An empty absolute sequence produces the root; an empty relative
     /// sequence returns an invalid-path error.
     ///
+    /// # Type Parameters
+    /// - `I`: Iterator type yielding the component values.
+    /// - `S`: Component value type borrowing string slices through `AsRef`.
+    ///
     /// # Parameters
     /// - `absolute`: Whether the resulting path is rooted at the provider root.
     /// - `components`: Validated path-component text to join in order.
@@ -118,6 +122,9 @@ impl Path {
     /// Returns [`FsError`] with an invalid-path kind when `text` is empty,
     /// contains NUL, or escapes above the hierarchical root.
     ///
+    /// # Parameters
+    /// - `text`: Hierarchical path spelling to normalize and validate.
+    ///
     /// # Returns
     /// Returns the normalized hierarchical path.
     #[inline]
@@ -132,6 +139,9 @@ impl Path {
     /// # Errors
     /// Returns [`FsError`] with an invalid-path kind when `text` is empty or
     /// contains NUL.
+    ///
+    /// # Parameters
+    /// - `text`: Provider-literal path spelling to retain and validate.
     ///
     /// # Returns
     /// Returns the provider-literal path preserving `text`.
@@ -287,6 +297,9 @@ impl Path {
     }
 
     /// Joins an already validated suffix to this path.
+    ///
+    /// # Parameters
+    /// - `suffix`: Validated suffix text to append after a separator.
     fn append(&self, suffix: &str) -> Self {
         let hierarchical_root = self.semantics == PathSemantics::Hierarchical && !self.literal && self.text == "/";
         let text = if hierarchical_root {
@@ -305,6 +318,9 @@ impl Path {
 
 impl Display for Path {
     /// Formats the validated logical spelling.
+    ///
+    /// # Parameters
+    /// - `formatter`: Destination for the path spelling.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter.write_str(self.as_str())

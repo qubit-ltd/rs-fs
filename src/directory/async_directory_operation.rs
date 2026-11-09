@@ -25,6 +25,10 @@ pub(crate) struct AsyncDirectoryOperation<'a> {
 
 impl<'a> AsyncDirectoryOperation<'a> {
     /// Creates an asynchronous directory operation bound to `filesystem`.
+    ///
+    /// # Parameters
+    ///
+    /// - `filesystem`: Filesystem facade supplying the cached provider policy.
     #[inline]
     pub(crate) const fn new(filesystem: &'a AsyncFileSystem) -> Self {
         Self { filesystem }

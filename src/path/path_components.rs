@@ -49,6 +49,7 @@ impl<'a> PathComponents<'a> {
 }
 
 impl<'a> Iterator for PathComponents<'a> {
+    /// Borrowed text for one lexical path component.
     type Item = &'a str;
 
     /// Returns the next lexical component, including empty literal components.

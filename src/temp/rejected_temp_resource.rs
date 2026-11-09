@@ -106,12 +106,22 @@ impl RejectedTempResource {
         result.map_err(|error| self.contextual_error(error))
     }
     /// Adds only trusted request context to a cleanup error.
+    ///
+    /// # Parameters
+    /// - `error`: Provider cleanup error to contextualize.
+    ///
+    /// # Returns
+    /// The error with cleanup operation, validated path, and configured
+    /// provider context.
     fn contextual_error(&self, error: FsError) -> FsError {
         error.with_trusted_cleanup_context(FsOperation::CleanupTemp, self.path.as_ref(), &self.provider)
     }
 }
 impl Debug for RejectedTempResource {
     /// Omits the session and unvalidated provider identity.
+    ///
+    /// # Parameters
+    /// - `f`: Destination for the safe cleanup-state representation.
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         f.debug_struct("RejectedTempResource")
             .field("cleanup_state", &self.state)
