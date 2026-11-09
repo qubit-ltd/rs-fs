@@ -36,11 +36,11 @@ use crate::error::FsResult;
 /// }
 /// ```
 pub trait AsyncRandomAccessReadSession: Send {
-    /// Reads a non-empty, in-range request at `offset`, allowing short reads;
-    /// a zero result means this provider request observed EOF. The facade
-    /// handles empty requests and requests at or beyond the open-time length
-    /// without calling this method, and those facade-level zero results do not
-    /// indicate EOF.
+    /// Reads from `offset` into a non-empty buffer, allowing short reads. A
+    /// direct SPI call may observe EOF and return zero. The facade handles
+    /// empty requests and requests at or beyond the open-time length without
+    /// calling this method; those facade-level zero results do not indicate
+    /// provider-observed EOF.
     ///
     /// # Errors
     /// Resolves to the provider's typed read error. The caller's buffer may
@@ -49,8 +49,8 @@ pub trait AsyncRandomAccessReadSession: Send {
     ///
     /// # Parameters
     /// - `offset`: Starting byte offset within the opened object.
-    /// - `output`: Non-empty in-range destination buffer, borrowed for the
-    ///   lifetime of the returned future.
+    /// - `output`: Non-empty destination buffer, borrowed for the lifetime of
+    ///   the returned future.
     ///
     /// # Returns
     /// A future resolving to the number of bytes read; a short count is valid
