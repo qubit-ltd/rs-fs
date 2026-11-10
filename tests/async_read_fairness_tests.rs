@@ -398,6 +398,7 @@ fn io_errors_before_and_after_a_yield_keep_path_and_kind() {
         let error = result.expect_err("scripted error");
         assert_eq!(error.kind(), FsErrorKind::Io);
         assert_eq!(error.path(), Some(&path()));
+        assert_eq!(error.provider(), Some("fairness"));
         assert!(std::error::Error::source(&error).is_some());
     }
 }
