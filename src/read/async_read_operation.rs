@@ -22,6 +22,30 @@ use crate::read::ReadOptions;
 use crate::read::internal::ReadBuffer;
 use crate::read::prefix_read_plan::PrefixReadPlan;
 
+/// Yields after a bounded number of successful aggregate reads.
+///
+/// When the budget is exhausted, this helper wakes the current task and
+/// returns `Pending` once before allowing the next provider read. The budget
+/// is local to one aggregate operation and is reset when that operation is
+/// polled again.
+async fn yield_read_budget(reads_since_yield: &mut usize) {
+    if *reads_since_yield < 64 {
+        return;
+    }
+    let mut yielded = false;
+    std::future::poll_fn(|cx| {
+        if yielded {
+            std::task::Poll::Ready(())
+        } else {
+            yielded = true;
+            cx.waker().wake_by_ref();
+            std::task::Poll::Pending
+        }
+    })
+    .await;
+    *reads_since_yield = 0;
+}
+
 /// Coordinates asynchronous reads through one filesystem facade.
 ///
 /// The operation object borrows the facade so every reader uses the same
@@ -73,7 +97,9 @@ impl<'a> AsyncReadOperation<'a> {
         )?;
         let mut read_budget = FacadeCore::byte_budget(FileSystemResource::ReadBytes, maximum);
         let mut buffer = [0_u8; 8192];
+        let mut reads_since_yield = 0_usize;
         loop {
+            yield_read_budget(&mut reads_since_yield).await;
             let remaining = read_budget.remaining();
             let read_len =
                 usize::try_from(remaining.saturating_add(1)).map_or(buffer.len(), |value| value.min(buffer.len()));
@@ -105,6 +131,7 @@ impl<'a> AsyncReadOperation<'a> {
             bytes
                 .try_append(&buffer[..usize::try_from(read).expect("read count originated as usize")])
                 .map_err(|error| self.filesystem.core().enrich(error, Some(path), FsOperation::Read))?;
+            reads_since_yield += 1;
         }
     }
 
@@ -150,7 +177,9 @@ impl<'a> AsyncReadOperation<'a> {
         let mut bytes = ReadBuffer::new(max_bytes);
         let mut buffer = [0_u8; FacadeCore::PREFIX_BUFFER_SIZE];
         let mut termination = PrefixReadTermination::LimitReached;
+        let mut reads_since_yield = 0_usize;
         while bytes.len() < max_bytes {
+            yield_read_budget(&mut reads_since_yield).await;
             let read_len = FacadeCore::next_prefix_read_len(bytes.len(), max_bytes);
             let read = reader.read_async(&mut buffer[..read_len]).await.map_err(|error| {
                 self.filesystem.core().enrich(
@@ -166,6 +195,7 @@ impl<'a> AsyncReadOperation<'a> {
             bytes
                 .try_append(&buffer[..read])
                 .map_err(|error| self.filesystem.core().enrich(error, Some(path), FsOperation::Read))?;
+            reads_since_yield += 1;
         }
         Ok(PrefixReadOutcome::new(
             bytes.into_vec(),
