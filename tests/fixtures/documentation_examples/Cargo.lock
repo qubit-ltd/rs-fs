@@ -101,7 +101,7 @@ dependencies = [
  "fluent-uri",
  "qubit-budget",
  "qubit-io",
- "qubit-redact",
+ "qubit-redact 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -140,9 +140,16 @@ dependencies = [
  "libc",
  "qubit-budget",
  "qubit-io",
- "qubit-redact",
+ "qubit-redact 0.10.1",
  "rustix",
  "windows-sys",
+]
+
+[[package]]
+name = "qubit-redact"
+version = "0.10.1"
+dependencies = [
+ "qubit-budget",
 ]
 
 [[package]]
