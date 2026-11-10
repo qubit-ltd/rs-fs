@@ -152,13 +152,20 @@ Platform roots and authority boundaries come from the configured provider.
 
 ## Testing
 
-The dedicated documentation examples workflow checks the bilingual examples,
-then compiles, tests, and runs the fixture against fixed sibling repository
-revisions. Run the same integration check locally with
-`bash scripts/check-documentation-examples.sh` from the `rs-fs` root in a
-sibling Qubit checkout. The fixture uses `rs-fs-local` (`qubit-fs-local`
-0.11), `rs-local-files` (`qubit-local-files` 0.5), and `rs-redact` beside
-`rs-fs` (`qubit-fs` 0.3):
+The documentation checks have two steps. From the `rs-fs` root in a sibling
+Qubit checkout, run:
+
+```bash
+python3 scripts/check-documentation.py
+bash scripts/check-documentation-examples.sh
+```
+
+The Python checker validates bilingual documentation structure, example text,
+and package-relative links. The Bash script compiles, tests, and runs the
+documentation fixture using the current sibling checkouts. It does not check
+Markdown or select fixed dependency revisions. The fixture uses
+`rs-fs-local` (`qubit-fs-local` 0.11), `rs-local-files` (`qubit-local-files`
+0.5), and `rs-redact` (`qubit-fs` 0.3) beside `rs-fs`:
 
 ```text
 parent/
@@ -178,8 +185,11 @@ entry point runs:
 bash scripts/check-documentation-examples.sh
 ```
 
-This fixture entry point is also run by its independent workflow; the core CI
-continues to check this crate and its documentation.
+The documentation examples workflow reads the fixed revisions from
+`scripts/documentation-example-dependencies.json`, checks out those sibling
+repositories, and runs the same two commands in the order shown above. Those
+revisions are required to reproduce CI's fixed dependency condition locally;
+the scripts do not automatically check out downstream repositories.
 
 ```bash
 # Run tests with the default feature set
