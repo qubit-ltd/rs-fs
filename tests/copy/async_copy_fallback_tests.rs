@@ -136,7 +136,9 @@ fn test_async_copy_fairness_cancel_preserves_progress() {
     );
     assert!(operation.has_recovery());
     match operation.recovery().expect("writer retained") {
-        AsyncWriterRecovery::Opened(writer) => assert_eq!(WriterState::Indeterminate, writer.state()),
+        AsyncWriterRecovery::Opened(writer) => {
+            assert_eq!(WriterState::Indeterminate, writer.state())
+        }
         AsyncWriterRecovery::Rejected(_) => panic!("validated writer expected"),
     }
     assert_eq!(0, probe.writer_commits());
