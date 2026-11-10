@@ -430,6 +430,13 @@ write/copy 归为 `Indeterminate`。打开步骤已生效不代表整文件已�
 不要只凭错误名称判断能否重试。`exists` 仅对 `NotFound` 返回 false；权限、认证、超时和 I/O
 错误都会继续返回错误。
 
+同步 `FileReader` 读取中，普通中断以及未提供 effect 证据或明确为
+`FsEffectState::Unchanged` 的类型化 `FsErrorKind::Interrupted`，可由聚合读取重试。
+若类型化中断报告 `Applied`、`PartiallyApplied` 或 `Indeterminate`，reader 会将外层
+错误类别设为 `io::ErrorKind::Other`，并把原始 `FsError` 直接保留为 payload，其中包括
+source 和上下文。应检查该 payload 及其 effect 后再决定如何处理；不能只因内部 kind
+是 `Interrupted` 就重试。聚合读取失败前可能已向目标缓冲区写入部分数据；reader 不会回滚这些字节。
+
 直接使用 `FileWriter` 或 `AsyncFileWriter` 时，可分别查看 `state()`、
 `has_confirmed_publication()` 和 `cleanup_state()`。发布访问器记录本会话曾有过的明确发布证据；
 `false` 不证明没有副作用。确认发布后不要重新提交写入；需要核查时检查清理状态，并同时保留

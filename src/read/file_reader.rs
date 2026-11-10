@@ -10,14 +10,26 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
+use std::io::Error as IoError;
+use std::io::ErrorKind as IoErrorKind;
 use std::io::Result as IoResult;
 
 use qubit_io::ByteInput;
 use qubit_io::Input;
 
+use crate::error::FsEffectState;
+use crate::error::FsError;
+use crate::error::FsErrorKind;
 use crate::metadata::OpenedFileInfo;
 
 /// Type-erased byte input explicitly associated with an opened file.
+///
+/// Aggregate reads retry ordinary interruptions and typed interruptions whose
+/// effect is absent or [`FsEffectState::Unchanged`]. A typed interruption with
+/// another effect, or with a conflicting error kind, is returned with outer
+/// [`IoErrorKind::Other`]; its original [`FsError`] remains the direct error
+/// payload. A failed aggregate read may already have written bytes into its
+/// destination buffer; those bytes are not rolled back.
 ///
 /// # Examples
 ///
@@ -99,7 +111,24 @@ impl Input for FileReader {
     unsafe fn read_unchecked(&mut self, output: &mut [u8], index: usize, count: usize) -> IoResult<usize> {
         // SAFETY: The caller guarantees the same range contract required by
         // the wrapped input.
-        unsafe { self.inner.read_unchecked(output, index, count) }
+        unsafe { self.inner.read_unchecked(output, index, count) }.map_err(|error| {
+            if error.kind() != IoErrorKind::Interrupted {
+                return error;
+            }
+            let unsafe_typed = error
+                .get_ref()
+                .and_then(|source| source.downcast_ref::<FsError>())
+                .is_some_and(|typed| {
+                    typed.kind() != FsErrorKind::Interrupted
+                        || !matches!(typed.effect_state(), None | Some(FsEffectState::Unchanged))
+                });
+            if unsafe_typed {
+                let source = error.into_inner().expect("typed interruption retains its source");
+                IoError::other(source)
+            } else {
+                error
+            }
+        })
     }
 }
 

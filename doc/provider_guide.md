@@ -342,6 +342,14 @@ the operation's `FsEffectState` (for example, whether a publication may have
 become visible), so callers can choose recovery without guessing. Include the
 target or temporary path whenever the provider knows it.
 
+For synchronous reads, report bytes already transferred as a successful short
+read before returning an interruption. Do not report a retryable
+`Interrupted` after bytes have been applied or when the effect is uncertain;
+use a typed `FsError` with the corresponding effect state so the reader can
+stop aggregate retries. `FileReader` performs this protection only when the
+outer I/O error directly contains an `FsError`; it does not recursively inspect
+arbitrary wrapped errors.
+
 ## 7. Publication and cleanup
 
 Writer and temporary-resource implementations must report publication,

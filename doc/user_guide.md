@@ -494,6 +494,16 @@ not a reason to resend; cleanup may still be necessary. Never infer safe retry
 from an error kind alone. `exists` returns false only for `NotFound`; permission,
 authentication, timeout, and I/O failures remain errors.
 
+For synchronous `FileReader` reads, ordinary interruptions and typed
+`FsErrorKind::Interrupted` errors with no effect evidence or
+`FsEffectState::Unchanged` may be retried by aggregate reads. If a typed
+interruption reports `Applied`, `PartiallyApplied`, or `Indeterminate`, the
+reader returns outer `io::ErrorKind::Other` with the original `FsError` as its
+direct payload, including its source and context. Inspect that payload and its
+effect before deciding what to do; do not retry solely because its inner kind
+is `Interrupted`. A failed aggregate read may already have written a prefix
+into the destination buffer; the reader does not roll it back.
+
 Direct `FileWriter` and `AsyncFileWriter` users can inspect
 `has_confirmed_publication()` and `cleanup_state()` separately from `state()`.
 The publication accessor records whether this writer session has ever received

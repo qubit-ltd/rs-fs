@@ -59,6 +59,7 @@ enum Step {
     Data(&'static [u8]),
     OrdinaryInterrupted,
     TypedInterrupted(TypedEffect),
+    TypedInterruptedKindMismatch,
     TypedInterruptedFromCustomProvider,
     OrdinaryError,
     Eof,
@@ -100,7 +101,24 @@ impl Input for ScriptReader {
                         TypedEffect::Unchanged => error.with_effect_state(FsEffectState::Unchanged),
                         TypedEffect::State(state) => error.with_effect_state(state),
                     };
+                    error = error
+                        .with_path(Path::parse(REQUEST_PATH).expect("script path"))
+                        .with_provider(PROVIDER_ID);
                     return Err(error.into_io_error());
+                }
+                Step::TypedInterruptedKindMismatch => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Interrupted,
+                        FsError::with_source(
+                            FsErrorKind::Io,
+                            FsOperation::Read,
+                            "scripted conflicting interruption",
+                            SourceMarker,
+                        )
+                        .with_effect_state(FsEffectState::Applied)
+                        .with_path(Path::parse(REQUEST_PATH).expect("script path"))
+                        .with_provider(PROVIDER_ID),
+                    ));
                 }
                 Step::TypedInterruptedFromCustomProvider => {
                     return Err(FsError::with_source(
@@ -110,6 +128,7 @@ impl Input for ScriptReader {
                         SourceMarker,
                     )
                     .with_provider(CUSTOM_PROVIDER_ID)
+                    .with_path(Path::parse(REQUEST_PATH).expect("script path"))
                     .with_effect_state(FsEffectState::Applied)
                     .into_io_error());
                 }
@@ -326,6 +345,195 @@ fn test_read_all_returns_non_interruption_error_without_retry() {
             .downcast_ref::<io::Error>()
             .is_some_and(|source| source.kind() == io::ErrorKind::Other)
     }));
+    assert_eq!(1, calls.load(Ordering::SeqCst));
+}
+
+#[test]
+fn test_direct_read_fully_stops_on_unsafe_interruption() {
+    let (fs, calls) = filesystem([
+        Step::TypedInterrupted(TypedEffect::State(FsEffectState::Applied)),
+        Step::Data(b"after"),
+        Step::Eof,
+    ]);
+    let path = Path::parse(REQUEST_PATH).expect("path");
+    let mut reader = fs.open_reader(&path, ReadOptions::default()).expect("reader");
+    let mut output = [0; 5];
+    let error = reader
+        .read_fully(&mut output)
+        .expect_err("unsafe interruption must stop");
+    assert_eq!(io::ErrorKind::Other, error.kind());
+    let typed = error
+        .get_ref()
+        .and_then(|e| e.downcast_ref::<FsError>())
+        .expect("FsError payload");
+    assert_eq!(FsErrorKind::Interrupted, typed.kind());
+    assert_eq!(FsOperation::Read, typed.operation());
+    assert_eq!(Some(FsEffectState::Applied), typed.effect_state());
+    assert_eq!(Some(&path), typed.path());
+    assert_eq!(Some(PROVIDER_ID), typed.provider());
+    assert_eq!(1, calls.load(Ordering::SeqCst));
+}
+
+#[test]
+fn test_direct_aggregate_reads_stop_on_each_unsafe_typed_effect() {
+    for effect in [
+        FsEffectState::Applied,
+        FsEffectState::PartiallyApplied,
+        FsEffectState::Indeterminate,
+    ] {
+        for use_exactly in [false, true] {
+            let (fs, calls) = filesystem([
+                Step::TypedInterrupted(TypedEffect::State(effect)),
+                Step::Data(b"after"),
+                Step::Eof,
+            ]);
+            let path = Path::parse(REQUEST_PATH).expect("path");
+            let mut reader = fs.open_reader(&path, ReadOptions::default()).expect("reader");
+            let mut output = [0; 5];
+            let error = if use_exactly {
+                reader.read_exactly(&mut output)
+            } else {
+                reader.read_fully(&mut output).map(|_| ())
+            }
+            .expect_err("unsafe typed interruption must stop");
+            assert_eq!(io::ErrorKind::Other, error.kind());
+            let typed = error
+                .get_ref()
+                .and_then(|e| e.downcast_ref::<FsError>())
+                .expect("direct FsError payload");
+            assert_eq!(FsErrorKind::Interrupted, typed.kind());
+            assert_eq!(FsOperation::Read, typed.operation());
+            assert_eq!(Some(effect), typed.effect_state());
+            assert_eq!(Some(&path), typed.path());
+            assert_eq!(Some(PROVIDER_ID), typed.provider());
+            assert!(Error::source(typed).is_some_and(|source| source.is::<SourceMarker>()));
+            assert_eq!(1, calls.load(Ordering::SeqCst));
+        }
+    }
+}
+
+#[test]
+fn test_direct_aggregate_reads_retry_safe_interruption() {
+    for effect in [TypedEffect::None, TypedEffect::Unchanged] {
+        for use_exactly in [false, true] {
+            let (fs, calls) = filesystem([Step::TypedInterrupted(effect), Step::Data(b"after"), Step::Eof]);
+            let path = Path::parse(REQUEST_PATH).expect("path");
+            let mut reader = fs.open_reader(&path, ReadOptions::default()).expect("reader");
+            let mut output = [0; 5];
+            if use_exactly {
+                reader.read_exactly(&mut output).expect("safe interruption retries");
+            } else {
+                assert_eq!(5, reader.read_fully(&mut output).expect("safe interruption retries"));
+            }
+            assert_eq!(b"after", &output);
+            assert_eq!(2, calls.load(Ordering::SeqCst));
+        }
+    }
+    for use_exactly in [false, true] {
+        let (fs, calls) = filesystem([Step::OrdinaryInterrupted, Step::Data(b"after"), Step::Eof]);
+        let path = Path::parse(REQUEST_PATH).expect("path");
+        let mut reader = fs.open_reader(&path, ReadOptions::default()).expect("reader");
+        let mut output = [0; 5];
+        if use_exactly {
+            reader.read_exactly(&mut output).expect("ordinary interruption retries");
+        } else {
+            assert_eq!(
+                5,
+                reader.read_fully(&mut output).expect("ordinary interruption retries")
+            );
+        }
+        assert_eq!(b"after", &output);
+        assert_eq!(2, calls.load(Ordering::SeqCst));
+    }
+}
+
+#[test]
+fn test_direct_read_preserves_unsafe_payload_and_partial_buffer() {
+    let (fs, calls) = filesystem([
+        Step::Data(b"ab"),
+        Step::TypedInterrupted(TypedEffect::State(FsEffectState::Applied)),
+        Step::Data(b"cde"),
+        Step::Eof,
+    ]);
+    let path = Path::parse(REQUEST_PATH).expect("path");
+    let mut reader = fs.open_reader(&path, ReadOptions::default()).expect("reader");
+    let mut output = [0; 5];
+    let error = reader.read_fully(&mut output).expect_err("unsafe interruption stops");
+    assert_eq!(io::ErrorKind::Other, error.kind());
+    let typed = error
+        .get_ref()
+        .and_then(|e| e.downcast_ref::<FsError>())
+        .expect("FsError payload");
+    assert_eq!(FsErrorKind::Interrupted, typed.kind());
+    assert_eq!(Some(FsEffectState::Applied), typed.effect_state());
+    assert_eq!(b"ab", &output[..2]);
+    assert_eq!(2, calls.load(Ordering::SeqCst));
+
+    let (fs, calls) = filesystem([
+        Step::TypedInterrupted(TypedEffect::State(FsEffectState::Applied)),
+        Step::Data(b"after"),
+        Step::Eof,
+    ]);
+    let mut reader = fs.open_reader(&path, ReadOptions::default()).expect("reader");
+    let error = reader.read(&mut output).expect_err("unsafe interruption");
+    assert_eq!(io::ErrorKind::Other, error.kind());
+    let typed = error
+        .get_ref()
+        .and_then(|e| e.downcast_ref::<FsError>())
+        .expect("direct FsError payload");
+    assert_eq!(FsErrorKind::Interrupted, typed.kind());
+    assert_eq!(Some(FsEffectState::Applied), typed.effect_state());
+    assert_eq!(FsOperation::Read, typed.operation());
+    assert_eq!(Some(&path), typed.path());
+    assert_eq!(Some(PROVIDER_ID), typed.provider());
+    assert!(Error::source(typed).is_some_and(|source| source.is::<SourceMarker>()));
+    assert_eq!(1, calls.load(Ordering::SeqCst));
+}
+
+#[test]
+fn test_direct_aggregate_reads_return_ordinary_errors_without_retry() {
+    for use_exactly in [false, true] {
+        let (fs, calls) = filesystem([Step::OrdinaryError, Step::Data(b"after"), Step::Eof]);
+        let path = Path::parse(REQUEST_PATH).expect("path");
+        let mut reader = fs.open_reader(&path, ReadOptions::default()).expect("reader");
+        let mut output = [0; 5];
+        let error = if use_exactly {
+            reader.read_exactly(&mut output)
+        } else {
+            reader.read_fully(&mut output).map(|_| ())
+        }
+        .expect_err("ordinary errors must be returned");
+        assert_eq!(io::ErrorKind::Other, error.kind());
+        assert_eq!("scripted ordinary read error", error.to_string());
+        assert_eq!(1, calls.load(Ordering::SeqCst));
+    }
+}
+
+#[test]
+fn test_direct_read_reclassifies_conflicting_typed_error_but_preserves_other_errors() {
+    let (fs, calls) = filesystem([Step::TypedInterruptedKindMismatch, Step::Data(b"after"), Step::Eof]);
+    let path = Path::parse(REQUEST_PATH).expect("path");
+    let mut reader = fs.open_reader(&path, ReadOptions::default()).expect("reader");
+    let mut output = [0; 5];
+    let error = reader.read(&mut output).expect_err("conflicting typed error stops");
+    assert_eq!(io::ErrorKind::Other, error.kind());
+    let typed = error
+        .get_ref()
+        .and_then(|e| e.downcast_ref::<FsError>())
+        .expect("FsError payload");
+    assert_eq!(FsErrorKind::Io, typed.kind());
+    assert_eq!(FsOperation::Read, typed.operation());
+    assert_eq!(Some(FsEffectState::Applied), typed.effect_state());
+    assert_eq!(Some(&path), typed.path());
+    assert_eq!(Some(PROVIDER_ID), typed.provider());
+    assert!(Error::source(typed).is_some_and(|source| source.is::<SourceMarker>()));
+    assert_eq!(1, calls.load(Ordering::SeqCst));
+
+    let (fs, calls) = filesystem([Step::OrdinaryError, Step::Eof]);
+    let mut reader = fs.open_reader(&path, ReadOptions::default()).expect("reader");
+    let error = reader.read(&mut output).expect_err("ordinary error");
+    assert_eq!(io::ErrorKind::Other, error.kind());
+    assert_eq!("scripted ordinary read error", error.to_string());
     assert_eq!(1, calls.load(Ordering::SeqCst));
 }
 
