@@ -337,6 +337,13 @@ impl AsyncFileSystem {
     /// The cap applies to bytes actually read, even when opened metadata
     /// overestimates the resource length.
     ///
+    /// Long aggregate reads may periodically return [`std::task::Poll::Pending`] even
+    /// when the provider remains ready. This gives the executor an opportunity
+    /// to schedule other tasks and observe cancellation. It does not bound the
+    /// time spent in a single provider poll or guarantee a scheduling order;
+    /// cancellation cannot interrupt a provider poll already in progress. The
+    /// byte cap bounds the result size, not elapsed time.
+    ///
     /// # Parameters
     ///
     /// - `path`: Logical path of the resource involved in this operation.
@@ -353,6 +360,13 @@ impl AsyncFileSystem {
     }
 
     /// Asynchronously reads at most max_bytes from a file.
+    ///
+    /// Long aggregate reads may periodically return [`std::task::Poll::Pending`] even
+    /// when the provider remains ready. This gives the executor an opportunity
+    /// to schedule other tasks and observe cancellation. It does not bound the
+    /// time spent in a single provider poll or guarantee a scheduling order;
+    /// cancellation cannot interrupt a provider poll already in progress. The
+    /// byte cap bounds the result size, not elapsed time.
     ///
     /// # Parameters
     ///

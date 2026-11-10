@@ -127,6 +127,12 @@ preserves the original request; Required checksum is rejected with
 Use a complete `read_all` when that guarantee is needed. Return and consumption
 bounds do not promise an identical bound on provider network prefetch.
 
+Async `read_all` and `read_prefix` periodically yield even when the provider
+remains ready. This gives the executor an opportunity to schedule other tasks
+and observe cancellation. It does not bound the time spent in one provider poll
+or guarantee a scheduling order; cancellation cannot interrupt a provider poll
+already in progress. The byte limit bounds the result size, not elapsed time.
+
 The result is a `PrefixReadOutcome`: use `bytes()` to borrow or `into_bytes()`
 to take the data, and inspect `info()`, `options()`, `max_bytes()`, and
 `termination()`. `LimitReached` means the bound was consumed without probing

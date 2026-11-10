@@ -102,6 +102,10 @@ Conditional 或不支持范围读取的 provider 仍可顺序读取前缀。Best
 保留原请求；Required checksum 会返回 `RequirementNotMet`，因为仅读取前缀不能确认
 完整校验。需要该保证时使用完整的 `read_all`。返回和消费上限不等于网络预取量保证。
 
+异步 `read_all` 和 `read_prefix` 即使在 provider 持续就绪时也会周期性让出执行权，为执行器调度
+其他任务和处理取消提供机会。这不限制 provider 单次 poll 的耗时，也不保证任务执行顺序；取消
+不能中断正在运行的 provider poll。字节上限约束结果大小，不约束耗时。
+
 返回值是 `PrefixReadOutcome`：用 `bytes()` 借用数据，或用 `into_bytes()` 接管数据；
 并可检查 `info()`、`options()`、`max_bytes()` 和 `termination()`。`LimitReached` 只表示
 已消费上限且没有继续探测，不证明流已结束；只有 `StreamEnded` 表示在上限前观察到 EOF。
