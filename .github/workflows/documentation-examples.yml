@@ -26,6 +26,7 @@ jobs:
         working-directory: rs-fs
         shell: bash
         run: |
+          python3 scripts/check-documentation-example-checkout.py
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import json
           import re
@@ -48,7 +49,10 @@ jobs:
                   raise SystemExit(f"unexpected repository URL for {name}")
               if not re.fullmatch(r"[0-9a-f]{40}", revision):
                   raise SystemExit(f"{name} revision is not a full Git SHA")
-              print(f"{name}_repository={dependency['repository']}")
+              repository = dependency['repository'].removeprefix('https://github.com/').removesuffix('.git')
+              if not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', repository):
+                  raise SystemExit(f'invalid checkout repository for {name}')
+              print(f'{name}_repository={repository}')
               print(f"{name}_rev={revision}")
           PY
 
