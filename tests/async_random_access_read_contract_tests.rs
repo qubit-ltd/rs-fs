@@ -23,6 +23,7 @@ use common::random_access as random_access_common;
 use qubit_fs::AsyncFileSystem;
 use qubit_fs::FsResult;
 use qubit_fs::Path;
+use qubit_fs::error::FsEffectState;
 use qubit_fs::error::FsError;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::error::FsOperation;
@@ -57,6 +58,7 @@ enum ReadMode {
     Short,
     Overreport,
     Error,
+    ContextError,
 }
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum MetadataMode {
@@ -75,13 +77,25 @@ struct Provider {
     supported: bool,
     pending_first: bool,
     limit: FileSystemLimit,
+    context_path: bool,
+    context_provider: bool,
 }
 struct Session {
     reads: Arc<AtomicUsize>,
     drops: Arc<AtomicUsize>,
     mode: ReadMode,
     pending_first: bool,
+    context_path: bool,
+    context_provider: bool,
 }
+#[derive(Debug)]
+struct SourceMarker;
+impl std::fmt::Display for SourceMarker {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("context marker")
+    }
+}
+impl std::error::Error for SourceMarker {}
 impl Drop for Session {
     fn drop(&mut self) {
         self.drops.fetch_add(1, Ordering::SeqCst);
@@ -109,6 +123,24 @@ impl AsyncRandomAccessReadSession for Session {
                     std::io::Error::other("async source"),
                 ));
             }
+            if this.mode == ReadMode::ContextError {
+                let mut error = FsError::with_source(
+                    FsErrorKind::Io,
+                    FsOperation::Other,
+                    "context fixture failure",
+                    SourceMarker,
+                )
+                .with_effect_state(FsEffectState::Indeterminate)
+                .with_target(Path::parse("/provider-target").unwrap())
+                .with_failure_target(Path::parse("/provider-failure-target").unwrap());
+                if this.context_path {
+                    error = error.with_path(Path::parse("/provider-detail").unwrap());
+                }
+                if this.context_provider {
+                    error = error.with_provider("nested-provider");
+                }
+                return Err(error);
+            }
             if this.mode == ReadMode::Overreport {
                 return Ok(out.len() + 1);
             }
@@ -134,6 +166,8 @@ impl Provider {
             supported: true,
             pending_first: false,
             limit: FileSystemLimit::Unknown,
+            context_path: false,
+            context_provider: false,
         }
     }
     fn filesystem(&self) -> AsyncFileSystem {
@@ -145,6 +179,8 @@ impl Provider {
             metadata: self.metadata,
             supported: self.supported,
             pending_first: self.pending_first,
+            context_path: self.context_path,
+            context_provider: self.context_provider,
             limit: self.limit,
         })
         .unwrap()
@@ -179,6 +215,8 @@ impl AsyncFileSystemSpi for Provider {
         let mode = self.mode;
         let metadata = self.metadata;
         let pending_first = self.pending_first;
+        let context_path = self.context_path;
+        let context_provider = self.context_provider;
         Box::pin(async move {
             let path = r.path().clone();
             let info = match metadata {
@@ -197,6 +235,8 @@ impl AsyncFileSystemSpi for Provider {
                     drops,
                     mode,
                     pending_first,
+                    context_path,
+                    context_provider,
                 }),
             ))
         })
@@ -360,6 +400,42 @@ fn test_async_short_eof_overreport_and_typed_error() {
         Some("async source".to_owned()),
         std::error::Error::source(&error).map(ToString::to_string)
     );
+}
+
+#[test]
+fn test_async_provider_error_context_is_preserved_or_filled_independently() {
+    let session_path = Path::parse("/same").unwrap();
+    let provider_path = Path::parse("/provider-detail").unwrap();
+    let target = Path::parse("/provider-target").unwrap();
+    let failure_target = Path::parse("/provider-failure-target").unwrap();
+    for (has_path, has_provider) in [(true, true), (false, false), (true, false), (false, true)] {
+        let mut provider = Provider::new();
+        provider.mode = ReadMode::ContextError;
+        provider.context_path = has_path;
+        provider.context_provider = has_provider;
+        let mut reader = ready(
+            provider
+                .filesystem()
+                .open_random_access_reader(&session_path, ReadOptions::default()),
+        )
+        .unwrap();
+        let error = ready(reader.read_at(0, &mut [0; 1])).unwrap_err();
+        assert_eq!(
+            Some(if has_path { &provider_path } else { &session_path }),
+            error.path()
+        );
+        assert_eq!(
+            Some(if has_provider { "nested-provider" } else { "fixture" }),
+            error.provider()
+        );
+        assert_eq!(FsOperation::Read, error.operation());
+        assert_eq!(FsErrorKind::Io, error.kind());
+        assert_eq!(Some(FsEffectState::Indeterminate), error.effect_state());
+        assert_eq!(Some(&target), error.target());
+        assert_eq!(Some(&failure_target), error.failure_target());
+        assert!(std::error::Error::source(&error).unwrap().is::<SourceMarker>());
+        assert_eq!(1, provider.reads.load(Ordering::SeqCst));
+    }
 }
 
 #[test]

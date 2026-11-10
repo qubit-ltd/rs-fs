@@ -125,7 +125,9 @@ impl AsyncRandomAccessReader {
     /// limit, a provider error with path/provider/source context, or
     /// `ProviderContractViolation` when the provider over-reports bytes. The
     /// buffer may contain partial bytes after an error or cancellation and
-    /// must be discarded.
+    /// must be discarded. Provider-supplied path and provider context is
+    /// preserved; missing fields are filled from this session. The operation
+    /// is reported as `Read`.
     pub async fn read_at(&mut self, offset: u64, output: &mut [u8]) -> FsResult<usize> {
         let count = RandomAccessReadPolicy::validate_read(offset, output.len(), self.len, self.limit)
             .map_err(|e| e.with_path(self.info.path().clone()).with_provider(&self.provider_id))?;
@@ -138,8 +140,7 @@ impl AsyncRandomAccessReader {
             .read_at_async(offset, &mut output[..count])
             .await
             .map_err(|e| {
-                e.with_path(self.info.path().clone())
-                    .with_provider(&self.provider_id)
+                e.with_missing_context(self.info.path(), None, &self.provider_id)
                     .with_operation(FsOperation::Read)
             })?;
         if n > count {
