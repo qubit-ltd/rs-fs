@@ -96,12 +96,7 @@ impl<'a> StreamCopyPlan<'a> {
             ));
         }
         if let Some(length) = metadata.len() {
-            super::stream_copy_policy::validate_stream_copy_length_limits(
-                self.limits,
-                self.source,
-                self.target,
-                length,
-            )?;
+            super::stream_copy_policy::validate_stream_copy_length_limits(self.limits, self.target, length)?;
             if self.options.max_bytes().is_some_and(|maximum| length > maximum) {
                 return Err(self.budget_error("copy byte limit was exceeded"));
             }

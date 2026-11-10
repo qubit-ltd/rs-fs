@@ -92,17 +92,20 @@ pub(crate) fn fallback_write_options(options: &CopyOptions) -> WriteOptions {
         .with_durability(options.durability())
 }
 
-/// Validates stream-copy read/write size constraints using the provided limits.
+/// Validates a known stream-copy length against the destination write limit.
+///
+/// This does not validate source-side range-read limits.
 ///
 /// # Parameters
+/// - `limits`: Configured filesystem limits containing the write-session
+///   ceiling.
+/// - `target`: Destination logical path attached to a limit error.
+/// - `length`: Known source length used as the planned destination byte count.
 ///
-/// - `limits`: Provider resource limits applied to the operation.
-/// - `_source`: Source-side limits used to check the requested copy length.
-/// - `target`: Destination logical path affected by the operation.
-/// - `length`: Length of the source resource to validate against copy limits.
+/// # Errors
+/// Returns the destination write-size error when `length` exceeds its limit.
 pub(crate) fn validate_stream_copy_length_limits(
     limits: &FileSystemLimits,
-    _source: &Path,
     target: &Path,
     length: u64,
 ) -> Result<(), FsError> {

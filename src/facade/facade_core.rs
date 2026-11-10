@@ -47,7 +47,8 @@ impl FacadeCore {
     ///
     /// # Parameters
     ///
-    /// - `provider`: Provider identifier attached to contextual errors.
+    /// - `provider`: Validated provider property snapshot containing identity,
+    ///   operations, capabilities, and limits used to derive the facade cache.
     ///
     /// # Errors
     /// Returns the provider-property validation error when the declared
