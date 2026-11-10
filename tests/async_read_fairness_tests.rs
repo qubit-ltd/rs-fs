@@ -50,6 +50,7 @@ use qubit_io::AsyncInput;
 
 #[derive(Default)]
 struct Counts {
+    opens: AtomicUsize,
     calls: AtomicUsize,
     data_reads: AtomicUsize,
     wakes: AtomicUsize,
@@ -120,11 +121,8 @@ impl Provider {
     }
 
     fn info(path: &Path) -> OpenedFileInfo {
-        OpenedFileInfo::new(
-            FileSystemId::new("fairness").expect("provider id"),
-            path.clone(),
-        )
-        .with_metadata(FileMetadata::new(FileKind::File))
+        OpenedFileInfo::new(FileSystemId::new("fairness").expect("provider id"), path.clone())
+            .with_metadata(FileMetadata::new(FileKind::File))
     }
 }
 
@@ -137,10 +135,8 @@ impl AsyncFileSystemSpi for Provider {
         Box::pin(async { panic!("unexpected stat") })
     }
 
-    fn open_reader<'a>(
-        &'a self,
-        request: OpenReaderRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
+    fn open_reader<'a>(&'a self, request: OpenReaderRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
+        self.0.counts.opens.fetch_add(1, Ordering::SeqCst);
         let reader = ScriptedReader {
             bytes: self.0.bytes.clone(),
             position: 0,
@@ -149,12 +145,7 @@ impl AsyncFileSystemSpi for Provider {
             pending_returned: false,
             counts: Arc::clone(&self.0.counts),
         };
-        Box::pin(async move {
-            Ok(OpenedAsyncReader::new(
-                Self::info(request.path()),
-                Box::new(reader),
-            ))
-        })
+        Box::pin(async move { Ok(OpenedAsyncReader::new(Self::info(request.path()), Box::new(reader))) })
     }
 }
 
@@ -206,10 +197,7 @@ impl AsyncInput for ScriptedReader {
 
 fn filesystem(script: Script) -> (AsyncFileSystem, Arc<Counts>) {
     let counts = Arc::clone(&script.counts);
-    (
-        AsyncFileSystem::from_spi(Provider(script)).expect("filesystem"),
-        counts,
-    )
+    (AsyncFileSystem::from_spi(Provider(script)).expect("filesystem"), counts)
 }
 
 fn path() -> Path {
@@ -221,7 +209,7 @@ fn data(length: usize) -> Vec<u8> {
 }
 
 #[test]
-fn read_all_yields_after_each_64_successful_reads() {
+fn test_read_all_yields_after_each_64_successful_reads() {
     let input = data(130);
     let (fs, counts) = filesystem(Script::new(input.clone()));
     let resource_path = path();
@@ -242,7 +230,7 @@ fn read_all_yields_after_each_64_successful_reads() {
 }
 
 #[test]
-fn read_prefix_yields_after_each_64_successful_reads() {
+fn test_read_prefix_yields_after_each_64_successful_reads() {
     let input = data(130);
     let (fs, counts) = filesystem(Script::new(input.clone()));
     let resource_path = path();
@@ -259,12 +247,12 @@ fn read_prefix_yields_after_each_64_successful_reads() {
         Poll::Ready(result) => result.expect("successful prefix read"),
         Poll::Pending => panic!("130 one-byte reads finish in three polls"),
     };
-    assert_eq!(result.bytes(), input);
+    assert_eq!(result.bytes(), input.as_slice());
     assert_eq!(result.termination(), PrefixReadTermination::LimitReached);
 }
 
 #[test]
-fn prefix_limit_boundaries_preserve_completion_and_yield_semantics() {
+fn test_prefix_limit_boundaries_preserve_completion_and_yield_semantics() {
     for limit in [0, 1, 63, 64, 65] {
         let input = data(80);
         let (fs, counts) = filesystem(Script::new(input.clone()));
@@ -290,12 +278,31 @@ fn prefix_limit_boundaries_preserve_completion_and_yield_semantics() {
         .expect("prefix read");
         assert_eq!(result.bytes(), &input[..limit]);
         assert_eq!(result.termination(), PrefixReadTermination::LimitReached);
+        assert_eq!(counts.opens.load(Ordering::SeqCst), 1);
         assert_eq!(counts.data_reads.load(Ordering::SeqCst), limit);
     }
 }
 
 #[test]
-fn read_all_boundary_lengths_and_eof_probe_follow_yield_contract() {
+fn test_read_prefix_short_stream_terminates_on_eof() {
+    let input = data(7);
+    let (fs, counts) = filesystem(Script::new(input.clone()));
+    let resource_path = path();
+    let operation = fs.read_prefix(&resource_path, ReadOptions::default(), 20);
+    let waker = counter_waker(&counts);
+    let mut cx = Context::from_waker(&waker);
+    let mut future = std::pin::pin!(operation);
+    let Poll::Ready(result) = future.as_mut().poll(&mut cx) else {
+        panic!("short prefix stream completes without yielding")
+    };
+    let result = result.expect("short prefix stream");
+    assert_eq!(result.bytes(), input.as_slice());
+    assert_eq!(result.termination(), PrefixReadTermination::StreamEnded);
+    assert_eq!(counts.calls.load(Ordering::SeqCst), 8);
+}
+
+#[test]
+fn test_read_all_boundary_lengths_and_eof_probe_follow_yield_contract() {
     for length in [63, 64, 65] {
         let input = data(length);
         let (fs, counts) = filesystem(Script::new(input.clone()));
@@ -324,7 +331,7 @@ fn read_all_boundary_lengths_and_eof_probe_follow_yield_contract() {
 }
 
 #[test]
-fn short_stream_reaches_eof_without_extra_yield() {
+fn test_short_stream_reaches_eof_without_extra_yield() {
     let input = data(7);
     let (fs, counts) = filesystem(Script::new(input.clone()));
     let resource_path = path();
@@ -340,7 +347,7 @@ fn short_stream_reaches_eof_without_extra_yield() {
 }
 
 #[test]
-fn read_all_rejects_bytes_beyond_budget() {
+fn test_read_all_rejects_bytes_beyond_budget() {
     let (fs, counts) = filesystem(Script::new(data(5)));
     let resource_path = path();
     let operation = fs.read_all(&resource_path, ReadOptions::default(), 2);
@@ -357,7 +364,7 @@ fn read_all_rejects_bytes_beyond_budget() {
 }
 
 #[test]
-fn provider_pending_registers_waker_and_preserves_read_budget() {
+fn test_provider_pending_registers_waker_and_preserves_read_budget() {
     let input = data(130);
     let (fs, counts) = filesystem(Script::new(input.clone()).pending_at(1));
     let resource_path = path();
@@ -380,7 +387,7 @@ fn provider_pending_registers_waker_and_preserves_read_budget() {
 }
 
 #[test]
-fn io_errors_before_and_after_a_yield_keep_path_and_kind() {
+fn test_io_errors_before_and_after_a_yield_keep_path_and_kind() {
     for error_call in [1, 65] {
         let (fs, counts) = filesystem(Script::new(data(130)).error_at(error_call));
         let resource_path = path();
@@ -404,7 +411,7 @@ fn io_errors_before_and_after_a_yield_keep_path_and_kind() {
 }
 
 #[test]
-fn dropping_after_first_yield_releases_reader_without_more_reads() {
+fn test_dropping_after_first_yield_releases_reader_without_more_reads() {
     let (fs, counts) = filesystem(Script::new(data(130)));
     let resource_path = path();
     let operation = fs.read_all(&resource_path, ReadOptions::default(), 130);
@@ -421,7 +428,7 @@ fn dropping_after_first_yield_releases_reader_without_more_reads() {
 }
 
 #[test]
-fn two_aggregate_futures_make_independent_progress_when_alternated() {
+fn test_two_aggregate_futures_make_independent_progress_when_alternated() {
     let input = data(130);
     let (fs_a, counts_a) = filesystem(Script::new(input.clone()));
     let (fs_b, counts_b) = filesystem(Script::new(input.clone()));

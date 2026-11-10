@@ -28,6 +28,10 @@ use crate::read::prefix_read_plan::PrefixReadPlan;
 /// returns `Pending` once before allowing the next provider read. The budget
 /// is local to one aggregate operation and is reset when that operation is
 /// polled again.
+///
+/// # Parameters
+///
+/// - `reads_since_yield`: Number of successful reads since the last yield.
 async fn yield_read_budget(reads_since_yield: &mut usize) {
     if *reads_since_yield < 64 {
         return;
