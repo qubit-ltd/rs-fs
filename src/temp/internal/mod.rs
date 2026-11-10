@@ -8,3 +8,5 @@
 //! Shared private temporary-resource lifecycle rules.
 mod temp_lifecycle;
 pub(crate) use temp_lifecycle::TempLifecycle;
+mod sync_temp_resource;
+pub(crate) use sync_temp_resource::SyncTempResource;

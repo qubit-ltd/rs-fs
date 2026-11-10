@@ -12,24 +12,16 @@ use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
 
 use crate::FileSystem;
-use crate::error::FsError;
-use crate::error::FsErrorKind;
-use crate::error::FsOperation;
 use crate::error::FsResult;
-use crate::metadata::AchievedAtomicity;
-use crate::metadata::AtomicityRequirement;
 use crate::path::Path;
 use crate::path::PathComponent;
 use crate::path::RelativePath;
-use crate::spi::PersistRequest;
-use crate::spi::SpiPersistFailure;
 use crate::spi::TempResourceSpi;
 use crate::temp::PersistFailure;
-use crate::temp::PersistFailureState;
 use crate::temp::PersistOptions;
 use crate::temp::PersistOutcome;
 use crate::temp::TempResourceState;
-use crate::temp::internal::TempLifecycle;
+use crate::temp::internal::SyncTempResource;
 
 /// Temporary directory retaining the provider session until lifecycle
 /// completion.
@@ -60,14 +52,8 @@ use crate::temp::internal::TempLifecycle;
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub struct TempDirectory {
-    /// Facade that owns validation and persistence policy.
-    filesystem: FileSystem,
-    /// Provider-local temporary directory path.
-    path: Path,
-    /// Provider lifecycle session.
-    session: Box<dyn TempResourceSpi>,
-    /// Current cleanup and publication lifecycle state.
-    lifecycle: TempLifecycle,
+    /// Shared synchronous resource lifecycle.
+    core: SyncTempResource,
 }
 impl TempDirectory {
     /// Creates the facade handle from validated provider parts.
@@ -81,12 +67,15 @@ impl TempDirectory {
     /// A handle initialized with cleanup ownership of the opened directory.
     pub(crate) fn new(filesystem: FileSystem, path: Path, session: Box<dyn TempResourceSpi>) -> Self {
         Self {
-            filesystem,
-            path,
-            session,
-            lifecycle: TempLifecycle::new(),
+            core: SyncTempResource::new(
+                filesystem,
+                path,
+                session,
+                "temporary directory cannot perform this lifecycle operation",
+            ),
         }
     }
+
     /// Returns the logical temporary directory path.
     ///
     /// # Returns
@@ -94,16 +83,18 @@ impl TempDirectory {
     #[inline]
     #[must_use]
     pub const fn path(&self) -> &Path {
-        &self.path
+        self.core.path()
     }
+
     /// Returns the resource lifecycle state.
     ///
     /// # Returns
     /// The current ownership and cleanup state of this temporary resource.
     #[inline]
     pub const fn state(&self) -> TempResourceState {
-        self.lifecycle.state()
+        self.core.state()
     }
+
     /// Returns one lexically safe child path.
     ///
     /// # Parameters
@@ -114,8 +105,9 @@ impl TempDirectory {
     #[inline]
     #[must_use]
     pub fn child(&self, component: &PathComponent) -> Path {
-        self.path.child(component)
+        self.core.path().child(component)
     }
+
     /// Returns one lexically safe descendant path.
     ///
     /// # Parameters
@@ -127,8 +119,9 @@ impl TempDirectory {
     #[inline]
     #[must_use]
     pub fn descendant(&self, relative: &RelativePath) -> Path {
-        self.path.join(relative)
+        self.core.path().join(relative)
     }
+
     /// Persists this directory.
     ///
     /// # Parameters
@@ -143,60 +136,9 @@ impl TempDirectory {
     /// provider failure, or a provider contract violation.
     #[allow(clippy::result_large_err)]
     pub fn persist(&mut self, target: &Path, options: PersistOptions) -> Result<PersistOutcome, PersistFailure> {
-        if self.lifecycle.state() != TempResourceState::Owned {
-            return Err(PersistFailure::new(
-                self.invalid_state(FsOperation::PersistTemp).with_target(target.clone()),
-                self.lifecycle.failure_state(),
-            )
-            .with_publication_target(self.lifecycle.publication_target()));
-        }
-        if let Err(error) = self.filesystem.preflight_temp_persist(&self.path, target, &options) {
-            return Err(PersistFailure::new(error, PersistFailureState::NotPublished));
-        }
-        match self.session.persist(PersistRequest::new(target, options.clone())) {
-            Ok(outcome) => {
-                if outcome.target() != target {
-                    self.lifecycle
-                        .record_failure(PersistFailureState::Indeterminate, Some(target.clone()), false);
-                    return Err(PersistFailure::new(
-                        FsError::new(
-                            FsErrorKind::ProviderContractViolation,
-                            FsOperation::PersistTemp,
-                            "provider reported a persistence target different from the request",
-                        )
-                        .with_path(self.path.clone())
-                        .with_target(target.clone())
-                        .with_provider(self.filesystem.properties().info().provider_id()),
-                        PersistFailureState::Indeterminate,
-                    ));
-                }
-                if options.atomicity() == AtomicityRequirement::Required
-                    && outcome.atomicity() != AchievedAtomicity::Atomic
-                {
-                    self.lifecycle.record_failure(
-                        PersistFailureState::PublishedSourceIndeterminate,
-                        Some(target.clone()),
-                        false,
-                    );
-                    return Err(PersistFailure::new(
-                        FsError::new(
-                            FsErrorKind::ProviderContractViolation,
-                            FsOperation::PersistTemp,
-                            "provider reported non-atomic success for atomic-required persist",
-                        )
-                        .with_path(self.path.clone())
-                        .with_target(target.clone())
-                        .with_provider(self.filesystem.properties().info().provider_id()),
-                        PersistFailureState::PublishedSourceIndeterminate,
-                    )
-                    .with_publication_target(self.lifecycle.publication_target()));
-                }
-                self.lifecycle.record_success(false, outcome.target().clone());
-                Ok(outcome)
-            }
-            Err(failure) => Err(self.record_persist_failure(failure, target, FsOperation::PersistTemp)),
-        }
+        self.core.persist(target, options)
     }
+
     /// Publishes this temporary directory to the provider-generated target.
     ///
     /// # Returns
@@ -207,27 +149,9 @@ impl TempDirectory {
     /// publication fails, or the provider returns an invalid target.
     #[allow(clippy::result_large_err)]
     pub fn keep(&mut self) -> Result<PersistOutcome, PersistFailure> {
-        if let Err(error) = self.ensure_owned(FsOperation::KeepTemp) {
-            return Err(PersistFailure::new(error, self.lifecycle.failure_state())
-                .with_publication_target(self.lifecycle.publication_target()));
-        }
-        match self.session.keep() {
-            Ok(outcome) => {
-                if let Err(error) = self.filesystem.validate_temp_keep_target(&self.path, outcome.target()) {
-                    self.lifecycle.record_failure(
-                        PersistFailureState::Indeterminate,
-                        Some(outcome.target().clone()),
-                        true,
-                    );
-                    return Err(PersistFailure::new(error, PersistFailureState::Indeterminate));
-                }
-                self.path = outcome.target().clone();
-                self.lifecycle.record_success(true, outcome.target().clone());
-                Ok(outcome)
-            }
-            Err(failure) => Err(self.record_persist_failure(failure, &self.path.clone(), FsOperation::KeepTemp)),
-        }
+        self.core.keep()
     }
+
     /// Cleans the temporary directory.
     ///
     /// Call this method when cleanup success or failure must be observed.
@@ -243,101 +167,11 @@ impl TempDirectory {
     /// `Ok(())` when cleanup is confirmed; otherwise, the contextual cleanup
     /// error.
     pub fn cleanup(&mut self) -> FsResult<()> {
-        if !matches!(
-            self.lifecycle.state(),
-            TempResourceState::Owned | TempResourceState::CleanupRequired
-        ) {
-            return Err(self.invalid_state(FsOperation::CleanupTemp));
-        }
-        self.session
-            .cleanup()
-            .map(|()| self.lifecycle.record_cleanup_success())
-            .map_err(|error| self.record_lifecycle_error(error, FsOperation::CleanupTemp))
-    }
-    /// Records provider partial persistence facts.
-    ///
-    /// # Parameters
-    /// - `failure`: Provider-reported failure and publication facts.
-    /// - `target`: Destination requested by the persistence operation.
-    /// - `operation`: Persistence or keep operation being contextualized.
-    ///
-    /// # Returns
-    /// A typed failure retaining provider state and the latest confirmed
-    /// target.
-    fn record_persist_failure(
-        &mut self,
-        failure: SpiPersistFailure,
-        target: &Path,
-        operation: FsOperation,
-    ) -> PersistFailure {
-        let (error, state) = failure.into_parts();
-        let publication_target = if operation == FsOperation::KeepTemp {
-            error.target().cloned()
-        } else {
-            Some(target.clone())
-        };
-        self.lifecycle
-            .record_failure(state, publication_target, operation == FsOperation::KeepTemp);
-        PersistFailure::new(
-            error.with_operation(operation).with_missing_context(
-                &self.path,
-                Some(target),
-                self.filesystem.properties().info().provider_id(),
-            ),
-            state,
-        )
-        .with_publication_target(self.lifecycle.publication_target())
-    }
-    /// Requires ownership of an unpublished source.
-    ///
-    /// # Parameters
-    /// - `operation`: Lifecycle operation attempted by the caller.
-    ///
-    /// # Returns
-    /// `Ok(())` while this handle owns an unpublished source; otherwise an
-    /// invalid-state error.
-    fn ensure_owned(&self, operation: FsOperation) -> FsResult<()> {
-        if self.lifecycle.state() == TempResourceState::Owned {
-            Ok(())
-        } else {
-            Err(self.invalid_state(operation))
-        }
-    }
-    /// Records lifecycle error state with resource context.
-    ///
-    /// # Parameters
-    /// - `error`: Cleanup or ownership-transfer error to retain.
-    /// - `operation`: Lifecycle operation associated with the error.
-    ///
-    /// # Returns
-    /// The error enriched with path and provider context.
-    fn record_lifecycle_error(&mut self, error: FsError, operation: FsOperation) -> FsError {
-        self.lifecycle.record_cleanup_error(&error);
-        error.with_operation(operation).with_missing_context(
-            &self.path,
-            None,
-            self.filesystem.properties().info().provider_id(),
-        )
-    }
-    /// Builds a contextual invalid-state error.
-    ///
-    /// # Parameters
-    /// - `operation`: Lifecycle operation rejected by the current state.
-    ///
-    /// # Returns
-    /// An invalid-state error carrying this resource's path and provider.
-    fn invalid_state(&self, operation: FsOperation) -> FsError {
-        FsError::new(
-            FsErrorKind::InvalidState,
-            operation,
-            "temporary directory cannot perform this lifecycle operation",
-        )
-        .with_path(self.path.clone())
-        .with_provider(self.filesystem.properties().info().provider_id())
+        self.core.cleanup()
     }
 }
 impl Debug for TempDirectory {
-    /// Formats the handle's path and lifecycle state without exposing provider
+    /// Formats the handle path and lifecycle state without exposing provider
     /// internals.
     ///
     /// # Parameters
@@ -348,19 +182,8 @@ impl Debug for TempDirectory {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         f.debug_struct("TempDirectory")
-            .field("path", &self.path)
-            .field("state", &self.lifecycle.state())
+            .field("path", self.core.path())
+            .field("state", &self.core.state())
             .finish_non_exhaustive()
-    }
-}
-impl Drop for TempDirectory {
-    /// Attempts best-effort cleanup while this handle still owns the resource.
-    fn drop(&mut self) {
-        if matches!(
-            self.lifecycle.state(),
-            TempResourceState::Owned | TempResourceState::CleanupRequired
-        ) {
-            let _ = self.session.cleanup();
-        }
     }
 }
