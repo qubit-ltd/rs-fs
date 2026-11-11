@@ -525,7 +525,8 @@ impl<'a> CopyOperation<'a> {
     /// - `error`: Stream I/O error converted through `FsError::from_stream_io`
     ///   before attaching provider context.
     fn io_error(&self, path: &Path, operation: FsOperation, error: std::io::Error) -> FsError {
-        FsError::from_stream_io(error, operation, path).with_provider(self.filesystem.properties().info().provider_id())
+        FsError::from_stream_io(error, operation, path)
+            .with_missing_provider(self.filesystem.properties().info().provider_id())
     }
 
     /// Returns a caller-budget error when the elapsed-time limit expired.
