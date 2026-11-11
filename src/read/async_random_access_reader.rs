@@ -94,6 +94,8 @@ impl AsyncRandomAccessReader {
         }
     }
     /// Returns the identity and metadata captured at open time.
+    #[inline]
+    #[must_use]
     pub fn info(&self) -> &OpenedFileInfo {
         &self.info
     }
@@ -101,10 +103,14 @@ impl AsyncRandomAccessReader {
     ///
     /// This bound does not change if the object grows and does not make the
     /// object's contents a snapshot.
+    #[inline]
+    #[must_use]
     pub fn len(&self) -> u64 {
         self.len
     }
     /// Returns whether the open-time length is zero.
+    #[inline]
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }
