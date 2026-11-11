@@ -19,6 +19,7 @@ use common::async_recording_spi::AsyncRecordingConfig;
 use common::async_recording_spi::async_recording_file_system;
 use common::poll_support::ready;
 use qubit_fs::FileSystem;
+use qubit_fs::FsError;
 use qubit_fs::FsResult;
 use qubit_fs::Path;
 use qubit_fs::copy::CopyOptions;
@@ -220,7 +221,7 @@ fn test_sync_async_outcome_diagnostics_match() {
     assert_eq!(2, sync_calls.load(Ordering::SeqCst));
 }
 
-fn assert_diagnostics_match(sync: &qubit_fs::FsError, asynchronous: &qubit_fs::FsError) {
+fn assert_diagnostics_match(sync: &FsError, asynchronous: &FsError) {
     assert_eq!(FsErrorKind::ProviderContractViolation, sync.kind());
     assert_eq!(sync.kind(), asynchronous.kind());
     assert_eq!(sync.operation(), asynchronous.operation());

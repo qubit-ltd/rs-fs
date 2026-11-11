@@ -47,6 +47,7 @@ use qubit_fs::metadata::FileSystemLimit;
 use qubit_fs::metadata::FileSystemLimits;
 use qubit_fs::metadata::OpenedFileInfo;
 use qubit_fs::metadata::PublicationMethod;
+use qubit_fs::metadata::ResourceVersion;
 use qubit_fs::metadata::SymlinkPolicy;
 use qubit_fs::metadata::WriteOutcome;
 use qubit_fs::path::PathConstraints;
@@ -465,7 +466,7 @@ impl FileSystemSpi for RecordingSpi {
         match self.response {
             CopyResponse::Completed => Ok(CopyAttempt::Completed(
                 CopyOutcome::new(CopyStats::default(), CopyMethod::Native, AchievedAtomicity::Atomic)
-                    .with_target_version(qubit_fs::metadata::ResourceVersion::new("native-generation")),
+                    .with_target_version(ResourceVersion::new("native-generation")),
             )),
             CopyResponse::CompletedAtomicDowngrade => Ok(CopyAttempt::Completed(CopyOutcome::new(
                 CopyStats {
@@ -745,7 +746,7 @@ fn test_copy_completed_does_not_open_fallback_handles() {
         .expect("native copy should succeed");
     assert_eq!(CopyMethod::Native, outcome.method());
     assert_eq!(
-        Some(&qubit_fs::metadata::ResourceVersion::new("native-generation")),
+        Some(&ResourceVersion::new("native-generation")),
         outcome.target_version()
     );
     assert_eq!(

@@ -101,13 +101,12 @@ impl Output for InterruptedWriter {
 }
 
 impl FileWriterSpi for InterruptedWriter {
-    fn commit(&mut self) -> Result<WriteOutcome, qubit_fs::spi::SpiWriteFailure> {
+    fn commit(&mut self) -> Result<WriteOutcome, SpiWriteFailure> {
         *self.commits.lock().expect("commits lock") += 1;
-        Ok(WriteOutcome::new(
-            qubit_fs::metadata::AchievedAtomicity::NonAtomic,
-            qubit_fs::metadata::PublicationMethod::Direct,
+        Ok(
+            WriteOutcome::new(AchievedAtomicity::NonAtomic, PublicationMethod::Direct)
+                .with_bytes_written(self.accepted.lock().expect("accepted lock").len() as u64),
         )
-        .with_bytes_written(self.accepted.lock().expect("accepted lock").len() as u64))
     }
     fn abort(&mut self) -> FsResult<WriteAbortOutcome> {
         Ok(WriteAbortOutcome::NotPublished)

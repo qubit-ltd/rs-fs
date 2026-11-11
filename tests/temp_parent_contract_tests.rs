@@ -16,6 +16,7 @@ use qubit_fs::FsResult;
 use qubit_fs::Path;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::error::FsOperation;
+use qubit_fs::error::OpenFailureStage;
 use qubit_fs::error::RecoveryCleanupState;
 use qubit_fs::metadata::FileKind;
 use qubit_fs::metadata::FileMetadata;
@@ -178,11 +179,8 @@ fn assert_sync_rejected(kind: FileKind) {
             .expect_err("outside parent must be rejected"),
         _ => unreachable!("test requests only file and directory"),
     };
-    assert_eq!(qubit_fs::error::OpenFailureStage::OutcomeValidation, failure.stage());
-    assert_eq!(
-        qubit_fs::error::FsErrorKind::ProviderContractViolation,
-        failure.error().kind()
-    );
+    assert_eq!(OpenFailureStage::OutcomeValidation, failure.stage());
+    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
     assert!(failure.recovery().is_some(), "the provider session remains recoverable");
     assert_eq!(Some(&path("/reports")), failure.error().path());
 }
@@ -273,7 +271,7 @@ fn test_sync_temp_parent_location_semantics_and_recovery() {
         match result {
             Ok(mut file) => file.cleanup().expect("valid temporary resource should clean up"),
             Err(mut failure) => {
-                assert_eq!(qubit_fs::error::OpenFailureStage::OutcomeValidation, failure.stage());
+                assert_eq!(OpenFailureStage::OutcomeValidation, failure.stage());
                 assert_eq!(
                     Some(&parent.expect("rejected cases have an explicit parent")),
                     failure.error().path()
@@ -291,6 +289,7 @@ fn test_sync_temp_parent_location_semantics_and_recovery() {
 
 #[cfg(feature = "async")]
 mod asynchronous {
+
     use std::future::Future;
     use std::pin::Pin;
     use std::task::Context;
@@ -315,6 +314,7 @@ mod asynchronous {
     use super::FsError;
     use super::FsErrorKind;
     use super::FsOperation;
+    use super::OpenFailureStage;
     use super::Path;
     use super::PathSemantics;
     use super::ProviderProperties;
@@ -432,11 +432,8 @@ mod asynchronous {
                 .expect("outside parent must be rejected"),
             _ => unreachable!("test requests only file and directory"),
         };
-        assert_eq!(qubit_fs::error::OpenFailureStage::OutcomeValidation, failure.stage());
-        assert_eq!(
-            qubit_fs::error::FsErrorKind::ProviderContractViolation,
-            failure.error().kind()
-        );
+        assert_eq!(OpenFailureStage::OutcomeValidation, failure.stage());
+        assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
         assert!(failure.recovery().is_some(), "the provider session remains recoverable");
         assert_eq!(Some(&path("/reports")), failure.error().path());
     }
@@ -586,7 +583,7 @@ mod asynchronous {
             match result {
                 Ok(mut file) => ready(file.cleanup()).expect("valid resource cleanup should succeed"),
                 Err(mut failure) => {
-                    assert_eq!(qubit_fs::error::OpenFailureStage::OutcomeValidation, failure.stage());
+                    assert_eq!(OpenFailureStage::OutcomeValidation, failure.stage());
                     assert_eq!(
                         Some(&parent.expect("rejected cases have an explicit parent")),
                         failure.error().path()

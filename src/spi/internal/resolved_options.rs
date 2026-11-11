@@ -15,7 +15,7 @@ macro_rules! resolved_options {
                                             "Immutable options resolved by the facade before provider dispatch.\n\n",
                                             "# Examples\n\n",
                                             "```rust\n",
-                                            "use qubit_fs::spi::", stringify!($name), ";\n\n",
+                                            "use ", stringify!(qubit_fs), "::spi::", stringify!($name), ";\n\n",
                                             "fn inspect(options: &", stringify!($name), ") {\n",
                                             "    let _caller_options = options.options();\n",
                                             "}\n",

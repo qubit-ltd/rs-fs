@@ -18,14 +18,18 @@ use qubit_fs::Path;
 use qubit_fs::copy::CopyFailureState;
 use qubit_fs::copy::CopyOptions;
 use qubit_fs::error::FsErrorKind;
+use qubit_fs::metadata::AchievedAtomicity;
 use qubit_fs::metadata::FileKind;
 use qubit_fs::metadata::FileMetadata;
 use qubit_fs::metadata::FileSystemCapabilities;
+use qubit_fs::metadata::FileSystemCapability;
 use qubit_fs::metadata::FileSystemId;
 use qubit_fs::metadata::FileSystemInfo;
 use qubit_fs::metadata::FileSystemLimits;
 use qubit_fs::metadata::OpenedFileInfo;
+use qubit_fs::metadata::PublicationMethod;
 use qubit_fs::metadata::SymlinkPolicy;
+use qubit_fs::metadata::WriteOutcome;
 use qubit_fs::path::PathConstraints;
 use qubit_fs::path::PathSemantics;
 use qubit_fs::spi::FileSystemSpi;
@@ -39,6 +43,7 @@ use qubit_fs::spi::ProviderOperations;
 use qubit_fs::spi::ProviderProperties;
 #[cfg(feature = "async")]
 use qubit_fs::spi::SpiFuture;
+use qubit_fs::spi::SpiWriteFailure;
 use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
 use qubit_fs::write::WriteAbortOutcome;
@@ -91,8 +96,8 @@ fn properties() -> ProviderProperties {
             .with(ProviderOperation::OpenReader)
             .with(ProviderOperation::OpenWriter),
         FileSystemCapabilities::new()
-            .with_guaranteed(qubit_fs::metadata::FileSystemCapability::Read)
-            .with_guaranteed(qubit_fs::metadata::FileSystemCapability::Write),
+            .with_guaranteed(FileSystemCapability::Read)
+            .with_guaranteed(FileSystemCapability::Write),
         FileSystemLimits::unknown(),
         PathConstraints::absolute(),
         SymlinkPolicy::Reject,
@@ -202,16 +207,16 @@ impl Output for SyncWriter {
 }
 
 impl FileWriterSpi for SyncWriter {
-    fn commit(&mut self) -> Result<qubit_fs::metadata::WriteOutcome, qubit_fs::spi::SpiWriteFailure> {
+    fn commit(&mut self) -> Result<WriteOutcome, SpiWriteFailure> {
         let mut state = self.state.lock().expect("target lock");
         state.commits += 1;
         if matches!(self.mode, WriterMode::Staging) {
             let staged = std::mem::take(&mut state.staging);
             state.bytes.extend_from_slice(&staged);
         }
-        Ok(qubit_fs::metadata::WriteOutcome::new(
-            qubit_fs::metadata::AchievedAtomicity::NonAtomic,
-            qubit_fs::metadata::PublicationMethod::StreamCopy,
+        Ok(WriteOutcome::new(
+            AchievedAtomicity::NonAtomic,
+            PublicationMethod::StreamCopy,
         ))
     }
 
@@ -335,10 +340,15 @@ mod asynchronous {
 
     use qubit_fs::AsyncFileSystem;
     use qubit_fs::copy::AsyncCopyOperationState;
+    use qubit_fs::metadata::AchievedAtomicity;
+    use qubit_fs::metadata::PublicationMethod;
+    use qubit_fs::metadata::WriteOutcome;
     use qubit_fs::spi::AsyncFileSystemSpi;
     use qubit_fs::spi::AsyncFileWriteSession;
     use qubit_fs::spi::OpenedAsyncReader;
     use qubit_fs::spi::OpenedAsyncWriter;
+    use qubit_fs::write::AsyncWriterRecovery;
+    use qubit_fs::write::WriteFailure;
     use qubit_io::AsyncInput;
     use qubit_io::AsyncOutput;
 
@@ -468,9 +478,7 @@ mod asynchronous {
     }
 
     impl AsyncFileWriteSession for AsyncFixtureWriter {
-        fn commit_async<'a>(
-            self: Pin<&'a mut Self>,
-        ) -> SpiFuture<'a, Result<qubit_fs::metadata::WriteOutcome, qubit_fs::write::WriteFailure>> {
+        fn commit_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
             let this = self.get_mut();
             let mut state = this.state.lock().expect("target lock");
             state.commits += 1;
@@ -479,9 +487,9 @@ mod asynchronous {
                 state.bytes.extend_from_slice(&staged);
             }
             Box::pin(async {
-                Ok(qubit_fs::metadata::WriteOutcome::new(
-                    qubit_fs::metadata::AchievedAtomicity::NonAtomic,
-                    qubit_fs::metadata::PublicationMethod::StreamCopy,
+                Ok(WriteOutcome::new(
+                    AchievedAtomicity::NonAtomic,
+                    PublicationMethod::StreamCopy,
                 ))
             })
         }
@@ -558,7 +566,7 @@ mod asynchronous {
         );
         assert!(operation.has_recovery());
         match operation.take_recovery().expect("recovery writer retained") {
-            qubit_fs::write::AsyncWriterRecovery::Opened(mut writer) => {
+            AsyncWriterRecovery::Opened(mut writer) => {
                 assert_eq!(WriterState::Open, writer.state());
                 let abort_outcome = ready(writer.abort_async()).expect("explicit async abort should complete");
                 assert_eq!(
@@ -569,7 +577,7 @@ mod asynchronous {
                     abort_outcome
                 );
             }
-            qubit_fs::write::AsyncWriterRecovery::Rejected(_) => {
+            AsyncWriterRecovery::Rejected(_) => {
                 panic!("validated writer expected")
             }
         }

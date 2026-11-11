@@ -28,6 +28,7 @@ use qubit_fs::copy::CopyOptions;
 use qubit_fs::copy::CopyStats;
 use qubit_fs::copy::MetadataPreservePolicy;
 use qubit_fs::copy::ServerSidePreference;
+use qubit_fs::error::FsEffectState;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::metadata::AchievedAtomicity;
 use qubit_fs::metadata::AtomicityRequirement;
@@ -52,6 +53,7 @@ use qubit_fs::spi::OpenReaderRequest;
 use qubit_fs::spi::OpenWriterRequest;
 use qubit_fs::spi::OpenedAsyncReader;
 use qubit_fs::spi::OpenedAsyncWriter;
+use qubit_fs::spi::ProviderOperation;
 use qubit_fs::spi::ProviderOperations;
 use qubit_fs::spi::ProviderProperties;
 use qubit_fs::spi::SpiFuture;
@@ -59,6 +61,7 @@ use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
 use qubit_fs::write::AsyncWriterRecovery;
 use qubit_fs::write::WriteAbortOutcome;
+use qubit_fs::write::WriteFailure;
 use qubit_fs::write::WriteFailureState;
 use qubit_fs::write::WriterState;
 use qubit_io::AsyncInput;
@@ -173,9 +176,9 @@ impl AsyncFileSystemSpi for VersionProbe {
                 PathSemantics::Hierarchical,
             ),
             ProviderOperations::new()
-                .with(qubit_fs::spi::ProviderOperation::Stat)
-                .with(qubit_fs::spi::ProviderOperation::OpenReader)
-                .with(qubit_fs::spi::ProviderOperation::OpenWriter),
+                .with(ProviderOperation::Stat)
+                .with(ProviderOperation::OpenReader)
+                .with(ProviderOperation::OpenWriter),
             FileSystemCapabilities::new()
                 .with_guaranteed(FileSystemCapability::Read)
                 .with_guaranteed(FileSystemCapability::Write),
@@ -243,7 +246,7 @@ impl AsyncOutput for VersionedWriter {
 }
 
 impl AsyncFileWriteSession for VersionedWriter {
-    fn commit_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<WriteOutcome, qubit_fs::write::WriteFailure>> {
+    fn commit_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
         Box::pin(async {
             Ok(
                 WriteOutcome::new(AchievedAtomicity::NonAtomic, PublicationMethod::Direct)
@@ -271,7 +274,7 @@ fn test_async_stream_fallback_skip_has_no_target_version() {
     let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
         decline_copy: true,
         writer_open_error: Some(FsErrorKind::AlreadyExists),
-        writer_open_effect: Some(qubit_fs::error::FsEffectState::Unchanged),
+        writer_open_effect: Some(FsEffectState::Unchanged),
         ..AsyncRecordingConfig::default()
     });
     let mut operation = file_system
@@ -364,10 +367,7 @@ fn test_async_copy_repeated_completed_snapshot_uses_validated_statistics() {
 #[test]
 fn test_async_stream_fallback_counts_file_and_object_sources() {
     let bytes = (0..20_000).map(|index| (index % 251) as u8).collect::<Vec<_>>();
-    for (kind, expected_files, expected_objects) in [
-        (qubit_fs::metadata::FileKind::File, 1, 0),
-        (qubit_fs::metadata::FileKind::Object, 0, 1),
-    ] {
+    for (kind, expected_files, expected_objects) in [(FileKind::File, 1, 0), (FileKind::Object, 0, 1)] {
         let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig {
             decline_copy: true,
             stat_kind: Some(kind),

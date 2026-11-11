@@ -16,7 +16,7 @@ macro_rules! path_request {
         /// # Examples
         ///
         /// ```
-        #[doc = concat!("use qubit_fs::spi::", stringify!($name), ";")]
+        #[doc = concat!("use ", stringify!(qubit_fs), "::spi::", stringify!($name), ";")]
         ///
         #[doc = concat!("fn inspect_request(request: &", stringify!($name), "<'_>) {")]
         ///     let path = request.path();

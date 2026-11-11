@@ -22,6 +22,7 @@ use qubit_fs::copy::CopyOptions;
 use qubit_fs::copy::CopyOutcome;
 use qubit_fs::copy::CopyStats;
 use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
 use qubit_fs::metadata::AchievedAtomicity;
 use qubit_fs::metadata::AtomicityRequirement;
 use qubit_fs::metadata::FileSystemCapabilities;
@@ -38,6 +39,7 @@ use qubit_fs::spi::FileSystemSpi;
 use qubit_fs::spi::ProviderOperation;
 use qubit_fs::spi::ProviderOperations;
 use qubit_fs::spi::ProviderProperties;
+use qubit_fs::spi::SpiCopyFailure;
 use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
 
@@ -86,13 +88,13 @@ impl FileSystemSpi for CopyStatsSpi {
     fn stat(&self, request: StatRequest<'_>) -> FsResult<StatResponse> {
         Err(FsError::new(
             FsErrorKind::UnsupportedOperation,
-            qubit_fs::error::FsOperation::Stat,
+            FsOperation::Stat,
             "copy test provider does not implement stat",
         )
         .with_path(request.path().clone()))
     }
 
-    fn try_copy(&self, _: CopyRequest<'_>) -> Result<CopyAttempt, qubit_fs::spi::SpiCopyFailure> {
+    fn try_copy(&self, _: CopyRequest<'_>) -> Result<CopyAttempt, SpiCopyFailure> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(CopyAttempt::Completed(CopyOutcome::new(
             self.stats,
@@ -489,9 +491,11 @@ mod asynchronous {
     use super::CopyStatsSpi;
     use super::FsError;
     use super::FsErrorKind;
+    use super::FsOperation;
     use super::FsResult;
     use super::Ordering;
     use super::ProviderProperties;
+    use super::SpiCopyFailure;
     use super::StatRequest;
     use super::StatResponse;
     use super::path;
@@ -505,17 +509,14 @@ mod asynchronous {
             Box::pin(async move {
                 Err(FsError::new(
                     FsErrorKind::UnsupportedOperation,
-                    qubit_fs::error::FsOperation::Stat,
+                    FsOperation::Stat,
                     "copy test provider does not implement stat",
                 )
                 .with_path(request.path().clone()))
             })
         }
 
-        fn try_copy<'a>(
-            &'a self,
-            _: CopyRequest<'a>,
-        ) -> SpiFuture<'a, Result<CopyAttempt, qubit_fs::spi::SpiCopyFailure>> {
+        fn try_copy<'a>(&'a self, _: CopyRequest<'a>) -> SpiFuture<'a, Result<CopyAttempt, SpiCopyFailure>> {
             Box::pin(async move {
                 self.calls.fetch_add(1, Ordering::SeqCst);
                 Ok(CopyAttempt::Completed(CopyOutcome::new(

@@ -10,4 +10,4 @@
 mod copy;
 mod directory;
 mod facade;
-mod spi;
+mod spi_tests;

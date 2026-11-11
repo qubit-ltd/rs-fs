@@ -29,6 +29,7 @@ use qubit_fs::directory::DirectoryStreamState;
 use qubit_fs::directory::ListOptions;
 use qubit_fs::directory::ListScope;
 use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
 use qubit_fs::metadata::DirEntry;
 use qubit_fs::metadata::FileKind;
 use qubit_fs::metadata::FileSystemCapabilities;
@@ -79,7 +80,7 @@ impl AsyncFileSystemSpi for PendingAfterConsumeProvider {
         Box::pin(async {
             Err(FsError::new(
                 FsErrorKind::UnsupportedOperation,
-                qubit_fs::error::FsOperation::Stat,
+                FsOperation::Stat,
                 "unexpected stat",
             ))
         })
@@ -127,7 +128,7 @@ impl AsyncDirectoryStreamSession for PendingAfterConsumeSession {
                     self.provider_error = false;
                     Poll::Ready(Err(FsError::new(
                         FsErrorKind::UnsupportedOperation,
-                        qubit_fs::error::FsOperation::List,
+                        FsOperation::List,
                         "scripted provider failure",
                     )))
                 } else {

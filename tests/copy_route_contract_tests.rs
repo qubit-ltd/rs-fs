@@ -22,11 +22,13 @@ use std::task::Poll;
 #[cfg(feature = "async")]
 use qubit_fs::AsyncFileSystem;
 use qubit_fs::FileSystem;
+use qubit_fs::FsError;
 use qubit_fs::FsResult;
 use qubit_fs::Path;
 #[cfg(feature = "async")]
 use qubit_fs::copy::AsyncCopyOperationState;
 use qubit_fs::copy::CopyConflictPolicy;
+use qubit_fs::copy::CopyExecutionRoute;
 use qubit_fs::copy::CopyFailureState;
 use qubit_fs::copy::CopyMethod;
 use qubit_fs::copy::CopyOptions;
@@ -34,6 +36,7 @@ use qubit_fs::copy::CopyOutcome;
 use qubit_fs::copy::CopyStats;
 use qubit_fs::copy::FallbackRejection;
 use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
 use qubit_fs::metadata::AchievedAtomicity;
 use qubit_fs::metadata::AtomicityRequirement;
 use qubit_fs::metadata::FileKind;
@@ -72,10 +75,13 @@ use qubit_fs::spi::ProviderProperties;
 use qubit_fs::spi::SpiCopyFailure;
 #[cfg(feature = "async")]
 use qubit_fs::spi::SpiFuture;
+use qubit_fs::spi::SpiWriteFailure;
 use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
 use qubit_fs::write::WriteAbortOutcome;
 use qubit_fs::write::WriteDisposition;
+#[cfg(feature = "async")]
+use qubit_fs::write::WriteFailure;
 use qubit_fs::write::WriteOptions;
 #[cfg(feature = "async")]
 use qubit_io::AsyncInput;
@@ -143,9 +149,9 @@ impl FileSystemSpi for RouteProbe {
 
     fn stat(&self, _: StatRequest<'_>) -> FsResult<StatResponse> {
         self.calls.lock().expect("calls lock").push("stat");
-        Err(qubit_fs::FsError::new(
+        Err(FsError::new(
             FsErrorKind::UnsupportedOperation,
-            qubit_fs::error::FsOperation::Stat,
+            FsOperation::Stat,
             "unexpected stat dispatch",
         ))
     }
@@ -163,12 +169,8 @@ impl FileSystemSpi for RouteProbe {
                 AchievedAtomicity::Atomic,
             ))),
             NativeReply::Failed => Err(SpiCopyFailure::new(
-                qubit_fs::FsError::new(
-                    FsErrorKind::Io,
-                    qubit_fs::error::FsOperation::Copy,
-                    "native source marker",
-                )
-                .with_path(request.source().clone()),
+                FsError::new(FsErrorKind::Io, FsOperation::Copy, "native source marker")
+                    .with_path(request.source().clone()),
                 CopyFailureState::Indeterminate,
                 CopyStats::default(),
             )),
@@ -342,9 +344,9 @@ impl AsyncFileSystemSpi for RouteProbe {
     fn stat<'a>(&'a self, _: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
         self.calls.lock().expect("calls lock").push("stat");
         Box::pin(async {
-            Err(qubit_fs::FsError::new(
+            Err(FsError::new(
                 FsErrorKind::UnsupportedOperation,
-                qubit_fs::error::FsOperation::Stat,
+                FsOperation::Stat,
                 "unexpected stat dispatch",
             ))
         })
@@ -363,12 +365,8 @@ impl AsyncFileSystemSpi for RouteProbe {
                 AchievedAtomicity::Atomic,
             ))),
             NativeReply::Failed => Err(SpiCopyFailure::new(
-                qubit_fs::FsError::new(
-                    FsErrorKind::Io,
-                    qubit_fs::error::FsOperation::Copy,
-                    "native source marker",
-                )
-                .with_path(request.source().clone()),
+                FsError::new(FsErrorKind::Io, FsOperation::Copy, "native source marker")
+                    .with_path(request.source().clone()),
                 CopyFailureState::Indeterminate,
                 CopyStats::default(),
             )),
@@ -628,7 +626,7 @@ impl Output for AtomicRouteWriter {
 }
 
 impl FileWriterSpi for AtomicRouteWriter {
-    fn commit(&mut self) -> Result<WriteOutcome, qubit_fs::spi::SpiWriteFailure> {
+    fn commit(&mut self) -> Result<WriteOutcome, SpiWriteFailure> {
         self.calls.lock().expect("calls lock").push("commit");
         Ok(WriteOutcome::new(self.commit_atomicity, PublicationMethod::StreamCopy))
     }
@@ -666,10 +664,7 @@ fn test_sync_atomic_required_copy_can_use_stream_fallback() {
     let assessment = filesystem
         .assess_copy(&path("/source"), &path("/target"), &options)
         .expect("atomic file copy should pass preflight");
-    assert_eq!(
-        qubit_fs::copy::CopyExecutionRoute::ProviderThenStream,
-        assessment.route()
-    );
+    assert_eq!(CopyExecutionRoute::ProviderThenStream, assessment.route());
     assert_eq!(None, assessment.fallback_rejection());
     let outcome = filesystem
         .copy(&path("/source"), &path("/target"), options)
@@ -739,7 +734,7 @@ fn test_sync_atomic_skip_has_no_stream_fallback() {
     let assessment = filesystem
         .assess_copy(&path("/source"), &path("/target"), &options)
         .expect("native route can be assessed");
-    assert_eq!(qubit_fs::copy::CopyExecutionRoute::ProviderOnly, assessment.route());
+    assert_eq!(CopyExecutionRoute::ProviderOnly, assessment.route());
     assert_eq!(Some(FallbackRejection::AtomicSkip), assessment.fallback_rejection());
     let failure = filesystem
         .copy(&path("/source"), &path("/target"), options)
@@ -941,16 +936,14 @@ impl AsyncOutput for AsyncAtomicRouteWriter {
 
 #[cfg(feature = "async")]
 impl AsyncFileWriteSession for AsyncAtomicRouteWriter {
-    fn commit_async<'a>(
-        self: Pin<&'a mut Self>,
-    ) -> qubit_fs::spi::SpiFuture<'a, Result<WriteOutcome, qubit_fs::write::WriteFailure>> {
+    fn commit_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
         let this = self.get_mut();
         this.calls.lock().expect("calls lock").push("commit");
         let atomicity = this.commit_atomicity;
         Box::pin(async move { Ok(WriteOutcome::new(atomicity, PublicationMethod::StreamCopy)) })
     }
 
-    fn abort_async<'a>(self: Pin<&'a mut Self>) -> qubit_fs::spi::SpiFuture<'a, FsResult<WriteAbortOutcome>> {
+    fn abort_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<WriteAbortOutcome>> {
         self.get_mut().calls.lock().expect("calls lock").push("abort");
         Box::pin(async { Ok(WriteAbortOutcome::NotPublished) })
     }
@@ -999,10 +992,7 @@ fn test_async_atomic_required_copy_can_use_stream_fallback() {
     let assessment = filesystem
         .assess_copy(&path("/source"), &path("/target"), &options)
         .expect("atomic file copy should pass preflight");
-    assert_eq!(
-        qubit_fs::copy::CopyExecutionRoute::ProviderThenStream,
-        assessment.route()
-    );
+    assert_eq!(CopyExecutionRoute::ProviderThenStream, assessment.route());
     assert_eq!(None, assessment.fallback_rejection());
     let mut operation = filesystem
         .begin_copy(path("/source"), path("/target"), options)
@@ -1076,7 +1066,7 @@ fn test_async_atomic_skip_has_no_stream_fallback() {
     let assessment = filesystem
         .assess_copy(&path("/source"), &path("/target"), &options)
         .expect("native route can be assessed");
-    assert_eq!(qubit_fs::copy::CopyExecutionRoute::ProviderOnly, assessment.route());
+    assert_eq!(CopyExecutionRoute::ProviderOnly, assessment.route());
     assert_eq!(Some(FallbackRejection::AtomicSkip), assessment.fallback_rejection());
     let mut operation = filesystem
         .begin_copy(path("/source"), path("/target"), options)

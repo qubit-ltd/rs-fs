@@ -20,6 +20,7 @@ use qubit_fs::Path;
 use qubit_fs::error::FsEffectState;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::error::FsOperation;
+use qubit_fs::metadata::AchievedAtomicity;
 use qubit_fs::metadata::FileKind;
 use qubit_fs::metadata::FileMetadata;
 use qubit_fs::metadata::FileSystemCapabilities;
@@ -28,6 +29,7 @@ use qubit_fs::metadata::FileSystemId;
 use qubit_fs::metadata::FileSystemInfo;
 use qubit_fs::metadata::FileSystemLimits;
 use qubit_fs::metadata::OpenedFileInfo;
+use qubit_fs::metadata::PublicationMethod;
 use qubit_fs::metadata::SymlinkPolicy;
 use qubit_fs::metadata::WriteOutcome;
 use qubit_fs::path::PathConstraints;
@@ -43,7 +45,12 @@ use qubit_fs::spi::SpiWriteFailure;
 use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
 use qubit_fs::write::WriteAbortOutcome;
+#[cfg(feature = "async")]
+use qubit_fs::write::WriteFailure;
+#[cfg(feature = "async")]
+use qubit_fs::write::WriteFailureState;
 use qubit_fs::write::WriteOptions;
+use qubit_fs::write::WriterRecovery;
 use qubit_fs::write::WriterState;
 use qubit_io::Output;
 
@@ -130,8 +137,8 @@ impl FileWriterSpi for SyncWriter {
     fn commit(&mut self) -> Result<WriteOutcome, SpiWriteFailure> {
         self.0.commits.fetch_add(1, Ordering::SeqCst);
         Ok(WriteOutcome::new(
-            qubit_fs::metadata::AchievedAtomicity::Atomic,
-            qubit_fs::metadata::PublicationMethod::AtomicRename,
+            AchievedAtomicity::Atomic,
+            PublicationMethod::AtomicRename,
         ))
     }
     fn abort(&mut self) -> FsResult<WriteAbortOutcome> {
@@ -201,8 +208,8 @@ fn test_sync_write_all_overcount_retains_recovery_and_prefix_count() {
     assert_eq!(2, failure.written_bytes());
     let recovery = failure.recovery().expect("writer recovery retained");
     let writer = match recovery {
-        qubit_fs::write::WriterRecovery::Opened(writer) => writer,
-        qubit_fs::write::WriterRecovery::Rejected(_) => panic!("writer was validated"),
+        WriterRecovery::Opened(writer) => writer,
+        WriterRecovery::Rejected(_) => panic!("writer was validated"),
     };
     assert_eq!(WriterState::Indeterminate, writer.state());
     assert_eq!(b"ab", probe.accepted.lock().unwrap().as_slice());
@@ -225,6 +232,7 @@ mod asynchronous {
     use qubit_fs::write::AsyncWriterRecovery;
     use qubit_io::AsyncOutput;
 
+    use super::AchievedAtomicity;
     use super::Arc;
     use super::FileKind;
     use super::FileMetadata;
@@ -242,9 +250,12 @@ mod asynchronous {
     use super::Path;
     use super::Probe;
     use super::ProviderProperties;
+    use super::PublicationMethod;
     use super::StatRequest;
     use super::StatResponse;
     use super::WriteAbortOutcome;
+    use super::WriteFailure;
+    use super::WriteFailureState;
     use super::WriteOptions;
     use super::WriteOutcome;
     use super::WriterState;
@@ -307,30 +318,27 @@ mod asynchronous {
         }
     }
     impl AsyncFileWriteSession for AsyncWriter {
-        fn commit_async<'a>(
-            self: Pin<&'a mut Self>,
-        ) -> SpiFuture<'a, Result<WriteOutcome, qubit_fs::write::WriteFailure>> {
+        fn commit_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
             let probe = Arc::clone(&self.get_mut().0);
             let attempt = probe.commits.fetch_add(1, Ordering::SeqCst);
             let failure = probe.async_commit_failure.load(Ordering::SeqCst);
             Box::pin(async move {
                 if failure != 0 && attempt == 0 {
                     let state = match failure {
-                        1 => qubit_fs::write::WriteFailureState::RetryableNotPublished,
-                        2 => qubit_fs::write::WriteFailureState::NotPublished,
-                        3 => qubit_fs::write::WriteFailureState::Published,
-                        _ => qubit_fs::write::WriteFailureState::Indeterminate,
+                        1 => WriteFailureState::RetryableNotPublished,
+                        2 => WriteFailureState::NotPublished,
+                        3 => WriteFailureState::Published,
+                        _ => WriteFailureState::Indeterminate,
                     };
-                    return Err(qubit_fs::write::WriteFailure::new(
+                    return Err(WriteFailure::new(
                         FsError::new(FsErrorKind::Io, FsOperation::CommitWriter, "commit probe"),
                         state,
                     ));
                 }
-                Ok(WriteOutcome::new(
-                    qubit_fs::metadata::AchievedAtomicity::Atomic,
-                    qubit_fs::metadata::PublicationMethod::AtomicRename,
+                Ok(
+                    WriteOutcome::new(AchievedAtomicity::Atomic, PublicationMethod::AtomicRename)
+                        .with_bytes_written(probe.async_expected_bytes.load(Ordering::SeqCst) as u64),
                 )
-                .with_bytes_written(probe.async_expected_bytes.load(Ordering::SeqCst) as u64))
             })
         }
         fn abort_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<WriteAbortOutcome>> {
