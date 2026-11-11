@@ -7,11 +7,6 @@
 // =============================================================================
 //! Owning asynchronous copy operation with cancellation-safe state tracking.
 
-use qubit_io::AsyncInput;
-use qubit_io::AsyncOutput;
-
-use super::fallback_failure_stats;
-use super::from_writer_state;
 use super::internal::CopyCancellationGuard;
 use super::internal::CopyDeadline;
 use super::internal::CopyRecoverySnapshot;
@@ -441,259 +436,23 @@ fn stream_copy_fallback<'a>(
                 return Err(filesystem.contextual_copy_failure(error, state, CopyStats::default(), source, target));
             }
         }
-        if deadline.expired() {
-            let writer = writer_slot
-                .as_ref()
-                .and_then(AsyncWriterRecovery::opened)
-                .expect("writer is retained before transfer");
-            return Err(filesystem.contextual_copy_failure(
-                budget_error(source, target, "copy deadline was exceeded"),
-                from_writer_state(writer.state()),
-                fallback_failure_stats(writer.written_bytes()),
-                source,
-                target,
-            ));
-        }
-        let mut bytes = 0_u64;
-        let mut buffer = [0_u8; 8192];
-        let mut writes_since_yield = 0_usize;
-        loop {
-            if deadline.expired() {
-                let writer = writer_slot
-                    .as_ref()
-                    .and_then(AsyncWriterRecovery::opened)
-                    .expect("writer is retained before transfer");
-                return Err(filesystem.contextual_copy_failure(
-                    budget_error(source, target, "copy deadline was exceeded"),
-                    from_writer_state(writer.state()),
-                    fallback_failure_stats(writer.written_bytes()),
-                    source,
-                    target,
-                ));
-            }
-            let read = reader.read_async(&mut buffer).await.map_err(|error| {
-                filesystem.contextual_copy_failure(
-                    FsError::from_stream_io(error, FsOperation::Read, source),
-                    from_writer_state(
-                        writer_slot
-                            .as_ref()
-                            .and_then(AsyncWriterRecovery::opened)
-                            .expect("writer is retained before transfer")
-                            .state(),
-                    ),
-                    fallback_failure_stats(
-                        writer_slot
-                            .as_ref()
-                            .and_then(AsyncWriterRecovery::opened)
-                            .expect("writer is retained before transfer")
-                            .written_bytes(),
-                    ),
-                    source,
-                    target,
-                )
-            })?;
-            if deadline.expired() {
-                let writer = writer_slot
-                    .as_ref()
-                    .and_then(AsyncWriterRecovery::opened)
-                    .expect("writer is retained before transfer");
-                return Err(filesystem.contextual_copy_failure(
-                    budget_error(source, target, "copy deadline was exceeded"),
-                    from_writer_state(writer.state()),
-                    fallback_failure_stats(writer.written_bytes()),
-                    source,
-                    target,
-                ));
-            }
-            if read == 0 {
-                break;
-            }
-            let writer = writer_slot
-                .as_mut()
-                .and_then(AsyncWriterRecovery::opened_mut)
-                .expect("writer is retained before transfer");
-            let next_bytes = plan.next_bytes(bytes, read).map_err(|error| {
-                filesystem.contextual_copy_failure(
-                    error,
-                    from_writer_state(writer.state()),
-                    fallback_failure_stats(writer.written_bytes()),
-                    source,
-                    target,
-                )
-            })?;
-            let mut offset = 0;
-            while offset < read {
-                if deadline.expired() {
-                    return Err(filesystem.contextual_copy_failure(
-                        budget_error(source, target, "copy deadline was exceeded"),
-                        from_writer_state(writer.state()),
-                        fallback_failure_stats(writer.written_bytes()),
-                        source,
-                        target,
-                    ));
-                }
-                let written = match writer.write_async(&buffer[offset..read]).await {
-                    Ok(written) => written,
-                    Err(error) => {
-                        return Err(filesystem.contextual_copy_failure(
-                            FsError::from_stream_io(error, FsOperation::Write, target),
-                            from_writer_state(writer.state()),
-                            fallback_failure_stats(writer.written_bytes()),
-                            source,
-                            target,
-                        ));
-                    }
-                };
-                if written == 0 {
-                    return Err(filesystem.contextual_copy_failure(
-                        FsError::from_stream_io(
-                            std::io::Error::new(
-                                std::io::ErrorKind::WriteZero,
-                                "failed to write the complete copy buffer",
-                            ),
-                            FsOperation::Write,
-                            target,
-                        ),
-                        from_writer_state(writer.state()),
-                        fallback_failure_stats(writer.written_bytes()),
-                        source,
-                        target,
-                    ));
-                }
-                offset += written;
-                if deadline.expired() {
-                    return Err(filesystem.contextual_copy_failure(
-                        budget_error(source, target, "copy deadline was exceeded"),
-                        from_writer_state(writer.state()),
-                        fallback_failure_stats(writer.written_bytes()),
-                        source,
-                        target,
-                    ));
-                }
-                writes_since_yield += 1;
-                if writes_since_yield == 64 {
-                    let mut yielded = false;
-                    std::future::poll_fn(|cx| {
-                        if yielded {
-                            std::task::Poll::Ready(())
-                        } else {
-                            yielded = true;
-                            cx.waker().wake_by_ref();
-                            std::task::Poll::Pending
-                        }
-                    })
-                    .await;
-                    writes_since_yield = 0;
-                }
-            }
-            bytes = next_bytes;
-        }
         let writer = writer_slot
             .as_mut()
             .and_then(AsyncWriterRecovery::opened_mut)
-            .expect("writer is retained before flush");
-        if deadline.expired() {
-            return Err(filesystem.contextual_copy_failure(
-                budget_error(source, target, "copy deadline was exceeded"),
-                from_writer_state(writer.state()),
-                fallback_failure_stats(writer.written_bytes()),
-                source,
-                target,
-            ));
-        }
-        writer.flush_async().await.map_err(|error| {
-            filesystem.contextual_copy_failure(
-                FsError::from_stream_io(error, FsOperation::Write, target),
-                from_writer_state(writer.state()),
-                fallback_failure_stats(writer.written_bytes()),
-                source,
-                target,
-            )
-        })?;
-        if deadline.expired() {
-            return Err(filesystem.contextual_copy_failure(
-                budget_error(source, target, "copy deadline was exceeded"),
-                from_writer_state(writer.state()),
-                fallback_failure_stats(writer.written_bytes()),
-                source,
-                target,
-            ));
-        }
-        let writer = writer_slot
-            .as_mut()
-            .and_then(AsyncWriterRecovery::opened_mut)
-            .expect("writer is retained before commit");
-        let write_outcome = match writer.commit_async().await {
-            Ok(outcome) => outcome,
-            Err(failure)
-                if failure.error().kind() == FsErrorKind::AlreadyExists
-                    && plan.may_skip_conflict(from_write_failure_state(failure.state())) =>
-            {
-                let error = failure.into_error();
-                if let Err(cleanup_error) = writer.abort_async().await {
-                    return Err(filesystem.contextual_copy_failure(
-                        cleanup_error,
-                        from_writer_state(writer.state()),
-                        fallback_failure_stats(writer.written_bytes()),
-                        source,
-                        target,
-                    ));
-                }
-                let state = from_writer_state(writer.state());
-                let _ = writer_slot.take();
-                let stats = CopyStats {
-                    skipped: 1,
-                    ..CopyStats::default()
-                };
-                if deadline.expired() {
-                    return Err(filesystem.contextual_copy_failure(
-                        budget_error(source, target, "copy deadline was exceeded"),
-                        state,
-                        stats,
-                        source,
-                        target,
-                    ));
-                }
-                if state != CopyFailureState::Unchanged {
-                    return Err(filesystem.contextual_copy_failure(error, state, stats, source, target));
-                }
-                return Ok(CopyOutcome::streamed_fallback(
-                    stats,
-                    crate::metadata::AchievedAtomicity::NonAtomic,
-                    false,
-                ));
-            }
-            Err(failure) => {
-                let (error, state) = failure.into_parts();
-                return Err(filesystem.contextual_copy_failure(
-                    error,
-                    from_write_failure_state(state),
-                    fallback_failure_stats(writer.written_bytes()),
-                    source,
-                    target,
-                ));
-            }
-        };
-        if deadline.expired() {
-            let _ = writer_slot.take();
-            return Err(filesystem.contextual_copy_failure(
-                budget_error(source, target, "copy deadline was exceeded"),
-                CopyFailureState::Published,
-                StreamCopyPlan::completed_stats(metadata.kind(), bytes),
-                source,
-                target,
-            ));
-        }
-        let _ = writer_slot.take();
-        let mut outcome = CopyOutcome::streamed_fallback(
-            StreamCopyPlan::completed_stats(metadata.kind(), bytes),
-            write_outcome.atomicity(),
-            write_outcome.durable(),
-        );
-        if let Some(version) = write_outcome.version() {
-            outcome = outcome.with_target_version(version.clone());
-        }
-        Ok(outcome)
+            .expect("writer is retained before transfer");
+        let bytes =
+            super::internal::transfer_stream(filesystem, source, target, &mut reader, writer, &plan, deadline).await?;
+        super::internal::finish_stream_copy(
+            filesystem,
+            source,
+            target,
+            writer_slot,
+            &plan,
+            deadline,
+            metadata.kind(),
+            bytes,
+        )
+        .await
     })
 }
 

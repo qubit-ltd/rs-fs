@@ -8,6 +8,8 @@
 //! Private implementation details for copy orchestration.
 
 #[cfg(feature = "async")]
+mod async_stream_copy;
+#[cfg(feature = "async")]
 mod copy_cancellation_guard;
 mod copy_deadline;
 mod copy_failure_parts;
@@ -17,6 +19,10 @@ mod fallback_failure_state;
 mod stream_copy_plan;
 mod stream_copy_policy;
 
+#[cfg(feature = "async")]
+pub(super) use async_stream_copy::finish_stream_copy;
+#[cfg(feature = "async")]
+pub(super) use async_stream_copy::transfer_stream;
 #[cfg(feature = "async")]
 pub(super) use copy_cancellation_guard::CopyCancellationGuard;
 pub(crate) use copy_deadline::CopyDeadline;

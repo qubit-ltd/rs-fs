@@ -31,7 +31,9 @@ use crate::error::FsOperation;
 use crate::error::FsResult;
 use crate::error::OpenFailureStage;
 use crate::metadata::AchievedAtomicity;
+use crate::metadata::FileKind;
 use crate::path::Path;
+use crate::read::FileReader;
 use crate::read::ReadOptions;
 use crate::spi::CopyAttempt;
 use crate::spi::CopyRequest;
@@ -264,46 +266,51 @@ impl<'a> CopyOperation<'a> {
             }
         };
         if let Some(error) = self.deadline_error() {
-            return Err(self.failure(
-                error,
-                from_writer_state(writer.state()),
-                fallback_failure_stats(writer.written_bytes()),
-                Some(writer),
-            ));
+            return Err(self.opened_writer_failure(error, writer));
         }
+        let bytes = match self.transfer_stream(&mut reader, &mut writer, &plan) {
+            Ok(bytes) => bytes,
+            Err(error) => return Err(self.opened_writer_failure(error, writer)),
+        };
+        self.finish_stream_copy(writer, &plan, metadata.kind(), bytes)
+    }
+
+    /// Copies source bytes into an already-open destination writer.
+    ///
+    /// # Parameters
+    /// - `reader`: Open source reader.
+    /// - `writer`: Open destination writer; ownership remains with the caller.
+    /// - `plan`: Validated plan used to account for the copied bytes.
+    ///
+    /// # Returns
+    /// The number of source bytes accepted by the writer.
+    ///
+    /// # Errors
+    /// Returns the first read, accounting, write, or deadline error. The caller
+    /// retains the writer and is responsible for recording its recovery state.
+    fn transfer_stream(
+        &self,
+        reader: &mut FileReader,
+        writer: &mut FileWriter,
+        plan: &StreamCopyPlan,
+    ) -> FsResult<u64> {
         let mut bytes = 0_u64;
         let mut buffer = [0_u8; 8192];
         loop {
             if let Some(error) = self.deadline_error() {
-                return Err(self.failure(
-                    error,
-                    from_writer_state(writer.state()),
-                    fallback_failure_stats(writer.written_bytes()),
-                    Some(writer),
-                ));
+                return Err(error);
             }
-            let read =
-                match crate::read::read_retry_interrupted(&mut reader, &mut buffer, || match self.deadline_error() {
-                    Some(error) => Err(error.into_io_error()),
-                    None => Ok(()),
-                }) {
-                    Ok(read) => read,
-                    Err(error) => {
-                        return Err(self.failure(
-                            self.io_error(self.source, FsOperation::Read, error),
-                            from_writer_state(writer.state()),
-                            fallback_failure_stats(writer.written_bytes()),
-                            Some(writer),
-                        ));
-                    }
-                };
+            let read = match crate::read::read_retry_interrupted(reader, &mut buffer, || match self.deadline_error() {
+                Some(error) => Err(error.into_io_error()),
+                None => Ok(()),
+            }) {
+                Ok(read) => read,
+                Err(error) => {
+                    return Err(self.io_error(self.source, FsOperation::Read, error));
+                }
+            };
             if let Some(error) = self.deadline_error() {
-                return Err(self.failure(
-                    error,
-                    from_writer_state(writer.state()),
-                    fallback_failure_stats(writer.written_bytes()),
-                    Some(writer),
-                ));
+                return Err(error);
             }
             if read == 0 {
                 break;
@@ -311,55 +318,49 @@ impl<'a> CopyOperation<'a> {
             let next_bytes = match plan.next_bytes(bytes, read) {
                 Ok(next_bytes) => next_bytes,
                 Err(error) => {
-                    return Err(self.failure(
-                        error,
-                        from_writer_state(writer.state()),
-                        fallback_failure_stats(writer.written_bytes()),
-                        Some(writer),
-                    ));
+                    return Err(error);
                 }
             };
-            if let Err(error) = self.write_chunk(&mut writer, &buffer[..read]) {
-                return Err(self.failure(
-                    error,
-                    from_writer_state(writer.state()),
-                    fallback_failure_stats(writer.written_bytes()),
-                    Some(writer),
-                ));
-            }
+            self.write_chunk(writer, &buffer[..read])?;
             if let Some(error) = self.deadline_error() {
-                return Err(self.failure(
-                    error,
-                    from_writer_state(writer.state()),
-                    fallback_failure_stats(writer.written_bytes()),
-                    Some(writer),
-                ));
+                return Err(error);
             }
             bytes = next_bytes;
         }
+        Ok(bytes)
+    }
+
+    /// Flushes and commits the streamed copy, preserving conflict cleanup and
+    /// publication accounting semantics.
+    ///
+    /// # Parameters
+    /// - `writer`: Open destination writer to flush and commit.
+    /// - `plan`: Validated plan used for conflict handling and statistics.
+    /// - `kind`: Source resource kind used in completed statistics.
+    /// - `bytes`: Number of source bytes accepted by the writer.
+    ///
+    /// # Returns
+    /// The completed or skipped copy outcome.
+    ///
+    /// # Errors
+    /// Returns a copy failure with the observed writer recovery state if
+    /// flushing, committing, aborting a conflict, or checking the deadline
+    /// fails. Provider commit failures retain their typed write state.
+    fn finish_stream_copy(
+        &self,
+        mut writer: FileWriter,
+        plan: &StreamCopyPlan,
+        kind: &FileKind,
+        bytes: u64,
+    ) -> Result<CopyOutcome, CopyFailure> {
         if let Some(error) = self.deadline_error() {
-            return Err(self.failure(
-                error,
-                from_writer_state(writer.state()),
-                fallback_failure_stats(writer.written_bytes()),
-                Some(writer),
-            ));
+            return Err(self.opened_writer_failure(error, writer));
         }
         if let Err(error) = Output::flush(&mut writer) {
-            return Err(self.failure(
-                self.io_error(self.target, FsOperation::Write, error),
-                from_writer_state(writer.state()),
-                fallback_failure_stats(writer.written_bytes()),
-                Some(writer),
-            ));
+            return Err(self.opened_writer_failure(self.io_error(self.target, FsOperation::Write, error), writer));
         }
         if let Some(error) = self.deadline_error() {
-            return Err(self.failure(
-                error,
-                from_writer_state(writer.state()),
-                fallback_failure_stats(writer.written_bytes()),
-                Some(writer),
-            ));
+            return Err(self.opened_writer_failure(error, writer));
         }
         let write_outcome = match writer.commit() {
             Ok(outcome) => outcome,
@@ -368,12 +369,7 @@ impl<'a> CopyOperation<'a> {
                 let state = from_write_failure_state(state);
                 if error.kind() == FsErrorKind::AlreadyExists && plan.may_skip_conflict(state) {
                     if let Err(cleanup_error) = writer.abort() {
-                        return Err(self.failure(
-                            cleanup_error,
-                            from_writer_state(writer.state()),
-                            fallback_failure_stats(writer.written_bytes()),
-                            Some(writer),
-                        ));
+                        return Err(self.opened_writer_failure(cleanup_error, writer));
                     }
                     let stats = CopyStats {
                         skipped: 1,
@@ -404,12 +400,12 @@ impl<'a> CopyOperation<'a> {
             return Err(self.failure(
                 error,
                 CopyFailureState::Published,
-                StreamCopyPlan::completed_stats(metadata.kind(), bytes),
+                StreamCopyPlan::completed_stats(kind, bytes),
                 None,
             ));
         }
         let mut outcome = CopyOutcome::streamed_fallback(
-            StreamCopyPlan::completed_stats(metadata.kind(), bytes),
+            StreamCopyPlan::completed_stats(kind, bytes),
             write_outcome.atomicity(),
             write_outcome.durable(),
         );
@@ -417,6 +413,25 @@ impl<'a> CopyOperation<'a> {
             outcome = outcome.with_target_version(version.clone());
         }
         Ok(outcome)
+    }
+
+    /// Captures the observed state and accepted bytes of an opened writer.
+    ///
+    /// The writer is moved into recovery after its state and byte count are
+    /// read, so ordinary fallback failures retain the same recovery ownership.
+    ///
+    /// # Parameters
+    /// - `error`: Primary read, write, or deadline error.
+    /// - `writer`: Open writer whose recovery state and accepted bytes are
+    ///   captured before ownership is transferred into the failure.
+    ///
+    /// # Returns
+    /// A copy failure containing the error, writer state, byte statistics, and
+    /// recovery writer.
+    fn opened_writer_failure(&self, error: FsError, writer: FileWriter) -> CopyFailure {
+        let state = from_writer_state(writer.state());
+        let stats = fallback_failure_stats(writer.written_bytes());
+        self.failure(error, state, stats, Some(writer))
     }
 
     /// Writes one source chunk while checking the operation deadline around
