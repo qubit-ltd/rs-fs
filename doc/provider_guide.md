@@ -398,7 +398,14 @@ as a synchronous call and has no future-drop cancellation boundary.
 
 Adapters should run the shared contract suite from `qubit-fs-testkit` and add
 backend-specific tests for limits, capabilities, path rules, and recovery.
-Run the fixture and all-features tests before publishing.
+Run the fixture and all-features tests before publishing. The default
+`run.assert_satisfied()` accepts optional cancellation probes recorded as
+`SkippedOptional` with a non-empty reason; `run.all_applicable_checks_verified()`
+requires evidence for every applicable contract check, including optional
+probes, and requires successful execution and cleanup. A release gate can
+require a particular probe with `run.assert_satisfied_with(&[check_id])`. See the
+[testkit quick start](https://github.com/qubit-ltd/rs-fs-testkit#quick-start)
+for the assertion boundary and setup.
 
 ## 10. Common contract violations
 

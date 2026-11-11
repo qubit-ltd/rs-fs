@@ -368,6 +368,11 @@ writer 和临时资源实现必须分别报告发布、清理和恢复失败。�
 
 适配器应运行 `qubit-fs-testkit` 的共享契约套件，并针对限制、capability、路径规则
 和恢复补充后端测试。发布前运行 fixture 和 all-features 测试。
+默认 `run.assert_satisfied()` 接受带非空原因的 `SkippedOptional` 取消探针；
+`run.all_applicable_checks_verified()` 要求每项适用契约检查（包括可选探针）都有证据，
+并要求执行与清理成功。发布门禁可用 `run.assert_satisfied_with(&[check_id])` 显式要求
+特定探针。关于断言边界与接入方式，参见
+[testkit 快速开始](https://github.com/qubit-ltd/rs-fs-testkit#quick-start)。
 
 ## 10. 常见契约违规
 

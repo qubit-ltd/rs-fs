@@ -349,9 +349,15 @@ success counts, empty payloads, cancellation stages, repeated execution and
 recovery ownership. Pending tests use controlled polling rather than sleeps.
 Testkit's async write catalog requires owning-operation, repeated-execute, and
 open/write/flush/commit cancellation evidence. Providers must acknowledge a
-stage through `WriteCancellationProbe`. Missing probes for advertised write
-capability remain `Unverified`; strict completeness fails. Sync catalogs exclude
-async requirements.
+stage through `WriteCancellationProbe`. When Write capability is unavailable,
+these checks are not applicable. When Write is advertised but a stage
+acknowledgement probe is missing, the check is `SkippedOptional` with a
+non-empty reason. The default `run.assert_satisfied()` accepts these optional
+skips; an executed probe failure still fails the run. A missing applicable
+probe keeps `run.all_applicable_checks_verified()` false. Use
+`run.assert_satisfied_with(&[check_id])` when a particular optional probe is a
+release requirement. These `run` methods include execution and cleanup results;
+report-only evidence checks do not. Sync catalogs exclude async requirements.
 
 Bilingual complete guide examples match an independent Cargo fixture exactly.
 The fixture exercises local success and retained async recovery; package checks

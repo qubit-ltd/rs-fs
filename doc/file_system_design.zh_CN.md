@@ -255,8 +255,12 @@ Provider 报告本次尝试的 publication，门面则保留整个生命周期�
 核心测试覆盖打开证据和 Skip 的同步／异步一致性、短写与失败、成功计数、空数据、取消阶段、
 重复执行和恢复所有权。Pending 测试使用可控 poll，不依赖 sleep。testkit 的异步写入目录
 要求 owning-operation、repeated-execute 和 open/write/flush/commit 取消证据。
-提供者必须通过 `WriteCancellationProbe` 确认阶段到达；声明写能力却缺失探针时保持
-`Unverified`，严格完整性检查失败。同步目录不登记异步要求。
+提供者必须通过 `WriteCancellationProbe` 确认阶段到达。Write 能力不可用时，这些检查
+不适用；声明 Write 能力但缺少阶段确认探针时，记录带非空原因的 `SkippedOptional`。
+默认 `run.assert_satisfied()` 接受这些可选跳过；已执行探针失败仍会令运行失败。缺少
+适用探针时，`run.all_applicable_checks_verified()` 为 false。若发布要求某个可选探针
+必须有证据，使用 `run.assert_satisfied_with(&[check_id])` 显式要求。这些 `run` 方法
+包含执行与清理结果；仅报告证据的检查不包含它们。同步目录不登记异步要求。
 
 双语指南中的完整示例与独立 Cargo fixture 精确匹配。fixture 验证本地成功流程和异步恢复
 所有权，源包检查验证文档相对链接。Rustdoc 构建与 Markdown 编译分别验收。默认／全 feature
