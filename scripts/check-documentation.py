@@ -41,7 +41,7 @@ RUST_FILE_HEADER = re.compile(
 
 def markdown_documents():
     """Return every Markdown document shipped by this crate."""
-    return sorted((ROOT / 'doc').glob('*.md')) + [ROOT / 'README.md', ROOT / 'README.zh_CN.md']
+    return sorted(path for path in (ROOT / 'doc').glob('*.md') if not path.name.startswith('design-')) + [ROOT / 'README.md', ROOT / 'README.zh_CN.md']
 
 
 def check_redact_dependency_description(root=ROOT):
@@ -191,7 +191,7 @@ def check_package_links():
     assert result.returncode == 0, result.stderr
     files = set(result.stdout.splitlines())
     assert not any('target' in Path(name).parts for name in files), 'package includes build output'
-    documents = [*DOCUMENTS, *[str(p.relative_to(ROOT)) for p in (ROOT / 'doc').glob('*.md')]]
+    documents = [str(path.relative_to(ROOT)) for path in markdown_documents()]
     for relative in set(documents):
         assert relative in files, f'{relative}: missing from package'
         content = (ROOT / relative).read_text()

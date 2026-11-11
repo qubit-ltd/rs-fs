@@ -13,6 +13,19 @@ checker = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(checker)
 
 
+class DocumentScopeTests(unittest.TestCase):
+    def test_design_drafts_are_not_release_documentation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'doc').mkdir()
+            for name in ('user_guide.md', 'design-0.4.0.zh_CN.md'):
+                (root / 'doc' / name).touch()
+            with mock.patch.object(checker, 'ROOT', root):
+                documents = checker.markdown_documents()
+            self.assertIn(root / 'doc/user_guide.md', documents)
+            self.assertNotIn(root / 'doc/design-0.4.0.zh_CN.md', documents)
+
+
 class RedactDependencyDescriptionTests(unittest.TestCase):
     def check_with(self, english, chinese, dependency, table=False):
         root = Path('/isolated/rs-fs')
