@@ -238,12 +238,6 @@ impl FacadeCore {
     ///
     /// # Parameters
     ///
-    /// - `capability`: Capability required before provider work can begin.
-    /// - `operation`: Filesystem operation used for validation or error
-    ///   context.
-    /// - `path`: Logical path of the resource involved in this operation.
-    ///
-    /// # Parameters
     /// - `source`: Requested source path.
     /// - `target`: Requested destination path.
     ///

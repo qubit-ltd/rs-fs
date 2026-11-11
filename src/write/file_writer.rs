@@ -85,8 +85,17 @@ impl FileWriter {
     /// Wraps an already-open provider write session.
     ///
     /// # Parameters
-    /// - `session`: Provider session accepting file bytes.
+    ///
     /// - `info`: File identity and optional open-time metadata snapshot.
+    /// - `session`: Provider session accepting file bytes.
+    /// - `atomicity`: Caller-required atomicity checked against publication
+    ///   outcomes.
+    /// - `durability`: Caller-required durability checked against publication
+    ///   outcomes.
+    /// - `provider`: Provider identifier attached to facade-generated errors.
+    /// - `max_write_bytes`: Inclusive limit on cumulative bytes accepted by
+    ///   this session. `None` imposes no finite byte limit here; `Some(0)`
+    ///   permits only zero-byte writes. This is not a process-memory limit.
     ///
     /// # Returns
     /// A concrete writer in [`WriterState::Open`].

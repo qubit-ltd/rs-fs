@@ -515,9 +515,9 @@ impl<'a> CopyOperation<'a> {
 
     /// Returns a caller-budget error when the elapsed-time limit expired.
     ///
-    /// # Parameters
-    ///
-    /// - `message`: Diagnostic message for the constructed filesystem error.
+    /// # Returns
+    /// `Some` with a budget error carrying copy context when the deadline has
+    /// expired, or `None` when the elapsed-time limit has not expired.
     fn deadline_error(&self) -> Option<FsError> {
         if self.deadline.expired() {
             return Some(self.budget_error("copy deadline was exceeded"));
