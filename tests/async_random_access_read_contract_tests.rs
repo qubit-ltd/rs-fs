@@ -66,6 +66,12 @@ enum MetadataMode {
     Missing,
     Directory,
     MissingLength,
+    Object,
+    EmptyObject,
+    ObjectMissingLength,
+    Prefix,
+    Symlink,
+    Other,
     WrongIdentity,
 }
 struct Provider {
@@ -79,6 +85,7 @@ struct Provider {
     limit: FileSystemLimit,
     context_path: bool,
     context_provider: bool,
+    object_key: bool,
 }
 struct Session {
     reads: Arc<AtomicUsize>,
@@ -168,6 +175,7 @@ impl Provider {
             limit: FileSystemLimit::Unknown,
             context_path: false,
             context_provider: false,
+            object_key: false,
         }
     }
     fn filesystem(&self) -> AsyncFileSystem {
@@ -181,6 +189,7 @@ impl Provider {
             pending_first: self.pending_first,
             context_path: self.context_path,
             context_provider: self.context_provider,
+            object_key: self.object_key,
             limit: self.limit,
         })
         .unwrap()
@@ -193,11 +202,23 @@ impl AsyncFileSystemSpi for Provider {
             ops = ops.with(ProviderOperation::OpenRandomAccessReader);
         }
         ProviderProperties::new(
-            FileSystemInfo::new(FileSystemId::new(ID).unwrap(), "fixture", PathSemantics::Hierarchical),
+            FileSystemInfo::new(
+                FileSystemId::new(ID).unwrap(),
+                "fixture",
+                if self.object_key {
+                    PathSemantics::ObjectKey
+                } else {
+                    PathSemantics::Hierarchical
+                },
+            ),
             ops,
             FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::Read),
             FileSystemLimits::unknown().with_max_read_range_bytes(self.limit),
-            PathConstraints::absolute(),
+            if self.object_key {
+                PathConstraints::relative()
+            } else {
+                PathConstraints::absolute()
+            },
             SymlinkPolicy::Reject,
         )
         .unwrap()
@@ -226,6 +247,18 @@ impl AsyncFileSystemSpi for Provider {
                     .with_metadata(FileMetadata::new(FileKind::Directory).with_len(Some(6))),
                 MetadataMode::MissingLength => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
                     .with_metadata(FileMetadata::new(FileKind::File)),
+                MetadataMode::Object => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
+                    .with_metadata(FileMetadata::new(FileKind::Object).with_len(Some(6))),
+                MetadataMode::EmptyObject => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
+                    .with_metadata(FileMetadata::new(FileKind::Object).with_len(Some(0))),
+                MetadataMode::ObjectMissingLength => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
+                    .with_metadata(FileMetadata::new(FileKind::Object)),
+                MetadataMode::Prefix => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
+                    .with_metadata(FileMetadata::new(FileKind::Prefix).with_len(Some(6))),
+                MetadataMode::Symlink => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
+                    .with_metadata(FileMetadata::new(FileKind::Symlink).with_len(Some(6))),
+                MetadataMode::Other => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
+                    .with_metadata(FileMetadata::new(FileKind::Other("other".into())).with_len(Some(6))),
                 MetadataMode::WrongIdentity => random_access_common::opened_info("wrong-id", &path, 6),
             };
             Ok(OpenedAsyncRandomAccessReader::new(
@@ -322,6 +355,10 @@ fn test_async_envelope_contract_errors_release_session() {
         MetadataMode::Missing,
         MetadataMode::Directory,
         MetadataMode::MissingLength,
+        MetadataMode::ObjectMissingLength,
+        MetadataMode::Prefix,
+        MetadataMode::Symlink,
+        MetadataMode::Other,
         MetadataMode::WrongIdentity,
     ] {
         let mut provider = Provider::new();
@@ -344,6 +381,48 @@ fn test_async_envelope_contract_errors_release_session() {
         assert_eq!(Some("fixture"), error.provider());
         assert_eq!(1, provider.drops.load(Ordering::SeqCst));
     }
+}
+
+#[test]
+fn test_async_object_key_random_access_uses_known_length_and_same_session() {
+    let mut provider = Provider::new();
+    provider.object_key = true;
+    provider.metadata = MetadataMode::Object;
+    let filesystem = provider.filesystem();
+    let path = Path::parse_with_semantics("bucket//raw/%2Fobject", PathSemantics::ObjectKey).unwrap();
+    let mut reader = ready(filesystem.open_random_access_reader(&path, ReadOptions::default())).unwrap();
+    assert_eq!(6, reader.len());
+    assert_eq!(&FileSystemId::new(ID).unwrap(), reader.info().filesystem_id());
+    assert_eq!(&path, reader.info().path());
+    assert_eq!(
+        Some(&FileKind::Object),
+        reader.info().metadata().map(FileMetadata::kind)
+    );
+
+    let mut first = [0; 2];
+    let mut second = [0; 2];
+    assert_eq!(2, ready(reader.read_at(0, &mut first)).unwrap());
+    assert_eq!(2, ready(reader.read_at(4, &mut second)).unwrap());
+    assert_eq!(*b"AA", first);
+    assert_eq!(*b"AA", second);
+    assert_eq!(1, provider.opens.load(Ordering::SeqCst));
+    assert_eq!(2, provider.reads.load(Ordering::SeqCst));
+    drop(reader);
+    assert_eq!(1, provider.drops.load(Ordering::SeqCst));
+}
+
+#[test]
+fn test_async_zero_length_object_returns_zero_without_provider_read() {
+    let mut provider = Provider::new();
+    provider.metadata = MetadataMode::EmptyObject;
+    let filesystem = provider.filesystem();
+    let path = Path::parse("/empty-object").unwrap();
+    let mut reader = ready(filesystem.open_random_access_reader(&path, ReadOptions::default())).unwrap();
+    assert_eq!(0, reader.len());
+    assert_eq!(0, ready(reader.read_at(0, &mut [0; 1])).unwrap());
+    assert_eq!(0, provider.reads.load(Ordering::SeqCst));
+    drop(reader);
+    assert_eq!(1, provider.drops.load(Ordering::SeqCst));
 }
 
 #[test]

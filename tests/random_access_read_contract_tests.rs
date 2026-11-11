@@ -56,6 +56,11 @@ enum MetadataMode {
     Missing,
     Directory,
     MissingLength,
+    Object,
+    ObjectMissingLength,
+    Prefix,
+    Symlink,
+    Other,
     WrongIdentity,
 }
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -78,6 +83,7 @@ struct Provider {
     drops: Arc<AtomicUsize>,
     context_path: bool,
     context_provider: bool,
+    object_key: bool,
 }
 struct Session {
     bytes: Arc<[u8]>,
@@ -156,6 +162,7 @@ impl Provider {
             drops: Arc::new(AtomicUsize::new(0)),
             context_path: false,
             context_provider: false,
+            object_key: false,
         }
     }
     fn filesystem(&self) -> FileSystem {
@@ -174,6 +181,7 @@ impl Provider {
             drops: self.drops.clone(),
             context_path: self.context_path,
             context_provider: self.context_provider,
+            object_key: self.object_key,
         }
     }
 }
@@ -184,11 +192,23 @@ impl FileSystemSpi for Provider {
             ops = ops.with(ProviderOperation::OpenRandomAccessReader);
         }
         ProviderProperties::new(
-            FileSystemInfo::new(FileSystemId::new(ID).unwrap(), "fixture", PathSemantics::Hierarchical),
+            FileSystemInfo::new(
+                FileSystemId::new(ID).unwrap(),
+                "fixture",
+                if self.object_key {
+                    PathSemantics::ObjectKey
+                } else {
+                    PathSemantics::Hierarchical
+                },
+            ),
             ops,
             FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::Read),
             FileSystemLimits::unknown().with_max_read_range_bytes(self.limit),
-            PathConstraints::absolute(),
+            if self.object_key {
+                PathConstraints::relative()
+            } else {
+                PathConstraints::absolute()
+            },
             SymlinkPolicy::Reject,
         )
         .unwrap()
@@ -217,6 +237,16 @@ impl FileSystemSpi for Provider {
                 .with_metadata(FileMetadata::new(FileKind::Directory).with_len(Some(bytes.len() as u64))),
             MetadataMode::MissingLength => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
                 .with_metadata(FileMetadata::new(FileKind::File)),
+            MetadataMode::Object => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
+                .with_metadata(FileMetadata::new(FileKind::Object).with_len(Some(bytes.len() as u64))),
+            MetadataMode::ObjectMissingLength => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
+                .with_metadata(FileMetadata::new(FileKind::Object)),
+            MetadataMode::Prefix => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
+                .with_metadata(FileMetadata::new(FileKind::Prefix).with_len(Some(bytes.len() as u64))),
+            MetadataMode::Symlink => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
+                .with_metadata(FileMetadata::new(FileKind::Symlink).with_len(Some(bytes.len() as u64))),
+            MetadataMode::Other => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
+                .with_metadata(FileMetadata::new(FileKind::Other("other".into())).with_len(Some(bytes.len() as u64))),
             MetadataMode::WrongIdentity => random_access_common::opened_info("wrong-fs", &path, bytes.len() as u64),
         };
         Ok(OpenedRandomAccessReader::new(
@@ -322,6 +352,10 @@ fn test_invalid_open_envelopes_drop_session_and_preserve_contract_context() {
         MetadataMode::Missing,
         MetadataMode::Directory,
         MetadataMode::MissingLength,
+        MetadataMode::ObjectMissingLength,
+        MetadataMode::Prefix,
+        MetadataMode::Symlink,
+        MetadataMode::Other,
         MetadataMode::WrongIdentity,
     ] {
         let mut provider = Provider::new();
@@ -341,6 +375,56 @@ fn test_invalid_open_envelopes_drop_session_and_preserve_contract_context() {
         assert_eq!(Some("fixture"), error.provider());
         assert_eq!(1, provider.drops.load(Ordering::SeqCst));
     }
+}
+
+#[test]
+fn test_object_key_random_access_uses_known_length_and_stays_on_opened_object() {
+    let mut provider = Provider::new();
+    provider.object_key = true;
+    provider.metadata = MetadataMode::Object;
+    *provider.current.write().unwrap() = Arc::from(&b"object-data"[..]);
+    let filesystem = provider.filesystem();
+    let path = Path::parse_with_semantics("bucket//raw/%2Fobject", PathSemantics::ObjectKey).unwrap();
+    let mut reader = filesystem
+        .open_random_access_reader(&path, ReadOptions::default())
+        .unwrap();
+    assert_eq!(11, reader.len());
+    assert_eq!(&FileSystemId::new(ID).unwrap(), reader.info().filesystem_id());
+    assert_eq!(&path, reader.info().path());
+    assert_eq!(
+        Some(&FileKind::Object),
+        reader.info().metadata().map(FileMetadata::kind)
+    );
+
+    *provider.current.write().unwrap() = Arc::from(&b"replacement"[..]);
+    let mut first = [0; 6];
+    let mut second = [0; 4];
+    assert_eq!(6, reader.read_at(0, &mut first).unwrap());
+    assert_eq!(4, reader.read_at(7, &mut second).unwrap());
+    assert_eq!(*b"object", first);
+    assert_eq!(*b"data", second);
+    assert_eq!(1, provider.random_opens.load(Ordering::SeqCst));
+    assert_eq!(0, provider.path_opens.load(Ordering::SeqCst));
+    drop(reader);
+    assert_eq!(1, provider.drops.load(Ordering::SeqCst));
+}
+
+#[test]
+fn test_zero_length_object_returns_zero_without_provider_read() {
+    let mut provider = Provider::new();
+    provider.metadata = MetadataMode::Object;
+    *provider.current.write().unwrap() = Arc::from(&b""[..]);
+    let path = Path::parse("/empty-object").unwrap();
+    let mut reader = provider
+        .filesystem()
+        .open_random_access_reader(&path, ReadOptions::default())
+        .unwrap();
+    assert_eq!(0, reader.len());
+    assert_eq!(0, reader.read_at(0, &mut [0; 1]).unwrap());
+    assert_eq!(0, provider.reads.load(Ordering::SeqCst));
+    assert_eq!(1, provider.random_opens.load(Ordering::SeqCst));
+    drop(reader);
+    assert_eq!(1, provider.drops.load(Ordering::SeqCst));
 }
 
 #[test]

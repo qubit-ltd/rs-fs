@@ -79,19 +79,19 @@ impl RandomAccessReadPolicy {
     /// Extracts the readable length from metadata returned with an opened
     /// random-access object.
     ///
-    /// Missing metadata, a non-file kind, or a missing length is a
-    /// `ProviderContractViolation`.
+    /// Missing metadata, a kind other than a regular file or object, or a
+    /// missing length is a `ProviderContractViolation`.
     ///
     /// # Parameters
     /// - `metadata`: Optional metadata returned with the opened object.
     ///
     /// # Returns
-    /// The opened file length, or a provider-contract error if metadata does
-    /// not identify a file with a length.
+    /// The opened file or object length, or a provider-contract error if
+    /// metadata does not identify one with a length.
     pub(crate) fn opened_len(metadata: Option<&FileMetadata>) -> FsResult<u64> {
         let metadata = metadata.ok_or_else(|| contract("provider omitted metadata for opened random-access object"))?;
-        if metadata.kind() != &FileKind::File {
-            return Err(contract("provider opened a non-file random-access object"));
+        if !matches!(metadata.kind(), FileKind::File | FileKind::Object) {
+            return Err(contract("provider opened neither a regular file nor an object"));
         }
         metadata
             .len()

@@ -602,6 +602,206 @@ let tail_count = reader.read_at(tail_offset, &mut tail)?;
 远端操作已停止；丢弃可能含有部分数据的缓冲区，再用同一个 reader 从新偏移读取。Provider
 不得在 future 结束后继续持有或修改该缓冲区。
 
+### 使用有界读取采样较大范围
+
+`read_at` 会对每次调用执行 provider 的 `max_read_range_bytes` 限制，不会自动拆分较大的请求。
+下面仅用于文档夹具的 helper 通过同一个已打开会话读取较大的样本。有限 Maximum 限制每个分段，
+不限制样本总长度。`Unknown` 表示未报告稳定上限，并不保证后端接受任意大的请求。成功读取到
+0 字节表示到达 EOF，函数返回已填充数量，因此结果可以短于输出缓冲区。
+
+发生错误时，之前的调用或失败调用可能已写入输出缓冲区，应丢弃整个样本。helper 不会自动重试、
+切换路径或重新打开资源。异步 future 完成或被丢弃前会借用输出缓冲区；取消后应丢弃部分样本。
+调用方若要重试，应继续使用同一个已打开 reader 会话。
+
+同步示例与异步示例使用相同的 `FileSystem`、`Path`、偏移和输出参数：
+
+<!-- example: random-access-sampling -->
+```rust
+//! Samples caller-owned storage from one opened random-access session.
+//!
+//! A finite provider range limit bounds each read request, not the sample's
+//! total size. Errors can follow partial writes, so callers must discard the
+//! output on error. This helper never retries or reopens the path.
+use qubit_fs::FileSystem;
+use qubit_fs::FsError;
+use qubit_fs::FsResult;
+use qubit_fs::Path;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
+use qubit_fs::metadata::FileSystemLimit;
+use qubit_fs::read::RandomAccessReader;
+use qubit_fs::read::ReadOptions;
+
+/// Reads a sample in provider-sized ranges, retaining one opened session.
+///
+/// A short positive read advances to the next offset. A zero read ends the
+/// sample and returns the number of bytes filled; it does not claim the output
+/// was filled. `Unknown` does not guarantee that a backend accepts an
+/// arbitrarily large request. On any error, discard `output` because it may
+/// contain bytes from earlier or partially completed reads.
+pub fn sample(filesystem: &FileSystem, path: &Path, offset: u64, output: &mut [u8]) -> FsResult<usize> {
+    let limit = filesystem.properties().limits().max_read_range_bytes();
+    let mut reader: RandomAccessReader = filesystem.open_random_access_reader(path, ReadOptions::default())?;
+    let mut position = offset;
+    let mut filled = 0;
+    if output.is_empty() || position >= reader.len() {
+        return Ok(0);
+    }
+    let output_len = u64::try_from(output.len()).map_err(|_| {
+        FsError::new(
+            FsErrorKind::InvalidOptions,
+            FsOperation::Read,
+            "sample length cannot be represented",
+        )
+        .with_path(path.clone())
+        .with_provider(filesystem.properties().info().provider_id())
+    })?;
+    position.checked_add(output_len).ok_or_else(|| {
+        FsError::new(FsErrorKind::InvalidOptions, FsOperation::Read, "sample range overflows")
+            .with_path(path.clone())
+            .with_provider(filesystem.properties().info().provider_id())
+    })?;
+    let segment_limit = match limit {
+        FileSystemLimit::Maximum(maximum) => usize::try_from(maximum).unwrap_or(usize::MAX),
+        FileSystemLimit::Unknown | FileSystemLimit::Unbounded | FileSystemLimit::NotApplicable => usize::MAX,
+    };
+    if segment_limit == 0 {
+        return Err(FsError::new(
+            FsErrorKind::ResourceLimitExceeded,
+            FsOperation::Read,
+            "random-access sample cannot progress with a zero range limit",
+        )
+        .with_path(path.clone())
+        .with_provider(filesystem.properties().info().provider_id()));
+    }
+    while filled < output.len() && position < reader.len() {
+        let request_len = (output.len() - filled).min(segment_limit);
+        let count = reader.read_at(position, &mut output[filled..filled + request_len])?;
+        if count == 0 {
+            break;
+        }
+        let count_u64 = u64::try_from(count).map_err(|_| {
+            FsError::new(
+                FsErrorKind::InvalidOptions,
+                FsOperation::Read,
+                "read count cannot be represented",
+            )
+            .with_path(path.clone())
+            .with_provider(filesystem.properties().info().provider_id())
+        })?;
+        position = position.checked_add(count_u64).ok_or_else(|| {
+            FsError::new(
+                FsErrorKind::InvalidOptions,
+                FsOperation::Read,
+                "sample offset overflows",
+            )
+            .with_path(path.clone())
+            .with_provider(filesystem.properties().info().provider_id())
+        })?;
+        filled += count;
+    }
+    Ok(filled)
+}
+```
+
+<!-- example: random-access-sampling-async -->
+```rust
+//! Samples caller-owned storage asynchronously from one opened session.
+//!
+//! A finite provider range limit bounds each read request, not the sample's
+//! total size. Errors or cancellation can follow partial writes, so discard
+//! the output and do not reopen the path.
+use qubit_fs::AsyncFileSystem;
+use qubit_fs::FsError;
+use qubit_fs::FsResult;
+use qubit_fs::Path;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
+use qubit_fs::metadata::FileSystemLimit;
+use qubit_fs::read::AsyncRandomAccessReader;
+use qubit_fs::read::ReadOptions;
+
+/// Reads a sample in provider-sized ranges, retaining one opened session.
+///
+/// A short positive read advances to the next offset. A zero read ends the
+/// sample and returns the number of bytes filled. `Unknown` does not guarantee
+/// that a backend accepts an arbitrarily large request. If this future is
+/// cancelled or returns an error, discard `output`; the buffer may contain
+/// partial data and this helper does not retry or reopen the path.
+pub async fn sample_async(
+    filesystem: &AsyncFileSystem,
+    path: &Path,
+    offset: u64,
+    output: &mut [u8],
+) -> FsResult<usize> {
+    let limit = filesystem.properties().limits().max_read_range_bytes();
+    let mut reader: AsyncRandomAccessReader = filesystem
+        .open_random_access_reader(path, ReadOptions::default())
+        .await?;
+    let mut position = offset;
+    let mut filled = 0;
+    if output.is_empty() || position >= reader.len() {
+        return Ok(0);
+    }
+    let output_len = u64::try_from(output.len()).map_err(|_| {
+        FsError::new(
+            FsErrorKind::InvalidOptions,
+            FsOperation::Read,
+            "sample length cannot be represented",
+        )
+        .with_path(path.clone())
+        .with_provider(filesystem.properties().info().provider_id())
+    })?;
+    position.checked_add(output_len).ok_or_else(|| {
+        FsError::new(FsErrorKind::InvalidOptions, FsOperation::Read, "sample range overflows")
+            .with_path(path.clone())
+            .with_provider(filesystem.properties().info().provider_id())
+    })?;
+    let segment_limit = match limit {
+        FileSystemLimit::Maximum(maximum) => usize::try_from(maximum).unwrap_or(usize::MAX),
+        FileSystemLimit::Unknown | FileSystemLimit::Unbounded | FileSystemLimit::NotApplicable => usize::MAX,
+    };
+    if segment_limit == 0 {
+        return Err(FsError::new(
+            FsErrorKind::ResourceLimitExceeded,
+            FsOperation::Read,
+            "random-access sample cannot progress with a zero range limit",
+        )
+        .with_path(path.clone())
+        .with_provider(filesystem.properties().info().provider_id()));
+    }
+    while filled < output.len() && position < reader.len() {
+        let request_len = (output.len() - filled).min(segment_limit);
+        let count = reader
+            .read_at(position, &mut output[filled..filled + request_len])
+            .await?;
+        if count == 0 {
+            break;
+        }
+        let count_u64 = u64::try_from(count).map_err(|_| {
+            FsError::new(
+                FsErrorKind::InvalidOptions,
+                FsOperation::Read,
+                "read count cannot be represented",
+            )
+            .with_path(path.clone())
+            .with_provider(filesystem.properties().info().provider_id())
+        })?;
+        position = position.checked_add(count_u64).ok_or_else(|| {
+            FsError::new(
+                FsErrorKind::InvalidOptions,
+                FsOperation::Read,
+                "sample offset overflows",
+            )
+            .with_path(path.clone())
+            .with_provider(filesystem.properties().info().provider_id())
+        })?;
+        filled += count;
+    }
+    Ok(filled)
+}
+```
+
 ### 列表 metadata 与流结束
 
 `ListOptions::with_include_metadata(true)` 要求每个返回条目都带 metadata。若某条目缺少

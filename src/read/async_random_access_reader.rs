@@ -25,6 +25,11 @@ use crate::spi::AsyncRandomAccessReadSession;
 ///
 /// # Examples
 ///
+/// This small example assumes each requested window fits the configured
+/// `max_read_range_bytes`; a larger single `read_at` request returns
+/// `ResourceLimitExceeded`. See the user guide for a fixture-backed helper
+/// that splits a larger sample across bounded reads.
+///
 /// ```rust
 /// use qubit_fs::{AsyncFileSystem, Path};
 /// use qubit_fs::read::ReadOptions;

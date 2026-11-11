@@ -533,9 +533,11 @@ An implementation opens once and returns `OpenedRandomAccessReader` with
 `OpenedFileInfo` observed from that same opened object. The returned session
 must remain bound to that object or immutable version for every offset; do not
 stat or reopen a bare path to obtain metadata or service `read_at`. The facade
-requires matching identity, file kind, and length. `len()` is cached as the
-session's readable upper bound, not a content snapshot or promise against
-in-place mutation.
+requires matching identity, metadata identifying a regular file or an object,
+and a known length (including zero). Directories, symlinks, prefixes, other
+resource kinds, and metadata without a length violate the provider contract.
+`len()` is cached as the session's readable upper bound, not a content
+snapshot or promise against in-place mutation.
 
 `read_at` may return a short count; only the prefix of the caller's buffer up
 to that count is valid. The facade returns zero without provider I/O for an

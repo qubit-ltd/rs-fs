@@ -143,7 +143,7 @@ bash scripts/check-documentation-examples.sh
 Python checker 会检查双语文档结构、示例文本和包内相对链接。Bash 脚本使用当前同级
 checkout 编译、测试并运行文档 fixture；它不检查 Markdown，也不选择固定依赖版本。
 fixture 需要 `rs-fs-local`（`qubit-fs-local` 0.11）、`rs-local-files`
-（`qubit-local-files` 0.5）和 `rs-redact`（`qubit-fs` 0.3）与 `rs-fs` 位于同一父目录：
+（`qubit-local-files` 0.5）和 `rs-redact`（`qubit-redact` 0.10 系列）与 `rs-fs` 位于同一父目录：
 
 ```text
 parent/

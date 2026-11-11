@@ -11,4 +11,6 @@
 pub mod async_recovery;
 pub mod provider_minimal;
 pub mod provider_minimal_async;
+pub mod random_access_sampling;
+pub mod random_access_sampling_async;
 pub mod sync_recovery;

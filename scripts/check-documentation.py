@@ -14,12 +14,14 @@ SOURCES = {
     'async-recovery': FIXTURE / 'async_recovery.rs',
     'provider-minimal': FIXTURE / 'provider_minimal.rs',
     'provider-minimal-async': FIXTURE / 'provider_minimal_async.rs',
+    'random-access-sampling': FIXTURE / 'random_access_sampling.rs',
+    'random-access-sampling-async': FIXTURE / 'random_access_sampling_async.rs',
 }
 DOCUMENTS = {
     'README.md': {'quick-start'},
     'README.zh_CN.md': {'quick-start'},
-    'doc/user_guide.md': {'quick-start', 'sync-recovery', 'async-recovery'},
-    'doc/user_guide.zh_CN.md': {'quick-start', 'sync-recovery', 'async-recovery'},
+    'doc/user_guide.md': {'quick-start', 'sync-recovery', 'async-recovery', 'random-access-sampling', 'random-access-sampling-async'},
+    'doc/user_guide.zh_CN.md': {'quick-start', 'sync-recovery', 'async-recovery', 'random-access-sampling', 'random-access-sampling-async'},
     'doc/provider_guide.md': {'provider-minimal', 'provider-minimal-async'},
     'doc/provider_guide.zh_CN.md': {'provider-minimal', 'provider-minimal-async'},
 }
@@ -40,8 +42,27 @@ def markdown_documents():
     return sorted((ROOT / 'doc').glob('*.md')) + [ROOT / 'README.md', ROOT / 'README.zh_CN.md']
 
 
+def check_redact_dependency_description(root=ROOT):
+    """Require both READMEs to name rs-redact's core dependency series."""
+    manifest = tomllib.loads((root / 'Cargo.toml').read_text(encoding='utf-8'))
+    requirement = manifest['dependencies']['qubit-redact']
+    if isinstance(requirement, dict):
+        requirement = requirement['version']
+    version = re.search(r'(?<![0-9])([0-9]+)\.([0-9]+)', requirement)
+    assert version, f'Cargo.toml: cannot derive qubit-redact version series from {requirement!r}'
+    series = f'{version.group(1)}\\.{version.group(2)}'
+    description = re.compile(r'rs-redact.{0,100}qubit-redact.{0,40}' + series + r'(?![0-9])', re.S)
+    for relative in ('README.md', 'README.zh_CN.md'):
+        content = (root / relative).read_text(encoding='utf-8')
+        assert description.search(content), (
+            f'{relative}: rs-redact must be described as the qubit-redact {version.group(1)}.'
+            f'{version.group(2)} series'
+        )
+
+
 def check_versions_and_structure():
     """Keep shipped docs on the manifest version and stable navigation shape."""
+    check_redact_dependency_description()
     manifest = tomllib.loads((ROOT / 'Cargo.toml').read_text())
     version = manifest['package']['version']
     major_minor = '.'.join(version.split('.')[:2])

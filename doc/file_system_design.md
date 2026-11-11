@@ -460,11 +460,14 @@ on `Read`; the default SPI method returns `UnsupportedOperation` without I/O.
 No global capability is added and support is not inferred from `RangeRead`.
 
 The provider returns one session with identity and metadata captured from that
-same opened object. The facade validates the envelope and caches its length as
-the readable upper bound. It is not a content snapshot: in-place mutation may
-be visible, truncation may cause short reads or EOF, and growth beyond the
-cached length is not exposed. Reads use caller buffers and independent offsets;
-the provider must not resolve the path again. Short reads are valid. An empty
+same opened object. Metadata must identify a regular file or an object and
+include a known length; zero is valid. Directories, symlinks, prefixes, other
+resource kinds, and missing lengths violate the provider contract. The facade
+validates the envelope and caches its length as the readable upper bound. It is
+not a content snapshot: in-place mutation may be visible, truncation may cause
+short reads or EOF, and growth beyond the cached length is not exposed. Reads
+use caller buffers and independent offsets; the provider must not resolve the
+path again. Short reads are valid. An empty
 buffer returns zero without observing EOF; a non-overflowing request at or
 beyond the open-time length also returns zero without provider I/O. For a
 non-empty in-range provider request, zero means that request observed EOF. An

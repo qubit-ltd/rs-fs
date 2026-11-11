@@ -165,7 +165,7 @@ and package-relative links. The Bash script compiles, tests, and runs the
 documentation fixture using the current sibling checkouts. It does not check
 Markdown or select fixed dependency revisions. The fixture uses
 `rs-fs-local` (`qubit-fs-local` 0.11), `rs-local-files` (`qubit-local-files`
-0.5), and `rs-redact` (`qubit-fs` 0.3) beside `rs-fs`:
+0.5), and `rs-redact` (`qubit-redact` 0.10 series) beside `rs-fs`:
 
 ```text
 parent/

@@ -39,14 +39,12 @@ fn test_properties(path_semantics: PathSemantics) -> FileSystemProperties {
     .expect("properties should validate")
 }
 
-/// Verifies nonsensical zero-valued provider limits are rejected at
-/// construction.
+/// Verifies zero path and list limits are rejected at construction.
 #[test]
 fn test_file_system_properties_rejects_invalid_limit_value() {
     let invalid_limits = [
         FileSystemLimits::unknown().with_max_path_text_bytes(FileSystemLimit::Maximum(0)),
         FileSystemLimits::unknown().with_max_component_text_bytes(FileSystemLimit::Maximum(0)),
-        FileSystemLimits::unknown().with_max_read_range_bytes(FileSystemLimit::Maximum(0)),
         FileSystemLimits::unknown().with_max_list_page_entries(FileSystemLimit::Maximum(0)),
     ];
 
@@ -67,6 +65,28 @@ fn test_file_system_properties_rejects_invalid_limit_value() {
             .is_err()
         );
     }
+}
+
+/// Verifies a zero read-range limit is valid and permits no provider read.
+#[test]
+fn test_file_system_properties_accepts_zero_read_range_limit() {
+    let info = FileSystemInfo::new(
+        FileSystemId::new("test-fs").expect("id should parse"),
+        "test-provider",
+        PathSemantics::Hierarchical,
+    );
+    let limits = FileSystemLimits::unknown().with_max_read_range_bytes(FileSystemLimit::Maximum(0));
+
+    assert!(
+        FileSystemProperties::new(
+            info,
+            FileSystemCapabilities::new(),
+            limits,
+            PathConstraints::either(),
+            SymlinkPolicy::Reject,
+        )
+        .is_ok()
+    );
 }
 
 /// Verifies a zero-byte write limit accepts a property snapshot.

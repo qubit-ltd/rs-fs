@@ -243,14 +243,13 @@ impl FileSystemProperties {
         if [
             self.limits.max_path_text_bytes(),
             self.limits.max_component_text_bytes(),
-            self.limits.max_read_range_bytes(),
             self.limits.max_list_page_entries(),
         ]
         .into_iter()
         .any(|limit| matches!(limit, crate::metadata::FileSystemLimit::Maximum(0)))
         {
             return Err(invalid_properties(
-                "finite path, component, range-read, and list-page limits must have a positive value",
+                "finite path, component, and list-page limits must have a positive value",
             ));
         }
         if self.info.path_semantics() != PathSemantics::Hierarchical
