@@ -5,6 +5,8 @@ import re
 import os
 import subprocess
 import tomllib
+import unicodedata
+from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / 'tests/fixtures/documentation_examples/src'
@@ -110,8 +112,80 @@ def check_examples():
             assert code + '\n' == source, f'{relative}: {name} differs from compiled fixture'
 
 
+def markdown_anchors(text: str) -> set[str]:
+    """Collect heading slugs and explicit HTML id/name anchors from Markdown."""
+    anchors = set()
+    automatic = set()
+    duplicate_counts = {}
+    lines = text.splitlines()
+    in_fence = False
+    fence_char = ''
+    fence_size = 0
+
+    def add_heading(value):
+        value = re.sub(r'<[^>]*>', '', value)
+        value = re.sub(r'!?\[([^]]*)\]\([^)]*\)', r'\1', value)
+        value = re.sub(r'!?\[([^]]*)\]\[[^]]*\]', r'\1', value)
+        value = re.sub(r'[`*_~]', '', value)
+        slug_chars = []
+        for char in value.lower().strip():
+            category = unicodedata.category(char)
+            if char.isspace():
+                slug_chars.append('-')
+            elif category[0] in ('L', 'N'):
+                slug_chars.append(char)
+        base = ''.join(slug_chars)
+        if not base:
+            return
+        suffix = duplicate_counts.get(base, 0)
+        slug = base if suffix == 0 else f'{base}-{suffix}'
+        while slug in automatic:
+            suffix += 1
+            slug = f'{base}-{suffix}'
+        duplicate_counts[base] = suffix + 1
+        automatic.add(slug)
+        anchors.add(slug)
+
+    previous = None
+    for line in lines:
+        fence = re.match(r'^ {0,3}(`{3,}|~{3,})', line)
+        if fence:
+            marker = fence.group(1)
+            if not in_fence:
+                in_fence = True
+                fence_char, fence_size = marker[0], len(marker)
+            elif marker[0] == fence_char and len(marker) >= fence_size and not line.strip().strip(marker[0]).strip():
+                in_fence = False
+            previous = None
+            continue
+        if in_fence:
+            continue
+
+        for match in re.finditer(r'\bid\s*=\s*(["\'])(.*?)\1|\bname\s*=\s*(["\'])(.*?)\3', line, re.I):
+            anchors.add(match.group(2) if match.group(2) is not None else match.group(4))
+
+        atx = re.match(r'^ {0,3}#{1,6}(?:[ \t]+|$)(.*?)[ \t]*#*[ \t]*$', line)
+        if atx:
+            add_heading(atx.group(1))
+            previous = None
+            continue
+        setext = re.match(r'^ {0,3}(=+|-+)[ \t]*$', line)
+        if setext and previous is not None and previous.strip():
+            add_heading(previous.strip())
+            previous = None
+            continue
+        previous = line
+    return anchors
+
+
+def check_markdown_fragment(text: str, fragment: str, location: str) -> None:
+    """Fail with link context when a Markdown fragment has no matching anchor."""
+    if fragment and fragment not in markdown_anchors(text):
+        raise AssertionError(f'{location}: missing Markdown fragment #{fragment}')
+
+
 def check_package_links():
-    """Require every local Markdown destination to exist in the source package."""
+    """Require local destinations and their Markdown fragments in the package."""
     manifest_root = Path(os.environ['QUBIT_FS_SIBLING_ROOT']) / 'rs-fs' if 'QUBIT_FS_SIBLING_ROOT' in os.environ else ROOT
     result = subprocess.run(['cargo', 'package', '--list', '--allow-dirty', '--locked', '--manifest-path', str(manifest_root / 'Cargo.toml')], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
@@ -122,13 +196,19 @@ def check_package_links():
         assert relative in files, f'{relative}: missing from package'
         content = (ROOT / relative).read_text()
         for destination in re.findall(r'\]\(([^)\s]+)\)', content):
-            if re.match(r'[a-zA-Z][a-zA-Z0-9+.-]*:', destination) or destination.startswith('#'):
+            if re.match(r'[a-zA-Z][a-zA-Z0-9+.-]*:', destination):
                 continue
-            target = destination.split('#', 1)[0]
+            target, separator, fragment = destination.partition('#')
+            fragment = unquote(fragment) if separator else ''
+            if not target:
+                target = relative
             resolved = (ROOT / relative).parent.joinpath(target).resolve()
             assert resolved.is_relative_to(ROOT), f'{relative}: link escapes package: {target}'
             package_path = str(resolved.relative_to(ROOT))
             assert package_path in files, f'{relative}: link not packaged: {target}'
+            if separator and fragment and resolved.suffix.lower() == '.md':
+                target_content = resolved.read_text(encoding='utf-8')
+                check_markdown_fragment(target_content, fragment, f'{relative}: {destination} -> {package_path}')
 
 
 if __name__ == '__main__':
