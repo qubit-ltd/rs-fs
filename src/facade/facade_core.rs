@@ -377,8 +377,8 @@ impl FacadeCore {
     ///
     /// # Parameters
     ///
-    /// - `error`: Filesystem error whose kind, source, and established facts
-    ///   are retained.
+    /// - `error`: Insufficient-budget error retained as the source of the new
+    ///   `ResourceLimitExceeded` filesystem error.
     /// - `operation`: Filesystem operation used for validation or error
     ///   context.
     /// - `path`: Logical path of the resource involved in this operation.

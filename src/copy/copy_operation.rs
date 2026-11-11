@@ -507,8 +507,8 @@ impl<'a> CopyOperation<'a> {
     /// - `path`: Logical path of the resource involved in this operation.
     /// - `operation`: Filesystem operation used for validation or error
     ///   context.
-    /// - `error`: Filesystem error whose kind, source, and established facts
-    ///   are retained.
+    /// - `error`: Stream I/O error converted through `FsError::from_stream_io`
+    ///   before attaching provider context.
     fn io_error(&self, path: &Path, operation: FsOperation, error: std::io::Error) -> FsError {
         FsError::from_stream_io(error, operation, path).with_provider(self.filesystem.properties().info().provider_id())
     }
