@@ -14,23 +14,29 @@
 use qubit_fs::FileSystem;
 use qubit_fs::FsError;
 use qubit_fs::FsResult;
-use qubit_fs::Path;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::error::FsOperation;
 use qubit_fs::metadata::FileSystemLimit;
 use qubit_fs::read::RandomAccessReader;
-use qubit_fs::read::ReadOptions;
 
 /// Reads a sample in provider-sized ranges, retaining one opened session.
+///
+/// `reader` must have been opened by `filesystem`, which supplies this sample's
+/// configured limits and provider context.
 ///
 /// A short positive read advances to the next offset. A zero read ends the
 /// sample and returns the number of bytes filled; it does not claim the output
 /// was filled. `Unknown` does not guarantee that a backend accepts an
 /// arbitrarily large request. On any error, discard `output` because it may
 /// contain bytes from earlier or partially completed reads.
-pub fn sample(filesystem: &FileSystem, path: &Path, offset: u64, output: &mut [u8]) -> FsResult<usize> {
+pub fn sample(
+    filesystem: &FileSystem,
+    reader: &mut RandomAccessReader,
+    offset: u64,
+    output: &mut [u8],
+) -> FsResult<usize> {
+    let path = reader.info().path().clone();
     let limit = filesystem.properties().limits().max_read_range_bytes();
-    let mut reader: RandomAccessReader = filesystem.open_random_access_reader(path, ReadOptions::default())?;
     let mut position = offset;
     let mut filled = 0;
     if output.is_empty() || position >= reader.len() {

@@ -14,14 +14,15 @@
 use qubit_fs::AsyncFileSystem;
 use qubit_fs::FsError;
 use qubit_fs::FsResult;
-use qubit_fs::Path;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::error::FsOperation;
 use qubit_fs::metadata::FileSystemLimit;
 use qubit_fs::read::AsyncRandomAccessReader;
-use qubit_fs::read::ReadOptions;
 
 /// Reads a sample in provider-sized ranges, retaining one opened session.
+///
+/// `reader` must have been opened by `filesystem`, which supplies this sample's
+/// configured limits and provider context.
 ///
 /// A short positive read advances to the next offset. A zero read ends the
 /// sample and returns the number of bytes filled. `Unknown` does not guarantee
@@ -30,14 +31,12 @@ use qubit_fs::read::ReadOptions;
 /// partial data and this helper does not retry or reopen the path.
 pub async fn sample_async(
     filesystem: &AsyncFileSystem,
-    path: &Path,
+    reader: &mut AsyncRandomAccessReader,
     offset: u64,
     output: &mut [u8],
 ) -> FsResult<usize> {
+    let path = reader.info().path().clone();
     let limit = filesystem.properties().limits().max_read_range_bytes();
-    let mut reader: AsyncRandomAccessReader = filesystem
-        .open_random_access_reader(path, ReadOptions::default())
-        .await?;
     let mut position = offset;
     let mut filled = 0;
     if output.is_empty() || position >= reader.len() {

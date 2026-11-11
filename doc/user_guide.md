@@ -737,19 +737,34 @@ must not keep or mutate the buffer after the future ends.
 
 `read_at` enforces the provider's `max_read_range_bytes` on each call; it does
 not split a large request automatically. The fixture-only helpers below read a
-larger sample through one opened session. A finite maximum limits each segment,
-not the total sample. `Unknown` means no stable limit was reported and does not
-guarantee that a backend accepts arbitrarily large requests. A successful zero
-read ends the sample at EOF and returns the count filled, which may be short.
+larger sample through a caller-owned reader. A finite maximum limits each
+segment, not the total sample. `Unknown` means no stable limit was reported and
+does not guarantee that a backend accepts arbitrarily large requests. A
+successful zero read ends the sample at EOF and returns the count filled, which
+may be short.
+
+Open the reader once, then pass it together with the filesystem that opened it.
+The filesystem supplies the configured limits and provider context, so the
+reader and filesystem must be a pair. For example:
+
+```rust
+let mut reader = filesystem.open_random_access_reader(&path, ReadOptions::default())?;
+let count = sample(&filesystem, &mut reader, offset, &mut output)?;
+```
 
 On an error, earlier calls or the failing call may have written into the output,
 so discard the whole sample. The helpers do not retry, switch paths, or reopen
-the resource. The async future borrows the output until it completes or is
-dropped; after cancellation discard the partial sample. A caller that retries
-should keep using the same opened reader session.
+the resource. The async future borrows both reader and output until it completes
+or is dropped. If an in-flight future is cancelled, let it drop before borrowing
+the reader again, discard its partial output, and use a fresh buffer for the next
+sample. Continue with the same reader session; do not combine bytes from the
+failed or cancelled sample with the next result. Keeping the session does not
+provide a content snapshot: in-place changes may be observed, truncation may
+cause a short read or EOF, and growth beyond the opened length is outside its
+readable range.
 
-The synchronous example uses the same `FileSystem`, `Path`, offset, and output
-arguments as the asynchronous example:
+The synchronous example uses the same `FileSystem`, reader session, offset, and
+output arguments as the asynchronous example:
 
 <!-- example: random-access-sampling -->
 ```rust
@@ -761,23 +776,29 @@ arguments as the asynchronous example:
 use qubit_fs::FileSystem;
 use qubit_fs::FsError;
 use qubit_fs::FsResult;
-use qubit_fs::Path;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::error::FsOperation;
 use qubit_fs::metadata::FileSystemLimit;
 use qubit_fs::read::RandomAccessReader;
-use qubit_fs::read::ReadOptions;
 
 /// Reads a sample in provider-sized ranges, retaining one opened session.
+///
+/// `reader` must have been opened by `filesystem`, which supplies this sample's
+/// configured limits and provider context.
 ///
 /// A short positive read advances to the next offset. A zero read ends the
 /// sample and returns the number of bytes filled; it does not claim the output
 /// was filled. `Unknown` does not guarantee that a backend accepts an
 /// arbitrarily large request. On any error, discard `output` because it may
 /// contain bytes from earlier or partially completed reads.
-pub fn sample(filesystem: &FileSystem, path: &Path, offset: u64, output: &mut [u8]) -> FsResult<usize> {
+pub fn sample(
+    filesystem: &FileSystem,
+    reader: &mut RandomAccessReader,
+    offset: u64,
+    output: &mut [u8],
+) -> FsResult<usize> {
+    let path = reader.info().path().clone();
     let limit = filesystem.properties().limits().max_read_range_bytes();
-    let mut reader: RandomAccessReader = filesystem.open_random_access_reader(path, ReadOptions::default())?;
     let mut position = offset;
     let mut filled = 0;
     if output.is_empty() || position >= reader.len() {
@@ -850,14 +871,15 @@ pub fn sample(filesystem: &FileSystem, path: &Path, offset: u64, output: &mut [u
 use qubit_fs::AsyncFileSystem;
 use qubit_fs::FsError;
 use qubit_fs::FsResult;
-use qubit_fs::Path;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::error::FsOperation;
 use qubit_fs::metadata::FileSystemLimit;
 use qubit_fs::read::AsyncRandomAccessReader;
-use qubit_fs::read::ReadOptions;
 
 /// Reads a sample in provider-sized ranges, retaining one opened session.
+///
+/// `reader` must have been opened by `filesystem`, which supplies this sample's
+/// configured limits and provider context.
 ///
 /// A short positive read advances to the next offset. A zero read ends the
 /// sample and returns the number of bytes filled. `Unknown` does not guarantee
@@ -866,14 +888,12 @@ use qubit_fs::read::ReadOptions;
 /// partial data and this helper does not retry or reopen the path.
 pub async fn sample_async(
     filesystem: &AsyncFileSystem,
-    path: &Path,
+    reader: &mut AsyncRandomAccessReader,
     offset: u64,
     output: &mut [u8],
 ) -> FsResult<usize> {
+    let path = reader.info().path().clone();
     let limit = filesystem.properties().limits().max_read_range_bytes();
-    let mut reader: AsyncRandomAccessReader = filesystem
-        .open_random_access_reader(path, ReadOptions::default())
-        .await?;
     let mut position = offset;
     let mut filled = 0;
     if output.is_empty() || position >= reader.len() {

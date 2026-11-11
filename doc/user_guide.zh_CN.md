@@ -605,15 +605,25 @@ let tail_count = reader.read_at(tail_offset, &mut tail)?;
 ### 使用有界读取采样较大范围
 
 `read_at` 会对每次调用执行 provider 的 `max_read_range_bytes` 限制，不会自动拆分较大的请求。
-下面仅用于文档夹具的 helper 通过同一个已打开会话读取较大的样本。有限 Maximum 限制每个分段，
+下面仅用于文档夹具的 helper 通过调用方持有的 reader 读取较大的样本。有限 Maximum 限制每个分段，
 不限制样本总长度。`Unknown` 表示未报告稳定上限，并不保证后端接受任意大的请求。成功读取到
 0 字节表示到达 EOF，函数返回已填充数量，因此结果可以短于输出缓冲区。
 
-发生错误时，之前的调用或失败调用可能已写入输出缓冲区，应丢弃整个样本。helper 不会自动重试、
-切换路径或重新打开资源。异步 future 完成或被丢弃前会借用输出缓冲区；取消后应丢弃部分样本。
-调用方若要重试，应继续使用同一个已打开 reader 会话。
+先打开一次 reader，再将它与打开它的 filesystem 一起传入 helper。filesystem 提供已配置的限制和
+provider 上下文，因此 reader 与 filesystem 必须配对。例如：
 
-同步示例与异步示例使用相同的 `FileSystem`、`Path`、偏移和输出参数：
+```rust
+let mut reader = filesystem.open_random_access_reader(&path, ReadOptions::default())?;
+let count = sample(&filesystem, &mut reader, offset, &mut output)?;
+```
+
+发生错误时，之前的调用或失败调用可能已写入输出缓冲区，应丢弃整个样本。helper 不会自动重试、
+切换路径或重新打开资源。异步 future 完成或被丢弃前会借用 reader 和输出缓冲区。若正在执行的
+future 被取消，应先让它 drop、丢弃其中的部分输出，再用同一个 reader 和新的缓冲区开始下一次采样。
+不要把失败或取消的样本拼入新结果。保留同一 session 不代表内容快照：原地修改可能被读到，文件缩短
+可能导致短读或 EOF，打开后增长的部分则不在可读范围内。
+
+同步示例与异步示例使用相同的 `FileSystem`、reader 会话、偏移和输出参数：
 
 <!-- example: random-access-sampling -->
 ```rust
@@ -625,23 +635,29 @@ let tail_count = reader.read_at(tail_offset, &mut tail)?;
 use qubit_fs::FileSystem;
 use qubit_fs::FsError;
 use qubit_fs::FsResult;
-use qubit_fs::Path;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::error::FsOperation;
 use qubit_fs::metadata::FileSystemLimit;
 use qubit_fs::read::RandomAccessReader;
-use qubit_fs::read::ReadOptions;
 
 /// Reads a sample in provider-sized ranges, retaining one opened session.
+///
+/// `reader` must have been opened by `filesystem`, which supplies this sample's
+/// configured limits and provider context.
 ///
 /// A short positive read advances to the next offset. A zero read ends the
 /// sample and returns the number of bytes filled; it does not claim the output
 /// was filled. `Unknown` does not guarantee that a backend accepts an
 /// arbitrarily large request. On any error, discard `output` because it may
 /// contain bytes from earlier or partially completed reads.
-pub fn sample(filesystem: &FileSystem, path: &Path, offset: u64, output: &mut [u8]) -> FsResult<usize> {
+pub fn sample(
+    filesystem: &FileSystem,
+    reader: &mut RandomAccessReader,
+    offset: u64,
+    output: &mut [u8],
+) -> FsResult<usize> {
+    let path = reader.info().path().clone();
     let limit = filesystem.properties().limits().max_read_range_bytes();
-    let mut reader: RandomAccessReader = filesystem.open_random_access_reader(path, ReadOptions::default())?;
     let mut position = offset;
     let mut filled = 0;
     if output.is_empty() || position >= reader.len() {
@@ -714,14 +730,15 @@ pub fn sample(filesystem: &FileSystem, path: &Path, offset: u64, output: &mut [u
 use qubit_fs::AsyncFileSystem;
 use qubit_fs::FsError;
 use qubit_fs::FsResult;
-use qubit_fs::Path;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::error::FsOperation;
 use qubit_fs::metadata::FileSystemLimit;
 use qubit_fs::read::AsyncRandomAccessReader;
-use qubit_fs::read::ReadOptions;
 
 /// Reads a sample in provider-sized ranges, retaining one opened session.
+///
+/// `reader` must have been opened by `filesystem`, which supplies this sample's
+/// configured limits and provider context.
 ///
 /// A short positive read advances to the next offset. A zero read ends the
 /// sample and returns the number of bytes filled. `Unknown` does not guarantee
@@ -730,14 +747,12 @@ use qubit_fs::read::ReadOptions;
 /// partial data and this helper does not retry or reopen the path.
 pub async fn sample_async(
     filesystem: &AsyncFileSystem,
-    path: &Path,
+    reader: &mut AsyncRandomAccessReader,
     offset: u64,
     output: &mut [u8],
 ) -> FsResult<usize> {
+    let path = reader.info().path().clone();
     let limit = filesystem.properties().limits().max_read_range_bytes();
-    let mut reader: AsyncRandomAccessReader = filesystem
-        .open_random_access_reader(path, ReadOptions::default())
-        .await?;
     let mut position = offset;
     let mut filled = 0;
     if output.is_empty() || position >= reader.len() {

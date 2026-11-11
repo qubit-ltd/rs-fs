@@ -33,6 +33,9 @@ use qubit_fs::metadata::OpenedFileInfo;
 use qubit_fs::metadata::SymlinkPolicy;
 use qubit_fs::path::PathConstraints;
 use qubit_fs::path::PathSemantics;
+use qubit_fs::read::AsyncRandomAccessReader;
+use qubit_fs::read::RandomAccessReader;
+use qubit_fs::read::ReadOptions;
 use qubit_fs::spi::AsyncFileSystemSpi;
 use qubit_fs::spi::AsyncRandomAccessReadSession;
 use qubit_fs::spi::FileSystemSpi;
@@ -277,11 +280,28 @@ fn path() -> Path {
     Path::parse("/sample").unwrap()
 }
 
+fn sync_session(config: &Config) -> (FileSystem, RandomAccessReader, Path) {
+    let filesystem = config.filesystem();
+    let path = path();
+    let reader = filesystem
+        .open_random_access_reader(&path, ReadOptions::default())
+        .unwrap();
+    (filesystem, reader, path)
+}
+
+fn async_session(config: &Config) -> (AsyncFileSystem, AsyncRandomAccessReader, Path) {
+    let filesystem = config.async_filesystem();
+    let path = path();
+    let reader = ready(filesystem.open_random_access_reader(&path, ReadOptions::default())).unwrap();
+    (filesystem, reader, path)
+}
+
 #[test]
 fn test_sync_sampling_splits_at_limit_and_keeps_one_open_session() {
     let config = Config::new(FileSystemLimit::Maximum(3));
+    let (filesystem, mut reader, _) = sync_session(&config);
     let mut output = [0; 8];
-    assert_eq!(8, sample(&config.filesystem(), &path(), 0, &mut output).unwrap());
+    assert_eq!(8, sample(&filesystem, &mut reader, 0, &mut output).unwrap());
     assert_eq!(*b"abcdefgh", output);
     let record = config.record();
     assert_eq!(1, record.opens);
@@ -293,25 +313,28 @@ fn test_sync_sampling_splits_at_limit_and_keeps_one_open_session() {
 fn test_sync_sampling_handles_short_reads_eof_empty_and_zero_limit() {
     let mut short = Config::new(FileSystemLimit::Maximum(3));
     short.short = true;
+    let (filesystem, mut reader, _) = sync_session(&short);
     let mut output = [0; 4];
-    assert_eq!(4, sample(&short.filesystem(), &path(), 1, &mut output).unwrap());
+    assert_eq!(4, sample(&filesystem, &mut reader, 1, &mut output).unwrap());
     assert_eq!(*b"bcde", output);
     assert_eq!(vec![3, 3, 2, 1], short.record().requests);
 
     let mut eof = Config::new(FileSystemLimit::Maximum(3));
     eof.bytes = Arc::from(&b"abc"[..]);
+    let (filesystem, mut reader, _) = sync_session(&eof);
     let mut output = [0; 8];
-    assert_eq!(3, sample(&eof.filesystem(), &path(), 0, &mut output).unwrap());
+    assert_eq!(3, sample(&filesystem, &mut reader, 0, &mut output).unwrap());
     assert_eq!(*b"abc\0\0\0\0\0", output);
     assert_eq!(vec![3, 3], eof.record().requests);
 
     let zero = Config::new(FileSystemLimit::Maximum(0));
-    assert_eq!(0, sample(&zero.filesystem(), &path(), 0, &mut []).unwrap());
-    let error = sample(&zero.filesystem(), &path(), 0, &mut [0]).unwrap_err();
+    let (filesystem, mut reader, _) = sync_session(&zero);
+    assert_eq!(0, sample(&filesystem, &mut reader, 0, &mut []).unwrap());
+    let error = sample(&filesystem, &mut reader, 0, &mut [0]).unwrap_err();
     assert_eq!(FsErrorKind::ResourceLimitExceeded, error.kind());
-    assert_eq!(0, sample(&zero.filesystem(), &path(), 8, &mut [0]).unwrap());
+    assert_eq!(0, sample(&filesystem, &mut reader, 8, &mut [0]).unwrap());
     assert_eq!(0, zero.record().reads);
-    assert_eq!(3, zero.record().opens);
+    assert_eq!(1, zero.record().opens);
 }
 
 #[test]
@@ -322,25 +345,31 @@ fn test_sync_sampling_accepts_nonfinite_limits_and_stops_on_errors_or_overflow()
         FileSystemLimit::NotApplicable,
     ] {
         let config = Config::new(limit);
+        let (filesystem, mut reader, _) = sync_session(&config);
         let mut output = [0; 8];
-        assert_eq!(8, sample(&config.filesystem(), &path(), 0, &mut output).unwrap());
+        assert_eq!(8, sample(&filesystem, &mut reader, 0, &mut output).unwrap());
         assert_eq!(vec![8], config.record().requests);
     }
 
     let mut failing = Config::new(FileSystemLimit::Maximum(2));
     failing.error_at = Some(1);
-    let mut output = [0; 6];
-    let error = sample(&failing.filesystem(), &path(), 0, &mut output).unwrap_err();
+    let (filesystem, mut reader, path) = sync_session(&failing);
+    let mut failed_output = [0; 6];
+    let error = sample(&filesystem, &mut reader, 0, &mut failed_output).unwrap_err();
     assert_eq!(FsErrorKind::Io, error.kind());
-    assert_eq!(Some(&path()), error.path());
+    assert_eq!(Some(&path), error.path());
     assert_eq!(Some("sampling fixture"), error.provider());
     assert_eq!(2, failing.record().reads);
+    let mut fresh = [0; 4];
+    assert_eq!(4, sample(&filesystem, &mut reader, 2, &mut fresh).unwrap());
+    assert_eq!(*b"cdef", fresh);
     assert_eq!(1, failing.record().opens);
     assert_eq!(0, failing.record().path_opens);
 
     let mut overflow = Config::new(FileSystemLimit::Maximum(2));
     overflow.reported_len = u64::MAX;
-    let error = sample(&overflow.filesystem(), &path(), u64::MAX - 1, &mut [0; 2]).unwrap_err();
+    let (filesystem, mut reader, _) = sync_session(&overflow);
+    let error = sample(&filesystem, &mut reader, u64::MAX - 1, &mut [0; 2]).unwrap_err();
     assert_eq!(FsErrorKind::InvalidOptions, error.kind());
     assert_eq!(0, overflow.record().reads);
 }
@@ -349,10 +378,11 @@ fn test_sync_sampling_accepts_nonfinite_limits_and_stops_on_errors_or_overflow()
 fn test_async_sampling_splits_short_reads_and_stops_at_early_eof() {
     let mut config = Config::new(FileSystemLimit::Maximum(3));
     config.short = true;
+    let (filesystem, mut reader, _) = async_session(&config);
     let mut output = [0; 8];
     assert_eq!(
         8,
-        ready(sample_async(&config.async_filesystem(), &path(), 0, &mut output)).unwrap()
+        ready(sample_async(&filesystem, &mut reader, 0, &mut output)).unwrap()
     );
     assert_eq!(*b"abcdefgh", output);
     let record = config.record();
@@ -362,10 +392,11 @@ fn test_async_sampling_splits_short_reads_and_stops_at_early_eof() {
 
     let mut eof = Config::new(FileSystemLimit::Maximum(3));
     eof.bytes = Arc::from(&b"abc"[..]);
+    let (filesystem, mut reader, _) = async_session(&eof);
     let mut output = [0; 8];
     assert_eq!(
         3,
-        ready(sample_async(&eof.async_filesystem(), &path(), 0, &mut output)).unwrap()
+        ready(sample_async(&filesystem, &mut reader, 0, &mut output)).unwrap()
     );
     assert_eq!(vec![3, 3], eof.record().requests);
 }
@@ -373,17 +404,13 @@ fn test_async_sampling_splits_short_reads_and_stops_at_early_eof() {
 #[test]
 fn test_async_sampling_handles_empty_zero_nonfinite_error_and_overflow() {
     let zero = Config::new(FileSystemLimit::Maximum(0));
-    assert_eq!(
-        0,
-        ready(sample_async(&zero.async_filesystem(), &path(), 0, &mut [])).unwrap()
-    );
-    let error = ready(sample_async(&zero.async_filesystem(), &path(), 0, &mut [0])).unwrap_err();
+    let (filesystem, mut reader, _) = async_session(&zero);
+    assert_eq!(0, ready(sample_async(&filesystem, &mut reader, 0, &mut [])).unwrap());
+    let error = ready(sample_async(&filesystem, &mut reader, 0, &mut [0])).unwrap_err();
     assert_eq!(FsErrorKind::ResourceLimitExceeded, error.kind());
-    assert_eq!(
-        0,
-        ready(sample_async(&zero.async_filesystem(), &path(), 8, &mut [0])).unwrap()
-    );
+    assert_eq!(0, ready(sample_async(&filesystem, &mut reader, 8, &mut [0])).unwrap());
     assert_eq!(0, zero.record().reads);
+    assert_eq!(1, zero.record().opens);
 
     for limit in [
         FileSystemLimit::Unknown,
@@ -391,49 +418,52 @@ fn test_async_sampling_handles_empty_zero_nonfinite_error_and_overflow() {
         FileSystemLimit::NotApplicable,
     ] {
         let config = Config::new(limit);
+        let (filesystem, mut reader, _) = async_session(&config);
         let mut output = [0; 8];
         assert_eq!(
             8,
-            ready(sample_async(&config.async_filesystem(), &path(), 0, &mut output)).unwrap()
+            ready(sample_async(&filesystem, &mut reader, 0, &mut output)).unwrap()
         );
         assert_eq!(vec![8], config.record().requests);
     }
 
     let mut failing = Config::new(FileSystemLimit::Maximum(2));
     failing.error_at = Some(1);
-    let error = ready(sample_async(&failing.async_filesystem(), &path(), 0, &mut [0; 6])).unwrap_err();
+    let (filesystem, mut reader, _) = async_session(&failing);
+    let error = ready(sample_async(&filesystem, &mut reader, 0, &mut [0; 6])).unwrap_err();
     assert_eq!(FsErrorKind::Io, error.kind());
     assert_eq!(2, failing.record().reads);
+    let mut fresh = [0; 4];
+    assert_eq!(4, ready(sample_async(&filesystem, &mut reader, 2, &mut fresh)).unwrap());
+    assert_eq!(*b"cdef", fresh);
     assert_eq!(1, failing.record().opens);
+    assert_eq!(0, failing.record().path_opens);
 
     let mut overflow = Config::new(FileSystemLimit::Maximum(2));
     overflow.reported_len = u64::MAX;
-    let error = ready(sample_async(
-        &overflow.async_filesystem(),
-        &path(),
-        u64::MAX - 1,
-        &mut [0; 2],
-    ))
-    .unwrap_err();
+    let (filesystem, mut reader, _) = async_session(&overflow);
+    let error = ready(sample_async(&filesystem, &mut reader, u64::MAX - 1, &mut [0; 2])).unwrap_err();
     assert_eq!(FsErrorKind::InvalidOptions, error.kind());
     assert_eq!(0, overflow.record().reads);
 }
 
 #[test]
-fn test_async_pending_drop_discards_partial_sample_without_reopening() {
+fn test_async_pending_drop_discards_partial_sample_and_reuses_session() {
     let mut config = Config::new(FileSystemLimit::Maximum(2));
     config.pending_first = true;
-    let filesystem = config.async_filesystem();
-    let path = path();
+    let (filesystem, mut reader, _) = async_session(&config);
     let mut output = [0xCC; 4];
     {
-        let mut future = std::pin::pin!(sample_async(&filesystem, &path, 0, &mut output));
+        let mut future = std::pin::pin!(sample_async(&filesystem, &mut reader, 0, &mut output));
         let mut context = Context::from_waker(Waker::noop());
         assert!(future.as_mut().poll(&mut context).is_pending());
     }
     assert_eq!(b"!\xCC\xCC\xCC", &output);
+    let mut fresh = [0; 4];
+    assert_eq!(4, ready(sample_async(&filesystem, &mut reader, 2, &mut fresh)).unwrap());
+    assert_eq!(*b"cdef", fresh);
     assert_eq!(1, config.record().opens);
     assert_eq!(0, config.record().path_opens);
-    assert_eq!(1, config.record().reads);
-    assert_eq!(vec![2], config.record().requests);
+    assert_eq!(3, config.record().reads);
+    assert_eq!(vec![2, 2, 2], config.record().requests);
 }
