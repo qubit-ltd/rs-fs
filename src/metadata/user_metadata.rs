@@ -72,7 +72,6 @@ impl UserMetadata {
     ///
     /// # Returns
     /// `Some` with the value when `key` is present, or `None` otherwise.
-    #[must_use]
     #[inline]
     pub fn get(&self, key: &str) -> Option<&str> {
         self.0.get(key).map(String::as_str)
