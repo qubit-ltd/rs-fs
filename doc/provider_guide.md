@@ -350,6 +350,19 @@ stop aggregate retries. `FileReader` performs this protection only when the
 outer I/O error directly contains an `FsError`; it does not recursively inspect
 arbitrary wrapped errors.
 
+These synchronous interruption rules do not apply to asynchronous inputs.
+An async provider reports temporary unavailability with `Poll::Pending` and
+registers the task's waker; it must not return `WouldBlock` or `Interrupted`.
+The safe `qubit-io` async read methods expose either error as
+`io::ErrorKind::InvalidData`, retaining the original cause chain.
+`read_all` and `read_prefix` report this wrapped contract violation as
+`FsErrorKind::Io` and do not promote a nested `FsError` to the outer error or
+promise that its type or effect state is recoverable through
+`std::error::Error::source`.
+Directly transported typed business errors retain their kind, provider, and
+effect state. A failed read may already have changed the destination buffer,
+so the error kind does not prove that the buffer is unchanged.
+
 ## 7. Publication and cleanup
 
 Writer and temporary-resource implementations must report publication,

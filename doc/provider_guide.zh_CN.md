@@ -337,6 +337,14 @@ pub async fn stat_health() -> FsResult<FileMetadata> {
 使 reader 停止聚合重试。`FileReader` 只在外层 I/O 错误直接包含 `FsError` 时提供此保护；
 它不会递归检查任意包装错误。
 
+这些同步中断规则不适用于异步输入。异步 Provider 应用 `Poll::Pending` 表示暂不可读，
+并注册任务的 waker；不得返回 `WouldBlock` 或 `Interrupted`。`qubit-io` 的安全异步读取方法
+会将这两类错误呈现为 `io::ErrorKind::InvalidData`，并保留原始原因链。
+`read_all` 和 `read_prefix` 会将此包装后的契约违例报告为 `FsErrorKind::Io`，不会把链中
+嵌套的 `FsError` 提升为外层错误，也不保证能通过 `std::error::Error::source` 取回其类型或 effect。
+直接传递的类型化业务错误会保留 kind、provider 和 effect。
+读取失败时目标缓冲区可能已经被修改，因此不能仅凭错误类别推断缓冲区未变。
+
 ## 7. 发布与清理
 
 writer 和临时资源实现必须分别报告发布、清理和恢复失败。清理失败并不表示目标一定

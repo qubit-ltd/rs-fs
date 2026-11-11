@@ -24,6 +24,19 @@ use crate::metadata::OpenedFileInfo;
 
 /// Type-erased asynchronous byte input associated with an opened file.
 ///
+/// Asynchronous providers must report temporary unavailability as
+/// `Poll::Pending` and arrange to wake the registered task. Returning
+/// `WouldBlock` or `Interrupted` violates the async I/O contract. The safe
+/// `qubit-io` read methods expose these errors as `InvalidData` while retaining
+/// the original cause chain. Consequently, `read_all` and `read_prefix`
+/// classify them as `FsErrorKind::Io`; they do not promote a nested `FsError`
+/// to the outer error or promise that a nested error's type/effect is
+/// recoverable through `Error::source`. A directly transported typed business
+/// error keeps its type, kind, provider, and effect state, but a failed read
+/// may already have changed the caller's buffer, so its kind does not prove
+/// that the buffer is unchanged. Synchronous interruption retry rules do not
+/// apply to asynchronous inputs.
+///
 /// # Examples
 ///
 /// The application supplies a configured filesystem and a validated path.
