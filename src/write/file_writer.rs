@@ -469,7 +469,7 @@ impl Output for FileWriter {
                 if error.kind() == IoErrorKind::Interrupted {
                     let typed_error = error.get_ref().and_then(|source| source.downcast_ref::<FsError>());
                     let has_unchanged_fact = typed_error.is_some_and(|typed_error| {
-                        typed_error.kind() != FsErrorKind::Indeterminate
+                        typed_error.kind() == FsErrorKind::Interrupted
                             && typed_error.effect_state() == Some(FsEffectState::Unchanged)
                     });
                     if typed_error.is_none() || has_unchanged_fact {
