@@ -81,8 +81,11 @@ impl<'a> WriteOperation<'a> {
             WriteAllFailure::new(error, state, 0, recovery.map(WriterRecovery::Rejected))
         })?;
         if let Err(error) = Output::write_fully(&mut writer, bytes).and_then(|_| Output::flush(&mut writer)) {
-            let error = FsError::from_stream_io(error, FsOperation::Write, path)
-                .with_provider(self.filesystem.properties().info().provider_id());
+            let error = self.filesystem.core().enrich(
+                FsError::from_stream_io(error, FsOperation::Write, path),
+                Some(path),
+                FsOperation::Write,
+            );
             let state = if error.has_indeterminate_effect() {
                 WriteFailureState::Indeterminate
             } else {
