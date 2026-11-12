@@ -106,7 +106,9 @@ fn test_shared_opened_info_validation_checks_filesystem_and_requested_path() {
     let foreign = OpenedFileInfo::new(FileSystemId::new("foreign").expect("filesystem id"), requested.clone());
     let wrong_path = info("/other", None);
     for outcome in [&foreign, &wrong_path] {
-        let error = core.validate_opened_info(outcome, &requested).expect_err("invalid identity");
+        let error = core
+            .validate_opened_info(outcome, &requested)
+            .expect_err("invalid identity");
         assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
         assert_eq!(FsOperation::ValidateProviderOutcome, error.operation());
         assert_eq!(Some(&requested), error.path());
@@ -118,9 +120,14 @@ fn test_shared_opened_info_validation_checks_filesystem_and_requested_path() {
 fn test_shared_temp_info_validation_checks_metadata_paths_and_parent() {
     let core = test_core();
     let parent = Path::parse("/parent").expect("parent path");
-    assert!(core
-        .validate_temp_info(&info("/parent/item", Some(FileKind::File)), FileKind::File, Some(&parent))
-        .is_ok());
+    assert!(
+        core.validate_temp_info(
+            &info("/parent/item", Some(FileKind::File)),
+            FileKind::File,
+            Some(&parent)
+        )
+        .is_ok()
+    );
 
     let wrong_id = OpenedFileInfo::new(
         FileSystemId::new("foreign").expect("filesystem id"),
@@ -139,7 +146,11 @@ fn test_shared_temp_info_validation_checks_metadata_paths_and_parent() {
             "/parent/wrong-kind",
             "inconsistent resource kind",
         ),
-        (info("relative", Some(FileKind::File)), "relative", "invalid logical path"),
+        (
+            info("relative", Some(FileKind::File)),
+            "relative",
+            "invalid logical path",
+        ),
         (
             info("/elsewhere/item", Some(FileKind::File)),
             "/parent",

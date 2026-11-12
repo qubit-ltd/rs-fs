@@ -2,32 +2,56 @@
 //    Copyright (c) 2026 Haixing Hu.
 //
 //    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 //! Regression coverage for write interruption retry boundaries.
 
 use std::io;
 use std::io::Cursor;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 use qubit_fs::FileSystem;
 use qubit_fs::FsError;
 use qubit_fs::FsResult;
 use qubit_fs::Path;
-use qubit_fs::copy::{CopyFailureState, CopyOptions};
-use qubit_fs::error::{FsEffectState, FsErrorKind, FsOperation};
-use qubit_fs::metadata::{
-    AchievedAtomicity, FileKind, FileMetadata, FileSystemCapabilities, FileSystemCapability,
-    FileSystemId, FileSystemInfo, FileSystemLimits, OpenedFileInfo, PublicationMethod,
-    SymlinkPolicy, WriteOutcome,
-};
-use qubit_fs::path::{PathConstraints, PathSemantics};
-use qubit_fs::spi::{
-    FileSystemSpi, FileWriterSpi, OpenReaderRequest, OpenWriterRequest, OpenedReader, OpenedWriter,
-    ProviderOperation, ProviderOperations, ProviderProperties, SpiWriteFailure, StatRequest,
-    StatResponse,
-};
-use qubit_fs::write::{WriteAbortOutcome, WriteOptions, WriterRecovery, WriterState};
+use qubit_fs::copy::CopyFailureState;
+use qubit_fs::copy::CopyOptions;
+use qubit_fs::error::FsEffectState;
+use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
+use qubit_fs::metadata::AchievedAtomicity;
+use qubit_fs::metadata::FileKind;
+use qubit_fs::metadata::FileMetadata;
+use qubit_fs::metadata::FileSystemCapabilities;
+use qubit_fs::metadata::FileSystemCapability;
+use qubit_fs::metadata::FileSystemId;
+use qubit_fs::metadata::FileSystemInfo;
+use qubit_fs::metadata::FileSystemLimits;
+use qubit_fs::metadata::OpenedFileInfo;
+use qubit_fs::metadata::PublicationMethod;
+use qubit_fs::metadata::SymlinkPolicy;
+use qubit_fs::metadata::WriteOutcome;
+use qubit_fs::path::PathConstraints;
+use qubit_fs::path::PathSemantics;
+use qubit_fs::spi::FileSystemSpi;
+use qubit_fs::spi::FileWriterSpi;
+use qubit_fs::spi::OpenReaderRequest;
+use qubit_fs::spi::OpenWriterRequest;
+use qubit_fs::spi::OpenedReader;
+use qubit_fs::spi::OpenedWriter;
+use qubit_fs::spi::ProviderOperation;
+use qubit_fs::spi::ProviderOperations;
+use qubit_fs::spi::ProviderProperties;
+use qubit_fs::spi::SpiWriteFailure;
+use qubit_fs::spi::StatRequest;
+use qubit_fs::spi::StatResponse;
+use qubit_fs::write::WriteAbortOutcome;
+use qubit_fs::write::WriteOptions;
+use qubit_fs::write::WriterRecovery;
+use qubit_fs::write::WriterState;
 use qubit_io::Output;
 
 const ID: &str = "writer-interruption";
@@ -76,10 +100,8 @@ impl FileSystemSpi for Provider {
     }
     fn stat(&self, request: StatRequest<'_>) -> FsResult<StatResponse> {
         if request.path().as_str() == "/target" {
-            return Err(
-                FsError::new(FsErrorKind::NotFound, FsOperation::Stat, "missing target")
-                    .with_effect_state(FsEffectState::Unchanged),
-            );
+            return Err(FsError::new(FsErrorKind::NotFound, FsOperation::Stat, "missing target")
+                .with_effect_state(FsEffectState::Unchanged));
         }
         Ok(StatResponse::new(
             request.path().clone(),
@@ -89,10 +111,7 @@ impl FileSystemSpi for Provider {
     fn open_reader(&self, request: OpenReaderRequest<'_>) -> FsResult<OpenedReader> {
         let info = OpenedFileInfo::new(FileSystemId::new(ID)?, request.path().clone())
             .with_metadata(FileMetadata::new(FileKind::File).with_len(Some(7)));
-        Ok(OpenedReader::new(
-            info,
-            Box::new(Cursor::new(b"payload".to_vec())),
-        ))
+        Ok(OpenedReader::new(info, Box::new(Cursor::new(b"payload".to_vec()))))
     }
     fn open_writer(&self, request: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
         let info = OpenedFileInfo::new(FileSystemId::new(ID)?, request.path().clone());
@@ -112,12 +131,7 @@ impl FileSystemSpi for Provider {
 
 impl Output for Writer {
     type Item = u8;
-    unsafe fn write_unchecked(
-        &mut self,
-        input: &[u8],
-        index: usize,
-        count: usize,
-    ) -> io::Result<usize> {
+    unsafe fn write_unchecked(&mut self, input: &[u8], index: usize, count: usize) -> io::Result<usize> {
         if self.0.fetch_add(1, Ordering::SeqCst) == 0 {
             if self.4 {
                 return Err(io::Error::from(io::ErrorKind::Interrupted));
@@ -152,10 +166,7 @@ impl FileWriterSpi for Writer {
     }
 }
 
-fn filesystem(
-    kind: FsErrorKind,
-    effect: FsEffectState,
-) -> (FileSystem, Arc<AtomicUsize>, Arc<AtomicUsize>) {
+fn filesystem(kind: FsErrorKind, effect: FsEffectState) -> (FileSystem, Arc<AtomicUsize>, Arc<AtomicUsize>) {
     filesystem_with_ordinary(kind, effect, false)
 }
 
@@ -244,12 +255,7 @@ fn test_typed_interrupted_with_unchanged_is_a_retry_candidate() {
 
 #[test]
 fn test_typed_interrupted_without_effect_is_not_retried() {
-    let (fs, calls, _) = filesystem_configured(
-        FsErrorKind::Interrupted,
-        FsEffectState::Unchanged,
-        false,
-        true,
-    );
+    let (fs, calls, _) = filesystem_configured(FsErrorKind::Interrupted, FsEffectState::Unchanged, false, true);
     let mut writer = fs
         .open_writer(&Path::parse("/target").unwrap(), WriteOptions::default())
         .unwrap();
@@ -259,8 +265,7 @@ fn test_typed_interrupted_without_effect_is_not_retried() {
 
 #[test]
 fn test_ordinary_interrupted_remains_retryable() {
-    let (fs, calls, _) =
-        filesystem_with_ordinary(FsErrorKind::Interrupted, FsEffectState::Unchanged, true);
+    let (fs, calls, _) = filesystem_with_ordinary(FsErrorKind::Interrupted, FsEffectState::Unchanged, true);
     let mut writer = fs
         .open_writer(&Path::parse("/target").unwrap(), WriteOptions::default())
         .unwrap();
@@ -284,10 +289,7 @@ fn test_stream_copy_does_not_retry_conflicting_interruption() {
     assert_eq!(CopyFailureState::Indeterminate, failure.state());
     assert_eq!(FsOperation::Copy, failure.error().operation());
     assert_eq!(Some("scripted provider"), failure.error().provider());
-    assert_eq!(
-        Some(&Path::parse("/target").unwrap()),
-        failure.error().path()
-    );
+    assert_eq!(Some(&Path::parse("/target").unwrap()), failure.error().path());
     assert!(
         matches!(failure.recovery(), Some(WriterRecovery::Opened(writer)) if writer.state() == WriterState::Indeterminate)
     );

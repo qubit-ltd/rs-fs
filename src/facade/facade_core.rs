@@ -22,9 +22,9 @@ use crate::error::FsOperation;
 use crate::error::FsResult;
 use crate::facade::internal::ByteBudget;
 use crate::facade::internal::FileSystemResource;
+use crate::metadata::FileKind;
 use crate::metadata::FileSystemCapability;
 use crate::metadata::FileSystemProperties;
-use crate::metadata::FileKind;
 use crate::metadata::OpenedFileInfo;
 use crate::path::Path;
 use crate::path::PathSemantics;
@@ -146,7 +146,8 @@ impl FacadeCore {
         }
     }
 
-    /// Validates the filesystem and path identity reported for an opened handle.
+    /// Validates the filesystem and path identity reported for an opened
+    /// handle.
     ///
     /// # Parameters
     /// - `info`: Provider-reported opened-file identity.
