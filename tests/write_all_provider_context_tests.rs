@@ -6,11 +6,19 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 use std::error::Error;
+#[cfg(feature = "async")]
+use std::future::Future;
 use std::io::Error as IoError;
 use std::io::Result as IoResult;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+#[cfg(feature = "async")]
+use std::task::Context;
+#[cfg(feature = "async")]
+use std::task::Poll;
+#[cfg(feature = "async")]
+use std::task::Waker;
 
 use qubit_fs::FileSystem;
 use qubit_fs::FsError;
@@ -29,6 +37,7 @@ use qubit_fs::metadata::FileSystemLimits;
 use qubit_fs::metadata::OpenedFileInfo;
 use qubit_fs::metadata::SymlinkPolicy;
 use qubit_fs::metadata::WriteOutcome;
+use qubit_fs::path::PathConstraints;
 use qubit_fs::path::PathSemantics;
 use qubit_fs::spi::FileSystemSpi;
 use qubit_fs::spi::FileWriterSpi;
@@ -45,11 +54,20 @@ use qubit_fs::write::WriteFailureState;
 use qubit_fs::write::WriteOptions;
 use qubit_io::Output;
 
-#[cfg(feature = "async")]
-#[path = "common/poll_support.rs"]
-mod poll_support;
-
 const PAYLOAD: &[u8] = b"payload";
+
+#[cfg(feature = "async")]
+fn poll_ready<F>(future: F) -> F::Output
+where
+    F: Future,
+{
+    let mut context = Context::from_waker(Waker::noop());
+    let mut future = std::pin::pin!(future);
+    match future.as_mut().poll(&mut context) {
+        Poll::Ready(output) => output,
+        Poll::Pending => panic!("test future should be immediately ready"),
+    }
+}
 
 #[derive(Debug)]
 struct MarkerCause;
@@ -156,26 +174,19 @@ impl FileSystemSpi for Provider {
             ProviderOperations::new().with(ProviderOperation::OpenWriter),
             FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::Write),
             FileSystemLimits::unknown(),
-            qubit_fs::path::PathConstraints::absolute(),
+            PathConstraints::absolute(),
             SymlinkPolicy::Reject,
         )
         .unwrap()
     }
 
     fn stat(&self, _request: StatRequest<'_>) -> FsResult<StatResponse> {
-        Err(FsError::new(
-            FsErrorKind::NotFound,
-            FsOperation::Stat,
-            "unused",
-        ))
+        Err(FsError::new(FsErrorKind::NotFound, FsOperation::Stat, "unused"))
     }
 
     fn open_writer(&self, request: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
-        let info = OpenedFileInfo::new(
-            FileSystemId::new("provider-context").unwrap(),
-            request.path().clone(),
-        )
-        .with_metadata(FileMetadata::new(FileKind::File));
+        let info = OpenedFileInfo::new(FileSystemId::new("provider-context").unwrap(), request.path().clone())
+            .with_metadata(FileMetadata::new(FileKind::File));
         Ok(OpenedWriter::new(
             info,
             Box::new(Session {
@@ -223,10 +234,7 @@ fn run_sync(stage: FailureStage, context: ErrorContext) -> bool {
     if let Some(cause) = source.downcast_ref::<MarkerCause>() {
         let _ = cause;
     } else if let Some(io) = source.downcast_ref::<IoError>() {
-        assert!(
-            io.get_ref()
-                .is_some_and(|source| source.is::<MarkerCause>())
-        );
+        assert!(io.get_ref().is_some_and(|source| source.is::<MarkerCause>()));
     } else {
         panic!("unexpected source type");
     }
@@ -237,16 +245,13 @@ fn run_sync(stage: FailureStage, context: ErrorContext) -> bool {
     };
     assert_eq!(expected_bytes, failure.written_bytes());
     assert_eq!(WriteFailureState::Indeterminate, failure.state());
-    assert!(
-        failure.take_recovery().is_some(),
-        "opened recovery must be retained"
-    );
+    assert!(failure.take_recovery().is_some(), "opened recovery must be retained");
     assert_eq!(0, counts.commits.load(Ordering::SeqCst));
     provider_matches
 }
 
 #[test]
-fn sync_write_all_preserves_or_fills_provider_context() {
+fn test_sync_write_all_preserves_or_fills_provider_context() {
     let mut mismatches = Vec::new();
     for stage in [FailureStage::Write, FailureStage::Flush] {
         for context in [
@@ -262,25 +267,55 @@ fn sync_write_all_preserves_or_fills_provider_context() {
             }
         }
     }
-    assert!(
-        mismatches.is_empty(),
-        "provider mismatches at stages: {mismatches:?}"
-    );
+    assert!(mismatches.is_empty(), "provider mismatches at stages: {mismatches:?}");
 }
 
 #[cfg(feature = "async")]
 mod asynchronous {
-    use super::*;
+    use std::pin::Pin;
+
     use qubit_fs::AsyncFileSystem;
     use qubit_fs::spi::AsyncFileSystemSpi;
     use qubit_fs::spi::AsyncFileWriteSession;
+    use qubit_fs::spi::FileSystemSpi;
+    use qubit_fs::spi::OpenWriterRequest;
     use qubit_fs::spi::OpenedAsyncWriter;
     use qubit_fs::spi::SpiFuture;
+    use qubit_fs::spi::StatRequest;
+    use qubit_fs::spi::StatResponse;
     use qubit_fs::write::WriteFailure;
     use qubit_io::AsyncOutput;
-    use std::pin::Pin;
-    use std::task::Context;
-    use std::task::Poll;
+
+    use super::Arc;
+    use super::AtomicUsize;
+    use super::Context;
+    use super::Counts;
+    use super::Error;
+    use super::ErrorContext;
+    use super::FailureStage;
+    use super::FileKind;
+    use super::FileMetadata;
+    use super::FileSystemId;
+    use super::FsEffectState;
+    use super::FsErrorKind;
+    use super::FsOperation;
+    use super::FsResult;
+    use super::IoError;
+    use super::IoResult;
+    use super::MarkerCause;
+    use super::OpenedFileInfo;
+    use super::Ordering;
+    use super::PAYLOAD;
+    use super::Path;
+    use super::Poll;
+    use super::Provider;
+    use super::ProviderProperties;
+    use super::Session;
+    use super::WriteAbortOutcome;
+    use super::WriteFailureState;
+    use super::WriteOptions;
+    use super::WriteOutcome;
+    use super::stream_error;
 
     struct AsyncSession(Session);
 
@@ -314,14 +349,8 @@ mod asynchronous {
     }
 
     impl AsyncFileWriteSession for AsyncSession {
-        fn commit_async<'a>(
-            self: Pin<&'a mut Self>,
-        ) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
-            self.get_mut()
-                .0
-                .counts
-                .commits
-                .fetch_add(1, Ordering::SeqCst);
+        fn commit_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
+            self.get_mut().0.counts.commits.fetch_add(1, Ordering::SeqCst);
             Box::pin(async { panic!("commit must not run after a stream failure") })
         }
 
@@ -339,15 +368,9 @@ mod asynchronous {
             Box::pin(async move { <Provider as FileSystemSpi>::stat(self, request) })
         }
 
-        fn open_writer<'a>(
-            &'a self,
-            request: OpenWriterRequest<'a>,
-        ) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
-            let info = OpenedFileInfo::new(
-                FileSystemId::new("provider-context").unwrap(),
-                request.path().clone(),
-            )
-            .with_metadata(FileMetadata::new(FileKind::File));
+        fn open_writer<'a>(&'a self, request: OpenWriterRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
+            let info = OpenedFileInfo::new(FileSystemId::new("provider-context").unwrap(), request.path().clone())
+                .with_metadata(FileMetadata::new(FileKind::File));
             let session = AsyncSession(Session {
                 stage: self.stage,
                 context: self.context,
@@ -372,10 +395,7 @@ mod asynchronous {
         let mut operation = filesystem
             .begin_write_all(path.clone(), PAYLOAD.to_vec(), WriteOptions::default())
             .expect("operation should construct");
-        let failure = operation
-            .execute()
-            .await
-            .expect_err("scripted error should fail");
+        let failure = operation.execute().await.expect_err("scripted error should fail");
         let expected_provider = match context {
             ErrorContext::TypedProvider => "inner-provider",
             ErrorContext::TypedMissingProvider | ErrorContext::Untyped => "outer-provider",
@@ -395,10 +415,9 @@ mod asynchronous {
         let source = Error::source(failure.error()).expect("stream cause should be retained");
         assert!(
             source.downcast_ref::<MarkerCause>().is_some()
-                || source.downcast_ref::<IoError>().is_some_and(|io| {
-                    io.get_ref()
-                        .is_some_and(|source| source.is::<MarkerCause>())
-                })
+                || source
+                    .downcast_ref::<IoError>()
+                    .is_some_and(|io| { io.get_ref().is_some_and(|source| source.is::<MarkerCause>()) })
         );
         assert_eq!(
             if matches!(stage, FailureStage::Write) {
@@ -419,8 +438,8 @@ mod asynchronous {
     }
 
     #[test]
-    fn async_write_all_preserves_or_fills_provider_context() {
-        poll_support::ready(async {
+    fn test_async_write_all_preserves_or_fills_provider_context() {
+        super::poll_ready(async {
             let mut mismatches = Vec::new();
             for stage in [FailureStage::Write, FailureStage::Flush] {
                 for context in [
@@ -436,10 +455,7 @@ mod asynchronous {
                     }
                 }
             }
-            assert!(
-                mismatches.is_empty(),
-                "provider mismatches at stages: {mismatches:?}"
-            );
+            assert!(mismatches.is_empty(), "provider mismatches at stages: {mismatches:?}");
         });
     }
 }
