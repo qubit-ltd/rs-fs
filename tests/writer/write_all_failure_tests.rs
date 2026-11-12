@@ -12,10 +12,13 @@ use std::hint::black_box;
 use qubit_fs::Path;
 use qubit_fs::error::FsError;
 use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
 use qubit_fs::metadata::AchievedAtomicity;
+use qubit_fs::write::WriteAbortOutcome;
 use qubit_fs::write::WriteAllFailure;
 use qubit_fs::write::WriteOptions;
 use qubit_fs::write::WriterRecovery;
+use qubit_fs::write::WriterState;
 use qubit_io::Output;
 
 #[test]
@@ -76,7 +79,19 @@ fn test_open_writer_rejects_cumulative_bytes_over_finite_write_limit() {
         .expect("writer should open");
     Output::write_fully(&mut writer, b"two").expect("the first write should fit the limit");
     let error = Output::write_fully(&mut writer, b"xx").expect_err("the cumulative write should exceed the limit");
-    assert!(error.to_string().contains("provider byte limit"));
+    let source = error
+        .get_ref()
+        .and_then(|source| source.downcast_ref::<FsError>())
+        .expect("limit rejection should retain its typed filesystem error");
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, source.kind());
+    assert_eq!(FsOperation::Write, source.operation());
+    assert_eq!(Some(&Path::parse("/target").expect("path should parse")), source.path());
+    assert_eq!(WriterState::Open, writer.state());
+    assert_eq!(
+        WriteAbortOutcome::NotPublished,
+        writer.abort().expect("the still-open writer should remain abortable"),
+    );
+    assert_eq!(WriterState::Aborted, writer.state());
 }
 
 /// Keeps a recoverable writer inspectable without exposing its private session
