@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade tests.
 //! Directory creation outcome.
 
 /// Result returned after a directory creation request.

@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade tests.
 //! Observable lifecycle state for an owning asynchronous copy operation.
 
 use crate::copy::CopyFailureState;
