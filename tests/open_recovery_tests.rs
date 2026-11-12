@@ -286,8 +286,16 @@ fn test_rejected_temp_resources_keep_explicit_cleanup_ownership() {
                 .expect_err("identity")
         };
         assert_eq!(failed.stage(), OpenFailureStage::OutcomeValidation);
+        assert_eq!(
+            failed.error().operation(),
+            FsOperation::ValidateProviderOutcome
+        );
+        assert_eq!(failed.error().provider(), Some("test"));
         assert_eq!(calls.cleanups.load(Ordering::SeqCst), 0);
-        assert_temp_open_failure_reporting(&failed);
+        assert_temp_open_failure_reporting(
+            &failed,
+            if directory { "/tmp/dir" } else { "/tmp/file" },
+        );
         let mut recovery = failed.take_recovery().expect("owned recovery");
         drop(failed);
         let diagnostic = format!("{recovery:?}");
@@ -588,7 +596,12 @@ mod asynchronous {
                     .err()
                     .expect("identity")
             };
-            assert_temp_open_failure_reporting(&failed);
+            assert_eq!(failed.error().operation(), FsOperation::ValidateProviderOutcome);
+            assert_eq!(failed.error().provider(), Some("test"));
+            assert_temp_open_failure_reporting(
+                &failed,
+                if directory { "/tmp/dir" } else { "/tmp/file" },
+            );
             let mut recovery = failed.take_recovery().expect("recovery");
             drop(failed);
             let diagnostic = format!("{recovery:?}");
@@ -673,7 +686,7 @@ fn assert_cleanup_context(error: &FsError, expected: Option<&str>) {
 
 /// Reporting a rejected temporary opening preserves the causal error and owned
 /// recovery.
-fn assert_temp_open_failure_reporting<R: 'static>(failure: &OpenFailure<R>) {
+fn assert_temp_open_failure_reporting<R: 'static>(failure: &OpenFailure<R>, expected_path: &str) {
     assert_eq!(failure.error().to_string(), failure.to_string());
     let cause = failure
         .source()
@@ -683,6 +696,15 @@ fn assert_temp_open_failure_reporting<R: 'static>(failure: &OpenFailure<R>) {
         .expect("filesystem cause type is preserved");
     assert!(eq(failure.error(), original));
     assert_eq!(FsErrorKind::ProviderContractViolation, original.kind());
+    assert_eq!(FsOperation::ValidateProviderOutcome, original.operation());
+    assert_eq!(Some("test"), original.provider());
+    let validation_cause = original
+        .source()
+        .and_then(|cause| cause.downcast_ref::<FsError>())
+        .expect("the temporary identity validation error remains in the cause chain");
+    assert_eq!(FsOperation::ValidateProviderOutcome, validation_cause.operation());
+    assert_eq!(Some(expected_path), validation_cause.path().map(Path::as_str));
+    assert_eq!(Some("test"), validation_cause.provider());
     assert!(
         failure.recovery().is_some(),
         "formatting and error inspection must retain cleanup ownership"
