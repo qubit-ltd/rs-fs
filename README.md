@@ -191,6 +191,13 @@ repositories, and runs the same two commands in the order shown above. Those
 revisions are required to reproduce CI's fixed dependency condition locally;
 the scripts do not automatically check out downstream repositories.
 
+The fixture checks the repository source with fixed sibling revisions. The published-package
+smoke instead resolves the dependencies in the Quick Start as published crates, in a fresh
+Cargo project; it needs network access and does not validate this checkout's source changes.
+Run it locally with `python3 scripts/check-published-quick-start.py`. The
+`Published Documentation Smoke` workflow also runs weekly and can be started with
+`workflow_dispatch` after the documented package versions are available on crates.io.
+
 ```bash
 # Run tests with the default feature set
 cargo test

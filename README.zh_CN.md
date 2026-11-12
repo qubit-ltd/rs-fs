@@ -160,6 +160,11 @@ Cargo 项目中使用“快速开始”的依赖配置与完整程序。文档�
 仓库，然后按上面所示顺序运行相同的两个命令。复现 CI 的固定依赖条件需要使用这些
 revision；脚本不会自动 checkout 下游仓库。
 
+fixture 使用固定的同级 revision 验证仓库源码。发布包 smoke 则在全新的 Cargo 项目中解析并
+运行“快速开始”所列的已发布 crate；它需要网络，不能验证当前 checkout 的源码修改。可在本地运行
+`python3 scripts/check-published-quick-start.py`。`Published Documentation Smoke` workflow
+每周运行一次；在文档所列版本已发布到 crates.io 后，也可通过 `workflow_dispatch` 手动触发。
+
 ```bash
 # 使用默认 feature 集运行测试
 cargo test
