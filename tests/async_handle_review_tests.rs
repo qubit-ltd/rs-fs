@@ -25,6 +25,7 @@ use qubit_fs::directory::DeleteOptions;
 use qubit_fs::directory::DirectoryStreamState;
 use qubit_fs::directory::ListOptions;
 use qubit_fs::directory::ListScope;
+use qubit_fs::error::FsError;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::error::FsOperation;
 use qubit_fs::error::OpenFailureStage;
@@ -653,6 +654,38 @@ fn test_async_writer_enforces_limit_and_closed_state() {
     assert!(closed.to_string().contains("writer no longer accepts bytes"));
     let flush = ready(writer.flush_async()).expect_err("committed writer must reject flushing");
     assert!(flush.to_string().contains("writer no longer accepts bytes"));
+}
+
+/// Rejects a later write when the total bytes in one asynchronous session
+/// would exceed the provider-advertised limit, while preserving abort access.
+#[test]
+fn test_async_writer_rejects_cumulative_bytes_over_finite_write_limit() {
+    let (file_system, probe) = async_recording_file_system(AsyncRecordingConfig {
+        maximum_write_bytes: Some(3),
+        ..AsyncRecordingConfig::default()
+    });
+    let mut writer =
+        ready(file_system.open_writer(&path("/target"), WriteOptions::default())).expect("writer should open");
+
+    ready(writer.write_fully_async(b"abc")).expect("the first write should fit the limit");
+    assert_eq!(WriterState::Open, writer.state());
+    let error =
+        ready(writer.write_fully_async(b"d")).expect_err("the cumulative successor write should exceed the limit");
+    let source = error
+        .get_ref()
+        .and_then(|source| source.downcast_ref::<FsError>())
+        .expect("limit rejection should retain its typed filesystem error");
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, source.kind());
+    assert_eq!(FsOperation::Write, source.operation());
+    assert_eq!(Some(&path("/target")), source.path());
+    assert_eq!(WriterState::Open, writer.state());
+    assert_eq!(b"abc", probe.written_bytes().as_slice());
+
+    assert_eq!(
+        WriteAbortOutcome::NotPublished,
+        ready(writer.abort_async()).expect("the still-open writer should remain abortable"),
+    );
+    assert_eq!(WriterState::Aborted, writer.state());
 }
 
 /// Rejects provider outcomes that claim an accepted pre-existing or missing
