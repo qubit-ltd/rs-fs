@@ -181,7 +181,7 @@ fn test_write_fully_does_not_retry_conflicting_interruption() {
         FsErrorKind::Io,
         FsErrorKind::Indeterminate,
     ] {
-        let (fs, calls, _) = filesystem(kind, FsEffectState::Unchanged);
+        let (fs, calls, commits) = filesystem(kind, FsEffectState::Unchanged);
         let mut writer = fs
             .open_writer(&Path::parse("/target").unwrap(), WriteOptions::default())
             .unwrap();
@@ -197,6 +197,7 @@ fn test_write_fully_does_not_retry_conflicting_interruption() {
         assert_eq!(kind, typed.kind());
         assert_eq!(Some("scripted provider"), typed.provider());
         assert_eq!(Some(&Path::parse("/target").unwrap()), typed.path());
+        assert_eq!(0, commits.load(Ordering::SeqCst));
         assert_eq!(WriterState::Indeterminate, writer.state());
         assert_eq!(WriteAbortOutcome::Indeterminate, writer.abort().unwrap());
     }
@@ -246,13 +247,15 @@ fn test_stream_copy_does_not_retry_conflicting_interruption() {
             CopyOptions::file(),
         )
         .expect_err("stream write failure must be reported");
-    assert_eq!(
-        1,
-        calls.load(Ordering::SeqCst),
-        "copy failed early: {:?}",
-        failure.error()
-    );
+    assert_eq!(1, calls.load(Ordering::SeqCst));
     assert_eq!(0, commits.load(Ordering::SeqCst));
+    assert_eq!(FsErrorKind::PermissionDenied, failure.error().kind());
+    assert_eq!(FsOperation::Copy, failure.error().operation());
+    assert_eq!(Some("scripted provider"), failure.error().provider());
+    assert_eq!(
+        Some(&Path::parse("/target").unwrap()),
+        failure.error().path()
+    );
     assert!(
         matches!(failure.recovery(), Some(WriterRecovery::Opened(writer)) if writer.state() == WriterState::Indeterminate)
     );
