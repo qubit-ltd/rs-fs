@@ -14,7 +14,7 @@ use qubit_fs::FileSystem;
 use qubit_fs::FsError;
 use qubit_fs::FsResult;
 use qubit_fs::Path;
-use qubit_fs::copy::CopyOptions;
+use qubit_fs::copy::{CopyFailureState, CopyOptions};
 use qubit_fs::error::{FsEffectState, FsErrorKind, FsOperation};
 use qubit_fs::metadata::{
     AchievedAtomicity, FileKind, FileMetadata, FileSystemCapabilities, FileSystemCapability,
@@ -38,12 +38,14 @@ struct Provider(
     FsErrorKind,
     FsEffectState,
     bool,
+    bool,
 );
 struct Writer(
     Arc<AtomicUsize>,
     Arc<AtomicUsize>,
     FsErrorKind,
     FsEffectState,
+    bool,
     bool,
 );
 
@@ -102,6 +104,7 @@ impl FileSystemSpi for Provider {
                 self.2,
                 self.3,
                 self.4,
+                self.5,
             )),
         ))
     }
@@ -119,8 +122,11 @@ impl Output for Writer {
             if self.4 {
                 return Err(io::Error::from(io::ErrorKind::Interrupted));
             }
-            let inner = FsError::new(self.2, FsOperation::Write, "conflicting interruption")
-                .with_effect_state(self.3)
+            let mut inner = FsError::new(self.2, FsOperation::Write, "conflicting interruption");
+            if !self.5 {
+                inner = inner.with_effect_state(self.3);
+            }
+            let inner = inner
                 .with_path(Path::parse("/target").unwrap())
                 .with_provider("scripted provider");
             Err(io::Error::new(io::ErrorKind::Interrupted, inner))
@@ -158,6 +164,15 @@ fn filesystem_with_ordinary(
     effect: FsEffectState,
     ordinary: bool,
 ) -> (FileSystem, Arc<AtomicUsize>, Arc<AtomicUsize>) {
+    filesystem_configured(kind, effect, ordinary, false)
+}
+
+fn filesystem_configured(
+    kind: FsErrorKind,
+    effect: FsEffectState,
+    ordinary: bool,
+    omit_effect: bool,
+) -> (FileSystem, Arc<AtomicUsize>, Arc<AtomicUsize>) {
     let calls = Arc::new(AtomicUsize::new(0));
     let commits = Arc::new(AtomicUsize::new(0));
     (
@@ -167,6 +182,7 @@ fn filesystem_with_ordinary(
             kind,
             effect,
             ordinary,
+            omit_effect,
         ))
         .unwrap(),
         calls,
@@ -227,6 +243,21 @@ fn test_typed_interrupted_with_unchanged_is_a_retry_candidate() {
 }
 
 #[test]
+fn test_typed_interrupted_without_effect_is_not_retried() {
+    let (fs, calls, _) = filesystem_configured(
+        FsErrorKind::Interrupted,
+        FsEffectState::Unchanged,
+        false,
+        true,
+    );
+    let mut writer = fs
+        .open_writer(&Path::parse("/target").unwrap(), WriteOptions::default())
+        .unwrap();
+    assert!(writer.write_fully(b"payload").is_err());
+    assert_eq!(1, calls.load(Ordering::SeqCst));
+}
+
+#[test]
 fn test_ordinary_interrupted_remains_retryable() {
     let (fs, calls, _) =
         filesystem_with_ordinary(FsErrorKind::Interrupted, FsEffectState::Unchanged, true);
@@ -250,6 +281,7 @@ fn test_stream_copy_does_not_retry_conflicting_interruption() {
     assert_eq!(1, calls.load(Ordering::SeqCst));
     assert_eq!(0, commits.load(Ordering::SeqCst));
     assert_eq!(FsErrorKind::PermissionDenied, failure.error().kind());
+    assert_eq!(CopyFailureState::Indeterminate, failure.state());
     assert_eq!(FsOperation::Copy, failure.error().operation());
     assert_eq!(Some("scripted provider"), failure.error().provider());
     assert_eq!(
