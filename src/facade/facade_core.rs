@@ -24,6 +24,8 @@ use crate::facade::internal::ByteBudget;
 use crate::facade::internal::FileSystemResource;
 use crate::metadata::FileSystemCapability;
 use crate::metadata::FileSystemProperties;
+use crate::metadata::FileKind;
+use crate::metadata::OpenedFileInfo;
 use crate::path::Path;
 use crate::path::PathSemantics;
 use crate::spi::ProviderOperation;
@@ -142,6 +144,67 @@ impl FacadeCore {
                 "provider returned a temporary resource outside the requested parent location",
             ))
         }
+    }
+
+    /// Validates the filesystem and path identity reported for an opened handle.
+    ///
+    /// # Parameters
+    /// - `info`: Provider-reported opened-file identity.
+    /// - `path`: Requested logical resource path.
+    ///
+    /// # Errors
+    /// Returns a provider-contract error when either identity differs.
+    pub(crate) fn validate_opened_info(&self, info: &OpenedFileInfo, path: &Path) -> FsResult<()> {
+        if info.filesystem_id() != self.properties.info().id() || info.path() != path {
+            return Err(self.contract_error(
+                path,
+                FsOperation::ValidateProviderOutcome,
+                "provider returned an opened handle with a different identity",
+            ));
+        }
+        Ok(())
+    }
+
+    /// Validates the identity, path, metadata kind, and requested location of a
+    /// provider-created temporary resource.
+    ///
+    /// # Parameters
+    /// - `info`: Provider-reported temporary-resource identity.
+    /// - `expected_kind`: Resource kind requested from the provider.
+    /// - `requested_parent`: Optional parent location supplied for creation.
+    ///
+    /// # Errors
+    /// Returns a provider-contract error when any part of the outcome violates
+    /// the filesystem contract.
+    pub(crate) fn validate_temp_info(
+        &self,
+        info: &OpenedFileInfo,
+        expected_kind: FileKind,
+        requested_parent: Option<&Path>,
+    ) -> FsResult<()> {
+        if info.filesystem_id() != self.properties.info().id() {
+            return Err(self.contract_error(
+                info.path(),
+                FsOperation::ValidateProviderOutcome,
+                "provider returned a temporary handle for a different filesystem",
+            ));
+        }
+        self.validate_path(info.path(), FsOperation::CreateTemp).map_err(|_| {
+            self.contract_error(
+                info.path(),
+                FsOperation::ValidateProviderOutcome,
+                "provider returned a temporary handle with an invalid logical path",
+            )
+        })?;
+        if info.metadata().is_none_or(|metadata| metadata.kind() != &expected_kind) {
+            return Err(self.contract_error(
+                info.path(),
+                FsOperation::ValidateProviderOutcome,
+                "provider returned a temporary handle with an inconsistent resource kind",
+            ));
+        }
+        self.validate_temp_location(requested_parent, info.path())?;
+        Ok(())
     }
 
     /// Validates a writer path, options, and required write capability.

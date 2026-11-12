@@ -1034,10 +1034,7 @@ impl AsyncFileSystem {
     ///   provider.
     /// - `path`: Logical path of the resource involved in this operation.
     fn validate_opened_info(&self, info: &crate::metadata::OpenedFileInfo, path: &Path) -> FsResult<()> {
-        if info.filesystem_id() != self.properties().info().id() || info.path() != path {
-            return Err(self.contract_error(path, "provider returned an opened handle with a different identity"));
-        }
-        Ok(())
+        self.core.validate_opened_info(info, path)
     }
 
     /// Validates a provider-created temporary resource before exposing it.
@@ -1055,26 +1052,7 @@ impl AsyncFileSystem {
         expected_kind: crate::metadata::FileKind,
         requested_parent: Option<&Path>,
     ) -> FsResult<()> {
-        if info.filesystem_id() != self.properties().info().id() {
-            return Err(self.contract_error(
-                info.path(),
-                "provider returned a temporary handle for a different filesystem",
-            ));
-        }
-        self.validate_path(info.path(), FsOperation::CreateTemp).map_err(|_| {
-            self.contract_error(
-                info.path(),
-                "provider returned a temporary handle with an invalid logical path",
-            )
-        })?;
-        if info.metadata().is_none_or(|metadata| metadata.kind() != &expected_kind) {
-            return Err(self.contract_error(
-                info.path(),
-                "provider returned a temporary handle with an inconsistent resource kind",
-            ));
-        }
-        self.core.validate_temp_location(requested_parent, info.path())?;
-        Ok(())
+        self.core.validate_temp_info(info, expected_kind, requested_parent)
     }
 
     /// Performs no-I/O preflight for asynchronous temporary persistence.

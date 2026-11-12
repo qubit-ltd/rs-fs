@@ -12,10 +12,13 @@ use crate::error::FsOperation;
 use crate::error::FsResult;
 use crate::facade::facade_core::FacadeCore;
 use crate::file_system::FileSystem;
+use crate::metadata::FileKind;
+use crate::metadata::FileMetadata;
 use crate::metadata::FileSystemCapabilities;
 use crate::metadata::FileSystemId;
 use crate::metadata::FileSystemInfo;
 use crate::metadata::FileSystemLimits;
+use crate::metadata::OpenedFileInfo;
 use crate::metadata::SymlinkPolicy;
 use crate::path::Path;
 use crate::path::PathConstraints;
@@ -80,6 +83,80 @@ fn test_quantity_conversion_is_executed_at_runtime() {
         FacadeCore::quantity_from_usize(7, FsOperation::Read, &path, "test").expect("value fits"),
         7,
     );
+}
+
+fn test_core() -> FacadeCore {
+    FacadeCore::new(PreflightTestSpi::properties()).expect("facade core")
+}
+
+fn info(path: &str, kind: Option<FileKind>) -> OpenedFileInfo {
+    let info = OpenedFileInfo::new(
+        FileSystemId::new("preflight-test").expect("filesystem id"),
+        Path::parse(path).expect("path"),
+    );
+    kind.map_or(info.clone(), |kind| info.with_metadata(FileMetadata::new(kind)))
+}
+
+#[test]
+fn test_shared_opened_info_validation_checks_filesystem_and_requested_path() {
+    let core = test_core();
+    let requested = Path::parse("/expected").expect("path");
+    assert!(core.validate_opened_info(&info("/expected", None), &requested).is_ok());
+
+    let foreign = OpenedFileInfo::new(FileSystemId::new("foreign").expect("filesystem id"), requested.clone());
+    let wrong_path = info("/other", None);
+    for outcome in [&foreign, &wrong_path] {
+        let error = core.validate_opened_info(outcome, &requested).expect_err("invalid identity");
+        assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
+        assert_eq!(FsOperation::ValidateProviderOutcome, error.operation());
+        assert_eq!(Some(&requested), error.path());
+        assert_eq!(Some("preflight-test"), error.provider());
+    }
+}
+
+#[test]
+fn test_shared_temp_info_validation_checks_metadata_paths_and_parent() {
+    let core = test_core();
+    let parent = Path::parse("/parent").expect("parent path");
+    assert!(core
+        .validate_temp_info(&info("/parent/item", Some(FileKind::File)), FileKind::File, Some(&parent))
+        .is_ok());
+
+    let wrong_id = OpenedFileInfo::new(
+        FileSystemId::new("foreign").expect("filesystem id"),
+        Path::parse("/parent/item").expect("path"),
+    )
+    .with_metadata(FileMetadata::new(FileKind::File));
+    let cases = [
+        (wrong_id, "/parent/item", "different filesystem"),
+        (
+            info("/parent/missing-metadata", None),
+            "/parent/missing-metadata",
+            "inconsistent resource kind",
+        ),
+        (
+            info("/parent/wrong-kind", Some(FileKind::Directory)),
+            "/parent/wrong-kind",
+            "inconsistent resource kind",
+        ),
+        (info("relative", Some(FileKind::File)), "relative", "invalid logical path"),
+        (
+            info("/elsewhere/item", Some(FileKind::File)),
+            "/parent",
+            "outside the requested parent",
+        ),
+    ];
+    for (outcome, expected_path, message) in cases {
+        let expected_path = Path::parse(expected_path).expect("expected error path");
+        let error = core
+            .validate_temp_info(&outcome, FileKind::File, Some(&parent))
+            .expect_err("invalid temporary resource outcome");
+        assert_eq!(FsErrorKind::ProviderContractViolation, error.kind());
+        assert_eq!(FsOperation::ValidateProviderOutcome, error.operation());
+        assert_eq!(Some(&expected_path), error.path());
+        assert_eq!(Some("preflight-test"), error.provider());
+        assert!(error.to_string().contains(message));
+    }
 }
 
 #[test]

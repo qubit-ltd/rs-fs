@@ -951,14 +951,7 @@ impl FileSystem {
     /// # Errors
     /// Returns a provider-contract error when either identity differs.
     fn validate_opened_info(&self, info: &OpenedFileInfo, path: &Path) -> FsResult<()> {
-        if info.filesystem_id() != self.properties().info().id() || info.path() != path {
-            return Err(self.contract_error(
-                path,
-                FsOperation::ValidateProviderOutcome,
-                "provider returned an opened handle with a different identity",
-            ));
-        }
-        Ok(())
+        self.core.validate_opened_info(info, path)
     }
 
     /// Validates the filesystem identity captured for a newly-created temporary
@@ -979,28 +972,6 @@ impl FileSystem {
         expected_kind: FileKind,
         requested_parent: Option<&Path>,
     ) -> FsResult<()> {
-        if info.filesystem_id() != self.properties().info().id() {
-            return Err(self.contract_error(
-                info.path(),
-                FsOperation::ValidateProviderOutcome,
-                "provider returned a temporary handle for a different filesystem",
-            ));
-        }
-        self.validate_path(info.path(), FsOperation::CreateTemp).map_err(|_| {
-            self.contract_error(
-                info.path(),
-                FsOperation::ValidateProviderOutcome,
-                "provider returned a temporary handle with an invalid logical path",
-            )
-        })?;
-        if info.metadata().is_none_or(|metadata| metadata.kind() != &expected_kind) {
-            return Err(self.contract_error(
-                info.path(),
-                FsOperation::ValidateProviderOutcome,
-                "provider returned a temporary handle with an inconsistent resource kind",
-            ));
-        }
-        self.core.validate_temp_location(requested_parent, info.path())?;
-        Ok(())
+        self.core.validate_temp_info(info, expected_kind, requested_parent)
     }
 }
