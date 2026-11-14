@@ -152,18 +152,17 @@ Platform roots and authority boundaries come from the configured provider.
 
 ## Testing
 
-The documentation checks have two steps. From the `rs-fs` root in a sibling
-Qubit checkout, run:
+The documentation entry point checks bilingual examples, versions, and
+package-relative links, then compiles, tests, and runs the fixture. From the
+`rs-fs` root in a sibling Qubit checkout, run:
 
 ```bash
-python3 scripts/check-documentation.py
 bash scripts/check-documentation-examples.sh
 ```
 
-The Python checker validates bilingual documentation structure, example text,
-and package-relative links. The Bash script compiles, tests, and runs the
-documentation fixture using the current sibling checkouts. It does not check
-Markdown or select fixed dependency revisions. The fixture uses
+The dedicated workflow runs this same entry point against fixed sibling
+repository revisions. Locally, it uses the sibling repositories currently
+present. The fixture uses
 `rs-fs-local` (`qubit-fs-local` 0.11), `rs-local-files` (`qubit-local-files`
 0.5), and `rs-redact` (`qubit-redact` 0.10 series) beside `rs-fs`:
 
@@ -185,11 +184,8 @@ entry point runs:
 bash scripts/check-documentation-examples.sh
 ```
 
-The documentation examples workflow reads the fixed revisions from
-`scripts/documentation-example-dependencies.json`, checks out those sibling
-repositories, and runs the same two commands in the order shown above. Those
-revisions are required to reproduce CI's fixed dependency condition locally;
-the scripts do not automatically check out downstream repositories.
+The documentation workflow also runs entry point regression tests before the
+integration check; core CI continues to check this crate and its documentation.
 
 The fixture checks the repository source with fixed sibling revisions. The published-package
 smoke instead resolves the dependencies in the Quick Start as published crates, in a fresh

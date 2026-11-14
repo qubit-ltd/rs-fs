@@ -133,15 +133,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## 测试
 
-文档验证分为两个步骤。在同级 Qubit 源码仓库的 `rs-fs` 根目录中，依次运行：
+统一的文档示例入口会检查双语示例、版本和包内相对链接，再编译、测试并运行 fixture。
+在同级 Qubit 源码仓库的 `rs-fs` 根目录中运行：
 
 ```bash
-python3 scripts/check-documentation.py
 bash scripts/check-documentation-examples.sh
 ```
 
-Python checker 会检查双语文档结构、示例文本和包内相对链接。Bash 脚本使用当前同级
-checkout 编译、测试并运行文档 fixture；它不检查 Markdown，也不选择固定依赖版本。
+独立 workflow 使用固定的同级仓库版本运行此入口；本地入口使用当前检出的同级仓库内容。
 fixture 需要 `rs-fs-local`（`qubit-fs-local` 0.11）、`rs-local-files`
 （`qubit-local-files` 0.5）和 `rs-redact`（`qubit-redact` 0.10 系列）与 `rs-fs` 位于同一父目录：
 
@@ -155,10 +154,9 @@ parent/
 ```
 
 仅克隆 `rs-fs` 或下载 crate 源码包不包含该本地布局。独立体验发布包时，请在自己的
-Cargo 项目中使用“快速开始”的依赖配置与完整程序。文档示例 workflow 会读取
-`scripts/documentation-example-dependencies.json` 中的固定 revision，checkout 这些同级
-仓库，然后按上面所示顺序运行相同的两个命令。复现 CI 的固定依赖条件需要使用这些
-revision；脚本不会自动 checkout 下游仓库。
+Cargo 项目中使用“快速开始”的依赖配置与完整程序。
+
+文档 workflow 还会在集成验证前运行入口回归测试；核心 CI 仍检查本 crate 及其文档。
 
 fixture 使用固定的同级 revision 验证仓库源码。发布包 smoke 则在全新的 Cargo 项目中解析并
 运行“快速开始”所列的已发布 crate；它需要 Python 3.11 或更高版本及网络，不能验证当前 checkout
