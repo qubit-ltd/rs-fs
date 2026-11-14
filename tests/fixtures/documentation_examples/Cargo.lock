@@ -97,6 +97,8 @@ dependencies = [
 [[package]]
 name = "qubit-fs"
 version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a9a33da41769effbc67acbe34227f81360a77107e65849aa33d17507b2f371aa"
 dependencies = [
  "fluent-uri",
  "qubit-budget",

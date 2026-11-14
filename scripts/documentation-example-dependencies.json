@@ -8,12 +8,12 @@
     {
       "name": "rs-local-files",
       "repository": "https://github.com/qubit-ltd/rs-local-files.git",
-      "rev": "a3aee6d04cfa3117f5217fa2df0adb4fe76bade4"
+      "rev": "fa951477dbc352525f756741b88a89dbf90c0071"
     },
     {
       "name": "rs-redact",
       "repository": "https://github.com/qubit-ltd/rs-redact.git",
-      "rev": "d3116d19fc40d6e23db0fdca4db3748d0dede7d8"
+      "rev": "c573cd9adf039b67519e86ef2f5a65df19e131a5"
     }
   ]
 }
