@@ -85,5 +85,5 @@ jobs:
       - name: Check documentation and examples
         working-directory: rs-fs
         run: |
-          python3 scripts/check-documentation.py
+          python3 -m unittest discover -s scripts/tests -p 'test_documentation_entrypoint.py'
           bash scripts/check-documentation-examples.sh

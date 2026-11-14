@@ -496,6 +496,20 @@ Guaranteed `RangeRead` 的 provider 生效。
 provider 示例有意不声明 operation 11，仍是有效 provider；它们展示默认不支持行为，不会让
 随机读取成为所有 provider 的必需方法。
 
+共享 `qubit-fs-testkit` Read 阶段包含随机读取 basic、边界、有限范围上限和已打开对象身份检查；
+异步套件还会检查 Pending 读取的取消行为。`FileSystemFixture::random_access_operation` 应根据
+provider 实际 SPI 配置实现，不能从 `Read` 或 `RangeRead` 推断。fixture 必须独立于被测门面准备和
+观察证据。basic 和 bounds 检查覆盖乱序读取、短读补齐、空缓冲区、EOF、跨 EOF 的截断读取和溢出范围。
+当 provider 声明了有限且可探测的范围上限时，套件会运行范围上限检查。身份检查需要
+`replace_random_access_path`：替换原生路径名，同时保留已打开 reader 持有的对象。异步 fixture 提供
+等价的替换钩子和 Pending 读取钩子。这些同步钩子不能启动 runtime；disarm 必须释放闸门，取消后 reader
+仍须可继续使用。
+
+操作声明未知、无法替换路径或无法注入 Pending 读取时，受影响的检查会得到 `SkippedOptional`。
+如果 provider 声明支持随机读取，但 fixture 无法准备种子证据，或 Pending 读取没有到达并确认注入闸门，
+结果为 `Unverified`；这两种结果都不表示行为已通过。fixture 独立声明不支持该操作时，套件会验证门面
+是否按预期返回不支持操作。
+
 ## 14. 发布前检查清单
 
 - 构造并校验一份缓存的 `ProviderProperties` 快照。

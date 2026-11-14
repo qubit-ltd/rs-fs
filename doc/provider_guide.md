@@ -573,6 +573,29 @@ provider examples in this guide intentionally omit operation 11 and remain
 valid providers; they demonstrate the default unsupported behavior rather
 than making random access a required method.
 
+The shared `qubit-fs-testkit` Read phase includes random-access basic, bounds,
+finite-range-limit, and opened-object identity checks; the async suite also
+checks cancellation of a pending read. Implement
+`FileSystemFixture::random_access_operation` from the provider's actual SPI
+configuration. Do not infer it from `Read` or `RangeRead`. The fixture must
+seed and observe evidence independently of the facade under test. The basic
+and bounds checks exercise out-of-order reads, short-read completion, empty
+buffers, EOF, clipped reads, and overflowing ranges. A finite range-limit
+check is run when the provider advertises a bounded probeable limit. The
+identity check requires `replace_random_access_path`: replace the native path
+while preserving the object already held by the open reader. The async
+fixture exposes the equivalent replacement hook and pending-read hooks. Those
+synchronous hooks must not start a runtime; disarm must release the gate, and
+the reader must remain usable after cancellation.
+
+An unknown operation declaration, unavailable path replacement, or inability
+to inject a pending read produces `SkippedOptional` for the affected check.
+If the provider declares random access but the fixture cannot seed evidence,
+or the pending read does not reach and confirm the injected gate, the outcome
+is `Unverified`; neither outcome means the behavior passed. A fixture that
+independently declares the operation unsupported is checked against the
+facade's unsupported-operation behavior.
+
 ## 14. Release checklist
 
 - Construct and validate one cached `ProviderProperties` snapshot.
