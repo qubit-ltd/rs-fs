@@ -1,8 +1,10 @@
 use super::{FsOwnedReadRequest, FsSubmitFailure, PreparedFsReadAdapter};
-use crate::spi::{ManagedFsMutationSpi, ManagedFsReadSpi};
+#[cfg(feature = "async")]
+use crate::AsyncFsMutationOperation;
+use crate::spi::{ManagedFsMutationSpi, ManagedFsReadSpi, ManagedFsTreeSpi};
 use crate::{
-    AsyncFsMutationOperation, FsEffectSlotPool, FsMutationOperation, FsOwnedCopyRequest,
-    FsOwnedRenameRequest, FsOwnedWriteRequest,
+    FsEffectSlotPool, FsMutationOperation, FsOwnedCopyRequest, FsOwnedRenameRequest,
+    FsOwnedTreePublishRequest, FsOwnedWriteRequest,
 };
 use crate::{FsOperation, FsOperationFailure};
 use qubit_operation::{OperationManager, OperationOptions};
@@ -20,6 +22,15 @@ impl FsExecutionBinding {
     /// Returns the manager view used for submissions.
     pub fn manager(&self) -> &OperationManager {
         &self.manager
+    }
+
+    /// Returns a clone bound to an additional service group while preserving
+    /// this binding's root or parent submission target.
+    pub fn with_group(
+        &self,
+        group: &qubit_operation::OperationGroup,
+    ) -> Result<Self, qubit_operation::GroupBindingError> {
+        self.manager.with_group(group).map(Self::new)
     }
     /// Prepares and submits a read while retaining its request on rejection.
     pub fn submit_read_all(
@@ -256,6 +267,72 @@ impl FsExecutionBinding {
         }
     }
 
+    /// Prepares, reserves a final-effect slot, and submits a staged-tree publication.
+    pub fn submit_tree_publish(
+        &self,
+        provider: &dyn ManagedFsTreeSpi,
+        request: FsOwnedTreePublishRequest,
+        pool: &FsEffectSlotPool,
+    ) -> Result<
+        FsMutationOperation<crate::directory::TreePublishOutcome>,
+        FsSubmitFailure<FsOwnedTreePublishRequest>,
+    > {
+        let reservation = match pool.reserve() {
+            Ok(v) => v,
+            Err(_) => {
+                return Err(FsSubmitFailure {
+                    admission: None,
+                    preparation: Some(super::FsPrepareFailureKind::EffectCapacity),
+                    request,
+                });
+            }
+        };
+        let prepared = match provider.prepare_tree_publish(request) {
+            Ok(v) => v,
+            Err(failure) => {
+                return Err(FsSubmitFailure {
+                    admission: None,
+                    preparation: Some(failure.kind),
+                    request: failure.request,
+                });
+            }
+        };
+        let observer = reservation.observer();
+        if let Err(reservation) = prepared.install_effect_reservation(reservation) {
+            drop(reservation);
+            return Err(FsSubmitFailure {
+                admission: None,
+                preparation: Some(super::FsPrepareFailureKind::ReservationInstallFailed),
+                request: prepared
+                    .take_unclaimed_request()
+                    .expect("unclaimed tree provider work retains request"),
+            });
+        }
+        let adapter = Arc::new(super::PreparedFsTreePublishAdapter::new(prepared));
+        match self
+            .manager
+            .try_submit_external::<crate::directory::TreePublishOutcome, FsOperationFailure, _>(
+                OperationOptions::default(),
+                Arc::clone(&adapter),
+            ) {
+            Ok(operation) => Ok(FsMutationOperation {
+                operation,
+                effect: observer,
+            }),
+            Err(rejected) => {
+                let (admission, rejected) = rejected.into_parts();
+                let request = rejected
+                    .take_request()
+                    .expect("unclaimed tree publication retains request");
+                Err(FsSubmitFailure {
+                    admission: Some(admission),
+                    preparation: None,
+                    request,
+                })
+            }
+        }
+    }
+
     /// Prepares, reserves a final-effect slot, and submits a managed async write.
     #[cfg(feature = "async")]
     pub fn submit_write_async(
@@ -451,6 +528,74 @@ impl FsExecutionBinding {
                 let request = rejected
                     .take_request()
                     .expect("unclaimed prepared operation retains request");
+                Err(FsSubmitFailure {
+                    admission: Some(admission),
+                    preparation: None,
+                    request,
+                })
+            }
+        }
+    }
+
+    /// Prepares, reserves a final-effect slot, and submits async tree publication.
+    #[cfg(feature = "async")]
+    pub fn submit_tree_publish_async(
+        &self,
+        provider: &dyn ManagedFsTreeSpi,
+        request: FsOwnedTreePublishRequest,
+        pool: &FsEffectSlotPool,
+    ) -> Result<
+        AsyncFsMutationOperation<crate::directory::TreePublishOutcome>,
+        FsSubmitFailure<FsOwnedTreePublishRequest>,
+    > {
+        let reservation = match pool.reserve() {
+            Ok(v) => v,
+            Err(_) => {
+                return Err(FsSubmitFailure {
+                    admission: None,
+                    preparation: Some(super::FsPrepareFailureKind::EffectCapacity),
+                    request,
+                });
+            }
+        };
+        let prepared = match provider.prepare_tree_publish(request) {
+            Ok(v) => v,
+            Err(failure) => {
+                return Err(FsSubmitFailure {
+                    admission: None,
+                    preparation: Some(failure.kind),
+                    request: failure.request,
+                });
+            }
+        };
+        let observer = reservation.observer();
+        if let Err(reservation) = prepared.install_effect_reservation(reservation) {
+            drop(reservation);
+            return Err(FsSubmitFailure {
+                admission: None,
+                preparation: Some(super::FsPrepareFailureKind::ReservationInstallFailed),
+                request: prepared
+                    .take_unclaimed_request()
+                    .expect("unclaimed tree provider work retains request"),
+            });
+        }
+        let adapter = Arc::new(super::PreparedFsTreePublishAdapter::new(prepared));
+        match self
+            .manager
+            .as_async()
+            .try_submit_external::<crate::directory::TreePublishOutcome, FsOperationFailure, _>(
+                OperationOptions::default(),
+                Arc::clone(&adapter),
+            ) {
+            Ok(operation) => Ok(AsyncFsMutationOperation {
+                operation,
+                effect: observer,
+            }),
+            Err(rejected) => {
+                let (admission, rejected) = rejected.into_parts();
+                let request = rejected
+                    .take_request()
+                    .expect("unclaimed tree publication retains request");
                 Err(FsSubmitFailure {
                     admission: Some(admission),
                     preparation: None,

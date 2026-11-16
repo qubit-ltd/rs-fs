@@ -273,6 +273,14 @@ pub trait PreparedFsTreePublish:
 {
     /// Returns the original tree request while unclaimed.
     fn take_unclaimed_request(&self) -> Option<FsOwnedTreePublishRequest>;
+
+    /// Installs the bounded mutation fact slot before provider work is activated.
+    /// The provider retains it until it publishes the final typed tree fact and
+    /// releases any publication or recovery owner.
+    fn install_effect_reservation(
+        &self,
+        reservation: crate::execution::FsEffectReservation,
+    ) -> Result<(), crate::execution::FsEffectReservation>;
 }
 /// Object-safe provider preparation interface for staged-tree publication.
 pub trait ManagedFsTreeSpi: Send + Sync {
@@ -332,4 +340,19 @@ pub trait ManagedFsTreeSpi: Send + Sync {
         &self,
         request: FsOwnedTreePublishRequest,
     ) -> Result<Arc<dyn PreparedFsTreePublish>, FsPrepareFailure<FsOwnedTreePublishRequest>>;
+}
+
+impl crate::execution::FsEffectReservation {
+    /// Publishes provider-confirmed tree publication facts independently of
+    /// the operation outcome.
+    pub fn publish_tree_outcome(
+        &self,
+        outcome: crate::directory::TreePublishOutcome,
+        recovery: Option<qubit_operation::RecoveryId>,
+    ) {
+        self.publish(crate::execution::FsEffectFact::TreePublish {
+            outcome: Arc::new(outcome),
+            recovery,
+        });
+    }
 }

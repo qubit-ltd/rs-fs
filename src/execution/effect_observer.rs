@@ -48,6 +48,13 @@ pub enum FsEffectFact {
         /// Provider-confirmed namespace transition.
         state: crate::rename::RenameFailureState,
     },
+    /// Provider-confirmed staged-tree publication facts.
+    TreePublish {
+        /// Actual publication outcome, including partial counts and guarantees.
+        outcome: Arc<crate::directory::TreePublishOutcome>,
+        /// Recovery record retaining a failed publication owner, when present.
+        recovery: Option<qubit_operation::RecoveryId>,
+    },
 }
 /// Cloneable read-only port for observing a managed mutation effect.
 #[derive(Clone)]

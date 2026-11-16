@@ -52,6 +52,7 @@ use crate::spi::DeleteDirectoryRequest;
 use crate::spi::DeleteFileRequest;
 use crate::spi::ManagedFsMutationSpi;
 use crate::spi::ManagedFsReadSpi;
+use crate::spi::ManagedFsTreeSpi;
 use crate::spi::OpenReaderRequest;
 use crate::spi::OpenWriterRequest;
 use crate::spi::ProviderOperation;
@@ -74,7 +75,7 @@ use crate::write::RejectedAsyncWriter;
 use crate::write::WriteOptions;
 use crate::{
     AsyncFsMutationOperation, FsEffectSlotPool, FsOwnedCopyRequest, FsOwnedRenameRequest,
-    FsOwnedWriteRequest,
+    FsOwnedTreePublishRequest, FsOwnedWriteRequest,
 };
 use qubit_operation::OperationScope;
 
@@ -163,6 +164,21 @@ impl AsyncFileSystem {
         crate::FsSubmitFailure<FsOwnedRenameRequest>,
     > {
         FsExecutionBinding::new(parent.manager()).submit_rename_async(provider, request, effects)
+    }
+
+    /// Submits staged-tree publication under the supplied parent scope.
+    pub fn submit_tree_publish_in(
+        &self,
+        parent: &OperationScope,
+        provider: &dyn ManagedFsTreeSpi,
+        request: FsOwnedTreePublishRequest,
+        effects: &FsEffectSlotPool,
+    ) -> Result<
+        AsyncFsMutationOperation<crate::directory::TreePublishOutcome>,
+        crate::FsSubmitFailure<FsOwnedTreePublishRequest>,
+    > {
+        FsExecutionBinding::new(parent.manager())
+            .submit_tree_publish_async(provider, request, effects)
     }
 
     /// Constructs a facade and caches one validated provider snapshot.
