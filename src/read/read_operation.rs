@@ -16,6 +16,8 @@ use crate::facade::internal::FileSystemResource;
 use crate::path::Path;
 use crate::read::PrefixReadOutcome;
 use crate::read::PrefixReadTermination;
+use crate::read::ReadAllOptions;
+use crate::read::ReadConsistencyPolicy;
 use crate::read::ReadOptions;
 use crate::read::internal::ReadBuffer;
 use crate::read::internal::read_retry_interrupted;
@@ -61,6 +63,15 @@ impl<'a> ReadOperation<'a> {
         options: ReadOptions,
         max_bytes: usize,
     ) -> FsResult<Vec<u8>> {
+        // Reject an unrepresentable overflow sentinel before opening the
+        // provider object, so invalid limits never begin I/O.
+        ReadAllOptions::new(max_bytes, ReadConsistencyPolicy::BestEffort)
+            .sentinel_capacity()
+            .map_err(|error| {
+                self.filesystem
+                    .core()
+                    .enrich(error, Some(path), FsOperation::Read)
+            })?;
         let mut reader = self.filesystem.open_reader(path, options)?;
         let mut result = ReadBuffer::new(max_bytes);
         let maximum = FacadeCore::quantity_from_usize(

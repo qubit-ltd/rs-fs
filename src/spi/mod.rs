@@ -85,7 +85,9 @@ pub use file_writer_spi::FileWriterSpi;
 pub use managed_mutation::{
     ManagedFsMutationSpi, PreparedFsCopy, PreparedFsRename, PreparedFsWrite,
 };
-pub use managed_read::{ManagedFsReadSpi, PreparedFsRead};
+#[cfg(feature = "async")]
+pub use managed_read::AsyncManagedReadPort;
+pub use managed_read::{ManagedFsReadSpi, ManagedReadPort, PreparedFsRead};
 pub use managed_tree::{ManagedFsTreeSpi, PreparedFsTreePublish};
 #[cfg(feature = "async")]
 pub use opened_async_directory_stream::OpenedAsyncDirectoryStream;
