@@ -199,6 +199,41 @@ fn managed_prefix_marks_limit_without_claiming_eof_and_text_is_strict() {
     );
 }
 
+#[test]
+fn read_allocations_are_capped_by_object_and_remaining_session_budget() {
+    let complete = read_port(b"tiny", 4, 4)
+        .read_all(ReadAllOptions::new(usize::MAX - 1, Default::default()))
+        .unwrap();
+    assert_eq!(complete.value, b"tiny");
+
+    let prefix = read_port(b"tiny", 4, 4).read_prefix(usize::MAX).unwrap();
+    assert_eq!(prefix.bytes(), b"tiny");
+    assert_eq!(
+        prefix.termination(),
+        qubit_fs::read::PrefixReadTermination::StreamEnded
+    );
+}
+
+#[test]
+fn zero_segment_is_a_typed_error_for_non_empty_sync_reads() {
+    let port = read_port(b"data", 0, 4);
+    let mut output = [0; 1];
+    assert_eq!(
+        port.read_at(0, &mut output).unwrap_err().kind(),
+        qubit_fs::error::FsErrorKind::ResourceLimitExceeded
+    );
+    assert_eq!(
+        port.read_all(ReadAllOptions::new(4, Default::default()))
+            .unwrap_err()
+            .kind(),
+        qubit_fs::error::FsErrorKind::ResourceLimitExceeded
+    );
+    assert_eq!(
+        port.read_prefix(4).unwrap_err().kind(),
+        qubit_fs::error::FsErrorKind::ResourceLimitExceeded
+    );
+}
+
 #[cfg(feature = "async")]
 struct PendingOnce(Arc<Vec<u8>>, bool);
 
@@ -256,4 +291,31 @@ fn dropping_pending_async_read_allows_complete_retry_at_same_offset() {
     ));
     drop(future);
     assert_eq!(&retry, b"ori");
+}
+
+#[cfg(feature = "async")]
+#[test]
+fn zero_segment_is_a_typed_error_for_non_empty_async_reads() {
+    let data = Arc::new(b"data".to_vec());
+    let info = qubit_fs::metadata::OpenedFileInfo::new(
+        qubit_fs::metadata::FileSystemId::new("managed-read-test").unwrap(),
+        Path::parse("/async-object").unwrap(),
+    );
+    let mut port = Box::pin(AsyncManagedReadPort::new(
+        info,
+        data.len() as u64,
+        0,
+        4,
+        Box::pin(PendingOnce(data, false)),
+    ));
+    let mut output = [0; 1];
+    let mut future = Box::pin(port.as_mut().read_at_async(0, &mut output));
+    let mut context = Context::from_waker(Waker::noop());
+    let Poll::Ready(Err(error)) = future.as_mut().poll(&mut context) else {
+        panic!("zero segment must fail before provider polling")
+    };
+    assert_eq!(
+        error.kind(),
+        qubit_fs::error::FsErrorKind::ResourceLimitExceeded
+    );
 }

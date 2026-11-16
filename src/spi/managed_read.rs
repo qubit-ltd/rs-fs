@@ -75,6 +75,13 @@ impl ManagedReadPort {
             .map_err(|_| poisoned_read_error())
     }
 
+    fn remaining_budget_and_len(&self) -> FsResult<(u64, u64)> {
+        self.state
+            .lock()
+            .map(|state| (state.max_total.saturating_sub(state.consumed), state.len))
+            .map_err(|_| poisoned_read_error())
+    }
+
     /// Reads a complete object within `options.max_bytes`.
     ///
     /// The method reads one sentinel byte beyond the requested content limit
@@ -105,8 +112,12 @@ impl ManagedReadPort {
             .info()?
             .metadata()
             .and_then(|metadata| metadata.etag().cloned());
+        let (remaining_budget, len) = self.remaining_budget_and_len()?;
+        let allocation_limit = capacity
+            .min(usize::try_from(remaining_budget).unwrap_or(usize::MAX))
+            .min(usize::try_from(len).unwrap_or(usize::MAX));
         let mut bytes = Vec::new();
-        bytes.try_reserve_exact(capacity).map_err(|error| {
+        bytes.try_reserve_exact(allocation_limit).map_err(|error| {
             FsError::with_source(
                 FsErrorKind::ResourceLimitExceeded,
                 FsOperation::Read,
@@ -141,8 +152,12 @@ impl ManagedReadPort {
     /// the complete file.
     pub fn read_prefix(&self, max_bytes: usize) -> FsResult<crate::read::PrefixReadOutcome> {
         let info = self.info()?;
+        let (remaining_budget, len) = self.remaining_budget_and_len()?;
+        let allocation_limit = max_bytes
+            .min(usize::try_from(remaining_budget).unwrap_or(usize::MAX))
+            .min(usize::try_from(len).unwrap_or(usize::MAX));
         let mut bytes = Vec::new();
-        bytes.try_reserve_exact(max_bytes).map_err(|error| {
+        bytes.try_reserve_exact(allocation_limit).map_err(|error| {
             FsError::with_source(
                 FsErrorKind::ResourceLimitExceeded,
                 FsOperation::Read,
@@ -206,6 +221,14 @@ impl ManagedReadPort {
         let mut state = self.state.lock().map_err(|_| poisoned_read_error())?;
         if offset >= state.len {
             return Ok(0);
+        }
+        if state.max_segment == 0 {
+            return Err(FsError::new(
+                FsErrorKind::ResourceLimitExceeded,
+                FsOperation::Read,
+                "managed read segment limit is zero",
+            )
+            .with_path(state.info.path().clone()));
         }
         let remaining_budget = state.max_total.saturating_sub(state.consumed);
         if remaining_budget == 0 {
@@ -319,6 +342,14 @@ impl AsyncManagedReadPort {
         let this = self.get_mut();
         if offset >= this.len {
             return Ok(0);
+        }
+        if this.max_segment == 0 {
+            return Err(FsError::new(
+                FsErrorKind::ResourceLimitExceeded,
+                FsOperation::Read,
+                "managed read segment limit is zero",
+            )
+            .with_path(this.info.path().clone()));
         }
         let remaining_budget = this.max_total.saturating_sub(this.consumed);
         if remaining_budget == 0 {
