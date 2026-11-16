@@ -45,7 +45,9 @@ pub(crate) fn validate_rename_outcome(
             state: RenameFailureState::Indeterminate,
         });
     }
-    if options.atomicity() == AtomicityRequirement::Required && outcome.atomicity() != AchievedAtomicity::Atomic {
+    if options.atomicity() == AtomicityRequirement::Required
+        && outcome.atomicity() != AchievedAtomicity::Atomic
+    {
         return Some(RenameOutcomeValidationError {
             message: "provider reported non-atomic success for an atomic-required rename",
             state: RenameFailureState::Renamed,

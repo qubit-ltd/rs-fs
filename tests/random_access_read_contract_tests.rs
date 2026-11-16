@@ -143,7 +143,11 @@ impl RandomAccessReadSession for Session {
         }
         let start = offset as usize;
         let n = out.len().min(self.bytes.len().saturating_sub(start));
-        let n = if self.mode == ReadMode::Short { n.min(1) } else { n };
+        let n = if self.mode == ReadMode::Short {
+            n.min(1)
+        } else {
+            n
+        };
         out[..n].copy_from_slice(&self.bytes[start..start + n]);
         Ok(n)
     }
@@ -226,7 +230,10 @@ impl FileSystemSpi for Provider {
             .with_metadata(FileMetadata::new(FileKind::File));
         Ok(OpenedReader::new(info, Box::new(Cursor::new(bytes))))
     }
-    fn open_random_access_reader(&self, request: OpenReaderRequest<'_>) -> FsResult<OpenedRandomAccessReader> {
+    fn open_random_access_reader(
+        &self,
+        request: OpenReaderRequest<'_>,
+    ) -> FsResult<OpenedRandomAccessReader> {
         self.random_opens.fetch_add(1, Ordering::SeqCst);
         let bytes = self.current.read().unwrap().clone();
         let path = request.path().clone();
@@ -234,20 +241,37 @@ impl FileSystemSpi for Provider {
             MetadataMode::Valid => random_access_common::opened_info(ID, &path, bytes.len() as u64),
             MetadataMode::Missing => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path),
             MetadataMode::Directory => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
-                .with_metadata(FileMetadata::new(FileKind::Directory).with_len(Some(bytes.len() as u64))),
-            MetadataMode::MissingLength => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
-                .with_metadata(FileMetadata::new(FileKind::File)),
+                .with_metadata(
+                    FileMetadata::new(FileKind::Directory).with_len(Some(bytes.len() as u64)),
+                ),
+            MetadataMode::MissingLength => {
+                OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
+                    .with_metadata(FileMetadata::new(FileKind::File))
+            }
             MetadataMode::Object => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
-                .with_metadata(FileMetadata::new(FileKind::Object).with_len(Some(bytes.len() as u64))),
-            MetadataMode::ObjectMissingLength => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
-                .with_metadata(FileMetadata::new(FileKind::Object)),
+                .with_metadata(
+                    FileMetadata::new(FileKind::Object).with_len(Some(bytes.len() as u64)),
+                ),
+            MetadataMode::ObjectMissingLength => {
+                OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
+                    .with_metadata(FileMetadata::new(FileKind::Object))
+            }
             MetadataMode::Prefix => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
-                .with_metadata(FileMetadata::new(FileKind::Prefix).with_len(Some(bytes.len() as u64))),
+                .with_metadata(
+                    FileMetadata::new(FileKind::Prefix).with_len(Some(bytes.len() as u64)),
+                ),
             MetadataMode::Symlink => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
-                .with_metadata(FileMetadata::new(FileKind::Symlink).with_len(Some(bytes.len() as u64))),
+                .with_metadata(
+                    FileMetadata::new(FileKind::Symlink).with_len(Some(bytes.len() as u64)),
+                ),
             MetadataMode::Other => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
-                .with_metadata(FileMetadata::new(FileKind::Other("other".into())).with_len(Some(bytes.len() as u64))),
-            MetadataMode::WrongIdentity => random_access_common::opened_info("wrong-fs", &path, bytes.len() as u64),
+                .with_metadata(
+                    FileMetadata::new(FileKind::Other("other".into()))
+                        .with_len(Some(bytes.len() as u64)),
+                ),
+            MetadataMode::WrongIdentity => {
+                random_access_common::opened_info("wrong-fs", &path, bytes.len() as u64)
+            }
         };
         Ok(OpenedRandomAccessReader::new(
             info,
@@ -268,11 +292,15 @@ fn test_path_replacement_splits_legacy_reads_but_session_stays_on_opened_object(
     let provider = Provider::new();
     let filesystem = provider.filesystem();
     let path = Path::parse("/same").unwrap();
-    let mut old_a = filesystem.open_reader(&path, ReadOptions::default()).unwrap();
+    let mut old_a = filesystem
+        .open_reader(&path, ReadOptions::default())
+        .unwrap();
     let mut a = [0; 1];
     old_a.read_fully(&mut a).unwrap();
     *provider.current.write().unwrap() = Arc::from(&b"BBBBBB"[..]);
-    let mut old_b = filesystem.open_reader(&path, ReadOptions::default()).unwrap();
+    let mut old_b = filesystem
+        .open_reader(&path, ReadOptions::default())
+        .unwrap();
     let mut b = [0; 1];
     old_b.read_fully(&mut b).unwrap();
     assert_eq!(*b"A", a);
@@ -319,7 +347,10 @@ fn test_unsupported_operation_and_open_options_are_rejected_before_spi() {
     drop(zero_offset);
     assert_eq!(1, provider.random_opens.load(Ordering::SeqCst));
     for (options, kind) in [
-        (ReadOptions::default().with_length(Some(3)), FsErrorKind::InvalidOptions),
+        (
+            ReadOptions::default().with_length(Some(3)),
+            FsErrorKind::InvalidOptions,
+        ),
         (
             ReadOptions::default().with_checksum(ChecksumPolicy::BestEffort),
             FsErrorKind::RequirementNotMet,
@@ -384,12 +415,16 @@ fn test_object_key_random_access_uses_known_length_and_stays_on_opened_object() 
     provider.metadata = MetadataMode::Object;
     *provider.current.write().unwrap() = Arc::from(&b"object-data"[..]);
     let filesystem = provider.filesystem();
-    let path = Path::parse_with_semantics("bucket//raw/%2Fobject", PathSemantics::ObjectKey).unwrap();
+    let path =
+        Path::parse_with_semantics("bucket//raw/%2Fobject", PathSemantics::ObjectKey).unwrap();
     let mut reader = filesystem
         .open_random_access_reader(&path, ReadOptions::default())
         .unwrap();
     assert_eq!(11, reader.len());
-    assert_eq!(&FileSystemId::new(ID).unwrap(), reader.info().filesystem_id());
+    assert_eq!(
+        &FileSystemId::new(ID).unwrap(),
+        reader.info().filesystem_id()
+    );
     assert_eq!(&path, reader.info().path());
     assert_eq!(
         Some(&FileKind::Object),
@@ -432,7 +467,9 @@ fn test_reads_clip_eof_allow_short_reads_and_reject_overreport_with_context() {
     let mut provider = Provider::new();
     let fs = provider.filesystem();
     let path = Path::parse("/same").unwrap();
-    let mut reader = fs.open_random_access_reader(&path, ReadOptions::default()).unwrap();
+    let mut reader = fs
+        .open_random_access_reader(&path, ReadOptions::default())
+        .unwrap();
     let mut tail = [0; 4];
     assert_eq!(2, reader.read_at(4, &mut tail).unwrap());
     assert_eq!(&b"AA"[..], &tail[..2]);
@@ -498,11 +535,19 @@ fn test_provider_error_context_is_preserved_or_filled_independently() {
             .unwrap();
         let error = reader.read_at(0, &mut [0; 1]).unwrap_err();
         assert_eq!(
-            Some(if has_path { &provider_path } else { &session_path }),
+            Some(if has_path {
+                &provider_path
+            } else {
+                &session_path
+            }),
             error.path()
         );
         assert_eq!(
-            Some(if has_provider { "nested-provider" } else { "fixture" }),
+            Some(if has_provider {
+                "nested-provider"
+            } else {
+                "fixture"
+            }),
             error.provider()
         );
         assert_eq!(FsOperation::Read, error.operation());
@@ -510,7 +555,11 @@ fn test_provider_error_context_is_preserved_or_filled_independently() {
         assert_eq!(Some(FsEffectState::Indeterminate), error.effect_state());
         assert_eq!(Some(&target), error.target());
         assert_eq!(Some(&failure_target), error.failure_target());
-        assert!(std::error::Error::source(&error).unwrap().is::<SourceMarker>());
+        assert!(
+            std::error::Error::source(&error)
+                .unwrap()
+                .is::<SourceMarker>()
+        );
         assert_eq!(1, provider.reads.load(Ordering::SeqCst));
     }
 }
@@ -547,7 +596,11 @@ struct DefaultSpi;
 impl FileSystemSpi for DefaultSpi {
     fn properties(&self) -> ProviderProperties {
         ProviderProperties::new(
-            FileSystemInfo::new(FileSystemId::new(ID).unwrap(), "fixture", PathSemantics::Hierarchical),
+            FileSystemInfo::new(
+                FileSystemId::new(ID).unwrap(),
+                "fixture",
+                PathSemantics::Hierarchical,
+            ),
             ProviderOperations::new()
                 .with(ProviderOperation::OpenReader)
                 .with(ProviderOperation::OpenRandomAccessReader),
@@ -569,7 +622,9 @@ impl FileSystemSpi for DefaultSpi {
 fn test_default_spi_method_returns_unsupported_without_opening() {
     let fs = FileSystem::from_spi(DefaultSpi).unwrap();
     let path = Path::parse("/same").unwrap();
-    let error = fs.open_random_access_reader(&path, ReadOptions::default()).unwrap_err();
+    let error = fs
+        .open_random_access_reader(&path, ReadOptions::default())
+        .unwrap_err();
     assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
     assert_eq!(FsOperation::OpenReader, error.operation());
     assert_eq!(Some(&path), error.path());

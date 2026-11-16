@@ -66,7 +66,11 @@ impl TempFile {
     ///
     /// # Returns
     /// An owned temporary-file handle.
-    pub(crate) fn new(filesystem: FileSystem, path: Path, session: Box<dyn TempResourceSpi>) -> Self {
+    pub(crate) fn new(
+        filesystem: FileSystem,
+        path: Path,
+        session: Box<dyn TempResourceSpi>,
+    ) -> Self {
         Self {
             core: SyncTempResource::new(
                 filesystem,
@@ -109,7 +113,11 @@ impl TempFile {
     /// Returns a typed failure for invalid lifecycle state, failed preflight,
     /// provider failure, or a provider contract violation.
     #[allow(clippy::result_large_err)]
-    pub fn persist(&mut self, target: &Path, options: PersistOptions) -> Result<PersistOutcome, PersistFailure> {
+    pub fn persist(
+        &mut self,
+        target: &Path,
+        options: PersistOptions,
+    ) -> Result<PersistOutcome, PersistFailure> {
         self.core.persist(target, options)
     }
 

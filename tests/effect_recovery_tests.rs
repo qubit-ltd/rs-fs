@@ -24,8 +24,12 @@ fn test_io_error_with_indeterminate_effect_is_uncertain() {
 
 #[test]
 fn test_legacy_indeterminate_kind_remains_conservative() {
-    let error = FsError::new(FsErrorKind::Indeterminate, FsOperation::AbortWriter, "injected")
-        .with_effect_state(FsEffectState::Unchanged);
+    let error = FsError::new(
+        FsErrorKind::Indeterminate,
+        FsOperation::AbortWriter,
+        "injected",
+    )
+    .with_effect_state(FsEffectState::Unchanged);
     assert!(
         error.has_indeterminate_effect(),
         "the legacy indeterminate error kind must remain conservative"

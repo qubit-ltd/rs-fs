@@ -20,7 +20,9 @@ fn test_file_and_directory_share_successful_lifecycle_contract() {
     let target = Path::parse("/published").expect("target");
     let (filesystem, cleanup_calls, persist_calls) =
         handle_support::implementation_tests::filesystem(false, Vec::new());
-    let mut file = filesystem.create_temp_file(TempOptions::default()).expect("file");
+    let mut file = filesystem
+        .create_temp_file(TempOptions::default())
+        .expect("file");
     assert!(format!("{file:?}").starts_with("TempFile {"));
     file.persist(
         &target,
@@ -28,7 +30,9 @@ fn test_file_and_directory_share_successful_lifecycle_contract() {
     )
     .expect("persist");
     assert_eq!(TempResourceState::Persisted, file.state());
-    let file_error = file.cleanup().expect_err("persisted file cannot be cleaned again");
+    let file_error = file
+        .cleanup()
+        .expect_err("persisted file cannot be cleaned again");
     assert!(
         file_error
             .to_string()
@@ -38,14 +42,17 @@ fn test_file_and_directory_share_successful_lifecycle_contract() {
     assert_eq!(0, *cleanup_calls.lock().expect("cleanup calls"));
     assert_eq!(1, *persist_calls.lock().expect("persist calls"));
 
-    let (filesystem, cleanup_calls, _) = handle_support::implementation_tests::filesystem(false, Vec::new());
+    let (filesystem, cleanup_calls, _) =
+        handle_support::implementation_tests::filesystem(false, Vec::new());
     let mut directory = filesystem
         .create_temp_directory(TempOptions::default())
         .expect("directory");
     assert!(format!("{directory:?}").starts_with("TempDirectory {"));
     directory.keep().expect("keep");
     assert_eq!(TempResourceState::Kept, directory.state());
-    let directory_error = directory.cleanup().expect_err("kept directory cannot be cleaned again");
+    let directory_error = directory
+        .cleanup()
+        .expect_err("kept directory cannot be cleaned again");
     assert!(
         directory_error
             .to_string()
@@ -57,14 +64,18 @@ fn test_file_and_directory_share_successful_lifecycle_contract() {
 
 #[test]
 fn test_file_and_directory_cleanup_and_owned_drop_call_provider_once() {
-    let (filesystem, cleanup_calls, _) = handle_support::implementation_tests::filesystem(false, Vec::new());
-    let mut file = filesystem.create_temp_file(TempOptions::default()).expect("file");
+    let (filesystem, cleanup_calls, _) =
+        handle_support::implementation_tests::filesystem(false, Vec::new());
+    let mut file = filesystem
+        .create_temp_file(TempOptions::default())
+        .expect("file");
     file.cleanup().expect("cleanup");
     assert_eq!(TempResourceState::Cleaned, file.state());
     drop(file);
     assert_eq!(1, *cleanup_calls.lock().expect("cleanup calls"));
 
-    let (filesystem, cleanup_calls, _) = handle_support::implementation_tests::filesystem(false, Vec::new());
+    let (filesystem, cleanup_calls, _) =
+        handle_support::implementation_tests::filesystem(false, Vec::new());
     let directory = filesystem
         .create_temp_directory(TempOptions::default())
         .expect("directory");

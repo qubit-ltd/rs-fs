@@ -65,7 +65,11 @@ impl RejectedTempResource {
     /// - `session`: Provider session whose cleanup authority is isolated here.
     /// - `provider`: Trusted provider identifier used to contextualize errors.
     /// - `path`: Requested path, if available, used only as trusted context.
-    pub(crate) fn new(session: Box<dyn TempResourceSpi>, provider: &str, path: Option<Path>) -> Self {
+    pub(crate) fn new(
+        session: Box<dyn TempResourceSpi>,
+        provider: &str,
+        path: Option<Path>,
+    ) -> Self {
         Self {
             session,
             state: RecoveryCleanupState::Pending,
@@ -114,7 +118,11 @@ impl RejectedTempResource {
     /// The error with cleanup operation, validated path, and configured
     /// provider context.
     fn contextual_error(&self, error: FsError) -> FsError {
-        error.with_trusted_cleanup_context(FsOperation::CleanupTemp, self.path.as_ref(), &self.provider)
+        error.with_trusted_cleanup_context(
+            FsOperation::CleanupTemp,
+            self.path.as_ref(),
+            &self.provider,
+        )
     }
 }
 impl Debug for RejectedTempResource {

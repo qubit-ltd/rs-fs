@@ -83,8 +83,12 @@ struct ResidualProbe {
 
 impl ResidualProbe {
     fn outcome(&self, target: &Path) -> PersistOutcome {
-        PersistOutcome::new(target.clone(), AchievedAtomicity::Atomic, PublicationMethod::Direct)
-            .with_cleanup_state(PersistCleanupState::ResidualTemporaryContainer)
+        PersistOutcome::new(
+            target.clone(),
+            AchievedAtomicity::Atomic,
+            PublicationMethod::Direct,
+        )
+        .with_cleanup_state(PersistCleanupState::ResidualTemporaryContainer)
     }
 
     fn keep_target(&self) -> Path {
@@ -98,7 +102,10 @@ impl ResidualProbe {
 }
 
 impl TempResourceSpi for ResidualProbe {
-    fn persist(&mut self, request: PersistRequest<'_>) -> Result<PersistOutcome, SpiPersistFailure> {
+    fn persist(
+        &mut self,
+        request: PersistRequest<'_>,
+    ) -> Result<PersistOutcome, SpiPersistFailure> {
         self.persist_calls.fetch_add(1, Ordering::SeqCst);
         Ok(self.outcome(request.target()))
     }
@@ -124,7 +131,9 @@ impl AsyncTempResourceSpi for ResidualProbe {
         })
     }
 
-    fn keep<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<PersistOutcome, SpiPersistFailure>> {
+    fn keep<'a>(
+        self: Pin<&'a mut Self>,
+    ) -> SpiFuture<'a, Result<PersistOutcome, SpiPersistFailure>> {
         Box::pin(async move {
             let this = self.get_mut();
             this.keep_calls.fetch_add(1, Ordering::SeqCst);
@@ -216,7 +225,10 @@ impl FileSystemSpi for ResidualProvider {
         ))
     }
 
-    fn create_temp_directory(&self, _: CreateTempDirectoryRequest) -> FsResult<OpenedTempDirectory> {
+    fn create_temp_directory(
+        &self,
+        _: CreateTempDirectoryRequest,
+    ) -> FsResult<OpenedTempDirectory> {
         Ok(OpenedTempDirectory::new(
             self.opened(FileKind::Directory),
             self.session(FileKind::Directory),
@@ -234,7 +246,10 @@ impl AsyncFileSystemSpi for ResidualProvider {
         Box::pin(async { unreachable!("stat is not used by this contract probe") })
     }
 
-    fn create_temp_file<'a>(&'a self, _: CreateTempFileRequest) -> SpiFuture<'a, FsResult<OpenedAsyncTempFile>> {
+    fn create_temp_file<'a>(
+        &'a self,
+        _: CreateTempFileRequest,
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncTempFile>> {
         Box::pin(async move {
             Ok(OpenedAsyncTempFile::new(
                 self.opened(FileKind::File),
@@ -271,13 +286,20 @@ fn poll_ready<F: Future>(future: F) -> F::Output {
 #[test]
 fn test_persist_outcome_preserves_residual_temporary_container() {
     let target = Path::parse("/published").expect("target");
-    let outcome = PersistOutcome::new(target.clone(), AchievedAtomicity::Atomic, PublicationMethod::Direct)
-        .with_cleanup_state(PersistCleanupState::ResidualTemporaryContainer);
+    let outcome = PersistOutcome::new(
+        target.clone(),
+        AchievedAtomicity::Atomic,
+        PublicationMethod::Direct,
+    )
+    .with_cleanup_state(PersistCleanupState::ResidualTemporaryContainer);
 
     assert_eq!(&target, outcome.target());
     assert_eq!(AchievedAtomicity::Atomic, outcome.atomicity());
     assert_eq!(PublicationMethod::Direct, outcome.method());
-    assert_eq!(PersistCleanupState::ResidualTemporaryContainer, outcome.cleanup_state());
+    assert_eq!(
+        PersistCleanupState::ResidualTemporaryContainer,
+        outcome.cleanup_state()
+    );
 }
 
 #[test]
@@ -366,7 +388,10 @@ fn test_sync_temp_handles_preserve_residual_persist_and_keep_outcomes() {
                 },
                 state
             );
-            assert_eq!(PersistCleanupState::ResidualTemporaryContainer, outcome.cleanup_state());
+            assert_eq!(
+                PersistCleanupState::ResidualTemporaryContainer,
+                outcome.cleanup_state()
+            );
             assert_eq!(0, cleanup_calls.load(Ordering::SeqCst));
         }
     }
@@ -391,47 +416,61 @@ fn test_async_temp_handles_preserve_residual_persist_and_keep_outcomes() {
             let (outcome, state) = match (kind.clone(), persist) {
                 (FileKind::File, true) => {
                     let mut handle =
-                        poll_ready(filesystem.create_temp_file(TempOptions::default())).expect("temporary file");
+                        poll_ready(filesystem.create_temp_file(TempOptions::default()))
+                            .expect("temporary file");
                     let outcome =
-                        poll_ready(handle.persist(&requested_target, PersistOptions::default())).expect("persist");
+                        poll_ready(handle.persist(&requested_target, PersistOptions::default()))
+                            .expect("persist");
                     let state = handle.state();
                     assert_eq!(
                         FsErrorKind::InvalidState,
-                        poll_ready(handle.cleanup()).expect_err("terminal cleanup").kind()
+                        poll_ready(handle.cleanup())
+                            .expect_err("terminal cleanup")
+                            .kind()
                     );
                     (outcome, state)
                 }
                 (FileKind::File, false) => {
                     let mut handle =
-                        poll_ready(filesystem.create_temp_file(TempOptions::default())).expect("temporary file");
+                        poll_ready(filesystem.create_temp_file(TempOptions::default()))
+                            .expect("temporary file");
                     let outcome = poll_ready(handle.keep()).expect("keep");
                     let state = handle.state();
                     assert_eq!(
                         FsErrorKind::InvalidState,
-                        poll_ready(handle.cleanup()).expect_err("terminal cleanup").kind()
+                        poll_ready(handle.cleanup())
+                            .expect_err("terminal cleanup")
+                            .kind()
                     );
                     (outcome, state)
                 }
                 (FileKind::Directory, true) => {
-                    let mut handle = poll_ready(filesystem.create_temp_directory(TempOptions::default()))
-                        .expect("temporary directory");
+                    let mut handle =
+                        poll_ready(filesystem.create_temp_directory(TempOptions::default()))
+                            .expect("temporary directory");
                     let outcome =
-                        poll_ready(handle.persist(&requested_target, PersistOptions::default())).expect("persist");
+                        poll_ready(handle.persist(&requested_target, PersistOptions::default()))
+                            .expect("persist");
                     let state = handle.state();
                     assert_eq!(
                         FsErrorKind::InvalidState,
-                        poll_ready(handle.cleanup()).expect_err("terminal cleanup").kind()
+                        poll_ready(handle.cleanup())
+                            .expect_err("terminal cleanup")
+                            .kind()
                     );
                     (outcome, state)
                 }
                 (FileKind::Directory, false) => {
-                    let mut handle = poll_ready(filesystem.create_temp_directory(TempOptions::default()))
-                        .expect("temporary directory");
+                    let mut handle =
+                        poll_ready(filesystem.create_temp_directory(TempOptions::default()))
+                            .expect("temporary directory");
                     let outcome = poll_ready(handle.keep()).expect("keep");
                     let state = handle.state();
                     assert_eq!(
                         FsErrorKind::InvalidState,
-                        poll_ready(handle.cleanup()).expect_err("terminal cleanup").kind()
+                        poll_ready(handle.cleanup())
+                            .expect_err("terminal cleanup")
+                            .kind()
                     );
                     (outcome, state)
                 }
@@ -453,7 +492,10 @@ fn test_async_temp_handles_preserve_residual_persist_and_keep_outcomes() {
                 },
                 state
             );
-            assert_eq!(PersistCleanupState::ResidualTemporaryContainer, outcome.cleanup_state());
+            assert_eq!(
+                PersistCleanupState::ResidualTemporaryContainer,
+                outcome.cleanup_state()
+            );
             assert_eq!(0, cleanup_calls.load(Ordering::SeqCst));
         }
     }
@@ -475,9 +517,11 @@ fn test_async_temp_invalid_state_context_preserves_current_and_published_targets
     let published_target = Path::parse("/published-a").expect("published target");
     let retry_target = Path::parse("/retry-b").expect("retry target");
 
-    let mut file = poll_ready(filesystem.create_temp_file(TempOptions::default())).expect("temp file");
+    let mut file =
+        poll_ready(filesystem.create_temp_file(TempOptions::default())).expect("temp file");
     poll_ready(file.persist(&published_target, PersistOptions::default())).expect("publish file A");
-    let file_failure = poll_ready(file.persist(&retry_target, PersistOptions::default())).expect_err("reject file B");
+    let file_failure = poll_ready(file.persist(&retry_target, PersistOptions::default()))
+        .expect_err("reject file B");
     assert_eq!(FsErrorKind::InvalidState, file_failure.error().kind());
     assert_eq!(Some("residual-probe"), file_failure.error().provider());
     assert_eq!(Some(&retry_target), file_failure.error().target());
@@ -495,20 +539,29 @@ fn test_async_temp_invalid_state_context_preserves_current_and_published_targets
     assert_eq!(0, cleanup_calls.load(Ordering::SeqCst));
     assert_eq!(0, keep_calls.load(Ordering::SeqCst));
 
-    let mut directory = poll_ready(filesystem.create_temp_directory(TempOptions::default())).expect("temp dir");
-    poll_ready(directory.persist(&published_target, PersistOptions::default())).expect("publish directory A");
-    let directory_failure =
-        poll_ready(directory.persist(&retry_target, PersistOptions::default())).expect_err("reject directory B");
+    let mut directory =
+        poll_ready(filesystem.create_temp_directory(TempOptions::default())).expect("temp dir");
+    poll_ready(directory.persist(&published_target, PersistOptions::default()))
+        .expect("publish directory A");
+    let directory_failure = poll_ready(directory.persist(&retry_target, PersistOptions::default()))
+        .expect_err("reject directory B");
     assert_eq!(FsErrorKind::InvalidState, directory_failure.error().kind());
     assert_eq!(Some("residual-probe"), directory_failure.error().provider());
     assert_eq!(Some(&retry_target), directory_failure.error().target());
-    assert_eq!(FsOperation::PersistTemp, directory_failure.error().operation());
-    assert_eq!(Some(&published_target), directory_failure.publication_target());
+    assert_eq!(
+        FsOperation::PersistTemp,
+        directory_failure.error().operation()
+    );
+    assert_eq!(
+        Some(&published_target),
+        directory_failure.publication_target()
+    );
     let directory_keep = poll_ready(directory.keep()).expect_err("reject keep after publish");
     assert_eq!(Some("residual-probe"), directory_keep.error().provider());
     assert_eq!(None, directory_keep.error().target());
     assert_eq!(FsOperation::KeepTemp, directory_keep.error().operation());
-    let directory_cleanup = poll_ready(directory.cleanup()).expect_err("reject cleanup after publish");
+    let directory_cleanup =
+        poll_ready(directory.cleanup()).expect_err("reject cleanup after publish");
     assert_eq!(Some("residual-probe"), directory_cleanup.provider());
     assert_eq!(None, directory_cleanup.target());
     assert_eq!(FsOperation::CleanupTemp, directory_cleanup.operation());
@@ -532,15 +585,23 @@ fn test_persist_failure_retains_release_state() {
 /// Failed unpublished attempts must not fabricate historical publication.
 #[test]
 fn test_unpublished_failure_has_no_publication_target() {
-    let (filesystem, _, _) =
-        handle_support::implementation_tests::temp_failure_filesystem(PersistFailureState::NotPublished);
+    let (filesystem, _, _) = handle_support::implementation_tests::temp_failure_filesystem(
+        PersistFailureState::NotPublished,
+    );
     let target = Path::parse("/requested").expect("target");
-    let mut file = filesystem.create_temp_file(TempOptions::default()).expect("file");
-    let failure = file.persist(&target, PersistOptions::default()).expect_err("failure");
+    let mut file = filesystem
+        .create_temp_file(TempOptions::default())
+        .expect("file");
+    let failure = file
+        .persist(&target, PersistOptions::default())
+        .expect_err("failure");
     assert_eq!(None, failure.publication_target());
     file.cleanup().expect("cleanup");
     let retry = file.keep().expect_err("cleaned");
-    assert_eq!(PersistFailureState::NotPublishedSourceReleased, retry.state());
+    assert_eq!(
+        PersistFailureState::NotPublishedSourceReleased,
+        retry.state()
+    );
     assert_eq!(None, retry.publication_target());
 }
 
@@ -548,22 +609,29 @@ fn test_unpublished_failure_has_no_publication_target() {
 fn test_sync_preflight_temp_persist_rejects_relative_targets_with_context() {
     let target = Path::parse("relative").expect("relative target");
     let (filesystem, _, persist_calls) =
-        handle_support::implementation_tests::temp_failure_filesystem(PersistFailureState::NotPublished);
+        handle_support::implementation_tests::temp_failure_filesystem(
+            PersistFailureState::NotPublished,
+        );
     let original_message = filesystem
         .properties()
         .validate_path(&target, FsOperation::PersistTemp)
         .expect_err("relative target validation")
         .to_string();
-    let mut file = filesystem.create_temp_file(TempOptions::default()).expect("file");
+    let mut file = filesystem
+        .create_temp_file(TempOptions::default())
+        .expect("file");
     let failure = file
         .persist(&target, PersistOptions::default())
         .expect_err("relative target must be rejected before provider persist");
     assert_persist_target_context(failure.error(), &target, &original_message);
     assert_eq!(0, *persist_calls.lock().expect("persist calls"));
-    file.cleanup().expect("owned temporary file remains cleanable");
+    file.cleanup()
+        .expect("owned temporary file remains cleanable");
 
     let (filesystem, _, persist_calls) =
-        handle_support::implementation_tests::temp_failure_filesystem(PersistFailureState::NotPublished);
+        handle_support::implementation_tests::temp_failure_filesystem(
+            PersistFailureState::NotPublished,
+        );
     let original_message = filesystem
         .properties()
         .validate_path(&target, FsOperation::PersistTemp)
@@ -583,7 +651,10 @@ fn test_sync_preflight_temp_persist_rejects_relative_targets_with_context() {
 }
 
 fn assert_persist_target_context(error: &FsError, target: &Path, original_message: &str) {
-    assert_eq!(Some(&Path::parse("/temporary").expect("source")), error.path());
+    assert_eq!(
+        Some(&Path::parse("/temporary").expect("source")),
+        error.path()
+    );
     assert_eq!(Some(target), error.target());
     assert_eq!(Some(target), error.failure_target());
     assert_eq!(None, error.failure_path());
@@ -615,7 +686,9 @@ fn test_temp_file_source_failure_states_are_sticky_with_invalid_state_context() 
     ] {
         let (filesystem, cleanup_calls, persist_calls) =
             handle_support::implementation_tests::temp_failure_filesystem(state);
-        let mut temporary = filesystem.create_temp_file(TempOptions::default()).expect("resource");
+        let mut temporary = filesystem
+            .create_temp_file(TempOptions::default())
+            .expect("resource");
         let target = Path::parse("/published").expect("target");
         let failure = temporary
             .persist(&target, PersistOptions::default())
@@ -647,7 +720,10 @@ fn test_temp_file_source_failure_states_are_sticky_with_invalid_state_context() 
         } else {
             temporary.cleanup().expect("remaining sandbox cleanup");
             let retry = temporary.keep().expect_err("cleaned");
-            assert_eq!(PersistFailureState::NotPublishedSourceReleased, retry.state());
+            assert_eq!(
+                PersistFailureState::NotPublishedSourceReleased,
+                retry.state()
+            );
             assert_eq!(None, retry.publication_target());
         }
         drop(temporary);
@@ -715,7 +791,10 @@ fn test_temp_directory_source_failure_states_are_sticky_with_invalid_state_conte
         } else {
             temporary.cleanup().expect("remaining sandbox cleanup");
             let retry = temporary.keep().expect_err("cleaned");
-            assert_eq!(PersistFailureState::NotPublishedSourceReleased, retry.state());
+            assert_eq!(
+                PersistFailureState::NotPublishedSourceReleased,
+                retry.state()
+            );
             assert_eq!(None, retry.publication_target());
         }
         drop(temporary);
@@ -735,8 +814,11 @@ fn test_temp_file_keep_failure_retains_generated_target() {
         PersistFailureState::PublishedSourceRetained,
         PersistFailureState::PublishedSourceReleased,
     ] {
-        let (filesystem, _, _) = handle_support::implementation_tests::temp_failure_filesystem(state);
-        let mut temporary = filesystem.create_temp_file(TempOptions::default()).expect("resource");
+        let (filesystem, _, _) =
+            handle_support::implementation_tests::temp_failure_filesystem(state);
+        let mut temporary = filesystem
+            .create_temp_file(TempOptions::default())
+            .expect("resource");
         let target = Path::parse("/kept-resource").expect("target");
         let failure = temporary.keep().expect_err("injected keep failure");
         assert_eq!(Some(&target), failure.publication_target());
@@ -768,7 +850,8 @@ fn test_temp_directory_keep_failure_retains_generated_target() {
         PersistFailureState::PublishedSourceRetained,
         PersistFailureState::PublishedSourceReleased,
     ] {
-        let (filesystem, _, _) = handle_support::implementation_tests::temp_failure_filesystem(state);
+        let (filesystem, _, _) =
+            handle_support::implementation_tests::temp_failure_filesystem(state);
         let mut temporary = filesystem
             .create_temp_directory(TempOptions::default())
             .expect("resource");
@@ -799,7 +882,10 @@ fn test_temp_directory_keep_failure_retains_generated_target() {
 #[test]
 fn test_cleanup_failure_does_not_restore_owned_source() {
     for (kind, expected) in [
-        (FsErrorKind::Io, PersistFailureState::NotPublishedSourceCleanupRequired),
+        (
+            FsErrorKind::Io,
+            PersistFailureState::NotPublishedSourceCleanupRequired,
+        ),
         (
             FsErrorKind::Indeterminate,
             PersistFailureState::NotPublishedSourceIndeterminate,
@@ -807,8 +893,13 @@ fn test_cleanup_failure_does_not_restore_owned_source() {
     ] {
         let (filesystem, calls) =
             handle_support::implementation_tests::temp_lifecycle_error_filesystem(None, Some(kind));
-        let mut file = filesystem.create_temp_file(TempOptions::default()).expect("file");
-        assert_eq!(kind, file.cleanup().expect_err("injected cleanup failure").kind());
+        let mut file = filesystem
+            .create_temp_file(TempOptions::default())
+            .expect("file");
+        assert_eq!(
+            kind,
+            file.cleanup().expect_err("injected cleanup failure").kind()
+        );
         let retry = file.keep().expect_err("not owned");
         assert_eq!(expected, retry.state());
         assert_eq!(None, retry.publication_target());
@@ -825,25 +916,39 @@ fn test_temp_file_published_cleanup_becomes_source_indeterminate() {
             PersistFailureState::PublishedSourceRetained,
             Some(FsErrorKind::Indeterminate),
         );
-    let mut temporary = filesystem.create_temp_file(TempOptions::default()).expect("resource");
+    let mut temporary = filesystem
+        .create_temp_file(TempOptions::default())
+        .expect("resource");
     let target = Path::parse("/published").expect("target");
     let failure = temporary
         .persist(&target, PersistOptions::default())
         .expect_err("partial publication");
-    assert_eq!(PersistFailureState::PublishedSourceRetained, failure.state());
+    assert_eq!(
+        PersistFailureState::PublishedSourceRetained,
+        failure.state()
+    );
     assert_eq!(TempResourceState::CleanupRequired, temporary.state());
     assert_eq!(Some(&target), failure.publication_target());
     let cleanup = temporary.cleanup().expect_err("uncertain cleanup");
     assert_eq!(FsErrorKind::Indeterminate, cleanup.kind());
     assert_eq!(TempResourceState::Indeterminate, temporary.state());
     let retry = temporary
-        .persist(&Path::parse("relative").expect("relative"), PersistOptions::default())
+        .persist(
+            &Path::parse("relative").expect("relative"),
+            PersistOptions::default(),
+        )
         .expect_err("source authority is uncertain");
     assert_eq!(FsErrorKind::InvalidState, retry.error().kind());
-    assert_eq!(PersistFailureState::PublishedSourceIndeterminate, retry.state());
+    assert_eq!(
+        PersistFailureState::PublishedSourceIndeterminate,
+        retry.state()
+    );
     assert_eq!(Some(&target), retry.publication_target());
     let keep = temporary.keep().expect_err("source authority is uncertain");
-    assert_eq!(PersistFailureState::PublishedSourceIndeterminate, keep.state());
+    assert_eq!(
+        PersistFailureState::PublishedSourceIndeterminate,
+        keep.state()
+    );
     assert_eq!(Some(&target), keep.publication_target());
     assert_eq!(
         FsErrorKind::InvalidState,
@@ -871,20 +976,32 @@ fn test_temp_directory_published_cleanup_becomes_source_indeterminate() {
     let failure = temporary
         .persist(&target, PersistOptions::default())
         .expect_err("partial publication");
-    assert_eq!(PersistFailureState::PublishedSourceRetained, failure.state());
+    assert_eq!(
+        PersistFailureState::PublishedSourceRetained,
+        failure.state()
+    );
     assert_eq!(TempResourceState::CleanupRequired, temporary.state());
     assert_eq!(Some(&target), failure.publication_target());
     let cleanup = temporary.cleanup().expect_err("uncertain cleanup");
     assert_eq!(FsErrorKind::Indeterminate, cleanup.kind());
     assert_eq!(TempResourceState::Indeterminate, temporary.state());
     let retry = temporary
-        .persist(&Path::parse("relative").expect("relative"), PersistOptions::default())
+        .persist(
+            &Path::parse("relative").expect("relative"),
+            PersistOptions::default(),
+        )
         .expect_err("source authority is uncertain");
     assert_eq!(FsErrorKind::InvalidState, retry.error().kind());
-    assert_eq!(PersistFailureState::PublishedSourceIndeterminate, retry.state());
+    assert_eq!(
+        PersistFailureState::PublishedSourceIndeterminate,
+        retry.state()
+    );
     assert_eq!(Some(&target), retry.publication_target());
     let keep = temporary.keep().expect_err("source authority is uncertain");
-    assert_eq!(PersistFailureState::PublishedSourceIndeterminate, keep.state());
+    assert_eq!(
+        PersistFailureState::PublishedSourceIndeterminate,
+        keep.state()
+    );
     assert_eq!(Some(&target), keep.publication_target());
     assert_eq!(
         FsErrorKind::InvalidState,

@@ -39,7 +39,10 @@ fn test_write_options_full_configuration_is_usable() {
     assert_eq!(AtomicityRequirement::Required, options.atomicity());
     assert_eq!(DurabilityRequirement::Preferred, options.durability());
     assert_eq!(WriteDisposition::CreateOrReplace, options.disposition());
-    assert!(matches!(options.precondition(), WritePrecondition::IfMatch(_)));
+    assert!(matches!(
+        options.precondition(),
+        WritePrecondition::IfMatch(_)
+    ));
     assert!(options.user_metadata().is_empty());
     assert!(options.validate().is_ok());
 }
@@ -47,14 +50,24 @@ fn test_write_options_full_configuration_is_usable() {
 #[test]
 fn test_write_requirements_are_checked_against_typed_capabilities() {
     let atomic = WriteOptions::default().with_atomicity(AtomicityRequirement::Required);
-    let error = atomic.validate_against(FileSystemCapabilities::default()).unwrap_err();
-    assert_eq!(Some(FileSystemCapability::AtomicReplace), error.required_capability());
+    let error = atomic
+        .validate_against(FileSystemCapabilities::default())
+        .unwrap_err();
+    assert_eq!(
+        Some(FileSystemCapability::AtomicReplace),
+        error.required_capability()
+    );
 
     let append = WriteOptions::default()
         .with_disposition(WriteDisposition::Append)
         .with_atomicity(AtomicityRequirement::NotRequired);
-    let error = append.validate_against(FileSystemCapabilities::default()).unwrap_err();
-    assert_eq!(Some(FileSystemCapability::Append), error.required_capability());
+    let error = append
+        .validate_against(FileSystemCapabilities::default())
+        .unwrap_err();
+    assert_eq!(
+        Some(FileSystemCapability::Append),
+        error.required_capability()
+    );
 
     let conditional = WriteOptions::default().with_precondition(WritePrecondition::IfAbsent);
     let error = conditional
@@ -77,7 +90,10 @@ fn test_write_requirements_are_checked_against_typed_capabilities() {
     let error = durable
         .validate_against(FileSystemCapabilities::default())
         .expect_err("required durability must be preflighted");
-    assert_eq!(Some(FileSystemCapability::DurableWrite), error.required_capability());
+    assert_eq!(
+        Some(FileSystemCapability::DurableWrite),
+        error.required_capability()
+    );
     let capabilities = capabilities.with_guaranteed(FileSystemCapability::DurableWrite);
     assert!(durable.validate_against(capabilities).is_ok());
 }
@@ -133,10 +149,13 @@ fn test_write_options_preserve_validated_user_metadata() {
 #[test]
 fn test_option_accessors_are_executed_at_runtime() {
     let disposition: fn(&WriteOptions) -> WriteDisposition = black_box(WriteOptions::disposition);
-    let precondition: for<'a> fn(&'a WriteOptions) -> &'a WritePrecondition = black_box(WriteOptions::precondition);
+    let precondition: for<'a> fn(&'a WriteOptions) -> &'a WritePrecondition =
+        black_box(WriteOptions::precondition);
     let create_parent: fn(&WriteOptions) -> bool = black_box(WriteOptions::create_parent);
-    let user_metadata: fn(&WriteOptions) -> &NonSensitiveMetadata = black_box(WriteOptions::user_metadata);
-    let checksum: for<'a> fn(&'a WriteOptions) -> Option<&'a Checksum> = black_box(WriteOptions::checksum);
+    let user_metadata: fn(&WriteOptions) -> &NonSensitiveMetadata =
+        black_box(WriteOptions::user_metadata);
+    let checksum: for<'a> fn(&'a WriteOptions) -> Option<&'a Checksum> =
+        black_box(WriteOptions::checksum);
 
     let options = WriteOptions::default()
         .with_create_parent(true)

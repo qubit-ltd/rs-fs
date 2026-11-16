@@ -34,7 +34,10 @@ use crate::handle_support::implementation_tests::wrong_temp_kind_filesystem;
 fn test_handle_support_constructs_file_system() {
     let (file_system, _, _) = filesystem(false, Vec::new());
 
-    assert_eq!("handles-test", file_system.properties().info().id().as_str());
+    assert_eq!(
+        "handles-test",
+        file_system.properties().info().id().as_str()
+    );
 }
 
 /// Exercises synchronous facade dispatch for directory creation and both
@@ -77,7 +80,12 @@ fn test_handle_support_dispatches_successful_facade_operations() {
     let mut directory = file_system
         .list(&ListScope::Path((source).clone()), ListOptions::default())
         .expect("list should succeed");
-    assert!(directory.next_entry().expect("stream should succeed").is_none());
+    assert!(
+        directory
+            .next_entry()
+            .expect("stream should succeed")
+            .is_none()
+    );
 
     let mut reader = file_system
         .open_reader(&source, ReadOptions::default())
@@ -97,11 +105,15 @@ fn test_handle_support_dispatches_successful_facade_operations() {
     let mut temporary_file = file_system
         .create_temp_file(TempOptions::default())
         .expect("temporary file should open");
-    temporary_file.keep().expect("temporary file should be kept");
+    temporary_file
+        .keep()
+        .expect("temporary file should be kept");
     let mut temporary_directory = file_system
         .create_temp_directory(TempOptions::default())
         .expect("temporary directory should open");
-    temporary_directory.keep().expect("temporary directory should be kept");
+    temporary_directory
+        .keep()
+        .expect("temporary directory should be kept");
 }
 
 /// Invokes the synchronous SPI's optional default copy method and completes
@@ -215,13 +227,20 @@ fn test_handle_support_rejects_invalid_temp_identities_with_cleanup_failure() {
             .expect_err("foreign temporary directory identity must be rejected"),
     ] {
         assert_eq!(FsErrorKind::ProviderContractViolation, error.error().kind());
-        assert_eq!(FsOperation::ValidateProviderOutcome, error.error().operation());
+        assert_eq!(
+            FsOperation::ValidateProviderOutcome,
+            error.error().operation()
+        );
         let cleanup = error
             .recovery_mut()
             .expect("isolated session")
             .cleanup()
             .expect_err("cleanup injection");
-        assert!(cleanup.to_string().contains("injected temporary cleanup failure"));
+        assert!(
+            cleanup
+                .to_string()
+                .contains("injected temporary cleanup failure")
+        );
         assert_eq!(FsErrorKind::ProviderContractViolation, error.error().kind());
     }
 }

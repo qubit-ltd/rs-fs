@@ -15,7 +15,8 @@ use qubit_fs::path::PathSemantics;
 
 #[test]
 fn test_file_system_info_is_a_validated_local_snapshot() {
-    let id = FileSystemId::new("mock-instance").expect("valid filesystem identity must be accepted");
+    let id =
+        FileSystemId::new("mock-instance").expect("valid filesystem identity must be accepted");
     let provider_id = "mock";
     let info = FileSystemInfo::new(id.clone(), provider_id, PathSemantics::ObjectKey)
         .with_scheme("mock")
@@ -68,7 +69,11 @@ fn test_with_scheme_rejects_uri_and_path_input() {
         .with_scheme(scheme)
         .expect_err("only a complete URI scheme should be accepted");
         assert_eq!(FsErrorKind::InvalidUri, error.kind(), "input: {scheme:?}");
-        assert_eq!(FsOperation::ParseUri, error.operation(), "input: {scheme:?}");
+        assert_eq!(
+            FsOperation::ParseUri,
+            error.operation(),
+            "input: {scheme:?}"
+        );
     }
 
     let info = FileSystemInfo::new(
@@ -90,7 +95,11 @@ fn test_file_system_info_rejects_secret_bearing_provider_metadata() {
 
 #[test]
 fn test_file_system_info_rejects_sensitive_provider_metadata_keys() {
-    assert!(UserMetadata::new().with("x-amz-signature", "plaintext").is_err());
+    assert!(
+        UserMetadata::new()
+            .with("x-amz-signature", "plaintext")
+            .is_err()
+    );
 }
 
 #[test]

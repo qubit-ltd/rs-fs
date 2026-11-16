@@ -132,7 +132,12 @@ fn test_assess_copy_preflight_preserves_request_context() {
     })
     .expect("sync facade should construct");
     for (source, target, options, kind) in [
-        ("/same", "/same", CopyOptions::default(), FsErrorKind::InvalidOptions),
+        (
+            "/same",
+            "/same",
+            CopyOptions::default(),
+            FsErrorKind::InvalidOptions,
+        ),
         (
             "/source",
             "/target",
@@ -164,7 +169,10 @@ fn test_assess_copy_preflight_preserves_request_context() {
         sync_calls.load(Ordering::SeqCst),
         "local rejection must not call provider"
     );
-    assert!(probe.calls().is_empty(), "local copy rejection must not call provider");
+    assert!(
+        probe.calls().is_empty(),
+        "local copy rejection must not call provider"
+    );
 
     let (filesystem, probe) = async_recording_file_system(AsyncRecordingConfig {
         omitted_capability: Some(FileSystemCapability::Copy),
@@ -181,7 +189,10 @@ fn test_assess_copy_preflight_preserves_request_context() {
     assert_eq!(Some("async-recording"), error.provider());
     assert_eq!(Some(&source), error.path());
     assert_eq!(Some(&target), error.target());
-    assert!(probe.calls().is_empty(), "route rejection must not call provider");
+    assert!(
+        probe.calls().is_empty(),
+        "route rejection must not call provider"
+    );
 
     let invalid_target = path("relative");
     let error = filesystem
@@ -208,8 +219,9 @@ fn test_sync_async_outcome_diagnostics_match() {
     let sync_create = sync
         .create_directory(&resource_path, CreateDirectoryOptions::default())
         .expect_err("existing directory without exists_ok should violate the contract");
-    let create = ready(filesystem.create_directory(&resource_path, CreateDirectoryOptions::default()))
-        .expect_err("existing directory without exists_ok should violate the contract");
+    let create =
+        ready(filesystem.create_directory(&resource_path, CreateDirectoryOptions::default()))
+            .expect_err("existing directory without exists_ok should violate the contract");
     assert_diagnostics_match(&sync_create, &create);
 
     let sync_delete = sync
@@ -237,7 +249,10 @@ fn assert_diagnostics_match(sync: &FsError, asynchronous: &FsError) {
     assert_eq!(None, sync.target());
     assert_eq!(None, sync.effect_state());
     assert!(std::error::Error::source(sync).is_none());
-    assert!(matches!(sync.operation(), FsOperation::CreateDir | FsOperation::Delete));
+    assert!(matches!(
+        sync.operation(),
+        FsOperation::CreateDir | FsOperation::Delete
+    ));
 }
 
 #[test]
@@ -277,7 +292,10 @@ fn test_identity_and_rename_diagnostics_keep_their_operations() {
     let target = path("/wrong-rename-target");
     let failure = ready(filesystem.rename(&source, &target, RenameOptions::default()))
         .expect_err("provider returned a different rename target");
-    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
     assert_eq!(FsOperation::Rename, failure.error().operation());
     assert_eq!(Some(&source), failure.error().path());
     assert_eq!(Some(&target), failure.error().target());

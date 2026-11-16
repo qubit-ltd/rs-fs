@@ -101,14 +101,23 @@ impl FileSystemSpi for SyncFs {
         ))
     }
     fn open_writer(&self, request: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
-        let info = OpenedFileInfo::new(FileSystemId::new(PROVIDER).unwrap(), request.path().clone());
-        Ok(OpenedWriter::new(info, Box::new(SyncWriter(Arc::clone(&self.0)))))
+        let info =
+            OpenedFileInfo::new(FileSystemId::new(PROVIDER).unwrap(), request.path().clone());
+        Ok(OpenedWriter::new(
+            info,
+            Box::new(SyncWriter(Arc::clone(&self.0))),
+        ))
     }
 }
 
 impl Output for SyncWriter {
     type Item = u8;
-    unsafe fn write_unchecked(&mut self, input: &[u8], index: usize, count: usize) -> IoResult<usize> {
+    unsafe fn write_unchecked(
+        &mut self,
+        input: &[u8],
+        index: usize,
+        count: usize,
+    ) -> IoResult<usize> {
         if count == 0 {
             self.0.writes.fetch_add(1, Ordering::SeqCst);
             return Ok(1);
@@ -166,7 +175,10 @@ fn test_sync_overreported_write_poisoning_blocks_commit() {
     let path = Path::parse("/count-sync").unwrap();
     let mut writer = fs.open_writer(&path, WriteOptions::default()).unwrap();
     let payload = b"abcdef";
-    assert_eq!(2, unsafe { writer.write_unchecked(payload, 0, payload.len()) }.unwrap());
+    assert_eq!(
+        2,
+        unsafe { writer.write_unchecked(payload, 0, payload.len()) }.unwrap()
+    );
     let error = unsafe { writer.write_unchecked(payload, 2, payload.len() - 2) }.unwrap_err();
     assert_contract_error(&error, &path);
     assert_eq!(b"ab", probe.accepted.lock().unwrap().as_slice());
@@ -199,10 +211,18 @@ fn test_sync_write_all_overcount_retains_recovery_and_prefix_count() {
     let probe = Arc::new(Probe::default());
     let fs = FileSystem::from_spi(SyncFs(Arc::clone(&probe))).unwrap();
     let path = Path::parse("/count-write-all").unwrap();
-    let failure = fs.write_all(&path, b"abcdef", WriteOptions::default()).unwrap_err();
-    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+    let failure = fs
+        .write_all(&path, b"abcdef", WriteOptions::default())
+        .unwrap_err();
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
     assert_eq!(FsOperation::Write, failure.error().operation());
-    assert_eq!(Some(FsEffectState::Indeterminate), failure.error().effect_state());
+    assert_eq!(
+        Some(FsEffectState::Indeterminate),
+        failure.error().effect_state()
+    );
     assert_eq!(Some(&path), failure.error().path());
     assert_eq!(Some("overcount test provider"), failure.error().provider());
     assert_eq!(2, failure.written_bytes());
@@ -273,7 +293,10 @@ mod asynchronous {
             let path = request.path().clone();
             Box::pin(async move { Ok(StatResponse::new(path, FileMetadata::new(FileKind::File))) })
         }
-        fn open_writer<'a>(&'a self, request: OpenWriterRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
+        fn open_writer<'a>(
+            &'a self,
+            request: OpenWriterRequest<'a>,
+        ) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
             let path = request.path().clone();
             let probe = Arc::clone(&self.0);
             Box::pin(async move {
@@ -318,7 +341,9 @@ mod asynchronous {
         }
     }
     impl AsyncFileWriteSession for AsyncWriter {
-        fn commit_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
+        fn commit_async<'a>(
+            self: Pin<&'a mut Self>,
+        ) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
             let probe = Arc::clone(&self.get_mut().0);
             let attempt = probe.commits.fetch_add(1, Ordering::SeqCst);
             let failure = probe.async_commit_failure.load(Ordering::SeqCst);
@@ -337,7 +362,9 @@ mod asynchronous {
                 }
                 Ok(
                     WriteOutcome::new(AchievedAtomicity::Atomic, PublicationMethod::AtomicRename)
-                        .with_bytes_written(probe.async_expected_bytes.load(Ordering::SeqCst) as u64),
+                        .with_bytes_written(
+                            probe.async_expected_bytes.load(Ordering::SeqCst) as u64
+                        ),
                 )
             })
         }
@@ -381,12 +408,16 @@ mod asynchronous {
         let fs = AsyncFileSystem::from_spi(AsyncFs(Arc::clone(&probe))).unwrap();
         let path = Path::parse("/count-async").unwrap();
         ready(async {
-            let mut writer = fs.open_writer(&path, WriteOptions::default()).await.unwrap();
+            let mut writer = fs
+                .open_writer(&path, WriteOptions::default())
+                .await
+                .unwrap();
             let bytes = b"abcdef";
             let mut cx = Context::from_waker(Waker::noop());
             let first = unsafe { Pin::new(&mut writer).poll_write_unchecked(&mut cx, bytes, 0, 6) };
             assert!(matches!(first, Poll::Ready(Ok(2))));
-            let result = unsafe { Pin::new(&mut writer).poll_write_unchecked(&mut cx, bytes, 2, 4) };
+            let result =
+                unsafe { Pin::new(&mut writer).poll_write_unchecked(&mut cx, bytes, 2, 4) };
             let error = match result {
                 Poll::Ready(Err(error)) => error,
                 _ => panic!("overcount must fail"),
@@ -398,12 +429,18 @@ mod asynchronous {
                 unsafe { Pin::new(&mut writer).poll_write_unchecked(&mut cx, bytes, 0, 1) },
                 Poll::Ready(Err(_))
             ));
-            assert!(matches!(Pin::new(&mut writer).poll_flush(&mut cx), Poll::Ready(Err(_))));
+            assert!(matches!(
+                Pin::new(&mut writer).poll_flush(&mut cx),
+                Poll::Ready(Err(_))
+            ));
             assert!(ready(writer.commit_async()).is_err());
             assert_eq!(2, probe.writes.load(Ordering::SeqCst));
             assert_eq!(0, probe.flushes.load(Ordering::SeqCst));
             assert_eq!(0, probe.commits.load(Ordering::SeqCst));
-            assert_eq!(WriteAbortOutcome::Indeterminate, ready(writer.abort_async()).unwrap());
+            assert_eq!(
+                WriteAbortOutcome::Indeterminate,
+                ready(writer.abort_async()).unwrap()
+            );
             assert_eq!(WriterState::Indeterminate, writer.state());
             assert_eq!(1, probe.aborts.load(Ordering::SeqCst));
         });
@@ -415,7 +452,10 @@ mod asynchronous {
         let fs = AsyncFileSystem::from_spi(AsyncFs(Arc::clone(&probe))).unwrap();
         let path = Path::parse("/count-async-zero").unwrap();
         ready(async {
-            let mut writer = fs.open_writer(&path, WriteOptions::default()).await.unwrap();
+            let mut writer = fs
+                .open_writer(&path, WriteOptions::default())
+                .await
+                .unwrap();
             let mut cx = Context::from_waker(Waker::noop());
             let state = writer.state();
             let result = unsafe { Pin::new(&mut writer).poll_write_unchecked(&mut cx, b"", 0, 0) };
@@ -438,18 +478,28 @@ mod asynchronous {
             (0, 1, WriterState::Aborted),
         ] {
             let probe = Arc::new(Probe::default());
-            probe.async_commit_failure.store(commit_failure, Ordering::SeqCst);
-            probe.async_abort_outcome.store(abort_outcome, Ordering::SeqCst);
+            probe
+                .async_commit_failure
+                .store(commit_failure, Ordering::SeqCst);
+            probe
+                .async_abort_outcome
+                .store(abort_outcome, Ordering::SeqCst);
             let fs = AsyncFileSystem::from_spi(AsyncFs(Arc::clone(&probe))).unwrap();
             let path = Path::parse("/count-async-zero-state").unwrap();
             ready(async {
-                let mut writer = fs.open_writer(&path, WriteOptions::default()).await.unwrap();
+                let mut writer = fs
+                    .open_writer(&path, WriteOptions::default())
+                    .await
+                    .unwrap();
                 if commit_failure != 0 {
                     assert!(ready(writer.commit_async()).is_err());
                 } else if expected == WriterState::Committed {
                     ready(writer.commit_async()).unwrap();
                 } else if expected == WriterState::Aborted {
-                    assert_eq!(WriteAbortOutcome::NotPublished, ready(writer.abort_async()).unwrap());
+                    assert_eq!(
+                        WriteAbortOutcome::NotPublished,
+                        ready(writer.abort_async()).unwrap()
+                    );
                 }
 
                 let mut cx = Context::from_waker(Waker::noop());
@@ -466,7 +516,9 @@ mod asynchronous {
                 let flushes = probe.flushes.load(Ordering::SeqCst);
                 let commits = probe.commits.load(Ordering::SeqCst);
                 for (input, index) in [(&b""[..], 0), (&b"abc"[..], 3)] {
-                    let result = unsafe { Pin::new(&mut writer).poll_write_unchecked(&mut cx, input, index, 0) };
+                    let result = unsafe {
+                        Pin::new(&mut writer).poll_write_unchecked(&mut cx, input, index, 0)
+                    };
                     assert!(matches!(result, Poll::Ready(Ok(0))));
                     assert_eq!(state, writer.state());
                     assert_eq!(writes, probe.writes.load(Ordering::SeqCst));
@@ -492,7 +544,10 @@ mod asynchronous {
         let error = ready(operation.execute()).unwrap_err();
         assert_eq!(FsErrorKind::ProviderContractViolation, error.error().kind());
         assert_eq!(FsOperation::Write, error.error().operation());
-        assert_eq!(Some(FsEffectState::Indeterminate), error.error().effect_state());
+        assert_eq!(
+            Some(FsEffectState::Indeterminate),
+            error.error().effect_state()
+        );
         assert_eq!(Some(&path), error.error().path());
         assert_eq!(Some("overcount test provider"), error.error().provider());
         assert_eq!(2, operation.written_bytes());

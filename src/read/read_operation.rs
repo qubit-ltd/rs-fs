@@ -55,7 +55,12 @@ impl<'a> ReadOperation<'a> {
     ///
     /// # Returns
     /// The complete file contents when they fit within `max_bytes`.
-    pub(crate) fn read_all(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
+    pub(crate) fn read_all(
+        &self,
+        path: &Path,
+        options: ReadOptions,
+        max_bytes: usize,
+    ) -> FsResult<Vec<u8>> {
         let mut reader = self.filesystem.open_reader(path, options)?;
         let mut result = ReadBuffer::new(max_bytes);
         let maximum = FacadeCore::quantity_from_usize(
@@ -68,15 +73,16 @@ impl<'a> ReadOperation<'a> {
         let mut buffer = [0_u8; 8192];
         loop {
             let remaining = read_budget.remaining();
-            let read_len =
-                usize::try_from(remaining.saturating_add(1)).map_or(buffer.len(), |value| value.min(buffer.len()));
-            let read = read_retry_interrupted(&mut reader, &mut buffer[..read_len], || Ok(())).map_err(|error| {
-                self.filesystem.core().enrich(
-                    FsError::from_stream_io(error, FsOperation::Read, path),
-                    Some(path),
-                    FsOperation::Read,
-                )
-            })?;
+            let read_len = usize::try_from(remaining.saturating_add(1))
+                .map_or(buffer.len(), |value| value.min(buffer.len()));
+            let read = read_retry_interrupted(&mut reader, &mut buffer[..read_len], || Ok(()))
+                .map_err(|error| {
+                    self.filesystem.core().enrich(
+                        FsError::from_stream_io(error, FsOperation::Read, path),
+                        Some(path),
+                        FsOperation::Read,
+                    )
+                })?;
             if read == 0 {
                 return Ok(result.into_vec());
             }
@@ -96,8 +102,14 @@ impl<'a> ReadOperation<'a> {
                 ));
             }
             result
-                .try_append(&buffer[..usize::try_from(read).expect("read count originated as usize")])
-                .map_err(|error| self.filesystem.core().enrich(error, Some(path), FsOperation::Read))?;
+                .try_append(
+                    &buffer[..usize::try_from(read).expect("read count originated as usize")],
+                )
+                .map_err(|error| {
+                    self.filesystem
+                        .core()
+                        .enrich(error, Some(path), FsOperation::Read)
+                })?;
         }
     }
 
@@ -129,7 +141,9 @@ impl<'a> ReadOperation<'a> {
     ) -> FsResult<PrefixReadOutcome> {
         let original_options = options.clone();
         let plan = PrefixReadPlan::new(self.filesystem.properties(), path, options, max_bytes)?;
-        let mut reader = self.filesystem.open_reader_resolved(path, plan.into_options())?;
+        let mut reader = self
+            .filesystem
+            .open_reader_resolved(path, plan.into_options())?;
         let info = reader.info().clone();
         if max_bytes == 0 {
             return Ok(PrefixReadOutcome::new(
@@ -145,20 +159,23 @@ impl<'a> ReadOperation<'a> {
         let mut termination = PrefixReadTermination::LimitReached;
         while result.len() < max_bytes {
             let read_len = FacadeCore::next_prefix_read_len(result.len(), max_bytes);
-            let read = read_retry_interrupted(&mut reader, &mut buffer[..read_len], || Ok(())).map_err(|error| {
-                self.filesystem.core().enrich(
-                    FsError::from_stream_io(error, FsOperation::Read, path),
-                    Some(path),
-                    FsOperation::Read,
-                )
-            })?;
+            let read = read_retry_interrupted(&mut reader, &mut buffer[..read_len], || Ok(()))
+                .map_err(|error| {
+                    self.filesystem.core().enrich(
+                        FsError::from_stream_io(error, FsOperation::Read, path),
+                        Some(path),
+                        FsOperation::Read,
+                    )
+                })?;
             if read == 0 {
                 termination = PrefixReadTermination::StreamEnded;
                 break;
             }
-            result
-                .try_append(&buffer[..read])
-                .map_err(|error| self.filesystem.core().enrich(error, Some(path), FsOperation::Read))?;
+            result.try_append(&buffer[..read]).map_err(|error| {
+                self.filesystem
+                    .core()
+                    .enrich(error, Some(path), FsOperation::Read)
+            })?;
         }
         Ok(PrefixReadOutcome::new(
             result.into_vec(),

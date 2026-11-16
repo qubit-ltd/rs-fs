@@ -57,7 +57,9 @@ fn test_list_options_reject_invalid_page_size_and_noncanonical_prefix() {
         ListOptions::default().with_prefix(Some("../escape".to_owned())),
         ListOptions::default().with_prefix(Some("nested/../entry".to_owned())),
     ] {
-        let error = options.validate().expect_err("invalid list option must be rejected");
+        let error = options
+            .validate()
+            .expect_err("invalid list option must be rejected");
         assert_eq!(FsErrorKind::InvalidOptions, error.kind());
         assert_eq!(FsOperation::List, error.operation());
     }
@@ -65,7 +67,8 @@ fn test_list_options_reject_invalid_page_size_and_noncanonical_prefix() {
 
 #[test]
 fn test_list_options_reject_nul_literal_prefix_in_both_validators() {
-    let options = ListOptions::object_keys().with_filter(Some(ListFilter::LiteralPrefix("a\0b".to_owned())));
+    let options =
+        ListOptions::object_keys().with_filter(Some(ListFilter::LiteralPrefix("a\0b".to_owned())));
     for result in [
         options.validate(),
         options.validate_for(PathSemantics::ObjectKey),
@@ -80,10 +83,18 @@ fn test_list_options_reject_nul_literal_prefix_in_both_validators() {
 #[test]
 fn test_list_options_preserve_valid_literal_prefixes() {
     for prefix in ["", "报告/日", "a//b/../c"] {
-        let options = ListOptions::object_keys().with_filter(Some(ListFilter::LiteralPrefix(prefix.to_owned())));
+        let options = ListOptions::object_keys()
+            .with_filter(Some(ListFilter::LiteralPrefix(prefix.to_owned())));
         assert!(options.validate().is_ok());
         assert!(options.validate_for(PathSemantics::ObjectKey).is_ok());
-        assert!(options.validate_for(PathSemantics::ProviderSpecific).is_ok());
-        assert_eq!(Some(&ListFilter::LiteralPrefix(prefix.to_owned())), options.filter());
+        assert!(
+            options
+                .validate_for(PathSemantics::ProviderSpecific)
+                .is_ok()
+        );
+        assert_eq!(
+            Some(&ListFilter::LiteralPrefix(prefix.to_owned())),
+            options.filter()
+        );
     }
 }

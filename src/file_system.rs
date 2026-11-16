@@ -169,7 +169,12 @@ impl FileSystem {
     /// # Returns
     /// The selected route and the first statically rejected fallback, when one
     /// exists.
-    pub fn assess_copy(&self, source: &Path, target: &Path, options: &CopyOptions) -> FsResult<CopyAssessment> {
+    pub fn assess_copy(
+        &self,
+        source: &Path,
+        target: &Path,
+        options: &CopyOptions,
+    ) -> FsResult<CopyAssessment> {
         self.core.assess_copy(source, target, options)
     }
 
@@ -236,7 +241,12 @@ impl FileSystem {
     /// # Returns
     /// The confirmed copy outcome.
     #[allow(clippy::result_large_err)]
-    pub fn copy(&self, source: &Path, target: &Path, options: CopyOptions) -> Result<CopyOutcome, CopyFailure> {
+    pub fn copy(
+        &self,
+        source: &Path,
+        target: &Path,
+        options: CopyOptions,
+    ) -> Result<CopyOutcome, CopyFailure> {
         CopyOperation::new(self, source, target, options).execute()
     }
 
@@ -253,7 +263,12 @@ impl FileSystem {
     ///
     /// # Returns
     /// The provider-confirmed rename outcome.
-    pub fn rename(&self, source: &Path, target: &Path, options: RenameOptions) -> Result<RenameOutcome, RenameFailure> {
+    pub fn rename(
+        &self,
+        source: &Path,
+        target: &Path,
+        options: RenameOptions,
+    ) -> Result<RenameOutcome, RenameFailure> {
         if let Err(error) = self.rename_preflight(source, target, &options) {
             return Err(self.contextualize_rename_failure(
                 RenameFailure::new(error, RenameFailureState::Unchanged),
@@ -277,11 +292,13 @@ impl FileSystem {
             Err(failure) => {
                 let (error, state) = failure.into_parts();
                 Err(RenameFailure::new(
-                    error.with_operation(FsOperation::Rename).with_missing_context(
-                        source,
-                        Some(target),
-                        self.properties().info().provider_id(),
-                    ),
+                    error
+                        .with_operation(FsOperation::Rename)
+                        .with_missing_context(
+                            source,
+                            Some(target),
+                            self.properties().info().provider_id(),
+                        ),
                     state,
                 ))
             }
@@ -335,13 +352,21 @@ impl FileSystem {
     /// Returns path/option errors, missing read or operation errors, the
     /// provider open error, or a provider-contract error for mismatched
     /// identity, missing metadata, non-file kind, or unknown length.
-    pub fn open_random_access_reader(&self, path: &Path, options: ReadOptions) -> FsResult<RandomAccessReader> {
+    pub fn open_random_access_reader(
+        &self,
+        path: &Path,
+        options: ReadOptions,
+    ) -> FsResult<RandomAccessReader> {
         self.validate_path(path, FsOperation::OpenReader)?;
-        RandomAccessReadPolicy::validate_open(&options).map_err(|e| self.enrich(e, path, FsOperation::OpenReader))?;
+        RandomAccessReadPolicy::validate_open(&options)
+            .map_err(|e| self.enrich(e, path, FsOperation::OpenReader))?;
         RandomAccessReadPolicy::validate_capabilities(&options, self.properties().capabilities())
             .map_err(|e| self.enrich(e, path, FsOperation::OpenReader))?;
         self.require(FileSystemCapability::Read, FsOperation::OpenReader, path)?;
-        if !self.core.provider_supports(ProviderOperation::OpenRandomAccessReader) {
+        if !self
+            .core
+            .provider_supports(ProviderOperation::OpenRandomAccessReader)
+        {
             return Err(self.enrich(
                 FsError::new(
                     FsErrorKind::UnsupportedOperation,
@@ -354,7 +379,10 @@ impl FileSystem {
         }
         let opened = self
             .spi
-            .open_random_access_reader(OpenReaderRequest::new(path, ResolvedReadOptions::new(options)))
+            .open_random_access_reader(OpenReaderRequest::new(
+                path,
+                ResolvedReadOptions::new(options),
+            ))
             .map_err(|e| self.enrich(e, path, FsOperation::OpenReader))?;
         let (info, session) = opened.into_parts();
         self.validate_opened_info(&info, path)?;
@@ -382,7 +410,11 @@ impl FileSystem {
     ///
     /// # Returns
     /// The writer, or an `OpenFailure` retaining cleanup state when needed.
-    pub fn open_writer(&self, path: &Path, options: WriteOptions) -> Result<FileWriter, OpenFailure<RejectedWriter>> {
+    pub fn open_writer(
+        &self,
+        path: &Path,
+        options: WriteOptions,
+    ) -> Result<FileWriter, OpenFailure<RejectedWriter>> {
         self.core
             .validate_write_request(path, &options)
             .map_err(|error| OpenFailure::new(error, OpenFailureStage::Preflight, None))?;
@@ -390,7 +422,10 @@ impl FileSystem {
         let durability = options.durability();
         let opened = self
             .spi
-            .open_writer(OpenWriterRequest::new(path, ResolvedWriteOptions::new(options)))
+            .open_writer(OpenWriterRequest::new(
+                path,
+                ResolvedWriteOptions::new(options),
+            ))
             .map_err(|error| {
                 OpenFailure::new(
                     self.enrich(error, path, FsOperation::OpenWriter),
@@ -431,20 +466,28 @@ impl FileSystem {
     ///
     /// # Returns
     /// A temporary file handle bound to this facade.
-    pub fn create_temp_file(&self, options: TempOptions) -> Result<TempFile, OpenFailure<RejectedTempResource>> {
+    pub fn create_temp_file(
+        &self,
+        options: TempOptions,
+    ) -> Result<TempFile, OpenFailure<RejectedTempResource>> {
         let parent = options.parent().cloned();
         self.core
             .validate_temp_parent(parent.as_ref())
             .map_err(|error| OpenFailure::new(error, OpenFailureStage::Preflight, None))?;
         self.core
-            .require(FileSystemCapability::TempFile, FsOperation::CreateTemp, parent.as_ref())
+            .require(
+                FileSystemCapability::TempFile,
+                FsOperation::CreateTemp,
+                parent.as_ref(),
+            )
             .map_err(|error| OpenFailure::new(error, OpenFailureStage::Preflight, None))?;
         let opened = self
             .spi
             .create_temp_file(CreateTempFileRequest::new(options))
             .map_err(|error| {
                 OpenFailure::new(
-                    self.core.enrich(error, parent.as_ref(), FsOperation::CreateTemp),
+                    self.core
+                        .enrich(error, parent.as_ref(), FsOperation::CreateTemp),
                     OpenFailureStage::ProviderOpen,
                     None,
                 )
@@ -507,7 +550,8 @@ impl FileSystem {
             .create_temp_directory(CreateTempDirectoryRequest::new(options))
             .map_err(|error| {
                 OpenFailure::new(
-                    self.core.enrich(error, parent.as_ref(), FsOperation::CreateTemp),
+                    self.core
+                        .enrich(error, parent.as_ref(), FsOperation::CreateTemp),
                     OpenFailureStage::ProviderOpen,
                     None,
                 )
@@ -535,7 +579,11 @@ impl FileSystem {
                 )),
             ));
         }
-        Ok(TempDirectory::new(self.clone(), info.path().clone(), session))
+        Ok(TempDirectory::new(
+            self.clone(),
+            info.path().clone(),
+            session,
+        ))
     }
 
     /// Creates a directory after local path validation.
@@ -550,9 +598,17 @@ impl FileSystem {
     ///
     /// # Returns
     /// The provider-confirmed directory creation outcome.
-    pub fn create_directory(&self, path: &Path, options: CreateDirectoryOptions) -> FsResult<CreateDirectoryOutcome> {
+    pub fn create_directory(
+        &self,
+        path: &Path,
+        options: CreateDirectoryOptions,
+    ) -> FsResult<CreateDirectoryOutcome> {
         self.validate_path(path, FsOperation::CreateDir)?;
-        self.require(FileSystemCapability::CreateDirectory, FsOperation::CreateDir, path)?;
+        self.require(
+            FileSystemCapability::CreateDirectory,
+            FsOperation::CreateDir,
+            path,
+        )?;
         let exists_ok = options.exists_ok();
         let outcome = self
             .spi
@@ -621,7 +677,12 @@ impl FileSystem {
     ///
     /// # Returns
     /// The complete contents when the file fits within the byte cap.
-    pub fn read_all(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
+    pub fn read_all(
+        &self,
+        path: &Path,
+        options: ReadOptions,
+        max_bytes: usize,
+    ) -> FsResult<Vec<u8>> {
         ReadOperation::new(self).read_all(path, options, max_bytes)
     }
 
@@ -639,7 +700,12 @@ impl FileSystem {
     /// # Returns
     /// The bytes read and the termination reason, which distinguishes end of
     /// file from reaching the byte limit.
-    pub fn read_prefix(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<PrefixReadOutcome> {
+    pub fn read_prefix(
+        &self,
+        path: &Path,
+        options: ReadOptions,
+        max_bytes: usize,
+    ) -> FsResult<PrefixReadOutcome> {
         ReadOperation::new(self).read_prefix(path, options, max_bytes)
     }
 
@@ -657,7 +723,12 @@ impl FileSystem {
     /// # Returns
     /// The confirmed write outcome, or a failure retaining the writer and
     /// confirmed transfer state.
-    pub fn write_all(&self, path: &Path, bytes: &[u8], options: WriteOptions) -> Result<WriteOutcome, WriteAllFailure> {
+    pub fn write_all(
+        &self,
+        path: &Path,
+        bytes: &[u8],
+        options: WriteOptions,
+    ) -> Result<WriteOutcome, WriteAllFailure> {
         WriteOperation::new(self).write_all(path, bytes, options)
     }
 
@@ -707,7 +778,11 @@ impl FileSystem {
     /// # Errors
     /// Returns a path, option, capability, provider, or provider-contract
     /// error when the reader cannot be opened safely.
-    pub(crate) fn open_reader_resolved(&self, path: &Path, resolved: ResolvedReadOptions) -> FsResult<FileReader> {
+    pub(crate) fn open_reader_resolved(
+        &self,
+        path: &Path,
+        resolved: ResolvedReadOptions,
+    ) -> FsResult<FileReader> {
         let options = resolved.options().clone();
         self.validate_path(path, FsOperation::OpenReader)?;
         options
@@ -750,18 +825,20 @@ impl FileSystem {
         target: &Path,
         options: &PersistOptions,
     ) -> FsResult<()> {
-        self.validate_path(source, FsOperation::PersistTemp).map_err(|error| {
-            self.enrich(error, source, FsOperation::PersistTemp)
-                .with_failure_path(source.clone())
-                .with_path(source.clone())
-                .with_target(target.clone())
-        })?;
-        self.validate_path(target, FsOperation::PersistTemp).map_err(|error| {
-            self.enrich(error, source, FsOperation::PersistTemp)
-                .with_failure_target(target.clone())
-                .with_path(source.clone())
-                .with_target(target.clone())
-        })?;
+        self.validate_path(source, FsOperation::PersistTemp)
+            .map_err(|error| {
+                self.enrich(error, source, FsOperation::PersistTemp)
+                    .with_failure_path(source.clone())
+                    .with_path(source.clone())
+                    .with_target(target.clone())
+            })?;
+        self.validate_path(target, FsOperation::PersistTemp)
+            .map_err(|error| {
+                self.enrich(error, source, FsOperation::PersistTemp)
+                    .with_failure_target(target.clone())
+                    .with_path(source.clone())
+                    .with_target(target.clone())
+            })?;
         options
             .validate_against(self.properties().capabilities())
             .map_err(|error| {
@@ -783,14 +860,15 @@ impl FileSystem {
     /// # Errors
     /// Returns a provider-contract error when the target path is invalid.
     pub(crate) fn validate_temp_keep_target(&self, source: &Path, target: &Path) -> FsResult<()> {
-        self.validate_path(target, FsOperation::KeepTemp).map_err(|_| {
-            self.contract_error(
-                source,
-                FsOperation::ValidateProviderOutcome,
-                "provider returned a temporary keep target with an invalid logical path",
-            )
-            .with_target(target.clone())
-        })
+        self.validate_path(target, FsOperation::KeepTemp)
+            .map_err(|_| {
+                self.contract_error(
+                    source,
+                    FsOperation::ValidateProviderOutcome,
+                    "provider returned a temporary keep target with an invalid logical path",
+                )
+                .with_target(target.clone())
+            })
     }
 
     /// Validates and dispatches one deletion primitive.
@@ -805,7 +883,12 @@ impl FileSystem {
     ///
     /// # Errors
     /// Returns validation, capability, provider, or provider-contract errors.
-    fn delete(&self, path: &Path, options: DeleteOptions, directory: bool) -> FsResult<DeleteOutcome> {
+    fn delete(
+        &self,
+        path: &Path,
+        options: DeleteOptions,
+        directory: bool,
+    ) -> FsResult<DeleteOutcome> {
         self.validate_path(path, FsOperation::Delete)?;
         options
             .validate_against(self.properties().capabilities())
@@ -813,11 +896,15 @@ impl FileSystem {
         self.require(FileSystemCapability::Delete, FsOperation::Delete, path)?;
         let missing_ok = options.missing_ok();
         let outcome = if directory {
-            self.spi
-                .delete_directory(DeleteDirectoryRequest::new(path, ResolvedDeleteOptions::new(options)))
+            self.spi.delete_directory(DeleteDirectoryRequest::new(
+                path,
+                ResolvedDeleteOptions::new(options),
+            ))
         } else {
-            self.spi
-                .delete_file(DeleteFileRequest::new(path, ResolvedDeleteOptions::new(options)))
+            self.spi.delete_file(DeleteFileRequest::new(
+                path,
+                ResolvedDeleteOptions::new(options),
+            ))
         }
         .map_err(|error| self.enrich(error, path, FsOperation::Delete))?;
         if outcome.already_missing() && !missing_ok {
@@ -842,7 +929,12 @@ impl FileSystem {
     ///
     /// # Errors
     /// Returns a path, option, capability, or same-path validation error.
-    fn rename_preflight(&self, source: &Path, target: &Path, options: &RenameOptions) -> FsResult<()> {
+    fn rename_preflight(
+        &self,
+        source: &Path,
+        target: &Path,
+        options: &RenameOptions,
+    ) -> FsResult<()> {
         self.validate_path(source, FsOperation::Rename)?;
         self.validate_path(target, FsOperation::Rename)?;
         options
@@ -874,10 +966,19 @@ impl FileSystem {
     ///
     /// # Returns
     /// The failure with missing source, target, and provider context filled.
-    fn contextualize_rename_failure(&self, failure: RenameFailure, source: &Path, target: &Path) -> RenameFailure {
+    fn contextualize_rename_failure(
+        &self,
+        failure: RenameFailure,
+        source: &Path,
+        target: &Path,
+    ) -> RenameFailure {
         let (error, state) = failure.into_parts();
         RenameFailure::new(
-            error.with_missing_context(source, Some(target), self.properties().info().provider_id()),
+            error.with_missing_context(
+                source,
+                Some(target),
+                self.properties().info().provider_id(),
+            ),
             state,
         )
     }
@@ -909,7 +1010,12 @@ impl FileSystem {
     ///
     /// # Errors
     /// Returns a missing-capability error when the provider lacks it.
-    fn require(&self, capability: FileSystemCapability, operation: FsOperation, path: &Path) -> FsResult<()> {
+    fn require(
+        &self,
+        capability: FileSystemCapability,
+        operation: FsOperation,
+        path: &Path,
+    ) -> FsResult<()> {
         self.core.require(capability, operation, Some(path))
     }
 
@@ -972,6 +1078,7 @@ impl FileSystem {
         expected_kind: FileKind,
         requested_parent: Option<&Path>,
     ) -> FsResult<()> {
-        self.core.validate_temp_info(info, expected_kind, requested_parent)
+        self.core
+            .validate_temp_info(info, expected_kind, requested_parent)
     }
 }

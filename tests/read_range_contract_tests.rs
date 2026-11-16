@@ -50,9 +50,12 @@ fn test_range_overflow_precedes_sync_dispatch_and_capabilities() {
         let observations = Arc::new(Observations::default());
         let fs = FileSystem::from_spi(provider(&observations, ranged)).expect("filesystem");
         let path = Path::parse("/payload").expect("path");
-        let options = ReadOptions::default().with_offset(Some(u64::MAX)).with_length(Some(1));
+        let options = ReadOptions::default()
+            .with_offset(Some(u64::MAX))
+            .with_length(Some(1));
         let errors = [
-            fs.open_reader(&path, options.clone()).expect_err("overflow"),
+            fs.open_reader(&path, options.clone())
+                .expect_err("overflow"),
             fs.read_prefix(&path, options, 0)
                 .expect_err("overflow before narrowing"),
         ];
@@ -72,10 +75,14 @@ fn test_range_overflow_precedes_async_dispatch() {
     let observations = Arc::new(Observations::default());
     let fs = AsyncFileSystem::from_spi(provider(&observations, true)).expect("filesystem");
     let path = Path::parse("/payload").expect("path");
-    let options = ReadOptions::default().with_offset(Some(u64::MAX)).with_length(Some(1));
-    let error = common::poll_support::ready(fs.open_reader(&path, options.clone())).expect_err("overflow");
+    let options = ReadOptions::default()
+        .with_offset(Some(u64::MAX))
+        .with_length(Some(1));
+    let error =
+        common::poll_support::ready(fs.open_reader(&path, options.clone())).expect_err("overflow");
     assert_eq!(error.kind(), FsErrorKind::InvalidOptions);
-    let error = common::poll_support::ready(fs.read_prefix(&path, options, 0)).expect_err("overflow");
+    let error =
+        common::poll_support::ready(fs.read_prefix(&path, options, 0)).expect_err("overflow");
     assert_eq!(error.kind(), FsErrorKind::InvalidOptions);
     assert_eq!(observations.opens.load(Ordering::SeqCst), 0);
 }
@@ -84,7 +91,11 @@ fn test_range_overflow_precedes_async_dispatch() {
 /// offset.
 #[test]
 fn test_empty_range_and_eof_preserve_open() {
-    for (offset, length, expected) in [(u64::MAX, 0, &b""[..]), (16, 5, &b""[..]), (14, 8, &b"op"[..])] {
+    for (offset, length, expected) in [
+        (u64::MAX, 0, &b""[..]),
+        (16, 5, &b""[..]),
+        (14, 8, &b"op"[..]),
+    ] {
         let observations = Arc::new(Observations::default());
         let fs = FileSystem::from_spi(provider(&observations, true)).expect("filesystem");
         let options = ReadOptions::default()

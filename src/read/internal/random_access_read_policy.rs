@@ -68,7 +68,10 @@ impl RandomAccessReadPolicy {
     /// # Returns
     /// `Ok(())` when the requested operation is supported, or the capability
     /// validation error.
-    pub(crate) fn validate_capabilities(options: &ReadOptions, capabilities: FileSystemCapabilities) -> FsResult<()> {
+    pub(crate) fn validate_capabilities(
+        options: &ReadOptions,
+        capabilities: FileSystemCapabilities,
+    ) -> FsResult<()> {
         let checked = if options.offset() == Some(0) {
             options.clone().with_offset(None)
         } else {
@@ -89,9 +92,12 @@ impl RandomAccessReadPolicy {
     /// The opened file or object length, or a provider-contract error if
     /// metadata does not identify one with a length.
     pub(crate) fn opened_len(metadata: Option<&FileMetadata>) -> FsResult<u64> {
-        let metadata = metadata.ok_or_else(|| contract("provider omitted metadata for opened random-access object"))?;
+        let metadata = metadata
+            .ok_or_else(|| contract("provider omitted metadata for opened random-access object"))?;
         if !matches!(metadata.kind(), FileKind::File | FileKind::Object) {
-            return Err(contract("provider opened neither a regular file nor an object"));
+            return Err(contract(
+                "provider opened neither a regular file nor an object",
+            ));
         }
         metadata
             .len()
@@ -128,7 +134,8 @@ impl RandomAccessReadPolicy {
         opened_len: u64,
         limit: FileSystemLimit,
     ) -> FsResult<usize> {
-        let requested = u64::try_from(output_len).map_err(|_| invalid("buffer length cannot be represented"))?;
+        let requested = u64::try_from(output_len)
+            .map_err(|_| invalid("buffer length cannot be represented"))?;
         offset
             .checked_add(requested)
             .ok_or_else(|| invalid("read range overflows"))?;

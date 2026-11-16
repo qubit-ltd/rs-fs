@@ -102,20 +102,26 @@ impl FileSystemSpi for RangeSpi {
     }
     fn open_reader(&self, request: OpenReaderRequest<'_>) -> FsResult<OpenedReader> {
         if self.fail_open {
-            return Err(FsError::new(FsErrorKind::Io, FsOperation::OpenReader, "open failed"));
+            return Err(FsError::new(
+                FsErrorKind::Io,
+                FsOperation::OpenReader,
+                "open failed",
+            ));
         }
         let options = request.options().options();
         let total = b"0123456789";
         let start = options.offset().unwrap_or(0).min(total.len() as u64) as usize;
-        let end = options
-            .length()
-            .map_or(total.len(), |n| start.saturating_add(n as usize).min(total.len()));
+        let end = options.length().map_or(total.len(), |n| {
+            start.saturating_add(n as usize).min(total.len())
+        });
         let mut info = OpenedFileInfo::new(
             FileSystemId::new("read-window").expect("file system ID should be valid"),
             request.path().clone(),
         );
         if self.metadata {
-            info = info.with_metadata(FileMetadata::new(FileKind::File).with_len(Some(total.len() as u64)));
+            info = info.with_metadata(
+                FileMetadata::new(FileKind::File).with_len(Some(total.len() as u64)),
+            );
         }
         Ok(OpenedReader::new(
             info,
@@ -135,25 +141,37 @@ impl FileSystemSpi for RangeSpi {
         Err(unused())
     }
     fn rename(&self, _: RenameRequest<'_>) -> Result<RenameOutcome, SpiRenameFailure> {
-        Err(SpiRenameFailure::new(unused(), RenameFailureState::Unchanged))
+        Err(SpiRenameFailure::new(
+            unused(),
+            RenameFailureState::Unchanged,
+        ))
     }
     fn create_temp_file(&self, _: CreateTempFileRequest) -> FsResult<OpenedTempFile> {
         Err(unused())
     }
-    fn create_temp_directory(&self, _: CreateTempDirectoryRequest) -> FsResult<OpenedTempDirectory> {
+    fn create_temp_directory(
+        &self,
+        _: CreateTempDirectoryRequest,
+    ) -> FsResult<OpenedTempDirectory> {
         Err(unused())
     }
 }
 
 fn unused() -> FsError {
-    FsError::new(FsErrorKind::UnsupportedOperation, FsOperation::Other, "unused")
+    FsError::new(
+        FsErrorKind::UnsupportedOperation,
+        FsOperation::Other,
+        "unused",
+    )
 }
 
 #[test]
 fn test_metadata_length_is_compared_with_selected_window() {
     let fs = FileSystem::from_spi(RangeSpi::with_metadata()).expect("SPI should be accepted");
     let path = Path::parse("/source").expect("source path should be valid");
-    let options = ReadOptions::default().with_offset(Some(2)).with_length(Some(3));
+    let options = ReadOptions::default()
+        .with_offset(Some(2))
+        .with_length(Some(3));
     assert_eq!(
         b"234",
         fs.read_all(&path, options.clone(), 3)
@@ -170,7 +188,8 @@ fn test_metadata_length_is_compared_with_selected_window() {
 
 #[test]
 fn test_metadata_length_does_not_reject_empty_range_at_eof() {
-    let fs = FileSystem::from_shared_spi(Arc::new(RangeSpi::with_metadata())).expect("shared SPI should be accepted");
+    let fs = FileSystem::from_shared_spi(Arc::new(RangeSpi::with_metadata()))
+        .expect("shared SPI should be accepted");
     let path = Path::parse("/source").expect("source path should be valid");
     let options = ReadOptions::default().with_offset(Some(100));
     assert!(
@@ -184,7 +203,9 @@ fn test_metadata_length_does_not_reject_empty_range_at_eof() {
 fn test_read_all_accepts_unknown_metadata_but_still_enforces_stream_budget() {
     let fs = FileSystem::from_spi(RangeSpi::without_metadata()).expect("SPI should be accepted");
     let path = Path::parse("/source").expect("source path should be valid");
-    let options = ReadOptions::default().with_offset(Some(2)).with_length(Some(3));
+    let options = ReadOptions::default()
+        .with_offset(Some(2))
+        .with_length(Some(3));
     assert_eq!(
         b"234",
         fs.read_all(&path, options.clone(), 3)

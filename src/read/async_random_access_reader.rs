@@ -140,8 +140,12 @@ impl AsyncRandomAccessReader {
     /// preserved; missing fields are filled from this session. The operation
     /// is reported as `Read`.
     pub async fn read_at(&mut self, offset: u64, output: &mut [u8]) -> FsResult<usize> {
-        let count = RandomAccessReadPolicy::validate_read(offset, output.len(), self.len, self.limit)
-            .map_err(|e| e.with_path(self.info.path().clone()).with_provider(&self.provider_id))?;
+        let count =
+            RandomAccessReadPolicy::validate_read(offset, output.len(), self.len, self.limit)
+                .map_err(|e| {
+                    e.with_path(self.info.path().clone())
+                        .with_provider(&self.provider_id)
+                })?;
         if count == 0 {
             return Ok(0);
         }

@@ -156,7 +156,12 @@ impl CopyFailure {
     #[inline]
     pub fn into_parts(self) -> (FsError, CopyFailureState, CopyStats, Option<WriterRecovery>) {
         let mut parts = self.parts;
-        (parts.error, parts.state, parts.partial_stats, parts.writer.take())
+        (
+            parts.error,
+            parts.state,
+            parts.partial_stats,
+            parts.writer.take(),
+        )
     }
 }
 impl Debug for CopyFailure {

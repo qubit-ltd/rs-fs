@@ -24,6 +24,9 @@ mod directory_stream_spi;
 mod file_system_spi;
 mod file_writer_spi;
 mod internal;
+mod managed_mutation;
+mod managed_read;
+mod managed_tree;
 #[cfg(feature = "async")]
 mod opened_async_directory_stream;
 #[cfg(feature = "async")]
@@ -79,6 +82,11 @@ pub use copy_decline_reason::CopyDeclineReason;
 pub use directory_stream_spi::DirectoryStreamSpi;
 pub use file_system_spi::FileSystemSpi;
 pub use file_writer_spi::FileWriterSpi;
+pub use managed_mutation::{
+    ManagedFsMutationSpi, PreparedFsCopy, PreparedFsRename, PreparedFsWrite,
+};
+pub use managed_read::{ManagedFsReadSpi, PreparedFsRead};
+pub use managed_tree::{ManagedFsTreeSpi, PreparedFsTreePublish};
 #[cfg(feature = "async")]
 pub use opened_async_directory_stream::OpenedAsyncDirectoryStream;
 #[cfg(feature = "async")]

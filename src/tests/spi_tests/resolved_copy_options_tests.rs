@@ -17,5 +17,8 @@ fn test_resolved_copy_options_expose_their_values() {
     let resolved = ResolvedCopyOptions::new(options.clone(), SymlinkPolicy::FollowWithinFileSystem);
 
     assert_eq!(&options, resolved.options());
-    assert_eq!(SymlinkPolicy::FollowWithinFileSystem, resolved.symlink_policy());
+    assert_eq!(
+        SymlinkPolicy::FollowWithinFileSystem,
+        resolved.symlink_policy()
+    );
 }

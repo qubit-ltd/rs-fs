@@ -127,7 +127,12 @@ impl TempLifecycle {
     /// - `target`: Newly reported destination, if publication is confirmed.
     /// - `kept`: Whether a successfully published source remains retained.
     #[inline]
-    pub(crate) fn record_failure(&mut self, state: PersistFailureState, target: Option<Path>, kept: bool) {
+    pub(crate) fn record_failure(
+        &mut self,
+        state: PersistFailureState,
+        target: Option<Path>,
+        kept: bool,
+    ) {
         if matches!(
             state,
             PersistFailureState::PublishedSourceRetained
@@ -141,7 +146,8 @@ impl TempLifecycle {
         self.state = match state {
             PersistFailureState::NotPublished => TempResourceState::Owned,
             PersistFailureState::NotPublishedSourceReleased => TempResourceState::Cleaned,
-            PersistFailureState::PublishedSourceRetained | PersistFailureState::NotPublishedSourceCleanupRequired => {
+            PersistFailureState::PublishedSourceRetained
+            | PersistFailureState::NotPublishedSourceCleanupRequired => {
                 TempResourceState::CleanupRequired
             }
             PersistFailureState::PublishedSourceReleased => {
@@ -170,7 +176,9 @@ impl TempLifecycle {
         self.failure_state = match self.failure_state {
             PersistFailureState::PublishedSourceRetained
             | PersistFailureState::PublishedSourceReleased
-            | PersistFailureState::PublishedSourceIndeterminate => PersistFailureState::PublishedSourceReleased,
+            | PersistFailureState::PublishedSourceIndeterminate => {
+                PersistFailureState::PublishedSourceReleased
+            }
             PersistFailureState::Indeterminate => PersistFailureState::Indeterminate,
             _ => PersistFailureState::NotPublishedSourceReleased,
         };
@@ -194,7 +202,8 @@ impl TempLifecycle {
             self.failure_state = if self.publication_target.is_some()
                 || matches!(
                     self.failure_state,
-                    PersistFailureState::PublishedSourceRetained | PersistFailureState::PublishedSourceReleased
+                    PersistFailureState::PublishedSourceRetained
+                        | PersistFailureState::PublishedSourceReleased
                 ) {
                 PersistFailureState::PublishedSourceIndeterminate
             } else {

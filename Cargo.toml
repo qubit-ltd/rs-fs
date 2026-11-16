@@ -37,6 +37,7 @@ async = []
 
 [dependencies]
 qubit-budget = "^0.10"
+qubit-operation = "^0.3"
 
 fluent-uri = "^0.4"
 qubit-io = "^0.19"

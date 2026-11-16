@@ -44,4 +44,12 @@ pub enum ProviderOperation {
     CreateTempDirectory = 10,
     /// Opens a random-access session bound to one opened object.
     OpenRandomAccessReader = 11,
+    /// Performs an owned bounded complete-file read.
+    ReadAll = 12,
+    /// Performs an owned complete-buffer write.
+    WriteAll = 13,
+    /// Publishes a validated staged tree.
+    PublishTree = 14,
+    /// Observes storage capacity.
+    ObserveStorage = 15,
 }

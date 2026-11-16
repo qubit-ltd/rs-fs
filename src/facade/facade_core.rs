@@ -107,7 +107,9 @@ impl FacadeCore {
     /// Returns an enriched path-validation error when `parent` is present and
     /// does not satisfy the cached filesystem rules.
     pub(crate) fn validate_temp_parent(&self, parent: Option<&Path>) -> FsResult<()> {
-        parent.map_or(Ok(()), |path| self.validate_path(path, FsOperation::CreateTemp))
+        parent.map_or(Ok(()), |path| {
+            self.validate_path(path, FsOperation::CreateTemp)
+        })
     }
 
     /// Validates a temporary resource's logical location under an explicit
@@ -119,17 +121,22 @@ impl FacadeCore {
     ///   creation.
     /// - `returned_path`: Logical path returned by the provider for the
     ///   temporary resource.
-    pub(crate) fn validate_temp_location(&self, requested_parent: Option<&Path>, returned_path: &Path) -> FsResult<()> {
+    pub(crate) fn validate_temp_location(
+        &self,
+        requested_parent: Option<&Path>,
+        returned_path: &Path,
+    ) -> FsResult<()> {
         let Some(parent) = requested_parent else {
             return Ok(());
         };
         let valid = match self.properties.info().path_semantics() {
             PathSemantics::Hierarchical => {
                 (!parent.is_absolute() || returned_path.is_absolute())
-                    && parent
-                        .components()
-                        .zip(returned_path.components())
-                        .all(|(parent_component, returned_component)| parent_component == returned_component)
+                    && parent.components().zip(returned_path.components()).all(
+                        |(parent_component, returned_component)| {
+                            parent_component == returned_component
+                        },
+                    )
                     && returned_path.components().count() > parent.components().count()
             }
             PathSemantics::ObjectKey => returned_path.as_str().starts_with(parent.as_str()),
@@ -190,14 +197,18 @@ impl FacadeCore {
                 "provider returned a temporary handle for a different filesystem",
             ));
         }
-        self.validate_path(info.path(), FsOperation::CreateTemp).map_err(|_| {
-            self.contract_error(
-                info.path(),
-                FsOperation::ValidateProviderOutcome,
-                "provider returned a temporary handle with an invalid logical path",
-            )
-        })?;
-        if info.metadata().is_none_or(|metadata| metadata.kind() != &expected_kind) {
+        self.validate_path(info.path(), FsOperation::CreateTemp)
+            .map_err(|_| {
+                self.contract_error(
+                    info.path(),
+                    FsOperation::ValidateProviderOutcome,
+                    "provider returned a temporary handle with an invalid logical path",
+                )
+            })?;
+        if info
+            .metadata()
+            .is_none_or(|metadata| metadata.kind() != &expected_kind)
+        {
             return Err(self.contract_error(
                 info.path(),
                 FsOperation::ValidateProviderOutcome,
@@ -215,12 +226,20 @@ impl FacadeCore {
     /// - `path`: Logical path of the resource involved in this operation.
     /// - `options`: Write behavior and guarantees to validate before provider
     ///   work begins.
-    pub(crate) fn validate_write_request(&self, path: &Path, options: &WriteOptions) -> FsResult<()> {
+    pub(crate) fn validate_write_request(
+        &self,
+        path: &Path,
+        options: &WriteOptions,
+    ) -> FsResult<()> {
         self.validate_path(path, FsOperation::OpenWriter)?;
         options
             .validate_against(self.properties.capabilities())
             .map_err(|error| self.enrich(error, Some(path), FsOperation::OpenWriter))?;
-        self.require(FileSystemCapability::Write, FsOperation::OpenWriter, Some(path))
+        self.require(
+            FileSystemCapability::Write,
+            FsOperation::OpenWriter,
+            Some(path),
+        )
     }
 
     /// Assesses copy routes from the immutable provider snapshot without I/O.
@@ -235,7 +254,12 @@ impl FacadeCore {
     /// # Errors
     /// Returns an invalid-options or requirement error when the paths or copy
     /// options cannot be served by either the provider or the stream fallback.
-    pub(crate) fn assess_copy(&self, source: &Path, target: &Path, options: &CopyOptions) -> FsResult<CopyAssessment> {
+    pub(crate) fn assess_copy(
+        &self,
+        source: &Path,
+        target: &Path,
+        options: &CopyOptions,
+    ) -> FsResult<CopyAssessment> {
         self.validate_path(source, FsOperation::Copy)?;
         self.validate_path(target, FsOperation::Copy)?;
         if source == target {
@@ -244,7 +268,11 @@ impl FacadeCore {
                 FsOperation::Copy,
                 "copy source and target must differ",
             )
-            .with_missing_context(source, Some(target), self.properties.info().provider_id()));
+            .with_missing_context(
+                source,
+                Some(target),
+                self.properties.info().provider_id(),
+            ));
         }
         options
             .validate_against(self.properties.capabilities())
@@ -258,23 +286,40 @@ impl FacadeCore {
                 FsOperation::Copy,
                 "copy entry limit must be greater than zero",
             )
-            .with_missing_context(source, Some(target), self.properties.info().provider_id()));
+            .with_missing_context(
+                source,
+                Some(target),
+                self.properties.info().provider_id(),
+            ));
         }
-        let mut rejection = crate::copy::fallback_rejection(options, self.properties.symlink_policy());
+        let mut rejection =
+            crate::copy::fallback_rejection(options, self.properties.symlink_policy());
         if rejection.is_none() {
             rejection = self.stream_copy_primitive_rejection();
         }
-        let provider_copy = self.provider_operations.supports(ProviderOperation::TryCopy);
+        let provider_copy = self
+            .provider_operations
+            .supports(ProviderOperation::TryCopy);
         match (provider_copy, rejection) {
-            (true, reason @ None) => Ok(CopyAssessment::new(CopyExecutionRoute::ProviderThenStream, reason)),
-            (true, reason @ Some(_)) => Ok(CopyAssessment::new(CopyExecutionRoute::ProviderOnly, reason)),
+            (true, reason @ None) => Ok(CopyAssessment::new(
+                CopyExecutionRoute::ProviderThenStream,
+                reason,
+            )),
+            (true, reason @ Some(_)) => Ok(CopyAssessment::new(
+                CopyExecutionRoute::ProviderOnly,
+                reason,
+            )),
             (false, None) => Ok(CopyAssessment::new(CopyExecutionRoute::StreamOnly, None)),
             (false, Some(_)) => Err(FsError::new(
                 FsErrorKind::RequirementNotMet,
                 FsOperation::Copy,
                 "copy has no available provider or stream execution path",
             )
-            .with_missing_context(source, Some(target), self.properties.info().provider_id())),
+            .with_missing_context(
+                source,
+                Some(target),
+                self.properties.info().provider_id(),
+            )),
         }
     }
 
@@ -283,12 +328,22 @@ impl FacadeCore {
     /// This checks only the cached provider snapshot and performs no I/O.
     /// The order is Read, Write, then Stat to preserve assessment behavior.
     fn stream_copy_primitive_rejection(&self) -> Option<FallbackRejection> {
-        if !self.properties.capabilities().supports(FileSystemCapability::Read)
-            || !self.provider_operations.supports(ProviderOperation::OpenReader)
+        if !self
+            .properties
+            .capabilities()
+            .supports(FileSystemCapability::Read)
+            || !self
+                .provider_operations
+                .supports(ProviderOperation::OpenReader)
         {
             Some(FallbackRejection::MissingRead)
-        } else if !self.properties.capabilities().supports(FileSystemCapability::Write)
-            || !self.provider_operations.supports(ProviderOperation::OpenWriter)
+        } else if !self
+            .properties
+            .capabilities()
+            .supports(FileSystemCapability::Write)
+            || !self
+                .provider_operations
+                .supports(ProviderOperation::OpenWriter)
         {
             Some(FallbackRejection::MissingWrite)
         } else if !self.provider_operations.supports(ProviderOperation::Stat) {
@@ -308,7 +363,11 @@ impl FacadeCore {
     /// # Errors
     /// Returns `RequirementNotMet` with source, target, and provider context
     /// when any required reader, writer, or stat primitive is unavailable.
-    pub(crate) fn require_stream_copy_primitives(&self, source: &Path, target: &Path) -> FsResult<()> {
+    pub(crate) fn require_stream_copy_primitives(
+        &self,
+        source: &Path,
+        target: &Path,
+    ) -> FsResult<()> {
         if self.stream_copy_primitive_rejection().is_none() {
             return Ok(());
         }
@@ -369,12 +428,19 @@ impl FacadeCore {
     /// - `path`: Logical path of the resource involved in this operation.
     /// - `operation`: Filesystem operation used for validation or error
     ///   context.
-    pub(crate) fn enrich(&self, error: FsError, path: Option<&Path>, operation: FsOperation) -> FsError {
+    pub(crate) fn enrich(
+        &self,
+        error: FsError,
+        path: Option<&Path>,
+        operation: FsOperation,
+    ) -> FsError {
         let error = error
             .with_operation(operation)
             .with_missing_provider(self.properties.info().provider_id());
         match path {
-            Some(path) => error.with_missing_context(path, None, self.properties.info().provider_id()),
+            Some(path) => {
+                error.with_missing_context(path, None, self.properties.info().provider_id())
+            }
             None => error,
         }
     }
@@ -387,7 +453,12 @@ impl FacadeCore {
     /// - `operation`: Filesystem operation used for validation or error
     ///   context.
     /// - `message`: Diagnostic message for the constructed filesystem error.
-    pub(crate) fn contract_error(&self, path: &Path, operation: FsOperation, message: &str) -> FsError {
+    pub(crate) fn contract_error(
+        &self,
+        path: &Path,
+        operation: FsOperation,
+        message: &str,
+    ) -> FsError {
         FsError::new(FsErrorKind::ProviderContractViolation, operation, message)
             .with_path(path.clone())
             .with_provider(self.properties.info().provider_id())
@@ -456,9 +527,14 @@ impl FacadeCore {
         provider: &str,
         message: &'static str,
     ) -> FsError {
-        FsError::with_source(FsErrorKind::ResourceLimitExceeded, operation, message, error)
-            .with_path(path.clone())
-            .with_provider(provider)
+        FsError::with_source(
+            FsErrorKind::ResourceLimitExceeded,
+            operation,
+            message,
+            error,
+        )
+        .with_path(path.clone())
+        .with_provider(provider)
     }
 
     /// Returns the next bounded read length for an accumulated prefix.
@@ -469,7 +545,9 @@ impl FacadeCore {
     /// - `maximum`: Inclusive upper bound for this byte budget.
     #[inline]
     pub(crate) fn next_prefix_read_len(accumulated: usize, maximum: usize) -> usize {
-        maximum.saturating_sub(accumulated).min(Self::PREFIX_BUFFER_SIZE)
+        maximum
+            .saturating_sub(accumulated)
+            .min(Self::PREFIX_BUFFER_SIZE)
     }
 }
 

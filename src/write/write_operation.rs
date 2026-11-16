@@ -65,22 +65,29 @@ impl<'a> WriteOperation<'a> {
             .validate_write_size(path, bytes.len())
         {
             return Err(WriteAllFailure::new(
-                self.filesystem.core().enrich(error, Some(path), FsOperation::Write),
+                self.filesystem
+                    .core()
+                    .enrich(error, Some(path), FsOperation::Write),
                 WriteFailureState::NotPublished,
                 0,
                 None,
             ));
         }
-        let mut writer = self.filesystem.open_writer(path, options).map_err(|failure| {
-            let (error, stage, recovery) = failure.into_parts();
-            let state = match stage {
-                OpenFailureStage::Preflight => WriteFailureState::NotPublished,
-                OpenFailureStage::ProviderOpen => open_failure_state(&error),
-                OpenFailureStage::OutcomeValidation => WriteFailureState::Indeterminate,
-            };
-            WriteAllFailure::new(error, state, 0, recovery.map(WriterRecovery::Rejected))
-        })?;
-        if let Err(error) = Output::write_fully(&mut writer, bytes).and_then(|_| Output::flush(&mut writer)) {
+        let mut writer = self
+            .filesystem
+            .open_writer(path, options)
+            .map_err(|failure| {
+                let (error, stage, recovery) = failure.into_parts();
+                let state = match stage {
+                    OpenFailureStage::Preflight => WriteFailureState::NotPublished,
+                    OpenFailureStage::ProviderOpen => open_failure_state(&error),
+                    OpenFailureStage::OutcomeValidation => WriteFailureState::Indeterminate,
+                };
+                WriteAllFailure::new(error, state, 0, recovery.map(WriterRecovery::Rejected))
+            })?;
+        if let Err(error) =
+            Output::write_fully(&mut writer, bytes).and_then(|_| Output::flush(&mut writer))
+        {
             let error = self.filesystem.core().enrich(
                 FsError::from_stream_io(error, FsOperation::Write, path),
                 Some(path),

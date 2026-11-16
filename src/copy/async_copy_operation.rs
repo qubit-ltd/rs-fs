@@ -214,7 +214,15 @@ impl AsyncCopyOperation {
             recovery,
         } = self;
         let mut guard = CopyCancellationGuard::start(state, writer, recovery);
-        let result = execute_copy(file_system, source, target, options, *deadline, guard.writer_mut()).await;
+        let result = execute_copy(
+            file_system,
+            source,
+            target,
+            options,
+            *deadline,
+            guard.writer_mut(),
+        )
+        .await;
         guard.finish(&result);
         result
     }
@@ -264,7 +272,10 @@ async fn execute_copy(
             target,
         ));
     }
-    if !filesystem.core().provider_supports(ProviderOperation::TryCopy) {
+    if !filesystem
+        .core()
+        .provider_supports(ProviderOperation::TryCopy)
+    {
         return stream_copy_fallback(filesystem, source, target, options, deadline, writer).await;
     }
     match filesystem
@@ -273,7 +284,8 @@ async fn execute_copy(
         .await
     {
         Ok(CopyAttempt::Completed(outcome)) => {
-            let outcome = filesystem.verify_completed_copy(outcome, options.options(), source, target)?;
+            let outcome =
+                filesystem.verify_completed_copy(outcome, options.options(), source, target)?;
             if deadline.expired() {
                 return Err(filesystem.contextual_copy_failure(
                     budget_error(source, target, "copy deadline was exceeded"),
@@ -355,7 +367,13 @@ fn stream_copy_fallback<'a>(
                 )
             })?;
         let metadata = filesystem.stat(source).await.map_err(|error| {
-            filesystem.contextual_copy_failure(error, CopyFailureState::Unchanged, CopyStats::default(), source, target)
+            filesystem.contextual_copy_failure(
+                error,
+                CopyFailureState::Unchanged,
+                CopyStats::default(),
+                source,
+                target,
+            )
         })?;
         if deadline.expired() {
             return Err(filesystem.contextual_copy_failure(
@@ -430,18 +448,34 @@ fn stream_copy_fallback<'a>(
                 *writer_slot = recovery.map(AsyncWriterRecovery::Rejected);
                 let state = match stage {
                     OpenFailureStage::Preflight => CopyFailureState::Unchanged,
-                    OpenFailureStage::ProviderOpen => from_write_failure_state(open_failure_state(&error)),
+                    OpenFailureStage::ProviderOpen => {
+                        from_write_failure_state(open_failure_state(&error))
+                    }
                     OpenFailureStage::OutcomeValidation => CopyFailureState::Indeterminate,
                 };
-                return Err(filesystem.contextual_copy_failure(error, state, CopyStats::default(), source, target));
+                return Err(filesystem.contextual_copy_failure(
+                    error,
+                    state,
+                    CopyStats::default(),
+                    source,
+                    target,
+                ));
             }
         }
         let writer = writer_slot
             .as_mut()
             .and_then(AsyncWriterRecovery::opened_mut)
             .expect("writer is retained before transfer");
-        let bytes =
-            super::internal::transfer_stream(filesystem, source, target, &mut reader, writer, &plan, deadline).await?;
+        let bytes = super::internal::transfer_stream(
+            filesystem,
+            source,
+            target,
+            &mut reader,
+            writer,
+            &plan,
+            deadline,
+        )
+        .await?;
         super::internal::finish_stream_copy(
             filesystem,
             source,
@@ -466,9 +500,13 @@ fn stream_copy_fallback<'a>(
 /// # Returns
 /// A resource-limit error associated with the source and destination paths.
 fn budget_error(source: &Path, target: &Path, message: &str) -> FsError {
-    FsError::new(FsErrorKind::ResourceLimitExceeded, FsOperation::Copy, message)
-        .with_path(source.clone())
-        .with_target(target.clone())
+    FsError::new(
+        FsErrorKind::ResourceLimitExceeded,
+        FsOperation::Copy,
+        message,
+    )
+    .with_path(source.clone())
+    .with_target(target.clone())
 }
 
 /// Builds the stable failure used for an invalid execute retry.
@@ -634,7 +672,10 @@ mod tests {
                 ))
             })
         }
-        fn open_reader<'a>(&'a self, request: OpenReaderRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
+        fn open_reader<'a>(
+            &'a self,
+            request: OpenReaderRequest<'a>,
+        ) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
             let info = self.info(request.path());
             let source_len = self.source_len;
             Box::pin(async move {
@@ -647,7 +688,10 @@ mod tests {
                 ))
             })
         }
-        fn open_writer<'a>(&'a self, request: OpenWriterRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
+        fn open_writer<'a>(
+            &'a self,
+            request: OpenWriterRequest<'a>,
+        ) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
             let info = self.info(request.path());
             let suspend_at = self.suspend_at;
             let fail_commit = self.fail_commit;
@@ -745,7 +789,10 @@ mod tests {
                 cx.waker().wake_by_ref();
                 return Poll::Pending;
             }
-            if attempts == usize::from(this.write_pending_once) && this.write_limit == 1 && count > 1 {
+            if attempts == usize::from(this.write_pending_once)
+                && this.write_limit == 1
+                && count > 1
+            {
                 advance_clock();
             }
             if this.write_zero {
@@ -769,7 +816,9 @@ mod tests {
         }
     }
     impl AsyncFileWriteSession for StageWriter {
-        fn commit_async<'a>(mut self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
+        fn commit_async<'a>(
+            mut self: Pin<&'a mut Self>,
+        ) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
             let this = self.as_mut().get_mut();
             this.calls.commits.fetch_add(1, Ordering::SeqCst);
             let fail = this.fail_commit;
@@ -784,12 +833,20 @@ mod tests {
                 advance_clock();
                 Poll::Ready(if skip {
                     Err(WriteFailure::new(
-                        FsError::new(FsErrorKind::AlreadyExists, FsOperation::CommitWriter, "skip conflict"),
+                        FsError::new(
+                            FsErrorKind::AlreadyExists,
+                            FsOperation::CommitWriter,
+                            "skip conflict",
+                        ),
                         WriteFailureState::RetryableNotPublished,
                     ))
                 } else if fail {
                     Err(WriteFailure::new(
-                        FsError::new(FsErrorKind::Io, FsOperation::CommitWriter, "late async commit failure"),
+                        FsError::new(
+                            FsErrorKind::Io,
+                            FsOperation::CommitWriter,
+                            "late async commit failure",
+                        ),
                         WriteFailureState::RetryableNotPublished,
                     ))
                 } else {
@@ -875,11 +932,16 @@ mod tests {
             },
             SymlinkPolicy::Reject,
         );
-        operation.deadline = CopyDeadline::new(with_deadline.then_some(Duration::from_secs(1)), test_now);
+        operation.deadline =
+            CopyDeadline::new(with_deadline.then_some(Duration::from_secs(1)), test_now);
         operation
     }
 
-    fn skip_operation(skip_open: bool, abort_outcome: WriteAbortOutcome, with_deadline: bool) -> AsyncCopyOperation {
+    fn skip_operation(
+        skip_open: bool,
+        abort_outcome: WriteAbortOutcome,
+        with_deadline: bool,
+    ) -> AsyncCopyOperation {
         let file_system = crate::AsyncFileSystem::from_spi(StageSpi {
             suspend_at: SuspendAt::Commit,
             fail_commit: false,
@@ -995,7 +1057,10 @@ mod tests {
 
     #[test]
     fn test_async_copy_deadline_after_skip_abort_keeps_abort_publication_state() {
-        for abort_outcome in [WriteAbortOutcome::Published, WriteAbortOutcome::Indeterminate] {
+        for abort_outcome in [
+            WriteAbortOutcome::Published,
+            WriteAbortOutcome::Indeterminate,
+        ] {
             let mut operation = skip_operation(false, abort_outcome, true);
             let mut future = Box::pin(operation.execute());
             let mut context = Context::from_waker(Waker::noop());
@@ -1134,7 +1199,9 @@ mod tests {
         let source = std::error::Error::source(failure.error()).expect("stream error source");
         assert_eq!(
             Some(std::io::ErrorKind::WriteZero),
-            source.downcast_ref::<std::io::Error>().map(std::io::Error::kind),
+            source
+                .downcast_ref::<std::io::Error>()
+                .map(std::io::Error::kind),
         );
         assert_eq!(0, failure.partial_stats().bytes);
         assert_eq!(1, calls.writes.load(Ordering::SeqCst));

@@ -234,7 +234,10 @@ fn test_sync_decline_does_not_dispatch_missing_stat_fallback_primitive() {
     let assessment = filesystem
         .assess_copy(&source, &target, &CopyOptions::file())
         .expect("native route remains available");
-    assert_eq!(Some(FallbackRejection::MissingStat), assessment.fallback_rejection());
+    assert_eq!(
+        Some(FallbackRejection::MissingStat),
+        assessment.fallback_rejection()
+    );
     let failure = filesystem
         .copy(&source, &target, CopyOptions::file())
         .expect_err("declined native route cannot stream without stat");
@@ -352,7 +355,10 @@ impl AsyncFileSystemSpi for RouteProbe {
         })
     }
 
-    fn try_copy<'a>(&'a self, request: CopyRequest<'a>) -> SpiFuture<'a, Result<CopyAttempt, SpiCopyFailure>> {
+    fn try_copy<'a>(
+        &'a self,
+        request: CopyRequest<'a>,
+    ) -> SpiFuture<'a, Result<CopyAttempt, SpiCopyFailure>> {
         self.calls.lock().expect("calls lock").push("try_copy");
         let reply = match self.native_reply {
             NativeReply::Declined => Ok(CopyAttempt::Declined(CopyDeclineReason::NotApplicable)),
@@ -433,7 +439,10 @@ fn test_async_decline_does_not_dispatch_missing_stat_fallback_primitive() {
     let assessment = filesystem
         .assess_copy(&source, &target, &CopyOptions::file())
         .expect("native route remains available");
-    assert_eq!(Some(FallbackRejection::MissingStat), assessment.fallback_rejection());
+    assert_eq!(
+        Some(FallbackRejection::MissingStat),
+        assessment.fallback_rejection()
+    );
 
     let mut operation = filesystem
         .begin_copy(source, target, CopyOptions::file())
@@ -567,7 +576,9 @@ impl FileSystemSpi for AtomicRouteProbe {
             FileSystemId::new("atomic-copy-route-test").expect("test id"),
             request.path().clone(),
         )
-        .with_metadata(FileMetadata::new(FileKind::File).with_len(Some(ATOMIC_PAYLOAD.len() as u64)));
+        .with_metadata(
+            FileMetadata::new(FileKind::File).with_len(Some(ATOMIC_PAYLOAD.len() as u64)),
+        );
         Ok(OpenedReader::new(
             info,
             Box::new(std::io::Cursor::new(ATOMIC_PAYLOAD.to_vec())),
@@ -628,7 +639,10 @@ impl Output for AtomicRouteWriter {
 impl FileWriterSpi for AtomicRouteWriter {
     fn commit(&mut self) -> Result<WriteOutcome, SpiWriteFailure> {
         self.calls.lock().expect("calls lock").push("commit");
-        Ok(WriteOutcome::new(self.commit_atomicity, PublicationMethod::StreamCopy))
+        Ok(WriteOutcome::new(
+            self.commit_atomicity,
+            PublicationMethod::StreamCopy,
+        ))
     }
 
     fn abort(&mut self) -> FsResult<WriteAbortOutcome> {
@@ -659,7 +673,8 @@ fn atomic_route_filesystem(
 
 #[test]
 fn test_sync_atomic_required_copy_can_use_stream_fallback() {
-    let (filesystem, calls, payload, writer_options) = atomic_route_filesystem(AchievedAtomicity::Atomic, true, true);
+    let (filesystem, calls, payload, writer_options) =
+        atomic_route_filesystem(AchievedAtomicity::Atomic, true, true);
     let options = CopyOptions::file().with_atomicity(AtomicityRequirement::Required);
     let assessment = filesystem
         .assess_copy(&path("/source"), &path("/target"), &options)
@@ -674,11 +689,17 @@ fn test_sync_atomic_required_copy_can_use_stream_fallback() {
     assert!(outcome.used_fallback());
     assert_eq!(1, outcome.stats().files);
     assert_eq!(ATOMIC_PAYLOAD.len() as u64, outcome.stats().bytes);
-    assert_eq!(ATOMIC_PAYLOAD, payload.lock().expect("payload lock").as_slice());
+    assert_eq!(
+        ATOMIC_PAYLOAD,
+        payload.lock().expect("payload lock").as_slice()
+    );
     let writer_options = writer_options.lock().expect("writer options lock");
     assert_eq!(1, writer_options.len());
     assert_eq!(WriteDisposition::CreateNew, writer_options[0].disposition());
-    assert_eq!(AtomicityRequirement::Required, writer_options[0].atomicity());
+    assert_eq!(
+        AtomicityRequirement::Required,
+        writer_options[0].atomicity()
+    );
     assert_eq!(
         1,
         calls
@@ -701,7 +722,8 @@ fn test_sync_atomic_required_copy_can_use_stream_fallback() {
 
 #[test]
 fn test_sync_atomic_required_fallback_rejects_non_atomic_commit() {
-    let (filesystem, calls, payload, _) = atomic_route_filesystem(AchievedAtomicity::NonAtomic, true, true);
+    let (filesystem, calls, payload, _) =
+        atomic_route_filesystem(AchievedAtomicity::NonAtomic, true, true);
     let failure = filesystem
         .copy(
             &path("/source"),
@@ -709,11 +731,17 @@ fn test_sync_atomic_required_fallback_rejects_non_atomic_commit() {
             CopyOptions::file().with_atomicity(AtomicityRequirement::Required),
         )
         .expect_err("non-atomic commit must violate Required atomicity");
-    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
     assert_eq!(CopyFailureState::Published, failure.state());
     assert_eq!(ATOMIC_PAYLOAD.len() as u64, failure.partial_stats().bytes);
     assert!(failure.recovery().is_some());
-    assert_eq!(ATOMIC_PAYLOAD, payload.lock().expect("payload lock").as_slice());
+    assert_eq!(
+        ATOMIC_PAYLOAD,
+        payload.lock().expect("payload lock").as_slice()
+    );
     assert_eq!(
         1,
         calls
@@ -735,7 +763,10 @@ fn test_sync_atomic_skip_has_no_stream_fallback() {
         .assess_copy(&path("/source"), &path("/target"), &options)
         .expect("native route can be assessed");
     assert_eq!(CopyExecutionRoute::ProviderOnly, assessment.route());
-    assert_eq!(Some(FallbackRejection::AtomicSkip), assessment.fallback_rejection());
+    assert_eq!(
+        Some(FallbackRejection::AtomicSkip),
+        assessment.fallback_rejection()
+    );
     let failure = filesystem
         .copy(&path("/source"), &path("/target"), options)
         .expect_err("declined AtomicSkip has no fallback");
@@ -836,13 +867,18 @@ impl AsyncFileSystemSpi for AsyncAtomicRouteProbe {
         })
     }
 
-    fn open_reader<'a>(&'a self, request: OpenReaderRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
+    fn open_reader<'a>(
+        &'a self,
+        request: OpenReaderRequest<'a>,
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
         self.calls.lock().expect("calls lock").push("open_reader");
         let info = OpenedFileInfo::new(
             FileSystemId::new("async-atomic-copy-route-test").expect("test id"),
             request.path().clone(),
         )
-        .with_metadata(FileMetadata::new(FileKind::File).with_len(Some(ATOMIC_PAYLOAD.len() as u64)));
+        .with_metadata(
+            FileMetadata::new(FileKind::File).with_len(Some(ATOMIC_PAYLOAD.len() as u64)),
+        );
         Box::pin(async move {
             Ok(OpenedAsyncReader::new(
                 info,
@@ -851,7 +887,10 @@ impl AsyncFileSystemSpi for AsyncAtomicRouteProbe {
         })
     }
 
-    fn open_writer<'a>(&'a self, request: OpenWriterRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
+    fn open_writer<'a>(
+        &'a self,
+        request: OpenWriterRequest<'a>,
+    ) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
         self.calls.lock().expect("calls lock").push("open_writer");
         self.writer_options
             .lock()
@@ -870,7 +909,10 @@ impl AsyncFileSystemSpi for AsyncAtomicRouteProbe {
         Box::pin(async move { Ok(OpenedAsyncWriter::new(info, Box::new(writer))) })
     }
 
-    fn try_copy<'a>(&'a self, _: CopyRequest<'a>) -> SpiFuture<'a, Result<CopyAttempt, SpiCopyFailure>> {
+    fn try_copy<'a>(
+        &'a self,
+        _: CopyRequest<'a>,
+    ) -> SpiFuture<'a, Result<CopyAttempt, SpiCopyFailure>> {
         self.calls.lock().expect("calls lock").push("try_copy");
         Box::pin(async { Ok(CopyAttempt::Declined(CopyDeclineReason::NotApplicable)) })
     }
@@ -929,14 +971,20 @@ impl AsyncOutput for AsyncAtomicRouteWriter {
     }
 
     fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<IoResult<()>> {
-        self.get_mut().calls.lock().expect("calls lock").push("flush");
+        self.get_mut()
+            .calls
+            .lock()
+            .expect("calls lock")
+            .push("flush");
         Poll::Ready(Ok(()))
     }
 }
 
 #[cfg(feature = "async")]
 impl AsyncFileWriteSession for AsyncAtomicRouteWriter {
-    fn commit_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
+    fn commit_async<'a>(
+        self: Pin<&'a mut Self>,
+    ) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
         let this = self.get_mut();
         this.calls.lock().expect("calls lock").push("commit");
         let atomicity = this.commit_atomicity;
@@ -944,7 +992,11 @@ impl AsyncFileWriteSession for AsyncAtomicRouteWriter {
     }
 
     fn abort_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<WriteAbortOutcome>> {
-        self.get_mut().calls.lock().expect("calls lock").push("abort");
+        self.get_mut()
+            .calls
+            .lock()
+            .expect("calls lock")
+            .push("abort");
         Box::pin(async { Ok(WriteAbortOutcome::NotPublished) })
     }
 }
@@ -1003,11 +1055,17 @@ fn test_async_atomic_required_copy_can_use_stream_fallback() {
     assert!(outcome.used_fallback());
     assert_eq!(1, outcome.stats().files);
     assert_eq!(ATOMIC_PAYLOAD.len() as u64, outcome.stats().bytes);
-    assert_eq!(ATOMIC_PAYLOAD, payload.lock().expect("payload lock").as_slice());
+    assert_eq!(
+        ATOMIC_PAYLOAD,
+        payload.lock().expect("payload lock").as_slice()
+    );
     let writer_options = writer_options.lock().expect("writer options lock");
     assert_eq!(1, writer_options.len());
     assert_eq!(WriteDisposition::CreateNew, writer_options[0].disposition());
-    assert_eq!(AtomicityRequirement::Required, writer_options[0].atomicity());
+    assert_eq!(
+        AtomicityRequirement::Required,
+        writer_options[0].atomicity()
+    );
     assert_eq!(
         1,
         calls
@@ -1031,7 +1089,8 @@ fn test_async_atomic_required_copy_can_use_stream_fallback() {
 #[cfg(feature = "async")]
 #[test]
 fn test_async_atomic_required_fallback_rejects_non_atomic_commit() {
-    let (filesystem, calls, payload, _) = async_atomic_route_filesystem(AchievedAtomicity::NonAtomic, true, true);
+    let (filesystem, calls, payload, _) =
+        async_atomic_route_filesystem(AchievedAtomicity::NonAtomic, true, true);
     let mut operation = filesystem
         .begin_copy(
             path("/source"),
@@ -1039,12 +1098,19 @@ fn test_async_atomic_required_fallback_rejects_non_atomic_commit() {
             CopyOptions::file().with_atomicity(AtomicityRequirement::Required),
         )
         .expect("copy operation should be constructed");
-    let failure = ready(operation.execute()).expect_err("non-atomic commit must violate Required atomicity");
-    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+    let failure =
+        ready(operation.execute()).expect_err("non-atomic commit must violate Required atomicity");
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
     assert_eq!(CopyFailureState::Published, failure.state());
     assert_eq!(ATOMIC_PAYLOAD.len() as u64, failure.partial_stats().bytes);
     assert!(operation.has_recovery());
-    assert_eq!(ATOMIC_PAYLOAD, payload.lock().expect("payload lock").as_slice());
+    assert_eq!(
+        ATOMIC_PAYLOAD,
+        payload.lock().expect("payload lock").as_slice()
+    );
     assert_eq!(
         1,
         calls
@@ -1059,7 +1125,8 @@ fn test_async_atomic_required_fallback_rejects_non_atomic_commit() {
 #[cfg(feature = "async")]
 #[test]
 fn test_async_atomic_skip_has_no_stream_fallback() {
-    let (filesystem, calls, _, _) = async_atomic_route_filesystem(AchievedAtomicity::Atomic, true, true);
+    let (filesystem, calls, _, _) =
+        async_atomic_route_filesystem(AchievedAtomicity::Atomic, true, true);
     let options = CopyOptions::file()
         .with_conflict(CopyConflictPolicy::Skip)
         .with_atomicity(AtomicityRequirement::Required);
@@ -1067,7 +1134,10 @@ fn test_async_atomic_skip_has_no_stream_fallback() {
         .assess_copy(&path("/source"), &path("/target"), &options)
         .expect("native route can be assessed");
     assert_eq!(CopyExecutionRoute::ProviderOnly, assessment.route());
-    assert_eq!(Some(FallbackRejection::AtomicSkip), assessment.fallback_rejection());
+    assert_eq!(
+        Some(FallbackRejection::AtomicSkip),
+        assessment.fallback_rejection()
+    );
     let mut operation = filesystem
         .begin_copy(path("/source"), path("/target"), options)
         .expect("copy operation should be constructed");
@@ -1079,7 +1149,8 @@ fn test_async_atomic_skip_has_no_stream_fallback() {
 #[cfg(feature = "async")]
 #[test]
 fn test_async_required_atomic_copy_needs_copy_and_writer_capabilities() {
-    let (filesystem, calls, _, _) = async_atomic_route_filesystem(AchievedAtomicity::Atomic, false, true);
+    let (filesystem, calls, _, _) =
+        async_atomic_route_filesystem(AchievedAtomicity::Atomic, false, true);
     let error = filesystem
         .assess_copy(
             &path("/source"),
@@ -1090,7 +1161,8 @@ fn test_async_required_atomic_copy_needs_copy_and_writer_capabilities() {
     assert_eq!(FsErrorKind::RequirementNotMet, error.kind());
     assert!(calls.lock().expect("calls lock").is_empty());
 
-    let (filesystem, calls, _, _) = async_atomic_route_filesystem(AchievedAtomicity::Atomic, true, false);
+    let (filesystem, calls, _, _) =
+        async_atomic_route_filesystem(AchievedAtomicity::Atomic, true, false);
     let mut operation = filesystem
         .begin_copy(
             path("/source"),

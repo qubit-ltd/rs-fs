@@ -96,8 +96,16 @@ impl<'a> StreamCopyPlan<'a> {
             ));
         }
         if let Some(length) = metadata.len() {
-            super::stream_copy_policy::validate_stream_copy_length_limits(self.limits, self.target, length)?;
-            if self.options.max_bytes().is_some_and(|maximum| length > maximum) {
+            super::stream_copy_policy::validate_stream_copy_length_limits(
+                self.limits,
+                self.target,
+                length,
+            )?;
+            if self
+                .options
+                .max_bytes()
+                .is_some_and(|maximum| length > maximum)
+            {
                 return Err(self.budget_error("copy byte limit was exceeded"));
             }
         }
@@ -119,10 +127,14 @@ impl<'a> StreamCopyPlan<'a> {
     /// - `count`: Bytes in the next chunk to account for.
     pub(crate) fn next_bytes(&self, total: u64, count: usize) -> Result<u64, FsError> {
         let count = count as u64;
-        let next = total
-            .checked_add(count)
-            .ok_or_else(|| self.budget_error("copy byte count exceeds the filesystem API reporting range"))?;
-        if self.options.max_bytes().is_some_and(|maximum| next > maximum) {
+        let next = total.checked_add(count).ok_or_else(|| {
+            self.budget_error("copy byte count exceeds the filesystem API reporting range")
+        })?;
+        if self
+            .options
+            .max_bytes()
+            .is_some_and(|maximum| next > maximum)
+        {
             return Err(self.budget_error("copy byte limit was exceeded"));
         }
         Ok(next)
@@ -162,9 +174,13 @@ impl<'a> StreamCopyPlan<'a> {
     ///
     /// - `message`: Diagnostic message for the constructed filesystem error.
     pub(crate) fn budget_error(&self, message: &str) -> FsError {
-        FsError::new(FsErrorKind::ResourceLimitExceeded, FsOperation::Copy, message)
-            .with_path(self.source.clone())
-            .with_target(self.target.clone())
+        FsError::new(
+            FsErrorKind::ResourceLimitExceeded,
+            FsOperation::Copy,
+            message,
+        )
+        .with_path(self.source.clone())
+        .with_target(self.target.clone())
     }
 }
 
@@ -198,7 +214,11 @@ mod tests {
             CopyOptions::default().with_symlink_policy(SymlinkPolicy::Reject),
             FileSystemLimits::unknown(),
         );
-        assert!(symlink.validate_options(SymlinkPolicy::FollowWithinFileSystem).is_err());
+        assert!(
+            symlink
+                .validate_options(SymlinkPolicy::FollowWithinFileSystem)
+                .is_err()
+        );
         assert!(
             default_plan
                 .validate_metadata(&FileMetadata::new(FileKind::File))
@@ -214,7 +234,9 @@ mod tests {
     fn test_rejects_unsupported_options_and_limits() {
         let tree = plan(CopyOptions::tree(), FileSystemLimits::unknown());
         assert_eq!(
-            tree.validate_options(SymlinkPolicy::Reject).unwrap_err().kind(),
+            tree.validate_options(SymlinkPolicy::Reject)
+                .unwrap_err()
+                .kind(),
             FsErrorKind::RequirementNotMet
         );
 
@@ -223,7 +245,9 @@ mod tests {
             FileSystemLimits::unknown(),
         );
         assert_eq!(
-            zero.validate_options(SymlinkPolicy::Reject).unwrap_err().kind(),
+            zero.validate_options(SymlinkPolicy::Reject)
+                .unwrap_err()
+                .kind(),
             FsErrorKind::ResourceLimitExceeded
         );
 

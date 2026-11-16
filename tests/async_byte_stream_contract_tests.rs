@@ -37,7 +37,8 @@ impl AsyncInput for PinnedInput {
 
 #[test]
 fn test_async_byte_boundary_accepts_pinned_provider() {
-    let constructor: fn(OpenedFileInfo, Box<dyn AsyncByteInput + Send>) -> OpenedAsyncReader = OpenedAsyncReader::new;
+    let constructor: fn(OpenedFileInfo, Box<dyn AsyncByteInput + Send>) -> OpenedAsyncReader =
+        OpenedAsyncReader::new;
     let info = OpenedFileInfo::new(
         FileSystemId::new("async-byte-contract").expect("valid id"),
         Path::parse("/data").expect("valid path"),

@@ -70,7 +70,10 @@ impl PrefixReadPlan {
             .limits()
             .validate_read_range(path, options.length())
             .map_err(contextualize)?;
-        if !properties.capabilities().supports(FileSystemCapability::Read) {
+        if !properties
+            .capabilities()
+            .supports(FileSystemCapability::Read)
+        {
             return Err(contextualize(
                 FsError::new(
                     FsErrorKind::UnsupportedCapability,
@@ -91,12 +94,17 @@ impl PrefixReadPlan {
         }
         if max_bytes > 0
             && options.checksum() == ChecksumPolicy::None
-            && properties.capabilities().guarantees(FileSystemCapability::RangeRead)
+            && properties
+                .capabilities()
+                .guarantees(FileSystemCapability::RangeRead)
             && let Ok(maximum) = u64::try_from(max_bytes)
         {
             let length = options.length().map_or(maximum, |value| value.min(maximum));
             let representable = options.offset().unwrap_or(0).checked_add(length).is_some();
-            let allowed = !properties.limits().max_read_range_bytes().is_exceeded_by(length);
+            let allowed = !properties
+                .limits()
+                .max_read_range_bytes()
+                .is_exceeded_by(length);
             if representable && allowed {
                 options = options.with_length(Some(length));
             }

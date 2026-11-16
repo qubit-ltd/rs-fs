@@ -53,12 +53,26 @@ impl<'a> AsyncDirectoryOperation<'a> {
     /// Returns an enriched filesystem error when the scope or options are
     /// invalid, listing is unsupported, the provider cannot open the listing,
     /// or the returned stream cannot be initialized.
-    pub(crate) async fn list(&self, scope: &ListScope, options: ListOptions) -> FsResult<AsyncDirectoryStream> {
-        crate::directory::internal::list_preflight::validate(self.filesystem.properties(), scope, &options)
-            .map_err(|error| self.filesystem.core().enrich(error, scope.path(), FsOperation::List))?;
-        self.filesystem
-            .core()
-            .require(FileSystemCapability::List, FsOperation::List, scope.path())?;
+    pub(crate) async fn list(
+        &self,
+        scope: &ListScope,
+        options: ListOptions,
+    ) -> FsResult<AsyncDirectoryStream> {
+        crate::directory::internal::list_preflight::validate(
+            self.filesystem.properties(),
+            scope,
+            &options,
+        )
+        .map_err(|error| {
+            self.filesystem
+                .core()
+                .enrich(error, scope.path(), FsOperation::List)
+        })?;
+        self.filesystem.core().require(
+            FileSystemCapability::List,
+            FsOperation::List,
+            scope.path(),
+        )?;
         let page_size = self
             .filesystem
             .properties()
@@ -78,7 +92,11 @@ impl<'a> AsyncDirectoryOperation<'a> {
                 ),
             ))
             .await
-            .map_err(|error| self.filesystem.core().enrich(error, scope.path(), FsOperation::List))?;
+            .map_err(|error| {
+                self.filesystem
+                    .core()
+                    .enrich(error, scope.path(), FsOperation::List)
+            })?;
         opened.into_stream(
             scope.clone(),
             options,

@@ -69,7 +69,12 @@ impl<'a> CopyOperation<'a> {
     /// - `options`: Copy route, conflict, consistency, and metadata guarantees
     ///   requested by the caller.
     #[inline]
-    pub(crate) fn new(filesystem: &'a FileSystem, source: &'a Path, target: &'a Path, options: CopyOptions) -> Self {
+    pub(crate) fn new(
+        filesystem: &'a FileSystem,
+        source: &'a Path,
+        target: &'a Path,
+        options: CopyOptions,
+    ) -> Self {
         let deadline = CopyDeadline::new(options.deadline(), std::time::Instant::now);
         Self {
             filesystem,
@@ -107,7 +112,11 @@ impl<'a> CopyOperation<'a> {
                 None,
             )));
         }
-        if self.filesystem.core().provider_supports(ProviderOperation::TryCopy) {
+        if self
+            .filesystem
+            .core()
+            .provider_supports(ProviderOperation::TryCopy)
+        {
             self.execute_provider_attempt()
         } else {
             self.execute_stream_fallback()
@@ -160,7 +169,11 @@ impl<'a> CopyOperation<'a> {
     fn verify_completed_copy(&self, outcome: CopyOutcome) -> Result<CopyOutcome, CopyFailure> {
         if let Some(message) = outcome.contract_violation(&self.options) {
             return Err(self.contextualize_failure(self.failure(
-                FsError::new(FsErrorKind::ProviderContractViolation, FsOperation::Copy, message),
+                FsError::new(
+                    FsErrorKind::ProviderContractViolation,
+                    FsOperation::Copy,
+                    message,
+                ),
                 outcome.violation_failure_state(&self.options),
                 *outcome.stats(),
                 None,
@@ -171,8 +184,12 @@ impl<'a> CopyOperation<'a> {
 
     /// Performs no-I/O validation before selecting a copy implementation.
     fn copy_preflight(&self) -> FsResult<()> {
-        self.filesystem.core().validate_path(self.source, FsOperation::Copy)?;
-        self.filesystem.core().validate_path(self.target, FsOperation::Copy)?;
+        self.filesystem
+            .core()
+            .validate_path(self.source, FsOperation::Copy)?;
+        self.filesystem
+            .core()
+            .validate_path(self.target, FsOperation::Copy)?;
         self.options
             .validate_against(self.filesystem.properties().capabilities())
             .map_err(|error| {
@@ -203,29 +220,75 @@ impl<'a> CopyOperation<'a> {
             self.target,
         );
         plan.validate_options(self.filesystem.properties().symlink_policy())
-            .map_err(|error| self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None))?;
+            .map_err(|error| {
+                self.failure(
+                    error,
+                    CopyFailureState::Unchanged,
+                    CopyStats::default(),
+                    None,
+                )
+            })?;
         if let Some(error) = self.deadline_error() {
-            return Err(self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None));
+            return Err(self.failure(
+                error,
+                CopyFailureState::Unchanged,
+                CopyStats::default(),
+                None,
+            ));
         }
         self.filesystem
             .core()
             .require_stream_copy_primitives(self.source, self.target)
-            .map_err(|error| self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None))?;
-        let metadata = self
-            .filesystem
-            .stat(self.source)
-            .map_err(|error| self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None))?;
+            .map_err(|error| {
+                self.failure(
+                    error,
+                    CopyFailureState::Unchanged,
+                    CopyStats::default(),
+                    None,
+                )
+            })?;
+        let metadata = self.filesystem.stat(self.source).map_err(|error| {
+            self.failure(
+                error,
+                CopyFailureState::Unchanged,
+                CopyStats::default(),
+                None,
+            )
+        })?;
         if let Some(error) = self.deadline_error() {
-            return Err(self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None));
+            return Err(self.failure(
+                error,
+                CopyFailureState::Unchanged,
+                CopyStats::default(),
+                None,
+            ));
         }
-        plan.validate_metadata(&metadata)
-            .map_err(|error| self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None))?;
+        plan.validate_metadata(&metadata).map_err(|error| {
+            self.failure(
+                error,
+                CopyFailureState::Unchanged,
+                CopyStats::default(),
+                None,
+            )
+        })?;
         let mut reader = self
             .filesystem
             .open_reader(self.source, ReadOptions::default())
-            .map_err(|error| self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None))?;
+            .map_err(|error| {
+                self.failure(
+                    error,
+                    CopyFailureState::Unchanged,
+                    CopyStats::default(),
+                    None,
+                )
+            })?;
         if let Some(error) = self.deadline_error() {
-            return Err(self.failure(error, CopyFailureState::Unchanged, CopyStats::default(), None));
+            return Err(self.failure(
+                error,
+                CopyFailureState::Unchanged,
+                CopyStats::default(),
+                None,
+            ));
         }
         let writer_options = plan.writer_options();
         let mut writer = match self.filesystem.open_writer(self.target, writer_options) {
@@ -254,7 +317,9 @@ impl<'a> CopyOperation<'a> {
                 let (error, stage, recovery) = error.into_parts();
                 let state = match stage {
                     OpenFailureStage::Preflight => CopyFailureState::Unchanged,
-                    OpenFailureStage::ProviderOpen => from_write_failure_state(open_failure_state(&error)),
+                    OpenFailureStage::ProviderOpen => {
+                        from_write_failure_state(open_failure_state(&error))
+                    }
                     OpenFailureStage::OutcomeValidation => CopyFailureState::Indeterminate,
                 };
                 return Err(CopyFailure::new(
@@ -300,7 +365,9 @@ impl<'a> CopyOperation<'a> {
             if let Some(error) = self.deadline_error() {
                 return Err(error);
             }
-            let read = match crate::read::read_retry_interrupted(reader, &mut buffer, || match self.deadline_error() {
+            let read = match crate::read::read_retry_interrupted(reader, &mut buffer, || match self
+                .deadline_error()
+            {
                 Some(error) => Err(error.into_io_error()),
                 None => Ok(()),
             }) {
@@ -357,7 +424,10 @@ impl<'a> CopyOperation<'a> {
             return Err(self.opened_writer_failure(error, writer));
         }
         if let Err(error) = Output::flush(&mut writer) {
-            return Err(self.opened_writer_failure(self.io_error(self.target, FsOperation::Write, error), writer));
+            return Err(self.opened_writer_failure(
+                self.io_error(self.target, FsOperation::Write, error),
+                writer,
+            ));
         }
         if let Some(error) = self.deadline_error() {
             return Err(self.opened_writer_failure(error, writer));
@@ -547,10 +617,14 @@ impl<'a> CopyOperation<'a> {
     ///
     /// - `message`: Diagnostic message for the constructed filesystem error.
     fn budget_error(&self, message: &str) -> FsError {
-        FsError::new(FsErrorKind::ResourceLimitExceeded, FsOperation::Copy, message)
-            .with_path(self.source.clone())
-            .with_target(self.target.clone())
-            .with_provider(self.filesystem.properties().info().provider_id())
+        FsError::new(
+            FsErrorKind::ResourceLimitExceeded,
+            FsOperation::Copy,
+            message,
+        )
+        .with_path(self.source.clone())
+        .with_target(self.target.clone())
+        .with_provider(self.filesystem.properties().info().provider_id())
     }
 }
 
@@ -662,11 +736,13 @@ mod tests {
         fn stat(&self, request: StatRequest<'_>) -> FsResult<StatResponse> {
             Ok(StatResponse::new(
                 request.path().clone(),
-                FileMetadata::new(FileKind::File).with_len(Some(match WRITE_MODE.with(Cell::get) {
-                    2 => 2,
-                    8 => 4,
-                    _ => 1,
-                })),
+                FileMetadata::new(FileKind::File).with_len(Some(
+                    match WRITE_MODE.with(Cell::get) {
+                        2 => 2,
+                        8 => 4,
+                        _ => 1,
+                    },
+                )),
             ))
         }
 
@@ -714,7 +790,12 @@ mod tests {
     }
     impl Output for StageWriter {
         type Item = u8;
-        unsafe fn write_unchecked(&mut self, input: &[u8], index: usize, count: usize) -> IoResult<usize> {
+        unsafe fn write_unchecked(
+            &mut self,
+            input: &[u8],
+            index: usize,
+            count: usize,
+        ) -> IoResult<usize> {
             let call = WRITE_CALLS.with(|calls| {
                 let call = calls.get();
                 calls.set(call + 1);
@@ -723,7 +804,10 @@ mod tests {
             match (WRITE_MODE.with(Cell::get), call) {
                 (1, 0) => {
                     advance_clock();
-                    Err(IoError::new(ErrorKind::Interrupted, "injected interruption"))
+                    Err(IoError::new(
+                        ErrorKind::Interrupted,
+                        "injected interruption",
+                    ))
                 }
                 (2, 0) => {
                     advance_clock();
@@ -736,16 +820,27 @@ mod tests {
                     Ok(1)
                 }
                 (5, _) => {
-                    WRITTEN.with(|bytes| bytes.borrow_mut().extend_from_slice(&input[index..index + count]));
+                    WRITTEN.with(|bytes| {
+                        bytes
+                            .borrow_mut()
+                            .extend_from_slice(&input[index..index + count])
+                    });
                     Ok(count)
                 }
                 (6, 0) => {
                     advance_clock();
                     Err(IoError::other("real error at deadline"))
                 }
-                (7, 0) => Err(IoError::new(ErrorKind::Interrupted, "retryable interruption")),
+                (7, 0) => Err(IoError::new(
+                    ErrorKind::Interrupted,
+                    "retryable interruption",
+                )),
                 (7, _) => {
-                    WRITTEN.with(|bytes| bytes.borrow_mut().extend_from_slice(&input[index..index + count]));
+                    WRITTEN.with(|bytes| {
+                        bytes
+                            .borrow_mut()
+                            .extend_from_slice(&input[index..index + count])
+                    });
                     Ok(count)
                 }
                 (8, _) => {
@@ -776,7 +871,8 @@ mod tests {
     impl FileWriterSpi for StageWriter {
         fn commit(&mut self) -> Result<WriteOutcome, SpiWriteFailure> {
             COMMIT_CALLS.with(|calls| calls.set(calls.get() + 1));
-            if (SKIP_AFTER_COMMIT_NOT_PUBLISHED..=SKIP_AFTER_COMMIT_INDETERMINATE).contains(&SKIP_STAGE.with(Cell::get))
+            if (SKIP_AFTER_COMMIT_NOT_PUBLISHED..=SKIP_AFTER_COMMIT_INDETERMINATE)
+                .contains(&SKIP_STAGE.with(Cell::get))
             {
                 return Err(SpiWriteFailure::new(
                     FsError::new(
@@ -792,7 +888,11 @@ mod tests {
             }
             if self.late_commit_error {
                 return Err(SpiWriteFailure::new(
-                    FsError::new(FsErrorKind::Io, FsOperation::CommitWriter, "late commit failure"),
+                    FsError::new(
+                        FsErrorKind::Io,
+                        FsOperation::CommitWriter,
+                        "late commit failure",
+                    ),
                     WriteFailureState::RetryableNotPublished,
                 ));
             }
@@ -821,7 +921,8 @@ mod tests {
 
     fn operation_with_mode(late_commit_error: bool, mode: u8) -> CopyOperation<'static> {
         let filesystem = Box::leak(Box::new(
-            crate::FileSystem::from_spi(StageSpi { late_commit_error }).expect("valid test filesystem"),
+            crate::FileSystem::from_spi(StageSpi { late_commit_error })
+                .expect("valid test filesystem"),
         ));
         let source = Box::leak(Box::new(Path::parse("/source").expect("valid source path")));
         let target = Box::leak(Box::new(Path::parse("/target").expect("valid target path")));
@@ -862,8 +963,14 @@ mod tests {
             .expect_err("deadline after interruption must fail");
         assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
         assert_eq!(FsOperation::Copy, failure.error().operation());
-        assert_eq!(Some(&Path::parse("/source").expect("path")), failure.error().path());
-        assert_eq!(Some(&Path::parse("/target").expect("path")), failure.error().target());
+        assert_eq!(
+            Some(&Path::parse("/source").expect("path")),
+            failure.error().path()
+        );
+        assert_eq!(
+            Some(&Path::parse("/target").expect("path")),
+            failure.error().target()
+        );
         assert_eq!(Some("deadline-test"), failure.error().provider());
         assert!(failure.has_recovery());
         assert_eq!(0, failure.partial_stats().bytes);
@@ -903,7 +1010,10 @@ mod tests {
         let short = operation_with_mode(false, 8)
             .execute()
             .expect("short writes should complete");
-        assert_eq!(b"wxyz", WRITTEN.with(|bytes| bytes.borrow().clone()).as_slice());
+        assert_eq!(
+            b"wxyz",
+            WRITTEN.with(|bytes| bytes.borrow().clone()).as_slice()
+        );
         assert_eq!(4, WRITE_CALLS.with(Cell::get));
         assert_eq!(
             Some(&crate::metadata::ResourceVersion::new("generation-7")),
@@ -937,7 +1047,9 @@ mod tests {
     #[test]
     fn test_copy_deadline_after_flush_retains_indeterminate_writer_and_bytes() {
         ADVANCE_ON_FLUSH.with(|advance| advance.set(true));
-        let failure = operation(false).execute().expect_err("deadline after flush must fail");
+        let failure = operation(false)
+            .execute()
+            .expect_err("deadline after flush must fail");
         ADVANCE_ON_FLUSH.with(|advance| advance.set(false));
         assert_eq!(CopyFailureState::Indeterminate, failure.state());
         assert_eq!(1, failure.partial_stats().bytes);
@@ -947,7 +1059,9 @@ mod tests {
     #[test]
     fn test_copy_deadline_after_commit_reports_published_without_recovery() {
         ADVANCE_ON_COMMIT.with(|advance| advance.set(true));
-        let failure = operation(false).execute().expect_err("deadline after commit must fail");
+        let failure = operation(false)
+            .execute()
+            .expect_err("deadline after commit must fail");
         ADVANCE_ON_COMMIT.with(|advance| advance.set(false));
         assert_eq!(CopyFailureState::Published, failure.state());
         assert_eq!(1, failure.partial_stats().bytes);
@@ -985,7 +1099,10 @@ mod tests {
         for (stage, expected_state) in [
             (SKIP_AFTER_COMMIT_NOT_PUBLISHED, CopyFailureState::Unchanged),
             (SKIP_AFTER_COMMIT_PUBLISHED, CopyFailureState::Published),
-            (SKIP_AFTER_COMMIT_INDETERMINATE, CopyFailureState::Indeterminate),
+            (
+                SKIP_AFTER_COMMIT_INDETERMINATE,
+                CopyFailureState::Indeterminate,
+            ),
         ] {
             let failure = skip_operation(stage)
                 .execute()

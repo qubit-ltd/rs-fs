@@ -96,7 +96,11 @@ impl CopyOutcome {
     /// An outcome marked as fallback with no provider diagnostics or target
     /// version.
     #[must_use]
-    pub(crate) fn streamed_fallback(stats: CopyStats, atomicity: AchievedAtomicity, durable: bool) -> Self {
+    pub(crate) fn streamed_fallback(
+        stats: CopyStats,
+        atomicity: AchievedAtomicity,
+        durable: bool,
+    ) -> Self {
         Self {
             stats,
             method: CopyMethod::Streamed,
@@ -284,13 +288,20 @@ impl CopyOutcome {
         {
             return Some("provider reported non-atomic success for an atomic-required copy");
         }
-        if options.durability() == crate::metadata::DurabilityRequirement::Required && !self.durable {
+        if options.durability() == crate::metadata::DurabilityRequirement::Required && !self.durable
+        {
             return Some("provider reported non-durable success for a durability-required copy");
         }
-        if options.server_side() == ServerSidePreference::Require && self.method != CopyMethod::ServerSide {
-            return Some("provider reported a non-server-side success for a server-side-required copy");
+        if options.server_side() == ServerSidePreference::Require
+            && self.method != CopyMethod::ServerSide
+        {
+            return Some(
+                "provider reported a non-server-side success for a server-side-required copy",
+            );
         }
-        if options.server_side() == ServerSidePreference::Disable && self.method == CopyMethod::ServerSide {
+        if options.server_side() == ServerSidePreference::Disable
+            && self.method == CopyMethod::ServerSide
+        {
             return Some("provider reported a server-side success for a server-side-disabled copy");
         }
         if self.metadata != options.preserve_metadata() {
@@ -303,9 +314,14 @@ impl CopyOutcome {
             return Some("provider reported skipped copy entries without a skip conflict policy");
         }
         if options.conflict() != CopyConflictPolicy::Overwrite && self.stats.overwritten != 0 {
-            return Some("provider reported overwritten copy entries without an overwrite conflict policy");
+            return Some(
+                "provider reported overwritten copy entries without an overwrite conflict policy",
+            );
         }
-        if options.max_bytes().is_some_and(|maximum| self.stats.bytes > maximum) {
+        if options
+            .max_bytes()
+            .is_some_and(|maximum| self.stats.bytes > maximum)
+        {
             return Some("provider reported copy bytes beyond the requested limit");
         }
         let Some(entries) = self.entry_count() else {
@@ -455,7 +471,10 @@ mod tests {
             Some("provider reported non-atomic success for an atomic-required copy"),
             skipped.contract_violation(&file_skip)
         );
-        assert_eq!(CopyFailureState::Unchanged, skipped.violation_failure_state(&file_skip));
+        assert_eq!(
+            CopyFailureState::Unchanged,
+            skipped.violation_failure_state(&file_skip)
+        );
 
         let copied_empty_file = CopyOutcome::new(
             CopyStats {
@@ -494,7 +513,9 @@ mod tests {
         );
         assert_eq!(
             CopyFailureState::PartiallyPublished,
-            partial_tree.violation_failure_state(&CopyOptions::tree().with_atomicity(AtomicityRequirement::Required)),
+            partial_tree.violation_failure_state(
+                &CopyOptions::tree().with_atomicity(AtomicityRequirement::Required)
+            ),
         );
 
         let inconsistent = CopyOutcome::new(
@@ -508,8 +529,9 @@ mod tests {
         );
         assert_eq!(
             CopyFailureState::Indeterminate,
-            inconsistent
-                .violation_failure_state(&CopyOptions::file().with_conflict(crate::copy::CopyConflictPolicy::Skip)),
+            inconsistent.violation_failure_state(
+                &CopyOptions::file().with_conflict(crate::copy::CopyConflictPolicy::Skip)
+            ),
         );
 
         let too_many_overwrites = CopyOutcome::new(
@@ -521,7 +543,11 @@ mod tests {
             CopyMethod::Native,
             AchievedAtomicity::Atomic,
         );
-        assert!(too_many_overwrites.contract_violation(&CopyOptions::file()).is_some());
+        assert!(
+            too_many_overwrites
+                .contract_violation(&CopyOptions::file())
+                .is_some()
+        );
         assert_eq!(
             CopyFailureState::Indeterminate,
             too_many_overwrites.violation_failure_state(&CopyOptions::file())

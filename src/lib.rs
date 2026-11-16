@@ -68,6 +68,7 @@ mod async_file_system;
 pub mod copy;
 pub mod directory;
 pub mod error;
+pub mod execution;
 mod facade;
 mod file_system;
 mod file_system_properties;
@@ -81,6 +82,15 @@ pub mod spi;
 pub mod temp;
 mod uri;
 pub mod write;
+pub use execution::{
+    AsyncFsMutationOperation, AsyncFsOperation, FsEffectCapacityError, FsEffectFact,
+    FsEffectObservationError, FsEffectObserver, FsEffectReservation, FsEffectSlotPool,
+    FsEffectSnapshot, FsEffectWait, FsExecutionBinding, FsMutationOperation, FsOperation,
+    FsOperationFailure, FsOperationFailureKind, FsOwnedCopyRequest, FsOwnedReadRequest,
+    FsOwnedRenameRequest, FsOwnedTreePublishRequest, FsOwnedWriteRequest, FsPrepareFailure,
+    FsPrepareFailureKind, FsSubmitFailure,
+};
+pub use read::{ConsistentReadOutcome, ReadAllOptions, ReadConsistencyPolicy};
 
 #[cfg(feature = "async")]
 pub use async_file_system::AsyncFileSystem;

@@ -22,8 +22,13 @@ fn test_copied_byte_accounting_is_executed_at_runtime() {
     let plan = StreamCopyPlan::new(&options, &limits, &source, &target);
 
     assert_eq!(plan.next_bytes(4, 3).expect("value fits"), 7);
-    let error = plan.next_bytes(u64::MAX, 1).expect_err("overflow must be rejected");
-    assert_eq!(error.kind(), crate::error::FsErrorKind::ResourceLimitExceeded);
+    let error = plan
+        .next_bytes(u64::MAX, 1)
+        .expect_err("overflow must be rejected");
+    assert_eq!(
+        error.kind(),
+        crate::error::FsErrorKind::ResourceLimitExceeded
+    );
     assert_eq!(error.operation(), FsOperation::Copy);
     assert_eq!(
         plan.next_bytes(u64::MAX, 1)

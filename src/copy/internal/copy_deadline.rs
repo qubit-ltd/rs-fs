@@ -68,7 +68,10 @@ mod tests {
     fn set_test_now(value: Instant) {
         TEST_NOW.with(|now| {
             if let Some(previous) = now.get() {
-                assert!(value >= previous, "controlled test time must not move backwards");
+                assert!(
+                    value >= previous,
+                    "controlled test time must not move backwards"
+                );
             }
             now.set(Some(value));
         });
@@ -98,6 +101,9 @@ mod tests {
         let backwards = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             set_test_now(start);
         }));
-        assert!(backwards.is_err(), "controlled test time must reject a backwards step");
+        assert!(
+            backwards.is_err(),
+            "controlled test time must reject a backwards step"
+        );
     }
 }

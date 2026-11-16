@@ -19,7 +19,10 @@ fn test_user_metadata_debug_hides_values() {
     assert!(!debug.contains("private-value"));
     assert!(!metadata.is_empty());
     assert!(metadata.contains_key("language"));
-    assert_eq!(vec![("language", "private-value")], metadata.iter().collect::<Vec<_>>());
+    assert_eq!(
+        vec![("language", "private-value")],
+        metadata.iter().collect::<Vec<_>>()
+    );
 }
 
 /// Verifies metadata keys are classified directly instead of through a URI.
@@ -39,7 +42,11 @@ fn test_user_metadata_rejects_secret_bearing_keys() {
 
 #[test]
 fn test_user_metadata_rejects_sensitive_provider_metadata_keys() {
-    assert!(UserMetadata::new().with("x-amz-signature", "plaintext").is_err());
+    assert!(
+        UserMetadata::new()
+            .with("x-amz-signature", "plaintext")
+            .is_err()
+    );
 }
 
 #[test]
@@ -54,5 +61,8 @@ fn test_user_metadata_accessors_are_callable_directly() {
     assert_eq!(Some("private-region"), get(&metadata, "region"));
     assert!(!is_empty(&metadata));
     assert!(contains_key(&metadata, "region"));
-    assert_eq!(vec![("region", "private-region")], metadata.iter().collect::<Vec<_>>());
+    assert_eq!(
+        vec![("region", "private-region")],
+        metadata.iter().collect::<Vec<_>>()
+    );
 }

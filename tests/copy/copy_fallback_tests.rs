@@ -142,7 +142,11 @@ struct RecordingSpi {
     writer_durable: bool,
 }
 
-type RecordingHandles = (FileSystem, Arc<Mutex<Vec<&'static str>>>, Arc<Mutex<Vec<u8>>>);
+type RecordingHandles = (
+    FileSystem,
+    Arc<Mutex<Vec<&'static str>>>,
+    Arc<Mutex<Vec<u8>>>,
+);
 
 /// Constructs a recording filesystem with a selected fast-path response.
 fn recording_filesystem(response: CopyResponse) -> RecordingHandles {
@@ -153,11 +157,17 @@ fn recording_filesystem_without_copy(response: CopyResponse) -> RecordingHandles
     recording_filesystem_with_options(response, false, None)
 }
 /// Constructs a recording filesystem with a finite write-session limit.
-fn recording_filesystem_with_write_limit(response: CopyResponse, maximum_write_bytes: u64) -> RecordingHandles {
+fn recording_filesystem_with_write_limit(
+    response: CopyResponse,
+    maximum_write_bytes: u64,
+) -> RecordingHandles {
     recording_filesystem_with_options(response, true, Some(maximum_write_bytes))
 }
 /// Constructs a recording filesystem with a finite read-range limit.
-fn recording_filesystem_with_range_limit(response: CopyResponse, maximum_read_range_bytes: u64) -> RecordingHandles {
+fn recording_filesystem_with_range_limit(
+    response: CopyResponse,
+    maximum_read_range_bytes: u64,
+) -> RecordingHandles {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let bytes = Arc::new(Mutex::new(Vec::new()));
     let filesystem = FileSystem::from_spi(RecordingSpi {
@@ -182,7 +192,8 @@ fn test_recovery_accessors_are_executed_at_runtime() {
     let recovery: fn(&CopyFailure) -> Option<&WriterRecovery> = black_box(CopyFailure::recovery);
     let recovery_mut: for<'a> fn(&'a mut CopyFailure) -> Option<&'a mut WriterRecovery> =
         black_box(CopyFailure::recovery_mut);
-    let take_recovery: fn(&mut CopyFailure) -> Option<WriterRecovery> = black_box(CopyFailure::take_recovery);
+    let take_recovery: fn(&mut CopyFailure) -> Option<WriterRecovery> =
+        black_box(CopyFailure::take_recovery);
     let (filesystem, _, _) = recording_filesystem(CopyResponse::Failed);
     let mut failure = filesystem
         .copy(&path("/source"), &path("/target"), CopyOptions::default())
@@ -219,7 +230,10 @@ fn recording_filesystem_with_options(
 }
 /// Constructs a recording filesystem whose metadata reports a selected source
 /// length.
-fn recording_filesystem_with_source_length(response: CopyResponse, source_length: u64) -> RecordingHandles {
+fn recording_filesystem_with_source_length(
+    response: CopyResponse,
+    source_length: u64,
+) -> RecordingHandles {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let bytes = Arc::new(Mutex::new(Vec::new()));
     let filesystem = FileSystem::from_spi(RecordingSpi {
@@ -238,7 +252,10 @@ fn recording_filesystem_with_source_length(response: CopyResponse, source_length
     (filesystem, calls, bytes)
 }
 /// Constructs a recording filesystem whose source metadata has a selected kind.
-fn recording_filesystem_with_source_kind(response: CopyResponse, source_kind: FileKind) -> RecordingHandles {
+fn recording_filesystem_with_source_kind(
+    response: CopyResponse,
+    source_kind: FileKind,
+) -> RecordingHandles {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let bytes = Arc::new(Mutex::new(Vec::new()));
     let filesystem = FileSystem::from_spi(RecordingSpi {
@@ -258,7 +275,9 @@ fn recording_filesystem_with_source_kind(response: CopyResponse, source_kind: Fi
 }
 /// Constructs a recording filesystem with observable fallback writer options
 /// and a configurable durability result.
-fn recording_filesystem_with_writer_durability(durable: bool) -> (FileSystem, Arc<Mutex<Vec<WriteOptions>>>) {
+fn recording_filesystem_with_writer_durability(
+    durable: bool,
+) -> (FileSystem, Arc<Mutex<Vec<WriteOptions>>>) {
     let writer_options = Arc::new(Mutex::new(Vec::new()));
     let filesystem = FileSystem::from_spi(RecordingSpi {
         response: CopyResponse::Declined,
@@ -308,7 +327,8 @@ fn properties(
     }
     if matches!(
         response,
-        CopyResponse::CompletedServerSideRequiredButNative | CopyResponse::CompletedServerSideWhenDisabled
+        CopyResponse::CompletedServerSideRequiredButNative
+            | CopyResponse::CompletedServerSideWhenDisabled
     ) {
         capabilities = capabilities.with_guaranteed(FileSystemCapability::ServerSideCopy);
     }
@@ -332,7 +352,9 @@ fn properties(
             .with_max_read_range_bytes(
                 maximum_read_range_bytes.map_or(FileSystemLimit::Unknown, FileSystemLimit::Maximum),
             )
-            .with_max_write_bytes(maximum_write_bytes.map_or(FileSystemLimit::Unknown, FileSystemLimit::Maximum)),
+            .with_max_write_bytes(
+                maximum_write_bytes.map_or(FileSystemLimit::Unknown, FileSystemLimit::Maximum),
+            ),
         PathConstraints::absolute(),
         SymlinkPolicy::Reject,
     )
@@ -354,7 +376,10 @@ impl FileSystemSpi for RecordingSpi {
         )
     }
     fn stat(&self, request: StatRequest<'_>) -> FsResult<StatResponse> {
-        self.calls.lock().expect("calls lock should succeed").push("stat");
+        self.calls
+            .lock()
+            .expect("calls lock should succeed")
+            .push("stat");
         if matches!(self.response, CopyResponse::DeclinedStatFailure) {
             return Err(FsError::new(
                 FsErrorKind::Io,
@@ -384,11 +409,12 @@ impl FileSystemSpi for RecordingSpi {
                 "injected reader failure",
             ));
         }
-        let reader: Box<dyn ByteInput + Send> = if matches!(self.response, CopyResponse::DeclinedReadFailure) {
-            Box::new(FailingReader)
-        } else {
-            Box::new(Cursor::new(b"bytes".to_vec()))
-        };
+        let reader: Box<dyn ByteInput + Send> =
+            if matches!(self.response, CopyResponse::DeclinedReadFailure) {
+                Box::new(FailingReader)
+            } else {
+                Box::new(Cursor::new(b"bytes".to_vec()))
+            };
         Ok(OpenedReader::new(info(request.path()), reader))
     }
     fn open_writer(&self, request: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
@@ -409,10 +435,12 @@ impl FileSystemSpi for RecordingSpi {
             .with_effect_state(FsEffectState::Unchanged));
         }
         if matches!(self.response, CopyResponse::DeclinedWriterFailure) {
-            return Err(
-                FsError::new(FsErrorKind::Io, FsOperation::OpenWriter, "injected writer failure")
-                    .with_effect_state(FsEffectState::Unchanged),
-            );
+            return Err(FsError::new(
+                FsErrorKind::Io,
+                FsOperation::OpenWriter,
+                "injected writer failure",
+            )
+            .with_effect_state(FsEffectState::Unchanged));
         }
         let opened_path = if matches!(self.response, CopyResponse::DeclinedWriterInvalidIdentity) {
             path("/wrong")
@@ -427,17 +455,23 @@ impl FileSystemSpi for RecordingSpi {
                 fail_write: matches!(self.response, CopyResponse::DeclinedWriteFailure),
                 commit_failure_state: match self.response {
                     CopyResponse::DeclinedCommitFailure => Some(WriteFailureState::NotPublished),
-                    CopyResponse::DeclinedCommitRetryable => Some(WriteFailureState::RetryableNotPublished),
+                    CopyResponse::DeclinedCommitRetryable => {
+                        Some(WriteFailureState::RetryableNotPublished)
+                    }
                     CopyResponse::DeclinedCommitPublished => Some(WriteFailureState::Published),
-                    CopyResponse::DeclinedCommitIndeterminate => Some(WriteFailureState::Indeterminate),
-                    CopyResponse::DeclinedCommitAbortPublished | CopyResponse::DeclinedCommitAbortIndeterminate => {
+                    CopyResponse::DeclinedCommitIndeterminate => {
+                        Some(WriteFailureState::Indeterminate)
+                    }
+                    CopyResponse::DeclinedCommitAbortPublished
+                    | CopyResponse::DeclinedCommitAbortIndeterminate => {
                         Some(WriteFailureState::RetryableNotPublished)
                     }
                     _ => None,
                 },
                 commit_failure_error: if matches!(
                     self.response,
-                    CopyResponse::DeclinedCommitAbortPublished | CopyResponse::DeclinedCommitAbortIndeterminate
+                    CopyResponse::DeclinedCommitAbortPublished
+                        | CopyResponse::DeclinedCommitAbortIndeterminate
                 ) {
                     FsErrorKind::AlreadyExists
                 } else {
@@ -445,7 +479,9 @@ impl FileSystemSpi for RecordingSpi {
                 },
                 abort_outcome: match self.response {
                     CopyResponse::DeclinedCommitAbortPublished => WriteAbortOutcome::Published,
-                    CopyResponse::DeclinedCommitAbortIndeterminate => WriteAbortOutcome::Indeterminate,
+                    CopyResponse::DeclinedCommitAbortIndeterminate => {
+                        WriteAbortOutcome::Indeterminate
+                    }
                     _ => WriteAbortOutcome::NotPublished,
                 },
                 durable: self.writer_durable,
@@ -462,11 +498,18 @@ impl FileSystemSpi for RecordingSpi {
         Err(unused())
     }
     fn try_copy(&self, _: CopyRequest<'_>) -> Result<CopyAttempt, SpiCopyFailure> {
-        self.calls.lock().expect("calls lock should succeed").push("try_copy");
+        self.calls
+            .lock()
+            .expect("calls lock should succeed")
+            .push("try_copy");
         match self.response {
             CopyResponse::Completed => Ok(CopyAttempt::Completed(
-                CopyOutcome::new(CopyStats::default(), CopyMethod::Native, AchievedAtomicity::Atomic)
-                    .with_target_version(ResourceVersion::new("native-generation")),
+                CopyOutcome::new(
+                    CopyStats::default(),
+                    CopyMethod::Native,
+                    AchievedAtomicity::Atomic,
+                )
+                .with_target_version(ResourceVersion::new("native-generation")),
             )),
             CopyResponse::CompletedAtomicDowngrade => Ok(CopyAttempt::Completed(CopyOutcome::new(
                 CopyStats {
@@ -476,15 +519,7 @@ impl FileSystemSpi for RecordingSpi {
                 CopyMethod::Native,
                 AchievedAtomicity::NonAtomic,
             ))),
-            CopyResponse::CompletedDurabilityDowngrade => Ok(CopyAttempt::Completed(CopyOutcome::new(
-                CopyStats {
-                    files: 1,
-                    ..CopyStats::default()
-                },
-                CopyMethod::Native,
-                AchievedAtomicity::Atomic,
-            ))),
-            CopyResponse::CompletedServerSideRequiredButNative | CopyResponse::CompletedMetadataDowngrade => {
+            CopyResponse::CompletedDurabilityDowngrade => {
                 Ok(CopyAttempt::Completed(CopyOutcome::new(
                     CopyStats {
                         files: 1,
@@ -494,47 +529,68 @@ impl FileSystemSpi for RecordingSpi {
                     AchievedAtomicity::Atomic,
                 )))
             }
-            CopyResponse::CompletedServerSideWhenDisabled => Ok(CopyAttempt::Completed(CopyOutcome::new(
-                CopyStats {
-                    files: 1,
-                    ..CopyStats::default()
-                },
-                CopyMethod::ServerSide,
-                AchievedAtomicity::Atomic,
-            ))),
-            CopyResponse::CompletedInvalidSkippedStats => Ok(CopyAttempt::Completed(CopyOutcome::new(
-                CopyStats {
-                    skipped: 1,
-                    bytes: 100,
-                    ..CopyStats::default()
-                },
-                CopyMethod::Native,
-                AchievedAtomicity::Atomic,
-            ))),
-            CopyResponse::CompletedInvalidFailedStats => Ok(CopyAttempt::Completed(CopyOutcome::new(
-                CopyStats {
-                    failed: 1,
-                    ..CopyStats::default()
-                },
-                CopyMethod::Native,
-                AchievedAtomicity::Atomic,
-            ))),
-            CopyResponse::CompletedInvalidOverwrittenStats => Ok(CopyAttempt::Completed(CopyOutcome::new(
-                CopyStats {
-                    overwritten: 1,
-                    ..CopyStats::default()
-                },
-                CopyMethod::Native,
-                AchievedAtomicity::Atomic,
-            ))),
-            CopyResponse::CompletedInvalidFileStats => Ok(CopyAttempt::Completed(CopyOutcome::new(
-                CopyStats {
-                    directories: 1,
-                    ..CopyStats::default()
-                },
-                CopyMethod::Native,
-                AchievedAtomicity::Atomic,
-            ))),
+            CopyResponse::CompletedServerSideRequiredButNative
+            | CopyResponse::CompletedMetadataDowngrade => {
+                Ok(CopyAttempt::Completed(CopyOutcome::new(
+                    CopyStats {
+                        files: 1,
+                        ..CopyStats::default()
+                    },
+                    CopyMethod::Native,
+                    AchievedAtomicity::Atomic,
+                )))
+            }
+            CopyResponse::CompletedServerSideWhenDisabled => {
+                Ok(CopyAttempt::Completed(CopyOutcome::new(
+                    CopyStats {
+                        files: 1,
+                        ..CopyStats::default()
+                    },
+                    CopyMethod::ServerSide,
+                    AchievedAtomicity::Atomic,
+                )))
+            }
+            CopyResponse::CompletedInvalidSkippedStats => {
+                Ok(CopyAttempt::Completed(CopyOutcome::new(
+                    CopyStats {
+                        skipped: 1,
+                        bytes: 100,
+                        ..CopyStats::default()
+                    },
+                    CopyMethod::Native,
+                    AchievedAtomicity::Atomic,
+                )))
+            }
+            CopyResponse::CompletedInvalidFailedStats => {
+                Ok(CopyAttempt::Completed(CopyOutcome::new(
+                    CopyStats {
+                        failed: 1,
+                        ..CopyStats::default()
+                    },
+                    CopyMethod::Native,
+                    AchievedAtomicity::Atomic,
+                )))
+            }
+            CopyResponse::CompletedInvalidOverwrittenStats => {
+                Ok(CopyAttempt::Completed(CopyOutcome::new(
+                    CopyStats {
+                        overwritten: 1,
+                        ..CopyStats::default()
+                    },
+                    CopyMethod::Native,
+                    AchievedAtomicity::Atomic,
+                )))
+            }
+            CopyResponse::CompletedInvalidFileStats => {
+                Ok(CopyAttempt::Completed(CopyOutcome::new(
+                    CopyStats {
+                        directories: 1,
+                        ..CopyStats::default()
+                    },
+                    CopyMethod::Native,
+                    AchievedAtomicity::Atomic,
+                )))
+            }
             CopyResponse::CompletedFileSkipped => Ok(CopyAttempt::Completed(CopyOutcome::new(
                 CopyStats {
                     skipped: 1,
@@ -543,23 +599,27 @@ impl FileSystemSpi for RecordingSpi {
                 CopyMethod::Native,
                 AchievedAtomicity::Atomic,
             ))),
-            CopyResponse::CompletedFileSkippedAndCopied => Ok(CopyAttempt::Completed(CopyOutcome::new(
-                CopyStats {
-                    files: 1,
-                    skipped: 1,
-                    ..CopyStats::default()
-                },
-                CopyMethod::Native,
-                AchievedAtomicity::Atomic,
-            ))),
-            CopyResponse::CompletedFileSkippedNonAtomic => Ok(CopyAttempt::Completed(CopyOutcome::new(
-                CopyStats {
-                    skipped: 1,
-                    ..CopyStats::default()
-                },
-                CopyMethod::Native,
-                AchievedAtomicity::NonAtomic,
-            ))),
+            CopyResponse::CompletedFileSkippedAndCopied => {
+                Ok(CopyAttempt::Completed(CopyOutcome::new(
+                    CopyStats {
+                        files: 1,
+                        skipped: 1,
+                        ..CopyStats::default()
+                    },
+                    CopyMethod::Native,
+                    AchievedAtomicity::Atomic,
+                )))
+            }
+            CopyResponse::CompletedFileSkippedNonAtomic => {
+                Ok(CopyAttempt::Completed(CopyOutcome::new(
+                    CopyStats {
+                        skipped: 1,
+                        ..CopyStats::default()
+                    },
+                    CopyMethod::Native,
+                    AchievedAtomicity::NonAtomic,
+                )))
+            }
             CopyResponse::CompletedStreamedOutcome => Ok(CopyAttempt::Completed(CopyOutcome::new(
                 CopyStats::default(),
                 CopyMethod::Streamed,
@@ -594,12 +654,18 @@ impl FileSystemSpi for RecordingSpi {
         }
     }
     fn rename(&self, _: RenameRequest<'_>) -> Result<RenameOutcome, SpiRenameFailure> {
-        Err(SpiRenameFailure::new(unused(), RenameFailureState::Unchanged))
+        Err(SpiRenameFailure::new(
+            unused(),
+            RenameFailureState::Unchanged,
+        ))
     }
     fn create_temp_file(&self, _: CreateTempFileRequest) -> FsResult<OpenedTempFile> {
         Err(unused())
     }
-    fn create_temp_directory(&self, _: CreateTempDirectoryRequest) -> FsResult<OpenedTempDirectory> {
+    fn create_temp_directory(
+        &self,
+        _: CreateTempDirectoryRequest,
+    ) -> FsResult<OpenedTempDirectory> {
         Err(unused())
     }
 }
@@ -613,7 +679,11 @@ fn info(path: &Path) -> OpenedFileInfo {
 }
 /// Returns an unused-operation provider error.
 fn unused() -> FsError {
-    FsError::new(FsErrorKind::UnsupportedOperation, FsOperation::Other, "unused")
+    FsError::new(
+        FsErrorKind::UnsupportedOperation,
+        FsOperation::Other,
+        "unused",
+    )
 }
 /// Captures fallback bytes through the writer SPI.
 struct RecordingWriter {
@@ -671,7 +741,10 @@ impl FileWriterSpi for RecordingWriter {
                 state,
             ));
         }
-        Ok(WriteOutcome::new(AchievedAtomicity::NonAtomic, PublicationMethod::StreamCopy).with_durable(self.durable))
+        Ok(
+            WriteOutcome::new(AchievedAtomicity::NonAtomic, PublicationMethod::StreamCopy)
+                .with_durable(self.durable),
+        )
     }
     fn abort(&mut self) -> FsResult<WriteAbortOutcome> {
         Ok(self.abort_outcome)
@@ -707,7 +780,10 @@ fn test_assess_copy_tree_is_provider_only() {
         .assess_copy(&path("/source"), &path("/target"), &CopyOptions::tree())
         .expect("provider copy should satisfy tree mode");
     assert_eq!(assessment.route(), CopyExecutionRoute::ProviderOnly);
-    assert_eq!(assessment.fallback_rejection(), Some(FallbackRejection::TreeMode));
+    assert_eq!(
+        assessment.fallback_rejection(),
+        Some(FallbackRejection::TreeMode)
+    );
     assert!(calls.lock().expect("calls lock should succeed").is_empty());
 }
 
@@ -724,12 +800,15 @@ fn test_assess_copy_rejects_same_path_without_io() {
 #[test]
 fn test_copy_stream_fallback_propagates_preferred_durability_and_reports_result() {
     for writer_durable in [true, false] {
-        let (filesystem, writer_options) = recording_filesystem_with_writer_durability(writer_durable);
+        let (filesystem, writer_options) =
+            recording_filesystem_with_writer_durability(writer_durable);
         let options = CopyOptions::default().with_durability(DurabilityRequirement::Preferred);
         let outcome = filesystem
             .copy(&path("/source"), &path("/target"), options)
             .expect("stream fallback should succeed");
-        let options = writer_options.lock().expect("writer options lock should succeed");
+        let options = writer_options
+            .lock()
+            .expect("writer options lock should succeed");
         assert_eq!(DurabilityRequirement::Preferred, options[0].durability());
         assert_eq!(writer_durable, outcome.durable());
         assert!(outcome.used_fallback());
@@ -795,7 +874,10 @@ fn test_copy_declined_uses_allowlisted_stream_fallback() {
     assert_eq!(CopyMethod::Streamed, outcome.method());
     assert!(outcome.used_fallback());
     assert_eq!(None, outcome.target_version());
-    assert_eq!(b"bytes", bytes.lock().expect("bytes lock should succeed").as_slice());
+    assert_eq!(
+        b"bytes",
+        bytes.lock().expect("bytes lock should succeed").as_slice()
+    );
     assert_eq!(
         ["try_copy", "stat", "open_reader", "open_writer"],
         calls.lock().expect("calls lock should succeed").as_slice()
@@ -815,7 +897,12 @@ fn test_copy_stream_fallback_enforces_byte_and_entry_budgets() {
     assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
     assert_eq!(CopyFailureState::Unchanged, failure.state());
     assert!(bytes.lock().expect("bytes lock should succeed").is_empty());
-    assert!(failure.error().to_string().contains("copy byte limit was exceeded"));
+    assert!(
+        failure
+            .error()
+            .to_string()
+            .contains("copy byte limit was exceeded")
+    );
     assert_eq!(Some(&path("/source")), failure.error().path());
 
     let (filesystem, _, bytes) = recording_filesystem(CopyResponse::Declined);
@@ -827,7 +914,10 @@ fn test_copy_stream_fallback_enforces_byte_and_entry_budgets() {
         )
         .expect("a five-byte budget must accept the complete five-byte copy");
     assert_eq!(5, outcome.stats().bytes);
-    assert_eq!(b"bytes", bytes.lock().expect("bytes lock should succeed").as_slice());
+    assert_eq!(
+        b"bytes",
+        bytes.lock().expect("bytes lock should succeed").as_slice()
+    );
 
     let (filesystem, calls, _) = recording_filesystem(CopyResponse::Declined);
     let failure = filesystem
@@ -855,24 +945,32 @@ fn test_copy_stream_fallback_enforces_byte_and_entry_budgets() {
 /// Keeps a large metadata length in the u64 domain until provider validation.
 #[test]
 fn test_stream_fallback_does_not_narrow_metadata_length_to_usize() {
-    let (filesystem, _, bytes) = recording_filesystem_with_source_length(CopyResponse::Declined, u64::MAX);
+    let (filesystem, _, bytes) =
+        recording_filesystem_with_source_length(CopyResponse::Declined, u64::MAX);
     let outcome = filesystem
         .copy(&path("/source"), &path("/target"), CopyOptions::default())
         .expect("an unbounded write limit must accept the u64 metadata length");
 
     assert_eq!(CopyMethod::Streamed, outcome.method());
     assert_eq!(5, outcome.stats().bytes);
-    assert_eq!(b"bytes", bytes.lock().expect("bytes lock should succeed").as_slice());
+    assert_eq!(
+        b"bytes",
+        bytes.lock().expect("bytes lock should succeed").as_slice()
+    );
 }
 #[test]
 fn test_copy_stream_fallback_ignores_range_read_limit() {
-    let (filesystem, calls, bytes) = recording_filesystem_with_range_limit(CopyResponse::Declined, 4);
+    let (filesystem, calls, bytes) =
+        recording_filesystem_with_range_limit(CopyResponse::Declined, 4);
     let outcome = filesystem
         .copy(&path("/source"), &path("/target"), CopyOptions::default())
         .expect("sequential fallback should not use the range-read limit");
     assert_eq!(CopyMethod::Streamed, outcome.method());
     assert_eq!(5, outcome.stats().bytes);
-    assert_eq!(b"bytes", bytes.lock().expect("bytes lock should succeed").as_slice());
+    assert_eq!(
+        b"bytes",
+        bytes.lock().expect("bytes lock should succeed").as_slice()
+    );
     assert_eq!(
         ["try_copy", "stat", "open_reader", "open_writer"],
         calls.lock().expect("calls lock should succeed").as_slice()
@@ -896,8 +994,11 @@ fn test_copy_fallback_does_not_require_copy_capability() {
 
 #[test]
 fn test_copy_stream_fallback_reports_source_resource_kind() {
-    for (source_kind, expected_files, expected_objects) in [(FileKind::File, 1, 0), (FileKind::Object, 0, 1)] {
-        let (filesystem, _, _) = recording_filesystem_with_source_kind(CopyResponse::Declined, source_kind);
+    for (source_kind, expected_files, expected_objects) in
+        [(FileKind::File, 1, 0), (FileKind::Object, 0, 1)]
+    {
+        let (filesystem, _, _) =
+            recording_filesystem_with_source_kind(CopyResponse::Declined, source_kind);
         let outcome = filesystem
             .copy(&path("/source"), &path("/target"), CopyOptions::default())
             .expect("supported source kinds should complete the stream fallback");
@@ -911,7 +1012,10 @@ fn test_copy_stream_fallback_reports_source_resource_kind() {
 #[test]
 fn test_sync_copy_commit_skip_preserves_abort_publication_state_without_deadline() {
     for (response, expected_state) in [
-        (CopyResponse::DeclinedCommitAbortPublished, CopyFailureState::Published),
+        (
+            CopyResponse::DeclinedCommitAbortPublished,
+            CopyFailureState::Published,
+        ),
         (
             CopyResponse::DeclinedCommitAbortIndeterminate,
             CopyFailureState::Indeterminate,
@@ -946,7 +1050,10 @@ fn test_copy_declined_with_preferred_server_side_uses_stream_fallback() {
 
     assert_eq!(CopyMethod::Streamed, outcome.method());
     assert!(outcome.used_fallback());
-    assert_eq!(b"bytes", bytes.lock().expect("bytes lock should succeed").as_slice());
+    assert_eq!(
+        b"bytes",
+        bytes.lock().expect("bytes lock should succeed").as_slice()
+    );
 }
 
 /// Rejects copy options the synchronous stream fallback cannot faithfully
@@ -1066,7 +1173,10 @@ fn test_copy_declined_preserves_stream_and_writer_recovery_states() {
     }
 
     for (response, expected) in [
-        (CopyResponse::DeclinedWriterFailure, CopyFailureState::Unchanged),
+        (
+            CopyResponse::DeclinedWriterFailure,
+            CopyFailureState::Unchanged,
+        ),
         (
             CopyResponse::DeclinedWriterInvalidIdentity,
             CopyFailureState::Indeterminate,
@@ -1078,7 +1188,10 @@ fn test_copy_declined_preserves_stream_and_writer_recovery_states() {
             .expect_err("fallback writer failure should preserve recovery");
         assert_eq!(expected, failure.state());
         if expected == CopyFailureState::Indeterminate {
-            assert!(matches!(failure.recovery(), Some(WriterRecovery::Rejected(_))));
+            assert!(matches!(
+                failure.recovery(),
+                Some(WriterRecovery::Rejected(_))
+            ));
         } else {
             assert!(!failure.has_recovery());
         }
@@ -1263,7 +1376,10 @@ fn test_copy_completed_atomicity_downgrade_is_contract_failure() {
         )
         .expect_err("downgrade must fail");
     assert_eq!(CopyFailureState::Published, failure.state());
-    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
     assert_eq!(
         ["try_copy"],
         calls.lock().expect("calls lock should succeed").as_slice()
@@ -1283,7 +1399,10 @@ fn test_copy_completed_durability_downgrade_is_contract_failure() {
         )
         .expect_err("durability downgrade must fail");
     assert_eq!(CopyFailureState::Published, failure.state());
-    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
     assert_eq!(
         ["try_copy"],
         calls.lock().expect("calls lock should succeed").as_slice()
@@ -1294,7 +1413,8 @@ fn test_copy_completed_durability_downgrade_is_contract_failure() {
 /// copy when its reported method is not server-side.
 #[test]
 fn test_copy_completed_non_server_side_method_violates_required_server_side() {
-    let (filesystem, calls, _) = recording_filesystem(CopyResponse::CompletedServerSideRequiredButNative);
+    let (filesystem, calls, _) =
+        recording_filesystem(CopyResponse::CompletedServerSideRequiredButNative);
     let failure = filesystem
         .copy(
             &path("/source"),
@@ -1303,7 +1423,10 @@ fn test_copy_completed_non_server_side_method_violates_required_server_side() {
         )
         .expect_err("native result cannot satisfy required server-side copy");
     assert_eq!(CopyFailureState::Published, failure.state());
-    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
     assert_eq!(
         ["try_copy"],
         calls.lock().expect("calls lock should succeed").as_slice()
@@ -1314,7 +1437,8 @@ fn test_copy_completed_non_server_side_method_violates_required_server_side() {
 /// copy while still reporting a server-side completed outcome.
 #[test]
 fn test_copy_completed_server_side_method_violates_disabled_preference() {
-    let (filesystem, calls, _) = recording_filesystem(CopyResponse::CompletedServerSideWhenDisabled);
+    let (filesystem, calls, _) =
+        recording_filesystem(CopyResponse::CompletedServerSideWhenDisabled);
     let failure = filesystem
         .copy(
             &path("/source"),
@@ -1323,7 +1447,10 @@ fn test_copy_completed_server_side_method_violates_disabled_preference() {
         )
         .expect_err("server-side outcome must honor the disabled preference");
     assert_eq!(CopyFailureState::Published, failure.state());
-    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
     assert_eq!(
         ["try_copy"],
         calls.lock().expect("calls lock should succeed").as_slice()
@@ -1343,7 +1470,10 @@ fn test_copy_completed_missing_metadata_preservation_is_contract_failure() {
         )
         .expect_err("missing metadata preservation must be rejected");
     assert_eq!(CopyFailureState::Published, failure.state());
-    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
     assert_eq!(
         ["try_copy"],
         calls.lock().expect("calls lock should succeed").as_slice()
@@ -1359,7 +1489,10 @@ fn test_copy_completed_skipped_stats_violate_fail_conflict_policy() {
         .copy(&path("/source"), &path("/target"), CopyOptions::default())
         .expect_err("skipped stats must match the conflict policy");
     assert_eq!(CopyFailureState::Indeterminate, failure.state());
-    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
 }
 
 /// Verifies a native provider result cannot report failed entries unless the
@@ -1371,7 +1504,10 @@ fn test_copy_completed_failed_stats_violate_stop_on_error_policy() {
         .copy(&path("/source"), &path("/target"), CopyOptions::default())
         .expect_err("failed stats must match the continue-on-error policy");
     assert_eq!(CopyFailureState::Indeterminate, failure.state());
-    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
 }
 
 /// Verifies a native provider result cannot report overwritten entries unless
@@ -1383,7 +1519,10 @@ fn test_copy_completed_overwritten_stats_violate_fail_conflict_policy() {
         .copy(&path("/source"), &path("/target"), CopyOptions::default())
         .expect_err("overwritten stats must match the conflict policy");
     assert_eq!(CopyFailureState::Indeterminate, failure.state());
-    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
 }
 
 /// Verifies file-mode completion reports exactly one non-tree resource.
@@ -1394,7 +1533,10 @@ fn test_copy_file_mode_rejects_tree_stats() {
         .copy(&path("/source"), &path("/target"), CopyOptions::file())
         .expect_err("file mode must reject tree-shaped completion stats");
     assert_eq!(CopyFailureState::Indeterminate, failure.state());
-    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
 }
 
 /// Verifies file-mode completion may report a single skipped source.
@@ -1423,7 +1565,10 @@ fn test_copy_file_mode_skip_cannot_report_both_copy_and_skip() {
         )
         .expect_err("a single source cannot be both copied and skipped");
     assert_eq!(CopyFailureState::Indeterminate, failure.state());
-    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
 }
 
 #[test]
@@ -1437,7 +1582,10 @@ fn test_copy_file_atomicity_violation_preserves_completed_file_fact() {
         )
         .expect_err("non-atomic copy must violate the requested guarantee");
     assert_eq!(CopyFailureState::Published, failure.state());
-    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
 }
 
 #[test]
@@ -1453,7 +1601,10 @@ fn test_copy_file_skip_atomicity_violation_is_unchanged() {
         )
         .expect_err("non-atomic skip must violate the requested guarantee");
     assert_eq!(CopyFailureState::Unchanged, failure.state());
-    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
 }
 
 /// Verifies only the facade may return a streamed fallback outcome; providers
@@ -1465,7 +1616,10 @@ fn test_copy_completed_streamed_outcome_violates_native_contract() {
         .copy(&path("/source"), &path("/target"), CopyOptions::default())
         .expect_err("providers must not return facade fallback outcomes");
     assert_eq!(CopyFailureState::Indeterminate, failure.state());
-    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+    assert_eq!(
+        FsErrorKind::ProviderContractViolation,
+        failure.error().kind()
+    );
 }
 
 /// Verifies a declined atomic skip request opens neither fallback stream

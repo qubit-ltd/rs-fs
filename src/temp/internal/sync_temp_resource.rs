@@ -86,22 +86,39 @@ impl SyncTempResource {
     /// Returns a typed failure for invalid lifecycle state, failed preflight,
     /// provider failure, or a provider contract violation.
     #[allow(clippy::result_large_err)]
-    pub(crate) fn persist(&mut self, target: &Path, options: PersistOptions) -> Result<PersistOutcome, PersistFailure> {
+    pub(crate) fn persist(
+        &mut self,
+        target: &Path,
+        options: PersistOptions,
+    ) -> Result<PersistOutcome, PersistFailure> {
         if self.lifecycle.state() != TempResourceState::Owned {
             return Err(PersistFailure::new(
-                self.invalid_state(FsOperation::PersistTemp).with_target(target.clone()),
+                self.invalid_state(FsOperation::PersistTemp)
+                    .with_target(target.clone()),
                 self.lifecycle.failure_state(),
             )
             .with_publication_target(self.lifecycle.publication_target()));
         }
-        if let Err(error) = self.filesystem.preflight_temp_persist(&self.path, target, &options) {
-            return Err(PersistFailure::new(error, PersistFailureState::NotPublished));
+        if let Err(error) = self
+            .filesystem
+            .preflight_temp_persist(&self.path, target, &options)
+        {
+            return Err(PersistFailure::new(
+                error,
+                PersistFailureState::NotPublished,
+            ));
         }
-        match self.session.persist(PersistRequest::new(target, options.clone())) {
+        match self
+            .session
+            .persist(PersistRequest::new(target, options.clone()))
+        {
             Ok(outcome) => {
                 if outcome.target() != target {
-                    self.lifecycle
-                        .record_failure(PersistFailureState::Indeterminate, Some(target.clone()), false);
+                    self.lifecycle.record_failure(
+                        PersistFailureState::Indeterminate,
+                        Some(target.clone()),
+                        false,
+                    );
                     return Err(PersistFailure::new(
                         FsError::new(
                             FsErrorKind::ProviderContractViolation,
@@ -135,10 +152,13 @@ impl SyncTempResource {
                     )
                     .with_publication_target(self.lifecycle.publication_target()));
                 }
-                self.lifecycle.record_success(false, outcome.target().clone());
+                self.lifecycle
+                    .record_success(false, outcome.target().clone());
                 Ok(outcome)
             }
-            Err(failure) => Err(self.record_persist_failure(failure, target, FsOperation::PersistTemp)),
+            Err(failure) => {
+                Err(self.record_persist_failure(failure, target, FsOperation::PersistTemp))
+            }
         }
     }
     /// Publishes this temporary resource to the provider-generated target.
@@ -157,19 +177,28 @@ impl SyncTempResource {
         }
         match self.session.keep() {
             Ok(outcome) => {
-                if let Err(error) = self.filesystem.validate_temp_keep_target(&self.path, outcome.target()) {
+                if let Err(error) = self
+                    .filesystem
+                    .validate_temp_keep_target(&self.path, outcome.target())
+                {
                     self.lifecycle.record_failure(
                         PersistFailureState::Indeterminate,
                         Some(outcome.target().clone()),
                         true,
                     );
-                    return Err(PersistFailure::new(error, PersistFailureState::Indeterminate));
+                    return Err(PersistFailure::new(
+                        error,
+                        PersistFailureState::Indeterminate,
+                    ));
                 }
                 self.path = outcome.target().clone();
-                self.lifecycle.record_success(true, outcome.target().clone());
+                self.lifecycle
+                    .record_success(true, outcome.target().clone());
                 Ok(outcome)
             }
-            Err(failure) => Err(self.record_persist_failure(failure, &self.path.clone(), FsOperation::KeepTemp)),
+            Err(failure) => {
+                Err(self.record_persist_failure(failure, &self.path.clone(), FsOperation::KeepTemp))
+            }
         }
     }
     /// Cleans the source and releases the session responsibility.
@@ -217,8 +246,11 @@ impl SyncTempResource {
         } else {
             Some(target.clone())
         };
-        self.lifecycle
-            .record_failure(state, publication_target, operation == FsOperation::KeepTemp);
+        self.lifecycle.record_failure(
+            state,
+            publication_target,
+            operation == FsOperation::KeepTemp,
+        );
         PersistFailure::new(
             error.with_operation(operation).with_missing_context(
                 &self.path,
@@ -268,9 +300,13 @@ impl SyncTempResource {
     /// # Returns
     /// An invalid-state error carrying this resource's path and provider.
     fn invalid_state(&self, operation: FsOperation) -> FsError {
-        FsError::new(FsErrorKind::InvalidState, operation, self.invalid_state_message)
-            .with_path(self.path.clone())
-            .with_provider(self.filesystem.properties().info().provider_id())
+        FsError::new(
+            FsErrorKind::InvalidState,
+            operation,
+            self.invalid_state_message,
+        )
+        .with_path(self.path.clone())
+        .with_provider(self.filesystem.properties().info().provider_id())
     }
 }
 

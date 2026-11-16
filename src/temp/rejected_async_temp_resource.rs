@@ -65,7 +65,11 @@ impl RejectedAsyncTempResource {
     ///
     /// # Returns
     /// A recovery handle isolated from the failed open operation.
-    pub(crate) fn new(session: Box<dyn AsyncTempResourceSpi>, provider: &str, path: Option<Path>) -> Self {
+    pub(crate) fn new(
+        session: Box<dyn AsyncTempResourceSpi>,
+        provider: &str,
+        path: Option<Path>,
+    ) -> Self {
         Self {
             session: Box::into_pin(session),
             state: RecoveryCleanupState::Pending,
@@ -115,7 +119,11 @@ impl RejectedAsyncTempResource {
     /// The error with cleanup operation, validated path, and configured
     /// provider context.
     fn contextual_error(&self, error: FsError) -> FsError {
-        error.with_trusted_cleanup_context(FsOperation::CleanupTemp, self.path.as_ref(), &self.provider)
+        error.with_trusted_cleanup_context(
+            FsOperation::CleanupTemp,
+            self.path.as_ref(),
+            &self.provider,
+        )
     }
 }
 impl Debug for RejectedAsyncTempResource {

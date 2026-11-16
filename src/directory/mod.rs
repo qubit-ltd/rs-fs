@@ -23,6 +23,7 @@ mod internal;
 mod list_filter;
 mod list_options;
 mod list_scope;
+mod tree_publish_outcome;
 
 #[cfg(feature = "async")]
 pub(crate) use async_directory_operation::AsyncDirectoryOperation;
@@ -39,3 +40,4 @@ pub(crate) use internal::ListStreamPolicy;
 pub use list_filter::ListFilter;
 pub use list_options::ListOptions;
 pub use list_scope::ListScope;
+pub use tree_publish_outcome::TreePublishOutcome;

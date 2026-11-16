@@ -77,6 +77,16 @@ pub enum FileSystemCapability {
     DurableRename = 26,
     /// Durable publication of a completed write session.
     DurableWrite = 27,
+    /// Bounded complete-file read with explicit overflow semantics.
+    ReadAll = 28,
+    /// Change observation while reading an opened object.
+    ObserveReadChanges = 29,
+    /// Strong version-bound read consistency.
+    VersionConsistentRead = 30,
+    /// Staged directory-tree publication.
+    StagedTreePublish = 31,
+    /// Storage-capacity observation.
+    StorageObservation = 32,
 }
 
 impl FileSystemCapability {
@@ -110,6 +120,11 @@ impl FileSystemCapability {
         Self::DurableTreeCopy,
         Self::DurableRename,
         Self::DurableWrite,
+        Self::ReadAll,
+        Self::ObserveReadChanges,
+        Self::VersionConsistentRead,
+        Self::StagedTreePublish,
+        Self::StorageObservation,
     ];
 
     /// Returns the bit representing this capability in a capability set.

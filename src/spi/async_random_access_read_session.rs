@@ -55,5 +55,9 @@ pub trait AsyncRandomAccessReadSession: Send {
     /// # Returns
     /// A future resolving to the number of bytes read; a short count is valid
     /// and zero means this request observed EOF.
-    fn read_at_async<'a>(self: Pin<&'a mut Self>, offset: u64, output: &'a mut [u8]) -> SpiFuture<'a, FsResult<usize>>;
+    fn read_at_async<'a>(
+        self: Pin<&'a mut Self>,
+        offset: u64,
+        output: &'a mut [u8],
+    ) -> SpiFuture<'a, FsResult<usize>>;
 }

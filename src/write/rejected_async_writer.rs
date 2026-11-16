@@ -85,7 +85,11 @@ impl RejectedAsyncWriter {
     /// - `session`: Provider session whose ownership transfers to this wrapper.
     /// - `provider`: Trusted provider identity attached to cleanup errors.
     /// - `path`: Target path used for error context and provider requests.
-    pub(crate) fn new(session: Box<dyn AsyncFileWriteSession>, provider: &str, path: Option<Path>) -> Self {
+    pub(crate) fn new(
+        session: Box<dyn AsyncFileWriteSession>,
+        provider: &str,
+        path: Option<Path>,
+    ) -> Self {
         Self {
             session: Box::into_pin(session),
             state: RecoveryCleanupState::Pending,
@@ -134,7 +138,11 @@ impl RejectedAsyncWriter {
     /// # Parameters
     /// - `error`: Failure whose trusted filesystem context is being restored.
     fn contextual_error(&self, error: FsError) -> FsError {
-        error.with_trusted_cleanup_context(FsOperation::AbortWriter, self.path.as_ref(), &self.provider)
+        error.with_trusted_cleanup_context(
+            FsOperation::AbortWriter,
+            self.path.as_ref(),
+            &self.provider,
+        )
     }
 }
 impl Debug for RejectedAsyncWriter {

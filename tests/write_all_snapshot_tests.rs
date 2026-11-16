@@ -74,7 +74,12 @@ struct InterruptedWriter {
 impl Output for InterruptedWriter {
     type Item = u8;
 
-    unsafe fn write_unchecked(&mut self, input: &[u8], index: usize, _count: usize) -> std::io::Result<usize> {
+    unsafe fn write_unchecked(
+        &mut self,
+        input: &[u8],
+        index: usize,
+        _count: usize,
+    ) -> std::io::Result<usize> {
         *self.calls.lock().expect("calls lock") += 1;
         match self.steps.next().expect("script step") {
             WriteStep::Accept(accepted) => {
@@ -132,11 +137,18 @@ impl FileSystemSpi for InterruptedProvider {
         .expect("properties")
     }
     fn stat(&self, _: StatRequest<'_>) -> FsResult<StatResponse> {
-        Err(FsError::new(FsErrorKind::NotFound, FsOperation::Stat, "missing"))
+        Err(FsError::new(
+            FsErrorKind::NotFound,
+            FsOperation::Stat,
+            "missing",
+        ))
     }
     fn open_writer(&self, request: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
         Ok(OpenedWriter::new(
-            OpenedFileInfo::new(self.properties().info().id().clone(), request.path().clone()),
+            OpenedFileInfo::new(
+                self.properties().info().id().clone(),
+                request.path().clone(),
+            ),
             Box::new(InterruptedWriter {
                 steps: self.steps.clone().into_iter(),
                 accepted: self.accepted.clone(),
@@ -147,7 +159,9 @@ impl FileSystemSpi for InterruptedProvider {
     }
 }
 
-fn interrupted_filesystem(steps: Vec<WriteStep>) -> (FileSystem, SharedBytes, SharedCount, SharedCount) {
+fn interrupted_filesystem(
+    steps: Vec<WriteStep>,
+) -> (FileSystem, SharedBytes, SharedCount, SharedCount) {
     let accepted = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let calls = std::sync::Arc::new(std::sync::Mutex::new(0));
     let commits = std::sync::Arc::new(std::sync::Mutex::new(0));
@@ -163,9 +177,14 @@ fn interrupted_filesystem(steps: Vec<WriteStep>) -> (FileSystem, SharedBytes, Sh
 
 #[test]
 fn test_write_all_interrupted_before_acceptance_retries() {
-    let (fs, accepted, calls, commits) = interrupted_filesystem(vec![WriteStep::Interrupted, WriteStep::Accept(4)]);
+    let (fs, accepted, calls, commits) =
+        interrupted_filesystem(vec![WriteStep::Interrupted, WriteStep::Accept(4)]);
     let outcome = fs
-        .write_all(&Path::parse("/target").expect("path"), b"data", WriteOptions::default())
+        .write_all(
+            &Path::parse("/target").expect("path"),
+            b"data",
+            WriteOptions::default(),
+        )
         .expect("interrupted write retries");
     assert_eq!(Some(4), outcome.bytes_written());
     assert_eq!(b"data", accepted.lock().expect("accepted").as_slice());
@@ -180,7 +199,11 @@ fn test_write_all_interrupted_with_unchanged_effect_retries() {
         WriteStep::Accept(4),
     ]);
     let outcome = fs
-        .write_all(&Path::parse("/target").expect("path"), b"data", WriteOptions::default())
+        .write_all(
+            &Path::parse("/target").expect("path"),
+            b"data",
+            WriteOptions::default(),
+        )
         .expect("unchanged interruption retries");
     assert_eq!(Some(4), outcome.bytes_written());
     assert_eq!(b"data", accepted.lock().expect("accepted").as_slice());
@@ -190,10 +213,17 @@ fn test_write_all_interrupted_with_unchanged_effect_retries() {
 
 #[test]
 fn test_write_all_interrupted_after_short_write_retries_remaining_payload() {
-    let (fs, accepted, calls, commits) =
-        interrupted_filesystem(vec![WriteStep::Accept(2), WriteStep::Interrupted, WriteStep::Accept(2)]);
+    let (fs, accepted, calls, commits) = interrupted_filesystem(vec![
+        WriteStep::Accept(2),
+        WriteStep::Interrupted,
+        WriteStep::Accept(2),
+    ]);
     let outcome = fs
-        .write_all(&Path::parse("/target").expect("path"), b"data", WriteOptions::default())
+        .write_all(
+            &Path::parse("/target").expect("path"),
+            b"data",
+            WriteOptions::default(),
+        )
         .expect("interrupted write retries");
     assert_eq!(Some(4), outcome.bytes_written());
     assert_eq!(b"data", accepted.lock().expect("accepted").as_slice());
@@ -203,17 +233,25 @@ fn test_write_all_interrupted_after_short_write_retries_remaining_payload() {
 
 #[test]
 fn test_write_all_interrupted_with_partial_effect_is_not_retried() {
-    let (fs, accepted, calls, commits) =
-        interrupted_filesystem(vec![WriteStep::TypedInterrupted(FsEffectState::PartiallyApplied)]);
+    let (fs, accepted, calls, commits) = interrupted_filesystem(vec![WriteStep::TypedInterrupted(
+        FsEffectState::PartiallyApplied,
+    )]);
     let failure = fs
-        .write_all(&Path::parse("/target").expect("path"), b"data", WriteOptions::default())
+        .write_all(
+            &Path::parse("/target").expect("path"),
+            b"data",
+            WriteOptions::default(),
+        )
         .expect_err("uncertain interruption fails");
     assert_eq!(WriteFailureState::Indeterminate, failure.state());
     assert_eq!(0, failure.written_bytes());
     assert_eq!(1, *calls.lock().expect("calls"));
     assert_eq!(0, *commits.lock().expect("commits"));
     assert!(accepted.lock().expect("accepted").is_empty());
-    assert_eq!(Some(FsEffectState::PartiallyApplied), failure.error().effect_state());
+    assert_eq!(
+        Some(FsEffectState::PartiallyApplied),
+        failure.error().effect_state()
+    );
     assert_eq!(FsErrorKind::Interrupted, failure.error().kind());
     assert!(std::error::Error::source(failure.error()).is_some());
 }
@@ -240,7 +278,12 @@ struct ZeroProgressAppendWriter {
 impl Output for ZeroProgressAppendWriter {
     type Item = u8;
 
-    unsafe fn write_unchecked(&mut self, input: &[u8], index: usize, count: usize) -> std::io::Result<usize> {
+    unsafe fn write_unchecked(
+        &mut self,
+        input: &[u8],
+        index: usize,
+        count: usize,
+    ) -> std::io::Result<usize> {
         let mut writes = self.writes.lock().expect("writes lock");
         *writes += 1;
         if *writes > 1 {
@@ -286,11 +329,13 @@ impl FileWriterSpi for ZeroProgressAppendWriter {
         if !self.direct {
             self.staging.lock().expect("staging lock").clear();
         }
-        Ok(if self.direct && !self.target.lock().expect("target lock").is_empty() {
-            WriteAbortOutcome::Published
-        } else {
-            WriteAbortOutcome::NotPublished
-        })
+        Ok(
+            if self.direct && !self.target.lock().expect("target lock").is_empty() {
+                WriteAbortOutcome::Published
+            } else {
+                WriteAbortOutcome::NotPublished
+            },
+        )
     }
 }
 
@@ -316,13 +361,20 @@ impl FileSystemSpi for ZeroProgressAppendProbe {
     }
 
     fn stat(&self, _: StatRequest<'_>) -> FsResult<StatResponse> {
-        Err(FsError::new(FsErrorKind::NotFound, FsOperation::Stat, "missing"))
+        Err(FsError::new(
+            FsErrorKind::NotFound,
+            FsOperation::Stat,
+            "missing",
+        ))
     }
 
     fn open_writer(&self, request: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
         assert_eq!(self.disposition, request.options().options().disposition());
         Ok(OpenedWriter::new(
-            OpenedFileInfo::new(self.properties().info().id().clone(), request.path().clone()),
+            OpenedFileInfo::new(
+                self.properties().info().id().clone(),
+                request.path().clone(),
+            ),
             Box::new(ZeroProgressAppendWriter {
                 target: self.target.clone(),
                 staging: self.staging.clone(),
@@ -338,7 +390,13 @@ impl FileSystemSpi for ZeroProgressAppendProbe {
 fn zero_progress_filesystem(
     direct: bool,
     disposition: WriteDisposition,
-) -> (FileSystem, SharedBytes, SharedCount, SharedCount, SharedCount) {
+) -> (
+    FileSystem,
+    SharedBytes,
+    SharedCount,
+    SharedCount,
+    SharedCount,
+) {
     let target = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let staging = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let writes = std::sync::Arc::new(std::sync::Mutex::new(0));
@@ -359,7 +417,8 @@ fn zero_progress_filesystem(
 
 #[test]
 fn test_write_all_zero_progress_after_append_prefix_preserves_publication_facts() {
-    let (filesystem, target, writes, commits, aborts) = zero_progress_filesystem(true, WriteDisposition::Append);
+    let (filesystem, target, writes, commits, aborts) =
+        zero_progress_filesystem(true, WriteDisposition::Append);
     let mut failure = filesystem
         .write_all(
             &Path::parse("/target").expect("path"),
@@ -398,8 +457,12 @@ fn test_write_all_zero_progress_after_append_prefix_preserves_publication_facts(
 
 #[test]
 fn test_write_all_zero_progress_after_direct_create_new_prefix_is_indeterminate() {
-    for disposition in [WriteDisposition::CreateNew, WriteDisposition::CreateOrReplace] {
-        let (filesystem, target, writes, commits, aborts) = zero_progress_filesystem(true, disposition);
+    for disposition in [
+        WriteDisposition::CreateNew,
+        WriteDisposition::CreateOrReplace,
+    ] {
+        let (filesystem, target, writes, commits, aborts) =
+            zero_progress_filesystem(true, disposition);
         let mut failure = filesystem
             .write_all(
                 &Path::parse("/target").expect("path"),
@@ -422,7 +485,8 @@ fn test_write_all_zero_progress_after_direct_create_new_prefix_is_indeterminate(
 
 #[test]
 fn test_write_all_zero_progress_empty_payload_is_successful() {
-    let (filesystem, target, writes, commits, aborts) = zero_progress_filesystem(true, WriteDisposition::Append);
+    let (filesystem, target, writes, commits, aborts) =
+        zero_progress_filesystem(true, WriteDisposition::Append);
     let outcome = filesystem
         .write_all(
             &Path::parse("/empty").expect("path"),
@@ -439,7 +503,8 @@ fn test_write_all_zero_progress_empty_payload_is_successful() {
 
 #[test]
 fn test_write_all_zero_progress_after_staged_prefix_remains_unpublished() {
-    let (filesystem, target, writes, commits, aborts) = zero_progress_filesystem(false, WriteDisposition::CreateNew);
+    let (filesystem, target, writes, commits, aborts) =
+        zero_progress_filesystem(false, WriteDisposition::CreateNew);
     let mut failure = filesystem
         .write_all(
             &Path::parse("/target").expect("path"),
@@ -477,7 +542,8 @@ fn test_write_all_commit_failure_preserves_snapshot() {
         WriteFailureState::Published,
         WriteFailureState::Indeterminate,
     ] {
-        let fs = handle_support::implementation_tests::writer_lifecycle_filesystem(Some(state), None);
+        let fs =
+            handle_support::implementation_tests::writer_lifecycle_filesystem(Some(state), None);
         let mut failure = fs
             .write_all(
                 &Path::parse("/target").expect("path"),
@@ -546,9 +612,16 @@ fn test_partial_write_and_flush_failures_preserve_confirmed_bytes() {
     }
     impl Output for Writer {
         type Item = u8;
-        unsafe fn write_unchecked(&mut self, _: &[u8], _: usize, count: usize) -> std::io::Result<usize> {
+        unsafe fn write_unchecked(
+            &mut self,
+            _: &[u8],
+            _: usize,
+            count: usize,
+        ) -> std::io::Result<usize> {
             if self.accepted == 5 {
-                return Err(std::io::Error::other("write failed after two acknowledgements"));
+                return Err(std::io::Error::other(
+                    "write failed after two acknowledgements",
+                ));
             }
             let accepted = count.min(if self.accepted == 0 { 2 } else { 3 });
             self.accepted += accepted;
@@ -595,7 +668,10 @@ fn test_partial_write_and_flush_failures_preserve_confirmed_bytes() {
         }
         fn open_writer(&self, request: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
             Ok(OpenedWriter::new(
-                OpenedFileInfo::new(self.properties().info().id().clone(), request.path().clone()),
+                OpenedFileInfo::new(
+                    self.properties().info().id().clone(),
+                    request.path().clone(),
+                ),
                 Box::new(Writer {
                     accepted: 0,
                     flush_failure: self.flush_failure,
@@ -607,7 +683,11 @@ fn test_partial_write_and_flush_failures_preserve_confirmed_bytes() {
         let filesystem = FileSystem::from_spi(Provider { flush_failure }).expect("facade");
         let payload: &[u8] = if flush_failure { b"12345" } else { b"1234567" };
         let mut failure = filesystem
-            .write_all(&Path::parse("/target").expect("path"), payload, WriteOptions::default())
+            .write_all(
+                &Path::parse("/target").expect("path"),
+                payload,
+                WriteOptions::default(),
+            )
             .expect_err("stream failure");
         assert_eq!(failure.state(), WriteFailureState::Indeterminate);
         assert_eq!(failure.written_bytes(), 5);

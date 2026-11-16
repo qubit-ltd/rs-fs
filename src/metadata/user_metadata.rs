@@ -97,7 +97,9 @@ impl UserMetadata {
     /// Returns an iterator over metadata pairs.
     #[inline]
     pub fn iter(&self) -> impl Iterator<Item = (&str, &str)> {
-        self.0.iter().map(|(key, value)| (key.as_str(), value.as_str()))
+        self.0
+            .iter()
+            .map(|(key, value)| (key.as_str(), value.as_str()))
     }
 }
 
