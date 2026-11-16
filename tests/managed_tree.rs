@@ -1,0 +1,452 @@
+use qubit_fs::error::{FsError, FsErrorKind, FsOperation as FsErrorOperation};
+use qubit_fs::metadata::{
+    AchievedAtomicity, AtomicityRequirement, DurabilityRequirement, FileSystemCapabilities,
+    FileSystemCapability, FileSystemCapabilityProfile, FileSystemCapabilitySupport,
+    PublicationMethod, StorageObservation, TreePublishOptions, TreeValidationOptions,
+};
+use qubit_fs::spi::{
+    ManagedFsTreeSpi, PreparedFsTreePublish, ProviderOperation, ProviderOperations,
+};
+use qubit_operation::{
+    OperationManager, OperationOptions, OperationOutcome, ResourceScopeOptions, ShutdownMode,
+};
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
+
+struct FakeTreeProvider;
+
+impl ManagedFsTreeSpi for FakeTreeProvider {
+    fn prepare_tree_publish(
+        &self,
+        _request: qubit_fs::FsOwnedTreePublishRequest,
+    ) -> Result<
+        Arc<dyn PreparedFsTreePublish>,
+        qubit_fs::FsPrepareFailure<qubit_fs::FsOwnedTreePublishRequest>,
+    > {
+        unreachable!("focused owner tests do not activate publication")
+    }
+}
+
+macro_rules! run_staged {
+    ($staged:ident, $root:expr, $options:expr, $cleanup:expr, $body:block) => {{
+        let manager = OperationManager::new(qubit_operation::ManagerOptions::default()).unwrap();
+        let mut operation = manager
+            .try_submit(OperationOptions::default(), move |operation_scope| {
+                let scope = operation_scope
+                    .resource_scope(ResourceScopeOptions { capacity: 4 })
+                    .expect("resource scope should be available");
+                let reservation = FakeTreeProvider
+                    .reserve_staged_directory(&scope)
+                    .expect("resource cleanup capacity should be reserved");
+                let $staged = FakeTreeProvider
+                    .commit_staged_directory(
+                        reservation,
+                        qubit_fs::Path::parse($root).unwrap(),
+                        $options,
+                        Box::new($cleanup),
+                    )
+                    .expect("staged tree should register in the resource scope");
+                $body
+                drop($staged);
+                scope.end();
+                Ok::<(), ()>(())
+            })
+            .expect("operation should be accepted");
+        let outcome = operation.wait_outcome().expect("operation outcome available");
+        assert!(matches!(outcome, OperationOutcome::Succeeded(())));
+        let settlement = operation.wait_settlement().expect("settlement available");
+        let _shutdown_report = manager
+            .request_shutdown(ShutdownMode::Drain)
+            .wait()
+            .expect("manager should shut down");
+        settlement
+    }};
+}
+
+#[test]
+fn operation_presence_is_only_conditional_and_sync_async_are_independent() {
+    let sync = ProviderOperations::new()
+        .with(ProviderOperation::PublishTree)
+        .with(ProviderOperation::ObserveStorage);
+    let asynchronous = ProviderOperations::new().with(ProviderOperation::List);
+
+    let profile = FileSystemCapabilityProfile::from_operations(sync, asynchronous);
+    assert_eq!(
+        profile
+            .synchronous
+            .support(FileSystemCapability::StagedTreePublish),
+        FileSystemCapabilitySupport::Conditional,
+    );
+    assert_eq!(
+        profile
+            .synchronous
+            .support(FileSystemCapability::AtomicTreeCopy),
+        FileSystemCapabilitySupport::Unsupported,
+    );
+    assert_eq!(
+        profile
+            .synchronous
+            .support(FileSystemCapability::StorageObservation),
+        FileSystemCapabilitySupport::Conditional,
+    );
+    assert_eq!(
+        profile
+            .asynchronous
+            .support(FileSystemCapability::StagedTreePublish),
+        FileSystemCapabilitySupport::Unsupported,
+    );
+    assert_eq!(
+        profile.asynchronous.support(FileSystemCapability::List),
+        FileSystemCapabilitySupport::Conditional,
+    );
+}
+
+#[test]
+fn unknown_storage_capacity_is_a_valid_observation() {
+    let observed = StorageObservation::Unknown;
+    assert_eq!(observed, StorageObservation::Unknown);
+}
+
+#[test]
+fn caller_guarantees_are_preserved_by_profile_construction() {
+    let declared = FileSystemCapabilities::new()
+        .with_guaranteed(FileSystemCapability::List)
+        .with_conditional(FileSystemCapability::StagedTreePublish);
+    let profile = FileSystemCapabilityProfile::new(declared, FileSystemCapabilities::new());
+    assert!(profile.synchronous.guarantees(FileSystemCapability::List));
+    assert_eq!(
+        profile
+            .synchronous
+            .support(FileSystemCapability::StagedTreePublish),
+        FileSystemCapabilitySupport::Conditional,
+    );
+}
+
+#[test]
+fn validation_batches_enforce_record_and_byte_limits() {
+    let options = TreeValidationOptions::default();
+    assert!(options.validate_batch(&vec![1; 128]).is_ok());
+    assert!(options.validate_batch(&vec![1; 129]).is_err());
+    assert!(options.validate_batch(&[256 * 1024]).is_ok());
+    assert!(options.validate_batch(&[256 * 1024 + 1]).is_err());
+    assert!(options.validate_batch(&[128 * 1024, 128 * 1024]).is_ok());
+    assert!(
+        options
+            .validate_batch(&[128 * 1024, 128 * 1024 + 1])
+            .is_err()
+    );
+}
+
+#[test]
+fn entry_validation_rejects_escapes_links_and_normalized_conflicts() {
+    let options = TreeValidationOptions {
+        max_entries: 2,
+        max_depth: 2,
+        max_content_bytes: 3,
+    };
+    let mut normalized = std::collections::BTreeSet::new();
+    let valid = |path: &str, key: &str, bytes, seen: &mut std::collections::BTreeSet<String>| {
+        options.validate_entry(path, key, false, seen.len(), 0, bytes, seen)
+    };
+
+    assert!(valid("a/b", "a/b", 3, &mut normalized).is_ok());
+    assert!(valid("a/c", "a/c", 0, &mut normalized).is_ok());
+    assert!(valid("a/d", "a/d", 0, &mut normalized).is_err());
+    assert!(valid("../escape", "escape", 0, &mut normalized).is_err());
+    assert!(valid("/absolute", "/absolute", 0, &mut normalized).is_err());
+    assert!(valid("a/b/c", "a/b/c", 0, &mut normalized).is_err());
+    assert!(valid("safe", "../normalized-escape", 0, &mut normalized).is_err());
+    assert!(
+        options
+            .validate_entry("link", "link", true, 0, 0, 0, &mut normalized)
+            .is_err()
+    );
+    assert!(valid("different", "a/b", 0, &mut normalized).is_err());
+    assert!(valid("unknown-length", "unknown-length", 4, &mut normalized).is_err());
+    assert!(
+        options
+            .validate_entry("aggregate", "aggregate", false, 1, 2, 2, &mut normalized)
+            .is_err()
+    );
+}
+
+#[test]
+fn validation_checks_deadline_and_stop_before_accepting_more_work() {
+    use std::time::{Duration, Instant};
+
+    let options = TreeValidationOptions::default();
+    let now = Instant::now();
+    assert!(
+        options
+            .check_active(now, Some(now + Duration::from_secs(1)), false)
+            .is_ok()
+    );
+    assert!(options.check_active(now, Some(now), false).is_err());
+    assert!(options.check_active(now, None, true).is_err());
+}
+
+#[test]
+fn required_tree_guarantees_reject_before_publication_when_unsupported() {
+    let required = TreePublishOptions {
+        atomicity: AtomicityRequirement::Required,
+        durability: DurabilityRequirement::Required,
+    };
+    let error = required
+        .validate_capabilities(&FileSystemCapabilities::new())
+        .expect_err("unsupported required guarantees must fail in preflight");
+    assert_eq!(
+        error.required_capability(),
+        Some(FileSystemCapability::AtomicTreeCopy),
+    );
+
+    let conditional = FileSystemCapabilities::new()
+        .with_conditional(FileSystemCapability::AtomicTreeCopy)
+        .with_conditional(FileSystemCapability::DurableTreeCopy);
+    assert!(required.validate_capabilities(&conditional).is_ok());
+}
+
+#[test]
+fn tree_outcomes_preserve_partial_publication_facts_and_reject_false_atomicity() {
+    let partial = qubit_fs::directory::TreePublishOutcome {
+        entries_published: 2,
+        content_bytes: 17,
+        atomicity: AchievedAtomicity::NonAtomic,
+        method: PublicationMethod::ServerSideCopy,
+        durable: false,
+    };
+    assert!(partial.facts_are_consistent());
+    assert_eq!(partial.entries_published, 2);
+    assert!(!partial.durable);
+    let required = TreePublishOptions {
+        atomicity: AtomicityRequirement::Required,
+        durability: DurabilityRequirement::Required,
+    };
+    assert!(!partial.meets_requirements(&required));
+
+    let impossible = qubit_fs::directory::TreePublishOutcome {
+        entries_published: 3,
+        content_bytes: 29,
+        atomicity: AchievedAtomicity::Atomic,
+        method: PublicationMethod::ServerSideCopy,
+        durable: true,
+    };
+    assert!(!impossible.facts_are_consistent());
+    assert_eq!(impossible.atomicity, AchievedAtomicity::Atomic);
+}
+
+#[test]
+fn staged_owner_retains_cleanup_after_validation_failure() {
+    let cleanups = Arc::new(AtomicUsize::new(0));
+    let counted = Arc::clone(&cleanups);
+    let settlement = run_staged!(
+        staged,
+        "/stage",
+        TreeValidationOptions::default(),
+        move || {
+            counted.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        },
+        {
+            assert!(
+                staged
+                    .validate_entry("../escape", "escape", false, 0)
+                    .is_err()
+            );
+        }
+    );
+    assert_eq!(cleanups.load(Ordering::SeqCst), 1);
+    assert!(settlement.recoveries.is_empty());
+}
+
+#[test]
+fn failed_cleanup_keeps_owner_for_retry() {
+    let attempts = Arc::new(AtomicUsize::new(0));
+    let counted = Arc::clone(&attempts);
+    let manager = OperationManager::new(qubit_operation::ManagerOptions::default()).unwrap();
+    let mut operation = manager
+        .try_submit(OperationOptions::default(), move |operation_scope| {
+            let scope = operation_scope
+                .resource_scope(ResourceScopeOptions { capacity: 4 })
+                .unwrap();
+            let reservation = FakeTreeProvider.reserve_staged_directory(&scope).unwrap();
+            let staged = FakeTreeProvider
+                .commit_staged_directory(
+                    reservation,
+                    qubit_fs::Path::parse("/stage").unwrap(),
+                    TreeValidationOptions::default(),
+                    Box::new(move || {
+                        if counted.fetch_add(1, Ordering::SeqCst) == 0 {
+                            Err(FsError::new(
+                                FsErrorKind::Other,
+                                FsErrorOperation::Other,
+                                "temporary cleanup failure",
+                            ))
+                        } else {
+                            Ok(())
+                        }
+                    }),
+                )
+                .unwrap();
+            drop(staged);
+            scope.end();
+            Ok::<(), ()>(())
+        })
+        .unwrap();
+    assert!(matches!(
+        operation.wait_outcome().unwrap(),
+        OperationOutcome::Succeeded(())
+    ));
+    let settlement = operation.wait_settlement().unwrap();
+    assert_eq!(settlement.recoveries.len(), 1);
+    let recovery = &settlement.recoveries[0];
+    assert_eq!(attempts.load(Ordering::SeqCst), 1);
+    let report = recovery.try_retry().unwrap().wait().unwrap();
+    assert_eq!(
+        report.recovery.phase,
+        qubit_operation::RecoveryPhase::Resolved
+    );
+    assert_eq!(attempts.load(Ordering::SeqCst), 2);
+    let _shutdown_report = manager
+        .request_shutdown(ShutdownMode::Drain)
+        .wait()
+        .expect("manager should shut down after recovery");
+}
+
+#[test]
+fn staged_path_prefix_checks_use_components() {
+    run_staged!(
+        staged,
+        "/bucket/tree",
+        TreeValidationOptions::default(),
+        || Ok(()),
+        {
+            assert!(staged.contains_path(&qubit_fs::Path::parse("/bucket/tree").unwrap()));
+            assert!(staged.contains_path(&qubit_fs::Path::parse("/bucket/tree/child").unwrap()));
+            assert!(!staged.contains_path(&qubit_fs::Path::parse("/bucket/treehouse").unwrap()));
+        }
+    );
+}
+
+#[test]
+fn changed_tree_version_blocks_required_publish_and_keeps_cleanup_owner() {
+    let required = TreePublishOptions {
+        atomicity: AtomicityRequirement::Required,
+        durability: DurabilityRequirement::NotRequired,
+    };
+    let capabilities =
+        FileSystemCapabilities::new().with_conditional(FileSystemCapability::AtomicTreeCopy);
+    run_staged!(
+        staged,
+        "/stage",
+        TreeValidationOptions::default(),
+        || Ok(()),
+        {
+            staged.record_validated_version("version-before-validation".into());
+            assert!(
+                staged
+                    .check_publish_version(Some(&"changed-after-validation".into()), &required)
+                    .is_err()
+            );
+            assert!(
+                staged
+                    .publish_request(
+                        qubit_fs::Path::parse("/destination").unwrap(),
+                        required,
+                        Some(&"changed-after-validation".into()),
+                        &capabilities,
+                    )
+                    .is_err()
+            );
+            assert!(
+                staged
+                    .check_publish_version(Some(&"version-before-validation".into()), &required)
+                    .is_ok()
+            );
+        }
+    );
+}
+
+#[test]
+fn durability_requirement_does_not_require_a_validation_version() {
+    let durable = TreePublishOptions {
+        atomicity: AtomicityRequirement::NotRequired,
+        durability: DurabilityRequirement::Required,
+    };
+    run_staged!(
+        staged,
+        "/stage",
+        TreeValidationOptions::default(),
+        || Ok(()),
+        {
+            assert!(staged.check_publish_version(None, &durable).is_ok());
+        }
+    );
+}
+
+#[test]
+fn required_unsupported_publish_request_is_rejected_before_provider_prepare() {
+    let required = TreePublishOptions {
+        atomicity: AtomicityRequirement::Required,
+        durability: DurabilityRequirement::NotRequired,
+    };
+    run_staged!(
+        staged,
+        "/stage",
+        TreeValidationOptions::default(),
+        || Ok(()),
+        {
+            assert!(
+                staged
+                    .publish_request(
+                        qubit_fs::Path::parse("/destination").unwrap(),
+                        required,
+                        None,
+                        &FileSystemCapabilities::new(),
+                    )
+                    .is_err()
+            );
+        }
+    );
+}
+
+#[test]
+fn publication_releases_cleanup_only_after_consistent_success() {
+    let cleanups = Arc::new(AtomicUsize::new(0));
+    let counted = Arc::clone(&cleanups);
+    run_staged!(
+        staged,
+        "/stage",
+        TreeValidationOptions::default(),
+        move || {
+            counted.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        },
+        {
+            let required = TreePublishOptions {
+                atomicity: AtomicityRequirement::Required,
+                durability: DurabilityRequirement::Required,
+            };
+            let partial = qubit_fs::directory::TreePublishOutcome {
+                entries_published: 1,
+                content_bytes: 1,
+                atomicity: AchievedAtomicity::NonAtomic,
+                method: PublicationMethod::ServerSideCopy,
+                durable: false,
+            };
+            assert!(staged.publication_succeeded(&partial, &required).is_err());
+            assert_eq!(cleanups.load(Ordering::SeqCst), 0);
+
+            let complete = qubit_fs::directory::TreePublishOutcome {
+                entries_published: 1,
+                content_bytes: 1,
+                atomicity: AchievedAtomicity::Atomic,
+                method: PublicationMethod::AtomicRename,
+                durable: true,
+            };
+            assert!(staged.publication_succeeded(&complete, &required).is_ok());
+            assert_eq!(cleanups.load(Ordering::SeqCst), 0);
+        }
+    );
+}

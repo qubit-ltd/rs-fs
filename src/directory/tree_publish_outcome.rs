@@ -1,4 +1,7 @@
-use crate::metadata::{AchievedAtomicity, PublicationMethod};
+use crate::metadata::{
+    AchievedAtomicity, AtomicityRequirement, DurabilityRequirement, PublicationMethod,
+    TreePublishOptions,
+};
 
 /// Facts reported after a staged directory tree is published.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -13,4 +16,46 @@ pub struct TreePublishOutcome {
     pub method: PublicationMethod,
     /// Whether the provider confirmed durable publication.
     pub durable: bool,
+}
+
+impl TreePublishOutcome {
+    /// Reports whether publication facts are consistent with the method used.
+    ///
+    /// Per-object and streamed publication methods do not establish one
+    /// atomic namespace switch for a directory tree. This method validates
+    /// provider facts without rewriting or discarding them.
+    #[must_use]
+    pub const fn facts_are_consistent(&self) -> bool {
+        match self.method {
+            PublicationMethod::AtomicRename => {
+                matches!(self.atomicity, AchievedAtomicity::Atomic)
+            }
+            PublicationMethod::ConditionalReplace => true,
+            PublicationMethod::Direct
+            | PublicationMethod::ServerSideCopy
+            | PublicationMethod::StreamCopy
+            | PublicationMethod::CopyThenDelete => {
+                !matches!(self.atomicity, AchievedAtomicity::Atomic)
+            }
+        }
+    }
+
+    /// Reports whether the actual facts satisfy the requested guarantees.
+    ///
+    /// The outcome remains intact when this returns `false`, so callers can
+    /// still inspect partial counts and the guarantees actually achieved.
+    #[must_use]
+    pub const fn meets_requirements(&self, options: &TreePublishOptions) -> bool {
+        let atomicity_met = match options.atomicity {
+            AtomicityRequirement::Required => {
+                matches!(self.atomicity, AchievedAtomicity::Atomic)
+            }
+            AtomicityRequirement::Preferred | AtomicityRequirement::NotRequired => true,
+        };
+        let durability_met = match options.durability {
+            DurabilityRequirement::Required => self.durable,
+            DurabilityRequirement::Preferred | DurabilityRequirement::NotRequired => true,
+        };
+        atomicity_met && durability_met && self.facts_are_consistent()
+    }
 }
