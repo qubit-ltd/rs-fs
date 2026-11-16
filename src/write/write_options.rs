@@ -303,11 +303,11 @@ impl WriteOptions {
             ));
         }
         if self.precondition != WritePrecondition::None
-            && !capabilities.supports(FileSystemCapability::ConditionalWrite)
+            && !capabilities.guarantees(FileSystemCapability::ConditionalWrite)
         {
             return Err(missing_requirement(
                 FileSystemCapability::ConditionalWrite,
-                "conditional writes are required but not supported",
+                "version comparison and write publication must be guaranteed as one conditional write",
             ));
         }
         if self.content_precondition != ContentPrecondition::None

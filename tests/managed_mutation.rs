@@ -611,3 +611,94 @@ fn version_condition_without_conditional_write_fails_before_publication() {
     assert!(result.is_err());
     assert!(!probe.calls().contains(&"open_writer"));
 }
+
+#[cfg(feature = "async")]
+#[test]
+fn version_precondition_rejects_support_only_conditional_write_before_open() {
+    use qubit_fs::error::{FsError, FsErrorKind, FsOperation};
+    use qubit_fs::metadata::{
+        FileSystemCapabilities, FileSystemCapability, FileSystemId, FileSystemInfo,
+        FileSystemLimits, SymlinkPolicy,
+    };
+    use qubit_fs::path::{PathConstraints, PathSemantics};
+    use qubit_fs::spi::{
+        AsyncFileSystemSpi, OpenWriterRequest, ProviderOperation, ProviderOperations,
+        ProviderProperties, SpiFuture, StatRequest, StatResponse,
+    };
+    use qubit_fs::{
+        AsyncFileSystem, Path,
+        metadata::ResourceVersion,
+        write::{WriteOptions, WritePrecondition},
+    };
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct ConditionalProvider {
+        properties: ProviderProperties,
+        writer_opens: Arc<AtomicUsize>,
+    }
+    impl AsyncFileSystemSpi for ConditionalProvider {
+        fn properties(&self) -> ProviderProperties {
+            self.properties.clone()
+        }
+        fn stat<'a>(
+            &'a self,
+            _: StatRequest<'a>,
+        ) -> SpiFuture<'a, qubit_fs::FsResult<StatResponse>> {
+            Box::pin(async {
+                Err(FsError::new(
+                    FsErrorKind::NotFound,
+                    FsOperation::Stat,
+                    "not used",
+                ))
+            })
+        }
+        fn open_writer<'a>(
+            &'a self,
+            request: OpenWriterRequest<'a>,
+        ) -> SpiFuture<'a, qubit_fs::FsResult<qubit_fs::spi::OpenedAsyncWriter>> {
+            let _ = request;
+            self.writer_opens.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async {
+                Err(FsError::new(
+                    FsErrorKind::Io,
+                    FsOperation::OpenWriter,
+                    "must be preflight rejected",
+                ))
+            })
+        }
+    }
+
+    let properties = ProviderProperties::new(
+        FileSystemInfo::new(
+            FileSystemId::new("conditional-only").unwrap(),
+            "conditional-only",
+            PathSemantics::Hierarchical,
+        ),
+        ProviderOperations::new().with(ProviderOperation::OpenWriter),
+        FileSystemCapabilities::new()
+            .with_guaranteed(FileSystemCapability::Write)
+            .with_conditional(FileSystemCapability::ConditionalWrite),
+        FileSystemLimits::unknown(),
+        PathConstraints::absolute(),
+        SymlinkPolicy::Reject,
+    )
+    .unwrap();
+    let writer_opens = Arc::new(AtomicUsize::new(0));
+    let filesystem = AsyncFileSystem::from_spi(ConditionalProvider {
+        properties,
+        writer_opens: Arc::clone(&writer_opens),
+    })
+    .unwrap();
+    let result = filesystem.begin_write_all(
+        Path::parse("/version-guard").unwrap(),
+        b"new".to_vec(),
+        WriteOptions::default()
+            .with_precondition(WritePrecondition::IfMatch(ResourceVersion::new("v1"))),
+    );
+    let error = result.expect_err(
+        "support-only conditional writes cannot guarantee atomic comparison and publication",
+    );
+    assert_eq!(FsErrorKind::RequirementNotMet, error.error().kind());
+    assert_eq!(0, writer_opens.load(Ordering::SeqCst));
+}
