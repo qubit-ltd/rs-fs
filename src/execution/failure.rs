@@ -63,6 +63,10 @@ pub enum FsPrepareFailureKind {
     Unsupported,
     /// Request was rejected before I/O with a bounded diagnostic.
     Rejected(String),
+    /// No bounded mutation fact slot was available before preparation.
+    EffectCapacity,
+    /// Provider did not accept its reserved fact slot before submission.
+    ReservationInstallFailed,
 }
 /// Preparation failure retaining the exact unclaimed request.
 #[derive(Clone, Debug, Eq, PartialEq)]

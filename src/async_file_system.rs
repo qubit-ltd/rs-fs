@@ -30,6 +30,7 @@ use crate::error::FsOperation;
 use crate::error::FsResult;
 use crate::error::OpenFailure;
 use crate::error::OpenFailureStage;
+use crate::execution::{FsExecutionBinding, FsOwnedReadRequest};
 use crate::facade::facade_core::FacadeCore;
 use crate::metadata::FileMetadata;
 use crate::metadata::FileSystemCapability;
@@ -49,6 +50,8 @@ use crate::spi::AsyncFileSystemSpi;
 use crate::spi::CreateDirectoryRequest;
 use crate::spi::DeleteDirectoryRequest;
 use crate::spi::DeleteFileRequest;
+use crate::spi::ManagedFsMutationSpi;
+use crate::spi::ManagedFsReadSpi;
 use crate::spi::OpenReaderRequest;
 use crate::spi::OpenWriterRequest;
 use crate::spi::ProviderOperation;
@@ -69,8 +72,14 @@ use crate::write::AsyncWriteAllOperation;
 use crate::write::AsyncWriteAllOperationFailure;
 use crate::write::RejectedAsyncWriter;
 use crate::write::WriteOptions;
+use crate::{
+    AsyncFsMutationOperation, FsEffectSlotPool, FsOwnedCopyRequest, FsOwnedRenameRequest,
+    FsOwnedWriteRequest,
+};
+use qubit_operation::OperationScope;
 
-/// Application-facing asynchronous filesystem facade.
+/// Application-facing asynchronous filesystem facade. Managed submissions
+/// are explicitly bound to a caller-owned parent scope.
 ///
 /// It validates provider boundaries, exposes asynchronous operations, and owns
 /// the cancellation-safe copy operation entry point.
@@ -99,6 +108,63 @@ pub struct AsyncFileSystem {
 }
 
 impl AsyncFileSystem {
+    /// Submits a bounded managed read as a child of `parent`.
+    ///
+    /// The parent-bound manager view is temporary and is never stored by this
+    /// facade.
+    pub fn submit_read_all_in(
+        &self,
+        parent: &OperationScope,
+        provider: &dyn ManagedFsReadSpi,
+        path: Path,
+        options: crate::read::ReadAllOptions,
+    ) -> Result<crate::AsyncFsOperation<Vec<u8>>, crate::FsSubmitFailure<FsOwnedReadRequest>> {
+        FsExecutionBinding::new(parent.manager())
+            .submit_read_all_async(provider, FsOwnedReadRequest { path, options })
+    }
+
+    /// Submits a managed write under the supplied parent operation scope.
+    pub fn submit_write_in(
+        &self,
+        parent: &OperationScope,
+        provider: &dyn ManagedFsMutationSpi,
+        request: FsOwnedWriteRequest,
+        effects: &FsEffectSlotPool,
+    ) -> Result<
+        AsyncFsMutationOperation<crate::metadata::WriteOutcome>,
+        crate::FsSubmitFailure<FsOwnedWriteRequest>,
+    > {
+        FsExecutionBinding::new(parent.manager()).submit_write_async(provider, request, effects)
+    }
+
+    /// Submits a managed copy under the supplied parent operation scope.
+    pub fn submit_copy_in(
+        &self,
+        parent: &OperationScope,
+        provider: &dyn ManagedFsMutationSpi,
+        request: FsOwnedCopyRequest,
+        effects: &FsEffectSlotPool,
+    ) -> Result<
+        AsyncFsMutationOperation<crate::copy::CopyOutcome>,
+        crate::FsSubmitFailure<FsOwnedCopyRequest>,
+    > {
+        FsExecutionBinding::new(parent.manager()).submit_copy_async(provider, request, effects)
+    }
+
+    /// Submits a managed rename under the supplied parent operation scope.
+    pub fn submit_rename_in(
+        &self,
+        parent: &OperationScope,
+        provider: &dyn ManagedFsMutationSpi,
+        request: FsOwnedRenameRequest,
+        effects: &FsEffectSlotPool,
+    ) -> Result<
+        AsyncFsMutationOperation<crate::rename::RenameOutcome>,
+        crate::FsSubmitFailure<FsOwnedRenameRequest>,
+    > {
+        FsExecutionBinding::new(parent.manager()).submit_rename_async(provider, request, effects)
+    }
+
     /// Constructs a facade and caches one validated provider snapshot.
     ///
     /// # Type Parameters

@@ -28,6 +28,7 @@ use crate::error::FsOperation;
 use crate::error::FsResult;
 use crate::error::OpenFailure;
 use crate::error::OpenFailureStage;
+use crate::execution::{FsExecutionBinding, FsOwnedReadRequest};
 use crate::facade::facade_core::FacadeCore;
 use crate::metadata::FileKind;
 use crate::metadata::FileMetadata;
@@ -53,6 +54,8 @@ use crate::spi::CreateTempFileRequest;
 use crate::spi::DeleteDirectoryRequest;
 use crate::spi::DeleteFileRequest;
 use crate::spi::FileSystemSpi;
+use crate::spi::ManagedFsMutationSpi;
+use crate::spi::ManagedFsReadSpi;
 use crate::spi::OpenReaderRequest;
 use crate::spi::OpenWriterRequest;
 use crate::spi::ProviderOperation;
@@ -73,8 +76,15 @@ use crate::write::RejectedWriter;
 use crate::write::WriteAllFailure;
 use crate::write::WriteOperation;
 use crate::write::WriteOptions;
+use crate::{
+    FsEffectSlotPool, FsMutationOperation, FsOwnedCopyRequest, FsOwnedRenameRequest,
+    FsOwnedWriteRequest,
+};
+use qubit_operation::OperationScope;
 
-/// Application-facing synchronous filesystem facade.
+/// Application-facing synchronous filesystem facade. Its legacy direct
+/// methods are non-managed; use the `*_in` methods to bind work to a parent
+/// operation scope.
 ///
 /// # Examples
 ///
@@ -100,6 +110,56 @@ pub struct FileSystem {
 }
 
 impl FileSystem {
+    /// Submits a bounded managed read as a child of `parent`.
+    ///
+    /// The parent-bound manager view is created for this submission only; the
+    /// facade does not retain the scope or promote the operation to a root.
+    pub fn submit_read_all_in(
+        &self,
+        parent: &OperationScope,
+        provider: &dyn ManagedFsReadSpi,
+        path: Path,
+        options: crate::read::ReadAllOptions,
+    ) -> Result<crate::FsOperation<Vec<u8>>, crate::FsSubmitFailure<FsOwnedReadRequest>> {
+        FsExecutionBinding::new(parent.manager())
+            .submit_read_all(provider, FsOwnedReadRequest { path, options })
+    }
+
+    /// Submits a managed write under the supplied parent operation scope.
+    pub fn submit_write_in(
+        &self,
+        parent: &OperationScope,
+        provider: &dyn ManagedFsMutationSpi,
+        request: FsOwnedWriteRequest,
+        effects: &FsEffectSlotPool,
+    ) -> Result<FsMutationOperation<WriteOutcome>, crate::FsSubmitFailure<FsOwnedWriteRequest>>
+    {
+        FsExecutionBinding::new(parent.manager()).submit_write(provider, request, effects)
+    }
+
+    /// Submits a managed copy under the supplied parent operation scope.
+    pub fn submit_copy_in(
+        &self,
+        parent: &OperationScope,
+        provider: &dyn ManagedFsMutationSpi,
+        request: FsOwnedCopyRequest,
+        effects: &FsEffectSlotPool,
+    ) -> Result<FsMutationOperation<CopyOutcome>, crate::FsSubmitFailure<FsOwnedCopyRequest>> {
+        FsExecutionBinding::new(parent.manager()).submit_copy(provider, request, effects)
+    }
+
+    /// Submits a managed rename under the supplied parent operation scope.
+    pub fn submit_rename_in(
+        &self,
+        parent: &OperationScope,
+        provider: &dyn ManagedFsMutationSpi,
+        request: FsOwnedRenameRequest,
+        effects: &FsEffectSlotPool,
+    ) -> Result<FsMutationOperation<RenameOutcome>, crate::FsSubmitFailure<FsOwnedRenameRequest>>
+    {
+        FsExecutionBinding::new(parent.manager()).submit_rename(provider, request, effects)
+    }
+
     /// Constructs a facade and caches the provider's single validated property
     /// snapshot.
     ///

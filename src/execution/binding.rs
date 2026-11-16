@@ -1,5 +1,9 @@
 use super::{FsOwnedReadRequest, FsSubmitFailure, PreparedFsReadAdapter};
-use crate::spi::ManagedFsReadSpi;
+use crate::spi::{ManagedFsMutationSpi, ManagedFsReadSpi};
+use crate::{
+    AsyncFsMutationOperation, FsEffectSlotPool, FsMutationOperation, FsOwnedCopyRequest,
+    FsOwnedRenameRequest, FsOwnedWriteRequest,
+};
 use crate::{FsOperation, FsOperationFailure};
 use qubit_operation::{OperationManager, OperationOptions};
 use std::sync::Arc;
@@ -51,6 +55,406 @@ impl FsExecutionBinding {
                     admission: Some(admission),
                     preparation: None,
                     request: original,
+                })
+            }
+        }
+    }
+
+    /// Prepares, reserves a final-effect slot, and submits a managed write.
+    pub fn submit_write(
+        &self,
+        provider: &dyn ManagedFsMutationSpi,
+        request: FsOwnedWriteRequest,
+        pool: &FsEffectSlotPool,
+    ) -> Result<
+        FsMutationOperation<crate::metadata::WriteOutcome>,
+        FsSubmitFailure<FsOwnedWriteRequest>,
+    > {
+        let reservation = match pool.reserve() {
+            Ok(v) => v,
+            Err(_) => {
+                return Err(FsSubmitFailure {
+                    admission: None,
+                    preparation: Some(super::FsPrepareFailureKind::EffectCapacity),
+                    request,
+                });
+            }
+        };
+        let prepared = match provider.prepare_write(request) {
+            Ok(v) => v,
+            Err(f) => {
+                return Err(FsSubmitFailure {
+                    admission: None,
+                    preparation: Some(f.kind),
+                    request: f.request,
+                });
+            }
+        };
+        let observer = reservation.observer();
+        if let Err(reservation) = prepared.install_effect_reservation(reservation) {
+            drop(reservation);
+            return Err(FsSubmitFailure {
+                admission: None,
+                preparation: Some(super::FsPrepareFailureKind::ReservationInstallFailed),
+                request: prepared
+                    .take_unclaimed_request()
+                    .expect("unclaimed provider work retains request"),
+            });
+        }
+        let adapter = Arc::new(super::PreparedFsWriteAdapter::new(prepared));
+        match self
+            .manager
+            .try_submit_external::<crate::metadata::WriteOutcome, FsOperationFailure, _>(
+                OperationOptions::default(),
+                Arc::clone(&adapter),
+            ) {
+            Ok(operation) => Ok(FsMutationOperation {
+                operation,
+                effect: observer,
+            }),
+            Err(rejected) => {
+                let (admission, rejected) = rejected.into_parts();
+                let request = rejected
+                    .take_request()
+                    .expect("unclaimed prepared operation retains request");
+                Err(FsSubmitFailure {
+                    admission: Some(admission),
+                    preparation: None,
+                    request,
+                })
+            }
+        }
+    }
+
+    /// Prepares, reserves a final-effect slot, and submits a managed copy.
+    pub fn submit_copy(
+        &self,
+        provider: &dyn ManagedFsMutationSpi,
+        request: FsOwnedCopyRequest,
+        pool: &FsEffectSlotPool,
+    ) -> Result<FsMutationOperation<crate::copy::CopyOutcome>, FsSubmitFailure<FsOwnedCopyRequest>>
+    {
+        let reservation = match pool.reserve() {
+            Ok(v) => v,
+            Err(_) => {
+                return Err(FsSubmitFailure {
+                    admission: None,
+                    preparation: Some(super::FsPrepareFailureKind::EffectCapacity),
+                    request,
+                });
+            }
+        };
+        let prepared = match provider.prepare_copy(request) {
+            Ok(v) => v,
+            Err(f) => {
+                return Err(FsSubmitFailure {
+                    admission: None,
+                    preparation: Some(f.kind),
+                    request: f.request,
+                });
+            }
+        };
+        let observer = reservation.observer();
+        if let Err(reservation) = prepared.install_effect_reservation(reservation) {
+            drop(reservation);
+            return Err(FsSubmitFailure {
+                admission: None,
+                preparation: Some(super::FsPrepareFailureKind::ReservationInstallFailed),
+                request: prepared
+                    .take_unclaimed_request()
+                    .expect("unclaimed provider work retains request"),
+            });
+        }
+        let adapter = Arc::new(super::PreparedFsCopyAdapter::new(prepared));
+        match self
+            .manager
+            .try_submit_external::<crate::copy::CopyOutcome, FsOperationFailure, _>(
+                OperationOptions::default(),
+                Arc::clone(&adapter),
+            ) {
+            Ok(operation) => Ok(FsMutationOperation {
+                operation,
+                effect: observer,
+            }),
+            Err(rejected) => {
+                let (admission, rejected) = rejected.into_parts();
+                let request = rejected
+                    .take_request()
+                    .expect("unclaimed prepared operation retains request");
+                Err(FsSubmitFailure {
+                    admission: Some(admission),
+                    preparation: None,
+                    request,
+                })
+            }
+        }
+    }
+
+    /// Prepares, reserves a final-effect slot, and submits a managed rename.
+    pub fn submit_rename(
+        &self,
+        provider: &dyn ManagedFsMutationSpi,
+        request: FsOwnedRenameRequest,
+        pool: &FsEffectSlotPool,
+    ) -> Result<
+        FsMutationOperation<crate::rename::RenameOutcome>,
+        FsSubmitFailure<FsOwnedRenameRequest>,
+    > {
+        let reservation = match pool.reserve() {
+            Ok(v) => v,
+            Err(_) => {
+                return Err(FsSubmitFailure {
+                    admission: None,
+                    preparation: Some(super::FsPrepareFailureKind::EffectCapacity),
+                    request,
+                });
+            }
+        };
+        let prepared = match provider.prepare_rename(request) {
+            Ok(v) => v,
+            Err(f) => {
+                return Err(FsSubmitFailure {
+                    admission: None,
+                    preparation: Some(f.kind),
+                    request: f.request,
+                });
+            }
+        };
+        let observer = reservation.observer();
+        if let Err(reservation) = prepared.install_effect_reservation(reservation) {
+            drop(reservation);
+            return Err(FsSubmitFailure {
+                admission: None,
+                preparation: Some(super::FsPrepareFailureKind::ReservationInstallFailed),
+                request: prepared
+                    .take_unclaimed_request()
+                    .expect("unclaimed provider work retains request"),
+            });
+        }
+        let adapter = Arc::new(super::PreparedFsRenameAdapter::new(prepared));
+        match self
+            .manager
+            .try_submit_external::<crate::rename::RenameOutcome, FsOperationFailure, _>(
+                OperationOptions::default(),
+                Arc::clone(&adapter),
+            ) {
+            Ok(operation) => Ok(FsMutationOperation {
+                operation,
+                effect: observer,
+            }),
+            Err(rejected) => {
+                let (admission, rejected) = rejected.into_parts();
+                let request = rejected
+                    .take_request()
+                    .expect("unclaimed prepared operation retains request");
+                Err(FsSubmitFailure {
+                    admission: Some(admission),
+                    preparation: None,
+                    request,
+                })
+            }
+        }
+    }
+
+    /// Prepares, reserves a final-effect slot, and submits a managed async write.
+    #[cfg(feature = "async")]
+    pub fn submit_write_async(
+        &self,
+        provider: &dyn ManagedFsMutationSpi,
+        request: FsOwnedWriteRequest,
+        pool: &FsEffectSlotPool,
+    ) -> Result<
+        AsyncFsMutationOperation<crate::metadata::WriteOutcome>,
+        FsSubmitFailure<FsOwnedWriteRequest>,
+    > {
+        let reservation = match pool.reserve() {
+            Ok(v) => v,
+            Err(_) => {
+                return Err(FsSubmitFailure {
+                    admission: None,
+                    preparation: Some(super::FsPrepareFailureKind::EffectCapacity),
+                    request,
+                });
+            }
+        };
+        let prepared = match provider.prepare_write(request) {
+            Ok(v) => v,
+            Err(f) => {
+                return Err(FsSubmitFailure {
+                    admission: None,
+                    preparation: Some(f.kind),
+                    request: f.request,
+                });
+            }
+        };
+        let observer = reservation.observer();
+        if let Err(reservation) = prepared.install_effect_reservation(reservation) {
+            drop(reservation);
+            return Err(FsSubmitFailure {
+                admission: None,
+                preparation: Some(super::FsPrepareFailureKind::ReservationInstallFailed),
+                request: prepared
+                    .take_unclaimed_request()
+                    .expect("unclaimed provider work retains request"),
+            });
+        }
+        let adapter = Arc::new(super::PreparedFsWriteAdapter::new(prepared));
+        match self
+            .manager
+            .as_async()
+            .try_submit_external::<crate::metadata::WriteOutcome, FsOperationFailure, _>(
+                OperationOptions::default(),
+                Arc::clone(&adapter),
+            ) {
+            Ok(operation) => Ok(AsyncFsMutationOperation {
+                operation,
+                effect: observer,
+            }),
+            Err(rejected) => {
+                let (admission, rejected) = rejected.into_parts();
+                let request = rejected
+                    .take_request()
+                    .expect("unclaimed prepared operation retains request");
+                Err(FsSubmitFailure {
+                    admission: Some(admission),
+                    preparation: None,
+                    request,
+                })
+            }
+        }
+    }
+
+    /// Prepares, reserves a final-effect slot, and submits a managed async copy.
+    #[cfg(feature = "async")]
+    pub fn submit_copy_async(
+        &self,
+        provider: &dyn ManagedFsMutationSpi,
+        request: FsOwnedCopyRequest,
+        pool: &FsEffectSlotPool,
+    ) -> Result<
+        AsyncFsMutationOperation<crate::copy::CopyOutcome>,
+        FsSubmitFailure<FsOwnedCopyRequest>,
+    > {
+        let reservation = match pool.reserve() {
+            Ok(v) => v,
+            Err(_) => {
+                return Err(FsSubmitFailure {
+                    admission: None,
+                    preparation: Some(super::FsPrepareFailureKind::EffectCapacity),
+                    request,
+                });
+            }
+        };
+        let prepared = match provider.prepare_copy(request) {
+            Ok(v) => v,
+            Err(f) => {
+                return Err(FsSubmitFailure {
+                    admission: None,
+                    preparation: Some(f.kind),
+                    request: f.request,
+                });
+            }
+        };
+        let observer = reservation.observer();
+        if let Err(reservation) = prepared.install_effect_reservation(reservation) {
+            drop(reservation);
+            return Err(FsSubmitFailure {
+                admission: None,
+                preparation: Some(super::FsPrepareFailureKind::ReservationInstallFailed),
+                request: prepared
+                    .take_unclaimed_request()
+                    .expect("unclaimed provider work retains request"),
+            });
+        }
+        let adapter = Arc::new(super::PreparedFsCopyAdapter::new(prepared));
+        match self
+            .manager
+            .as_async()
+            .try_submit_external::<crate::copy::CopyOutcome, FsOperationFailure, _>(
+                OperationOptions::default(),
+                Arc::clone(&adapter),
+            ) {
+            Ok(operation) => Ok(AsyncFsMutationOperation {
+                operation,
+                effect: observer,
+            }),
+            Err(rejected) => {
+                let (admission, rejected) = rejected.into_parts();
+                let request = rejected
+                    .take_request()
+                    .expect("unclaimed prepared operation retains request");
+                Err(FsSubmitFailure {
+                    admission: Some(admission),
+                    preparation: None,
+                    request,
+                })
+            }
+        }
+    }
+
+    /// Prepares, reserves a final-effect slot, and submits a managed async rename.
+    #[cfg(feature = "async")]
+    pub fn submit_rename_async(
+        &self,
+        provider: &dyn ManagedFsMutationSpi,
+        request: FsOwnedRenameRequest,
+        pool: &FsEffectSlotPool,
+    ) -> Result<
+        AsyncFsMutationOperation<crate::rename::RenameOutcome>,
+        FsSubmitFailure<FsOwnedRenameRequest>,
+    > {
+        let reservation = match pool.reserve() {
+            Ok(v) => v,
+            Err(_) => {
+                return Err(FsSubmitFailure {
+                    admission: None,
+                    preparation: Some(super::FsPrepareFailureKind::EffectCapacity),
+                    request,
+                });
+            }
+        };
+        let prepared = match provider.prepare_rename(request) {
+            Ok(v) => v,
+            Err(f) => {
+                return Err(FsSubmitFailure {
+                    admission: None,
+                    preparation: Some(f.kind),
+                    request: f.request,
+                });
+            }
+        };
+        let observer = reservation.observer();
+        if let Err(reservation) = prepared.install_effect_reservation(reservation) {
+            drop(reservation);
+            return Err(FsSubmitFailure {
+                admission: None,
+                preparation: Some(super::FsPrepareFailureKind::ReservationInstallFailed),
+                request: prepared
+                    .take_unclaimed_request()
+                    .expect("unclaimed provider work retains request"),
+            });
+        }
+        let adapter = Arc::new(super::PreparedFsRenameAdapter::new(prepared));
+        match self
+            .manager
+            .as_async()
+            .try_submit_external::<crate::rename::RenameOutcome, FsOperationFailure, _>(
+                OperationOptions::default(),
+                Arc::clone(&adapter),
+            ) {
+            Ok(operation) => Ok(AsyncFsMutationOperation {
+                operation,
+                effect: observer,
+            }),
+            Err(rejected) => {
+                let (admission, rejected) = rejected.into_parts();
+                let request = rejected
+                    .take_request()
+                    .expect("unclaimed prepared operation retains request");
+                Err(FsSubmitFailure {
+                    admission: Some(admission),
+                    preparation: None,
+                    request,
                 })
             }
         }
