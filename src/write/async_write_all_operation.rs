@@ -137,6 +137,20 @@ impl AsyncWriteAllOperation {
     pub const fn written_bytes(&self) -> u64 {
         self.recovery.written_bytes
     }
+    /// Returns the input suffix after the bytes confirmed accepted by the
+    /// writer.
+    ///
+    /// The suffix remains owned by this operation when its execution future is
+    /// cancelled. If publication is indeterminate, this is an inspection aid;
+    /// it does not establish that retrying the suffix is safe.
+    #[inline]
+    #[must_use]
+    pub fn remaining_bytes(&self) -> &[u8] {
+        let offset = usize::try_from(self.recovery.written_bytes)
+            .unwrap_or(self.bytes.len())
+            .min(self.bytes.len());
+        &self.bytes[offset..]
+    }
     /// Executes the operation once, retaining recovery state on failure.
     ///
     /// # Cancellation
@@ -145,7 +159,10 @@ impl AsyncWriteAllOperation {
     /// future. Dropping an unpolled future leaves the operation ready. After
     /// execution starts, cancellation records indeterminate publication and
     /// retains any opened writer. A missing writer does not prove no effects.
-    /// The payload is released when this future finishes or is dropped.
+    /// The payload remains owned by the operation if this future is cancelled.
+    /// [`Self::remaining_bytes`] identifies the suffix after confirmed writes;
+    /// uncertain publication still requires provider-specific recovery before
+    /// any retry.
     ///
     /// # Returns
     ///
@@ -174,10 +191,12 @@ impl AsyncWriteAllOperation {
             writer,
             recovery,
         } = self;
-        let bytes = std::mem::take(bytes);
         let mut guard = WriteAllCancellationGuard::start(state, writer, recovery);
-        let result = execute_write(filesystem, path, &bytes, options, guard.writer_mut()).await;
+        let result = execute_write(filesystem, path, bytes, options, guard.writer_mut()).await;
         guard.finish(&result);
+        if result.is_ok() {
+            bytes.clear();
+        }
         result
     }
 }
