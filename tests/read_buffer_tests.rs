@@ -13,6 +13,10 @@ mod common;
 use std::io::Cursor;
 #[cfg(feature = "async")]
 use std::pin::Pin;
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
 #[cfg(feature = "async")]
 use std::task::Context;
 #[cfg(feature = "async")]
@@ -60,6 +64,7 @@ use qubit_io::Input;
 struct MetadataProvider {
     hint: Option<u64>,
     length: usize,
+    opens: Arc<AtomicUsize>,
 }
 
 impl MetadataProvider {
@@ -95,6 +100,7 @@ impl FileSystemSpi for MetadataProvider {
         Err(unexpected_stat())
     }
     fn open_reader(&self, request: OpenReaderRequest<'_>) -> FsResult<OpenedReader> {
+        self.opens.fetch_add(1, Ordering::SeqCst);
         Ok(OpenedReader::new(
             self.info(request.path()),
             Box::new(Cursor::new(vec![7; self.length])),
@@ -140,6 +146,7 @@ impl AsyncFileSystemSpi for MetadataProvider {
         &'a self,
         request: OpenReaderRequest<'a>,
     ) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
+        self.opens.fetch_add(1, Ordering::SeqCst);
         Box::pin(async move {
             Ok(OpenedAsyncReader::new(
                 self.info(request.path()),
@@ -149,38 +156,43 @@ impl AsyncFileSystemSpi for MetadataProvider {
     }
 }
 
-/// An enormous stale length must not force a huge allocation for a short
-/// stream.
+/// A limit without a representable overflow sentinel is rejected before I/O.
 #[test]
-fn test_read_all_does_not_preallocate_entire_metadata_length() {
+fn test_read_all_rejects_unrepresentable_sentinel_before_open() {
+    let opens = Arc::new(AtomicUsize::new(0));
     let fs = FileSystem::from_spi(MetadataProvider {
         hint: Some(usize::MAX as u64),
         length: 3,
+        opens: Arc::clone(&opens),
     })
     .expect("filesystem");
-    let bytes = fs
+    let error = fs
         .read_all(
             &Path::parse("/payload").expect("path"),
             ReadOptions::default(),
             usize::MAX,
         )
-        .expect("bounded incremental allocation");
-    assert_eq!(bytes, [7; 3]);
+        .expect_err("usize::MAX cannot represent the overflow sentinel");
+    assert_eq!(error.kind(), FsErrorKind::ResourceLimitExceeded);
+    assert_eq!(0, opens.load(Ordering::SeqCst));
 }
 
-/// Async readers use exactly the same incremental allocation policy.
+/// Async readers reject the same unrepresentable sentinel before provider I/O.
 #[cfg(feature = "async")]
 #[test]
-fn test_async_read_all_does_not_preallocate_entire_metadata_length() {
+fn test_async_read_all_rejects_unrepresentable_sentinel_before_open() {
+    let opens = Arc::new(AtomicUsize::new(0));
     let fs = AsyncFileSystem::from_spi(MetadataProvider {
         hint: Some(usize::MAX as u64),
         length: 3,
+        opens: Arc::clone(&opens),
     })
     .expect("filesystem");
     let path = Path::parse("/payload").expect("path");
-    let bytes = common::poll_support::ready(fs.read_all(&path, ReadOptions::default(), usize::MAX))
-        .expect("incremental allocation");
-    assert_eq!(bytes, [7; 3]);
+    let error = common::poll_support::ready(fs.read_all(&path, ReadOptions::default(), usize::MAX))
+        .expect_err("usize::MAX cannot represent the overflow sentinel");
+    assert_eq!(error.kind(), FsErrorKind::ResourceLimitExceeded);
+    assert_eq!(0, opens.load(Ordering::SeqCst));
 }
 
 /// A stale overestimate cannot reject a stream that fits the caller's limit.
@@ -189,6 +201,7 @@ fn test_read_all_accepts_short_stream_despite_overestimated_metadata() {
     let fs = FileSystem::from_spi(MetadataProvider {
         hint: Some(20),
         length: 3,
+        opens: Arc::new(AtomicUsize::new(0)),
     })
     .expect("filesystem");
     let path = Path::parse("/payload").expect("path");
@@ -207,6 +220,7 @@ fn test_async_read_all_accepts_short_stream_despite_overestimated_metadata() {
     let fs = AsyncFileSystem::from_spi(MetadataProvider {
         hint: Some(20),
         length: 3,
+        opens: Arc::new(AtomicUsize::new(0)),
     })
     .expect("filesystem");
     let path = Path::parse("/payload").expect("path");
@@ -226,6 +240,7 @@ fn test_unknown_and_low_metadata_enforce_actual_bytes() {
         let fs = FileSystem::from_spi(MetadataProvider {
             hint,
             length: 20_000,
+            opens: Arc::new(AtomicUsize::new(0)),
         })
         .expect("filesystem");
         assert_eq!(

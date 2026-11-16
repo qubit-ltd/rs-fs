@@ -16,26 +16,35 @@ or an async runtime for you.
 
 ```toml
 [dependencies]
-qubit-fs = "0.3"
+qubit-fs = "0.4"
 ```
 
 Synchronous APIs are enabled by default. Enable the asynchronous facade
 explicitly when it is needed:
 
 ```toml
-qubit-fs = { version = "0.3", features = ["async"] }
+qubit-fs = { version = "0.4", features = ["async"] }
 ```
 
-## Quick Start
+The default feature set is empty: it exposes the synchronous API and does not
+start threads. The optional `async` feature exposes async APIs without selecting
+an executor. Version 0.4 introduces owned provider operations and explicit
+execution bindings; see the [managed operation migration](doc/user_guide.md#managed-operations-and-03-migration)
+and [provider guide](doc/provider_guide.md#managed-spi-migration).
+
+## Direct-call compatibility example
 
 A report job can keep its reads and writes on `FileSystem` while provider setup
-chooses the storage authority. This executable demo creates an isolated local
-root, writes a report, reads it with a 1 KiB limit, and prints `report ready`.
-The temporary directory is removed when the demo ends.
+chooses the storage authority. This example creates an isolated local root,
+writes a report, reads it with a 1 KiB limit, and prints `report ready`.
+The temporary directory is removed when the demo ends. This direct-call example
+shows the non-managed compatibility API. The referenced `qubit-fs-local` release
+is not asserted to implement the 0.4 SPI; use a provider built for 0.4 before
+using the snippet as an integration example.
 
 ```toml
 [dependencies]
-qubit-fs = "0.3"
+qubit-fs = "0.4"
 qubit-fs-local = "^0.11"
 tempfile = "3"
 ```

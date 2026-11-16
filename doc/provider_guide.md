@@ -2,10 +2,12 @@
 
 [中文版本](provider_guide.zh_CN.md)
 
-This guide targets `qubit-fs` 0.3 provider authors. It explains the smallest
+This guide targets `qubit-fs` 0.4 provider authors. It explains the smallest
 provider that can be trusted by the `FileSystem` facade, and the checks to run
-before publishing an adapter. It is not a backend tutorial, a credential
-manager, or a promise that every backend supports every operation.
+before publishing an adapter. Legacy direct-facade contracts remain
+non-managed; the final section describes the 0.4 managed SPI. It is not a
+backend tutorial, a credential manager, or a promise that every backend
+supports every operation.
 
 ## 1. Facade and SPI trust boundary
 
@@ -692,3 +694,36 @@ documentation and inspect the target.
 - [File-system design](file_system_design.md) ·
   [中文设计文档](file_system_design.zh_CN.md)
 - [API reference](https://docs.rs/qubit-fs)
+
+## Managed SPI migration
+
+Version 0.4 preserves direct `FileSystem` and `AsyncFileSystem` methods as
+non-managed compatibility entry points. Provider work requiring managed stop, release, and
+settlement semantics uses the owned preparation protocols:
+`ManagedFsReadSpi`, `ManagedFsMutationSpi`, and `ManagedFsTreeSpi`. Preparation
+must not start I/O. If it rejects, it returns the same owned request, including
+its buffers. Once the manager claims a prepared operation, report failures
+through its typed outcome; do not present a post-claim failure as an unstarted
+request.
+
+Providers map concrete operations into separate synchronous and asynchronous
+capability profiles. `Unsupported` means there is no usable entry point;
+`Conditional` means the operation exists subject to request/provider
+constraints; `Guaranteed` is reserved for an evidenced semantic guarantee.
+Method presence alone never proves snapshot consistency, same-object versions,
+atomic tree publication, or durability. Reject unmet `Required` guarantees
+before side effects and return the achieved guarantee for `Preferred` requests.
+
+Managed mutations install a bounded effect reservation before submission and
+publish typed final facts independently from the generic outcome. Keep the
+physical owner and any recovery capability in the execution/resource service;
+the observer is read-only and must not own a writer, staged directory, or
+cleanup callback. Cleanup remains owned after errors and until the resource
+service confirms release or accepts recovery responsibility.
+
+The application supplies the parent execution scope and owns the shared
+`OperationManager`. `qubit-fs` does not create a manager root. At shutdown, the
+application first drains or retains filesystem work and cleanup, closes
+filesystem-owned services/groups, then closes the shared manager after all
+clients are done. Enabling `async` adds async SPI/API surface only; it starts no
+thread and chooses no runtime.

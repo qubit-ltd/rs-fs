@@ -18,6 +18,8 @@ use crate::facade::internal::FileSystemResource;
 use crate::path::Path;
 use crate::read::PrefixReadOutcome;
 use crate::read::PrefixReadTermination;
+use crate::read::ReadAllOptions;
+use crate::read::ReadConsistencyPolicy;
 use crate::read::ReadOptions;
 use crate::read::internal::ReadBuffer;
 use crate::read::prefix_read_plan::PrefixReadPlan;
@@ -96,6 +98,15 @@ impl<'a> AsyncReadOperation<'a> {
         options: ReadOptions,
         max_bytes: usize,
     ) -> FsResult<Vec<u8>> {
+        // Reject a limit without a representable overflow sentinel before
+        // opening the provider object, matching the synchronous read path.
+        ReadAllOptions::new(max_bytes, ReadConsistencyPolicy::BestEffort)
+            .sentinel_capacity()
+            .map_err(|error| {
+                self.filesystem
+                    .core()
+                    .enrich(error, Some(path), FsOperation::Read)
+            })?;
         let mut reader = self.filesystem.open_reader(path, options).await?;
         let mut bytes = ReadBuffer::new(max_bytes);
         let maximum = FacadeCore::quantity_from_usize(

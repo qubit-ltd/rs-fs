@@ -2,7 +2,7 @@
 
 [简体中文](user_guide.zh_CN.md) | English
 
-This guide describes `qubit-fs` `0.3` for Rust 1.94 and later. It is for
+This guide describes `qubit-fs` `0.4` for Rust 1.94 and later. It is for
 applications that publish reports through a configured filesystem and need to
 retain recovery facts when a write, copy, or cancellation does not complete
 normally.
@@ -20,8 +20,9 @@ Use this guide when an application must:
    of inferring safety from error kinds alone.
 
 The guide covers the public `qubit_fs` API and application-facing recovery
-patterns. It does not replace the provider guide or promise behavior that is not
-stated by the public API and tests.
+patterns. Existing direct facade examples are non-managed compatibility calls;
+the final chapter describes 0.4 managed-operation migration. It does not replace
+the provider guide or promise behavior that is not stated by the public API and tests.
 
 ## Conceptual Model
 
@@ -62,14 +63,18 @@ limits.
 ## Installation and Minimal Configuration
 
 The default feature set is empty and provides synchronous APIs. Enable
-`qubit-fs = { version = "0.3", features = ["async"] }` for asynchronous APIs.
+`qubit-fs = { version = "0.4", features = ["async"] }` for asynchronous APIs.
 The application chooses its executor; the library does not require Tokio.
 
-For the runnable local example in this guide, use:
+The local adapter example below documents the direct non-managed facade path.
+Its adapter version has not been validated against `qubit-fs` 0.4; use a
+provider that implements the 0.4 SPI when integrating this release.
+
+For the legacy local-adapter example in this guide, use:
 
 ```toml
 [dependencies]
-qubit-fs = "0.3"
+qubit-fs = "0.4"
 qubit-fs-local = "^0.11"
 tempfile = "3"
 ```
@@ -1006,3 +1011,50 @@ snapshot. This does not authorize another source mutation.
 - [中文架构设计](file_system_design.zh_CN.md)
 - [API documentation on docs.rs](https://docs.rs/qubit-fs)
 - [Repository](https://github.com/qubit-ltd/rs-fs)
+
+<a id="managed-operations-and-03-migration"></a>
+## Managed operations and 0.3 migration
+
+Version 0.4 keeps the existing direct methods on both `FileSystem` and
+`AsyncFileSystem` as explicitly **non-managed** operations. They do not acquire
+cancellation, release, or settlement tracking from `qubit-operation`. A managed call instead receives an application-owned
+`OperationScope` through `FsExecutionBinding`; the filesystem library does not
+create a replacement root manager or keep a borrowed scope.
+
+```rust,ignore
+let binding = FsExecutionBinding::new(scope.manager().clone());
+let request = FsOwnedReadRequest { path, options: ReadAllOptions::default() };
+let operation = binding.submit_read_all(&provider, request)?;
+let bytes = operation.wait_outcome()?;
+```
+
+For writes, copies, and renames, use the corresponding `submit_*` method with an
+`FsEffectSlotPool`. These return an operation plus an independent read-only
+effect observer. Inspect the typed outcome and effect fact as needed, return all
+resource references, and then wait for settlement. An early `Stopped` outcome
+does not prove that a provider effect was rolled back. Settlement confirms
+resource release; it does not change a separately observed publication fact.
+Do not wait for settlement while retaining a resource reference that settlement
+itself must release.
+
+The migration breaks the provider SPI deliberately. Providers add the
+`ManagedFsReadSpi`, `ManagedFsMutationSpi`, and `ManagedFsTreeSpi` preparation
+contracts and return owned requests unchanged when preparation rejects them.
+Preparation reserves capacity but performs no I/O; activation follows manager
+admission. Unclaimed requests can be recovered from a failed submission, while
+failures after claim are represented by the operation's typed outcome. A
+provider must retain cleanup ownership until cleanup or recovery is confirmed.
+
+`ProviderOperations` records implemented entry points. The synchronous and
+asynchronous capability profiles map those entry points separately to
+`Unsupported`, `Conditional`, or `Guaranteed` support. An entry point alone
+establishes at most conditional support; it does not imply snapshot reads,
+atomic publication, durability, or any other stronger guarantee. Required
+guarantees that cannot be met must be rejected before side effects.
+
+`async` is opt-in and only exposes async APIs. It does not start a thread or
+choose an executor. Keep the application manager alive while managed work and
+cleanup remain active. At application shutdown, finish or retain recovery work,
+close filesystem-owned services/groups, and then shut down the shared manager
+once no other client needs it. This crate does not close an application-owned
+manager on the caller's behalf.

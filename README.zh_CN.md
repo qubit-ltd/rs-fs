@@ -15,23 +15,28 @@
 
 ```toml
 [dependencies]
-qubit-fs = "0.3"
+qubit-fs = "0.4"
 ```
 
 同步 API 默认启用。需要异步门面时必须显式开启 async feature：
 
 ```toml
-qubit-fs = { version = "0.3", features = ["async"] }
+qubit-fs = { version = "0.4", features = ["async"] }
 ```
 
-## 快速开始
+默认特性集合为空：提供同步 API，且不会启动线程。可选的 `async` feature
+提供异步 API，但不选择或启动执行器。0.4 引入 owned provider 操作和显式执行绑定；请阅读
+[托管操作迁移说明](doc/user_guide.zh_CN.md#托管操作与-03-迁移)及[provider 指南](doc/provider_guide.zh_CN.md#托管-spi-迁移)。
+
+## 直接调用兼容示例
 
 报告任务通过 `FileSystem` 完成读写，由初始化代码选择存储位置。下面的完整示例创建独立的
-本地临时目录，写入报告，再以 1 KiB 上限读取，输出 `report ready`。退出时清理临时目录。
+本地临时目录，写入报告，再以 1 KiB 上限读取，输出 `report ready`。退出时清理临时目录。此直接调用示例展示
+非托管兼容 API。文中引用的 `qubit-fs-local` 版本未被声明为实现了 0.4 SPI；集成使用时应选择为 0.4 构建的 provider。
 
 ```toml
 [dependencies]
-qubit-fs = "0.3"
+qubit-fs = "0.4"
 qubit-fs-local = "^0.11"
 tempfile = "3"
 ```

@@ -2,9 +2,10 @@
 
 [English version](provider_guide.md)
 
-本指南面向 `qubit-fs` 0.3 的 provider 作者，说明如何实现一个能够被
+本指南面向 `qubit-fs` 0.4 的 provider 作者，说明如何实现一个能够被
 `FileSystem` 门面信任的最小 provider，以及发布适配器前应完成的检查。它不是后端
-教程、凭据管理器，也不承诺所有后端都支持每个操作。
+教程、凭据管理器，也不承诺所有后端都支持每个操作。旧的直接门面契约属于非托管入口；
+本指南末尾说明 0.4 的托管 SPI。
 
 ## 1. 门面与 SPI 的信任边界
 
@@ -582,3 +583,22 @@ provider 在保存诊断前负责清洗值。句柄处于 `Persisted` 或 `Kept`
 - [English user guide](user_guide.md) · [中文用户指南](user_guide.zh_CN.md)
 - [English design](file_system_design.md) · [中文设计文档](file_system_design.zh_CN.md)
 - [API 文档](https://docs.rs/qubit-fs)
+
+## 托管 SPI 迁移
+
+0.4 保留 `FileSystem` 与 `AsyncFileSystem` 的直接方法作为非托管兼容入口。需要托管停止、释放和 settlement 语义的 provider
+工作使用 owned 准备协议：`ManagedFsReadSpi`、`ManagedFsMutationSpi` 和 `ManagedFsTreeSpi`。
+准备阶段不能启动 I/O。拒绝准备时须返还同一个 owned request，包括其中的缓冲区。manager 认领 prepared
+operation 后，失败通过 typed outcome 报告，不能再伪装成尚未启动的请求。
+
+provider 将实际操作映射到彼此独立的同步与异步 capability profile。`Unsupported` 表示没有可用入口；
+`Conditional` 表示入口存在但受请求或 provider 条件限制；`Guaranteed` 仅用于有证据支撑的语义保证。
+方法存在本身不能证明快照一致性、同对象版本、树原子发布或持久性。无法满足 `Required` 保证时须在副作用前拒绝；
+对 `Preferred` 请求则返回实际达到的保证。
+
+托管变更在提交前安装有界效果槽，并独立于通用 outcome 发布 typed 最终事实。物理 owner 和恢复能力由执行/资源服务持有；
+观察端口只读，不能拥有 writer、staged directory 或清理回调。发生错误后仍须保留清理责任，直到资源服务确认释放或接收恢复责任。
+
+应用提供父执行 scope，并拥有共享的 `OperationManager`。`qubit-fs` 不创建 manager 根任务。关闭时，应用先 drain 文件系统工作或保留恢复责任，
+关闭文件系统自有的服务/组；其他客户端都完成后，再关闭共享 manager。启用 `async` 只增加异步 SPI/API，
+不会启动线程或选择运行时。

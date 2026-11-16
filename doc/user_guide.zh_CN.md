@@ -2,7 +2,7 @@
 
 [English](user_guide.md) | 简体中文
 
-本手册针对 `qubit-fs` `0.3`、Rust 1.94 及以上版本。读者是通过已配置文件系统发布报告，
+本手册针对 `qubit-fs` `0.4`、Rust 1.94 及以上版本。读者是通过已配置文件系统发布报告，
 并需要在写入、复制或取消未正常完成时保留恢复信息的 Rust 应用开发者。
 
 ## 手册目标与读者
@@ -50,13 +50,16 @@
 ## 安装与最小配置
 
 默认 feature 集为空，只提供同步 API。异步应用显式配置
-`qubit-fs = { version = "0.3", features = ["async"] }`，并使用自己已有的执行器；库不要求 Tokio。
+`qubit-fs = { version = "0.4", features = ["async"] }`，并使用自己已有的执行器；库不要求 Tokio。
 
-运行本手册中的本地示例需要：
+下面的 local adapter 示例介绍非托管的直接门面路径。该 adapter 版本尚未针对
+`qubit-fs` 0.4 验证；集成本版本时应使用实现 0.4 SPI 的 provider。
+
+运行本手册中的 local 示例需要：
 
 ```toml
 [dependencies]
-qubit-fs = "0.3"
+qubit-fs = "0.4"
 qubit-fs-local = "^0.11"
 tempfile = "3"
 ```
@@ -852,3 +855,36 @@ metadata，流会失败，不会返回缺少 metadata 的条目。同步 `Direct
 - [English architecture](file_system_design.md)
 - [docs.rs API 文档](https://docs.rs/qubit-fs)
 - [仓库地址](https://github.com/qubit-ltd/rs-fs)
+
+<a id="托管操作与-03-迁移"></a>
+## 托管操作与 0.3 迁移
+
+0.4 保留 `FileSystem` 与 `AsyncFileSystem` 的现有直接方法，但明确标为**非托管**操作：它们不通过
+`qubit-operation` 获得取消、释放或 settlement 跟踪。托管调用通过
+`FsExecutionBinding` 接收应用提供的 `OperationScope`；文件系统库不会创建替代用的根 manager，
+也不会保存借用的 scope。
+
+```rust,ignore
+let binding = FsExecutionBinding::new(scope.manager().clone());
+let request = FsOwnedReadRequest { path, options: ReadAllOptions::default() };
+let operation = binding.submit_read_all(&provider, request)?;
+let bytes = operation.wait_outcome()?;
+```
+
+写入、复制和重命名使用对应的 `submit_*` 方法，并传入 `FsEffectSlotPool`。
+返回值包含 operation 和独立只读的效果观察端口。按需读取 typed outcome 与效果事实，归还所有资源引用，
+然后等待 settlement。提前得到 `Stopped` 不代表 provider 效果已回滚；settlement 确认资源释放，
+不会改变单独观察到的发布事实。不要在仍持有 settlement 必须释放的资源引用时等待 settlement。
+
+迁移会有意改变 provider SPI。provider 增加 `ManagedFsReadSpi`、`ManagedFsMutationSpi` 和
+`ManagedFsTreeSpi` 准备协议；准备拒绝时原样返还 owned request。准备阶段只预留容量，不执行 I/O；
+manager 准入后才激活。未认领的请求可从提交失败中取回；认领后的失败通过 operation 的 typed outcome 表示。
+provider 必须保留清理责任，直到清理或恢复得到确认。
+
+`ProviderOperations` 记录已实现的入口。同步与异步 capability profile 分别把这些入口映射为
+`Unsupported`、`Conditional` 或 `Guaranteed`。仅有入口最多表示 conditional support，不能推导快照读取、
+原子发布、持久性或其他更强保证。无法满足的 Required 保证必须在副作用前拒绝。
+
+`async` 默认关闭，仅提供异步 API，不启动线程，也不选择执行器。托管工作和清理仍在运行时，应用须保持 manager
+有效。应用关闭时先完成或保留恢复任务，关闭文件系统自有的服务/组；确认其他客户端也不再需要共享 manager 后，
+再由应用关闭 manager。本库不会替调用方关闭应用所有的 manager。
