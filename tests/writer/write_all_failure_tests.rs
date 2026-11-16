@@ -23,8 +23,7 @@ use qubit_io::Output;
 
 #[test]
 fn test_write_all_success_publishes_writer() {
-    let (filesystem, _, _) =
-        crate::handle_support::implementation_tests::filesystem(false, Vec::new());
+    let (filesystem, _, _) = crate::handle_support::implementation_tests::filesystem(false, Vec::new());
     let outcome = filesystem
         .write_all(
             &Path::parse("/target").expect("path should parse"),
@@ -79,24 +78,18 @@ fn test_open_writer_rejects_cumulative_bytes_over_finite_write_limit() {
         )
         .expect("writer should open");
     Output::write_fully(&mut writer, b"two").expect("the first write should fit the limit");
-    let error = Output::write_fully(&mut writer, b"xx")
-        .expect_err("the cumulative write should exceed the limit");
+    let error = Output::write_fully(&mut writer, b"xx").expect_err("the cumulative write should exceed the limit");
     let source = error
         .get_ref()
         .and_then(|source| source.downcast_ref::<FsError>())
         .expect("limit rejection should retain its typed filesystem error");
     assert_eq!(FsErrorKind::ResourceLimitExceeded, source.kind());
     assert_eq!(FsOperation::Write, source.operation());
-    assert_eq!(
-        Some(&Path::parse("/target").expect("path should parse")),
-        source.path()
-    );
+    assert_eq!(Some(&Path::parse("/target").expect("path should parse")), source.path());
     assert_eq!(WriterState::Open, writer.state());
     assert_eq!(
         WriteAbortOutcome::NotPublished,
-        writer
-            .abort()
-            .expect("the still-open writer should remain abortable"),
+        writer.abort().expect("the still-open writer should remain abortable"),
     );
     assert_eq!(WriterState::Aborted, writer.state());
 }
@@ -105,8 +98,7 @@ fn test_open_writer_rejects_cumulative_bytes_over_finite_write_limit() {
 /// details through formatting or the causal error interface.
 #[test]
 fn test_write_all_failure_exposes_recovery_accessors_and_formatting() {
-    let (filesystem, _, _) =
-        crate::handle_support::implementation_tests::filesystem(true, Vec::new());
+    let (filesystem, _, _) = crate::handle_support::implementation_tests::filesystem(true, Vec::new());
     let mut failure = filesystem
         .write_all(
             &Path::parse("/target").expect("path should parse"),
@@ -144,10 +136,8 @@ fn test_write_all_failure_exposes_recovery_accessors_and_formatting() {
 #[test]
 fn test_write_all_failure_accessors_are_executed_at_runtime() {
     let error: fn(&WriteAllFailure) -> &FsError = black_box(WriteAllFailure::error);
-    let recovery: fn(&WriteAllFailure) -> Option<&WriterRecovery> =
-        black_box(WriteAllFailure::recovery);
-    let (filesystem, _, _) =
-        crate::handle_support::implementation_tests::filesystem(true, Vec::new());
+    let recovery: fn(&WriteAllFailure) -> Option<&WriterRecovery> = black_box(WriteAllFailure::recovery);
+    let (filesystem, _, _) = crate::handle_support::implementation_tests::filesystem(true, Vec::new());
     let failure = filesystem
         .write_all(
             &Path::parse("/target").expect("path should parse"),

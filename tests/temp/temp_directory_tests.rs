@@ -17,8 +17,7 @@ use qubit_fs::temp::TempOptions;
 use qubit_fs::temp::TempResourceState;
 #[test]
 fn test_temp_directory_child_components_are_lexically_safe() {
-    let (filesystem, cleanup_calls, _) =
-        crate::handle_support::implementation_tests::filesystem(false, Vec::new());
+    let (filesystem, cleanup_calls, _) = crate::handle_support::implementation_tests::filesystem(false, Vec::new());
     let mut directory = filesystem
         .create_temp_directory(TempOptions::default())
         .expect("temporary directory should open");
@@ -26,17 +25,11 @@ fn test_temp_directory_child_components_are_lexically_safe() {
     let component = PathComponent::parse("child").expect("component should parse");
     assert_eq!("/temporary/child", directory.child(&component).as_str());
     let descendant = RelativePath::parse("nested/child").expect("relative path should parse");
-    assert_eq!(
-        "/temporary/nested/child",
-        directory.descendant(&descendant).as_str()
-    );
+    assert_eq!("/temporary/nested/child", directory.descendant(&descendant).as_str());
     assert!(format!("{directory:?}").contains("TempDirectory"));
     directory.cleanup().expect("cleanup should succeed");
     assert_eq!(TempResourceState::Cleaned, directory.state());
-    assert_eq!(
-        1,
-        *cleanup_calls.lock().expect("cleanup lock should succeed")
-    );
+    assert_eq!(1, *cleanup_calls.lock().expect("cleanup lock should succeed"));
 }
 
 /// Verifies a successful directory persist releases the owned source and
@@ -55,17 +48,11 @@ fn test_temp_directory_persist_marks_resource_persisted() {
         .expect("atomic temporary directory persist should succeed");
     assert_eq!(&target, outcome.target());
     assert_eq!(TempResourceState::Persisted, directory.state());
-    assert_eq!(
-        1,
-        *persist_calls.lock().expect("persist lock should succeed")
-    );
+    assert_eq!(1, *persist_calls.lock().expect("persist lock should succeed"));
     assert!(directory.cleanup().is_err());
     assert!(directory.keep().is_err());
     drop(directory);
-    assert_eq!(
-        0,
-        *cleanup_calls.lock().expect("cleanup lock should succeed")
-    );
+    assert_eq!(0, *cleanup_calls.lock().expect("cleanup lock should succeed"));
 }
 
 /// Verifies a provider cannot satisfy required atomic directory persistence by
@@ -84,15 +71,9 @@ fn test_temp_directory_non_atomic_required_persist_does_not_assume_source_owners
             PersistOptions::default(),
         )
         .expect_err("non-atomic provider result must violate requirement");
-    assert_eq!(
-        FsErrorKind::ProviderContractViolation,
-        failure.error().kind()
-    );
+    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
     assert_eq!(Some("handles-test"), failure.error().provider());
-    assert_eq!(
-        PersistFailureState::PublishedSourceIndeterminate,
-        failure.state()
-    );
+    assert_eq!(PersistFailureState::PublishedSourceIndeterminate, failure.state());
     assert_eq!(TempResourceState::Indeterminate, directory.state());
     let target = Path::parse("/published-directory").expect("target should parse");
     assert_eq!(Some(&target), failure.publication_target());
@@ -108,25 +89,18 @@ fn test_temp_directory_non_atomic_required_persist_does_not_assume_source_owners
     assert_eq!(
         PersistFailureState::PublishedSourceIndeterminate,
         directory
-            .persist(
-                &Path::parse("/next").expect("target"),
-                PersistOptions::default()
-            )
+            .persist(&Path::parse("/next").expect("target"), PersistOptions::default())
             .expect_err("source is uncertain")
             .state()
     );
     drop(directory);
-    assert_eq!(
-        0,
-        *cleanup_calls.lock().expect("cleanup lock should succeed")
-    );
+    assert_eq!(0, *cleanup_calls.lock().expect("cleanup lock should succeed"));
 }
 
 /// Rejects a provider outcome that reports a different persistence target.
 #[test]
 fn test_temp_directory_rejects_mismatched_persist_target() {
-    let (filesystem, _, _) =
-        crate::handle_support::implementation_tests::filesystem(false, Vec::new());
+    let (filesystem, _, _) = crate::handle_support::implementation_tests::filesystem(false, Vec::new());
     let mut directory = filesystem
         .create_temp_directory(TempOptions::default())
         .expect("temporary directory should open");
@@ -138,10 +112,7 @@ fn test_temp_directory_rejects_mismatched_persist_target() {
         )
         .expect_err("mismatched target should violate the provider contract");
 
-    assert_eq!(
-        FsErrorKind::ProviderContractViolation,
-        failure.error().kind()
-    );
+    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
     assert_eq!(Some("handles-test"), failure.error().provider());
     assert_eq!(PersistFailureState::Indeterminate, failure.state());
     assert_eq!(TempResourceState::Indeterminate, directory.state());
@@ -151,8 +122,7 @@ fn test_temp_directory_rejects_mismatched_persist_target() {
 /// leaves the completed handle unusable for further persistence.
 #[test]
 fn test_temp_directory_keep_releases_cleanup_responsibility() {
-    let (filesystem, cleanup_calls, _) =
-        crate::handle_support::implementation_tests::filesystem(false, Vec::new());
+    let (filesystem, cleanup_calls, _) = crate::handle_support::implementation_tests::filesystem(false, Vec::new());
     let mut directory = filesystem
         .create_temp_directory(TempOptions::default())
         .expect("temporary directory should open");
@@ -169,10 +139,7 @@ fn test_temp_directory_keep_releases_cleanup_responsibility() {
     );
     assert!(directory.cleanup().is_err());
     drop(directory);
-    assert_eq!(
-        0,
-        *cleanup_calls.lock().expect("cleanup lock should succeed")
-    );
+    assert_eq!(0, *cleanup_calls.lock().expect("cleanup lock should succeed"));
 }
 
 /// Verifies every provider-reported persist failure state is retained by the
@@ -185,10 +152,7 @@ fn test_temp_directory_persist_failure_preserves_provider_progress() {
             PersistFailureState::PublishedSourceRetained,
             TempResourceState::CleanupRequired,
         ),
-        (
-            PersistFailureState::Indeterminate,
-            TempResourceState::Indeterminate,
-        ),
+        (PersistFailureState::Indeterminate, TempResourceState::Indeterminate),
     ] {
         let (filesystem, cleanup_calls, persist_calls) =
             crate::handle_support::implementation_tests::temp_failure_filesystem(failure_state);
@@ -214,10 +178,7 @@ fn test_temp_directory_persist_failure_preserves_provider_progress() {
         assert_eq!(Some("handles-test"), failure.error().provider());
         assert_eq!(failure_state, failure.state());
         assert_eq!(expected_state, directory.state());
-        assert_eq!(
-            1,
-            *persist_calls.lock().expect("persist lock should succeed")
-        );
+        assert_eq!(1, *persist_calls.lock().expect("persist lock should succeed"));
         drop(directory);
         assert_eq!(
             usize::from(matches!(
@@ -235,27 +196,14 @@ fn test_temp_directory_persist_failure_preserves_provider_progress() {
 fn test_temp_directory_lifecycle_errors_preserve_recovery_state() {
     for (operation, error_kind, expected_state) in [
         ("keep", FsErrorKind::Io, TempResourceState::Owned),
-        (
-            "keep",
-            FsErrorKind::Indeterminate,
-            TempResourceState::Indeterminate,
-        ),
-        (
-            "cleanup",
-            FsErrorKind::Io,
-            TempResourceState::CleanupRequired,
-        ),
-        (
-            "cleanup",
-            FsErrorKind::Indeterminate,
-            TempResourceState::Indeterminate,
-        ),
+        ("keep", FsErrorKind::Indeterminate, TempResourceState::Indeterminate),
+        ("cleanup", FsErrorKind::Io, TempResourceState::CleanupRequired),
+        ("cleanup", FsErrorKind::Indeterminate, TempResourceState::Indeterminate),
     ] {
-        let (filesystem, cleanup_calls) =
-            crate::handle_support::implementation_tests::temp_lifecycle_error_filesystem(
-                (operation == "keep").then_some(error_kind),
-                (operation == "cleanup").then_some(error_kind),
-            );
+        let (filesystem, cleanup_calls) = crate::handle_support::implementation_tests::temp_lifecycle_error_filesystem(
+            (operation == "keep").then_some(error_kind),
+            (operation == "cleanup").then_some(error_kind),
+        );
         let mut directory = filesystem
             .create_temp_directory(TempOptions::default())
             .expect("temporary directory should open");

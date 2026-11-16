@@ -136,8 +136,6 @@ impl Debug for DirectoryStream {
     /// - `formatter`: Formatter receiving the stream's debug representation.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
-        formatter
-            .debug_struct("DirectoryStream")
-            .finish_non_exhaustive()
+        formatter.debug_struct("DirectoryStream").finish_non_exhaustive()
     }
 }

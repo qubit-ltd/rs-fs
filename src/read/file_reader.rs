@@ -108,12 +108,7 @@ impl Input for FileReader {
     /// `index..index + count` must be a valid range within `output`, and the
     /// addition must not overflow.
     #[inline]
-    unsafe fn read_unchecked(
-        &mut self,
-        output: &mut [u8],
-        index: usize,
-        count: usize,
-    ) -> IoResult<usize> {
+    unsafe fn read_unchecked(&mut self, output: &mut [u8], index: usize, count: usize) -> IoResult<usize> {
         // SAFETY: The caller guarantees the same range contract required by
         // the wrapped input.
         unsafe { self.inner.read_unchecked(output, index, count) }.map_err(|error| {
@@ -128,9 +123,7 @@ impl Input for FileReader {
                         || !matches!(typed.effect_state(), None | Some(FsEffectState::Unchanged))
                 });
             if unsafe_typed {
-                let source = error
-                    .into_inner()
-                    .expect("typed interruption retains its source");
+                let source = error.into_inner().expect("typed interruption retains its source");
                 IoError::other(source)
             } else {
                 error

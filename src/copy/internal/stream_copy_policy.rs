@@ -29,10 +29,7 @@ use crate::write::WriteOptions;
 ///   requested by the caller.
 /// - `filesystem_symlink_policy`: Symlink policy configured for the filesystem.
 #[inline]
-pub(crate) fn fallback_options_supported(
-    options: &CopyOptions,
-    filesystem_symlink_policy: SymlinkPolicy,
-) -> bool {
+pub(crate) fn fallback_options_supported(options: &CopyOptions, filesystem_symlink_policy: SymlinkPolicy) -> bool {
     fallback_rejection(options, filesystem_symlink_policy).is_none()
 }
 
@@ -71,15 +68,10 @@ pub(crate) fn fallback_rejection(
     if options.durability() == DurabilityRequirement::Required {
         return Some(FallbackRejection::DurabilityRequired);
     }
-    if options.conflict() == CopyConflictPolicy::Skip
-        && options.atomicity() == AtomicityRequirement::Required
-    {
+    if options.conflict() == CopyConflictPolicy::Skip && options.atomicity() == AtomicityRequirement::Required {
         return Some(FallbackRejection::AtomicSkip);
     }
-    if !matches!(
-        options.conflict(),
-        CopyConflictPolicy::Fail | CopyConflictPolicy::Skip
-    ) {
+    if !matches!(options.conflict(), CopyConflictPolicy::Fail | CopyConflictPolicy::Skip) {
         return Some(FallbackRejection::ConflictPolicy);
     }
     None
@@ -129,10 +121,7 @@ mod tests {
 
     #[test]
     fn test_fallback_rejects_tree_mode() {
-        assert!(!fallback_options_supported(
-            &CopyOptions::tree(),
-            SymlinkPolicy::Reject,
-        ));
+        assert!(!fallback_options_supported(&CopyOptions::tree(), SymlinkPolicy::Reject,));
     }
 
     #[test]

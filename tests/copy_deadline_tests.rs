@@ -33,10 +33,8 @@ fn test_copy_options_default_has_no_deadline() {
 
 #[test]
 fn test_indeterminate_commit_retains_writer_for_recovery() {
-    let filesystem = handle_support::implementation_tests::writer_lifecycle_filesystem(
-        Some(WriteFailureState::Indeterminate),
-        None,
-    );
+    let filesystem =
+        handle_support::implementation_tests::writer_lifecycle_filesystem(Some(WriteFailureState::Indeterminate), None);
 
     let failure = filesystem
         .copy(

@@ -104,10 +104,7 @@ impl RecordingProvider {
             .unwrap_or(usize::MAX)
             .min(payload.len() - offset);
         Ok((
-            OpenedFileInfo::new(
-                FileSystemId::new("prefix-test").unwrap(),
-                request.path().clone(),
-            ),
+            OpenedFileInfo::new(FileSystemId::new("prefix-test").unwrap(), request.path().clone()),
             RecordingReader {
                 bytes: payload[offset..offset + length].to_vec(),
                 position: 0,
@@ -159,10 +156,7 @@ impl AsyncFileSystemSpi for RecordingProvider {
     }
 
     /// Opens the selected asynchronous payload once.
-    fn open_reader<'a>(
-        &'a self,
-        request: OpenReaderRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
+    fn open_reader<'a>(&'a self, request: OpenReaderRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
         Box::pin(async move {
             let (info, reader) = self.open(request)?;
             Ok(OpenedAsyncReader::new(info, Box::new(reader)))
@@ -184,9 +178,7 @@ impl RecordingReader {
         let count = output.len().min(self.bytes.len() - self.position);
         output[..count].copy_from_slice(&self.bytes[self.position..self.position + count]);
         self.position += count;
-        self.observations
-            .read_bytes
-            .fetch_add(count, Ordering::SeqCst);
+        self.observations.read_bytes.fetch_add(count, Ordering::SeqCst);
         count
     }
 }
@@ -195,12 +187,7 @@ impl Input for RecordingReader {
     type Item = u8;
 
     /// Copies bytes within the caller-validated output range.
-    unsafe fn read_unchecked(
-        &mut self,
-        output: &mut [u8],
-        index: usize,
-        count: usize,
-    ) -> std::io::Result<usize> {
+    unsafe fn read_unchecked(&mut self, output: &mut [u8], index: usize, count: usize) -> std::io::Result<usize> {
         if self.fail {
             return Err(injected_failure().into_io_error());
         }

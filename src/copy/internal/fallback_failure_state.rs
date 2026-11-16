@@ -48,9 +48,7 @@ pub(crate) const fn from_writer_state(state: WriterState) -> CopyFailureState {
 #[inline]
 pub(crate) const fn from_write_failure_state(state: WriteFailureState) -> CopyFailureState {
     match state {
-        WriteFailureState::RetryableNotPublished | WriteFailureState::NotPublished => {
-            CopyFailureState::Unchanged
-        }
+        WriteFailureState::RetryableNotPublished | WriteFailureState::NotPublished => CopyFailureState::Unchanged,
         WriteFailureState::Published => CopyFailureState::Published,
         WriteFailureState::Indeterminate => CopyFailureState::Indeterminate,
     }
@@ -146,9 +144,6 @@ mod tests {
                 ..CopyStats::default()
             }),
         );
-        assert_eq!(
-            CopyFailureState::Indeterminate,
-            mapper(&CopyStats::default())
-        );
+        assert_eq!(CopyFailureState::Indeterminate, mapper(&CopyStats::default()));
     }
 }

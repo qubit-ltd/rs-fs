@@ -1,7 +1,8 @@
-use crate::metadata::{
-    AchievedAtomicity, AtomicityRequirement, DurabilityRequirement, PublicationMethod,
-    TreePublishOptions,
-};
+use crate::metadata::AchievedAtomicity;
+use crate::metadata::AtomicityRequirement;
+use crate::metadata::DurabilityRequirement;
+use crate::metadata::PublicationMethod;
+use crate::metadata::TreePublishOptions;
 
 /// Facts reported after a staged directory tree is published.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -34,9 +35,7 @@ impl TreePublishOutcome {
             PublicationMethod::Direct
             | PublicationMethod::ServerSideCopy
             | PublicationMethod::StreamCopy
-            | PublicationMethod::CopyThenDelete => {
-                !matches!(self.atomicity, AchievedAtomicity::Atomic)
-            }
+            | PublicationMethod::CopyThenDelete => !matches!(self.atomicity, AchievedAtomicity::Atomic),
         }
     }
 

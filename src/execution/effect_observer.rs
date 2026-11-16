@@ -1,9 +1,11 @@
-use crate::error::FsEffectState;
-use std::sync::{
-    Arc, Condvar, Mutex,
-    atomic::{AtomicUsize, Ordering},
-};
+use std::sync::Arc;
+use std::sync::Condvar;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::task::Waker;
+
+use crate::error::FsEffectState;
 /// Immutable state of an independently observed mutation effect.
 #[derive(Clone, Debug)]
 #[must_use]
@@ -88,7 +90,8 @@ impl FsEffectObserver {
     pub fn publish(&self, state: FsEffectState) {
         self.publish_fact(FsEffectFact::State(state));
     }
-    /// Publishes typed final evidence once; later publications cannot replace it.
+    /// Publishes typed final evidence once; later publications cannot replace
+    /// it.
     pub fn publish_fact(&self, fact: FsEffectFact) {
         let mut published = false;
         if let Ok(mut v) = self.state.snapshot.lock() {
@@ -151,10 +154,7 @@ pub struct FsEffectWait<'a> {
 }
 impl std::future::Future for FsEffectWait<'_> {
     type Output = Result<FsEffectFact, FsEffectObservationError>;
-    fn poll(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
+    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
         let observer = self.observer;
         match observer.state.snapshot.lock() {
             Err(_) => std::task::Poll::Ready(Err(FsEffectObservationError::Poisoned)),
@@ -175,9 +175,7 @@ impl std::future::Future for FsEffectWait<'_> {
                     match observer.state.snapshot.lock() {
                         Err(_) => std::task::Poll::Ready(Err(FsEffectObservationError::Poisoned)),
                         Ok(snapshot) => match &*snapshot {
-                            FsEffectSnapshot::Final(fact) => {
-                                std::task::Poll::Ready(Ok(fact.clone()))
-                            }
+                            FsEffectSnapshot::Final(fact) => std::task::Poll::Ready(Ok(fact.clone())),
                             FsEffectSnapshot::Pending => std::task::Poll::Pending,
                         },
                     }
@@ -249,9 +247,7 @@ impl FsEffectSlotPool {
         Ok(FsEffectReservation {
             inner: Arc::new(EffectSlotReservationInner {
                 state: Arc::new(FsEffectShared::new()),
-                _slot: EffectSlotLease {
-                    used: Arc::clone(used),
-                },
+                _slot: EffectSlotLease { used: Arc::clone(used) },
             }),
         })
     }

@@ -1,13 +1,16 @@
 //! Owned mutation protocol declarations for managed providers.
-use crate::{
-    FsOperationFailure,
-    copy::CopyOutcome,
-    execution::{FsOwnedCopyRequest, FsOwnedRenameRequest, FsOwnedWriteRequest, FsPrepareFailure},
-    metadata::WriteOutcome,
-    rename::RenameOutcome,
-};
-use qubit_operation::PreparedExternalOperation;
 use std::sync::Arc;
+
+use qubit_operation::PreparedExternalOperation;
+
+use crate::FsOperationFailure;
+use crate::copy::CopyOutcome;
+use crate::execution::FsOwnedCopyRequest;
+use crate::execution::FsOwnedRenameRequest;
+use crate::execution::FsOwnedWriteRequest;
+use crate::execution::FsPrepareFailure;
+use crate::metadata::WriteOutcome;
+use crate::rename::RenameOutcome;
 /// Object-safe prepared write operation with request recovery before claim.
 pub trait PreparedFsWrite: PreparedExternalOperation<WriteOutcome, FsOperationFailure> {
     /// Returns the original write request while unclaimed.
@@ -114,11 +117,7 @@ impl crate::execution::FsEffectReservation {
     }
 
     /// Publishes typed rename failure facts independently of its outcome.
-    pub fn publish_rename_failure(
-        &self,
-        error: Arc<crate::FsError>,
-        state: crate::rename::RenameFailureState,
-    ) {
+    pub fn publish_rename_failure(&self, error: Arc<crate::FsError>, state: crate::rename::RenameFailureState) {
         self.publish(crate::execution::FsEffectFact::RenameFailure { error, state });
     }
 }

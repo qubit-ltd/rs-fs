@@ -16,63 +16,21 @@ use crate::metadata::FileSystemCapabilitySupport;
 
 const CAPABILITY_DEPENDENCIES: &[(FileSystemCapability, FileSystemCapability)] = &[
     (FileSystemCapability::RangeRead, FileSystemCapability::Read),
-    (
-        FileSystemCapability::ConditionalRead,
-        FileSystemCapability::Read,
-    ),
-    (
-        FileSystemCapability::ChecksumValidation,
-        FileSystemCapability::Read,
-    ),
+    (FileSystemCapability::ConditionalRead, FileSystemCapability::Read),
+    (FileSystemCapability::ChecksumValidation, FileSystemCapability::Read),
     (FileSystemCapability::Append, FileSystemCapability::Write),
-    (
-        FileSystemCapability::ConditionalWrite,
-        FileSystemCapability::Write,
-    ),
-    (
-        FileSystemCapability::AtomicReplace,
-        FileSystemCapability::Write,
-    ),
-    (
-        FileSystemCapability::DurableWrite,
-        FileSystemCapability::Write,
-    ),
-    (
-        FileSystemCapability::RecursiveDelete,
-        FileSystemCapability::Delete,
-    ),
-    (
-        FileSystemCapability::ConditionalDelete,
-        FileSystemCapability::Delete,
-    ),
-    (
-        FileSystemCapability::AtomicRename,
-        FileSystemCapability::Rename,
-    ),
-    (
-        FileSystemCapability::ServerSideCopy,
-        FileSystemCapability::Copy,
-    ),
-    (
-        FileSystemCapability::AtomicFileCopy,
-        FileSystemCapability::Copy,
-    ),
-    (
-        FileSystemCapability::AtomicTreeCopy,
-        FileSystemCapability::Copy,
-    ),
-    (
-        FileSystemCapability::DurableFileCopy,
-        FileSystemCapability::Copy,
-    ),
-    (
-        FileSystemCapability::DurableTreeCopy,
-        FileSystemCapability::Copy,
-    ),
-    (
-        FileSystemCapability::DurableRename,
-        FileSystemCapability::Rename,
-    ),
+    (FileSystemCapability::ConditionalWrite, FileSystemCapability::Write),
+    (FileSystemCapability::AtomicReplace, FileSystemCapability::Write),
+    (FileSystemCapability::DurableWrite, FileSystemCapability::Write),
+    (FileSystemCapability::RecursiveDelete, FileSystemCapability::Delete),
+    (FileSystemCapability::ConditionalDelete, FileSystemCapability::Delete),
+    (FileSystemCapability::AtomicRename, FileSystemCapability::Rename),
+    (FileSystemCapability::ServerSideCopy, FileSystemCapability::Copy),
+    (FileSystemCapability::AtomicFileCopy, FileSystemCapability::Copy),
+    (FileSystemCapability::AtomicTreeCopy, FileSystemCapability::Copy),
+    (FileSystemCapability::DurableFileCopy, FileSystemCapability::Copy),
+    (FileSystemCapability::DurableTreeCopy, FileSystemCapability::Copy),
+    (FileSystemCapability::DurableRename, FileSystemCapability::Rename),
 ];
 
 /// Stable typed capability support for one configured filesystem.
@@ -150,11 +108,7 @@ impl FileSystemCapabilities {
     /// - `support`: New support strength to record for that capability.
     #[inline]
     #[must_use]
-    pub const fn set_support(
-        mut self,
-        capability: FileSystemCapability,
-        support: FileSystemCapabilitySupport,
-    ) -> Self {
+    pub const fn set_support(mut self, capability: FileSystemCapability, support: FileSystemCapabilitySupport) -> Self {
         let bit = capability.bit();
         self.conditional &= !bit;
         self.guaranteed &= !bit;
@@ -194,10 +148,7 @@ impl FileSystemCapabilities {
     #[inline]
     #[must_use]
     pub const fn supports(&self, capability: FileSystemCapability) -> bool {
-        !matches!(
-            self.support(capability),
-            FileSystemCapabilitySupport::Unsupported
-        )
+        !matches!(self.support(capability), FileSystemCapabilitySupport::Unsupported)
     }
 
     /// Returns whether `capability` is guaranteed in this filesystem scope.
@@ -207,10 +158,7 @@ impl FileSystemCapabilities {
     #[inline]
     #[must_use]
     pub const fn guarantees(&self, capability: FileSystemCapability) -> bool {
-        matches!(
-            self.support(capability),
-            FileSystemCapabilitySupport::Guaranteed
-        )
+        matches!(self.support(capability), FileSystemCapabilitySupport::Guaranteed)
     }
 
     /// Returns the number of advertised capabilities.
@@ -247,11 +195,8 @@ impl FileSystemCapabilities {
 
     /// Iterates advertised capabilities with their support status.
     #[inline]
-    pub fn iter_with_support(
-        &self,
-    ) -> impl Iterator<Item = (FileSystemCapability, FileSystemCapabilitySupport)> + '_ {
-        self.iter()
-            .map(|capability| (capability, self.support(capability)))
+    pub fn iter_with_support(&self) -> impl Iterator<Item = (FileSystemCapability, FileSystemCapabilitySupport)> + '_ {
+        self.iter().map(|capability| (capability, self.support(capability)))
     }
 
     /// Returns the first advertised capability whose required base capability
@@ -298,9 +243,6 @@ impl Debug for FileSystemCapabilities {
     /// - `formatter`: Destination for the debug map.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
-        formatter
-            .debug_map()
-            .entries(self.iter_with_support())
-            .finish()
+        formatter.debug_map().entries(self.iter_with_support()).finish()
     }
 }

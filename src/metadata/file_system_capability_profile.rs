@@ -26,10 +26,7 @@ impl FileSystemCapabilityProfile {
     }
 
     /// Creates a profile with independently supplied sync and async snapshots.
-    pub const fn new(
-        synchronous: FileSystemCapabilities,
-        asynchronous: FileSystemCapabilities,
-    ) -> Self {
+    pub const fn new(synchronous: FileSystemCapabilities, asynchronous: FileSystemCapabilities) -> Self {
         Self {
             synchronous,
             asynchronous,

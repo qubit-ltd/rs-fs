@@ -1,14 +1,24 @@
-use super::{FsOwnedReadRequest, FsSubmitFailure, PreparedFsReadAdapter};
+use std::sync::Arc;
+
+use qubit_operation::OperationManager;
+use qubit_operation::OperationOptions;
+
+use super::FsOwnedReadRequest;
+use super::FsSubmitFailure;
+use super::PreparedFsReadAdapter;
 #[cfg(feature = "async")]
 use crate::AsyncFsMutationOperation;
-use crate::spi::{ManagedFsMutationSpi, ManagedFsReadSpi, ManagedFsTreeSpi};
-use crate::{
-    FsEffectSlotPool, FsMutationOperation, FsOwnedCopyRequest, FsOwnedRenameRequest,
-    FsOwnedTreePublishRequest, FsOwnedWriteRequest,
-};
-use crate::{FsOperation, FsOperationFailure};
-use qubit_operation::{OperationManager, OperationOptions};
-use std::sync::Arc;
+use crate::FsEffectSlotPool;
+use crate::FsMutationOperation;
+use crate::FsOperation;
+use crate::FsOperationFailure;
+use crate::FsOwnedCopyRequest;
+use crate::FsOwnedRenameRequest;
+use crate::FsOwnedTreePublishRequest;
+use crate::FsOwnedWriteRequest;
+use crate::spi::ManagedFsMutationSpi;
+use crate::spi::ManagedFsReadSpi;
+use crate::spi::ManagedFsTreeSpi;
 /// Explicit synchronous execution binding for managed filesystem operations.
 #[derive(Clone)]
 pub struct FsExecutionBinding {
@@ -51,10 +61,7 @@ impl FsExecutionBinding {
         let adapter = Arc::new(PreparedFsReadAdapter::new(prepared));
         let result = self
             .manager
-            .try_submit_external::<Vec<u8>, FsOperationFailure, _>(
-                OperationOptions::default(),
-                Arc::clone(&adapter),
-            );
+            .try_submit_external::<Vec<u8>, FsOperationFailure, _>(OperationOptions::default(), Arc::clone(&adapter));
         match result {
             Ok(operation) => Ok(operation),
             Err(rejected) => {
@@ -77,10 +84,7 @@ impl FsExecutionBinding {
         provider: &dyn ManagedFsMutationSpi,
         request: FsOwnedWriteRequest,
         pool: &FsEffectSlotPool,
-    ) -> Result<
-        FsMutationOperation<crate::metadata::WriteOutcome>,
-        FsSubmitFailure<FsOwnedWriteRequest>,
-    > {
+    ) -> Result<FsMutationOperation<crate::metadata::WriteOutcome>, FsSubmitFailure<FsOwnedWriteRequest>> {
         let reservation = match pool.reserve() {
             Ok(v) => v,
             Err(_) => {
@@ -143,8 +147,7 @@ impl FsExecutionBinding {
         provider: &dyn ManagedFsMutationSpi,
         request: FsOwnedCopyRequest,
         pool: &FsEffectSlotPool,
-    ) -> Result<FsMutationOperation<crate::copy::CopyOutcome>, FsSubmitFailure<FsOwnedCopyRequest>>
-    {
+    ) -> Result<FsMutationOperation<crate::copy::CopyOutcome>, FsSubmitFailure<FsOwnedCopyRequest>> {
         let reservation = match pool.reserve() {
             Ok(v) => v,
             Err(_) => {
@@ -207,10 +210,7 @@ impl FsExecutionBinding {
         provider: &dyn ManagedFsMutationSpi,
         request: FsOwnedRenameRequest,
         pool: &FsEffectSlotPool,
-    ) -> Result<
-        FsMutationOperation<crate::rename::RenameOutcome>,
-        FsSubmitFailure<FsOwnedRenameRequest>,
-    > {
+    ) -> Result<FsMutationOperation<crate::rename::RenameOutcome>, FsSubmitFailure<FsOwnedRenameRequest>> {
         let reservation = match pool.reserve() {
             Ok(v) => v,
             Err(_) => {
@@ -267,16 +267,15 @@ impl FsExecutionBinding {
         }
     }
 
-    /// Prepares, reserves a final-effect slot, and submits a staged-tree publication.
+    /// Prepares, reserves a final-effect slot, and submits a staged-tree
+    /// publication.
     pub fn submit_tree_publish(
         &self,
         provider: &dyn ManagedFsTreeSpi,
         request: FsOwnedTreePublishRequest,
         pool: &FsEffectSlotPool,
-    ) -> Result<
-        FsMutationOperation<crate::directory::TreePublishOutcome>,
-        FsSubmitFailure<FsOwnedTreePublishRequest>,
-    > {
+    ) -> Result<FsMutationOperation<crate::directory::TreePublishOutcome>, FsSubmitFailure<FsOwnedTreePublishRequest>>
+    {
         let reservation = match pool.reserve() {
             Ok(v) => v,
             Err(_) => {
@@ -333,17 +332,15 @@ impl FsExecutionBinding {
         }
     }
 
-    /// Prepares, reserves a final-effect slot, and submits a managed async write.
+    /// Prepares, reserves a final-effect slot, and submits a managed async
+    /// write.
     #[cfg(feature = "async")]
     pub fn submit_write_async(
         &self,
         provider: &dyn ManagedFsMutationSpi,
         request: FsOwnedWriteRequest,
         pool: &FsEffectSlotPool,
-    ) -> Result<
-        AsyncFsMutationOperation<crate::metadata::WriteOutcome>,
-        FsSubmitFailure<FsOwnedWriteRequest>,
-    > {
+    ) -> Result<AsyncFsMutationOperation<crate::metadata::WriteOutcome>, FsSubmitFailure<FsOwnedWriteRequest>> {
         let reservation = match pool.reserve() {
             Ok(v) => v,
             Err(_) => {
@@ -401,17 +398,15 @@ impl FsExecutionBinding {
         }
     }
 
-    /// Prepares, reserves a final-effect slot, and submits a managed async copy.
+    /// Prepares, reserves a final-effect slot, and submits a managed async
+    /// copy.
     #[cfg(feature = "async")]
     pub fn submit_copy_async(
         &self,
         provider: &dyn ManagedFsMutationSpi,
         request: FsOwnedCopyRequest,
         pool: &FsEffectSlotPool,
-    ) -> Result<
-        AsyncFsMutationOperation<crate::copy::CopyOutcome>,
-        FsSubmitFailure<FsOwnedCopyRequest>,
-    > {
+    ) -> Result<AsyncFsMutationOperation<crate::copy::CopyOutcome>, FsSubmitFailure<FsOwnedCopyRequest>> {
         let reservation = match pool.reserve() {
             Ok(v) => v,
             Err(_) => {
@@ -469,17 +464,15 @@ impl FsExecutionBinding {
         }
     }
 
-    /// Prepares, reserves a final-effect slot, and submits a managed async rename.
+    /// Prepares, reserves a final-effect slot, and submits a managed async
+    /// rename.
     #[cfg(feature = "async")]
     pub fn submit_rename_async(
         &self,
         provider: &dyn ManagedFsMutationSpi,
         request: FsOwnedRenameRequest,
         pool: &FsEffectSlotPool,
-    ) -> Result<
-        AsyncFsMutationOperation<crate::rename::RenameOutcome>,
-        FsSubmitFailure<FsOwnedRenameRequest>,
-    > {
+    ) -> Result<AsyncFsMutationOperation<crate::rename::RenameOutcome>, FsSubmitFailure<FsOwnedRenameRequest>> {
         let reservation = match pool.reserve() {
             Ok(v) => v,
             Err(_) => {
@@ -537,7 +530,8 @@ impl FsExecutionBinding {
         }
     }
 
-    /// Prepares, reserves a final-effect slot, and submits async tree publication.
+    /// Prepares, reserves a final-effect slot, and submits async tree
+    /// publication.
     #[cfg(feature = "async")]
     pub fn submit_tree_publish_async(
         &self,
@@ -626,10 +620,8 @@ impl FsExecutionBinding {
         match self
             .manager
             .as_async()
-            .try_submit_external::<Vec<u8>, FsOperationFailure, _>(
-                OperationOptions::default(),
-                Arc::clone(&adapter),
-            ) {
+            .try_submit_external::<Vec<u8>, FsOperationFailure, _>(OperationOptions::default(), Arc::clone(&adapter))
+        {
             Ok(operation) => Ok(operation),
             Err(rejected) => {
                 let (admission, rejected_adapter) = rejected.into_parts();

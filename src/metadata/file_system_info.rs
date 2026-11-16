@@ -79,11 +79,8 @@ impl FileSystemInfo {
     /// - `scheme`: URI scheme alias to validate and add if not already present.
     pub fn with_scheme(mut self, scheme: &str) -> FsResult<Self> {
         let mut characters = scheme.bytes();
-        let valid = characters
-            .next()
-            .is_some_and(|first| first.is_ascii_alphabetic())
-            && characters
-                .all(|next| next.is_ascii_alphanumeric() || matches!(next, b'+' | b'-' | b'.'));
+        let valid = characters.next().is_some_and(|first| first.is_ascii_alphabetic())
+            && characters.all(|next| next.is_ascii_alphanumeric() || matches!(next, b'+' | b'-' | b'.'));
         if !valid {
             return Err(FsError::new(
                 FsErrorKind::InvalidUri,

@@ -92,21 +92,12 @@ impl<'a> AsyncReadOperation<'a> {
     ///
     /// # Returns
     /// The complete file contents when they fit within `max_bytes`.
-    pub(crate) async fn read_all(
-        &self,
-        path: &Path,
-        options: ReadOptions,
-        max_bytes: usize,
-    ) -> FsResult<Vec<u8>> {
+    pub(crate) async fn read_all(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
         // Reject a limit without a representable overflow sentinel before
         // opening the provider object, matching the synchronous read path.
         ReadAllOptions::new(max_bytes, ReadConsistencyPolicy::BestEffort)
             .sentinel_capacity()
-            .map_err(|error| {
-                self.filesystem
-                    .core()
-                    .enrich(error, Some(path), FsOperation::Read)
-            })?;
+            .map_err(|error| self.filesystem.core().enrich(error, Some(path), FsOperation::Read))?;
         let mut reader = self.filesystem.open_reader(path, options).await?;
         let mut bytes = ReadBuffer::new(max_bytes);
         let maximum = FacadeCore::quantity_from_usize(
@@ -121,18 +112,15 @@ impl<'a> AsyncReadOperation<'a> {
         loop {
             yield_read_budget(&mut reads_since_yield).await;
             let remaining = read_budget.remaining();
-            let read_len = usize::try_from(remaining.saturating_add(1))
-                .map_or(buffer.len(), |value| value.min(buffer.len()));
-            let read = reader
-                .read_async(&mut buffer[..read_len])
-                .await
-                .map_err(|error| {
-                    self.filesystem.core().enrich(
-                        FsError::from_stream_io(error, FsOperation::Read, path),
-                        Some(path),
-                        FsOperation::Read,
-                    )
-                })?;
+            let read_len =
+                usize::try_from(remaining.saturating_add(1)).map_or(buffer.len(), |value| value.min(buffer.len()));
+            let read = reader.read_async(&mut buffer[..read_len]).await.map_err(|error| {
+                self.filesystem.core().enrich(
+                    FsError::from_stream_io(error, FsOperation::Read, path),
+                    Some(path),
+                    FsOperation::Read,
+                )
+            })?;
             if read == 0 {
                 return Ok(bytes.into_vec());
             }
@@ -152,14 +140,8 @@ impl<'a> AsyncReadOperation<'a> {
                 ));
             }
             bytes
-                .try_append(
-                    &buffer[..usize::try_from(read).expect("read count originated as usize")],
-                )
-                .map_err(|error| {
-                    self.filesystem
-                        .core()
-                        .enrich(error, Some(path), FsOperation::Read)
-                })?;
+                .try_append(&buffer[..usize::try_from(read).expect("read count originated as usize")])
+                .map_err(|error| self.filesystem.core().enrich(error, Some(path), FsOperation::Read))?;
             reads_since_yield += 1;
         }
     }
@@ -192,10 +174,7 @@ impl<'a> AsyncReadOperation<'a> {
     ) -> FsResult<PrefixReadOutcome> {
         let original_options = options.clone();
         let plan = PrefixReadPlan::new(self.filesystem.properties(), path, options, max_bytes)?;
-        let mut reader = self
-            .filesystem
-            .open_reader_resolved(path, plan.into_options())
-            .await?;
+        let mut reader = self.filesystem.open_reader_resolved(path, plan.into_options()).await?;
         let info = reader.info().clone();
         if max_bytes == 0 {
             return Ok(PrefixReadOutcome::new(
@@ -213,25 +192,20 @@ impl<'a> AsyncReadOperation<'a> {
         while bytes.len() < max_bytes {
             yield_read_budget(&mut reads_since_yield).await;
             let read_len = FacadeCore::next_prefix_read_len(bytes.len(), max_bytes);
-            let read = reader
-                .read_async(&mut buffer[..read_len])
-                .await
-                .map_err(|error| {
-                    self.filesystem.core().enrich(
-                        FsError::from_stream_io(error, FsOperation::Read, path),
-                        Some(path),
-                        FsOperation::Read,
-                    )
-                })?;
+            let read = reader.read_async(&mut buffer[..read_len]).await.map_err(|error| {
+                self.filesystem.core().enrich(
+                    FsError::from_stream_io(error, FsOperation::Read, path),
+                    Some(path),
+                    FsOperation::Read,
+                )
+            })?;
             if read == 0 {
                 termination = PrefixReadTermination::StreamEnded;
                 break;
             }
-            bytes.try_append(&buffer[..read]).map_err(|error| {
-                self.filesystem
-                    .core()
-                    .enrich(error, Some(path), FsOperation::Read)
-            })?;
+            bytes
+                .try_append(&buffer[..read])
+                .map_err(|error| self.filesystem.core().enrich(error, Some(path), FsOperation::Read))?;
             reads_since_yield += 1;
         }
         Ok(PrefixReadOutcome::new(

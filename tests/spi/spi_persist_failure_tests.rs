@@ -17,11 +17,7 @@ use qubit_fs::temp::PersistFailureState;
 #[test]
 fn test_spi_persist_failure_preserves_typed_state() {
     let failure = SpiPersistFailure::new(
-        FsError::new(
-            FsErrorKind::AlreadyExists,
-            FsOperation::PersistTemp,
-            "target exists",
-        ),
+        FsError::new(FsErrorKind::AlreadyExists, FsOperation::PersistTemp, "target exists"),
         PersistFailureState::NotPublished,
     );
     assert_eq!(FsErrorKind::AlreadyExists, failure.error().kind());

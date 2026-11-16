@@ -235,9 +235,7 @@ impl Path {
         if self.text == "/" || (self.literal && self.text.ends_with('/')) {
             return None;
         }
-        self.text
-            .rsplit('/')
-            .find(|component| !component.is_empty())
+        self.text.rsplit('/').find(|component| !component.is_empty())
     }
 
     /// Returns whether this path is absolute.
@@ -303,8 +301,7 @@ impl Path {
     /// # Parameters
     /// - `suffix`: Validated suffix text to append after a separator.
     fn append(&self, suffix: &str) -> Self {
-        let hierarchical_root =
-            self.semantics == PathSemantics::Hierarchical && !self.literal && self.text == "/";
+        let hierarchical_root = self.semantics == PathSemantics::Hierarchical && !self.literal && self.text == "/";
         let text = if hierarchical_root {
             format!("/{suffix}")
         } else {

@@ -165,12 +165,7 @@ struct ScriptedReader {
 impl Input for ScriptedReader {
     type Item = u8;
 
-    unsafe fn read_unchecked(
-        &mut self,
-        output: &mut [u8],
-        index: usize,
-        count: usize,
-    ) -> IoResult<usize> {
+    unsafe fn read_unchecked(&mut self, output: &mut [u8], index: usize, count: usize) -> IoResult<usize> {
         if matches!(self.scenario, ReadScenario::FailImmediately) && self.position == 0 {
             return Err(IoError::other("injected read failure"));
         }
@@ -182,8 +177,7 @@ impl Input for ScriptedReader {
         }
         let bytes = b"abcd";
         let accepted = count.min(2).min(bytes.len() - self.position);
-        output[index..index + accepted]
-            .copy_from_slice(&bytes[self.position..self.position + accepted]);
+        output[index..index + accepted].copy_from_slice(&bytes[self.position..self.position + accepted]);
         self.position += accepted;
         Ok(accepted)
     }
@@ -197,21 +191,12 @@ struct SyncWriter {
 impl Output for SyncWriter {
     type Item = u8;
 
-    unsafe fn write_unchecked(
-        &mut self,
-        input: &[u8],
-        index: usize,
-        count: usize,
-    ) -> IoResult<usize> {
+    unsafe fn write_unchecked(&mut self, input: &[u8], index: usize, count: usize) -> IoResult<usize> {
         let accepted = count.min(2);
         let mut state = self.state.lock().expect("target lock");
         match self.mode {
-            WriterMode::Direct => state
-                .bytes
-                .extend_from_slice(&input[index..index + accepted]),
-            WriterMode::Staging => state
-                .staging
-                .extend_from_slice(&input[index..index + accepted]),
+            WriterMode::Direct => state.bytes.extend_from_slice(&input[index..index + accepted]),
+            WriterMode::Staging => state.staging.extend_from_slice(&input[index..index + accepted]),
         }
         Ok(accepted)
     }
@@ -274,17 +259,9 @@ fn assert_public_failure(
         )
     };
     assert!(created, "opening writer must be externally observable");
-    assert_eq!(
-        expected_visible_bytes,
-        visible_bytes.as_slice(),
-        "visible target bytes"
-    );
+    assert_eq!(expected_visible_bytes, visible_bytes.as_slice(), "visible target bytes");
     if matches!(mode, WriterMode::Staging) {
-        assert_eq!(
-            b"ab",
-            staging_bytes.as_slice(),
-            "staging retains the accepted prefix"
-        );
+        assert_eq!(b"ab", staging_bytes.as_slice(), "staging retains the accepted prefix");
     }
     assert_eq!(0, commits, "a failure must not commit implicitly");
     assert_eq!(CopyFailureState::Indeterminate, failure.state());
@@ -399,10 +376,7 @@ mod asynchronous {
     use super::path;
     use super::properties;
 
-    fn async_filesystem(
-        scenario: ReadScenario,
-        mode: WriterMode,
-    ) -> (AsyncFileSystem, Arc<Mutex<VisibleTarget>>) {
+    fn async_filesystem(scenario: ReadScenario, mode: WriterMode) -> (AsyncFileSystem, Arc<Mutex<VisibleTarget>>) {
         let state = Arc::new(Mutex::new(VisibleTarget::default()));
         let filesystem = AsyncFileSystem::from_spi(CopyFixture {
             state: Arc::clone(&state),
@@ -427,37 +401,21 @@ mod asynchronous {
             })
         }
 
-        fn open_reader<'a>(
-            &'a self,
-            request: OpenReaderRequest<'a>,
-        ) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
+        fn open_reader<'a>(&'a self, request: OpenReaderRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
             let reader = AsyncScriptedReader {
                 scenario: self.scenario,
                 position: 0,
             };
-            Box::pin(async move {
-                Ok(OpenedAsyncReader::new(
-                    info(request.path()),
-                    Box::new(reader),
-                ))
-            })
+            Box::pin(async move { Ok(OpenedAsyncReader::new(info(request.path()), Box::new(reader))) })
         }
 
-        fn open_writer<'a>(
-            &'a self,
-            request: OpenWriterRequest<'a>,
-        ) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
+        fn open_writer<'a>(&'a self, request: OpenWriterRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
             self.state.lock().expect("target lock").created = true;
             let writer = AsyncFixtureWriter {
                 state: Arc::clone(&self.state),
                 mode: self.mode,
             };
-            Box::pin(async move {
-                Ok(OpenedAsyncWriter::new(
-                    info(request.path()),
-                    Box::new(writer),
-                ))
-            })
+            Box::pin(async move { Ok(OpenedAsyncWriter::new(info(request.path()), Box::new(writer))) })
         }
     }
 
@@ -485,8 +443,7 @@ mod asynchronous {
                 return Poll::Ready(Ok(0));
             }
             let accepted = count.min(2).min(4 - this.position);
-            output[index..index + accepted]
-                .copy_from_slice(&b"abcd"[this.position..this.position + accepted]);
+            output[index..index + accepted].copy_from_slice(&b"abcd"[this.position..this.position + accepted]);
             this.position += accepted;
             Poll::Ready(Ok(accepted))
         }
@@ -510,12 +467,8 @@ mod asynchronous {
             let accepted = count.min(2);
             let mut state = this.state.lock().expect("target lock");
             match this.mode {
-                WriterMode::Direct => state
-                    .bytes
-                    .extend_from_slice(&input[index..index + accepted]),
-                WriterMode::Staging => state
-                    .staging
-                    .extend_from_slice(&input[index..index + accepted]),
+                WriterMode::Direct => state.bytes.extend_from_slice(&input[index..index + accepted]),
+                WriterMode::Staging => state.staging.extend_from_slice(&input[index..index + accepted]),
             }
             Poll::Ready(Ok(accepted))
         }
@@ -525,9 +478,7 @@ mod asynchronous {
     }
 
     impl AsyncFileWriteSession for AsyncFixtureWriter {
-        fn commit_async<'a>(
-            self: Pin<&'a mut Self>,
-        ) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
+        fn commit_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
             let this = self.get_mut();
             let mut state = this.state.lock().expect("target lock");
             state.commits += 1;
@@ -617,8 +568,7 @@ mod asynchronous {
         match operation.take_recovery().expect("recovery writer retained") {
             AsyncWriterRecovery::Opened(mut writer) => {
                 assert_eq!(WriterState::Open, writer.state());
-                let abort_outcome =
-                    ready(writer.abort_async()).expect("explicit async abort should complete");
+                let abort_outcome = ready(writer.abort_async()).expect("explicit async abort should complete");
                 assert_eq!(
                     match mode {
                         WriterMode::Direct => WriteAbortOutcome::Indeterminate,

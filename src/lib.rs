@@ -82,20 +82,36 @@ pub mod spi;
 pub mod temp;
 mod uri;
 pub mod write;
-pub use execution::{
-    AsyncFsMutationOperation, AsyncFsOperation, FsEffectCapacityError, FsEffectFact,
-    FsEffectObservationError, FsEffectObserver, FsEffectReservation, FsEffectSlotPool,
-    FsEffectSnapshot, FsEffectWait, FsExecutionBinding, FsMutationOperation, FsOperation,
-    FsOperationFailure, FsOperationFailureKind, FsOwnedCopyRequest, FsOwnedReadRequest,
-    FsOwnedRenameRequest, FsOwnedTreePublishRequest, FsOwnedWriteRequest, FsPrepareFailure,
-    FsPrepareFailureKind, FsSubmitFailure,
-};
-pub use read::{ConsistentReadOutcome, ReadAllOptions, ReadConsistencyPolicy};
-
 #[cfg(feature = "async")]
 pub use async_file_system::AsyncFileSystem;
 pub use error::FsEffectState;
 pub use error::FsError;
 pub use error::FsResult;
+pub use execution::AsyncFsMutationOperation;
+pub use execution::AsyncFsOperation;
+pub use execution::FsEffectCapacityError;
+pub use execution::FsEffectFact;
+pub use execution::FsEffectObservationError;
+pub use execution::FsEffectObserver;
+pub use execution::FsEffectReservation;
+pub use execution::FsEffectSlotPool;
+pub use execution::FsEffectSnapshot;
+pub use execution::FsEffectWait;
+pub use execution::FsExecutionBinding;
+pub use execution::FsMutationOperation;
+pub use execution::FsOperation;
+pub use execution::FsOperationFailure;
+pub use execution::FsOperationFailureKind;
+pub use execution::FsOwnedCopyRequest;
+pub use execution::FsOwnedReadRequest;
+pub use execution::FsOwnedRenameRequest;
+pub use execution::FsOwnedTreePublishRequest;
+pub use execution::FsOwnedWriteRequest;
+pub use execution::FsPrepareFailure;
+pub use execution::FsPrepareFailureKind;
+pub use execution::FsSubmitFailure;
 pub use file_system::FileSystem;
 pub use path::Path;
+pub use read::ConsistentReadOutcome;
+pub use read::ReadAllOptions;
+pub use read::ReadConsistencyPolicy;

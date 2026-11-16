@@ -107,9 +107,7 @@ impl TempResourceSpi for SyncTempSession {
     }
 
     fn cleanup(&mut self) -> FsResult<()> {
-        let attempt = self
-            .cleanup_calls
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let attempt = self.cleanup_calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         if self.cleanup_behavior == CleanupBehavior::FailOnce && attempt == 0 {
             Err(FsError::new(
                 FsErrorKind::Io,
@@ -128,12 +126,10 @@ impl FileSystemSpi for TempParentSpi {
     }
 
     fn stat(&self, request: StatRequest<'_>) -> FsResult<StatResponse> {
-        Err(FsError::new(
-            FsErrorKind::UnsupportedOperation,
-            FsOperation::Stat,
-            "stat is unused",
+        Err(
+            FsError::new(FsErrorKind::UnsupportedOperation, FsOperation::Stat, "stat is unused")
+                .with_path(request.path().clone()),
         )
-        .with_path(request.path().clone()))
     }
 
     fn create_temp_file(&self, _: CreateTempFileRequest) -> FsResult<OpenedTempFile> {
@@ -146,10 +142,7 @@ impl FileSystemSpi for TempParentSpi {
         ))
     }
 
-    fn create_temp_directory(
-        &self,
-        _: CreateTempDirectoryRequest,
-    ) -> FsResult<OpenedTempDirectory> {
+    fn create_temp_directory(&self, _: CreateTempDirectoryRequest) -> FsResult<OpenedTempDirectory> {
         Ok(OpenedTempDirectory::new(
             self.info(FileKind::Directory)?,
             Box::new(SyncTempSession {
@@ -187,14 +180,8 @@ fn assert_sync_rejected(kind: FileKind) {
         _ => unreachable!("test requests only file and directory"),
     };
     assert_eq!(OpenFailureStage::OutcomeValidation, failure.stage());
-    assert_eq!(
-        FsErrorKind::ProviderContractViolation,
-        failure.error().kind()
-    );
-    assert!(
-        failure.recovery().is_some(),
-        "the provider session remains recoverable"
-    );
+    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+    assert!(failure.recovery().is_some(), "the provider session remains recoverable");
     assert_eq!(Some(&path("/reports")), failure.error().path());
 }
 
@@ -217,26 +204,16 @@ fn test_sync_rejected_temp_cleanup_failure_retains_session_and_rejects_repeat_af
     let mut failure = filesystem
         .create_temp_file(TempOptions::new().with_parent(Some(path("/reports"))))
         .expect_err("outside parent must be rejected");
-    let recovery = failure
-        .recovery_mut()
-        .expect("recovery session must be retained");
+    let recovery = failure.recovery_mut().expect("recovery session must be retained");
     assert_eq!(RecoveryCleanupState::Pending, recovery.cleanup_state());
     assert_eq!(
         FsErrorKind::Io,
-        recovery
-            .cleanup()
-            .expect_err("first cleanup attempt fails")
-            .kind()
+        recovery.cleanup().expect_err("first cleanup attempt fails").kind()
     );
-    assert_eq!(
-        RecoveryCleanupState::Indeterminate,
-        recovery.cleanup_state()
-    );
+    assert_eq!(RecoveryCleanupState::Indeterminate, recovery.cleanup_state());
     assert_eq!(1, cleanup_calls.load(std::sync::atomic::Ordering::SeqCst));
 
-    recovery
-        .cleanup()
-        .expect("retained session can be cleaned on retry");
+    recovery.cleanup().expect("retained session can be cleaned on retry");
     assert_eq!(RecoveryCleanupState::Completed, recovery.cleanup_state());
     assert_eq!(
         FsErrorKind::InvalidState,
@@ -263,57 +240,17 @@ fn test_sync_temp_parent_location_semantics_and_recovery() {
             "/reports/nested/temp",
             true,
         ),
-        (
-            PathSemantics::Hierarchical,
-            Some("reports"),
-            "/other/temp",
-            false,
-        ),
-        (
-            PathSemantics::Hierarchical,
-            Some("/reports"),
-            "/reports2/temp",
-            false,
-        ),
-        (
-            PathSemantics::Hierarchical,
-            Some("/reports"),
-            "/reports",
-            false,
-        ),
+        (PathSemantics::Hierarchical, Some("reports"), "/other/temp", false),
+        (PathSemantics::Hierarchical, Some("/reports"), "/reports2/temp", false),
+        (PathSemantics::Hierarchical, Some("/reports"), "/reports", false),
         (PathSemantics::Hierarchical, Some("/"), "/tmp/temp", true),
         (PathSemantics::Hierarchical, Some("/"), "/", false),
-        (
-            PathSemantics::Hierarchical,
-            None,
-            "/unconstrained/temp",
-            true,
-        ),
-        (
-            PathSemantics::ObjectKey,
-            Some("/reports"),
-            "/reports2/key",
-            true,
-        ),
+        (PathSemantics::Hierarchical, None, "/unconstrained/temp", true),
+        (PathSemantics::ObjectKey, Some("/reports"), "/reports2/key", true),
         (PathSemantics::ObjectKey, Some("/reports"), "/reports", true),
-        (
-            PathSemantics::ObjectKey,
-            Some("/reports/"),
-            "/reports/%2F//key",
-            true,
-        ),
-        (
-            PathSemantics::ObjectKey,
-            Some("/reports"),
-            "/other/key",
-            false,
-        ),
-        (
-            PathSemantics::ProviderSpecific,
-            Some("/reports"),
-            "/other/key",
-            true,
-        ),
+        (PathSemantics::ObjectKey, Some("/reports/"), "/reports/%2F//key", true),
+        (PathSemantics::ObjectKey, Some("/reports"), "/other/key", false),
+        (PathSemantics::ProviderSpecific, Some("/reports"), "/other/key", true),
     ] {
         let cleanup_calls = Arc::new(AtomicUsize::new(0));
         let filesystem = FileSystem::from_spi(TempParentSpi {
@@ -332,9 +269,7 @@ fn test_sync_temp_parent_location_semantics_and_recovery() {
             "semantics={semantics:?}, parent={parent:?}, returned={returned_path}"
         );
         match result {
-            Ok(mut file) => file
-                .cleanup()
-                .expect("valid temporary resource should clean up"),
+            Ok(mut file) => file.cleanup().expect("valid temporary resource should clean up"),
             Err(mut failure) => {
                 assert_eq!(OpenFailureStage::OutcomeValidation, failure.stage());
                 assert_eq!(
@@ -415,9 +350,7 @@ mod asynchronous {
             })
         }
 
-        fn keep<'a>(
-            self: Pin<&'a mut Self>,
-        ) -> SpiFuture<'a, Result<PersistOutcome, SpiPersistFailure>> {
+        fn keep<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<PersistOutcome, SpiPersistFailure>> {
             Box::pin(async { unreachable!("lifecycle methods are outside the opening contract") })
         }
 
@@ -436,19 +369,14 @@ mod asynchronous {
 
         fn stat<'a>(&'a self, request: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
             Box::pin(async move {
-                Err(FsError::new(
-                    FsErrorKind::UnsupportedOperation,
-                    FsOperation::Stat,
-                    "stat is unused",
+                Err(
+                    FsError::new(FsErrorKind::UnsupportedOperation, FsOperation::Stat, "stat is unused")
+                        .with_path(request.path().clone()),
                 )
-                .with_path(request.path().clone()))
             })
         }
 
-        fn create_temp_file<'a>(
-            &'a self,
-            _: CreateTempFileRequest,
-        ) -> SpiFuture<'a, FsResult<OpenedAsyncTempFile>> {
+        fn create_temp_file<'a>(&'a self, _: CreateTempFileRequest) -> SpiFuture<'a, FsResult<OpenedAsyncTempFile>> {
             Box::pin(async move {
                 Ok(OpenedAsyncTempFile::new(
                     self.info(FileKind::File)?,
@@ -505,14 +433,8 @@ mod asynchronous {
             _ => unreachable!("test requests only file and directory"),
         };
         assert_eq!(OpenFailureStage::OutcomeValidation, failure.stage());
-        assert_eq!(
-            FsErrorKind::ProviderContractViolation,
-            failure.error().kind()
-        );
-        assert!(
-            failure.recovery().is_some(),
-            "the provider session remains recoverable"
-        );
+        assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+        assert!(failure.recovery().is_some(), "the provider session remains recoverable");
         assert_eq!(Some(&path("/reports")), failure.error().path());
     }
 
@@ -532,14 +454,10 @@ mod asynchronous {
             cleanup_behavior: super::CleanupBehavior::FailOnce,
         })
         .expect("async facade should construct");
-        let mut failure = ready(
-            filesystem.create_temp_file(TempOptions::new().with_parent(Some(path("/reports")))),
-        )
-        .err()
-        .expect("outside parent must be rejected");
-        let recovery = failure
-            .recovery_mut()
-            .expect("recovery session must be retained");
+        let mut failure = ready(filesystem.create_temp_file(TempOptions::new().with_parent(Some(path("/reports")))))
+            .err()
+            .expect("outside parent must be rejected");
+        let recovery = failure.recovery_mut().expect("recovery session must be retained");
         assert_eq!(RecoveryCleanupState::Pending, recovery.cleanup_state());
         assert_eq!(
             FsErrorKind::Io,
@@ -547,10 +465,7 @@ mod asynchronous {
                 .expect_err("first cleanup attempt fails")
                 .kind()
         );
-        assert_eq!(
-            RecoveryCleanupState::Indeterminate,
-            recovery.cleanup_state()
-        );
+        assert_eq!(RecoveryCleanupState::Indeterminate, recovery.cleanup_state());
         assert_eq!(1, cleanup_calls.load(std::sync::atomic::Ordering::SeqCst));
 
         ready(recovery.cleanup_async()).expect("retained session can be cleaned on retry");
@@ -574,14 +489,10 @@ mod asynchronous {
             cleanup_behavior: super::CleanupBehavior::Succeed,
         })
         .expect("async facade should construct");
-        let mut failure = ready(
-            filesystem.create_temp_file(TempOptions::new().with_parent(Some(path("/reports")))),
-        )
-        .err()
-        .expect("outside parent must be rejected");
-        let recovery = failure
-            .recovery_mut()
-            .expect("recovery session must be retained");
+        let mut failure = ready(filesystem.create_temp_file(TempOptions::new().with_parent(Some(path("/reports")))))
+            .err()
+            .expect("outside parent must be rejected");
+        let recovery = failure.recovery_mut().expect("recovery session must be retained");
         assert_eq!(RecoveryCleanupState::Pending, recovery.cleanup_state());
         let cleanup = recovery.cleanup_async();
         drop(cleanup);
@@ -602,14 +513,10 @@ mod asynchronous {
             cleanup_behavior: super::CleanupBehavior::PendingOnce,
         })
         .expect("async facade should construct");
-        let mut failure = ready(
-            filesystem.create_temp_file(TempOptions::new().with_parent(Some(path("/reports")))),
-        )
-        .err()
-        .expect("outside parent must be rejected");
-        let recovery = failure
-            .recovery_mut()
-            .expect("recovery session must be retained");
+        let mut failure = ready(filesystem.create_temp_file(TempOptions::new().with_parent(Some(path("/reports")))))
+            .err()
+            .expect("outside parent must be rejected");
+        let recovery = failure.recovery_mut().expect("recovery session must be retained");
         let waker = Waker::noop();
         let mut context = Context::from_waker(waker);
         let mut cleanup = recovery.cleanup_async();
@@ -617,10 +524,7 @@ mod asynchronous {
         assert_eq!(1, cleanup_calls.load(std::sync::atomic::Ordering::SeqCst));
         drop(cleanup);
 
-        assert_eq!(
-            RecoveryCleanupState::Indeterminate,
-            recovery.cleanup_state()
-        );
+        assert_eq!(RecoveryCleanupState::Indeterminate, recovery.cleanup_state());
         ready(recovery.cleanup_async()).expect("cancelled session can be cleaned on retry");
         assert_eq!(RecoveryCleanupState::Completed, recovery.cleanup_state());
         assert_eq!(2, cleanup_calls.load(std::sync::atomic::Ordering::SeqCst));
@@ -648,57 +552,17 @@ mod asynchronous {
                 "/reports/nested/temp",
                 true,
             ),
-            (
-                PathSemantics::Hierarchical,
-                Some("reports"),
-                "/other/temp",
-                false,
-            ),
-            (
-                PathSemantics::Hierarchical,
-                Some("/reports"),
-                "/reports2/temp",
-                false,
-            ),
-            (
-                PathSemantics::Hierarchical,
-                Some("/reports"),
-                "/reports",
-                false,
-            ),
+            (PathSemantics::Hierarchical, Some("reports"), "/other/temp", false),
+            (PathSemantics::Hierarchical, Some("/reports"), "/reports2/temp", false),
+            (PathSemantics::Hierarchical, Some("/reports"), "/reports", false),
             (PathSemantics::Hierarchical, Some("/"), "/tmp/temp", true),
             (PathSemantics::Hierarchical, Some("/"), "/", false),
-            (
-                PathSemantics::Hierarchical,
-                None,
-                "/unconstrained/temp",
-                true,
-            ),
-            (
-                PathSemantics::ObjectKey,
-                Some("/reports"),
-                "/reports2/key",
-                true,
-            ),
+            (PathSemantics::Hierarchical, None, "/unconstrained/temp", true),
+            (PathSemantics::ObjectKey, Some("/reports"), "/reports2/key", true),
             (PathSemantics::ObjectKey, Some("/reports"), "/reports", true),
-            (
-                PathSemantics::ObjectKey,
-                Some("/reports/"),
-                "/reports/%2F//key",
-                true,
-            ),
-            (
-                PathSemantics::ObjectKey,
-                Some("/reports"),
-                "/other/key",
-                false,
-            ),
-            (
-                PathSemantics::ProviderSpecific,
-                Some("/reports"),
-                "/other/key",
-                true,
-            ),
+            (PathSemantics::ObjectKey, Some("/reports/"), "/reports/%2F//key", true),
+            (PathSemantics::ObjectKey, Some("/reports"), "/other/key", false),
+            (PathSemantics::ProviderSpecific, Some("/reports"), "/other/key", true),
         ] {
             let cleanup_calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
             let filesystem = AsyncFileSystem::from_spi(TempParentSpi {
@@ -708,8 +572,7 @@ mod asynchronous {
                 cleanup_behavior: super::CleanupBehavior::Succeed,
             })
             .expect("async facade should construct");
-            let parent =
-                parent.map(|value| Path::parse_with_semantics(value, semantics).expect("parent"));
+            let parent = parent.map(|value| Path::parse_with_semantics(value, semantics).expect("parent"));
             let options = TempOptions::new().with_parent(parent.clone());
             let result = ready(filesystem.create_temp_file(options));
             assert_eq!(
@@ -718,9 +581,7 @@ mod asynchronous {
                 "semantics={semantics:?}, parent={parent:?}, returned={returned_path}"
             );
             match result {
-                Ok(mut file) => {
-                    ready(file.cleanup()).expect("valid resource cleanup should succeed")
-                }
+                Ok(mut file) => ready(file.cleanup()).expect("valid resource cleanup should succeed"),
                 Err(mut failure) => {
                     assert_eq!(OpenFailureStage::OutcomeValidation, failure.stage());
                     assert_eq!(

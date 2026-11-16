@@ -19,18 +19,11 @@ use crate::path::PathSemantics;
 /// - `scope`: Requested directory or namespace listing scope.
 /// - `entry`: Provider-returned directory entry being validated or selected.
 /// - `semantics`: Path interpretation rules declared by the provider.
-pub(crate) fn relative_path<'a>(
-    scope: &ListScope,
-    entry: &'a Path,
-    semantics: PathSemantics,
-) -> Option<&'a str> {
+pub(crate) fn relative_path<'a>(scope: &ListScope, entry: &'a Path, semantics: PathSemantics) -> Option<&'a str> {
     let Some(root) = scope.path() else {
         return Some(entry.as_str());
     };
-    if matches!(
-        semantics,
-        PathSemantics::ObjectKey | PathSemantics::ProviderSpecific
-    ) {
+    if matches!(semantics, PathSemantics::ObjectKey | PathSemantics::ProviderSpecific) {
         return entry.as_str().strip_prefix(root.as_str());
     }
     if root == entry {
@@ -69,26 +62,19 @@ pub(crate) fn select(
     };
     match (semantics, options.filter()) {
         (PathSemantics::Hierarchical, Some(ListFilter::Subtree(prefix)))
-            if !(relative == prefix
-                || relative
-                    .strip_prefix(prefix)
-                    .is_some_and(|rest| rest.starts_with('/'))) =>
+            if !(relative == prefix || relative.strip_prefix(prefix).is_some_and(|rest| rest.starts_with('/'))) =>
         {
             return Err("provider returned directory entry outside requested prefix");
         }
         (PathSemantics::Hierarchical, Some(ListFilter::LiteralPrefix(_))) => {
             return Err("literal prefix is not valid for hierarchical listing");
         }
-        (
-            PathSemantics::ObjectKey | PathSemantics::ProviderSpecific,
-            Some(ListFilter::LiteralPrefix(prefix)),
-        ) if !relative.starts_with(prefix) => {
+        (PathSemantics::ObjectKey | PathSemantics::ProviderSpecific, Some(ListFilter::LiteralPrefix(prefix)))
+            if !relative.starts_with(prefix) =>
+        {
             return Err("provider returned directory entry outside requested prefix");
         }
-        (
-            PathSemantics::ObjectKey | PathSemantics::ProviderSpecific,
-            Some(ListFilter::Subtree(_)),
-        ) => {
+        (PathSemantics::ObjectKey | PathSemantics::ProviderSpecific, Some(ListFilter::Subtree(_))) => {
             return Err("subtree filter is not valid for flat listing");
         }
         _ => {}

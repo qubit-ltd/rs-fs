@@ -1,12 +1,19 @@
-use crate::{FsOperationFailure, execution::FsOwnedReadRequest, spi::PreparedFsRead};
-use qubit_operation::{
-    ExecutionFailure, ExternalBindError, OperationControl, OperationId, OperationOutcome,
-    OperationScope, PreparedExternalOperation,
-};
-use std::{
-    sync::{Arc, Mutex},
-    task::{Context, Poll},
-};
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::task::Context;
+use std::task::Poll;
+
+use qubit_operation::ExecutionFailure;
+use qubit_operation::ExternalBindError;
+use qubit_operation::OperationControl;
+use qubit_operation::OperationId;
+use qubit_operation::OperationOutcome;
+use qubit_operation::OperationScope;
+use qubit_operation::PreparedExternalOperation;
+
+use crate::FsOperationFailure;
+use crate::execution::FsOwnedReadRequest;
+use crate::spi::PreparedFsRead;
 /// Sized wrapper adapting an object-safe prepared read to the operation API.
 pub struct PreparedFsReadAdapter {
     prepared: Arc<dyn PreparedFsRead>,
@@ -34,9 +41,7 @@ impl PreparedFsReadAdapter {
             .lock()
             .map(|state| state.bound.is_none())
             .unwrap_or(false);
-        is_unclaimed
-            .then(|| self.prepared.take_unclaimed_request())
-            .flatten()
+        is_unclaimed.then(|| self.prepared.take_unclaimed_request()).flatten()
     }
 }
 impl OperationControl for PreparedFsReadAdapter {
@@ -58,10 +63,7 @@ impl OperationControl for PreparedFsReadAdapter {
 }
 impl PreparedExternalOperation<Vec<u8>, FsOperationFailure> for PreparedFsReadAdapter {
     fn bind(&self, id: OperationId) -> Result<(), ExternalBindError> {
-        let mut state = self
-            .lifecycle
-            .lock()
-            .map_err(|_| ExternalBindError::AlreadyBound)?;
+        let mut state = self.lifecycle.lock().map_err(|_| ExternalBindError::AlreadyBound)?;
         if state.bound.is_some() || state.abandoned || state.activated {
             return Err(ExternalBindError::AlreadyBound);
         }
@@ -71,10 +73,7 @@ impl PreparedExternalOperation<Vec<u8>, FsOperationFailure> for PreparedFsReadAd
     }
     fn activate(self: Arc<Self>, scope: OperationScope) -> Result<(), ExecutionFailure> {
         {
-            let mut state = self
-                .lifecycle
-                .lock()
-                .expect("prepared read lifecycle mutex poisoned");
+            let mut state = self.lifecycle.lock().expect("prepared read lifecycle mutex poisoned");
             if state.activated || state.abandoned {
                 if let Some(operation_id) = state.bound {
                     return Err(ExecutionFailure {
@@ -107,10 +106,7 @@ impl PreparedExternalOperation<Vec<u8>, FsOperationFailure> for PreparedFsReadAd
             Arc::clone(&self.prepared).abandon();
         }
     }
-    fn poll_take_outcome(
-        &self,
-        c: &mut Context<'_>,
-    ) -> Poll<OperationOutcome<Vec<u8>, FsOperationFailure>> {
+    fn poll_take_outcome(&self, c: &mut Context<'_>) -> Poll<OperationOutcome<Vec<u8>, FsOperationFailure>> {
         self.prepared.poll_take_outcome(c)
     }
 }
@@ -149,19 +145,13 @@ macro_rules! prepared_adapter {
             fn snapshot(&self) -> qubit_operation::ChildSnapshot {
                 self.prepared.snapshot()
             }
-            fn poll_outcome(
-                &self,
-                cx: &mut Context<'_>,
-            ) -> Poll<qubit_operation::ChildOutcomeSummary> {
+            fn poll_outcome(&self, cx: &mut Context<'_>) -> Poll<qubit_operation::ChildOutcomeSummary> {
                 self.prepared.poll_outcome(cx)
             }
             fn poll_release(&self, cx: &mut Context<'_>) -> Poll<qubit_operation::ChildRelease> {
                 self.prepared.poll_release(cx)
             }
-            fn poll_settlement(
-                &self,
-                cx: &mut Context<'_>,
-            ) -> Poll<Arc<qubit_operation::SettlementReport>> {
+            fn poll_settlement(&self, cx: &mut Context<'_>) -> Poll<Arc<qubit_operation::SettlementReport>> {
                 self.prepared.poll_settlement(cx)
             }
         }
@@ -215,10 +205,7 @@ macro_rules! prepared_adapter {
                     Arc::clone(&self.prepared).abandon();
                 }
             }
-            fn poll_take_outcome(
-                &self,
-                cx: &mut Context<'_>,
-            ) -> Poll<OperationOutcome<$output, FsOperationFailure>> {
+            fn poll_take_outcome(&self, cx: &mut Context<'_>) -> Poll<OperationOutcome<$output, FsOperationFailure>> {
                 self.prepared.poll_take_outcome(cx)
             }
         }

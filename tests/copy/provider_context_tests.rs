@@ -252,10 +252,7 @@ fn check(stage: Stage, provider: Option<&'static str>) {
         }
         source = cause.source();
     }
-    assert!(
-        found_marker,
-        "source marker must remain available in the cause chain"
-    );
+    assert!(found_marker, "source marker must remain available in the cause chain");
     let expected_bytes = if matches!(stage, Stage::Flush) { 3 } else { 0 };
     let expected_state = CopyFailureState::Indeterminate;
     assert_eq!(expected_state, failure.state(), "stage={stage:?}");
@@ -264,10 +261,7 @@ fn check(stage: Stage, provider: Option<&'static str>) {
     assert_eq!(expected_bytes as usize, bytes.lock().unwrap().len());
     let calls = calls.lock().unwrap();
     assert!(!calls.contains(&"try_copy"));
-    assert_eq!(
-        1,
-        calls.iter().filter(|call| **call == "open_writer").count()
-    );
+    assert_eq!(1, calls.iter().filter(|call| **call == "open_writer").count());
     assert_eq!(0, calls.iter().filter(|call| **call == "commit").count());
 }
 
@@ -344,10 +338,7 @@ mod asynchronous {
     }
 
     fn async_info(path: &Path) -> OpenedFileInfo {
-        OpenedFileInfo::new(
-            FileSystemId::new("async-provider-context").unwrap(),
-            path.clone(),
-        )
+        OpenedFileInfo::new(FileSystemId::new("async-provider-context").unwrap(), path.clone())
     }
 
     impl AsyncFileSystemSpi for AsyncSpi {
@@ -382,28 +373,17 @@ mod asynchronous {
             })
         }
 
-        fn open_reader<'a>(
-            &'a self,
-            request: OpenReaderRequest<'a>,
-        ) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
+        fn open_reader<'a>(&'a self, request: OpenReaderRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
             self.calls.lock().unwrap().push("open_reader");
             let reader = AsyncReader {
                 fail: matches!(self.stage, Stage::Read),
                 provider: self.provider,
                 position: 0,
             };
-            Box::pin(async move {
-                Ok(OpenedAsyncReader::new(
-                    async_info(request.path()),
-                    Box::new(reader),
-                ))
-            })
+            Box::pin(async move { Ok(OpenedAsyncReader::new(async_info(request.path()), Box::new(reader))) })
         }
 
-        fn open_writer<'a>(
-            &'a self,
-            request: OpenWriterRequest<'a>,
-        ) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
+        fn open_writer<'a>(&'a self, request: OpenWriterRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
             self.calls.lock().unwrap().push("open_writer");
             let writer = AsyncWriter {
                 stage: self.stage,
@@ -411,12 +391,7 @@ mod asynchronous {
                 bytes: Arc::clone(&self.bytes),
                 calls: Arc::clone(&self.calls),
             };
-            Box::pin(async move {
-                Ok(OpenedAsyncWriter::new(
-                    async_info(request.path()),
-                    Box::new(writer),
-                ))
-            })
+            Box::pin(async move { Ok(OpenedAsyncWriter::new(async_info(request.path()), Box::new(writer))) })
         }
     }
 
@@ -484,9 +459,7 @@ mod asynchronous {
     }
 
     impl AsyncFileWriteSession for AsyncWriter {
-        fn commit_async<'a>(
-            mut self: Pin<&'a mut Self>,
-        ) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
+        fn commit_async<'a>(mut self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
             self.as_mut().get_mut().calls.lock().unwrap().push("commit");
             Box::pin(async {
                 Ok(WriteOutcome::new(
@@ -556,10 +529,7 @@ mod asynchronous {
         assert_eq!(expected_bytes as usize, bytes.lock().unwrap().len());
         let calls = calls.lock().unwrap();
         assert!(!calls.contains(&"try_copy"));
-        assert_eq!(
-            1,
-            calls.iter().filter(|call| **call == "open_writer").count()
-        );
+        assert_eq!(1, calls.iter().filter(|call| **call == "open_writer").count());
         assert_eq!(0, calls.iter().filter(|call| **call == "commit").count());
     }
 

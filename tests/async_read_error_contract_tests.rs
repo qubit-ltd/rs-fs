@@ -113,24 +113,14 @@ impl AsyncInput for ScriptedInput {
             Step::Error(kind) => Poll::Ready(Err(io::Error::new(kind, "injected"))),
             Step::TypedInterrupted => Poll::Ready(Err(io::Error::new(
                 io::ErrorKind::Interrupted,
-                FsError::with_source(
-                    FsErrorKind::PermissionDenied,
-                    FsOperation::Read,
-                    "typed",
-                    Marker,
-                )
-                .with_provider("script-provider")
-                .with_effect_state(FsEffectState::Applied),
+                FsError::with_source(FsErrorKind::PermissionDenied, FsOperation::Read, "typed", Marker)
+                    .with_provider("script-provider")
+                    .with_effect_state(FsEffectState::Applied),
             ))),
             Step::Permission => Poll::Ready(Err(io::Error::other(
-                FsError::with_source(
-                    FsErrorKind::PermissionDenied,
-                    FsOperation::Read,
-                    "typed",
-                    Marker,
-                )
-                .with_provider("script-provider")
-                .with_effect_state(FsEffectState::Applied),
+                FsError::with_source(FsErrorKind::PermissionDenied, FsOperation::Read, "typed", Marker)
+                    .with_provider("script-provider")
+                    .with_effect_state(FsEffectState::Applied),
             ))),
             Step::PendingThenData if !this.sent => {
                 this.sent = true;
@@ -179,15 +169,9 @@ impl AsyncFileSystemSpi for ScriptSpi {
         let p = request.path().clone();
         Box::pin(async move { Ok(StatResponse::new(p, FileMetadata::new(FileKind::File))) })
     }
-    fn open_reader<'a>(
-        &'a self,
-        request: OpenReaderRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
-        let info = OpenedFileInfo::new(
-            FileSystemId::new("async-contract").unwrap(),
-            request.path().clone(),
-        )
-        .with_metadata(FileMetadata::new(FileKind::File));
+    fn open_reader<'a>(&'a self, request: OpenReaderRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
+        let info = OpenedFileInfo::new(FileSystemId::new("async-contract").unwrap(), request.path().clone())
+            .with_metadata(FileMetadata::new(FileKind::File));
         let input = ScriptedInput {
             step: self.step.clone(),
             polls: Arc::clone(&self.polls),

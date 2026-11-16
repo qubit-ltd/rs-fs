@@ -80,8 +80,8 @@ fn test_path_from_components_rejects_empty_relative_path() {
 /// Verifies encoded separators remain one validated component.
 #[test]
 fn test_path_from_components_preserves_encoded_separator_component() {
-    let path = Path::from_components(true, ["bucket", "%2F"])
-        .expect("encoded separator text should be a valid component");
+    let path =
+        Path::from_components(true, ["bucket", "%2F"]).expect("encoded separator text should be a valid component");
     assert_eq!("/bucket/%2F", path.as_str());
     assert_eq!(vec!["bucket", "%2F"], path.components().collect::<Vec<_>>());
 }
@@ -101,35 +101,27 @@ fn test_path_from_components_rejects_invalid_components() {
 #[test]
 fn test_path_components_preserve_literal_leading_separator_boundary() {
     let path = Path::parse_literal("/bucket/key").expect("literal path should parse");
-    assert_eq!(
-        path.components().collect::<Vec<_>>(),
-        vec!["", "bucket", "key"]
-    );
+    assert_eq!(path.components().collect::<Vec<_>>(), vec!["", "bucket", "key"]);
 }
 
 /// Verifies hierarchical parsing normalizes dots and separators, and exposes
 /// its resulting spelling, semantics, and display form consistently.
 #[test]
 fn test_path_normalizes_hierarchical_text_and_exposes_attributes() {
-    let path =
-        Path::parse("/bucket//./folder/../object").expect("hierarchical path should normalize");
+    let path = Path::parse("/bucket//./folder/../object").expect("hierarchical path should normalize");
     assert_eq!("/bucket/object", path.as_str());
     assert_eq!("/bucket/object", path.to_string());
     assert_eq!("/bucket/object", path.as_ref());
     assert!(path.is_absolute());
     assert_eq!(PathSemantics::Hierarchical, path.semantics());
-    assert_eq!(
-        vec!["bucket", "object"],
-        path.components().collect::<Vec<_>>()
-    );
+    assert_eq!(vec!["bucket", "object"], path.components().collect::<Vec<_>>());
 }
 
 /// Verifies a canonical hierarchical spelling can be parsed again without
 /// changing path identity.
 #[test]
 fn test_path_canonical_text_round_trips() {
-    let path =
-        Path::parse("/bucket//./folder/../object").expect("hierarchical path should normalize");
+    let path = Path::parse("/bucket//./folder/../object").expect("hierarchical path should normalize");
     let reparsed = Path::parse(path.as_str()).expect("canonical path should reparse");
     assert_eq!(path, reparsed);
 }
@@ -197,8 +189,7 @@ fn test_path_public_operations_are_callable_without_reparsing() {
 fn test_path_accessors_and_constructors_are_executed_at_runtime() {
     let root: fn() -> Path = black_box(Path::root);
     let parse_literal: fn(&str) -> FsResult<Path> = black_box(Path::parse_literal);
-    let parse_with_semantics: fn(&str, PathSemantics) -> FsResult<Path> =
-        black_box(Path::parse_with_semantics);
+    let parse_with_semantics: fn(&str, PathSemantics) -> FsResult<Path> = black_box(Path::parse_with_semantics);
     let as_str: for<'a> fn(&'a Path) -> &'a str = black_box(Path::as_str);
     let file_name: for<'a> fn(&'a Path) -> Option<&'a str> = black_box(Path::file_name);
     let is_absolute: fn(&Path) -> bool = black_box(Path::is_absolute);
@@ -208,8 +199,7 @@ fn test_path_accessors_and_constructors_are_executed_at_runtime() {
     let join: fn(&Path, &RelativePath) -> Path = black_box(Path::join);
     let as_ref: for<'a> fn(&'a Path) -> &'a str = black_box(<Path as AsRef<str>>::as_ref);
 
-    let built = Path::from_components(true, vec!["reports", "daily.csv"])
-        .expect("components should form a path");
+    let built = Path::from_components(true, vec!["reports", "daily.csv"]).expect("components should form a path");
     assert!(Path::from_components(false, Vec::<&str>::new()).is_err());
     let literal = parse_literal("bucket/key").expect("literal path should parse");
     let provider = parse_with_semantics("bucket/key", PathSemantics::ProviderSpecific)
@@ -228,9 +218,6 @@ fn test_path_accessors_and_constructors_are_executed_at_runtime() {
         "/reports/archive",
         as_str(&child(&Path::parse("/reports").unwrap(), &component))
     );
-    assert_eq!(
-        "reports/daily.csv",
-        components(&built).collect::<Vec<_>>().join("/")
-    );
+    assert_eq!("reports/daily.csv", components(&built).collect::<Vec<_>>().join("/"));
     assert_eq!(as_str(&built), as_ref(&built));
 }

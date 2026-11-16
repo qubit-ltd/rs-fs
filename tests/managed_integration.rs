@@ -1,21 +1,36 @@
-use qubit_fs::metadata::{FileSystemId, OpenedFileInfo, TreeValidationOptions};
+#[cfg(feature = "async")]
+use std::future::Future;
+#[cfg(feature = "async")]
+use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+#[cfg(feature = "async")]
+use std::task::Context;
+#[cfg(feature = "async")]
+use std::task::Poll;
+#[cfg(feature = "async")]
+use std::task::Wake;
+#[cfg(feature = "async")]
+use std::task::Waker;
+
+use qubit_fs::FsEffectObserver;
+use qubit_fs::FsExecutionBinding;
+use qubit_fs::FsOperation;
+use qubit_fs::FsOperationFailure;
+use qubit_fs::FsOperationFailureKind;
+use qubit_fs::FsOwnedReadRequest;
+use qubit_fs::FsPrepareFailure;
+use qubit_fs::Path;
+use qubit_fs::ReadAllOptions;
+use qubit_fs::metadata::FileSystemId;
+use qubit_fs::metadata::OpenedFileInfo;
+use qubit_fs::metadata::TreeValidationOptions;
 #[cfg(feature = "async")]
 use qubit_fs::spi::AsyncManagedReadPort;
-use qubit_fs::spi::{ManagedFsTreeSpi, ManagedReadPort, RandomAccessReadSession};
-use qubit_fs::{
-    FsEffectObserver, FsExecutionBinding, FsOperation, FsOperationFailure, FsOperationFailureKind,
-    FsOwnedReadRequest, FsPrepareFailure, Path, ReadAllOptions,
-};
-use std::sync::{
-    Arc,
-    atomic::{AtomicUsize, Ordering},
-};
-#[cfg(feature = "async")]
-use std::{
-    future::Future,
-    pin::Pin,
-    task::{Context, Poll, Wake, Waker},
-};
+use qubit_fs::spi::ManagedFsTreeSpi;
+use qubit_fs::spi::ManagedReadPort;
+use qubit_fs::spi::RandomAccessReadSession;
 
 struct BytesSession {
     opened_bytes: Arc<Vec<u8>>,
@@ -123,10 +138,7 @@ fn managed_async_reader_runs_without_an_executor_dependency() {
     // The async feature adds Future APIs; this controlled fake completes inline
     // and does not require or start a runtime thread.
     let mut output = [0; 2];
-    assert_eq!(
-        2,
-        run_ready(port.as_mut().read_at_async(0, &mut output)).unwrap()
-    );
+    assert_eq!(2, run_ready(port.as_mut().read_at_async(0, &mut output)).unwrap());
     assert_eq!(b"da", &output);
 }
 
@@ -148,9 +160,11 @@ impl ManagedFsTreeSpi for FakeTree {
 
 #[test]
 fn staged_resource_cleanup_runs_once_and_does_not_double_count() {
-    use qubit_operation::{
-        ManagerOptions, OperationOptions, OperationOutcome, ResourceScopeOptions, ShutdownMode,
-    };
+    use qubit_operation::ManagerOptions;
+    use qubit_operation::OperationOptions;
+    use qubit_operation::OperationOutcome;
+    use qubit_operation::ResourceScopeOptions;
+    use qubit_operation::ShutdownMode;
 
     let manager = qubit_operation::OperationManager::new(ManagerOptions::default()).unwrap();
     let cleanup_calls = Arc::new(AtomicUsize::new(0));
@@ -184,30 +198,18 @@ fn staged_resource_cleanup_runs_once_and_does_not_double_count() {
     ));
     let settlement = operation.wait_settlement().unwrap();
     assert!(settlement.all_released());
-    assert_eq!(
-        1,
-        cleanup_calls.load(Ordering::SeqCst),
-        "cleanup must run exactly once"
-    );
+    assert_eq!(1, cleanup_calls.load(Ordering::SeqCst), "cleanup must run exactly once");
     assert_eq!(
         1,
         settlement.resource_reports.len(),
         "one staged owner is counted exactly once"
     );
-    let _ = manager
-        .request_shutdown(ShutdownMode::Drain)
-        .wait()
-        .unwrap();
+    let _ = manager.request_shutdown(ShutdownMode::Drain).wait().unwrap();
 }
 
 #[test]
 fn public_managed_api_and_typed_provider_error_keep_the_original_source() {
-    fn accepts_root_api(
-        _: Option<FsEffectObserver>,
-        _: Option<FsExecutionBinding>,
-        _: Option<FsOperation<()>>,
-    ) {
-    }
+    fn accepts_root_api(_: Option<FsEffectObserver>, _: Option<FsExecutionBinding>, _: Option<FsOperation<()>>) {}
     accepts_root_api(None, None, None);
     let request = FsOwnedReadRequest {
         path: Path::parse("/input").unwrap(),

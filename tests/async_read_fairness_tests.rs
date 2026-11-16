@@ -121,11 +121,8 @@ impl Provider {
     }
 
     fn info(path: &Path) -> OpenedFileInfo {
-        OpenedFileInfo::new(
-            FileSystemId::new("fairness").expect("provider id"),
-            path.clone(),
-        )
-        .with_metadata(FileMetadata::new(FileKind::File))
+        OpenedFileInfo::new(FileSystemId::new("fairness").expect("provider id"), path.clone())
+            .with_metadata(FileMetadata::new(FileKind::File))
     }
 }
 
@@ -138,10 +135,7 @@ impl AsyncFileSystemSpi for Provider {
         Box::pin(async { panic!("unexpected stat") })
     }
 
-    fn open_reader<'a>(
-        &'a self,
-        request: OpenReaderRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
+    fn open_reader<'a>(&'a self, request: OpenReaderRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
         self.0.counts.opens.fetch_add(1, Ordering::SeqCst);
         let reader = ScriptedReader {
             bytes: self.0.bytes.clone(),
@@ -151,12 +145,7 @@ impl AsyncFileSystemSpi for Provider {
             pending_returned: false,
             counts: Arc::clone(&self.0.counts),
         };
-        Box::pin(async move {
-            Ok(OpenedAsyncReader::new(
-                Self::info(request.path()),
-                Box::new(reader),
-            ))
-        })
+        Box::pin(async move { Ok(OpenedAsyncReader::new(Self::info(request.path()), Box::new(reader))) })
     }
 }
 
@@ -208,10 +197,7 @@ impl AsyncInput for ScriptedReader {
 
 fn filesystem(script: Script) -> (AsyncFileSystem, Arc<Counts>) {
     let counts = Arc::clone(&script.counts);
-    (
-        AsyncFileSystem::from_spi(Provider(script)).expect("filesystem"),
-        counts,
-    )
+    (AsyncFileSystem::from_spi(Provider(script)).expect("filesystem"), counts)
 }
 
 fn path() -> Path {

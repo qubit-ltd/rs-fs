@@ -214,9 +214,7 @@ impl ReadOptions {
     /// for range, conditional, or required-checksum reads.
     pub fn validate_against(&self, capabilities: FileSystemCapabilities) -> Result<(), FsError> {
         self.validate()?;
-        if (self.offset.is_some() || self.length.is_some())
-            && !capabilities.supports(FileSystemCapability::RangeRead)
-        {
+        if (self.offset.is_some() || self.length.is_some()) && !capabilities.supports(FileSystemCapability::RangeRead) {
             return Err(missing_requirement(
                 FileSystemCapability::RangeRead,
                 "byte-range reads are required but not supported",
@@ -230,8 +228,7 @@ impl ReadOptions {
                 "conditional reads are required but not supported",
             ));
         }
-        if self.checksum == ChecksumPolicy::Required
-            && !capabilities.supports(FileSystemCapability::ChecksumValidation)
+        if self.checksum == ChecksumPolicy::Required && !capabilities.supports(FileSystemCapability::ChecksumValidation)
         {
             return Err(missing_requirement(
                 FileSystemCapability::ChecksumValidation,
@@ -251,10 +248,5 @@ impl ReadOptions {
 /// # Returns
 /// An error identifying the missing capability and the open-reader operation.
 fn missing_requirement(capability: FileSystemCapability, message: &str) -> FsError {
-    FsError::new(
-        FsErrorKind::RequirementNotMet,
-        FsOperation::OpenReader,
-        message,
-    )
-    .with_required_capability(capability)
+    FsError::new(FsErrorKind::RequirementNotMet, FsOperation::OpenReader, message).with_required_capability(capability)
 }

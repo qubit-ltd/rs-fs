@@ -1,6 +1,12 @@
-use super::{AtomicityRequirement, DurabilityRequirement};
-use super::{FileSystemCapabilities, FileSystemCapability, FileSystemCapabilitySupport};
-use crate::error::{FsError, FsErrorKind, FsOperation, FsResult};
+use super::AtomicityRequirement;
+use super::DurabilityRequirement;
+use super::FileSystemCapabilities;
+use super::FileSystemCapability;
+use super::FileSystemCapabilitySupport;
+use crate::error::FsError;
+use crate::error::FsErrorKind;
+use crate::error::FsOperation;
+use crate::error::FsResult;
 /// Publication guarantees requested for a staged directory tree.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct TreePublishOptions {

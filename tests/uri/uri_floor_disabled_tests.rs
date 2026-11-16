@@ -32,8 +32,8 @@ fn test_resource_uri_keeps_standard_floor_under_weakened_policy() {
             "s3://user:raw-password@bucket/key",
         ] {
             assert!(Uri::parse_with_policy(text, &policy).is_err());
-            let connection = ConnectionUri::parse_with_policy(text, &policy)
-                .expect("connection URI can contain credentials");
+            let connection =
+                ConnectionUri::parse_with_policy(text, &policy).expect("connection URI can contain credentials");
             assert!(connection.has_embedded_secret());
             assert!(connection.try_to_uri().is_err());
             assert!(!connection.to_string().contains("raw-token"));
@@ -42,11 +42,7 @@ fn test_resource_uri_keeps_standard_floor_under_weakened_policy() {
         assert!(Uri::parse_with_policy("s3://user@bucket/key?region=cn", &policy).is_ok());
     }
 
-    let redaction =
-        Redactor::new(RedactionPolicy::disabled()).redact_uri("s3://bucket/key?token=raw-token");
+    let redaction = Redactor::new(RedactionPolicy::disabled()).redact_uri("s3://bucket/key?token=raw-token");
     assert_eq!("s3://bucket/key?token=raw-token", redaction.text().as_str());
-    assert_eq!(
-        RedactionCompletion::Complete,
-        redaction.summary().completion()
-    );
+    assert_eq!(RedactionCompletion::Complete, redaction.summary().completion());
 }

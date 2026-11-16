@@ -7,20 +7,23 @@
 //! preflight-only version check is insufficient. Validation failures leave
 //! the staged-tree owner responsible for cleanup; successful publication
 //! reports the achieved atomicity and durability in [`TreePublishOutcome`].
-use crate::{
-    FsOperationFailure,
-    directory::TreePublishOutcome,
-    execution::{FsOwnedTreePublishRequest, FsPrepareFailure},
-};
+use std::collections::BTreeSet;
+use std::fmt::Debug;
+use std::fmt::Formatter;
+use std::fmt::Result as FmtResult;
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::PoisonError;
+use std::time::Instant;
+
 use qubit_operation::PreparedExternalOperation;
-use std::{
-    collections::BTreeSet,
-    fmt::{Debug, Formatter, Result as FmtResult},
-    future::Future,
-    pin::Pin,
-    sync::{Arc, Mutex, PoisonError},
-    time::Instant,
-};
+
+use crate::FsOperationFailure;
+use crate::directory::TreePublishOutcome;
+use crate::execution::FsOwnedTreePublishRequest;
+use crate::execution::FsPrepareFailure;
 
 /// Cleanup-owning staged directory used while validating and publishing a tree.
 ///
@@ -268,15 +271,13 @@ impl qubit_operation::AsyncCleanup<StagedDirectory> for StagedDirectoryCleanup {
     }
 }
 /// Object-safe prepared staged-tree publication operation.
-pub trait PreparedFsTreePublish:
-    PreparedExternalOperation<TreePublishOutcome, FsOperationFailure>
-{
+pub trait PreparedFsTreePublish: PreparedExternalOperation<TreePublishOutcome, FsOperationFailure> {
     /// Returns the original tree request while unclaimed.
     fn take_unclaimed_request(&self) -> Option<FsOwnedTreePublishRequest>;
 
-    /// Installs the bounded mutation fact slot before provider work is activated.
-    /// The provider retains it until it publishes the final typed tree fact and
-    /// releases any publication or recovery owner.
+    /// Installs the bounded mutation fact slot before provider work is
+    /// activated. The provider retains it until it publishes the final
+    /// typed tree fact and releases any publication or recovery owner.
     fn install_effect_reservation(
         &self,
         reservation: crate::execution::FsEffectReservation,
@@ -314,9 +315,8 @@ pub trait ManagedFsTreeSpi: Send + Sync {
             Err(error) => {
                 let (reason, owner, cleanup, reservation) = error.into_parts();
                 let resource_id = reservation.retain_with_for_cleanup(owner, cleanup);
-                let message = format!(
-                    "staging owner registration failed ({reason:?}); cleanup retained as {resource_id:?}"
-                );
+                let message =
+                    format!("staging owner registration failed ({reason:?}); cleanup retained as {resource_id:?}");
                 Err(crate::error::FsError::new(
                     crate::error::FsErrorKind::InvalidState,
                     crate::error::FsOperation::CreateTemp,

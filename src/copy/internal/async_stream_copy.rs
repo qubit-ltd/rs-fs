@@ -280,13 +280,7 @@ pub(in crate::copy) async fn finish_stream_copy(
         {
             let error = failure.into_error();
             if let Err(cleanup_error) = writer.abort_async().await {
-                return Err(opened_writer_failure(
-                    filesystem,
-                    source,
-                    target,
-                    cleanup_error,
-                    writer,
-                ));
+                return Err(opened_writer_failure(filesystem, source, target, cleanup_error, writer));
             }
             let state = from_writer_state(writer.state());
             let _ = writer_slot.take();

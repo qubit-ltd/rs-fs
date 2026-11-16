@@ -33,11 +33,7 @@ use crate::path::PathSemantics;
 /// semantics. Returns the path validation error when the selected path violates
 /// filesystem limits. Returns a resource-limit error when the combined raw
 /// query prefix exceeds the filesystem path text limit.
-pub(crate) fn validate(
-    properties: &FileSystemProperties,
-    scope: &ListScope,
-    options: &ListOptions,
-) -> FsResult<()> {
+pub(crate) fn validate(properties: &FileSystemProperties, scope: &ListScope, options: &ListOptions) -> FsResult<()> {
     let semantics = properties.info().path_semantics();
     match scope {
         ListScope::Path(path) => properties.validate_path(path, FsOperation::List)?,
@@ -51,10 +47,7 @@ pub(crate) fn validate(
         ListScope::Namespace => {}
     }
     options.validate_for(semantics)?;
-    if matches!(
-        semantics,
-        PathSemantics::ObjectKey | PathSemantics::ProviderSpecific
-    ) {
+    if matches!(semantics, PathSemantics::ObjectKey | PathSemantics::ProviderSpecific) {
         let root_length = scope.path().map_or(0, |path| path.as_str().len());
         let filter_length = match options.filter() {
             Some(ListFilter::LiteralPrefix(prefix)) => prefix.len(),
@@ -63,12 +56,7 @@ pub(crate) fn validate(
         let length = root_length
             .checked_add(filter_length)
             .and_then(|value| u64::try_from(value).ok());
-        if length.is_none_or(|value| {
-            properties
-                .limits()
-                .max_path_text_bytes()
-                .is_exceeded_by(value)
-        }) {
+        if length.is_none_or(|value| properties.limits().max_path_text_bytes().is_exceeded_by(value)) {
             return Err(FsError::new(
                 FsErrorKind::ResourceLimitExceeded,
                 FsOperation::List,

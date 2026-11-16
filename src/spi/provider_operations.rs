@@ -8,7 +8,8 @@
 //! Compact immutable sets of provider operation entry points.
 
 use super::ProviderOperation;
-use crate::metadata::{FileSystemCapabilities, FileSystemCapability};
+use crate::metadata::FileSystemCapabilities;
+use crate::metadata::FileSystemCapability;
 
 /// Immutable set of concrete operation entry points implemented by a provider.
 ///
@@ -92,9 +93,7 @@ impl ProviderOperations {
             FileSystemCapability::Read
             | FileSystemCapability::RangeRead
             | FileSystemCapability::ConditionalRead
-            | FileSystemCapability::ChecksumValidation => {
-                self.supports(ProviderOperation::OpenReader)
-            }
+            | FileSystemCapability::ChecksumValidation => self.supports(ProviderOperation::OpenReader),
             FileSystemCapability::Write
             | FileSystemCapability::Append
             | FileSystemCapability::ConditionalWrite
@@ -104,19 +103,14 @@ impl ProviderOperations {
                 self.supports(ProviderOperation::CreateDirectory)
             }
             FileSystemCapability::Delete | FileSystemCapability::ConditionalDelete => {
-                self.supports(ProviderOperation::DeleteFile)
-                    && self.supports(ProviderOperation::DeleteDirectory)
+                self.supports(ProviderOperation::DeleteFile) && self.supports(ProviderOperation::DeleteDirectory)
             }
-            FileSystemCapability::RecursiveDelete => {
-                self.supports(ProviderOperation::DeleteDirectory)
+            FileSystemCapability::RecursiveDelete => self.supports(ProviderOperation::DeleteDirectory),
+            FileSystemCapability::Rename | FileSystemCapability::AtomicRename | FileSystemCapability::DurableRename => {
+                self.supports(ProviderOperation::Rename)
             }
-            FileSystemCapability::Rename
-            | FileSystemCapability::AtomicRename
-            | FileSystemCapability::DurableRename => self.supports(ProviderOperation::Rename),
             FileSystemCapability::TempFile => self.supports(ProviderOperation::CreateTempFile),
-            FileSystemCapability::TempDirectory => {
-                self.supports(ProviderOperation::CreateTempDirectory)
-            }
+            FileSystemCapability::TempDirectory => self.supports(ProviderOperation::CreateTempDirectory),
             FileSystemCapability::AtomicTempPersist => {
                 self.supports(ProviderOperation::CreateTempFile)
                     && self.supports(ProviderOperation::CreateTempDirectory)
@@ -128,16 +122,11 @@ impl ProviderOperations {
             | FileSystemCapability::DurableFileCopy
             | FileSystemCapability::DurableTreeCopy => self.supports(ProviderOperation::TryCopy),
             FileSystemCapability::ReadAll => self.supports(ProviderOperation::ReadAll),
-            FileSystemCapability::ObserveReadChanges
-            | FileSystemCapability::VersionConsistentRead => {
+            FileSystemCapability::ObserveReadChanges | FileSystemCapability::VersionConsistentRead => {
                 self.supports(ProviderOperation::OpenRandomAccessReader)
             }
-            FileSystemCapability::StagedTreePublish => {
-                self.supports(ProviderOperation::PublishTree)
-            }
-            FileSystemCapability::StorageObservation => {
-                self.supports(ProviderOperation::ObserveStorage)
-            }
+            FileSystemCapability::StagedTreePublish => self.supports(ProviderOperation::PublishTree),
+            FileSystemCapability::StorageObservation => self.supports(ProviderOperation::ObserveStorage),
             FileSystemCapability::Symlink => false,
         };
         supported

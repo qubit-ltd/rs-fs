@@ -103,11 +103,7 @@ impl FileSystemSpi for CopySpi {
 
     fn stat(&self, request: StatRequest<'_>) -> FsResult<StatResponse> {
         if request.path().as_str() != "/source" {
-            return Err(FsError::new(
-                FsErrorKind::NotFound,
-                FsOperation::Stat,
-                "no target yet",
-            ));
+            return Err(FsError::new(FsErrorKind::NotFound, FsOperation::Stat, "no target yet"));
         }
         Ok(StatResponse::new(
             request.path().clone(),
@@ -130,12 +126,7 @@ impl FileSystemSpi for CopySpi {
         Ok(OpenedWriter::new(
             OpenedFileInfo::new(self.properties.info().id().clone(), request.path().clone()),
             Box::new(ShortWriter {
-                bytes: self
-                    .staging
-                    .lock()
-                    .unwrap()
-                    .take()
-                    .expect("one writer per iteration"),
+                bytes: self.staging.lock().unwrap().take().expect("one writer per iteration"),
                 chunk: self.write_chunk,
             }),
         ))
@@ -151,17 +142,9 @@ struct ShortReader {
 
 impl Input for ShortReader {
     type Item = u8;
-    unsafe fn read_unchecked(
-        &mut self,
-        output: &mut [u8],
-        index: usize,
-        count: usize,
-    ) -> IoResult<usize> {
-        let count = count
-            .min(self.chunk)
-            .min(self.payload.len() - self.position);
-        output[index..index + count]
-            .copy_from_slice(&self.payload[self.position..self.position + count]);
+    unsafe fn read_unchecked(&mut self, output: &mut [u8], index: usize, count: usize) -> IoResult<usize> {
+        let count = count.min(self.chunk).min(self.payload.len() - self.position);
+        output[index..index + count].copy_from_slice(&self.payload[self.position..self.position + count]);
         self.position += count;
         Ok(count)
     }
@@ -175,12 +158,7 @@ struct ShortWriter {
 
 impl Output for ShortWriter {
     type Item = u8;
-    unsafe fn write_unchecked(
-        &mut self,
-        bytes: &[u8],
-        index: usize,
-        count: usize,
-    ) -> IoResult<usize> {
+    unsafe fn write_unchecked(&mut self, bytes: &[u8], index: usize, count: usize) -> IoResult<usize> {
         let count = count.min(self.chunk);
         self.bytes.extend_from_slice(&bytes[index..index + count]);
         Ok(count)
@@ -220,14 +198,7 @@ fn stream_copy_fallback(c: &mut Criterion) {
                 ),
                 |bench| {
                     bench.iter_batched(
-                        || {
-                            FileSystem::from_spi(CopySpi::new(
-                                Arc::clone(&payload),
-                                read_chunk,
-                                write_chunk,
-                            ))
-                            .unwrap()
-                        },
+                        || FileSystem::from_spi(CopySpi::new(Arc::clone(&payload), read_chunk, write_chunk)).unwrap(),
                         |filesystem| {
                             black_box(
                                 filesystem

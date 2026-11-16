@@ -16,8 +16,7 @@ use qubit_fs::temp::TempOptions;
 use qubit_fs::temp::TempResourceState;
 #[test]
 fn test_required_non_atomic_temp_persist_does_not_assume_source_ownership() {
-    let (filesystem, cleanup_calls, _) =
-        crate::handle_support::implementation_tests::filesystem(false, Vec::new());
+    let (filesystem, cleanup_calls, _) = crate::handle_support::implementation_tests::filesystem(false, Vec::new());
     let mut temporary = filesystem
         .create_temp_file(TempOptions::default())
         .expect("temporary file should open");
@@ -31,19 +30,13 @@ fn test_required_non_atomic_temp_persist_does_not_assume_source_ownership() {
         .expect_err("non-atomic result must violate required contract");
     assert_eq!(FsErrorKind::ProviderContractViolation, error.error().kind());
     assert_eq!(Some("handles-test"), error.error().provider());
-    assert_eq!(
-        PersistFailureState::PublishedSourceIndeterminate,
-        error.state()
-    );
+    assert_eq!(PersistFailureState::PublishedSourceIndeterminate, error.state());
     assert_eq!(TempResourceState::Indeterminate, temporary.state());
     assert_eq!(
         Some(&Path::parse("/target").expect("target")),
         error.publication_target()
     );
-    assert_eq!(
-        Some(&Path::parse("/target").expect("target")),
-        error.error().target()
-    );
+    assert_eq!(Some(&Path::parse("/target").expect("target")), error.error().target());
     assert_eq!(
         FsErrorKind::InvalidState,
         temporary.cleanup().expect_err("source is uncertain").kind()
@@ -55,18 +48,12 @@ fn test_required_non_atomic_temp_persist_does_not_assume_source_ownership() {
     assert_eq!(
         PersistFailureState::PublishedSourceIndeterminate,
         temporary
-            .persist(
-                &Path::parse("/next").expect("target"),
-                PersistOptions::default()
-            )
+            .persist(&Path::parse("/next").expect("target"), PersistOptions::default())
             .expect_err("source is uncertain")
             .state()
     );
     drop(temporary);
-    assert_eq!(
-        0,
-        *cleanup_calls.lock().expect("cleanup lock should succeed")
-    );
+    assert_eq!(0, *cleanup_calls.lock().expect("cleanup lock should succeed"));
 }
 
 #[test]
@@ -85,17 +72,9 @@ fn test_temp_file_illegal_target_fails_preflight_without_provider_persist_and_re
     assert_eq!(FsErrorKind::InvalidPath, error.error().kind());
     assert_eq!(PersistFailureState::NotPublished, error.state());
     assert_eq!(TempResourceState::Owned, temporary.state());
-    assert_eq!(
-        0,
-        *persist_calls.lock().expect("persist lock should succeed")
-    );
-    temporary
-        .cleanup()
-        .expect("owned resource should remain recoverable");
-    assert_eq!(
-        1,
-        *cleanup_calls.lock().expect("cleanup lock should succeed")
-    );
+    assert_eq!(0, *persist_calls.lock().expect("persist lock should succeed"));
+    temporary.cleanup().expect("owned resource should remain recoverable");
+    assert_eq!(1, *cleanup_calls.lock().expect("cleanup lock should succeed"));
 }
 
 #[test]
@@ -125,25 +104,18 @@ fn test_temp_file_persist_marks_resource_persisted() {
         .expect("preferred atomicity may accept non-atomic persistence");
     assert_eq!(&target, outcome.target());
     assert_eq!(TempResourceState::Persisted, temporary.state());
-    assert_eq!(
-        1,
-        *persist_calls.lock().expect("persist lock should succeed")
-    );
+    assert_eq!(1, *persist_calls.lock().expect("persist lock should succeed"));
     assert!(temporary.cleanup().is_err());
     assert!(temporary.keep().is_err());
     drop(temporary);
-    assert_eq!(
-        0,
-        *cleanup_calls.lock().expect("cleanup lock should succeed")
-    );
+    assert_eq!(0, *cleanup_calls.lock().expect("cleanup lock should succeed"));
 }
 
 /// Verifies a provider cannot claim that a temporary resource was persisted to
 /// a target different from the caller's requested final path.
 #[test]
 fn test_temp_file_persist_rejects_wrong_provider_target() {
-    let (filesystem, _, _) =
-        crate::handle_support::implementation_tests::filesystem(false, Vec::new());
+    let (filesystem, _, _) = crate::handle_support::implementation_tests::filesystem(false, Vec::new());
     let mut temporary = filesystem
         .create_temp_file(TempOptions::default())
         .expect("temporary file should open");
@@ -155,10 +127,7 @@ fn test_temp_file_persist_rejects_wrong_provider_target() {
             PersistOptions::default().with_atomicity(AtomicityRequirement::Preferred),
         )
         .expect_err("wrong provider target must violate the contract");
-    assert_eq!(
-        FsErrorKind::ProviderContractViolation,
-        failure.error().kind()
-    );
+    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
     assert_eq!(Some("handles-test"), failure.error().provider());
     assert_eq!(PersistFailureState::Indeterminate, failure.state());
     assert_eq!(TempResourceState::Indeterminate, temporary.state());
@@ -168,8 +137,7 @@ fn test_temp_file_persist_rejects_wrong_provider_target() {
 /// cause a second best-effort cleanup when dropped.
 #[test]
 fn test_temp_file_cleanup_marks_resource_cleaned() {
-    let (filesystem, cleanup_calls, _) =
-        crate::handle_support::implementation_tests::filesystem(false, Vec::new());
+    let (filesystem, cleanup_calls, _) = crate::handle_support::implementation_tests::filesystem(false, Vec::new());
     let mut temporary = filesystem
         .create_temp_file(TempOptions::default())
         .expect("temporary file should open");
@@ -186,18 +154,14 @@ fn test_temp_file_cleanup_marks_resource_cleaned() {
             .is_err()
     );
     drop(temporary);
-    assert_eq!(
-        1,
-        *cleanup_calls.lock().expect("cleanup lock should succeed")
-    );
+    assert_eq!(1, *cleanup_calls.lock().expect("cleanup lock should succeed"));
 }
 
 /// Verifies keeping an owned temporary file succeeds and transfers automatic
 /// cleanup responsibility without publishing the source.
 #[test]
 fn test_temp_file_keep_marks_resource_kept() {
-    let (filesystem, cleanup_calls, _) =
-        crate::handle_support::implementation_tests::filesystem(false, Vec::new());
+    let (filesystem, cleanup_calls, _) = crate::handle_support::implementation_tests::filesystem(false, Vec::new());
     let mut temporary = filesystem
         .create_temp_file(TempOptions::default())
         .expect("temporary file should open");
@@ -205,10 +169,7 @@ fn test_temp_file_keep_marks_resource_kept() {
     temporary.keep().expect("keep should succeed");
     assert_eq!(TempResourceState::Kept, temporary.state());
     drop(temporary);
-    assert_eq!(
-        0,
-        *cleanup_calls.lock().expect("cleanup lock should succeed")
-    );
+    assert_eq!(0, *cleanup_calls.lock().expect("cleanup lock should succeed"));
 }
 
 /// Verifies temporary file persistence retains each provider-confirmed
@@ -221,10 +182,7 @@ fn test_temp_file_persist_failure_preserves_provider_progress() {
             PersistFailureState::PublishedSourceRetained,
             TempResourceState::CleanupRequired,
         ),
-        (
-            PersistFailureState::Indeterminate,
-            TempResourceState::Indeterminate,
-        ),
+        (PersistFailureState::Indeterminate, TempResourceState::Indeterminate),
     ] {
         let (filesystem, cleanup_calls, persist_calls) =
             crate::handle_support::implementation_tests::temp_failure_filesystem(failure_state);
@@ -250,10 +208,7 @@ fn test_temp_file_persist_failure_preserves_provider_progress() {
         assert_eq!(Some("handles-test"), failure.error().provider());
         assert_eq!(failure_state, failure.state());
         assert_eq!(expected_state, temporary.state());
-        assert_eq!(
-            1,
-            *persist_calls.lock().expect("persist lock should succeed")
-        );
+        assert_eq!(1, *persist_calls.lock().expect("persist lock should succeed"));
         drop(temporary);
         assert_eq!(
             usize::from(matches!(
@@ -271,27 +226,14 @@ fn test_temp_file_persist_failure_preserves_provider_progress() {
 fn test_temp_file_lifecycle_errors_preserve_recovery_state() {
     for (operation, error_kind, expected_state) in [
         ("keep", FsErrorKind::Io, TempResourceState::Owned),
-        (
-            "keep",
-            FsErrorKind::Indeterminate,
-            TempResourceState::Indeterminate,
-        ),
-        (
-            "cleanup",
-            FsErrorKind::Io,
-            TempResourceState::CleanupRequired,
-        ),
-        (
-            "cleanup",
-            FsErrorKind::Indeterminate,
-            TempResourceState::Indeterminate,
-        ),
+        ("keep", FsErrorKind::Indeterminate, TempResourceState::Indeterminate),
+        ("cleanup", FsErrorKind::Io, TempResourceState::CleanupRequired),
+        ("cleanup", FsErrorKind::Indeterminate, TempResourceState::Indeterminate),
     ] {
-        let (filesystem, cleanup_calls) =
-            crate::handle_support::implementation_tests::temp_lifecycle_error_filesystem(
-                (operation == "keep").then_some(error_kind),
-                (operation == "cleanup").then_some(error_kind),
-            );
+        let (filesystem, cleanup_calls) = crate::handle_support::implementation_tests::temp_lifecycle_error_filesystem(
+            (operation == "keep").then_some(error_kind),
+            (operation == "cleanup").then_some(error_kind),
+        );
         let mut temporary = filesystem
             .create_temp_file(TempOptions::default())
             .expect("temporary file should open");

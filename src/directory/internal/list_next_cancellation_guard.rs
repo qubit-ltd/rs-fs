@@ -41,11 +41,7 @@ impl<'a> ListNextCancellationGuard<'a> {
     ///
     /// - `result`: Provider result to validate and record for this stream step.
     /// - `now`: Monotonic timestamp used to evaluate the current deadline.
-    pub(crate) fn finish(
-        mut self,
-        result: FsResult<Option<DirEntry>>,
-        now: Instant,
-    ) -> FsResult<Option<DirEntry>> {
+    pub(crate) fn finish(mut self, result: FsResult<Option<DirEntry>>, now: Instant) -> FsResult<Option<DirEntry>> {
         let outcome = self.policy.finish_next(result, now);
         self.finished = true;
         outcome

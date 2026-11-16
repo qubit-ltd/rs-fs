@@ -86,25 +86,20 @@ impl AsyncFileSystemSpi for PendingAfterConsumeProvider {
         })
     }
 
-    fn list<'a>(
-        &'a self,
-        _: ListRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<OpenedAsyncDirectoryStream>> {
+    fn list<'a>(&'a self, _: ListRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncDirectoryStream>> {
         let next_calls = Arc::clone(&self.next_calls);
         let pending_polls = self.pending_polls;
         let provider_error = self.provider_error;
         Box::pin(async move {
-            Ok(OpenedAsyncDirectoryStream::new(Box::new(
-                PendingAfterConsumeSession {
-                    entries: ["a", "b"]
-                        .map(|key| DirEntry::new(Path::parse_literal(key).unwrap(), FileKind::File))
-                        .into_iter(),
-                    pending_polls_remaining: pending_polls,
-                    consumed_first: false,
-                    provider_error,
-                    next_calls,
-                },
-            )))
+            Ok(OpenedAsyncDirectoryStream::new(Box::new(PendingAfterConsumeSession {
+                entries: ["a", "b"]
+                    .map(|key| DirEntry::new(Path::parse_literal(key).unwrap(), FileKind::File))
+                    .into_iter(),
+                pending_polls_remaining: pending_polls,
+                consumed_first: false,
+                provider_error,
+                next_calls,
+            })))
         })
     }
 }
@@ -154,10 +149,8 @@ fn test_pending_cancellation_does_not_silently_continue() {
         provider_error: false,
     })
     .unwrap();
-    let mut stream = common::poll_support::ready(
-        filesystem.list(&ListScope::Namespace, ListOptions::object_keys()),
-    )
-    .unwrap();
+    let mut stream =
+        common::poll_support::ready(filesystem.list(&ListScope::Namespace, ListOptions::object_keys())).unwrap();
 
     drop(stream.next_entry_async());
     assert_eq!(DirectoryStreamState::Open, stream.state());
@@ -187,10 +180,8 @@ fn test_repeated_pending_then_entry_and_eof() {
         provider_error: false,
     })
     .unwrap();
-    let mut stream = common::poll_support::ready(
-        filesystem.list(&ListScope::Namespace, ListOptions::object_keys()),
-    )
-    .unwrap();
+    let mut stream =
+        common::poll_support::ready(filesystem.list(&ListScope::Namespace, ListOptions::object_keys())).unwrap();
     let mut future = Box::pin(stream.next_entry_async());
     let mut context = Context::from_waker(Waker::noop());
     assert!(Pin::as_mut(&mut future).poll(&mut context).is_pending());
@@ -221,10 +212,8 @@ fn test_provider_error_remains_terminal() {
         provider_error: true,
     })
     .unwrap();
-    let mut stream = common::poll_support::ready(
-        filesystem.list(&ListScope::Namespace, ListOptions::object_keys()),
-    )
-    .unwrap();
+    let mut stream =
+        common::poll_support::ready(filesystem.list(&ListScope::Namespace, ListOptions::object_keys())).unwrap();
     let error = common::poll_support::ready(stream.next_entry_async()).unwrap_err();
     assert_eq!(FsErrorKind::UnsupportedOperation, error.kind());
     assert_eq!(DirectoryStreamState::Failed, stream.state());
@@ -249,8 +238,7 @@ fn test_out_of_scope_entry_remains_a_contract_violation() {
     })
     .unwrap();
     let scope = ListScope::Path(Path::parse_literal("a").unwrap());
-    let mut stream =
-        common::poll_support::ready(filesystem.list(&scope, ListOptions::object_keys())).unwrap();
+    let mut stream = common::poll_support::ready(filesystem.list(&scope, ListOptions::object_keys())).unwrap();
     let mut future = Box::pin(stream.next_entry_async());
     let mut context = Context::from_waker(Waker::noop());
     assert!(Pin::as_mut(&mut future).poll(&mut context).is_pending());

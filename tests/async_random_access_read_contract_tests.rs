@@ -109,11 +109,7 @@ impl Drop for Session {
     }
 }
 impl AsyncRandomAccessReadSession for Session {
-    fn read_at_async<'a>(
-        self: Pin<&'a mut Self>,
-        offset: u64,
-        out: &'a mut [u8],
-    ) -> SpiFuture<'a, FsResult<usize>> {
+    fn read_at_async<'a>(self: Pin<&'a mut Self>, offset: u64, out: &'a mut [u8]) -> SpiFuture<'a, FsResult<usize>> {
         Box::pin(async move {
             let this = self.get_mut();
             let call = this.reads.fetch_add(1, Ordering::SeqCst);
@@ -228,12 +224,7 @@ impl AsyncFileSystemSpi for Provider {
         .unwrap()
     }
     fn stat<'a>(&'a self, r: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
-        Box::pin(async move {
-            Ok(StatResponse::new(
-                r.path().clone(),
-                FileMetadata::new(FileKind::File),
-            ))
-        })
+        Box::pin(async move { Ok(StatResponse::new(r.path().clone(), FileMetadata::new(FileKind::File))) })
     }
     fn open_random_access_reader<'a>(
         &'a self,
@@ -252,35 +243,23 @@ impl AsyncFileSystemSpi for Provider {
             let info = match metadata {
                 MetadataMode::Valid => random_access_common::opened_info(ID, &path, 6),
                 MetadataMode::Missing => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path),
-                MetadataMode::Directory => {
-                    OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
-                        .with_metadata(FileMetadata::new(FileKind::Directory).with_len(Some(6)))
-                }
-                MetadataMode::MissingLength => {
-                    OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
-                        .with_metadata(FileMetadata::new(FileKind::File))
-                }
+                MetadataMode::Directory => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
+                    .with_metadata(FileMetadata::new(FileKind::Directory).with_len(Some(6))),
+                MetadataMode::MissingLength => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
+                    .with_metadata(FileMetadata::new(FileKind::File)),
                 MetadataMode::Object => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
                     .with_metadata(FileMetadata::new(FileKind::Object).with_len(Some(6))),
-                MetadataMode::EmptyObject => {
-                    OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
-                        .with_metadata(FileMetadata::new(FileKind::Object).with_len(Some(0)))
-                }
-                MetadataMode::ObjectMissingLength => {
-                    OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
-                        .with_metadata(FileMetadata::new(FileKind::Object))
-                }
+                MetadataMode::EmptyObject => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
+                    .with_metadata(FileMetadata::new(FileKind::Object).with_len(Some(0))),
+                MetadataMode::ObjectMissingLength => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
+                    .with_metadata(FileMetadata::new(FileKind::Object)),
                 MetadataMode::Prefix => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
                     .with_metadata(FileMetadata::new(FileKind::Prefix).with_len(Some(6))),
                 MetadataMode::Symlink => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
                     .with_metadata(FileMetadata::new(FileKind::Symlink).with_len(Some(6))),
                 MetadataMode::Other => OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
-                    .with_metadata(
-                        FileMetadata::new(FileKind::Other("other".into())).with_len(Some(6)),
-                    ),
-                MetadataMode::WrongIdentity => {
-                    random_access_common::opened_info("wrong-id", &path, 6)
-                }
+                    .with_metadata(FileMetadata::new(FileKind::Other("other".into())).with_len(Some(6))),
+                MetadataMode::WrongIdentity => random_access_common::opened_info("wrong-id", &path, 6),
             };
             Ok(OpenedAsyncRandomAccessReader::new(
                 info,
@@ -340,10 +319,7 @@ fn test_async_open_preflight_matches_sync_error_classification() {
     let fs = provider.filesystem();
     let path = Path::parse("/same").unwrap();
     for (options, kind) in [
-        (
-            ReadOptions::default().with_length(Some(2)),
-            FsErrorKind::InvalidOptions,
-        ),
+        (ReadOptions::default().with_length(Some(2)), FsErrorKind::InvalidOptions),
         (
             ReadOptions::default().with_checksum(ChecksumPolicy::BestEffort),
             FsErrorKind::RequirementNotMet,
@@ -360,18 +336,14 @@ fn test_async_open_preflight_matches_sync_error_classification() {
         assert_eq!(Some("fixture"), error.provider());
         assert_eq!(0, provider.opens.load(Ordering::SeqCst));
     }
-    let error = ready(
-        fs.open_random_access_reader(&Path::parse("relative").unwrap(), ReadOptions::default()),
-    )
-    .unwrap_err();
+    let error =
+        ready(fs.open_random_access_reader(&Path::parse("relative").unwrap(), ReadOptions::default())).unwrap_err();
     assert_eq!(FsErrorKind::InvalidPath, error.kind());
     assert_eq!(FsOperation::OpenReader, error.operation());
     assert_eq!(Some("relative"), error.path().map(Path::as_str));
     assert_eq!(Some("fixture"), error.provider());
     assert_eq!(0, provider.opens.load(Ordering::SeqCst));
-    let zero_offset =
-        ready(fs.open_random_access_reader(&path, ReadOptions::default().with_offset(Some(0))))
-            .unwrap();
+    let zero_offset = ready(fs.open_random_access_reader(&path, ReadOptions::default().with_offset(Some(0)))).unwrap();
     assert_eq!(6, zero_offset.len());
     drop(zero_offset);
     assert_eq!(1, provider.opens.load(Ordering::SeqCst));
@@ -417,15 +389,10 @@ fn test_async_object_key_random_access_uses_known_length_and_same_session() {
     provider.object_key = true;
     provider.metadata = MetadataMode::Object;
     let filesystem = provider.filesystem();
-    let path =
-        Path::parse_with_semantics("bucket//raw/%2Fobject", PathSemantics::ObjectKey).unwrap();
-    let mut reader =
-        ready(filesystem.open_random_access_reader(&path, ReadOptions::default())).unwrap();
+    let path = Path::parse_with_semantics("bucket//raw/%2Fobject", PathSemantics::ObjectKey).unwrap();
+    let mut reader = ready(filesystem.open_random_access_reader(&path, ReadOptions::default())).unwrap();
     assert_eq!(6, reader.len());
-    assert_eq!(
-        &FileSystemId::new(ID).unwrap(),
-        reader.info().filesystem_id()
-    );
+    assert_eq!(&FileSystemId::new(ID).unwrap(), reader.info().filesystem_id());
     assert_eq!(&path, reader.info().path());
     assert_eq!(
         Some(&FileKind::Object),
@@ -450,8 +417,7 @@ fn test_async_zero_length_object_returns_zero_without_provider_read() {
     provider.metadata = MetadataMode::EmptyObject;
     let filesystem = provider.filesystem();
     let path = Path::parse("/empty-object").unwrap();
-    let mut reader =
-        ready(filesystem.open_random_access_reader(&path, ReadOptions::default())).unwrap();
+    let mut reader = ready(filesystem.open_random_access_reader(&path, ReadOptions::default())).unwrap();
     assert_eq!(0, reader.len());
     assert_eq!(0, ready(reader.read_at(0, &mut [0; 1])).unwrap());
     assert_eq!(0, provider.reads.load(Ordering::SeqCst));
@@ -534,19 +500,11 @@ fn test_async_provider_error_context_is_preserved_or_filled_independently() {
         .unwrap();
         let error = ready(reader.read_at(0, &mut [0; 1])).unwrap_err();
         assert_eq!(
-            Some(if has_path {
-                &provider_path
-            } else {
-                &session_path
-            }),
+            Some(if has_path { &provider_path } else { &session_path }),
             error.path()
         );
         assert_eq!(
-            Some(if has_provider {
-                "nested-provider"
-            } else {
-                "fixture"
-            }),
+            Some(if has_provider { "nested-provider" } else { "fixture" }),
             error.provider()
         );
         assert_eq!(FsOperation::Read, error.operation());
@@ -554,11 +512,7 @@ fn test_async_provider_error_context_is_preserved_or_filled_independently() {
         assert_eq!(Some(FsEffectState::Indeterminate), error.effect_state());
         assert_eq!(Some(&target), error.target());
         assert_eq!(Some(&failure_target), error.failure_target());
-        assert!(
-            std::error::Error::source(&error)
-                .unwrap()
-                .is::<SourceMarker>()
-        );
+        assert!(std::error::Error::source(&error).unwrap().is::<SourceMarker>());
         assert_eq!(1, provider.reads.load(Ordering::SeqCst));
     }
 }
@@ -614,11 +568,7 @@ struct DefaultAsyncProvider;
 impl AsyncFileSystemSpi for DefaultAsyncProvider {
     fn properties(&self) -> ProviderProperties {
         ProviderProperties::new(
-            FileSystemInfo::new(
-                FileSystemId::new(ID).unwrap(),
-                "fixture",
-                PathSemantics::Hierarchical,
-            ),
+            FileSystemInfo::new(FileSystemId::new(ID).unwrap(), "fixture", PathSemantics::Hierarchical),
             ProviderOperations::new()
                 .with(ProviderOperation::OpenReader)
                 .with(ProviderOperation::OpenRandomAccessReader),

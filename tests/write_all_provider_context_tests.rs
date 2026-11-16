@@ -181,19 +181,12 @@ impl FileSystemSpi for Provider {
     }
 
     fn stat(&self, _request: StatRequest<'_>) -> FsResult<StatResponse> {
-        Err(FsError::new(
-            FsErrorKind::NotFound,
-            FsOperation::Stat,
-            "unused",
-        ))
+        Err(FsError::new(FsErrorKind::NotFound, FsOperation::Stat, "unused"))
     }
 
     fn open_writer(&self, request: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
-        let info = OpenedFileInfo::new(
-            FileSystemId::new("provider-context").unwrap(),
-            request.path().clone(),
-        )
-        .with_metadata(FileMetadata::new(FileKind::File));
+        let info = OpenedFileInfo::new(FileSystemId::new("provider-context").unwrap(), request.path().clone())
+            .with_metadata(FileMetadata::new(FileKind::File));
         Ok(OpenedWriter::new(
             info,
             Box::new(Session {
@@ -241,10 +234,7 @@ fn run_sync(stage: FailureStage, context: ErrorContext) -> bool {
     if let Some(cause) = source.downcast_ref::<MarkerCause>() {
         let _ = cause;
     } else if let Some(io) = source.downcast_ref::<IoError>() {
-        assert!(
-            io.get_ref()
-                .is_some_and(|source| source.is::<MarkerCause>())
-        );
+        assert!(io.get_ref().is_some_and(|source| source.is::<MarkerCause>()));
     } else {
         panic!("unexpected source type");
     }
@@ -255,10 +245,7 @@ fn run_sync(stage: FailureStage, context: ErrorContext) -> bool {
     };
     assert_eq!(expected_bytes, failure.written_bytes());
     assert_eq!(WriteFailureState::Indeterminate, failure.state());
-    assert!(
-        failure.take_recovery().is_some(),
-        "opened recovery must be retained"
-    );
+    assert!(failure.take_recovery().is_some(), "opened recovery must be retained");
     assert_eq!(0, counts.commits.load(Ordering::SeqCst));
     provider_matches
 }
@@ -280,10 +267,7 @@ fn test_sync_write_all_preserves_or_fills_provider_context() {
             }
         }
     }
-    assert!(
-        mismatches.is_empty(),
-        "provider mismatches at stages: {mismatches:?}"
-    );
+    assert!(mismatches.is_empty(), "provider mismatches at stages: {mismatches:?}");
 }
 
 #[cfg(feature = "async")]
@@ -365,14 +349,8 @@ mod asynchronous {
     }
 
     impl AsyncFileWriteSession for AsyncSession {
-        fn commit_async<'a>(
-            self: Pin<&'a mut Self>,
-        ) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
-            self.get_mut()
-                .0
-                .counts
-                .commits
-                .fetch_add(1, Ordering::SeqCst);
+        fn commit_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
+            self.get_mut().0.counts.commits.fetch_add(1, Ordering::SeqCst);
             Box::pin(async { panic!("commit must not run after a stream failure") })
         }
 
@@ -390,15 +368,9 @@ mod asynchronous {
             Box::pin(async move { <Provider as FileSystemSpi>::stat(self, request) })
         }
 
-        fn open_writer<'a>(
-            &'a self,
-            request: OpenWriterRequest<'a>,
-        ) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
-            let info = OpenedFileInfo::new(
-                FileSystemId::new("provider-context").unwrap(),
-                request.path().clone(),
-            )
-            .with_metadata(FileMetadata::new(FileKind::File));
+        fn open_writer<'a>(&'a self, request: OpenWriterRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
+            let info = OpenedFileInfo::new(FileSystemId::new("provider-context").unwrap(), request.path().clone())
+                .with_metadata(FileMetadata::new(FileKind::File));
             let session = AsyncSession(Session {
                 stage: self.stage,
                 context: self.context,
@@ -423,10 +395,7 @@ mod asynchronous {
         let mut operation = filesystem
             .begin_write_all(path.clone(), PAYLOAD.to_vec(), WriteOptions::default())
             .expect("operation should construct");
-        let failure = operation
-            .execute()
-            .await
-            .expect_err("scripted error should fail");
+        let failure = operation.execute().await.expect_err("scripted error should fail");
         let expected_provider = match context {
             ErrorContext::TypedProvider => "inner-provider",
             ErrorContext::TypedMissingProvider | ErrorContext::Untyped => "outer-provider",
@@ -446,10 +415,9 @@ mod asynchronous {
         let source = Error::source(failure.error()).expect("stream cause should be retained");
         assert!(
             source.downcast_ref::<MarkerCause>().is_some()
-                || source.downcast_ref::<IoError>().is_some_and(|io| {
-                    io.get_ref()
-                        .is_some_and(|source| source.is::<MarkerCause>())
-                })
+                || source
+                    .downcast_ref::<IoError>()
+                    .is_some_and(|io| { io.get_ref().is_some_and(|source| source.is::<MarkerCause>()) })
         );
         assert_eq!(
             if matches!(stage, FailureStage::Write) {
@@ -487,10 +455,7 @@ mod asynchronous {
                     }
                 }
             }
-            assert!(
-                mismatches.is_empty(),
-                "provider mismatches at stages: {mismatches:?}"
-            );
+            assert!(mismatches.is_empty(), "provider mismatches at stages: {mismatches:?}");
         });
     }
 }

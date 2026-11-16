@@ -1,17 +1,36 @@
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Barrier, Mutex};
-use std::task::{Context, Poll};
+use std::sync::Arc;
+use std::sync::Barrier;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::task::Context;
+use std::task::Poll;
 
-use qubit_fs::spi::{ManagedFsReadSpi, PreparedFsRead};
-use qubit_fs::{
-    AsyncFsOperation, FsEffectSlotPool, FsEffectSnapshot, FsEffectState, FsOperation,
-    FsOperationFailure, FsPrepareFailure, FsSubmitFailure, Path, ReadAllOptions,
-};
-use qubit_operation::{
-    ChildOutcomeSummary, ChildRelease, ChildSnapshot, ExecutionFailure, OperationControl,
-    OperationId, OperationManager, OperationOutcome, OperationScope, PreparedExternalOperation,
-    ShutdownMode, StopReason,
-};
+use qubit_fs::AsyncFsOperation;
+use qubit_fs::FsEffectSlotPool;
+use qubit_fs::FsEffectSnapshot;
+use qubit_fs::FsEffectState;
+use qubit_fs::FsOperation;
+use qubit_fs::FsOperationFailure;
+use qubit_fs::FsPrepareFailure;
+use qubit_fs::FsSubmitFailure;
+use qubit_fs::Path;
+use qubit_fs::ReadAllOptions;
+use qubit_fs::spi::ManagedFsReadSpi;
+use qubit_fs::spi::PreparedFsRead;
+use qubit_operation::ChildOutcomeSummary;
+use qubit_operation::ChildRelease;
+use qubit_operation::ChildSnapshot;
+use qubit_operation::ExecutionFailure;
+use qubit_operation::OperationControl;
+use qubit_operation::OperationId;
+use qubit_operation::OperationManager;
+use qubit_operation::OperationOutcome;
+use qubit_operation::OperationScope;
+use qubit_operation::PreparedExternalOperation;
+use qubit_operation::ShutdownMode;
+use qubit_operation::StopReason;
 
 #[test]
 fn operation_aliases_are_public() {
@@ -65,10 +84,7 @@ fn managed_submission_rejection_returns_the_owned_request() {
         Err(failure) => failure,
     };
     let (reason, preparation, recovered) = failure.into_parts();
-    assert!(
-        reason.is_some(),
-        "expected manager admission error: {reason:?}"
-    );
+    assert!(reason.is_some(), "expected manager admission error: {reason:?}");
     assert!(preparation.is_none());
     assert_eq!(recovered.path.as_str(), "/admission-reject");
 }
@@ -134,19 +150,13 @@ impl PreparedExternalOperation<Vec<u8>, FsOperationFailure> for HoldingRead {
         Ok(())
     }
     fn abandon(self: Arc<Self>) {}
-    fn poll_take_outcome(
-        &self,
-        _: &mut Context<'_>,
-    ) -> Poll<OperationOutcome<Vec<u8>, FsOperationFailure>> {
+    fn poll_take_outcome(&self, _: &mut Context<'_>) -> Poll<OperationOutcome<Vec<u8>, FsOperationFailure>> {
         Poll::Pending
     }
 }
 impl PreparedFsRead for HoldingRead {
     fn take_unclaimed_request(&self) -> Option<qubit_fs::FsOwnedReadRequest> {
-        self.request
-            .lock()
-            .expect("request mutex not poisoned")
-            .take()
+        self.request.lock().expect("request mutex not poisoned").take()
     }
 }
 
@@ -179,9 +189,7 @@ fn effect_observer_waits_for_final_facts_in_sync_and_async_paths() {
 #[test]
 fn request_is_recoverable_only_while_unclaimed() {
     let (adapter, counters) = lifecycle_adapter("/recover", false, None);
-    let request = adapter
-        .take_request()
-        .expect("unclaimed request is recoverable");
+    let request = adapter.take_request().expect("unclaimed request is recoverable");
     assert_eq!(request.path.as_str(), "/recover");
     assert_eq!(counters.unclaimed_request_reads.load(Ordering::SeqCst), 1);
 
@@ -324,10 +332,7 @@ fn lifecycle_adapter(
     path: &str,
     activation_fails: bool,
     gate: Option<Arc<BindGate>>,
-) -> (
-    Arc<qubit_fs::execution::PreparedFsReadAdapter>,
-    Arc<LifecycleCounters>,
-) {
+) -> (Arc<qubit_fs::execution::PreparedFsReadAdapter>, Arc<LifecycleCounters>) {
     let counters = Arc::new(LifecycleCounters::default());
     let request = qubit_fs::FsOwnedReadRequest {
         path: Path::parse(path).unwrap(),
@@ -376,11 +381,7 @@ impl LifecyclePrepared {
 impl OperationControl for LifecyclePrepared {
     fn request_stop(&self, _: StopReason) {}
     fn snapshot(&self) -> ChildSnapshot {
-        let operation_id = self
-            .operation_id
-            .lock()
-            .unwrap()
-            .expect("binding precedes observation");
+        let operation_id = self.operation_id.lock().unwrap().expect("binding precedes observation");
         let completed = self.completed.load(Ordering::SeqCst);
         let abandoned = self.abandoned.load(Ordering::SeqCst);
         let final_fact = completed || abandoned;
@@ -389,11 +390,7 @@ impl OperationControl for LifecyclePrepared {
         } else {
             qubit_operation::ChildOutcomeKind::Succeeded
         };
-        let summary = if abandoned {
-            "child stopped"
-        } else {
-            "child succeeded"
-        };
+        let summary = if abandoned { "child stopped" } else { "child succeeded" };
         ChildSnapshot {
             operation_id,
             execution: if final_fact {
@@ -412,11 +409,7 @@ impl OperationControl for LifecyclePrepared {
         }
     }
     fn poll_outcome(&self, _: &mut Context<'_>) -> Poll<ChildOutcomeSummary> {
-        let operation_id = self
-            .operation_id
-            .lock()
-            .unwrap()
-            .expect("binding precedes observation");
+        let operation_id = self.operation_id.lock().unwrap().expect("binding precedes observation");
         if self.completed.load(Ordering::SeqCst) || self.abandoned.load(Ordering::SeqCst) {
             let stopped = self.abandoned.load(Ordering::SeqCst);
             let kind = if stopped {
@@ -424,11 +417,7 @@ impl OperationControl for LifecyclePrepared {
             } else {
                 qubit_operation::ChildOutcomeKind::Succeeded
             };
-            let summary = if stopped {
-                "child stopped"
-            } else {
-                "child succeeded"
-            };
+            let summary = if stopped { "child stopped" } else { "child succeeded" };
             Poll::Ready(ChildOutcomeSummary {
                 operation_id,
                 kind,
@@ -439,11 +428,7 @@ impl OperationControl for LifecyclePrepared {
         }
     }
     fn poll_release(&self, _: &mut Context<'_>) -> Poll<ChildRelease> {
-        let operation_id = self
-            .operation_id
-            .lock()
-            .unwrap()
-            .expect("binding precedes observation");
+        let operation_id = self.operation_id.lock().unwrap().expect("binding precedes observation");
         if self.completed.load(Ordering::SeqCst) || self.abandoned.load(Ordering::SeqCst) {
             Poll::Ready(ChildRelease {
                 operation_id,
@@ -454,11 +439,7 @@ impl OperationControl for LifecyclePrepared {
         }
     }
     fn poll_settlement(&self, _: &mut Context<'_>) -> Poll<Arc<qubit_operation::SettlementReport>> {
-        let operation_id = self
-            .operation_id
-            .lock()
-            .unwrap()
-            .expect("binding precedes observation");
+        let operation_id = self.operation_id.lock().unwrap().expect("binding precedes observation");
         if self.completed.load(Ordering::SeqCst) || self.abandoned.load(Ordering::SeqCst) {
             Poll::Ready(Arc::new(empty_settlement(operation_id)))
         } else {
@@ -479,11 +460,7 @@ impl PreparedExternalOperation<Vec<u8>, FsOperationFailure> for LifecyclePrepare
     fn activate(self: Arc<Self>, _: OperationScope) -> Result<(), ExecutionFailure> {
         self.counters.activations.fetch_add(1, Ordering::SeqCst);
         if self.activation_fails {
-            let operation_id = self
-                .operation_id
-                .lock()
-                .unwrap()
-                .expect("bind precedes activation");
+            let operation_id = self.operation_id.lock().unwrap().expect("bind precedes activation");
             return Err(ExecutionFailure {
                 operation_id,
                 summary: qubit_operation::DiagnosticSummary::new("activation rejected"),
@@ -498,22 +475,13 @@ impl PreparedExternalOperation<Vec<u8>, FsOperationFailure> for LifecyclePrepare
         self.counters.abandons.fetch_add(1, Ordering::SeqCst);
         self.abandoned.store(true, Ordering::SeqCst);
     }
-    fn poll_take_outcome(
-        &self,
-        _: &mut Context<'_>,
-    ) -> Poll<OperationOutcome<Vec<u8>, FsOperationFailure>> {
-        self.outcome
-            .lock()
-            .unwrap()
-            .take()
-            .map_or(Poll::Pending, Poll::Ready)
+    fn poll_take_outcome(&self, _: &mut Context<'_>) -> Poll<OperationOutcome<Vec<u8>, FsOperationFailure>> {
+        self.outcome.lock().unwrap().take().map_or(Poll::Pending, Poll::Ready)
     }
 }
 impl PreparedFsRead for LifecyclePrepared {
     fn take_unclaimed_request(&self) -> Option<qubit_fs::FsOwnedReadRequest> {
-        self.counters
-            .unclaimed_request_reads
-            .fetch_add(1, Ordering::SeqCst);
+        self.counters.unclaimed_request_reads.fetch_add(1, Ordering::SeqCst);
         self.request.lock().unwrap().take()
     }
 }
@@ -549,18 +517,13 @@ fn empty_settlement(operation_id: OperationId) -> qubit_operation::SettlementRep
 fn fresh_operation_id() -> OperationId {
     let manager = OperationManager::new(qubit_operation::ManagerOptions::default()).unwrap();
     let mut operation = manager
-        .try_submit(qubit_operation::OperationOptions::default(), |_| {
-            Ok::<(), ()>(())
-        })
+        .try_submit(qubit_operation::OperationOptions::default(), |_| Ok::<(), ()>(()))
         .unwrap();
     let id = operation.id();
     assert!(matches!(
         operation.wait_outcome().unwrap(),
         OperationOutcome::Succeeded(())
     ));
-    let _shutdown = manager
-        .request_shutdown(ShutdownMode::Drain)
-        .wait()
-        .unwrap();
+    let _shutdown = manager.request_shutdown(ShutdownMode::Drain).wait().unwrap();
     id
 }

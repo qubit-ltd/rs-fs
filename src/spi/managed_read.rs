@@ -1,12 +1,16 @@
 //! Object-safe owned read provider protocol.
+use std::sync::Arc;
+use std::sync::Mutex;
+
 use crate::FsOperationFailure;
-use crate::execution::{FsOwnedReadRequest, FsPrepareFailure};
-use crate::{
-    error::{FsError, FsErrorKind, FsOperation, FsResult},
-    metadata::OpenedFileInfo,
-    spi::RandomAccessReadSession,
-};
-use std::sync::{Arc, Mutex};
+use crate::error::FsError;
+use crate::error::FsErrorKind;
+use crate::error::FsOperation;
+use crate::error::FsResult;
+use crate::execution::FsOwnedReadRequest;
+use crate::execution::FsPrepareFailure;
+use crate::metadata::OpenedFileInfo;
+use crate::spi::RandomAccessReadSession;
 
 /// Thread-safe control port for bounded reads from one opened object.
 ///
@@ -108,10 +112,7 @@ impl ManagedReadPort {
                 "opened read session cannot guarantee a stable version",
             ));
         }
-        let version = self
-            .info()?
-            .metadata()
-            .and_then(|metadata| metadata.etag().cloned());
+        let version = self.info()?.metadata().and_then(|metadata| metadata.etag().cloned());
         let (remaining_budget, len) = self.remaining_budget_and_len()?;
         let allocation_limit = capacity
             .min(usize::try_from(remaining_budget).unwrap_or(usize::MAX))
@@ -248,14 +249,11 @@ impl ManagedReadPort {
         if count == 0 {
             return Ok(0);
         }
-        let n = state
-            .session
-            .read_at(offset, &mut output[..count])
-            .map_err(|error| {
-                error
-                    .with_missing_context(state.info.path(), None, "managed-read")
-                    .with_operation(FsOperation::Read)
-            })?;
+        let n = state.session.read_at(offset, &mut output[..count]).map_err(|error| {
+            error
+                .with_missing_context(state.info.path(), None, "managed-read")
+                .with_operation(FsOperation::Read)
+        })?;
         if n > count {
             return Err(FsError::new(
                 FsErrorKind::ProviderContractViolation,
@@ -317,11 +315,7 @@ impl AsyncManagedReadPort {
     /// at the same offset. The caller must discard the output buffer when this
     /// future is dropped or returns an error. Repeated successful ranges count
     /// again toward `max_total`.
-    pub async fn read_at_async(
-        self: std::pin::Pin<&mut Self>,
-        offset: u64,
-        output: &mut [u8],
-    ) -> FsResult<usize> {
+    pub async fn read_at_async(self: std::pin::Pin<&mut Self>, offset: u64, output: &mut [u8]) -> FsResult<usize> {
         let requested = u64::try_from(output.len()).map_err(|_| {
             FsError::new(
                 FsErrorKind::ResourceLimitExceeded,
@@ -392,10 +386,9 @@ impl AsyncManagedReadPort {
     }
 }
 /// Prepared read accepted by the managed operation framework.
-pub trait PreparedFsRead:
-    qubit_operation::PreparedExternalOperation<Vec<u8>, FsOperationFailure>
-{
-    /// Returns the original request while the prepared operation remains unclaimed.
+pub trait PreparedFsRead: qubit_operation::PreparedExternalOperation<Vec<u8>, FsOperationFailure> {
+    /// Returns the original request while the prepared operation remains
+    /// unclaimed.
     fn take_unclaimed_request(&self) -> Option<FsOwnedReadRequest>;
 }
 /// Object-safe provider preparation interface for owned read requests.

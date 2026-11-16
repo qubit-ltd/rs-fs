@@ -94,24 +94,16 @@ fn info(path: &str, kind: Option<FileKind>) -> OpenedFileInfo {
         FileSystemId::new("preflight-test").expect("filesystem id"),
         Path::parse(path).expect("path"),
     );
-    kind.map_or(info.clone(), |kind| {
-        info.with_metadata(FileMetadata::new(kind))
-    })
+    kind.map_or(info.clone(), |kind| info.with_metadata(FileMetadata::new(kind)))
 }
 
 #[test]
 fn test_shared_opened_info_validation_checks_filesystem_and_requested_path() {
     let core = test_core();
     let requested = Path::parse("/expected").expect("path");
-    assert!(
-        core.validate_opened_info(&info("/expected", None), &requested)
-            .is_ok()
-    );
+    assert!(core.validate_opened_info(&info("/expected", None), &requested).is_ok());
 
-    let foreign = OpenedFileInfo::new(
-        FileSystemId::new("foreign").expect("filesystem id"),
-        requested.clone(),
-    );
+    let foreign = OpenedFileInfo::new(FileSystemId::new("foreign").expect("filesystem id"), requested.clone());
     let wrong_path = info("/other", None);
     for outcome in [&foreign, &wrong_path] {
         let error = core

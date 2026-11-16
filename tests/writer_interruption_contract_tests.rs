@@ -100,10 +100,8 @@ impl FileSystemSpi for Provider {
     }
     fn stat(&self, request: StatRequest<'_>) -> FsResult<StatResponse> {
         if request.path().as_str() == "/target" {
-            return Err(
-                FsError::new(FsErrorKind::NotFound, FsOperation::Stat, "missing target")
-                    .with_effect_state(FsEffectState::Unchanged),
-            );
+            return Err(FsError::new(FsErrorKind::NotFound, FsOperation::Stat, "missing target")
+                .with_effect_state(FsEffectState::Unchanged));
         }
         Ok(StatResponse::new(
             request.path().clone(),
@@ -113,10 +111,7 @@ impl FileSystemSpi for Provider {
     fn open_reader(&self, request: OpenReaderRequest<'_>) -> FsResult<OpenedReader> {
         let info = OpenedFileInfo::new(FileSystemId::new(ID)?, request.path().clone())
             .with_metadata(FileMetadata::new(FileKind::File).with_len(Some(7)));
-        Ok(OpenedReader::new(
-            info,
-            Box::new(Cursor::new(b"payload".to_vec())),
-        ))
+        Ok(OpenedReader::new(info, Box::new(Cursor::new(b"payload".to_vec()))))
     }
     fn open_writer(&self, request: OpenWriterRequest<'_>) -> FsResult<OpenedWriter> {
         let info = OpenedFileInfo::new(FileSystemId::new(ID)?, request.path().clone());
@@ -136,12 +131,7 @@ impl FileSystemSpi for Provider {
 
 impl Output for Writer {
     type Item = u8;
-    unsafe fn write_unchecked(
-        &mut self,
-        input: &[u8],
-        index: usize,
-        count: usize,
-    ) -> io::Result<usize> {
+    unsafe fn write_unchecked(&mut self, input: &[u8], index: usize, count: usize) -> io::Result<usize> {
         if self.0.fetch_add(1, Ordering::SeqCst) == 0 {
             if self.4 {
                 return Err(io::Error::from(io::ErrorKind::Interrupted));
@@ -176,10 +166,7 @@ impl FileWriterSpi for Writer {
     }
 }
 
-fn filesystem(
-    kind: FsErrorKind,
-    effect: FsEffectState,
-) -> (FileSystem, Arc<AtomicUsize>, Arc<AtomicUsize>) {
+fn filesystem(kind: FsErrorKind, effect: FsEffectState) -> (FileSystem, Arc<AtomicUsize>, Arc<AtomicUsize>) {
     filesystem_with_ordinary(kind, effect, false)
 }
 
@@ -268,12 +255,7 @@ fn test_typed_interrupted_with_unchanged_is_a_retry_candidate() {
 
 #[test]
 fn test_typed_interrupted_without_effect_is_not_retried() {
-    let (fs, calls, _) = filesystem_configured(
-        FsErrorKind::Interrupted,
-        FsEffectState::Unchanged,
-        false,
-        true,
-    );
+    let (fs, calls, _) = filesystem_configured(FsErrorKind::Interrupted, FsEffectState::Unchanged, false, true);
     let mut writer = fs
         .open_writer(&Path::parse("/target").unwrap(), WriteOptions::default())
         .unwrap();
@@ -283,8 +265,7 @@ fn test_typed_interrupted_without_effect_is_not_retried() {
 
 #[test]
 fn test_ordinary_interrupted_remains_retryable() {
-    let (fs, calls, _) =
-        filesystem_with_ordinary(FsErrorKind::Interrupted, FsEffectState::Unchanged, true);
+    let (fs, calls, _) = filesystem_with_ordinary(FsErrorKind::Interrupted, FsEffectState::Unchanged, true);
     let mut writer = fs
         .open_writer(&Path::parse("/target").unwrap(), WriteOptions::default())
         .unwrap();
@@ -308,10 +289,7 @@ fn test_stream_copy_does_not_retry_conflicting_interruption() {
     assert_eq!(CopyFailureState::Indeterminate, failure.state());
     assert_eq!(FsOperation::Copy, failure.error().operation());
     assert_eq!(Some("scripted provider"), failure.error().provider());
-    assert_eq!(
-        Some(&Path::parse("/target").unwrap()),
-        failure.error().path()
-    );
+    assert_eq!(Some(&Path::parse("/target").unwrap()), failure.error().path());
     assert!(
         matches!(failure.recovery(), Some(WriterRecovery::Opened(writer)) if writer.state() == WriterState::Indeterminate)
     );

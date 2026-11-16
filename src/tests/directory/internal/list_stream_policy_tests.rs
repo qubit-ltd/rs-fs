@@ -124,10 +124,7 @@ fn test_late_provider_error_preserves_kind_path_and_source() {
     assert_eq!(error.kind(), FsErrorKind::PermissionDenied);
     assert_eq!(error.path(), Some(&path));
     assert_eq!(
-        error
-            .source()
-            .expect("provider error retains its source")
-            .to_string(),
+        error.source().expect("provider error retains its source").to_string(),
         "provider source"
     );
     assert_eq!(stream.state(), DirectoryStreamState::Failed);
@@ -140,9 +137,7 @@ fn test_empty_list_and_entry_overrun_are_distinct() {
     let now = Instant::now();
     let options = ListOptions::object_keys().with_max_entries(Some(0));
     let mut empty = policy(now, options.clone());
-    empty
-        .before_next(now)
-        .expect("empty listing stream is open");
+    empty.before_next(now).expect("empty listing stream is open");
     assert!(
         empty
             .finish_next(Ok(None), now)
@@ -158,9 +153,7 @@ fn test_empty_list_and_entry_overrun_are_distinct() {
         FsErrorKind::InvalidState
     );
     let mut nonempty = policy(now, options);
-    nonempty
-        .before_next(now)
-        .expect("nonempty listing stream is open");
+    nonempty.before_next(now).expect("nonempty listing stream is open");
     assert_eq!(
         nonempty
             .finish_next(Ok(Some(entry())), now)
@@ -175,9 +168,7 @@ fn test_empty_list_and_entry_overrun_are_distinct() {
 fn test_entry_limit_requires_an_explicit_overrun_probe() {
     let now = Instant::now();
     let mut stream = policy(now, ListOptions::object_keys().with_max_entries(Some(1)));
-    stream
-        .before_next(now)
-        .expect("stream is open before first entry");
+    stream.before_next(now).expect("stream is open before first entry");
     assert!(
         stream
             .finish_next(Ok(Some(entry())), now)
@@ -209,10 +200,7 @@ fn test_overflowing_deadline_is_rejected_at_construction() {
         Instant::now(),
     );
     assert_eq!(
-        result
-            .err()
-            .expect("unrepresentable deadline is rejected")
-            .kind(),
+        result.err().expect("unrepresentable deadline is rejected").kind(),
         FsErrorKind::InvalidOptions
     );
 }

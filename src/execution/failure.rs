@@ -1,16 +1,20 @@
-use crate::{
-    copy::CopyFailure,
-    error::{FsEffectState, FsError},
-    rename::RenameFailure,
-    write::WriteAllFailure,
-};
+use std::error::Error;
+use std::fmt;
+use std::sync::Arc;
+
 use qubit_operation::AdmissionError;
-use std::{error::Error, fmt, sync::Arc};
+
+use crate::copy::CopyFailure;
+use crate::error::FsEffectState;
+use crate::error::FsError;
+use crate::rename::RenameFailure;
+use crate::write::WriteAllFailure;
 
 /// Typed failure produced by a managed filesystem operation.
 #[derive(Debug)]
 pub enum FsOperationFailureKind {
-    /// General provider or read failure retaining its structured filesystem error.
+    /// General provider or read failure retaining its structured filesystem
+    /// error.
     Provider(Arc<FsError>),
     /// Copy failure retaining progress and any typed recovery owner.
     Copy(Box<CopyFailure>),

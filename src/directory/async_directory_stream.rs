@@ -135,8 +135,6 @@ impl Debug for AsyncDirectoryStream {
     /// - `formatter`: Formatter receiving the stream's debug representation.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
-        formatter
-            .debug_struct("AsyncDirectoryStream")
-            .finish_non_exhaustive()
+        formatter.debug_struct("AsyncDirectoryStream").finish_non_exhaustive()
     }
 }

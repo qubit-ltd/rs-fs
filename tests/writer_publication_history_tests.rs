@@ -19,10 +19,7 @@ use qubit_fs::write::WriterState;
 
 mod handle_support;
 
-fn opened_writer(
-    commit_failure: Option<WriteFailureState>,
-    abort_failure: Option<FsErrorKind>,
-) -> FileWriter {
+fn opened_writer(commit_failure: Option<WriteFailureState>, abort_failure: Option<FsErrorKind>) -> FileWriter {
     handle_support::implementation_tests::writer_lifecycle_filesystem(commit_failure, abort_failure)
         .open_writer(
             &Path::parse("/target").expect("path should parse"),
@@ -33,11 +30,10 @@ fn opened_writer(
 
 #[test]
 fn test_sync_writer_keeps_publication_history_after_cleanup_failure() {
-    let (filesystem, commit_calls, _) =
-        handle_support::implementation_tests::writer_lifecycle_filesystem_with_counts(
-            Some(WriteFailureState::Published),
-            Some(FsErrorKind::Io),
-        );
+    let (filesystem, commit_calls, _) = handle_support::implementation_tests::writer_lifecycle_filesystem_with_counts(
+        Some(WriteFailureState::Published),
+        Some(FsErrorKind::Io),
+    );
     let mut writer = filesystem
         .open_writer(
             &Path::parse("/target").expect("path should parse"),
@@ -61,10 +57,7 @@ fn test_sync_writer_keeps_publication_history_after_cleanup_failure() {
         .expect_err("published writer must reject a second commit");
     assert_eq!(FsErrorKind::InvalidState, repeated.error().kind());
     assert_eq!(WriteFailureState::Published, repeated.state());
-    assert_eq!(
-        1,
-        *commit_calls.lock().expect("counter lock should succeed")
-    );
+    assert_eq!(1, *commit_calls.lock().expect("counter lock should succeed"));
 }
 
 #[test]
@@ -112,9 +105,7 @@ fn test_sync_writer_repeated_abort_does_not_call_provider_again() {
         writer.abort().expect("abort should succeed")
     );
     assert_eq!(RecoveryCleanupState::Completed, writer.cleanup_state());
-    let repeated = writer
-        .abort()
-        .expect_err("completed cleanup must reject another abort");
+    let repeated = writer.abort().expect_err("completed cleanup must reject another abort");
 
     assert_eq!(FsErrorKind::InvalidState, repeated.kind());
     assert_eq!(1, *abort_calls.lock().expect("counter lock should succeed"));
@@ -123,9 +114,7 @@ fn test_sync_writer_repeated_abort_does_not_call_provider_again() {
 #[test]
 fn test_sync_writer_indeterminate_abort_completes_cleanup_without_publication_fact() {
     let mut writer = opened_writer(Some(WriteFailureState::Indeterminate), None);
-    let failure = writer
-        .commit()
-        .expect_err("configured commit should fail ambiguously");
+    let failure = writer.commit().expect_err("configured commit should fail ambiguously");
     assert_eq!(WriteFailureState::Indeterminate, failure.state());
     assert!(!writer.has_confirmed_publication());
 
@@ -165,8 +154,7 @@ fn test_async_writer_published_commit_survives_successful_abort() {
     let _ = ready(writer.abort_async()).expect("abort should complete");
     assert!(writer.has_confirmed_publication());
     assert_eq!(RecoveryCleanupState::Completed, writer.cleanup_state());
-    let repeated =
-        ready(writer.commit_async()).expect_err("published writer must reject a second commit");
+    let repeated = ready(writer.commit_async()).expect_err("published writer must reject a second commit");
     assert_eq!(WriteFailureState::Published, repeated.state());
     assert_eq!(1, probe.writer_commits());
 }
@@ -232,8 +220,7 @@ fn test_async_writer_repeated_abort_does_not_call_provider_again() {
         ready(writer.abort_async()).expect("abort should succeed")
     );
     assert_eq!(RecoveryCleanupState::Completed, writer.cleanup_state());
-    let repeated =
-        ready(writer.abort_async()).expect_err("completed cleanup must reject another abort");
+    let repeated = ready(writer.abort_async()).expect_err("completed cleanup must reject another abort");
 
     assert_eq!(FsErrorKind::InvalidState, repeated.kind());
     assert_eq!(1, probe.writer_aborts());
@@ -269,10 +256,7 @@ fn test_async_writer_abort_cancellation_keeps_publication_history() {
     let mut abort = writer.abort_async();
     let waker = Waker::noop();
     let mut context = Context::from_waker(waker);
-    assert!(matches!(
-        Pin::new(&mut abort).poll(&mut context),
-        Poll::Pending
-    ));
+    assert!(matches!(Pin::new(&mut abort).poll(&mut context), Poll::Pending));
     drop(abort);
 
     assert!(writer.has_confirmed_publication());

@@ -1,7 +1,10 @@
 use std::collections::BTreeSet;
 use std::time::Instant;
 
-use crate::error::{FsError, FsErrorKind, FsOperation, FsResult};
+use crate::error::FsError;
+use crate::error::FsErrorKind;
+use crate::error::FsOperation;
+use crate::error::FsResult;
 
 /// Resource limits used while validating a staged directory tree.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -30,12 +33,7 @@ impl TreeValidationOptions {
     pub const MAX_BATCH_BYTES: usize = 256 * 1024;
 
     /// Checks a validation deadline and an independent stop request.
-    pub fn check_active(
-        &self,
-        now: Instant,
-        deadline: Option<Instant>,
-        stop_requested: bool,
-    ) -> FsResult<()> {
+    pub fn check_active(&self, now: Instant, deadline: Option<Instant>, stop_requested: bool) -> FsResult<()> {
         if stop_requested {
             return Err(tree_validation_error("tree validation was stopped"));
         }
@@ -52,24 +50,18 @@ impl TreeValidationOptions {
     /// rejected even when it is the only record.
     pub fn validate_batch(&self, record_sizes: &[usize]) -> FsResult<()> {
         if record_sizes.len() > Self::MAX_BATCH_RECORDS {
-            return Err(tree_validation_error(
-                "tree validation batch exceeds record limit",
-            ));
+            return Err(tree_validation_error("tree validation batch exceeds record limit"));
         }
         let mut total = 0_usize;
         for size in record_sizes {
             if *size > Self::MAX_BATCH_BYTES {
-                return Err(tree_validation_error(
-                    "tree validation record exceeds byte limit",
-                ));
+                return Err(tree_validation_error("tree validation record exceeds byte limit"));
             }
-            total = total.checked_add(*size).ok_or_else(|| {
-                tree_validation_error("tree validation batch byte count overflowed")
-            })?;
+            total = total
+                .checked_add(*size)
+                .ok_or_else(|| tree_validation_error("tree validation batch byte count overflowed"))?;
             if total > Self::MAX_BATCH_BYTES {
-                return Err(tree_validation_error(
-                    "tree validation batch exceeds byte limit",
-                ));
+                return Err(tree_validation_error("tree validation batch exceeds byte limit"));
             }
         }
         Ok(())
@@ -92,22 +84,15 @@ impl TreeValidationOptions {
         normalized_paths: &mut BTreeSet<String>,
     ) -> FsResult<()> {
         if is_symlink {
-            return Err(tree_validation_error(
-                "tree validation rejects symbolic links",
-            ));
+            return Err(tree_validation_error("tree validation rejects symbolic links"));
         }
         if !is_safe_relative_path(relative_path) || !is_safe_relative_path(normalized_path) {
-            return Err(tree_validation_error(
-                "tree entry path is absolute or escapes its root",
-            ));
+            return Err(tree_validation_error("tree entry path is absolute or escapes its root"));
         }
         if relative_path.split('/').count() > self.max_depth {
             return Err(tree_validation_error("tree entry exceeds depth limit"));
         }
-        if entries_seen
-            .checked_add(1)
-            .is_none_or(|count| count > self.max_entries)
-        {
+        if entries_seen.checked_add(1).is_none_or(|count| count > self.max_entries) {
             return Err(tree_validation_error("tree exceeds entry limit"));
         }
         if content_bytes_seen

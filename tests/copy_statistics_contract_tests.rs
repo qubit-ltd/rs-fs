@@ -126,10 +126,7 @@ fn test_auto_and_tree_reject_excess_overwritten_statistics() {
             .copy(&path("/source"), &path("/target"), options)
             .expect_err("excess overwritten statistics must violate the contract");
 
-        assert_eq!(
-            FsErrorKind::ProviderContractViolation,
-            failure.error().kind()
-        );
+        assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
         assert_eq!(CopyFailureState::Indeterminate, failure.state());
         assert_eq!(
             CopyStats {
@@ -139,11 +136,7 @@ fn test_auto_and_tree_reject_excess_overwritten_statistics() {
             },
             *failure.partial_stats()
         );
-        assert_eq!(
-            1,
-            calls.load(Ordering::SeqCst),
-            "provider must be called once"
-        );
+        assert_eq!(1, calls.load(Ordering::SeqCst), "provider must be called once");
     }
 }
 
@@ -208,10 +201,7 @@ fn test_statistics_shape_legal_and_boundary_comparisons() {
     .into_filesystem()
     .copy(&path("/source"), &path("/target"), CopyOptions::default())
     .expect_err("overflowing entry counters must be rejected");
-    assert_eq!(
-        FsErrorKind::ProviderContractViolation,
-        overflow.error().kind()
-    );
+    assert_eq!(FsErrorKind::ProviderContractViolation, overflow.error().kind());
     assert_eq!(CopyFailureState::Indeterminate, overflow.state());
 
     let downgraded = CopyStatsSpi::new(
@@ -231,10 +221,7 @@ fn test_statistics_shape_legal_and_boundary_comparisons() {
             .with_atomicity(AtomicityRequirement::Required),
     )
     .expect_err("required atomicity downgrade must be rejected");
-    assert_eq!(
-        FsErrorKind::ProviderContractViolation,
-        downgraded.error().kind()
-    );
+    assert_eq!(FsErrorKind::ProviderContractViolation, downgraded.error().kind());
     assert_eq!(CopyFailureState::Published, downgraded.state());
 }
 
@@ -252,17 +239,10 @@ fn test_auto_and_tree_reject_bytes_without_completed_or_failed_resources() {
             .copy(&path("/source"), &path("/target"), options)
             .expect_err("bytes without completed or failed resources must be rejected");
 
-        assert_eq!(
-            FsErrorKind::ProviderContractViolation,
-            failure.error().kind()
-        );
+        assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
         assert_eq!(CopyFailureState::Indeterminate, failure.state());
         assert_eq!(stats, *failure.partial_stats());
-        assert_eq!(
-            1,
-            calls.load(Ordering::SeqCst),
-            "provider must be called once"
-        );
+        assert_eq!(1, calls.load(Ordering::SeqCst), "provider must be called once");
     }
 }
 
@@ -322,10 +302,7 @@ fn test_statistics_shape_preserves_empty_and_partial_failure_boundaries() {
         CopyOptions::tree().with_conflict(CopyConflictPolicy::Skip),
     )
     .expect_err("skipped entries cannot account for copied bytes");
-    assert_eq!(
-        FsErrorKind::ProviderContractViolation,
-        skipped_bytes.error().kind()
-    );
+    assert_eq!(FsErrorKind::ProviderContractViolation, skipped_bytes.error().kind());
     assert_eq!(CopyFailureState::Indeterminate, skipped_bytes.state());
     assert_eq!(42, skipped_bytes.partial_stats().bytes);
 
@@ -372,10 +349,7 @@ fn test_entry_budget_counts_skipped_and_completed_resources() {
     );
 
     let failure = failure.expect_err("processed source entries exceed the requested budget");
-    assert_eq!(
-        FsErrorKind::ProviderContractViolation,
-        failure.error().kind()
-    );
+    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
     assert_eq!(CopyFailureState::Unchanged, failure.state());
     assert_eq!(stats, *failure.partial_stats());
     assert_eq!(1, calls.load(Ordering::SeqCst));
@@ -455,10 +429,7 @@ fn test_entry_budget_counts_skipped_and_completed_resources() {
                 .with_max_entries(Some(1)),
         )
         .expect_err("failed entries alone exceed the requested limit");
-    assert_eq!(
-        FsErrorKind::ProviderContractViolation,
-        failure.error().kind()
-    );
+    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
     assert_eq!(CopyFailureState::Indeterminate, failure.state());
     assert_eq!(failed_stats, *failure.partial_stats());
 }
@@ -483,10 +454,7 @@ fn test_entry_budget_rejection_preserves_published_state_and_statistics() {
         )
         .expect_err("completed plus skipped entries exceed the budget");
 
-    assert_eq!(
-        FsErrorKind::ProviderContractViolation,
-        failure.error().kind()
-    );
+    assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
     assert_eq!(CopyFailureState::Published, failure.state());
     assert_eq!(stats, *failure.partial_stats());
     assert_eq!(1, calls.load(Ordering::SeqCst));
@@ -548,10 +516,7 @@ mod asynchronous {
             })
         }
 
-        fn try_copy<'a>(
-            &'a self,
-            _: CopyRequest<'a>,
-        ) -> SpiFuture<'a, Result<CopyAttempt, SpiCopyFailure>> {
+        fn try_copy<'a>(&'a self, _: CopyRequest<'a>) -> SpiFuture<'a, Result<CopyAttempt, SpiCopyFailure>> {
             Box::pin(async move {
                 self.calls.fetch_add(1, Ordering::SeqCst);
                 Ok(CopyAttempt::Completed(CopyOutcome::new(
@@ -594,13 +559,10 @@ mod asynchronous {
             let mut operation = filesystem
                 .begin_copy(path("/source"), path("/target"), options)
                 .expect("copy preflight should succeed");
-            let failure = ready(operation.execute())
-                .expect_err("excess overwritten statistics must violate the contract");
+            let failure =
+                ready(operation.execute()).expect_err("excess overwritten statistics must violate the contract");
 
-            assert_eq!(
-                FsErrorKind::ProviderContractViolation,
-                failure.error().kind()
-            );
+            assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
             assert_eq!(CopyFailureState::Indeterminate, failure.state());
             assert_eq!(
                 CopyStats {
@@ -610,11 +572,7 @@ mod asynchronous {
                 },
                 *failure.partial_stats()
             );
-            assert_eq!(
-                1,
-                calls.load(Ordering::SeqCst),
-                "provider must be called once"
-            );
+            assert_eq!(1, calls.load(Ordering::SeqCst), "provider must be called once");
             assert_eq!(
                 AsyncCopyOperationState::Failed(CopyFailureState::Indeterminate),
                 operation.state()
@@ -657,20 +615,13 @@ mod asynchronous {
             let mut operation = filesystem(spi)
                 .begin_copy(path("/source"), path("/target"), options)
                 .expect("copy preflight should succeed");
-            let failure = ready(operation.execute())
-                .expect_err("bytes without completed or failed resources must be rejected");
+            let failure =
+                ready(operation.execute()).expect_err("bytes without completed or failed resources must be rejected");
 
-            assert_eq!(
-                FsErrorKind::ProviderContractViolation,
-                failure.error().kind()
-            );
+            assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
             assert_eq!(CopyFailureState::Indeterminate, failure.state());
             assert_eq!(stats, *failure.partial_stats());
-            assert_eq!(
-                1,
-                calls.load(Ordering::SeqCst),
-                "provider must be called once"
-            );
+            assert_eq!(1, calls.load(Ordering::SeqCst), "provider must be called once");
             assert_eq!(
                 AsyncCopyOperationState::Failed(CopyFailureState::Indeterminate),
                 operation.state()
@@ -766,10 +717,7 @@ mod asynchronous {
         let result = ready(operation.execute());
 
         let failure = result.expect_err("processed source entries exceed the requested budget");
-        assert_eq!(
-            FsErrorKind::ProviderContractViolation,
-            failure.error().kind()
-        );
+        assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
         assert_eq!(CopyFailureState::Unchanged, failure.state());
         assert_eq!(stats, *failure.partial_stats());
         assert_eq!(1, calls.load(Ordering::SeqCst));
@@ -793,13 +741,9 @@ mod asynchronous {
                     .with_max_entries(Some(1)),
             )
             .expect("copy preflight should succeed");
-        let failure = ready(operation.execute())
-            .expect_err("completed plus skipped entries exceed the budget");
+        let failure = ready(operation.execute()).expect_err("completed plus skipped entries exceed the budget");
 
-        assert_eq!(
-            FsErrorKind::ProviderContractViolation,
-            failure.error().kind()
-        );
+        assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
         assert_eq!(CopyFailureState::Published, failure.state());
         assert_eq!(stats, *failure.partial_stats());
         assert_eq!(1, calls.load(Ordering::SeqCst));

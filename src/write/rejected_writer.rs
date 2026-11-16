@@ -116,11 +116,7 @@ impl RejectedWriter {
     /// # Parameters
     /// - `error`: Failure whose trusted filesystem context is being restored.
     fn contextual_error(&self, error: FsError) -> FsError {
-        error.with_trusted_cleanup_context(
-            FsOperation::AbortWriter,
-            self.path.as_ref(),
-            &self.provider,
-        )
+        error.with_trusted_cleanup_context(FsOperation::AbortWriter, self.path.as_ref(), &self.provider)
     }
 }
 impl Debug for RejectedWriter {

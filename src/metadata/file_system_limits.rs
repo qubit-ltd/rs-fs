@@ -167,11 +167,10 @@ impl FileSystemLimits {
     pub fn clamp_list_page_size(&self, requested: Option<usize>) -> Option<usize> {
         let requested = requested?;
         match self.max_list_page_entries {
-            FileSystemLimit::Maximum(maximum) => usize::try_from(maximum)
-                .map_or(Some(requested), |maximum| Some(requested.min(maximum))),
-            FileSystemLimit::Unknown
-            | FileSystemLimit::NotApplicable
-            | FileSystemLimit::Unbounded => Some(requested),
+            FileSystemLimit::Maximum(maximum) => {
+                usize::try_from(maximum).map_or(Some(requested), |maximum| Some(requested.min(maximum)))
+            }
+            FileSystemLimit::Unknown | FileSystemLimit::NotApplicable | FileSystemLimit::Unbounded => Some(requested),
         }
     }
 
@@ -188,12 +187,7 @@ impl FileSystemLimits {
     /// - `semantics`: Path model; component limits apply only to hierarchical
     ///   paths.
     /// - `operation`: Operation attached to a possible resource-limit error.
-    pub fn validate_path(
-        &self,
-        path: &Path,
-        semantics: PathSemantics,
-        operation: FsOperation,
-    ) -> FsResult<()> {
+    pub fn validate_path(&self, path: &Path, semantics: PathSemantics, operation: FsOperation) -> FsResult<()> {
         if exceeds_usize(self.max_path_text_bytes, path.as_str().len()) {
             return Err(limit_error(
                 operation,
@@ -202,10 +196,10 @@ impl FileSystemLimits {
             ));
         }
         if semantics == PathSemantics::Hierarchical
-            && path.as_str().split('/').any(|component| {
-                !component.is_empty()
-                    && exceeds_usize(self.max_component_text_bytes, component.len())
-            })
+            && path
+                .as_str()
+                .split('/')
+                .any(|component| !component.is_empty() && exceeds_usize(self.max_component_text_bytes, component.len()))
         {
             return Err(limit_error(
                 operation,

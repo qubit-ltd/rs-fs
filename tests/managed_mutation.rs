@@ -1,4 +1,7 @@
-use qubit_fs::{FsEffectFact, FsEffectSlotPool, FsEffectSnapshot, FsEffectState};
+use qubit_fs::FsEffectFact;
+use qubit_fs::FsEffectSlotPool;
+use qubit_fs::FsEffectSnapshot;
+use qubit_fs::FsEffectState;
 
 #[test]
 fn effect_reservation_stays_owned_until_recovery_finishes() {
@@ -14,36 +17,29 @@ fn effect_reservation_stays_owned_until_recovery_finishes() {
         FsEffectSnapshot::Final(FsEffectFact::State(FsEffectState::Applied))
     ));
     drop(observer);
-    assert!(
-        pool.reserve().is_err(),
-        "active owner retains the bounded slot"
-    );
+    assert!(pool.reserve().is_err(), "active owner retains the bounded slot");
     drop(reservation);
-    assert!(
-        pool.reserve().is_ok(),
-        "releasing the owner reclaims the slot"
-    );
+    assert!(pool.reserve().is_ok(), "releasing the owner reclaims the slot");
 }
 
 #[test]
 fn prepared_mutations_accept_one_owned_effect_reservation() {
-    use qubit_fs::spi::{PreparedFsCopy, PreparedFsRename, PreparedFsWrite};
+    use qubit_fs::spi::PreparedFsCopy;
+    use qubit_fs::spi::PreparedFsRename;
+    use qubit_fs::spi::PreparedFsWrite;
 
     let _: fn(
         &dyn PreparedFsWrite,
         qubit_fs::execution::FsEffectReservation,
-    ) -> Result<(), qubit_fs::execution::FsEffectReservation> =
-        PreparedFsWrite::install_effect_reservation;
+    ) -> Result<(), qubit_fs::execution::FsEffectReservation> = PreparedFsWrite::install_effect_reservation;
     let _: fn(
         &dyn PreparedFsCopy,
         qubit_fs::execution::FsEffectReservation,
-    ) -> Result<(), qubit_fs::execution::FsEffectReservation> =
-        PreparedFsCopy::install_effect_reservation;
+    ) -> Result<(), qubit_fs::execution::FsEffectReservation> = PreparedFsCopy::install_effect_reservation;
     let _: fn(
         &dyn PreparedFsRename,
         qubit_fs::execution::FsEffectReservation,
-    ) -> Result<(), qubit_fs::execution::FsEffectReservation> =
-        PreparedFsRename::install_effect_reservation;
+    ) -> Result<(), qubit_fs::execution::FsEffectReservation> = PreparedFsRename::install_effect_reservation;
 }
 
 #[test]
@@ -60,19 +56,18 @@ fn a_lost_effect_is_not_reported_as_unchanged() {
 
 #[test]
 fn failure_publication_preserves_write_count_and_publication_state() {
-    use qubit_fs::error::{FsError, FsErrorKind, FsOperation};
-    use qubit_fs::write::WriteFailureState;
     use std::sync::Arc;
+
+    use qubit_fs::error::FsError;
+    use qubit_fs::error::FsErrorKind;
+    use qubit_fs::error::FsOperation;
+    use qubit_fs::write::WriteFailureState;
 
     let pool = FsEffectSlotPool::new(1);
     let reservation = pool.reserve().unwrap();
     let observer = reservation.observer();
     reservation.publish_write_failure(
-        Arc::new(FsError::new(
-            FsErrorKind::Other,
-            FsOperation::Write,
-            "write failed",
-        )),
+        Arc::new(FsError::new(FsErrorKind::Other, FsOperation::Write, "write failed")),
         WriteFailureState::Published,
         23,
         None,
@@ -93,18 +88,18 @@ fn failure_publication_preserves_write_count_and_publication_state() {
 
 #[test]
 fn failure_publication_preserves_copy_counters_and_uncertainty() {
-    use qubit_fs::copy::{CopyFailureState, CopyStats};
-    use qubit_fs::error::{FsError, FsErrorKind, FsOperation};
     use std::sync::Arc;
+
+    use qubit_fs::copy::CopyFailureState;
+    use qubit_fs::copy::CopyStats;
+    use qubit_fs::error::FsError;
+    use qubit_fs::error::FsErrorKind;
+    use qubit_fs::error::FsOperation;
 
     let reservation = FsEffectSlotPool::new(1).reserve().unwrap();
     let observer = reservation.observer();
     reservation.publish_copy_failure(
-        Arc::new(FsError::new(
-            FsErrorKind::Other,
-            FsOperation::Copy,
-            "copy failed",
-        )),
+        Arc::new(FsError::new(FsErrorKind::Other, FsOperation::Copy, "copy failed")),
         CopyFailureState::Indeterminate,
         CopyStats {
             files: 2,
@@ -130,22 +125,20 @@ fn failure_publication_preserves_copy_counters_and_uncertainty() {
 
 #[test]
 fn failure_publication_preserves_rename_transition_state() {
-    use qubit_fs::error::{FsError, FsErrorKind, FsOperation};
-    use qubit_fs::rename::RenameFailureState;
     use std::sync::Arc;
+
+    use qubit_fs::error::FsError;
+    use qubit_fs::error::FsErrorKind;
+    use qubit_fs::error::FsOperation;
+    use qubit_fs::rename::RenameFailureState;
 
     let reservation = FsEffectSlotPool::new(1).reserve().unwrap();
     let observer = reservation.observer();
     reservation.publish_rename_failure(
-        Arc::new(FsError::new(
-            FsErrorKind::Other,
-            FsOperation::Rename,
-            "rename failed",
-        )),
+        Arc::new(FsError::new(FsErrorKind::Other, FsOperation::Rename, "rename failed")),
         RenameFailureState::Renamed,
     );
-    let FsEffectSnapshot::Final(FsEffectFact::RenameFailure { state, .. }) = observer.snapshot()
-    else {
+    let FsEffectSnapshot::Final(FsEffectFact::RenameFailure { state, .. }) = observer.snapshot() else {
         panic!("typed rename failure fact expected");
     };
     assert_eq!(RenameFailureState::Renamed, state);
@@ -153,27 +146,27 @@ fn failure_publication_preserves_rename_transition_state() {
 
 #[test]
 fn content_and_version_conditions_are_distinct_inputs() {
-    use qubit_fs::metadata::{ContentPrecondition, ResourceVersion};
-    use qubit_fs::write::{WriteOptions, WritePrecondition};
+    use qubit_fs::metadata::ContentPrecondition;
+    use qubit_fs::metadata::ResourceVersion;
+    use qubit_fs::write::WriteOptions;
+    use qubit_fs::write::WritePrecondition;
 
-    let options = WriteOptions::default().with_precondition(WritePrecondition::IfMatch(
-        ResourceVersion::new("revision-7"),
-    ));
+    let options =
+        WriteOptions::default().with_precondition(WritePrecondition::IfMatch(ResourceVersion::new("revision-7")));
     let content = ContentPrecondition::Equals(b"expected bytes".to_vec());
     assert_eq!(
         &WritePrecondition::IfMatch(ResourceVersion::new("revision-7")),
         options.precondition()
     );
-    assert_eq!(
-        ContentPrecondition::Equals(b"expected bytes".to_vec()),
-        content
-    );
+    assert_eq!(ContentPrecondition::Equals(b"expected bytes".to_vec()), content);
 }
 
 #[test]
 fn write_content_condition_is_preserved_independently_from_version_condition() {
-    use qubit_fs::metadata::{ContentPrecondition, ResourceVersion};
-    use qubit_fs::write::{WriteOptions, WritePrecondition};
+    use qubit_fs::metadata::ContentPrecondition;
+    use qubit_fs::metadata::ResourceVersion;
+    use qubit_fs::write::WriteOptions;
+    use qubit_fs::write::WritePrecondition;
 
     let options = WriteOptions::default()
         .with_precondition(WritePrecondition::IfMatch(ResourceVersion::new("v4")))
@@ -190,11 +183,12 @@ fn write_content_condition_is_preserved_independently_from_version_condition() {
 
 #[test]
 fn required_content_compare_needs_guaranteed_conditional_write() {
-    use qubit_fs::metadata::{FileSystemCapabilities, FileSystemCapability};
+    use qubit_fs::metadata::FileSystemCapabilities;
+    use qubit_fs::metadata::FileSystemCapability;
     use qubit_fs::write::WriteOptions;
 
-    let options = WriteOptions::default()
-        .with_content_precondition(qubit_fs::metadata::ContentPrecondition::Equals(vec![1]));
+    let options =
+        WriteOptions::default().with_content_precondition(qubit_fs::metadata::ContentPrecondition::Equals(vec![1]));
     let conditional = FileSystemCapabilities::new()
         .with_conditional(FileSystemCapability::Write)
         .with_conditional(FileSystemCapability::ConditionalWrite);
@@ -212,21 +206,39 @@ mod common;
 #[cfg(feature = "async")]
 #[test]
 fn native_copy_partial_side_effect_never_opens_fallback_streams() {
-    use common::poll_support::ready;
-    use qubit_fs::copy::{CopyFailureState, CopyOptions, CopyStats};
-    use qubit_fs::error::{FsEffectState, FsError, FsErrorKind, FsOperation};
-    use qubit_fs::metadata::{
-        FileSystemCapabilities, FileSystemCapability, FileSystemId, FileSystemInfo,
-        FileSystemLimits, SymlinkPolicy,
-    };
-    use qubit_fs::path::{Path, PathConstraints, PathSemantics};
-    use qubit_fs::spi::{
-        AsyncFileSystemSpi, CopyAttempt, CopyRequest, OpenReaderRequest, OpenWriterRequest,
-        ProviderOperation, ProviderOperations, ProviderProperties, SpiCopyFailure, SpiFuture,
-        StatRequest, StatResponse,
-    };
     use std::sync::Arc;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+
+    use common::poll_support::ready;
+    use qubit_fs::copy::CopyFailureState;
+    use qubit_fs::copy::CopyOptions;
+    use qubit_fs::copy::CopyStats;
+    use qubit_fs::error::FsEffectState;
+    use qubit_fs::error::FsError;
+    use qubit_fs::error::FsErrorKind;
+    use qubit_fs::error::FsOperation;
+    use qubit_fs::metadata::FileSystemCapabilities;
+    use qubit_fs::metadata::FileSystemCapability;
+    use qubit_fs::metadata::FileSystemId;
+    use qubit_fs::metadata::FileSystemInfo;
+    use qubit_fs::metadata::FileSystemLimits;
+    use qubit_fs::metadata::SymlinkPolicy;
+    use qubit_fs::path::Path;
+    use qubit_fs::path::PathConstraints;
+    use qubit_fs::path::PathSemantics;
+    use qubit_fs::spi::AsyncFileSystemSpi;
+    use qubit_fs::spi::CopyAttempt;
+    use qubit_fs::spi::CopyRequest;
+    use qubit_fs::spi::OpenReaderRequest;
+    use qubit_fs::spi::OpenWriterRequest;
+    use qubit_fs::spi::ProviderOperation;
+    use qubit_fs::spi::ProviderOperations;
+    use qubit_fs::spi::ProviderProperties;
+    use qubit_fs::spi::SpiCopyFailure;
+    use qubit_fs::spi::SpiFuture;
+    use qubit_fs::spi::StatRequest;
+    use qubit_fs::spi::StatResponse;
 
     struct SideEffectCopyProvider {
         properties: ProviderProperties,
@@ -237,17 +249,8 @@ fn native_copy_partial_side_effect_never_opens_fallback_streams() {
             self.properties.clone()
         }
 
-        fn stat<'a>(
-            &'a self,
-            _: StatRequest<'a>,
-        ) -> SpiFuture<'a, qubit_fs::FsResult<StatResponse>> {
-            Box::pin(async {
-                Err(FsError::new(
-                    FsErrorKind::NotFound,
-                    FsOperation::Stat,
-                    "not used",
-                ))
-            })
+        fn stat<'a>(&'a self, _: StatRequest<'a>) -> SpiFuture<'a, qubit_fs::FsResult<StatResponse>> {
+            Box::pin(async { Err(FsError::new(FsErrorKind::NotFound, FsOperation::Stat, "not used")) })
         }
 
         fn open_reader<'a>(
@@ -280,10 +283,7 @@ fn native_copy_partial_side_effect_never_opens_fallback_streams() {
             })
         }
 
-        fn try_copy<'a>(
-            &'a self,
-            _: CopyRequest<'a>,
-        ) -> SpiFuture<'a, Result<CopyAttempt, SpiCopyFailure>> {
+        fn try_copy<'a>(&'a self, _: CopyRequest<'a>) -> SpiFuture<'a, Result<CopyAttempt, SpiCopyFailure>> {
             Box::pin(async {
                 Err(SpiCopyFailure::new(
                     FsError::new(
@@ -344,14 +344,15 @@ fn native_copy_partial_side_effect_never_opens_fallback_streams() {
 #[cfg(feature = "async")]
 #[test]
 fn append_cancellation_keeps_acknowledged_bytes_and_writer_owner() {
-    use common::async_recording_spi::{
-        AsyncCopyStage, AsyncRecordingConfig, async_recording_file_system,
-    };
+    use common::async_recording_spi::AsyncCopyStage;
+    use common::async_recording_spi::AsyncRecordingConfig;
+    use common::async_recording_spi::async_recording_file_system;
     use common::poll_support::assert_pending;
-    use qubit_fs::{
-        Path,
-        write::{AsyncWriteAllOperationState, WriteDisposition, WriteFailureState, WriteOptions},
-    };
+    use qubit_fs::Path;
+    use qubit_fs::write::AsyncWriteAllOperationState;
+    use qubit_fs::write::WriteDisposition;
+    use qubit_fs::write::WriteFailureState;
+    use qubit_fs::write::WriteOptions;
 
     let (filesystem, probe) = async_recording_file_system(AsyncRecordingConfig {
         pending_stage: Some(AsyncCopyStage::WriterFlush),
@@ -381,12 +382,12 @@ fn append_cancellation_keeps_acknowledged_bytes_and_writer_owner() {
 #[cfg(feature = "async")]
 #[test]
 fn published_commit_error_remains_applied_after_durability_failure() {
-    use common::async_recording_spi::{AsyncRecordingConfig, async_recording_file_system};
+    use common::async_recording_spi::AsyncRecordingConfig;
+    use common::async_recording_spi::async_recording_file_system;
     use common::poll_support::ready;
-    use qubit_fs::{
-        Path,
-        write::{WriteFailureState, WriteOptions},
-    };
+    use qubit_fs::Path;
+    use qubit_fs::write::WriteFailureState;
+    use qubit_fs::write::WriteOptions;
 
     let (filesystem, probe) = async_recording_file_system(AsyncRecordingConfig {
         writer_commit_failure: Some(WriteFailureState::Published),
@@ -411,12 +412,12 @@ fn published_commit_error_remains_applied_after_durability_failure() {
 #[cfg(feature = "async")]
 #[test]
 fn required_content_condition_without_guaranteed_compare_fails_before_open() {
-    use common::async_recording_spi::{AsyncRecordingConfig, async_recording_file_system};
-    use qubit_fs::{
-        Path,
-        metadata::{ContentPrecondition, FileSystemCapability},
-        write::WriteOptions,
-    };
+    use common::async_recording_spi::AsyncRecordingConfig;
+    use common::async_recording_spi::async_recording_file_system;
+    use qubit_fs::Path;
+    use qubit_fs::metadata::ContentPrecondition;
+    use qubit_fs::metadata::FileSystemCapability;
+    use qubit_fs::write::WriteOptions;
 
     let (filesystem, probe) = async_recording_file_system(AsyncRecordingConfig {
         omitted_capability: Some(FileSystemCapability::ConditionalWrite),
@@ -425,8 +426,7 @@ fn required_content_condition_without_guaranteed_compare_fails_before_open() {
     let result = filesystem.begin_write_all(
         Path::parse("/condition").unwrap(),
         b"new".to_vec(),
-        WriteOptions::default()
-            .with_content_precondition(ContentPrecondition::Equals(b"old".to_vec())),
+        WriteOptions::default().with_content_precondition(ContentPrecondition::Equals(b"old".to_vec())),
     );
     assert!(result.is_err());
     assert!(!probe.calls().contains(&"open_writer"));
@@ -435,11 +435,12 @@ fn required_content_condition_without_guaranteed_compare_fails_before_open() {
 #[cfg(feature = "async")]
 #[test]
 fn pending_writer_acceptance_is_not_replayed_after_cancellation() {
-    use common::async_recording_spi::{
-        AsyncCopyStage, AsyncRecordingConfig, async_recording_file_system,
-    };
+    use common::async_recording_spi::AsyncCopyStage;
+    use common::async_recording_spi::AsyncRecordingConfig;
+    use common::async_recording_spi::async_recording_file_system;
     use common::poll_support::assert_pending;
-    use qubit_fs::{Path, write::WriteOptions};
+    use qubit_fs::Path;
+    use qubit_fs::write::WriteOptions;
 
     let (filesystem, probe) = async_recording_file_system(AsyncRecordingConfig {
         pending_stage: Some(AsyncCopyStage::WriterWrite),
@@ -467,26 +468,25 @@ fn pending_writer_acceptance_is_not_replayed_after_cancellation() {
 #[cfg(feature = "async")]
 #[test]
 fn cleanup_failure_keeps_temp_owner_recoverable() {
-    use common::async_recording_spi::{AsyncRecordingConfig, async_recording_file_system};
+    use common::async_recording_spi::AsyncRecordingConfig;
+    use common::async_recording_spi::async_recording_file_system;
     use common::poll_support::ready;
-    use qubit_fs::temp::{TempOptions, TempResourceState};
+    use qubit_fs::temp::TempOptions;
+    use qubit_fs::temp::TempResourceState;
 
     let (filesystem, probe) = async_recording_file_system(AsyncRecordingConfig {
         temp_cleanup_failure: true,
         ..Default::default()
     });
-    let mut temporary = ready(filesystem.create_temp_file(TempOptions::default()))
-        .expect("fixture creates the temporary file");
+    let mut temporary =
+        ready(filesystem.create_temp_file(TempOptions::default())).expect("fixture creates the temporary file");
     let error = ready(temporary.cleanup()).expect_err("first cleanup failure is observable");
     assert!(error.to_string().contains("injected cleanup failure"));
     assert_eq!(TempResourceState::CleanupRequired, temporary.state());
     let retry = ready(temporary.cleanup()).expect_err("owner remains available for retry");
     assert!(retry.to_string().contains("injected cleanup failure"));
     assert_eq!(TempResourceState::CleanupRequired, temporary.state());
-    assert_eq!(
-        vec!["create_temp_file", "cleanup", "cleanup"],
-        probe.calls()
-    );
+    assert_eq!(vec!["create_temp_file", "cleanup", "cleanup"], probe.calls());
     drop(temporary);
     assert_eq!(1, probe.temp_cancellations());
 }
@@ -494,13 +494,14 @@ fn cleanup_failure_keeps_temp_owner_recoverable() {
 #[cfg(feature = "async")]
 #[test]
 fn commit_failure_and_abort_failure_keep_separate_recovery_state() {
-    use common::async_recording_spi::{AsyncRecordingConfig, async_recording_file_system};
+    use common::async_recording_spi::AsyncRecordingConfig;
+    use common::async_recording_spi::async_recording_file_system;
     use common::poll_support::ready;
+    use qubit_fs::Path;
     use qubit_fs::error::FsErrorKind;
-    use qubit_fs::{
-        Path,
-        write::{AsyncWriterRecovery, WriteFailureState, WriteOptions},
-    };
+    use qubit_fs::write::AsyncWriterRecovery;
+    use qubit_fs::write::WriteFailureState;
+    use qubit_fs::write::WriteOptions;
 
     let (filesystem, probe) = async_recording_file_system(AsyncRecordingConfig {
         writer_commit_failure: Some(WriteFailureState::Published),
@@ -516,9 +517,7 @@ fn commit_failure_and_abort_failure_keep_separate_recovery_state() {
         .unwrap();
     let failure = ready(operation.execute()).expect_err("commit failure is retained");
     assert_eq!(WriteFailureState::Published, failure.state());
-    let mut recovery = operation
-        .take_recovery()
-        .expect("writer owner remains available");
+    let mut recovery = operation.take_recovery().expect("writer owner remains available");
     let AsyncWriterRecovery::Opened(writer) = &mut recovery else {
         panic!("opened writer expected")
     };
@@ -531,15 +530,22 @@ fn commit_failure_and_abort_failure_keep_separate_recovery_state() {
 #[cfg(feature = "async")]
 #[test]
 fn temp_created_before_registration_rejection_remains_in_commit_error() {
-    use common::async_recording_spi::{AsyncRecordingConfig, async_recording_file_system};
-    use common::poll_support::ready;
-    use qubit_fs::temp::{AsyncTempFile, TempOptions};
-    use qubit_operation::{
-        AsyncCleanup, CleanupContext, CleanupFuture, CleanupOutcome, OperationManager,
-        OperationOptions, ShutdownMode, StopReason,
-    };
     use std::sync::Arc;
     use std::sync::Mutex;
+
+    use common::async_recording_spi::AsyncRecordingConfig;
+    use common::async_recording_spi::async_recording_file_system;
+    use common::poll_support::ready;
+    use qubit_fs::temp::AsyncTempFile;
+    use qubit_fs::temp::TempOptions;
+    use qubit_operation::AsyncCleanup;
+    use qubit_operation::CleanupContext;
+    use qubit_operation::CleanupFuture;
+    use qubit_operation::CleanupOutcome;
+    use qubit_operation::OperationManager;
+    use qubit_operation::OperationOptions;
+    use qubit_operation::ShutdownMode;
+    use qubit_operation::StopReason;
 
     struct NeverCleanup;
     impl AsyncCleanup<Mutex<Option<AsyncTempFile>>> for NeverCleanup {
@@ -568,11 +574,7 @@ fn temp_created_before_registration_rejection_remains_in_commit_error() {
             };
             let (reason, owner, cleanup, reservation) = error.into_parts();
             assert_eq!(qubit_operation::ResourceManageErrorKind::Stopped, reason);
-            let temporary = owner
-                .lock()
-                .unwrap()
-                .take()
-                .expect("commit error retains temp owner");
+            let temporary = owner.lock().unwrap().take().expect("commit error retains temp owner");
             assert_eq!(path, *temporary.path());
             drop(temporary);
             drop(cleanup);
@@ -581,22 +583,20 @@ fn temp_created_before_registration_rejection_remains_in_commit_error() {
         })
         .unwrap();
     let _ = operation.wait_outcome().unwrap();
-    let _ = manager
-        .request_shutdown(ShutdownMode::Drain)
-        .wait()
-        .unwrap();
+    let _ = manager.request_shutdown(ShutdownMode::Drain).wait().unwrap();
     assert!(probe.calls().contains(&"create_temp_file"));
 }
 
 #[cfg(feature = "async")]
 #[test]
 fn version_condition_without_conditional_write_fails_before_publication() {
-    use common::async_recording_spi::{AsyncRecordingConfig, async_recording_file_system};
-    use qubit_fs::{
-        Path,
-        metadata::{FileSystemCapability, ResourceVersion},
-        write::{WriteOptions, WritePrecondition},
-    };
+    use common::async_recording_spi::AsyncRecordingConfig;
+    use common::async_recording_spi::async_recording_file_system;
+    use qubit_fs::Path;
+    use qubit_fs::metadata::FileSystemCapability;
+    use qubit_fs::metadata::ResourceVersion;
+    use qubit_fs::write::WriteOptions;
+    use qubit_fs::write::WritePrecondition;
 
     let (filesystem, probe) = async_recording_file_system(AsyncRecordingConfig {
         omitted_capability: Some(FileSystemCapability::ConditionalWrite),
@@ -605,8 +605,7 @@ fn version_condition_without_conditional_write_fails_before_publication() {
     let result = filesystem.begin_write_all(
         Path::parse("/version-condition").unwrap(),
         b"new".to_vec(),
-        WriteOptions::default()
-            .with_precondition(WritePrecondition::IfMatch(ResourceVersion::new("v1"))),
+        WriteOptions::default().with_precondition(WritePrecondition::IfMatch(ResourceVersion::new("v1"))),
     );
     assert!(result.is_err());
     assert!(!probe.calls().contains(&"open_writer"));
@@ -615,23 +614,34 @@ fn version_condition_without_conditional_write_fails_before_publication() {
 #[cfg(feature = "async")]
 #[test]
 fn version_precondition_rejects_support_only_conditional_write_before_open() {
-    use qubit_fs::error::{FsError, FsErrorKind, FsOperation};
-    use qubit_fs::metadata::{
-        FileSystemCapabilities, FileSystemCapability, FileSystemId, FileSystemInfo,
-        FileSystemLimits, SymlinkPolicy,
-    };
-    use qubit_fs::path::{PathConstraints, PathSemantics};
-    use qubit_fs::spi::{
-        AsyncFileSystemSpi, OpenWriterRequest, ProviderOperation, ProviderOperations,
-        ProviderProperties, SpiFuture, StatRequest, StatResponse,
-    };
-    use qubit_fs::{
-        AsyncFileSystem, Path,
-        metadata::ResourceVersion,
-        write::{WriteOptions, WritePrecondition},
-    };
     use std::sync::Arc;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+
+    use qubit_fs::AsyncFileSystem;
+    use qubit_fs::Path;
+    use qubit_fs::error::FsError;
+    use qubit_fs::error::FsErrorKind;
+    use qubit_fs::error::FsOperation;
+    use qubit_fs::metadata::FileSystemCapabilities;
+    use qubit_fs::metadata::FileSystemCapability;
+    use qubit_fs::metadata::FileSystemId;
+    use qubit_fs::metadata::FileSystemInfo;
+    use qubit_fs::metadata::FileSystemLimits;
+    use qubit_fs::metadata::ResourceVersion;
+    use qubit_fs::metadata::SymlinkPolicy;
+    use qubit_fs::path::PathConstraints;
+    use qubit_fs::path::PathSemantics;
+    use qubit_fs::spi::AsyncFileSystemSpi;
+    use qubit_fs::spi::OpenWriterRequest;
+    use qubit_fs::spi::ProviderOperation;
+    use qubit_fs::spi::ProviderOperations;
+    use qubit_fs::spi::ProviderProperties;
+    use qubit_fs::spi::SpiFuture;
+    use qubit_fs::spi::StatRequest;
+    use qubit_fs::spi::StatResponse;
+    use qubit_fs::write::WriteOptions;
+    use qubit_fs::write::WritePrecondition;
 
     struct ConditionalProvider {
         properties: ProviderProperties,
@@ -641,17 +651,8 @@ fn version_precondition_rejects_support_only_conditional_write_before_open() {
         fn properties(&self) -> ProviderProperties {
             self.properties.clone()
         }
-        fn stat<'a>(
-            &'a self,
-            _: StatRequest<'a>,
-        ) -> SpiFuture<'a, qubit_fs::FsResult<StatResponse>> {
-            Box::pin(async {
-                Err(FsError::new(
-                    FsErrorKind::NotFound,
-                    FsOperation::Stat,
-                    "not used",
-                ))
-            })
+        fn stat<'a>(&'a self, _: StatRequest<'a>) -> SpiFuture<'a, qubit_fs::FsResult<StatResponse>> {
+            Box::pin(async { Err(FsError::new(FsErrorKind::NotFound, FsOperation::Stat, "not used")) })
         }
         fn open_writer<'a>(
             &'a self,
@@ -693,12 +694,9 @@ fn version_precondition_rejects_support_only_conditional_write_before_open() {
     let result = filesystem.begin_write_all(
         Path::parse("/version-guard").unwrap(),
         b"new".to_vec(),
-        WriteOptions::default()
-            .with_precondition(WritePrecondition::IfMatch(ResourceVersion::new("v1"))),
+        WriteOptions::default().with_precondition(WritePrecondition::IfMatch(ResourceVersion::new("v1"))),
     );
-    let error = result.expect_err(
-        "support-only conditional writes cannot guarantee atomic comparison and publication",
-    );
+    let error = result.expect_err("support-only conditional writes cannot guarantee atomic comparison and publication");
     assert_eq!(FsErrorKind::RequirementNotMet, error.error().kind());
     assert_eq!(0, writer_opens.load(Ordering::SeqCst));
 }

@@ -288,10 +288,7 @@ impl AsyncFileWriter {
         if self.cleanup_state == RecoveryCleanupState::Completed
             || !matches!(
                 self.state,
-                WriterState::Open
-                    | WriterState::NotPublished
-                    | WriterState::Published
-                    | WriterState::Indeterminate
+                WriterState::Open | WriterState::NotPublished | WriterState::Published | WriterState::Indeterminate
             )
         {
             let error = self.invalid_state(
@@ -364,13 +361,8 @@ impl AsyncFileWriter {
     /// # Parameters
     /// - `count`: Byte count checked against or added to the session budget.
     fn check_write_limit(&self, count: usize) -> IoResult<u64> {
-        let count = FacadeCore::quantity_from_usize(
-            count,
-            FsOperation::Write,
-            self.info.path(),
-            &self.provider,
-        )
-        .map_err(FsError::into_io_error)?;
+        let count = FacadeCore::quantity_from_usize(count, FsOperation::Write, self.info.path(), &self.provider)
+            .map_err(FsError::into_io_error)?;
         if let Some(budget) = &self.write_budget
             && let Err(error) = budget.check_available(count)
         {
@@ -394,13 +386,8 @@ impl AsyncFileWriter {
     /// # Parameters
     /// - `count`: Byte count checked against or added to the session budget.
     fn record_written_bytes(&mut self, count: usize) -> IoResult<()> {
-        let count = FacadeCore::quantity_from_usize(
-            count,
-            FsOperation::Write,
-            self.info.path(),
-            &self.provider,
-        )
-        .map_err(FsError::into_io_error)?;
+        let count = FacadeCore::quantity_from_usize(count, FsOperation::Write, self.info.path(), &self.provider)
+            .map_err(FsError::into_io_error)?;
         if let Some(error) = self
             .write_budget
             .as_mut()
@@ -484,11 +471,7 @@ impl AsyncOutput for AsyncFileWriter {
         }
         // SAFETY: The caller guarantees the same range contract required by
         // the wrapped asynchronous output session.
-        match unsafe {
-            this.session
-                .as_mut()
-                .poll_write_unchecked(cx, input, index, count)
-        } {
+        match unsafe { this.session.as_mut().poll_write_unchecked(cx, input, index, count) } {
             Poll::Ready(Ok(written)) => {
                 if written > count {
                     this.state = WriterState::Indeterminate;
@@ -615,9 +598,7 @@ mod tests {
     }
 
     impl AsyncFileWriteSession for Session {
-        fn commit_async<'a>(
-            self: Pin<&'a mut Self>,
-        ) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
+        fn commit_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
             Box::pin(async {
                 Ok(WriteOutcome::new(
                     AchievedAtomicity::Atomic,

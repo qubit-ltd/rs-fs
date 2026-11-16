@@ -1,6 +1,9 @@
 //! Bounds and consistency requirements for complete-file reads.
 use super::ReadConsistencyPolicy;
-use crate::error::{FsError, FsErrorKind, FsOperation, FsResult};
+use crate::error::FsError;
+use crate::error::FsErrorKind;
+use crate::error::FsOperation;
+use crate::error::FsResult;
 /// Options for a bounded complete-file read.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ReadAllOptions {
@@ -12,10 +15,7 @@ pub struct ReadAllOptions {
 impl ReadAllOptions {
     /// Creates explicit read bounds and consistency policy.
     pub const fn new(max_bytes: usize, consistency: ReadConsistencyPolicy) -> Self {
-        Self {
-            max_bytes,
-            consistency,
-        }
+        Self { max_bytes, consistency }
     }
 
     /// Returns the allocation ceiling needed to detect one byte beyond this

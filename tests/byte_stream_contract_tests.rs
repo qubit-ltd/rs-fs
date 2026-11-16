@@ -23,20 +23,14 @@ struct OnlyInput;
 impl Input for OnlyInput {
     type Item = u8;
 
-    unsafe fn read_unchecked(
-        &mut self,
-        _: &mut [u8],
-        _: usize,
-        _: usize,
-    ) -> std::io::Result<usize> {
+    unsafe fn read_unchecked(&mut self, _: &mut [u8], _: usize, _: usize) -> std::io::Result<usize> {
         Ok(0)
     }
 }
 
 #[test]
 fn test_sync_byte_stream_contract() {
-    let constructor: fn(OpenedFileInfo, Box<dyn ByteInput + Send>) -> OpenedReader =
-        OpenedReader::new;
+    let constructor: fn(OpenedFileInfo, Box<dyn ByteInput + Send>) -> OpenedReader = OpenedReader::new;
     let info = OpenedFileInfo::new(
         FileSystemId::new("byte-contract").expect("valid id"),
         Path::parse("/data").expect("valid path"),
