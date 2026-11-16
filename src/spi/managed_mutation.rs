@@ -1,7 +1,10 @@
 //! Owned mutation protocol declarations for managed providers.
 use crate::{
-    copy::CopyOutcome, metadata::WriteOutcome, rename::RenameOutcome, FsOperationFailure,
+    FsOperationFailure,
+    copy::CopyOutcome,
     execution::{FsOwnedCopyRequest, FsOwnedRenameRequest, FsOwnedWriteRequest, FsPrepareFailure},
+    metadata::WriteOutcome,
+    rename::RenameOutcome,
 };
 use qubit_operation::PreparedExternalOperation;
 use std::sync::Arc;
@@ -37,4 +40,49 @@ pub trait ManagedFsMutationSpi: Send + Sync {
         &self,
         request: FsOwnedRenameRequest,
     ) -> Result<Arc<dyn PreparedFsRename>, FsPrepareFailure<FsOwnedRenameRequest>>;
+}
+
+impl crate::execution::FsEffectReservation {
+    /// Publishes typed write failure facts without taking the write outcome or
+    /// retaining the writer that owns recovery responsibility.
+    pub fn publish_write_failure(
+        &self,
+        error: Arc<crate::FsError>,
+        state: crate::write::WriteFailureState,
+        written_bytes: u64,
+        recovery: Option<qubit_operation::RecoveryId>,
+    ) {
+        self.publish(crate::execution::FsEffectFact::WriteFailure {
+            error,
+            state,
+            written_bytes,
+            recovery,
+        });
+    }
+
+    /// Publishes typed copy failure facts without taking the copy outcome or
+    /// retaining a writer that owns recovery responsibility.
+    pub fn publish_copy_failure(
+        &self,
+        error: Arc<crate::FsError>,
+        state: crate::copy::CopyFailureState,
+        partial_stats: crate::copy::CopyStats,
+        recovery: Option<qubit_operation::RecoveryId>,
+    ) {
+        self.publish(crate::execution::FsEffectFact::CopyFailure {
+            error,
+            state,
+            partial_stats,
+            recovery,
+        });
+    }
+
+    /// Publishes typed rename failure facts independently of its outcome.
+    pub fn publish_rename_failure(
+        &self,
+        error: Arc<crate::FsError>,
+        state: crate::rename::RenameFailureState,
+    ) {
+        self.publish(crate::execution::FsEffectFact::RenameFailure { error, state });
+    }
 }
