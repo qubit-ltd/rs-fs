@@ -536,7 +536,7 @@ publication does not change that publication into an unchanged result.
 and `create_parent = false`. Required atomicity does not guarantee durability.
 When the application can accept a weaker atomicity requirement, set
 `with_atomicity(AtomicityRequirement::Preferred)` explicitly; this does not
-guarantee that persistence will succeed. See [`PersistOptions` Rustdoc](https://docs.rs/qubit-fs/0.3/qubit_fs/temp/struct.PersistOptions.html)
+guarantee that persistence will succeed. See [`PersistOptions` Rustdoc](https://docs.rs/qubit-fs/0.4/qubit_fs/temp/struct.PersistOptions.html)
 for the options and defaults.
 
 The facade can perform allowlisted file-like stream copy without native

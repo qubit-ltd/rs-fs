@@ -458,7 +458,7 @@ source 和上下文。应检查该 payload 及其 effect 后再决定如何处�
 `PersistOptions::default()` 默认不覆盖目标、要求 `AtomicityRequirement::Required`、保留
 portable metadata，且不创建父目录。Required 原子性不等于持久性保证。业务可以接受较弱原子性
 时，才显式设置 `with_atomicity(AtomicityRequirement::Preferred)`；这也不保证持久化一定成功。
-选项和默认值见 [`PersistOptions` Rustdoc](https://docs.rs/qubit-fs/0.3/qubit_fs/temp/struct.PersistOptions.html)。
+选项和默认值见 [`PersistOptions` Rustdoc](https://docs.rs/qubit-fs/0.4/qubit_fs/temp/struct.PersistOptions.html)。
 
 没有原生 copy，或提供者明确无副作用地拒绝 fast path 后，门面可以执行允许范围内的文件
 流式复制；原生复制失败不会触发自动重试。`CopyMethod::Streamed` 仅表示门面拥有的流式回退；
