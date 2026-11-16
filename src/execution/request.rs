@@ -47,6 +47,11 @@ pub struct FsOwnedTreePublishRequest {
     pub destination_root: Path,
     /// Tree validation limits.
     pub validation: crate::metadata::TreeValidationOptions,
+    /// Version of the same staged owner observed after validation.
+    ///
+    /// Required atomic publication must compare this token as part of the
+    /// publication transaction. It is not a standalone preflight guarantee.
+    pub validated_version: Option<crate::metadata::ResourceVersion>,
     /// Publication guarantees.
     pub publication: crate::metadata::TreePublishOptions,
 }

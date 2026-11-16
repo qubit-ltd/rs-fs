@@ -2,9 +2,11 @@
 //!
 //! Providers validate staged content and publication requirements before
 //! activating I/O. A request with an unsupported `Required` guarantee must
-//! fail during preparation. Validation failures leave the staged-tree owner
-//! responsible for cleanup; successful publication reports the achieved
-//! atomicity and durability in [`TreePublishOutcome`].
+//! fail during preparation. Required atomic publication also compares the
+//! request's validated version as part of the publication transaction; a
+//! preflight-only version check is insufficient. Validation failures leave
+//! the staged-tree owner responsible for cleanup; successful publication
+//! reports the achieved atomicity and durability in [`TreePublishOutcome`].
 use crate::{
     FsOperationFailure,
     directory::TreePublishOutcome,
@@ -14,6 +16,8 @@ use qubit_operation::PreparedExternalOperation;
 use std::{
     collections::BTreeSet,
     fmt::{Debug, Formatter, Result as FmtResult},
+    future::Future,
+    pin::Pin,
     sync::{Arc, Mutex, PoisonError},
     time::Instant,
 };
@@ -29,7 +33,7 @@ pub struct StagedDirectory {
     root: crate::path::Path,
     options: crate::metadata::TreeValidationOptions,
     state: Mutex<StagedDirectoryState>,
-    cleanup: Mutex<Option<Box<dyn FnMut() -> crate::error::FsResult<()> + Send>>>,
+    cleanup: Mutex<Option<StagedCleanupCallback>>,
     cleanup_resource_id: Mutex<Option<qubit_operation::ResourceId>>,
 }
 
@@ -41,11 +45,14 @@ struct StagedDirectoryState {
     published: bool,
 }
 
+type StagedCleanupFuture = Pin<Box<dyn Future<Output = crate::error::FsResult<()>> + Send>>;
+type StagedCleanupCallback = Box<dyn FnMut() -> StagedCleanupFuture + Send>;
+
 impl StagedDirectory {
     fn new(
         root: crate::path::Path,
         options: crate::metadata::TreeValidationOptions,
-        cleanup: Box<dyn FnMut() -> crate::error::FsResult<()> + Send>,
+        cleanup: StagedCleanupCallback,
     ) -> Self {
         Self {
             root,
@@ -128,6 +135,7 @@ impl StagedDirectory {
             staging_root: self.root.clone(),
             destination_root,
             validation: self.options,
+            validated_version: lock(&self.state).validated_version.clone(),
             publication,
         })
     }
@@ -171,17 +179,20 @@ impl StagedDirectory {
     }
 
     /// Retries cleanup while retaining responsibility after cleanup errors.
-    pub fn cleanup(&self) -> crate::error::FsResult<()> {
+    async fn cleanup(&self) -> crate::error::FsResult<()> {
         if lock(&self.state).published {
             lock(&self.cleanup).take();
             return Ok(());
         }
-        let mut cleanup_owner = lock(&self.cleanup);
-        let Some(cleanup) = cleanup_owner.as_mut() else {
+        let attempt = {
+            let mut cleanup_owner = lock(&self.cleanup);
+            cleanup_owner.as_mut().map(|cleanup| cleanup())
+        };
+        let Some(attempt) = attempt else {
             return Ok(());
         };
-        cleanup()?;
-        *cleanup_owner = None;
+        attempt.await?;
+        lock(&self.cleanup).take();
         Ok(())
     }
 
@@ -221,16 +232,6 @@ impl StagedDirectory {
     }
 }
 
-impl Drop for StagedDirectory {
-    fn drop(&mut self) {
-        // Registered owners are cleaned by their ResourceScope policy. This
-        // fallback covers a staging value rejected before registration.
-        if let Some(cleanup) = lock(&self.cleanup).as_mut() {
-            let _ = cleanup();
-        }
-    }
-}
-
 impl Debug for StagedDirectory {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter
@@ -256,7 +257,7 @@ impl qubit_operation::AsyncCleanup<StagedDirectory> for StagedDirectoryCleanup {
         _context: qubit_operation::CleanupContext,
     ) -> qubit_operation::CleanupFuture<StagedDirectory> {
         Box::pin(async move {
-            match resource.cleanup() {
+            match resource.cleanup().await {
                 Ok(()) => qubit_operation::CleanupOutcome::Released,
                 Err(error) => qubit_operation::CleanupOutcome::Failed {
                     failure: resource.cleanup_failure(error),
@@ -294,7 +295,7 @@ pub trait ManagedFsTreeSpi: Send + Sync {
         reservation: qubit_operation::ResourceReservation,
         root: crate::path::Path,
         options: crate::metadata::TreeValidationOptions,
-        cleanup: Box<dyn FnMut() -> crate::error::FsResult<()> + Send>,
+        cleanup: StagedCleanupCallback,
     ) -> crate::error::FsResult<qubit_operation::ResourceRef<StagedDirectory>> {
         let owner = StagedDirectory::new(root, options, cleanup);
         match reservation.commit_with(owner, StagedDirectoryCleanup) {
@@ -321,8 +322,12 @@ pub trait ManagedFsTreeSpi: Send + Sync {
     ///
     /// Implementations must reject unsupported required guarantees before
     /// activating any I/O. They must not infer atomic tree publication from
-    /// an object-prefix operation. Any validation failure leaves cleanup with
-    /// the existing staging owner.
+    /// an object-prefix operation. For required atomic publication, they must
+    /// compare `request.validated_version` in the same transaction that
+    /// publishes the destination, or hold an equivalent lock through publish.
+    /// If the provider cannot do so, it rejects during preparation before
+    /// side effects. Any validation failure leaves cleanup with the existing
+    /// staging owner.
     fn prepare_tree_publish(
         &self,
         request: FsOwnedTreePublishRequest,

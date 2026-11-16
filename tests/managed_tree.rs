@@ -17,6 +17,33 @@ use std::sync::{
 
 struct FakeTreeProvider;
 
+struct NonCasTreeProvider {
+    preparations: Arc<AtomicUsize>,
+    effects: Arc<AtomicUsize>,
+}
+
+impl ManagedFsTreeSpi for NonCasTreeProvider {
+    fn prepare_tree_publish(
+        &self,
+        request: qubit_fs::FsOwnedTreePublishRequest,
+    ) -> Result<
+        Arc<dyn PreparedFsTreePublish>,
+        qubit_fs::FsPrepareFailure<qubit_fs::FsOwnedTreePublishRequest>,
+    > {
+        self.preparations.fetch_add(1, Ordering::SeqCst);
+        if request.publication.atomicity == AtomicityRequirement::Required
+            && request.validated_version.is_some()
+        {
+            return Err(qubit_fs::FsPrepareFailure {
+                kind: qubit_fs::execution::FsPrepareFailureKind::Unsupported,
+                request,
+            });
+        }
+        self.effects.fetch_add(1, Ordering::SeqCst);
+        unreachable!("this fake provider is used only for unsupported Required requests")
+    }
+}
+
 impl ManagedFsTreeSpi for FakeTreeProvider {
     fn prepare_tree_publish(
         &self,
@@ -245,8 +272,11 @@ fn staged_owner_retains_cleanup_after_validation_failure() {
         "/stage",
         TreeValidationOptions::default(),
         move || {
-            counted.fetch_add(1, Ordering::SeqCst);
-            Ok(())
+            let counted = Arc::clone(&counted);
+            Box::pin(async move {
+                counted.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            })
         },
         {
             assert!(
@@ -277,15 +307,18 @@ fn failed_cleanup_keeps_owner_for_retry() {
                     qubit_fs::Path::parse("/stage").unwrap(),
                     TreeValidationOptions::default(),
                     Box::new(move || {
-                        if counted.fetch_add(1, Ordering::SeqCst) == 0 {
-                            Err(FsError::new(
-                                FsErrorKind::Other,
-                                FsErrorOperation::Other,
-                                "temporary cleanup failure",
-                            ))
-                        } else {
-                            Ok(())
-                        }
+                        let counted = Arc::clone(&counted);
+                        Box::pin(async move {
+                            if counted.fetch_add(1, Ordering::SeqCst) == 0 {
+                                Err(FsError::new(
+                                    FsErrorKind::Other,
+                                    FsErrorOperation::Other,
+                                    "temporary cleanup failure",
+                                ))
+                            } else {
+                                Ok(())
+                            }
+                        })
                     }),
                 )
                 .unwrap();
@@ -320,7 +353,7 @@ fn staged_path_prefix_checks_use_components() {
         staged,
         "/bucket/tree",
         TreeValidationOptions::default(),
-        || Ok(()),
+        || Box::pin(async { Ok(()) }),
         {
             assert!(staged.contains_path(&qubit_fs::Path::parse("/bucket/tree").unwrap()));
             assert!(staged.contains_path(&qubit_fs::Path::parse("/bucket/tree/child").unwrap()));
@@ -331,6 +364,12 @@ fn staged_path_prefix_checks_use_components() {
 
 #[test]
 fn changed_tree_version_blocks_required_publish_and_keeps_cleanup_owner() {
+    let preparations = Arc::new(AtomicUsize::new(0));
+    let effects = Arc::new(AtomicUsize::new(0));
+    let no_cas_provider = NonCasTreeProvider {
+        preparations: Arc::clone(&preparations),
+        effects: Arc::clone(&effects),
+    };
     let required = TreePublishOptions {
         atomicity: AtomicityRequirement::Required,
         durability: DurabilityRequirement::NotRequired,
@@ -341,7 +380,7 @@ fn changed_tree_version_blocks_required_publish_and_keeps_cleanup_owner() {
         staged,
         "/stage",
         TreeValidationOptions::default(),
-        || Ok(()),
+        || Box::pin(async { Ok(()) }),
         {
             staged.record_validated_version("version-before-validation".into());
             assert!(
@@ -364,8 +403,30 @@ fn changed_tree_version_blocks_required_publish_and_keeps_cleanup_owner() {
                     .check_publish_version(Some(&"version-before-validation".into()), &required)
                     .is_ok()
             );
+            let request = staged
+                .publish_request(
+                    qubit_fs::Path::parse("/destination").unwrap(),
+                    required,
+                    Some(&"version-before-validation".into()),
+                    &capabilities,
+                )
+                .expect("unchanged validation version produces a publish request");
+            assert_eq!(
+                request.validated_version,
+                Some("version-before-validation".into())
+            );
+            let rejection = match no_cas_provider.prepare_tree_publish(request) {
+                Err(rejection) => rejection,
+                Ok(_) => panic!("provider without atomic version comparison must reject"),
+            };
+            assert_eq!(
+                rejection.request.validated_version,
+                Some("version-before-validation".into())
+            );
         }
     );
+    assert_eq!(preparations.load(Ordering::SeqCst), 1);
+    assert_eq!(effects.load(Ordering::SeqCst), 0);
 }
 
 #[test]
@@ -378,7 +439,7 @@ fn durability_requirement_does_not_require_a_validation_version() {
         staged,
         "/stage",
         TreeValidationOptions::default(),
-        || Ok(()),
+        || Box::pin(async { Ok(()) }),
         {
             assert!(staged.check_publish_version(None, &durable).is_ok());
         }
@@ -395,7 +456,7 @@ fn required_unsupported_publish_request_is_rejected_before_provider_prepare() {
         staged,
         "/stage",
         TreeValidationOptions::default(),
-        || Ok(()),
+        || Box::pin(async { Ok(()) }),
         {
             assert!(
                 staged
@@ -420,8 +481,11 @@ fn publication_releases_cleanup_only_after_consistent_success() {
         "/stage",
         TreeValidationOptions::default(),
         move || {
-            counted.fetch_add(1, Ordering::SeqCst);
-            Ok(())
+            let counted = Arc::clone(&counted);
+            Box::pin(async move {
+                counted.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            })
         },
         {
             let required = TreePublishOptions {
