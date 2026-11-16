@@ -26,6 +26,27 @@ fn effect_reservation_stays_owned_until_recovery_finishes() {
 }
 
 #[test]
+fn prepared_mutations_accept_one_owned_effect_reservation() {
+    use qubit_fs::spi::{PreparedFsCopy, PreparedFsRename, PreparedFsWrite};
+
+    let _: fn(
+        &dyn PreparedFsWrite,
+        qubit_fs::execution::FsEffectReservation,
+    ) -> Result<(), qubit_fs::execution::FsEffectReservation> =
+        PreparedFsWrite::install_effect_reservation;
+    let _: fn(
+        &dyn PreparedFsCopy,
+        qubit_fs::execution::FsEffectReservation,
+    ) -> Result<(), qubit_fs::execution::FsEffectReservation> =
+        PreparedFsCopy::install_effect_reservation;
+    let _: fn(
+        &dyn PreparedFsRename,
+        qubit_fs::execution::FsEffectReservation,
+    ) -> Result<(), qubit_fs::execution::FsEffectReservation> =
+        PreparedFsRename::install_effect_reservation;
+}
+
+#[test]
 fn a_lost_effect_is_not_reported_as_unchanged() {
     let pool = FsEffectSlotPool::new(1);
     let reservation = pool.reserve().unwrap();
@@ -147,4 +168,39 @@ fn content_and_version_conditions_are_distinct_inputs() {
         ContentPrecondition::Equals(b"expected bytes".to_vec()),
         content
     );
+}
+
+#[test]
+fn write_content_condition_is_preserved_independently_from_version_condition() {
+    use qubit_fs::metadata::{ContentPrecondition, ResourceVersion};
+    use qubit_fs::write::{WriteOptions, WritePrecondition};
+
+    let options = WriteOptions::default()
+        .with_precondition(WritePrecondition::IfMatch(ResourceVersion::new("v4")))
+        .with_content_precondition(ContentPrecondition::Equals(b"old bytes".to_vec()));
+    assert_eq!(
+        &WritePrecondition::IfMatch(ResourceVersion::new("v4")),
+        options.precondition()
+    );
+    assert_eq!(
+        &ContentPrecondition::Equals(b"old bytes".to_vec()),
+        options.content_precondition()
+    );
+}
+
+#[test]
+fn required_content_compare_needs_guaranteed_conditional_write() {
+    use qubit_fs::metadata::{FileSystemCapabilities, FileSystemCapability};
+    use qubit_fs::write::WriteOptions;
+
+    let options = WriteOptions::default()
+        .with_content_precondition(qubit_fs::metadata::ContentPrecondition::Equals(vec![1]));
+    let conditional = FileSystemCapabilities::new()
+        .with_conditional(FileSystemCapability::Write)
+        .with_conditional(FileSystemCapability::ConditionalWrite);
+    assert!(options.validate_against(conditional).is_err());
+    let guaranteed = FileSystemCapabilities::new()
+        .with_guaranteed(FileSystemCapability::Write)
+        .with_guaranteed(FileSystemCapability::ConditionalWrite);
+    assert!(options.validate_against(guaranteed).is_ok());
 }

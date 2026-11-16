@@ -12,16 +12,52 @@ use std::sync::Arc;
 pub trait PreparedFsWrite: PreparedExternalOperation<WriteOutcome, FsOperationFailure> {
     /// Returns the original write request while unclaimed.
     fn take_unclaimed_request(&self) -> Option<FsOwnedWriteRequest>;
+
+    /// Installs the single bounded effect reservation before submission.
+    ///
+    /// Implementations synchronize this one-shot slot: exactly one concurrent
+    /// installation may succeed. The accepted reservation stays with the
+    /// active work owner until it publishes one final typed fact and recovery
+    /// responsibility is released. A duplicate or late installation returns
+    /// the supplied reservation unchanged.
+    fn install_effect_reservation(
+        &self,
+        reservation: crate::execution::FsEffectReservation,
+    ) -> Result<(), crate::execution::FsEffectReservation>;
 }
 /// Object-safe prepared copy operation with request recovery before claim.
 pub trait PreparedFsCopy: PreparedExternalOperation<CopyOutcome, FsOperationFailure> {
     /// Returns the original copy request while unclaimed.
     fn take_unclaimed_request(&self) -> Option<FsOwnedCopyRequest>;
+
+    /// Installs the single bounded effect reservation before submission.
+    ///
+    /// Implementations synchronize this one-shot slot: exactly one concurrent
+    /// installation may succeed. The accepted reservation stays with the
+    /// active work owner until it publishes one final typed fact and recovery
+    /// responsibility is released. A duplicate or late installation returns
+    /// the supplied reservation unchanged.
+    fn install_effect_reservation(
+        &self,
+        reservation: crate::execution::FsEffectReservation,
+    ) -> Result<(), crate::execution::FsEffectReservation>;
 }
 /// Object-safe prepared rename operation with request recovery before claim.
 pub trait PreparedFsRename: PreparedExternalOperation<RenameOutcome, FsOperationFailure> {
     /// Returns the original rename request while unclaimed.
     fn take_unclaimed_request(&self) -> Option<FsOwnedRenameRequest>;
+
+    /// Installs the single bounded effect reservation before submission.
+    ///
+    /// Implementations synchronize this one-shot slot: exactly one concurrent
+    /// installation may succeed. The accepted reservation stays with the
+    /// active work owner until it publishes one final typed fact and recovery
+    /// responsibility is released. A duplicate or late installation returns
+    /// the supplied reservation unchanged.
+    fn install_effect_reservation(
+        &self,
+        reservation: crate::execution::FsEffectReservation,
+    ) -> Result<(), crate::execution::FsEffectReservation>;
 }
 /// Object-safe provider preparation interface for owned mutations.
 pub trait ManagedFsMutationSpi: Send + Sync {

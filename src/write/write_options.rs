@@ -12,6 +12,7 @@ use crate::error::FsErrorKind;
 use crate::error::FsOperation;
 use crate::metadata::AtomicityRequirement;
 use crate::metadata::Checksum;
+use crate::metadata::ContentPrecondition;
 use crate::metadata::DurabilityRequirement;
 use crate::metadata::FileSystemCapabilities;
 use crate::metadata::FileSystemCapability;
@@ -26,8 +27,9 @@ use crate::write::WritePrecondition;
 /// [`WriteDisposition::CreateOrReplace`], `atomicity` is
 /// [`AtomicityRequirement::Preferred`], `durability` is
 /// [`DurabilityRequirement::NotRequired`], and `precondition` is
-/// [`WritePrecondition::None`]. Content type and checksum are `None`, and user
-/// metadata is empty. These are request policies; provider support and
+/// [`WritePrecondition::None`], and `content_precondition` is
+/// [`ContentPrecondition::None`]. Content type and checksum are `None`, and
+/// user metadata is empty. These are request policies; provider support and
 /// successful completion are reported separately.
 ///
 /// # Examples
@@ -61,6 +63,8 @@ pub struct WriteOptions {
     durability: DurabilityRequirement,
     /// Version precondition applied to the destination.
     precondition: WritePrecondition,
+    /// Content condition checked against the destination before publication.
+    content_precondition: ContentPrecondition,
     /// Optional content type.
     content_type: Option<String>,
     /// User-defined metadata with validated non-sensitive structural keys.
@@ -79,6 +83,7 @@ impl Default for WriteOptions {
             atomicity: AtomicityRequirement::default(),
             durability: DurabilityRequirement::default(),
             precondition: WritePrecondition::default(),
+            content_precondition: ContentPrecondition::default(),
             content_type: None,
             user_metadata: NonSensitiveMetadata::new(),
             checksum: None,
@@ -120,6 +125,13 @@ impl WriteOptions {
     #[must_use]
     pub const fn precondition(&self) -> &WritePrecondition {
         &self.precondition
+    }
+
+    /// Returns the content condition required before publication.
+    #[inline]
+    #[must_use]
+    pub const fn content_precondition(&self) -> &ContentPrecondition {
+        &self.content_precondition
     }
 
     /// Returns the optional content type.
@@ -191,6 +203,18 @@ impl WriteOptions {
         self
     }
 
+    /// Returns a copy with the content condition replaced.
+    ///
+    /// A configured condition is required: providers must compare it and
+    /// publish under one conditional-write protocol, or reject the request
+    /// before opening a writer.
+    #[inline]
+    #[must_use]
+    pub fn with_content_precondition(mut self, precondition: ContentPrecondition) -> Self {
+        self.content_precondition = precondition;
+        self
+    }
+
     /// Returns a copy with the content type replaced.
     /// # Parameters
     /// - `content_type`: Optional content type associated with the new file.
@@ -225,27 +249,30 @@ impl WriteOptions {
     ///
     /// # Errors
     /// Returns [`FsErrorKind::InvalidOptions`] before a writer is opened when
-    /// append is combined with atomic publication or a version precondition,
-    /// or when create-new is combined with an existing-version requirement.
+    /// append is combined with atomic publication or a destination
+    /// precondition, or when create-new is combined with a precondition that
+    /// requires an existing resource.
     #[inline]
     pub fn validate(&self) -> Result<(), FsError> {
         if self.disposition == WriteDisposition::Append
             && (self.atomicity == AtomicityRequirement::Required
-                || self.precondition != WritePrecondition::None)
+                || self.precondition != WritePrecondition::None
+                || self.content_precondition != ContentPrecondition::None)
         {
             return Err(FsError::new(
                 FsErrorKind::InvalidOptions,
                 FsOperation::OpenWriter,
-                "append cannot require atomic publication or a destination version",
+                "append cannot require atomic publication or a destination precondition",
             ));
         }
         if self.disposition == WriteDisposition::CreateNew
-            && matches!(&self.precondition, WritePrecondition::IfMatch(_))
+            && (matches!(&self.precondition, WritePrecondition::IfMatch(_))
+                || self.content_precondition != ContentPrecondition::None)
         {
             return Err(FsError::new(
                 FsErrorKind::InvalidOptions,
                 FsOperation::OpenWriter,
-                "create-new cannot require an existing destination version",
+                "create-new cannot require an existing destination precondition",
             ));
         }
         Ok(())
@@ -281,6 +308,14 @@ impl WriteOptions {
             return Err(missing_requirement(
                 FileSystemCapability::ConditionalWrite,
                 "conditional writes are required but not supported",
+            ));
+        }
+        if self.content_precondition != ContentPrecondition::None
+            && !capabilities.guarantees(FileSystemCapability::ConditionalWrite)
+        {
+            return Err(missing_requirement(
+                FileSystemCapability::ConditionalWrite,
+                "content comparison and write publication must be guaranteed as one conditional write",
             ));
         }
         if self.atomicity == AtomicityRequirement::Required
