@@ -57,6 +57,7 @@
 
 运行本手册中的 local 示例需要：
 
+<!-- dependencies: quick-start -->
 ```toml
 [dependencies]
 qubit-fs = "0.4"

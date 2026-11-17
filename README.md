@@ -43,6 +43,7 @@ shows the non-managed compatibility API. The referenced `qubit-fs-local` release
 is not asserted to implement the 0.4 SPI; use a provider built for 0.4 before
 using the snippet as an integration example.
 
+<!-- dependencies: quick-start -->
 ```toml
 [dependencies]
 qubit-fs = "0.4"

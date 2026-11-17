@@ -23,31 +23,33 @@ class Example:
     rust: str
 
 
-def section(text, heading):
-    matches = list(re.finditer(r"(?m)^##\s+(.+?)\s*$", text))
-    selected = [index for index, match in enumerate(matches) if match.group(1).strip() == heading]
-    if len(selected) != 1:
-        raise SmokeError(f"expected exactly one {heading!r} section, found {len(selected)}")
-    index = selected[0]
-    start = matches[index].end()
-    end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
-    return text[start:end]
+def marked_fence(text, marker, language, label):
+    if text.count(marker) != 1:
+        raise SmokeError(f"expected exactly one {marker!r} marker, found {text.count(marker)}")
+    lines = text.splitlines()
+    marker_index = lines.index(marker)
+    opening_index = marker_index + 1
+    while opening_index < len(lines) and not lines[opening_index].strip():
+        opening_index += 1
+    opening = re.fullmatch(r"```([^`]*)", lines[opening_index].strip()) if opening_index < len(lines) else None
+    if opening is None:
+        raise SmokeError(f"{label} marker must be followed by a closed fenced block")
+    if opening.group(1).strip() != language:
+        raise SmokeError(f"{label} block must use a ```{language} fence")
+    for closing_index in range(opening_index + 1, len(lines)):
+        line = lines[closing_index].strip()
+        if line == "```":
+            return "\n".join(lines[opening_index + 1:closing_index]).strip()
+        if line.startswith("```"):
+            raise SmokeError(f"{label} marker must be followed by a closed fenced block")
+    raise SmokeError(f"{label} marker must be followed by a closed fenced block")
 
 
-def one_match(pattern, text, label):
-    matches = list(re.finditer(pattern, text, re.DOTALL))
-    if len(matches) != 1:
-        raise SmokeError(f"expected exactly one {label} block, found {len(matches)}")
-    return matches[0].group(1).strip()
-
-
-def extract(text, heading):
-    content = section(text, heading)
-    dependencies = one_match(r"```toml\s*\n(.*?)\n```", content, "dependencies TOML")
-    marker = "<!-- example: quick-start -->"
-    if content.count(marker) != 1:
-        raise SmokeError(f"expected exactly one {marker!r} marker, found {content.count(marker)}")
-    rust = one_match(re.escape(marker) + r"\s*\n```rust\s*\n(.*?)\n```", content, "Quick Start Rust")
+def extract(text):
+    dependencies = marked_fence(
+        text, "<!-- dependencies: quick-start -->", "toml", "Quick Start dependencies"
+    )
+    rust = marked_fence(text, "<!-- example: quick-start -->", "rust", "Quick Start Rust")
     return Example(dependencies, rust)
 
 
@@ -74,8 +76,8 @@ def validate_dependencies(block):
 
 
 def read_examples(english, chinese):
-    left = extract(english, "Quick Start")
-    right = extract(chinese, "快速开始")
+    left = extract(english)
+    right = extract(chinese)
     if left.dependencies != right.dependencies:
         raise SmokeError("English and Chinese Quick Start dependency blocks differ")
     if left.rust != right.rust:

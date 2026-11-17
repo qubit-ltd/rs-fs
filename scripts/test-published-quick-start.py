@@ -15,7 +15,8 @@ assert SPEC.loader is not None
 SPEC.loader.exec_module(CHECKER)
 
 
-DEPENDENCIES = '''```toml
+DEPENDENCIES = '''<!-- dependencies: quick-start -->
+```toml
 [dependencies]
 qubit-fs = "0.3"
 qubit-fs-local = "^0.11"
@@ -27,28 +28,62 @@ fn main() { println!("report ready"); }
 ```'''
 
 
-def readme(title="Quick Start", dependencies=DEPENDENCIES, program=PROGRAM):
-    return f"# Project\n\n## {title}\n\n{dependencies}\n\n{program}\n\n## Next\n"
+def readme(title="Quick Start", dependencies=DEPENDENCIES, program=PROGRAM, extra=""):
+    return f"# Project\n\n## {title}\n\n{extra}\n\n{dependencies}\n\n{program}\n\n## Next\n"
 
 
 class PublishedQuickStartTests(unittest.TestCase):
     def test_extracts_english_and_chinese_sections(self):
         extracted = CHECKER.read_examples(readme(), readme("快速开始"))
         self.assertEqual(extracted.dependencies, "[dependencies]\nqubit-fs = \"0.3\"\nqubit-fs-local = \"^0.11\"\ntempfile = \"3\"")
-        self.assertIn('println!("report ready")', extracted.rust)
+        self.assertIn('report ready', extracted.rust)
+
+    def test_reads_real_bilingual_readmes(self):
+        root = SCRIPT.parent.parent
+        extracted = CHECKER.read_examples(
+            (root / "README.md").read_text(encoding="utf-8"),
+            (root / "README.zh_CN.md").read_text(encoding="utf-8"),
+        )
+        self.assertIn('qubit-fs = "0.4"', extracted.dependencies)
+        self.assertIn('println!("{}", String::from_utf8(bytes)?)', extracted.rust)
+
+    def test_markers_ignore_extra_install_blocks_and_heading_names(self):
+        extra = '```toml\n[dependencies]\nserde = "1"\n```'
+        extracted = CHECKER.read_examples(
+            readme("Renamed heading", extra=extra),
+            readme("标题已更改", extra=extra),
+        )
+        self.assertIn('qubit-fs = "0.3"', extracted.dependencies)
+        self.assertNotIn('serde = "1"', extracted.dependencies)
 
     def test_rejects_missing_and_duplicate_blocks(self):
-        with self.assertRaisesRegex(CHECKER.SmokeError, "dependencies"):
+        with self.assertRaisesRegex(CHECKER.SmokeError, "marker"):
             CHECKER.read_examples(readme(dependencies=""), readme("快速开始", dependencies=""))
         with self.assertRaisesRegex(CHECKER.SmokeError, "exactly one"):
             CHECKER.read_examples(readme(dependencies=DEPENDENCIES + "\n" + DEPENDENCIES), readme("快速开始"))
         with self.assertRaisesRegex(CHECKER.SmokeError, "exactly one"):
             CHECKER.read_examples(readme(program=PROGRAM + "\n" + PROGRAM), readme("快速开始"))
+        with self.assertRaisesRegex(CHECKER.SmokeError, "example: quick-start"):
+            CHECKER.read_examples(readme(program=""), readme("快速开始", program=""))
+
+    def test_rejects_wrong_fence_language_and_unclosed_fence(self):
+        wrong_language = DEPENDENCIES.replace("```toml", "```text")
+        with self.assertRaisesRegex(CHECKER.SmokeError, "toml fence"):
+            CHECKER.read_examples(readme(dependencies=wrong_language), readme("快速开始"))
+        wrong_rust_language = PROGRAM.replace("```rust", "```text")
+        with self.assertRaisesRegex(CHECKER.SmokeError, "rust fence"):
+            CHECKER.read_examples(readme(program=wrong_rust_language), readme("快速开始", program=wrong_rust_language))
+        unclosed = DEPENDENCIES.rsplit("\n```", 1)[0]
+        with self.assertRaisesRegex(CHECKER.SmokeError, "closed fenced block"):
+            CHECKER.read_examples(readme(dependencies=unclosed), readme("快速开始"))
 
     def test_rejects_bilingual_mismatch(self):
         changed = DEPENDENCIES.replace('"3"', '"4"')
         with self.assertRaisesRegex(CHECKER.SmokeError, "differ"):
             CHECKER.read_examples(readme(), readme("快速开始", dependencies=changed))
+        changed_program = PROGRAM.replace("report ready", "not ready")
+        with self.assertRaisesRegex(CHECKER.SmokeError, "Rust examples differ"):
+            CHECKER.read_examples(readme(), readme("快速开始", program=changed_program))
 
     def test_rejects_dependency_injection(self):
         forbidden = [

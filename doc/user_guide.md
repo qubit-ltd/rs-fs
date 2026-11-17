@@ -72,6 +72,7 @@ provider that implements the 0.4 SPI when integrating this release.
 
 For the legacy local-adapter example in this guide, use:
 
+<!-- dependencies: quick-start -->
 ```toml
 [dependencies]
 qubit-fs = "0.4"

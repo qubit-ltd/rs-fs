@@ -37,6 +37,40 @@ RUST_FILE_HEADER = re.compile(
     r'//    Licensed under the Apache License, Version 2\.0\.\n'
     r'// =============================================================================\n\n'
 )
+QUICK_START_DEPENDENCIES = '<!-- dependencies: quick-start -->'
+
+
+def marked_fence(content, marker, language, location):
+    """Return the one closed fence immediately following a unique marker."""
+    count = content.count(marker)
+    assert count == 1, f'{location}: expected exactly one {marker!r} marker, found {count}'
+    lines = content.splitlines()
+    marker_index = lines.index(marker)
+    opening_index = marker_index + 1
+    while opening_index < len(lines) and not lines[opening_index].strip():
+        opening_index += 1
+    opening = re.fullmatch(r'```([^`]*)', lines[opening_index].strip()) if opening_index < len(lines) else None
+    assert opening, f'{location}: marker must be followed by a closed fenced block'
+    assert opening.group(1).strip() == language, f'{location}: marker block must use a ```{language} fence'
+    for closing_index in range(opening_index + 1, len(lines)):
+        line = lines[closing_index].strip()
+        if line == '```':
+            return '\n'.join(lines[opening_index + 1:closing_index]).strip()
+        if line.startswith('```'):
+            break
+    raise AssertionError(f'{location}: marker must be followed by a closed fenced block')
+
+
+def check_marked_quick_start_dependencies(root=ROOT):
+    """Keep the complete-program dependencies stable and bilingual."""
+    blocks = {}
+    for relative in ('README.md', 'README.zh_CN.md', 'doc/user_guide.md', 'doc/user_guide.zh_CN.md'):
+        content = (root / relative).read_text(encoding='utf-8')
+        blocks[relative] = marked_fence(content, QUICK_START_DEPENDENCIES, 'toml', relative)
+    baseline = blocks['README.md']
+    for relative, block in blocks.items():
+        assert block == baseline, f'{relative}: Quick Start dependency block differs from README.md'
+    return baseline
 
 
 def markdown_documents():
@@ -90,6 +124,11 @@ def check_versions_and_structure():
         block = match.group(1)
         assert block.count(f'qubit-fs = "{major_minor}"') == 1, f'{relative}: core version is stale'
         assert block.count(f'qubit-fs-local = "{local_version}"') == 1, f'{relative}: local version is stale'
+    quick_start_dependencies = check_marked_quick_start_dependencies()
+    parsed_quick_start_dependencies = tomllib.loads(quick_start_dependencies)
+    quick_start_table = parsed_quick_start_dependencies.get('dependencies', {})
+    assert quick_start_table.get('qubit-fs') == major_minor, 'Quick Start dependency marker: core version is stale'
+    assert quick_start_table.get('qubit-fs-local') == local_version, 'Quick Start dependency marker: local version is stale'
     for relative, heading in (
         ('doc/provider_guide.md', '## 15. Further reading'),
         ('doc/provider_guide.zh_CN.md', '## 15. 延伸阅读'),

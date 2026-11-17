@@ -68,6 +68,37 @@ class RedactDependencyDescriptionTests(unittest.TestCase):
             self.check_with('`rs-redact` (`qubit-redact` 0.10 series)', '`rs-redact`（`qubit-redact` 0.9 系列）', '^0.10')
 
 
+class QuickStartDependencyMarkerTests(unittest.TestCase):
+    def test_real_bilingual_readmes_and_guides_have_matching_marked_dependencies(self):
+        dependencies = checker.check_marked_quick_start_dependencies()
+        self.assertIn('qubit-fs = "0.4"', dependencies)
+
+    def test_marker_requires_one_closed_correct_fence(self):
+        marker = checker.QUICK_START_DEPENDENCIES
+        valid = marker + '\n```toml\n[dependencies]\nqubit-fs = "0.4"\n```'
+        self.assertIn('qubit-fs = "0.4"', checker.marked_fence(valid, marker, 'toml', 'fixture'))
+        for invalid in (
+            '```toml\n[dependencies]\n```',
+            valid + '\n' + valid,
+            marker + '\n```text\nvalue\n```',
+            marker + '\n```toml\n[dependencies]',
+        ):
+            with self.subTest(invalid=invalid), self.assertRaises(AssertionError):
+                checker.marked_fence(invalid, marker, 'toml', 'fixture')
+
+    def test_marked_dependencies_must_match_across_all_bilingual_documents(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'doc').mkdir()
+            valid = '<!-- dependencies: quick-start -->\n```toml\n[dependencies]\nqubit-fs = "0.4"\n```\n'
+            for relative in ('README.md', 'README.zh_CN.md', 'doc/user_guide.md', 'doc/user_guide.zh_CN.md'):
+                (root / relative).write_text(valid, encoding='utf-8')
+            self.assertIn('qubit-fs = "0.4"', checker.check_marked_quick_start_dependencies(root))
+            (root / 'doc/user_guide.zh_CN.md').write_text(valid.replace('"0.4"', '"0.3"'), encoding='utf-8')
+            with self.assertRaisesRegex(AssertionError, 'differs from README'):
+                checker.check_marked_quick_start_dependencies(root)
+
+
 class MarkdownAnchorTests(unittest.TestCase):
     def test_chinese_and_percent_encoded_fragments(self):
         anchors = checker.markdown_anchors('## 元数据保留\n')
