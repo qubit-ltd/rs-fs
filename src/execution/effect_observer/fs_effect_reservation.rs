@@ -55,7 +55,7 @@ impl FsEffectReservation {
     /// active prepared work are dropped.
     #[inline]
     pub fn publish(&self, fact: FsEffectFact) {
-        self.observer().publish_fact(fact);
+        self.inner.state.publish(fact);
     }
 }
 

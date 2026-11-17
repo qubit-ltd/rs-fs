@@ -122,7 +122,9 @@ fn test_effect_fact_slots_are_bounded_reclaimed_and_final_is_immutable() {
     let observer = clone.clone();
     assert!(pool.reserve().is_err());
     reservation.publish(FsEffectFact::State(FsEffectState::Applied));
-    clone.publish(FsEffectState::Indeterminate);
+    reservation
+        .clone()
+        .publish(FsEffectFact::State(FsEffectState::Indeterminate));
     assert!(matches!(
         observer.snapshot(),
         FsEffectSnapshot::Final(FsEffectFact::State(FsEffectState::Applied))

@@ -12,7 +12,6 @@ use super::FsEffectObservationError;
 use super::FsEffectSnapshot;
 use super::FsEffectWait;
 use super::internal::FsEffectShared;
-use crate::error::FsEffectState;
 
 /// Cloneable read-only port for observing a managed mutation effect.
 ///
@@ -28,6 +27,29 @@ use crate::error::FsEffectState;
 /// let observer = reservation.observer();
 /// reservation.publish(FsEffectFact::State(FsEffectState::Unchanged));
 /// assert!(matches!(observer.snapshot(), FsEffectSnapshot::Final(_)));
+/// ```
+///
+/// Observers cannot publish final evidence:
+///
+/// ```compile_fail
+/// use qubit_fs::FsEffectSlotPool;
+/// use qubit_fs::FsEffectState;
+///
+/// let reservation = FsEffectSlotPool::new(1).reserve().unwrap();
+/// let observer = reservation.observer();
+/// observer.publish(FsEffectState::Applied);
+/// ```
+///
+/// They also cannot publish typed facts:
+///
+/// ```compile_fail
+/// use qubit_fs::FsEffectFact;
+/// use qubit_fs::FsEffectSlotPool;
+/// use qubit_fs::FsEffectState;
+///
+/// let reservation = FsEffectSlotPool::new(1).reserve().unwrap();
+/// let observer = reservation.observer();
+/// observer.publish_fact(FsEffectFact::State(FsEffectState::Applied));
 /// ```
 #[must_use = "retain the observer to inspect or await the mutation effect"]
 #[derive(Clone)]
@@ -84,44 +106,9 @@ impl FsEffectObserver {
     /// poisoned.
     #[inline]
     pub fn wait_final_async(&self) -> FsEffectWait<'_> {
-        FsEffectWait { observer: self }
-    }
-    /// Publishes final effect evidence to observer clones.
-    ///
-    /// # Parameters
-    ///
-    /// - `state`: Confirmed effect state to publish to observers.
-    ///
-    /// The first publication wins. Lock poisoning prevents publication and is
-    /// intentionally not returned by this best-effort notification method.
-    #[inline]
-    pub fn publish(&self, state: FsEffectState) {
-        self.publish_fact(FsEffectFact::State(state));
-    }
-    /// Publishes typed final evidence once; later publications cannot replace
-    /// it.
-    ///
-    /// # Parameters
-    ///
-    /// - `fact`: Typed provider evidence retained by the observer snapshot.
-    ///
-    /// A poisoned state lock prevents publication; otherwise the first fact
-    /// wakes synchronous waiters and registered async tasks.
-    pub fn publish_fact(&self, fact: FsEffectFact) {
-        let mut published = false;
-        if let Ok(mut v) = self.state.snapshot.lock()
-            && matches!(*v, FsEffectSnapshot::Pending)
-        {
-            *v = FsEffectSnapshot::Final(fact);
-            published = true;
-        }
-        if published {
-            self.state.changed.notify_all();
-            if let Ok(mut wakers) = self.state.wakers.lock() {
-                for waker in wakers.drain(..) {
-                    waker.wake();
-                }
-            }
+        FsEffectWait {
+            observer: self,
+            registration_id: None,
         }
     }
 }

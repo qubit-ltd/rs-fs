@@ -6,6 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 use std::future::Future;
+use std::sync::Arc;
 use std::pin::Pin;
 use std::task::Context;
 use std::task::Poll;
@@ -36,6 +37,8 @@ use super::FsEffectSnapshot;
 pub struct FsEffectWait<'a> {
     /// Observer whose shared snapshot and waker list this future polls.
     pub(super) observer: &'a FsEffectObserver,
+    /// Identity of this future's optional shared waiter registration.
+    pub(super) registration_id: Option<Arc<()>>,
 }
 impl Future for FsEffectWait<'_> {
     /// Resolves with the published fact or a poisoned-lock error.
@@ -53,32 +56,64 @@ impl Future for FsEffectWait<'_> {
     /// `Ready` with the final fact or observation error, or `Pending` while no
     /// final fact has been published.
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let observer = self.observer;
+        let this = self.get_mut();
+        let observer = this.observer;
         match observer.state.snapshot.lock() {
-            Err(_) => Poll::Ready(Err(FsEffectObservationError::Poisoned)),
+            Err(_) => {
+                unregister(this);
+                Poll::Ready(Err(FsEffectObservationError::Poisoned))
+            }
             Ok(snapshot) => match &*snapshot {
-                FsEffectSnapshot::Final(fact) => Poll::Ready(Ok(fact.clone())),
+                FsEffectSnapshot::Final(fact) => {
+                    let fact = fact.clone();
+                    drop(snapshot);
+                    unregister(this);
+                    Poll::Ready(Ok(fact))
+                }
                 FsEffectSnapshot::Pending => {
                     drop(snapshot);
-                    let mut wakers = match observer.state.wakers.lock() {
-                        Ok(wakers) => wakers,
-                        Err(_) => {
-                            return Poll::Ready(Err(FsEffectObservationError::Poisoned));
-                        }
-                    };
-                    if !wakers.iter().any(|waker| waker.will_wake(cx.waker())) {
-                        wakers.push(cx.waker().clone());
+                    let registration_id = this
+                        .registration_id
+                        .get_or_insert_with(|| Arc::new(()));
+                    if observer
+                        .state
+                        .register_waiter(registration_id, cx.waker())
+                        .is_err()
+                    {
+                        unregister(this);
+                        return Poll::Ready(Err(FsEffectObservationError::Poisoned));
                     }
-                    drop(wakers);
                     match observer.state.snapshot.lock() {
-                        Err(_) => Poll::Ready(Err(FsEffectObservationError::Poisoned)),
+                        Err(_) => {
+                            unregister(this);
+                            Poll::Ready(Err(FsEffectObservationError::Poisoned))
+                        }
                         Ok(snapshot) => match &*snapshot {
-                            FsEffectSnapshot::Final(fact) => Poll::Ready(Ok(fact.clone())),
+                            FsEffectSnapshot::Final(fact) => {
+                                let fact = fact.clone();
+                                drop(snapshot);
+                                unregister(this);
+                                Poll::Ready(Ok(fact))
+                            }
                             FsEffectSnapshot::Pending => Poll::Pending,
                         },
                     }
                 }
             },
         }
+    }
+}
+
+impl Drop for FsEffectWait<'_> {
+    fn drop(&mut self) {
+        unregister(self);
+    }
+}
+
+fn unregister(wait: &mut FsEffectWait<'_>) {
+    if let Some(registration_id) = wait.registration_id.take() {
+        wait.observer
+            .state
+            .unregister_waiter(&registration_id);
     }
 }
