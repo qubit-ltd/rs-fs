@@ -5,8 +5,10 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
+
 //! Validated reader-open request.
+//! The facade routes this request through `FileSystemSpi::open_reader` after
+//! validating the path and resolving read options.
 
 use super::internal::path_request;
 use crate::spi::ResolvedReadOptions;

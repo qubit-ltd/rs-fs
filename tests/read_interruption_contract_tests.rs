@@ -74,7 +74,12 @@ struct ScriptReader {
 impl Input for ScriptReader {
     type Item = u8;
 
-    unsafe fn read_unchecked(&mut self, output: &mut [u8], index: usize, count: usize) -> io::Result<usize> {
+    unsafe fn read_unchecked(
+        &mut self,
+        output: &mut [u8],
+        index: usize,
+        count: usize,
+    ) -> io::Result<usize> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         let target = &mut output[index..index + count];
         loop {
@@ -84,7 +89,11 @@ impl Input for ScriptReader {
                 self.data = (position + length < bytes.len()).then_some((bytes, position + length));
                 return Ok(length);
             }
-            match self.steps.pop_front().expect("script must end with an explicit EOF") {
+            match self
+                .steps
+                .pop_front()
+                .expect("script must end with an explicit EOF")
+            {
                 Step::Data(bytes) => self.data = Some((bytes, 0)),
                 Step::OrdinaryInterrupted => {
                     return Err(io::Error::from(io::ErrorKind::Interrupted));
@@ -146,7 +155,10 @@ fn test_script_reader_preserves_typed_effect_evidence() {
     for (typed_effect, expected_effect) in [
         (TypedEffect::None, None),
         (TypedEffect::Unchanged, Some(FsEffectState::Unchanged)),
-        (TypedEffect::State(FsEffectState::Applied), Some(FsEffectState::Applied)),
+        (
+            TypedEffect::State(FsEffectState::Applied),
+            Some(FsEffectState::Applied),
+        ),
     ] {
         let mut reader = ScriptReader {
             steps: [Step::TypedInterrupted(typed_effect)].into_iter().collect(),
@@ -154,7 +166,8 @@ fn test_script_reader_preserves_typed_effect_evidence() {
             calls: Arc::new(AtomicUsize::new(0)),
         };
         let mut output = [0; 1];
-        let io_error = unsafe { reader.read_unchecked(&mut output, 0, 1) }.expect_err("typed interruption");
+        let io_error =
+            unsafe { reader.read_unchecked(&mut output, 0, 1) }.expect_err("typed interruption");
         assert_eq!(io::ErrorKind::Interrupted, io_error.kind());
         let fs_error = io_error
             .get_ref()
@@ -221,6 +234,7 @@ impl FileSystemSpi for ReadSpi {
     }
 }
 
+#[must_use]
 fn filesystem(steps: impl IntoIterator<Item = Step>) -> (FileSystem, Arc<AtomicUsize>) {
     let calls = Arc::new(AtomicUsize::new(0));
     let filesystem = FileSystem::from_spi(ReadSpi {
@@ -243,7 +257,11 @@ fn assert_safe_read(script: Vec<Step>, expected: &[u8], expected_calls: usize) {
 
 #[test]
 fn test_read_all_retries_safe_interruption_without_repeating_bytes() {
-    assert_safe_read(vec![Step::OrdinaryInterrupted, Step::Data(b"ab"), Step::Eof], b"ab", 3);
+    assert_safe_read(
+        vec![Step::OrdinaryInterrupted, Step::Data(b"ab"), Step::Eof],
+        b"ab",
+        3,
+    );
     assert_safe_read(
         vec![
             Step::Data(b"ab"),
@@ -297,7 +315,10 @@ fn assert_unsafe_typed_stops(effect: FsEffectState) {
         has_marker |= current.is::<SourceMarker>();
         source = current.source();
     }
-    assert!(has_marker, "typed source marker must survive the stream boundary");
+    assert!(
+        has_marker,
+        "typed source marker must survive the stream boundary"
+    );
     assert_eq!(1, calls.load(Ordering::SeqCst));
 }
 
@@ -356,7 +377,9 @@ fn test_direct_read_fully_stops_on_unsafe_interruption() {
         Step::Eof,
     ]);
     let path = Path::parse(REQUEST_PATH).expect("path");
-    let mut reader = fs.open_reader(&path, ReadOptions::default()).expect("reader");
+    let mut reader = fs
+        .open_reader(&path, ReadOptions::default())
+        .expect("reader");
     let mut output = [0; 5];
     let error = reader
         .read_fully(&mut output)
@@ -388,7 +411,9 @@ fn test_direct_aggregate_reads_stop_on_each_unsafe_typed_effect() {
                 Step::Eof,
             ]);
             let path = Path::parse(REQUEST_PATH).expect("path");
-            let mut reader = fs.open_reader(&path, ReadOptions::default()).expect("reader");
+            let mut reader = fs
+                .open_reader(&path, ReadOptions::default())
+                .expect("reader");
             let mut output = [0; 5];
             let error = if use_exactly {
                 reader.read_exactly(&mut output)
@@ -416,14 +441,27 @@ fn test_direct_aggregate_reads_stop_on_each_unsafe_typed_effect() {
 fn test_direct_aggregate_reads_retry_safe_interruption() {
     for effect in [TypedEffect::None, TypedEffect::Unchanged] {
         for use_exactly in [false, true] {
-            let (fs, calls) = filesystem([Step::TypedInterrupted(effect), Step::Data(b"after"), Step::Eof]);
+            let (fs, calls) = filesystem([
+                Step::TypedInterrupted(effect),
+                Step::Data(b"after"),
+                Step::Eof,
+            ]);
             let path = Path::parse(REQUEST_PATH).expect("path");
-            let mut reader = fs.open_reader(&path, ReadOptions::default()).expect("reader");
+            let mut reader = fs
+                .open_reader(&path, ReadOptions::default())
+                .expect("reader");
             let mut output = [0; 5];
             if use_exactly {
-                reader.read_exactly(&mut output).expect("safe interruption retries");
+                reader
+                    .read_exactly(&mut output)
+                    .expect("safe interruption retries");
             } else {
-                assert_eq!(5, reader.read_fully(&mut output).expect("safe interruption retries"));
+                assert_eq!(
+                    5,
+                    reader
+                        .read_fully(&mut output)
+                        .expect("safe interruption retries")
+                );
             }
             assert_eq!(b"after", &output);
             assert_eq!(2, calls.load(Ordering::SeqCst));
@@ -432,14 +470,20 @@ fn test_direct_aggregate_reads_retry_safe_interruption() {
     for use_exactly in [false, true] {
         let (fs, calls) = filesystem([Step::OrdinaryInterrupted, Step::Data(b"after"), Step::Eof]);
         let path = Path::parse(REQUEST_PATH).expect("path");
-        let mut reader = fs.open_reader(&path, ReadOptions::default()).expect("reader");
+        let mut reader = fs
+            .open_reader(&path, ReadOptions::default())
+            .expect("reader");
         let mut output = [0; 5];
         if use_exactly {
-            reader.read_exactly(&mut output).expect("ordinary interruption retries");
+            reader
+                .read_exactly(&mut output)
+                .expect("ordinary interruption retries");
         } else {
             assert_eq!(
                 5,
-                reader.read_fully(&mut output).expect("ordinary interruption retries")
+                reader
+                    .read_fully(&mut output)
+                    .expect("ordinary interruption retries")
             );
         }
         assert_eq!(b"after", &output);
@@ -456,9 +500,13 @@ fn test_direct_read_preserves_unsafe_payload_and_partial_buffer() {
         Step::Eof,
     ]);
     let path = Path::parse(REQUEST_PATH).expect("path");
-    let mut reader = fs.open_reader(&path, ReadOptions::default()).expect("reader");
+    let mut reader = fs
+        .open_reader(&path, ReadOptions::default())
+        .expect("reader");
     let mut output = [0; 5];
-    let error = reader.read_fully(&mut output).expect_err("unsafe interruption stops");
+    let error = reader
+        .read_fully(&mut output)
+        .expect_err("unsafe interruption stops");
     assert_eq!(io::ErrorKind::Other, error.kind());
     let typed = error
         .get_ref()
@@ -474,7 +522,9 @@ fn test_direct_read_preserves_unsafe_payload_and_partial_buffer() {
         Step::Data(b"after"),
         Step::Eof,
     ]);
-    let mut reader = fs.open_reader(&path, ReadOptions::default()).expect("reader");
+    let mut reader = fs
+        .open_reader(&path, ReadOptions::default())
+        .expect("reader");
     let error = reader.read(&mut output).expect_err("unsafe interruption");
     assert_eq!(io::ErrorKind::Other, error.kind());
     let typed = error
@@ -495,7 +545,9 @@ fn test_direct_aggregate_reads_return_ordinary_errors_without_retry() {
     for use_exactly in [false, true] {
         let (fs, calls) = filesystem([Step::OrdinaryError, Step::Data(b"after"), Step::Eof]);
         let path = Path::parse(REQUEST_PATH).expect("path");
-        let mut reader = fs.open_reader(&path, ReadOptions::default()).expect("reader");
+        let mut reader = fs
+            .open_reader(&path, ReadOptions::default())
+            .expect("reader");
         let mut output = [0; 5];
         let error = if use_exactly {
             reader.read_exactly(&mut output)
@@ -511,11 +563,19 @@ fn test_direct_aggregate_reads_return_ordinary_errors_without_retry() {
 
 #[test]
 fn test_direct_read_reclassifies_conflicting_typed_error_but_preserves_other_errors() {
-    let (fs, calls) = filesystem([Step::TypedInterruptedKindMismatch, Step::Data(b"after"), Step::Eof]);
+    let (fs, calls) = filesystem([
+        Step::TypedInterruptedKindMismatch,
+        Step::Data(b"after"),
+        Step::Eof,
+    ]);
     let path = Path::parse(REQUEST_PATH).expect("path");
-    let mut reader = fs.open_reader(&path, ReadOptions::default()).expect("reader");
+    let mut reader = fs
+        .open_reader(&path, ReadOptions::default())
+        .expect("reader");
     let mut output = [0; 5];
-    let error = reader.read(&mut output).expect_err("conflicting typed error stops");
+    let error = reader
+        .read(&mut output)
+        .expect_err("conflicting typed error stops");
     assert_eq!(io::ErrorKind::Other, error.kind());
     let typed = error
         .get_ref()
@@ -530,7 +590,9 @@ fn test_direct_read_reclassifies_conflicting_typed_error_but_preserves_other_err
     assert_eq!(1, calls.load(Ordering::SeqCst));
 
     let (fs, calls) = filesystem([Step::OrdinaryError, Step::Eof]);
-    let mut reader = fs.open_reader(&path, ReadOptions::default()).expect("reader");
+    let mut reader = fs
+        .open_reader(&path, ReadOptions::default())
+        .expect("reader");
     let error = reader.read(&mut output).expect_err("ordinary error");
     assert_eq!(io::ErrorKind::Other, error.kind());
     assert_eq!("scripted ordinary read error", error.to_string());
@@ -550,7 +612,11 @@ fn assert_safe_prefix(script: Vec<Step>, expected: &[u8], expected_calls: usize)
 
 #[test]
 fn test_read_prefix_retries_safe_interruption_without_repeating_bytes() {
-    assert_safe_prefix(vec![Step::OrdinaryInterrupted, Step::Data(b"ab"), Step::Eof], b"ab", 3);
+    assert_safe_prefix(
+        vec![Step::OrdinaryInterrupted, Step::Data(b"ab"), Step::Eof],
+        b"ab",
+        3,
+    );
     assert_safe_prefix(
         vec![
             Step::Data(b"ab"),
@@ -610,7 +676,10 @@ fn test_read_prefix_stops_on_typed_interruption_with_uncertain_or_applied_effect
             has_marker |= current.is::<SourceMarker>();
             source = current.source();
         }
-        assert!(has_marker, "typed source marker must survive the stream boundary");
+        assert!(
+            has_marker,
+            "typed source marker must survive the stream boundary"
+        );
         assert_eq!(1, calls.load(Ordering::SeqCst));
     }
 }

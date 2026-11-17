@@ -43,6 +43,7 @@ use qubit_fs::spi::SpiCopyFailure;
 use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
 
+/// Returns configured native-copy statistics to exercise facade validation.
 #[derive(Clone)]
 struct CopyStatsSpi {
     stats: CopyStats,
@@ -461,6 +462,7 @@ fn test_entry_budget_rejection_preserves_published_state_and_statistics() {
 }
 
 impl CopyStatsSpi {
+    /// Wraps this statistics provider in the synchronous facade used by tests.
     fn into_filesystem(self) -> FileSystem {
         FileSystem::from_spi(self).expect("facade should construct")
     }
@@ -528,6 +530,7 @@ mod asynchronous {
         }
     }
 
+    /// Polls a test future once and requires it to complete immediately.
     fn ready<F: Future>(future: F) -> F::Output {
         let waker = Waker::noop();
         let mut context = Context::from_waker(waker);
@@ -538,6 +541,7 @@ mod asynchronous {
         }
     }
 
+    /// Wraps the statistics provider in the asynchronous facade used by tests.
     fn filesystem(spi: CopyStatsSpi) -> AsyncFileSystem {
         AsyncFileSystem::from_spi(spi).expect("async facade should construct")
     }

@@ -159,7 +159,7 @@ impl CopyOutcome {
     /// # Returns
     /// The metadata preservation policy the provider reports as achieved.
     #[inline]
-    #[must_use]
+    #[must_use = "inspect the provider-reported metadata preservation policy"]
     pub const fn metadata(&self) -> MetadataPreservePolicy {
         self.metadata
     }
@@ -338,6 +338,10 @@ impl CopyOutcome {
     ///
     /// - `options`: Copy route, conflict, consistency, and metadata guarantees
     ///   requested by the caller.
+    ///
+    /// # Returns
+    /// The inferred publication state, or `Indeterminate` when the reported
+    /// statistics do not form a coherent shape for the requested mode.
     pub(crate) fn violation_failure_state(&self, options: &CopyOptions) -> CopyFailureState {
         if self.statistics_shape_violation(options.mode()).is_some() {
             return CopyFailureState::Indeterminate;
@@ -347,7 +351,9 @@ impl CopyOutcome {
 
     /// Returns the checked total of completed file and directory entries.
     ///
-    /// Returns `None` if the provider-reported counters overflow.
+    /// # Returns
+    /// `Some` with the checked total of completed resources, or `None` if the
+    /// provider-reported counters overflow.
     fn entry_count(&self) -> Option<u64> {
         // These counters describe completed resources; skipped and failed
         // entries are separate outcomes and cannot justify an overwrite.
@@ -361,11 +367,13 @@ impl CopyOutcome {
 
     /// Checks whether the reported statistics match the requested copy mode.
     ///
-    /// Returns a diagnostic when counters are inconsistent or overflow.
-    ///
     /// # Parameters
     ///
     /// - `mode`: Copy mode whose counter requirements are checked.
+    ///
+    /// # Returns
+    /// `Some` with a diagnostic when counters are inconsistent or overflow, or
+    /// `None` when the counters match the requested mode.
     fn statistics_shape_violation(&self, mode: CopyMode) -> Option<&'static str> {
         let Some(entries) = self.entry_count() else {
             return Some("provider reported copy entry counters that overflow");

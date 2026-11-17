@@ -121,6 +121,15 @@ Conditional 或不支持范围读取的 provider 仍可顺序读取前缀。Best
 
 <!-- example: quick-start -->
 ```rust
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
+//! Demonstrates basic operations on a rooted local filesystem.
+
 use qubit_fs::Path;
 use qubit_fs::copy::CopyExecutionRoute;
 use qubit_fs::copy::CopyOptions;
@@ -211,6 +220,7 @@ use qubit_fs::write::WriteAbortOutcome;
 use qubit_fs::write::WriterRecovery;
 
 /// Retains a copy failure and any error from aborting its writer.
+#[must_use = "inspect the copy failure and recovery cleanup state"]
 #[derive(Debug)]
 pub struct CopyRecovery {
     /// The copy failure, including its publication and recovery state.
@@ -296,6 +306,7 @@ use qubit_fs::write::WriteOptions;
 ///
 /// This guide type keeps the original operation, primary failure, and cleanup
 /// failure together so callers can reconcile publication state before retrying.
+#[must_use = "retain the operation and reconcile its publication state"]
 #[derive(Debug)]
 pub struct WriteRecovery {
     /// The operation containing the write's publication and recovery state.
@@ -309,6 +320,7 @@ pub struct WriteRecovery {
 }
 
 /// Describes whether report writing failed before execution or needs recovery.
+#[must_use = "handle the error or retain its recovery state"]
 #[derive(Debug)]
 pub enum WriteReportError {
     /// The operation could not be prepared before asynchronous execution.
@@ -653,6 +665,25 @@ use qubit_fs::read::RandomAccessReader;
 /// was filled. `Unknown` does not guarantee that a backend accepts an
 /// arbitrarily large request. On any error, discard `output` because it may
 /// contain bytes from earlier or partially completed reads.
+///
+/// # Parameters
+///
+/// - `filesystem`: The filesystem that opened `reader` and supplies its range
+///   limit and provider context.
+/// - `reader`: The already-open random-access reader to sample from.
+/// - `offset`: The starting byte offset in the opened resource.
+/// - `output`: Caller-owned storage that receives sampled bytes.
+///
+/// # Returns
+///
+/// The number of bytes filled, which may be less than `output.len()` when the
+/// reader reaches the end of the resource.
+///
+/// # Errors
+///
+/// Returns a contextual error when the range is invalid or a read fails. The
+/// output may contain bytes from earlier reads or a partial read and must be
+/// discarded on error.
 pub fn sample(
     filesystem: &FileSystem,
     reader: &mut RandomAccessReader,
@@ -748,6 +779,26 @@ use qubit_fs::read::AsyncRandomAccessReader;
 /// that a backend accepts an arbitrarily large request. If this future is
 /// cancelled or returns an error, discard `output`; the buffer may contain
 /// partial data and this helper does not retry or reopen the path.
+///
+/// # Parameters
+///
+/// - `filesystem`: The filesystem that opened `reader` and supplies its range
+///   limit and provider context.
+/// - `reader`: The already-open asynchronous random-access reader to sample
+///   from.
+/// - `offset`: The starting byte offset in the opened resource.
+/// - `output`: Caller-owned storage that receives sampled bytes.
+///
+/// # Returns
+///
+/// The number of bytes filled, which may be less than `output.len()` when the
+/// reader reaches the end of the resource.
+///
+/// # Errors
+///
+/// Returns a contextual error when the range is invalid or a read fails. The
+/// output may contain bytes from earlier reads or a partial read and must be
+/// discarded on error.
 pub async fn sample_async(
     filesystem: &AsyncFileSystem,
     reader: &mut AsyncRandomAccessReader,
@@ -847,16 +898,6 @@ metadata，流会失败，不会返回缺少 metadata 的条目。同步 `Direct
 保留目标此前已确认发布或未发布的事实。后续 persist 或 keep 仍被拒绝，其失败快照保留这一区分；
 该信息不构成再次变更源资源的权限。
 
-## 延伸阅读
-
-- [README](../README.zh_CN.md)
-- [English user guide](user_guide.md)
-- [架构设计](file_system_design.zh_CN.md)
-- [English architecture](file_system_design.md)
-- [docs.rs API 文档](https://docs.rs/qubit-fs)
-- [仓库地址](https://github.com/qubit-ltd/rs-fs)
-
-<a id="托管操作与-03-迁移"></a>
 ## 托管操作与 0.3 迁移
 
 0.4 保留 `FileSystem` 与 `AsyncFileSystem` 的现有直接方法，但明确标为**非托管**操作：它们不通过
@@ -888,3 +929,14 @@ provider 必须保留清理责任，直到清理或恢复得到确认。
 `async` 默认关闭，仅提供异步 API，不启动线程，也不选择执行器。托管工作和清理仍在运行时，应用须保持 manager
 有效。应用关闭时先完成或保留恢复任务，关闭文件系统自有的服务/组；确认其他客户端也不再需要共享 manager 后，
 再由应用关闭 manager。本库不会替调用方关闭应用所有的 manager。
+
+## 延伸阅读
+
+- [README](../README.zh_CN.md)
+- [English user guide](user_guide.md)
+- [架构设计](file_system_design.zh_CN.md)
+- [English architecture](file_system_design.md)
+- [docs.rs API 文档](https://docs.rs/qubit-fs)
+- [仓库地址](https://github.com/qubit-ltd/rs-fs)
+
+<a id="托管操作与-03-迁移"></a>

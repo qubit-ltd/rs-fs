@@ -27,6 +27,9 @@ pub(crate) struct TempLifecycle {
 }
 impl TempLifecycle {
     /// Creates a lifecycle that owns cleanup for an unpublished resource.
+    ///
+    /// # Returns
+    /// A snapshot initialized with owned cleanup responsibility.
     #[inline]
     #[must_use]
     pub(crate) const fn new() -> Self {
@@ -38,12 +41,18 @@ impl TempLifecycle {
     }
     /// Returns whether this handle owns cleanup, has released it, or cannot
     /// determine the resource state.
+    ///
+    /// # Returns
+    /// The current cleanup and ownership state.
     #[inline]
     pub(crate) const fn state(&self) -> TempResourceState {
         self.state
     }
     /// Returns provider-confirmed publication and source-release progress for
     /// interpreting persistence failures.
+    ///
+    /// # Returns
+    /// The current persistence failure state.
     #[must_use]
     #[inline]
     pub(crate) const fn failure_state(&self) -> PersistFailureState {
@@ -53,7 +62,9 @@ impl TempLifecycle {
     /// been observed.
     ///
     /// The borrowed path remains tied to this lifecycle snapshot.
-    #[must_use]
+    ///
+    /// # Returns
+    /// The latest confirmed publication target, if one is recorded.
     #[inline]
     pub(crate) fn publication_target(&self) -> Option<&Path> {
         self.publication_target.as_ref()

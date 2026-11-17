@@ -18,6 +18,7 @@
 /// assert_eq!(requirement, DurabilityRequirement::Required);
 /// assert_eq!(DurabilityRequirement::default(), DurabilityRequirement::NotRequired);
 /// ```
+#[must_use = "apply the durability requirement to an operation"]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum DurabilityRequirement {
     /// The operation must confirm durable data and namespace publication.

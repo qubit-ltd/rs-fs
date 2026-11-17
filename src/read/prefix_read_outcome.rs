@@ -128,6 +128,9 @@ impl PrefixReadOutcome {
     }
 
     /// Transfers the accumulated bytes without another allocation.
+    ///
+    /// # Returns
+    /// The accumulated prefix bytes in their existing allocation.
     #[inline]
     #[must_use]
     pub fn into_bytes(self) -> Vec<u8> {

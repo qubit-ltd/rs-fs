@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
 //! Provider copy-decline reasons.
 
 /// Reason a provider declined its optional copy fast path.

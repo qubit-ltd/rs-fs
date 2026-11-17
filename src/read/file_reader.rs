@@ -39,11 +39,12 @@ use crate::metadata::OpenedFileInfo;
 /// ```rust
 /// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
 /// # let filesystem = support::rustdoc_provider::filesystem();
+/// use qubit_fs::read::FileReader;
 /// use qubit_fs::Path;
 /// use qubit_fs::read::ReadOptions;
 /// use qubit_io::Input;
 ///
-/// let mut reader = filesystem.open_reader(&Path::parse("/report")?, ReadOptions::default())?;
+/// let mut reader: FileReader = filesystem.open_reader(&Path::parse("/report")?, ReadOptions::default())?;
 /// let mut prefix = [0; 3];
 /// assert_eq!(3, reader.read_fully(&mut prefix)?);
 /// assert_eq!(*b"rep", prefix);
@@ -91,6 +92,9 @@ impl Input for FileReader {
 
     /// Reports whether the wrapped byte input can satisfy reads from its
     /// buffer.
+    ///
+    /// # Returns
+    /// `true` when the input already buffers bytes for subsequent reads.
     #[inline]
     fn is_buffered(&self) -> bool {
         self.inner.is_buffered()
@@ -103,6 +107,19 @@ impl Input for FileReader {
     /// - `output`: Caller-owned destination buffer.
     /// - `index`: Start index of the requested output range.
     /// - `count`: Number of bytes requested from that range.
+    ///
+    /// # Returns
+    /// The number of bytes read, which may be shorter than the requested count.
+    ///
+    /// # Errors
+    /// Returns an I/O error from the wrapped input. A typed interruption whose
+    /// effect is not unchanged, or whose error kind conflicts with the outer
+    /// interruption, is returned with outer `Other` while preserving its
+    /// original [`FsError`] as the direct source.
+    ///
+    /// # Panics
+    /// Panics only if an I/O error exposes an [`FsError`] source but no longer
+    /// provides that source when ownership is taken.
     ///
     /// # Safety
     /// `index..index + count` must be a valid range within `output`, and the
@@ -137,6 +154,9 @@ impl Debug for FileReader {
     ///
     /// # Parameters
     /// - `formatter`: Destination for the debug representation.
+    ///
+    /// # Errors
+    /// Returns a formatting error if writing the debug representation fails.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter

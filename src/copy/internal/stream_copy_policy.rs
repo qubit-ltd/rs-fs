@@ -28,6 +28,10 @@ use crate::write::WriteOptions;
 /// - `options`: Copy route, conflict, consistency, and metadata guarantees
 ///   requested by the caller.
 /// - `filesystem_symlink_policy`: Symlink policy configured for the filesystem.
+///
+/// # Returns
+/// `true` when `fallback_rejection` finds no unsupported option.
+#[must_use]
 #[inline]
 pub(crate) fn fallback_options_supported(options: &CopyOptions, filesystem_symlink_policy: SymlinkPolicy) -> bool {
     fallback_rejection(options, filesystem_symlink_policy).is_none()
@@ -40,6 +44,10 @@ pub(crate) fn fallback_options_supported(options: &CopyOptions, filesystem_symli
 /// - `options`: Copy route, conflict, consistency, and metadata guarantees
 ///   requested by the caller.
 /// - `filesystem_symlink_policy`: Symlink policy configured for the filesystem.
+///
+/// # Returns
+/// `Some(reason)` for the first unsupported option in policy-check order, or
+/// `None` when the fallback can honor the requested options.
 pub(crate) fn fallback_rejection(
     options: &CopyOptions,
     filesystem_symlink_policy: SymlinkPolicy,
@@ -83,6 +91,10 @@ pub(crate) fn fallback_rejection(
 ///
 /// - `options`: Copy route, conflict, consistency, and metadata guarantees
 ///   requested by the caller.
+///
+/// # Returns
+/// Writer options that create a new destination and preserve the requested
+/// atomicity and durability requirements.
 #[inline]
 #[must_use]
 pub(crate) fn fallback_write_options(options: &CopyOptions) -> WriteOptions {
@@ -101,6 +113,9 @@ pub(crate) fn fallback_write_options(options: &CopyOptions) -> WriteOptions {
 ///   ceiling.
 /// - `target`: Destination logical path attached to a limit error.
 /// - `length`: Known source length used as the planned destination byte count.
+///
+/// # Returns
+/// `Ok(())` when `length` is within the configured destination write limit.
 ///
 /// # Errors
 /// Returns the destination write-size error when `length` exceeds its limit.

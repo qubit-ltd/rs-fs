@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
 //! Provider-opened synchronous directory stream envelope.
 
 use super::DirectoryStreamSpi;
@@ -27,6 +26,7 @@ use super::DirectoryStreamSpi;
 /// }
 /// let _stream = OpenedDirectoryStream::new(Box::new(EmptyStream));
 /// ```
+#[must_use = "transfer the opened directory stream or explicitly drop its provider session"]
 pub struct OpenedDirectoryStream {
     /// Provider enumeration session awaiting facade validation.
     stream: Box<dyn DirectoryStreamSpi>,
@@ -41,7 +41,6 @@ impl OpenedDirectoryStream {
     /// # Returns
     /// An opened-directory-stream envelope for the facade.
     #[inline]
-    #[must_use]
     pub fn new(stream: Box<dyn DirectoryStreamSpi>) -> Self {
         Self { stream }
     }

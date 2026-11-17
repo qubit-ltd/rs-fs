@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
 //! Definition helper for facade-resolved option values.
 
 /// Defines one immutable facade-resolved option value.
@@ -13,6 +12,7 @@ macro_rules! resolved_options {
     ($name:ident, $options:ty) => {
         #[doc = concat!(
                                             "Immutable options resolved by the facade before provider dispatch.\n\n",
+                                            "The facade places this value in the request passed to the provider's corresponding `FileSystemSpi` operation.\n\n",
                                             "# Examples\n\n",
                                             "```rust\n",
                                             "use ", stringify!(qubit_fs), "::spi::", stringify!($name), ";\n\n",
@@ -21,6 +21,7 @@ macro_rules! resolved_options {
                                             "}\n",
                                             "```",
                                         )]
+        #[must_use = "pass the resolved options to the provider"]
         #[derive(Clone)]
         pub struct $name {
             /// Caller options retained after facade validation and
@@ -47,7 +48,7 @@ macro_rules! resolved_options {
             /// # Returns
             /// The validated options retained by this envelope.
             #[inline]
-            #[must_use]
+            #[must_use = "inspect the caller options before provider dispatch"]
             pub const fn options(&self) -> &$options {
                 &self.options
             }

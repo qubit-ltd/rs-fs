@@ -68,6 +68,9 @@ impl Display for ResourceVersion {
 
 impl AsRef<str> for ResourceVersion {
     /// Borrows the provider-defined version text as a string slice.
+    ///
+    /// # Returns
+    /// The provider-defined version text.
     #[inline]
     fn as_ref(&self) -> &str {
         self.as_str()

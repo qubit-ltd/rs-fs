@@ -16,10 +16,8 @@ use std::pin::Pin;
 /// cross thread boundaries while borrowing data for `'a`.
 ///
 /// # Type Parameters
-/// - `T`: Value produced when the provider operation completes.
-///
-/// # Lifetimes
 /// - `'a`: Maximum lifetime of borrows held by the future.
+/// - `T`: Value produced when the provider operation completes.
 ///
 /// # Examples
 ///
@@ -31,6 +29,10 @@ use std::pin::Pin;
 ///     future.await
 /// }
 ///
-/// let _operation = provider_operation();
+/// async fn inspect() {
+///     assert_eq!(provider_operation().await, 42);
+/// }
+///
+/// let _inspect = inspect;
 /// ```
 pub type SpiFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;

@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
 //! Facade-resolved copy options.
 
 use crate::copy::CopyOptions;
@@ -26,6 +25,7 @@ use crate::metadata::SymlinkPolicy;
 /// // A provider receives this facade-created value in its copy request.
 /// let _ = inspect_copy_options;
 /// ```
+#[must_use = "pass the resolved copy options with the copy request"]
 #[derive(Clone)]
 pub struct ResolvedCopyOptions {
     /// Caller options retained after facade validation and normalization.
@@ -56,7 +56,7 @@ impl ResolvedCopyOptions {
     /// # Returns
     /// The validated caller options retained by the facade.
     #[inline]
-    #[must_use]
+    #[must_use = "inspect the caller copy options before dispatch"]
     pub const fn options(&self) -> &CopyOptions {
         &self.options
     }

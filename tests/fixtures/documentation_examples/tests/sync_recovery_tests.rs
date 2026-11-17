@@ -45,6 +45,8 @@ use qubit_fs::write::WriteFailureState;
 use qubit_fs_documentation_examples::sync_recovery::copy_report;
 use qubit_io::Output;
 
+/// Provider fixture that reports a published write followed by a configurable
+/// cleanup result.
 struct PublishedThenCleanupFailure {
     abort_outcome: Result<WriteAbortOutcome, FsErrorKind>,
 }
@@ -91,6 +93,8 @@ impl FileSystemSpi for PublishedThenCleanupFailure {
     }
 }
 
+/// Writer fixture that publishes on failure and returns the configured abort
+/// result.
 struct FailedWriter {
     abort_outcome: Result<WriteAbortOutcome, FsErrorKind>,
 }

@@ -29,9 +29,13 @@ pub(crate) struct WriteAllCancellationGuard<'a> {
 impl<'a> WriteAllCancellationGuard<'a> {
     /// Arms cancellation tracking before the first provider await.
     /// # Parameters
-    /// - `state`: Publication state used to classify or retain this outcome.
+    /// - `state`: Operation state set to `Running` before provider execution.
     /// - `writer`: Retained writer slot updated by cancellation tracking.
     /// - `recovery`: Snapshot updated with retained writer progress.
+    ///
+    /// # Returns
+    /// An armed guard that records cancellation unless `finish` records a
+    /// result.
     pub(crate) fn start(
         state: &'a mut AsyncWriteAllOperationState,
         writer: &'a mut Option<AsyncWriterRecovery>,
@@ -46,6 +50,10 @@ impl<'a> WriteAllCancellationGuard<'a> {
         }
     }
     /// Borrows the retained writer slot for provider execution.
+    ///
+    /// # Returns
+    /// Mutable access to the slot, which may be empty or contain a retained
+    /// opened or rejected writer.
     #[must_use = "the writer slot must be passed to provider execution"]
     #[inline]
     pub(crate) fn writer_mut(&mut self) -> &mut Option<AsyncWriterRecovery> {
@@ -53,11 +61,12 @@ impl<'a> WriteAllCancellationGuard<'a> {
     }
     /// Records a terminal result and releases a successfully committed writer.
     ///
+    /// # Parameters
+    /// - `result`: Provider-stage result used to record operation completion.
+    ///
     /// # Panics
     /// Panics if successful execution violated the internal retained-writer
     /// invariant.
-    /// # Parameters
-    /// - `result`: Provider-stage result used to record operation completion.
     pub(crate) fn finish(&mut self, result: &Result<WriteOutcome, AsyncWriteAllOperationFailure>) {
         *self.state = match result {
             Ok(_) => {

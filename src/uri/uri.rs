@@ -46,6 +46,9 @@ impl Uri {
     /// # Parameters
     /// - `text`: URI text to parse.
     ///
+    /// # Returns
+    /// The validated URI with its scheme normalized to lowercase.
+    ///
     /// # Errors
     /// Returns an invalid-URI error for malformed syntax, fragments, or
     /// sensitive components rejected by the fixed standard policy.
@@ -66,6 +69,9 @@ impl Uri {
     /// credentials that are not recognized by either policy remain the
     /// provider's responsibility to remove before constructing a URI.
     ///
+    /// # Returns
+    /// The validated secret-free URI using the captured policy.
+    ///
     /// # Errors
     /// Returns an invalid-URI error if the syntax is malformed, a fragment is
     /// present, or either policy classifies a component as sensitive.
@@ -81,6 +87,9 @@ impl Uri {
     }
 
     /// Returns the normalized lowercase scheme.
+    ///
+    /// # Returns
+    /// The URI scheme in lowercase.
     #[inline]
     #[must_use]
     pub fn scheme(&self) -> &str {
@@ -88,6 +97,10 @@ impl Uri {
     }
 
     /// Returns the raw RFC 3986 authority when it is syntactically present.
+    ///
+    /// # Returns
+    /// `Some(authority)` when the authority delimiter is present, including
+    /// an empty authority; otherwise, `None`.
     #[inline]
     #[must_use]
     pub fn authority(&self) -> Option<&str> {
@@ -96,6 +109,9 @@ impl Uri {
 
     /// Returns whether an authority delimiter was present, including empty
     /// authority.
+    ///
+    /// # Returns
+    /// `true` when the URI contains an authority delimiter.
     #[inline]
     #[must_use]
     pub fn has_authority(&self) -> bool {
@@ -103,6 +119,9 @@ impl Uri {
     }
 
     /// Returns the raw percent-encoded path without decoding separators.
+    ///
+    /// # Returns
+    /// The encoded path as written in the canonical URI.
     #[inline]
     #[must_use]
     pub fn path(&self) -> &str {
@@ -110,6 +129,10 @@ impl Uri {
     }
 
     /// Returns the raw ordered query text when a query delimiter was present.
+    ///
+    /// # Returns
+    /// `Some(query)` when the query delimiter is present, including an empty
+    /// query; otherwise, `None`.
     #[inline]
     #[must_use]
     pub fn query(&self) -> Option<&str> {
@@ -117,6 +140,9 @@ impl Uri {
     }
 
     /// Returns the complete validated canonical URI spelling.
+    ///
+    /// # Returns
+    /// The complete URI text without decoding its path or query components.
     #[inline]
     #[must_use]
     pub fn as_str(&self) -> &str {
@@ -129,6 +155,12 @@ impl Display for Uri {
     ///
     /// # Parameters
     /// - `formatter`: Destination for the canonical URI text.
+    ///
+    /// # Returns
+    /// `Ok(())` after writing the URI text.
+    ///
+    /// # Errors
+    /// Returns the formatter's error if it cannot accept the output.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter.write_str(self.as_str())

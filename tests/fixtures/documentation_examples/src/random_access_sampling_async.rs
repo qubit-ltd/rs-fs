@@ -29,6 +29,26 @@ use qubit_fs::read::AsyncRandomAccessReader;
 /// that a backend accepts an arbitrarily large request. If this future is
 /// cancelled or returns an error, discard `output`; the buffer may contain
 /// partial data and this helper does not retry or reopen the path.
+///
+/// # Parameters
+///
+/// - `filesystem`: The filesystem that opened `reader` and supplies its range
+///   limit and provider context.
+/// - `reader`: The already-open asynchronous random-access reader to sample
+///   from.
+/// - `offset`: The starting byte offset in the opened resource.
+/// - `output`: Caller-owned storage that receives sampled bytes.
+///
+/// # Returns
+///
+/// The number of bytes filled, which may be less than `output.len()` when the
+/// reader reaches the end of the resource.
+///
+/// # Errors
+///
+/// Returns a contextual error when the range is invalid or a read fails. The
+/// output may contain bytes from earlier reads or a partial read and must be
+/// discarded on error.
 pub async fn sample_async(
     filesystem: &AsyncFileSystem,
     reader: &mut AsyncRandomAccessReader,

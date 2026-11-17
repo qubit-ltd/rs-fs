@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
 //! Provider rename failure facts.
 
 use crate::error::FsError;
@@ -26,6 +25,7 @@ use crate::rename::RenameFailureState;
 /// );
 /// assert_eq!(RenameFailureState::Unchanged, failure.state());
 /// ```
+#[must_use = "inspect the provider rename failure before discarding it"]
 pub struct SpiRenameFailure {
     /// Provider failure with filesystem context.
     error: Box<FsError>,
@@ -43,7 +43,6 @@ impl SpiRenameFailure {
     /// # Returns
     /// A failure containing both facts.
     #[inline]
-    #[must_use]
     pub fn new(error: FsError, state: RenameFailureState) -> Self {
         Self {
             error: Box::new(error),

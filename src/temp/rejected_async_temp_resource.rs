@@ -76,6 +76,7 @@ impl RejectedAsyncTempResource {
     /// Returns cleanup progress; errors and cancellation do not release
     /// ownership.
     #[inline]
+    #[must_use]
     pub const fn cleanup_state(&self) -> RecoveryCleanupState {
         self.state
     }
@@ -86,6 +87,9 @@ impl RejectedAsyncTempResource {
     /// reconciliation. No work occurs until polled. Dropping a polled,
     /// unfinished future records Indeterminate; dropping an unpolled future
     /// leaves the state unchanged.
+    ///
+    /// # Returns
+    /// A future resolving after cleanup succeeds or returns a contextual error.
     ///
     /// # Errors
     /// Returns InvalidState after confirmed cleanup, or the contextual provider
@@ -123,6 +127,12 @@ impl Debug for RejectedAsyncTempResource {
     ///
     /// # Parameters
     /// - `f`: Destination for the safe cleanup-state representation.
+    ///
+    /// # Returns
+    /// `Ok(())` after writing the safe debug representation.
+    ///
+    /// # Errors
+    /// Returns a formatting error if the formatter cannot accept the output.
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         f.debug_struct("RejectedAsyncTempResource")
             .field("cleanup_state", &self.state)

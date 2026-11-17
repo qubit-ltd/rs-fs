@@ -94,7 +94,6 @@ impl PersistFailure {
     /// The latest retained confirmed publication path, or `None` when no path
     /// is available in the recovery snapshot.
     #[inline]
-    #[must_use]
     pub fn publication_target(&self) -> Option<&Path> {
         self.publication_target.as_ref()
     }
@@ -139,6 +138,9 @@ impl PersistFailure {
     ///
     /// # Parameters
     /// - `target`: Confirmed publication target to retain, if known.
+    ///
+    /// # Returns
+    /// This failure with the supplied publication target retained.
     pub(crate) fn with_publication_target(mut self, target: Option<&Path>) -> Self {
         self.publication_target = target.cloned();
         self
@@ -150,6 +152,12 @@ impl Display for PersistFailure {
     ///
     /// # Parameters
     /// - `formatter`: Destination for the failure text.
+    ///
+    /// # Returns
+    /// `Ok(())` after the formatted failure is written.
+    ///
+    /// # Errors
+    /// Returns a formatting error if the formatter cannot accept the output.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         write!(formatter, "persist {:?}: {}", self.state, self.error)

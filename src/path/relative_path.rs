@@ -72,6 +72,9 @@ impl RelativePath {
     }
 
     /// Returns the normalized logical path text.
+    ///
+    /// # Returns
+    /// The validated descendant spelling borrowed from this relative path.
     #[inline]
     #[must_use]
     pub fn as_str(&self) -> &str {

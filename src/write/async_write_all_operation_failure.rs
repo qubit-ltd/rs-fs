@@ -6,6 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 //! Failure for an owning asynchronous whole-file write.
+
 use std::error::Error;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -18,6 +19,7 @@ use crate::write::WriteFailureState;
 /// consumed.
 ///
 /// # Examples
+///
 /// ```rust
 /// # mod support { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/common/rustdoc_support.rs")); }
 /// # use support::*;
@@ -57,11 +59,16 @@ pub struct AsyncWriteAllOperationFailure {
 }
 impl AsyncWriteAllOperationFailure {
     /// Creates a failure with its recovery facts.
+    ///
     /// # Parameters
-    /// - `error`: Failure whose trusted filesystem context is being restored.
-    /// - `state`: Publication state used to classify or retain this outcome.
-    /// - `written_bytes`: Value used by `new` to preserve the writer operation
-    ///   contract.
+    /// - `error`: Contextual filesystem error from the failed operation.
+    /// - `state`: Publication state known when execution stopped.
+    /// - `written_bytes`: Bytes acknowledged by writes completed before
+    ///   failure.
+    ///
+    /// # Returns
+    /// A failure value retaining the error, publication facts, and confirmed
+    /// byte count.
     pub(crate) fn new(error: FsError, state: WriteFailureState, written_bytes: u64) -> Self {
         Self {
             error,
@@ -70,16 +77,26 @@ impl AsyncWriteAllOperationFailure {
         }
     }
     /// Returns the contextual filesystem error.
+    ///
+    /// # Returns
+    /// The original error with filesystem and provider context.
+    #[must_use = "inspect the filesystem error before discarding this reference"]
     #[inline]
     pub const fn error(&self) -> &FsError {
         &self.error
     }
     /// Returns the publication facts recorded when execution stopped.
+    ///
+    /// # Returns
+    /// The publication state associated with the failure.
     #[inline]
     pub const fn state(&self) -> WriteFailureState {
         self.state
     }
     /// Returns bytes acknowledged by completed writes before execution stopped.
+    ///
+    /// # Returns
+    /// The number of bytes confirmed before execution stopped.
     #[must_use]
     #[inline]
     pub const fn written_bytes(&self) -> u64 {
@@ -89,18 +106,33 @@ impl AsyncWriteAllOperationFailure {
     ///
     /// This discards publication state and confirmed byte count. The operation
     /// still owns any recovery writer; prefer `into_parts` when recovering.
+    ///
+    /// # Returns
+    /// The contextual filesystem error.
     pub fn into_error(self) -> FsError {
         self.error
     }
     /// Consumes the failure and returns all recovery facts.
+    ///
+    /// # Returns
+    /// A tuple of the filesystem error, publication state, and confirmed byte
+    /// count, in that order.
+    #[must_use = "handle the filesystem error, publication state, and byte count"]
     pub fn into_parts(self) -> (FsError, WriteFailureState, u64) {
         (self.error, self.state, self.written_bytes)
     }
 }
 impl Display for AsyncWriteAllOperationFailure {
     /// Formats the underlying filesystem failure for user-facing output.
+    ///
     /// # Parameters
     /// - `f`: Formatter receiving the diagnostic representation.
+    ///
+    /// # Returns
+    /// The formatter result after displaying the underlying filesystem error.
+    ///
+    /// # Errors
+    /// Returns an error if the formatter cannot write the error representation.
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         self.error.fmt(f)
     }
@@ -110,6 +142,12 @@ impl std::fmt::Debug for AsyncWriteAllOperationFailure {
     ///
     /// # Parameters
     /// - `f`: Formatter receiving the diagnostic representation.
+    ///
+    /// # Returns
+    /// The formatter result after displaying the failure and recovery facts.
+    ///
+    /// # Errors
+    /// Returns an error if the formatter cannot write the diagnostic output.
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AsyncWriteAllOperationFailure")
             .field("error", &self.error)
@@ -120,6 +158,9 @@ impl std::fmt::Debug for AsyncWriteAllOperationFailure {
 }
 impl Error for AsyncWriteAllOperationFailure {
     /// Returns the contextual filesystem error that caused this failure.
+    ///
+    /// # Returns
+    /// `Some` containing the original contextual filesystem error.
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(&self.error)
     }

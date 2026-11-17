@@ -7,6 +7,7 @@
 // =============================================================================
 
 //! Provider session for offset-based reads from one opened object.
+
 use crate::error::FsResult;
 
 /// Reads bytes at explicit offsets from the object opened by the provider.
@@ -41,10 +42,6 @@ pub trait RandomAccessReadSession: Send {
     /// requests at or beyond the open-time length without calling this method;
     /// those facade-level zero results do not indicate provider-observed EOF.
     ///
-    /// # Errors
-    /// Returns the provider's typed read error. The buffer may have been
-    /// partially modified when an error is returned.
-    ///
     /// # Parameters
     /// - `offset`: Starting byte offset within the opened object.
     /// - `output`: Non-empty destination buffer for the bytes read.
@@ -52,5 +49,9 @@ pub trait RandomAccessReadSession: Send {
     /// # Returns
     /// The number of bytes read; a short count is valid and zero means this
     /// provider request observed EOF.
+    ///
+    /// # Errors
+    /// Returns the provider's typed read error. The buffer may have been
+    /// partially modified when an error is returned.
     fn read_at(&mut self, offset: u64, output: &mut [u8]) -> FsResult<usize>;
 }

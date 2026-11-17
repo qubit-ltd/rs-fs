@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
 //! Provider metadata response.
 
 use crate::metadata::FileMetadata;
@@ -27,6 +26,7 @@ use crate::path::Path;
 /// assert_eq!("/object", response.path().as_str());
 /// # Ok::<(), qubit_fs::FsError>(())
 /// ```
+#[must_use = "inspect the provider metadata response before discarding it"]
 pub struct StatResponse {
     /// Logical path described by the response.
     path: Path,
@@ -44,7 +44,6 @@ impl StatResponse {
     /// # Returns
     /// A path-bound metadata response.
     #[inline]
-    #[must_use]
     pub fn new(path: Path, metadata: FileMetadata) -> Self {
         Self { path, metadata }
     }

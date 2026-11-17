@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
 //! Provider-created synchronous temporary-directory envelope.
 
 use super::TempResourceSpi;
@@ -43,6 +42,7 @@ use crate::metadata::OpenedFileInfo;
 /// let _opened = OpenedTempDirectory::new(info, Box::new(EmptyTemp));
 /// # Ok::<(), qubit_fs::FsError>(())
 /// ```
+#[must_use = "transfer the provider lifecycle session or explicitly drop the temporary directory"]
 pub struct OpenedTempDirectory {
     /// Temporary-directory identity claimed by the provider.
     info: OpenedFileInfo,
@@ -60,7 +60,6 @@ impl OpenedTempDirectory {
     /// # Returns
     /// A temporary-directory envelope for facade validation.
     #[inline]
-    #[must_use]
     pub fn new(info: OpenedFileInfo, session: Box<dyn TempResourceSpi>) -> Self {
         Self { info, session }
     }
@@ -70,7 +69,7 @@ impl OpenedTempDirectory {
     /// # Returns
     /// The claimed identity and provider lifecycle session.
     #[inline]
-    #[must_use]
+    #[must_use = "transfer or drop the provider session together with its metadata"]
     pub(crate) fn into_parts(self) -> (OpenedFileInfo, Box<dyn TempResourceSpi>) {
         (self.info, self.session)
     }

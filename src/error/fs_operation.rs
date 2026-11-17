@@ -12,7 +12,9 @@
 /// # Examples
 ///
 /// ```rust
-/// use qubit_fs::error::{FsError, FsErrorKind, FsOperation};
+/// use qubit_fs::error::FsError;
+/// use qubit_fs::error::FsErrorKind;
+/// use qubit_fs::error::FsOperation;
 ///
 /// let error = FsError::new(FsErrorKind::NotFound, FsOperation::Stat, "missing");
 /// assert_eq!(FsOperation::Stat, error.operation());

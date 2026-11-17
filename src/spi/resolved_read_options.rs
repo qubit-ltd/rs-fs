@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
 //! Facade-resolved read options.
 
 use crate::read::ReadOptions;
@@ -19,16 +18,19 @@ use crate::spi::PrefixReadHint;
 /// # Examples
 ///
 /// ```rust
+/// use qubit_fs::read::ReadOptions;
+/// use qubit_fs::spi::PrefixReadHint;
 /// use qubit_fs::spi::ResolvedReadOptions;
 ///
-/// fn inspect_read_options(options: &ResolvedReadOptions) {
-///     let _caller_options = options.options();
-///     let _prefix_hint = options.prefix_hint();
+/// fn inspect_read_options(
+///     options: &ResolvedReadOptions,
+/// ) -> (&ReadOptions, Option<PrefixReadHint>) {
+///     (options.options(), options.prefix_hint())
 /// }
 ///
-/// // A provider receives this facade-created value in its read request.
-/// let _ = inspect_read_options;
+/// // A provider calls this helper with the facade-created value from its read request.
 /// ```
+#[must_use = "pass the resolved read options with the read request"]
 #[derive(Clone)]
 pub struct ResolvedReadOptions {
     /// Caller options retained after facade validation and normalization.
@@ -46,12 +48,32 @@ impl ResolvedReadOptions {
     /// # Returns
     /// Resolved options without a prefix-read hint.
     #[inline]
-    #[must_use]
     pub(crate) const fn new(options: ReadOptions) -> Self {
         Self {
             options,
             prefix_hint: None,
         }
+    }
+
+    /// Returns the validated read options.
+    ///
+    /// # Returns
+    /// The caller's read options retained after facade validation and
+    /// normalization.
+    #[inline]
+    #[must_use]
+    pub const fn options(&self) -> &ReadOptions {
+        &self.options
+    }
+
+    /// Returns the optional prefix hint.
+    ///
+    /// # Returns
+    /// `Some(hint)` when the facade selected a prefix-read hint, or `None` when
+    /// no hint applies to this request.
+    #[inline]
+    pub const fn prefix_hint(&self) -> Option<PrefixReadHint> {
+        self.prefix_hint
     }
 
     /// Adds a non-binding bounded-prefix hint.
@@ -62,23 +84,9 @@ impl ResolvedReadOptions {
     /// # Returns
     /// Resolved options carrying the supplied hint.
     #[inline]
-    #[must_use]
     pub(crate) const fn with_prefix_hint(mut self, hint: PrefixReadHint) -> Self {
         self.prefix_hint = Some(hint);
         self
     }
 
-    /// Returns the validated read options.
-    #[inline]
-    #[must_use]
-    pub const fn options(&self) -> &ReadOptions {
-        &self.options
-    }
-
-    /// Returns the optional prefix hint.
-    #[inline]
-    #[must_use]
-    pub const fn prefix_hint(&self) -> Option<PrefixReadHint> {
-        self.prefix_hint
-    }
 }

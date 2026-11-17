@@ -81,6 +81,9 @@ impl WriteFailure {
     }
 
     /// Splits this facade failure into its causal error and state.
+    ///
+    /// # Returns
+    /// The underlying filesystem error and provider-confirmed recovery state.
     #[must_use = "inspect the filesystem error and recovery state"]
     #[inline]
     pub fn into_parts(self) -> (FsError, WriteFailureState) {
@@ -90,8 +93,12 @@ impl WriteFailure {
 
 impl Display for WriteFailure {
     /// Formats the publication state together with its cause.
+    ///
     /// # Parameters
     /// - `formatter`: Formatter receiving the diagnostic representation.
+    ///
+    /// # Returns
+    /// The formatter's result after writing the state and filesystem error.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         write!(formatter, "write {:?}: {}", self.state, self.error)
@@ -100,6 +107,9 @@ impl Display for WriteFailure {
 
 impl Error for WriteFailure {
     /// Returns the provider or facade error that caused the write failure.
+    ///
+    /// # Returns
+    /// The underlying filesystem error as the source of this failure.
     #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(&self.error)

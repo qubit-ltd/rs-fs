@@ -7,6 +7,7 @@
 // =============================================================================
 
 //! Provider-opened asynchronous random-access reader envelope.
+
 use super::AsyncRandomAccessReadSession;
 use crate::metadata::OpenedFileInfo;
 
@@ -36,6 +37,7 @@ use crate::metadata::OpenedFileInfo;
 /// let _opened = OpenedAsyncRandomAccessReader::new(info, Box::new(Empty));
 /// # Ok::<(), FsError>(())
 /// ```
+#[must_use = "transfer or explicitly drop the opened provider session"]
 pub struct OpenedAsyncRandomAccessReader {
     /// Identity and open-time metadata for the same object held by `session`.
     info: OpenedFileInfo,
@@ -52,10 +54,16 @@ impl OpenedAsyncRandomAccessReader {
     ///
     /// # Returns
     /// The provider envelope for facade validation.
+    #[inline]
     pub fn new(info: OpenedFileInfo, session: Box<dyn AsyncRandomAccessReadSession>) -> Self {
         Self { info, session }
     }
     /// Returns provider-reported identity and open-time metadata.
+    ///
+    /// # Returns
+    /// The identity and open-time metadata captured for this reader.
+    #[inline]
+    #[must_use]
     pub fn info(&self) -> &OpenedFileInfo {
         &self.info
     }
@@ -66,6 +74,8 @@ impl OpenedAsyncRandomAccessReader {
     ///
     /// # Returns
     /// The opened-object metadata and its corresponding asynchronous session.
+    #[inline]
+    #[must_use = "keep the opened metadata paired with its provider session"]
     pub(crate) fn into_parts(self) -> (OpenedFileInfo, Box<dyn AsyncRandomAccessReadSession>) {
         (self.info, self.session)
     }

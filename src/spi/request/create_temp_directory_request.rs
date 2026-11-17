@@ -5,11 +5,29 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+
 //! Validated temporary-directory creation request.
 
 use crate::temp::TempOptions;
 
 /// A facade-created temporary-directory request.
+///
+/// The facade supplies this value to the provider's directory-creation entry
+/// point for inspection.
+///
+/// # Examples
+///
+/// ```
+/// use qubit_fs::spi::CreateTempDirectoryRequest;
+///
+/// fn inspect_request(request: &CreateTempDirectoryRequest) {
+///     let options = request.options();
+///     let _ = options;
+/// }
+///
+/// let _ = inspect_request;
+/// ```
+#[must_use = "pass the request to the provider or drop it explicitly"]
 pub struct CreateTempDirectoryRequest {
     /// Validated temporary-directory creation options.
     options: TempOptions,
@@ -24,7 +42,6 @@ impl CreateTempDirectoryRequest {
     /// # Returns
     /// A provider temporary-directory request.
     #[allow(dead_code)]
-    #[must_use]
     #[inline]
     pub(crate) const fn new(options: TempOptions) -> Self {
         Self { options }

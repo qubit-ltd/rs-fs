@@ -52,6 +52,8 @@ use qubit_fs::write::WriterState;
 use qubit_io::Input;
 use qubit_io::Output;
 
+/// Selects the point at which the scripted source read fails or exceeds a
+/// limit.
 #[derive(Clone, Copy)]
 enum ReadScenario {
     FailAfterPrefix,
@@ -59,12 +61,14 @@ enum ReadScenario {
     FailImmediately,
 }
 
+/// Chooses whether writes alter the visible destination or remain staged.
 #[derive(Clone, Copy)]
 enum WriterMode {
     Direct,
     Staging,
 }
 
+/// Captures destination creation, published/staged bytes, commits, and aborts.
 #[derive(Default)]
 struct VisibleTarget {
     created: bool,
@@ -74,16 +78,20 @@ struct VisibleTarget {
     aborts: usize,
 }
 
+/// Supplies scripted reads and writers that expose publication behavior.
 struct CopyFixture {
     state: Arc<Mutex<VisibleTarget>>,
     scenario: ReadScenario,
     mode: WriterMode,
 }
 
+/// Parses a path for the public copy contract cases.
 fn path(value: &str) -> Path {
     Path::parse(value).expect("test path should parse")
 }
 
+/// Builds provider properties for the fixture's supported read/write
+/// operations.
 fn properties() -> ProviderProperties {
     ProviderProperties::new(
         FileSystemInfo::new(
@@ -105,6 +113,7 @@ fn properties() -> ProviderProperties {
     .expect("provider properties should be valid")
 }
 
+/// Creates the opened handle metadata returned by the fixture.
 fn info(path: &Path) -> OpenedFileInfo {
     OpenedFileInfo::new(
         FileSystemId::new("copy-contract").expect("valid provider id"),
@@ -112,6 +121,8 @@ fn info(path: &Path) -> OpenedFileInfo {
     )
 }
 
+/// Builds a filesystem and shared observer for a selected failure/publication
+/// mode.
 fn filesystem(scenario: ReadScenario, mode: WriterMode) -> (FileSystem, Arc<Mutex<VisibleTarget>>) {
     let state = Arc::new(Mutex::new(VisibleTarget::default()));
     let filesystem = FileSystem::from_spi(CopyFixture {
@@ -157,6 +168,7 @@ impl FileSystemSpi for CopyFixture {
     }
 }
 
+/// Emits a short byte prefix, then returns the configured read outcome.
 struct ScriptedReader {
     scenario: ReadScenario,
     position: usize,
@@ -183,6 +195,7 @@ impl Input for ScriptedReader {
     }
 }
 
+/// Writes directly to visible bytes or to a staging buffer according to mode.
 struct SyncWriter {
     state: Arc<Mutex<VisibleTarget>>,
     mode: WriterMode,
@@ -233,6 +246,7 @@ impl FileWriterSpi for SyncWriter {
     }
 }
 
+/// Asserts visible publication, reported facts, and explicit recovery behavior.
 fn assert_public_failure(
     scenario: ReadScenario,
     mode: WriterMode,
@@ -376,6 +390,7 @@ mod asynchronous {
     use super::path;
     use super::properties;
 
+    /// Builds an asynchronous filesystem and shared publication observer.
     fn async_filesystem(scenario: ReadScenario, mode: WriterMode) -> (AsyncFileSystem, Arc<Mutex<VisibleTarget>>) {
         let state = Arc::new(Mutex::new(VisibleTarget::default()));
         let filesystem = AsyncFileSystem::from_spi(CopyFixture {
@@ -419,6 +434,8 @@ mod asynchronous {
         }
     }
 
+    /// Emits a byte prefix asynchronously, then applies the selected read
+    /// failure.
     struct AsyncScriptedReader {
         scenario: ReadScenario,
         position: usize,
@@ -449,6 +466,7 @@ mod asynchronous {
         }
     }
 
+    /// Asynchronously writes into the direct destination or staging buffer.
     struct AsyncFixtureWriter {
         state: Arc<Mutex<VisibleTarget>>,
         mode: WriterMode,
@@ -509,6 +527,7 @@ mod asynchronous {
         fn cancel_on_drop(self: Pin<&mut Self>) {}
     }
 
+    /// Polls a ready test future until it completes.
     fn ready<F: Future>(future: F) -> F::Output {
         let mut future = Box::pin(future);
         let mut context = Context::from_waker(Waker::noop());
@@ -519,6 +538,8 @@ mod asynchronous {
         }
     }
 
+    /// Checks async publication state, failure facts, and explicit writer
+    /// recovery.
     fn assert_async_failure(
         scenario: ReadScenario,
         mode: WriterMode,

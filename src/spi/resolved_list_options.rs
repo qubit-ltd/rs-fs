@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
 //! Facade-resolved listing options.
 
 use crate::directory::ListOptions;
@@ -16,16 +15,19 @@ use crate::metadata::SymlinkPolicy;
 /// # Examples
 ///
 /// ```rust
+/// use qubit_fs::directory::ListOptions;
+/// use qubit_fs::metadata::SymlinkPolicy;
 /// use qubit_fs::spi::ResolvedListOptions;
 ///
-/// fn inspect_list_options(options: &ResolvedListOptions) {
-///     let _caller_options = options.options();
-///     let _symlink_policy = options.symlink_policy();
+/// fn inspect_list_options(
+///     options: &ResolvedListOptions,
+/// ) -> (&ListOptions, SymlinkPolicy) {
+///     (options.options(), options.symlink_policy())
 /// }
 ///
-/// // A provider receives this facade-created value in its list request.
-/// let _ = inspect_list_options;
+/// // A provider calls this helper with the facade-created value from its list request.
 /// ```
+#[must_use = "pass the resolved listing options with the list request"]
 #[derive(Clone)]
 pub struct ResolvedListOptions {
     /// Caller options retained after facade validation and normalization.
@@ -40,6 +42,10 @@ impl ResolvedListOptions {
     /// # Parameters
     /// - `options`: Validated caller options after normalization.
     /// - `symlink_policy`: Effective provider policy for this request.
+    ///
+    /// # Returns
+    /// A snapshot containing validated listing options and the effective
+    /// symlink policy.
     #[inline]
     pub(crate) const fn new(options: ListOptions, symlink_policy: SymlinkPolicy) -> Self {
         Self {
@@ -63,7 +69,6 @@ impl ResolvedListOptions {
     /// This value already incorporates the caller's override and the
     /// filesystem default, so providers should apply it directly.
     #[inline]
-    #[must_use = "the resolved symbolic-link policy must be used"]
     pub const fn symlink_policy(&self) -> SymlinkPolicy {
         self.symlink_policy
     }

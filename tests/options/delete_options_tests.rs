@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+
 use qubit_fs::directory::DeleteOptions;
 use qubit_fs::metadata::FileSystemCapabilities;
 use qubit_fs::metadata::FileSystemCapability;
@@ -27,13 +28,13 @@ fn test_delete_requirements_are_checked_against_typed_capabilities() {
     let recursive = DeleteOptions::default().with_recursive(true);
     let error = recursive
         .validate_against(FileSystemCapabilities::default())
-        .unwrap_err();
+        .expect_err("missing delete capability must reject the requested option");
     assert_eq!(Some(FileSystemCapability::RecursiveDelete), error.required_capability(),);
 
     let conditional = DeleteOptions::default().with_if_match(Some(ResourceVersion::from("v1")));
     let error = conditional
         .validate_against(FileSystemCapabilities::default())
-        .unwrap_err();
+        .expect_err("missing delete capability must reject the requested option");
     assert_eq!(
         Some(FileSystemCapability::ConditionalDelete),
         error.required_capability(),

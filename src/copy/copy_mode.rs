@@ -28,6 +28,9 @@ pub enum CopyMode {
 
 impl Default for CopyMode {
     /// Uses automatic source type detection by default.
+    ///
+    /// # Returns
+    /// [`CopyMode::Auto`].
     #[inline]
     fn default() -> Self {
         Self::Auto

@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
 //! Runtime-neutral asynchronous provider implementation contract.
 
 use super::CopyAttempt;
@@ -258,7 +257,7 @@ pub trait AsyncFileSystemSpi: Send + Sync {
     /// Asynchronously creates a temporary file.
     ///
     /// # Parameters
-    /// - `request`: Validated temporary-file creation request.
+    /// - `_request`: Validated temporary-file creation request.
     ///
     /// # Returns
     /// A future resolving to an identity-bound temporary-file session.
@@ -278,7 +277,7 @@ pub trait AsyncFileSystemSpi: Send + Sync {
     /// Asynchronously creates a temporary directory.
     ///
     /// # Parameters
-    /// - `request`: Validated temporary-directory creation request.
+    /// - `_request`: Validated temporary-directory creation request.
     ///
     /// # Returns
     /// A future resolving to an identity-bound temporary-directory session.

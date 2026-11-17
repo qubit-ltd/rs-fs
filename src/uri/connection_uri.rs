@@ -192,6 +192,12 @@ impl Display for ConnectionUri {
     ///
     /// # Parameters
     /// - `formatter`: Destination for the redacted URI text.
+    ///
+    /// # Returns
+    /// `Ok(())` after writing the redacted URI.
+    ///
+    /// # Errors
+    /// Returns the formatter's error if it cannot accept the output.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter.write_str(&self.redacted_text())
@@ -203,6 +209,12 @@ impl Debug for ConnectionUri {
     ///
     /// # Parameters
     /// - `formatter`: Destination for the redacted debug representation.
+    ///
+    /// # Returns
+    /// `Ok(())` after writing the redacted debug representation.
+    ///
+    /// # Errors
+    /// Returns the formatter's error if it cannot accept the output.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         let redacted = self.redacted_text();

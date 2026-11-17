@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+
 use std::time::Duration;
 
 use qubit_fs::copy::CopyConflictPolicy;
@@ -28,7 +29,9 @@ fn test_copy_options_default_and_constructors_set_modes() {
 #[test]
 fn test_required_server_side_copy_is_checked_before_side_effects() {
     let options = CopyOptions::default().with_server_side(ServerSidePreference::Require);
-    let error = options.validate_against(FileSystemCapabilities::default()).unwrap_err();
+    let error = options
+        .validate_against(FileSystemCapabilities::default())
+        .expect_err("required server-side copy must be rejected without support");
     assert_eq!(Some(FileSystemCapability::ServerSideCopy), error.required_capability(),);
     assert!(
         options

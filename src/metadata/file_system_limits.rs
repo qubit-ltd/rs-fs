@@ -41,6 +41,9 @@ pub struct FileSystemLimits {
 
 impl FileSystemLimits {
     /// Creates a limit snapshot whose dimensions are all explicitly unknown.
+    ///
+    /// # Returns
+    /// A snapshot with every limit dimension set to `Unknown`.
     #[inline]
     #[must_use]
     pub const fn unknown() -> Self {
@@ -58,6 +61,9 @@ impl FileSystemLimits {
     /// # Parameters
     /// - `limit`: New maximum for the encoded complete path, or its declared
     ///   unknown, inapplicable, or unbounded state.
+    ///
+    /// # Returns
+    /// A copy of these limits with the path-text limit replaced.
     #[inline]
     #[must_use]
     pub const fn with_max_path_text_bytes(mut self, limit: FileSystemLimit) -> Self {
@@ -69,6 +75,9 @@ impl FileSystemLimits {
     ///
     /// # Parameters
     /// - `limit`: New maximum for one encoded path component.
+    ///
+    /// # Returns
+    /// A copy of these limits with the component-text limit replaced.
     #[inline]
     #[must_use]
     pub const fn with_max_component_text_bytes(mut self, limit: FileSystemLimit) -> Self {
@@ -80,6 +89,9 @@ impl FileSystemLimits {
     ///
     /// # Parameters
     /// - `limit`: New maximum length for one range-read request.
+    ///
+    /// # Returns
+    /// A copy of these limits with the range-read limit replaced.
     #[inline]
     #[must_use]
     pub const fn with_max_read_range_bytes(mut self, limit: FileSystemLimit) -> Self {
@@ -94,6 +106,9 @@ impl FileSystemLimits {
     ///
     /// # Parameters
     /// - `limit`: New maximum total size for one write session.
+    ///
+    /// # Returns
+    /// A copy of these limits with the write-session limit replaced.
     #[inline]
     #[must_use]
     pub const fn with_max_write_bytes(mut self, limit: FileSystemLimit) -> Self {
@@ -106,6 +121,9 @@ impl FileSystemLimits {
     ///
     /// # Parameters
     /// - `limit`: New maximum number of entries requested in one native page.
+    ///
+    /// # Returns
+    /// A copy of these limits with the native list-page limit replaced.
     #[inline]
     #[must_use]
     pub const fn with_max_list_page_entries(mut self, limit: FileSystemLimit) -> Self {
@@ -115,6 +133,9 @@ impl FileSystemLimits {
 
     /// Returns the maximum canonical [`crate::path::Path`] text length in UTF-8
     /// bytes.
+    ///
+    /// # Returns
+    /// The declared complete-path text limit.
     #[inline]
     #[must_use]
     pub const fn max_path_text_bytes(&self) -> FileSystemLimit {
@@ -122,6 +143,9 @@ impl FileSystemLimits {
     }
 
     /// Returns the maximum path-component text length in UTF-8 bytes.
+    ///
+    /// # Returns
+    /// The declared path-component text limit.
     #[inline]
     #[must_use]
     pub const fn max_component_text_bytes(&self) -> FileSystemLimit {
@@ -129,6 +153,9 @@ impl FileSystemLimits {
     }
 
     /// Returns the maximum byte count accepted by one logical range read.
+    ///
+    /// # Returns
+    /// The declared range-read byte limit.
     #[inline]
     #[must_use]
     pub const fn max_read_range_bytes(&self) -> FileSystemLimit {
@@ -138,6 +165,9 @@ impl FileSystemLimits {
     /// Returns the maximum total byte count accepted by one write session.
     ///
     /// A finite maximum of zero permits only empty write sessions.
+    ///
+    /// # Returns
+    /// The declared write-session byte limit.
     #[inline]
     #[must_use]
     pub const fn max_write_bytes(&self) -> FileSystemLimit {
@@ -145,6 +175,9 @@ impl FileSystemLimits {
     }
 
     /// Returns the maximum entry count in one provider-native list page.
+    ///
+    /// # Returns
+    /// The declared provider-native list-page entry limit.
     #[inline]
     #[must_use]
     pub const fn max_list_page_entries(&self) -> FileSystemLimit {
@@ -187,6 +220,10 @@ impl FileSystemLimits {
     /// - `semantics`: Path model; component limits apply only to hierarchical
     ///   paths.
     /// - `operation`: Operation attached to a possible resource-limit error.
+    ///
+    /// # Returns
+    /// `Ok(())` when the path satisfies the declared limits, or a
+    /// resource-limit error describing the exceeded path dimension.
     pub fn validate_path(&self, path: &Path, semantics: PathSemantics, operation: FsOperation) -> FsResult<()> {
         if exceeds_usize(self.max_path_text_bytes, path.as_str().len()) {
             return Err(limit_error(
@@ -223,6 +260,10 @@ impl FileSystemLimits {
     /// - `path`: Path attached to a possible resource-limit error.
     /// - `length`: Requested range length, or `None` when the length is not
     ///   known before provider execution.
+    ///
+    /// # Returns
+    /// `Ok(())` when the known length satisfies the limit, or a resource-limit
+    /// error when it exceeds the declared maximum.
     pub fn validate_read_range(&self, path: &Path, length: Option<u64>) -> FsResult<()> {
         if length.is_some_and(|length| self.max_read_range_bytes.is_exceeded_by(length)) {
             Err(limit_error(
@@ -244,6 +285,10 @@ impl FileSystemLimits {
     /// # Parameters
     /// - `path`: Path attached to a possible resource-limit error.
     /// - `bytes`: Total number of bytes supplied to the write session.
+    ///
+    /// # Returns
+    /// `Ok(())` when the write size satisfies the limit, or a resource-limit
+    /// error when it exceeds the declared maximum.
     pub fn validate_write_size(&self, path: &Path, bytes: usize) -> FsResult<()> {
         if exceeds_usize(self.max_write_bytes, bytes) {
             Err(limit_error(
@@ -267,6 +312,10 @@ impl FileSystemLimits {
     /// - `path`: Path attached to a possible resource-limit error.
     /// - `bytes`: Streamed write length represented without native-size
     ///   narrowing.
+    ///
+    /// # Returns
+    /// `Ok(())` when the write size satisfies the limit, or a resource-limit
+    /// error when it exceeds the declared maximum.
     pub(crate) fn validate_write_size_u64(&self, path: &Path, bytes: u64) -> FsResult<()> {
         if self.max_write_bytes.is_exceeded_by(bytes) {
             Err(limit_error(

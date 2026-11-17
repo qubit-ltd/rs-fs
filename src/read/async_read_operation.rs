@@ -7,6 +7,9 @@
 // =============================================================================
 //! Asynchronous read operation implementation.
 
+use std::future::poll_fn;
+use std::task::Poll;
+
 use qubit_io::AsyncInput;
 
 use crate::AsyncFileSystem;
@@ -39,13 +42,13 @@ async fn yield_read_budget(reads_since_yield: &mut usize) {
         return;
     }
     let mut yielded = false;
-    std::future::poll_fn(|cx| {
+    poll_fn(|cx| {
         if yielded {
-            std::task::Poll::Ready(())
+            Poll::Ready(())
         } else {
             yielded = true;
             cx.waker().wake_by_ref();
-            std::task::Poll::Pending
+            Poll::Pending
         }
     })
     .await;
@@ -67,6 +70,9 @@ impl<'a> AsyncReadOperation<'a> {
     ///
     /// # Parameters
     /// - `filesystem`: Facade borrowed for opening and contextualizing reads.
+    ///
+    /// # Returns
+    /// An operation object borrowing the supplied filesystem.
     #[inline]
     #[must_use]
     pub(crate) const fn new(filesystem: &'a AsyncFileSystem) -> Self {
@@ -80,11 +86,6 @@ impl<'a> AsyncReadOperation<'a> {
     /// than the allowed number of bytes, the returned error identifies a read
     /// budget violation; stream and buffer errors retain filesystem context.
     ///
-    /// # Errors
-    ///
-    /// Returns an error if the file cannot be opened or read, if its content
-    /// exceeds `max_bytes`, or if the bounded read buffer cannot append data.
-    ///
     /// # Parameters
     /// - `path`: File to read.
     /// - `options`: Options used to open the reader.
@@ -92,6 +93,14 @@ impl<'a> AsyncReadOperation<'a> {
     ///
     /// # Returns
     /// The complete file contents when they fit within `max_bytes`.
+    ///
+    /// # Errors
+    /// Returns an error if the file cannot be opened or read, if its content
+    /// exceeds `max_bytes`, or if the bounded read buffer cannot append data.
+    ///
+    /// # Panics
+    /// Panics only if converting the read count back to `usize` fails, which
+    /// would violate the invariant that the count originated from a `usize`.
     pub(crate) async fn read_all(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
         // Reject a limit without a representable overflow sentinel before
         // opening the provider object, matching the synchronous read path.
@@ -152,12 +161,6 @@ impl<'a> AsyncReadOperation<'a> {
     /// returned outcome records which condition stopped the read and includes
     /// the resolved file information and original read options.
     ///
-    /// # Errors
-    ///
-    /// Returns an error if read options cannot be resolved, the file cannot be
-    /// opened or read, or the bounded read buffer cannot append data. Errors
-    /// from the stream include filesystem context.
-    ///
     /// # Parameters
     /// - `path`: File whose prefix is read.
     /// - `options`: Options used to open the reader.
@@ -166,6 +169,11 @@ impl<'a> AsyncReadOperation<'a> {
     /// # Returns
     /// The bytes read together with the termination reason and open-time
     /// metadata.
+    ///
+    /// # Errors
+    /// Returns an error if read options cannot be resolved, the file cannot be
+    /// opened or read, or the bounded read buffer cannot append data. Errors
+    /// from the stream include filesystem context.
     pub(crate) async fn read_prefix(
         &self,
         path: &Path,

@@ -16,6 +16,7 @@
 ///
 /// assert!(FileSystemCapability::ALL.contains(&FileSystemCapability::Read));
 /// ```
+#[must_use = "inspect or store the capability when building filesystem policies"]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[repr(u8)]
 #[non_exhaustive]
@@ -91,6 +92,10 @@ pub enum FileSystemCapability {
 
 impl FileSystemCapability {
     /// Stable list of every capability known by this crate version.
+    ///
+    /// # Returns
+    ///
+    /// A static slice containing every capability known by this crate version.
     pub const ALL: &'static [Self] = &[
         Self::List,
         Self::Read,
@@ -129,6 +134,7 @@ impl FileSystemCapability {
 
     /// Returns the bit representing this capability in a capability set.
     #[inline]
+    #[must_use]
     pub(crate) const fn bit(self) -> u128 {
         1_u128 << (self as u8)
     }

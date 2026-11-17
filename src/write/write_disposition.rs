@@ -17,6 +17,7 @@
 /// assert_eq!(WriteDisposition::CreateOrReplace, WriteDisposition::default());
 /// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[must_use = "the write disposition must be applied to a write operation"]
 pub enum WriteDisposition {
     /// Create a new destination and fail if one already exists.
     CreateNew,
@@ -28,6 +29,9 @@ pub enum WriteDisposition {
 
 impl Default for WriteDisposition {
     /// Selects replacement semantics for a newly opened destination.
+    ///
+    /// # Returns
+    /// `CreateOrReplace`, the default destination disposition.
     #[inline]
     fn default() -> Self {
         Self::CreateOrReplace

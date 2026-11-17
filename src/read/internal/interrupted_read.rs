@@ -28,6 +28,7 @@ use crate::error::FsErrorKind;
 /// # Returns
 /// `true` only for an ordinary interrupted I/O error or a filesystem
 /// interruption known to have no effect.
+#[must_use]
 fn retryable(error: &io::Error) -> bool {
     if let Some(fs_error) = error.get_ref().and_then(|source| source.downcast_ref::<FsError>()) {
         return fs_error.kind() == FsErrorKind::Interrupted

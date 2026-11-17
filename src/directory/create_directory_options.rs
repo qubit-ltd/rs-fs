@@ -19,6 +19,7 @@ use crate::metadata::UserMetadata;
 ///
 /// assert!(!CreateDirectoryOptions::default().recursive());
 /// ```
+#[must_use = "use these options to configure directory creation"]
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub struct CreateDirectoryOptions {
@@ -85,7 +86,6 @@ impl CreateDirectoryOptions {
     /// # Returns
     /// These options with recursive parent creation set to `recursive`.
     #[inline]
-    #[must_use]
     pub const fn with_recursive(mut self, recursive: bool) -> Self {
         self.recursive = recursive;
         self
@@ -99,7 +99,6 @@ impl CreateDirectoryOptions {
     /// # Returns
     /// These options with existing-directory acceptance set to `exists_ok`.
     #[inline]
-    #[must_use]
     pub const fn with_exists_ok(mut self, exists_ok: bool) -> Self {
         self.exists_ok = exists_ok;
         self
@@ -113,7 +112,6 @@ impl CreateDirectoryOptions {
     /// # Returns
     /// These options with `metadata` wrapped as non-sensitive metadata.
     #[inline]
-    #[must_use]
     pub fn with_user_metadata(mut self, metadata: UserMetadata) -> Self {
         self.user_metadata = NonSensitiveMetadata::from(metadata);
         self

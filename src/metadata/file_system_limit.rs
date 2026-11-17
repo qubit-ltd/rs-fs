@@ -35,6 +35,10 @@ pub enum FileSystemLimit {
 
 impl FileSystemLimit {
     /// Returns the finite inclusive maximum, when one exists.
+    ///
+    /// # Returns
+    /// `Some(maximum)` for a finite limit, or `None` for unknown, inapplicable,
+    /// or unbounded limits.
     #[inline]
     pub const fn maximum(self) -> Option<u64> {
         match self {
@@ -47,6 +51,10 @@ impl FileSystemLimit {
     ///
     /// # Parameters
     /// - `actual`: Value to compare with the inclusive maximum, if present.
+    ///
+    /// # Returns
+    /// `true` when `actual` exceeds a finite maximum; `false` for other limits
+    /// or values within the inclusive maximum.
     #[inline]
     #[must_use]
     pub const fn is_exceeded_by(self, actual: u64) -> bool {

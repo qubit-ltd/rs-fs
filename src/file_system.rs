@@ -13,10 +13,12 @@ use qubit_operation::OperationScope;
 
 use crate::FsEffectSlotPool;
 use crate::FsMutationOperation;
+use crate::FsOperation as ManagedFsOperation;
 use crate::FsOwnedCopyRequest;
 use crate::FsOwnedRenameRequest;
 use crate::FsOwnedTreePublishRequest;
 use crate::FsOwnedWriteRequest;
+use crate::FsSubmitFailure;
 use crate::copy::CopyAssessment;
 use crate::copy::CopyFailure;
 use crate::copy::CopyOperation;
@@ -30,6 +32,7 @@ use crate::directory::DirectoryOperation;
 use crate::directory::DirectoryStream;
 use crate::directory::ListOptions;
 use crate::directory::ListScope;
+use crate::directory::TreePublishOutcome;
 use crate::error::FsError;
 use crate::error::FsErrorKind;
 use crate::error::FsOperation;
@@ -50,6 +53,7 @@ use crate::read::FileReader;
 use crate::read::PrefixReadOutcome;
 use crate::read::RandomAccessReadPolicy;
 use crate::read::RandomAccessReader;
+use crate::read::ReadAllOptions;
 use crate::read::ReadOperation;
 use crate::read::ReadOptions;
 use crate::rename::RenameFailure;
@@ -119,60 +123,128 @@ impl FileSystem {
     ///
     /// The parent-bound manager view is created for this submission only; the
     /// facade does not retain the scope or promote the operation to a root.
+    ///
+    /// # Parameters
+    /// - `parent`: Active parent scope that owns the submitted child operation.
+    /// - `provider`: Managed read provider receiving the owned request.
+    /// - `path`: Logical path of the file to read.
+    /// - `options`: Read bounds and consistency policy.
+    ///
+    /// # Returns
+    /// A handle to the managed read child once it is accepted.
+    ///
+    /// # Errors
+    /// Returns a submission failure containing the owned request when the
+    /// provider cannot accept the child operation.
+    #[inline]
     pub fn submit_read_all_in(
         &self,
         parent: &OperationScope,
         provider: &dyn ManagedFsReadSpi,
         path: Path,
-        options: crate::read::ReadAllOptions,
-    ) -> Result<crate::FsOperation<Vec<u8>>, crate::FsSubmitFailure<FsOwnedReadRequest>> {
+        options: ReadAllOptions,
+    ) -> Result<ManagedFsOperation<Vec<u8>>, FsSubmitFailure<FsOwnedReadRequest>> {
         FsExecutionBinding::new(parent.manager()).submit_read_all(provider, FsOwnedReadRequest { path, options })
     }
 
     /// Submits a managed write under the supplied parent operation scope.
+    ///
+    /// # Parameters
+    /// - `parent`: Active parent scope that owns the submitted child operation.
+    /// - `provider`: Managed mutation provider receiving the write request.
+    /// - `request`: Destination, contents, and publication requirements.
+    /// - `effects`: Slots used to observe mutation effects.
+    ///
+    /// # Returns
+    /// A handle to the managed write child once it is accepted.
+    ///
+    /// # Errors
+    /// Returns a submission failure retaining the request if the provider
+    /// cannot accept the child operation.
+    #[inline]
     pub fn submit_write_in(
         &self,
         parent: &OperationScope,
         provider: &dyn ManagedFsMutationSpi,
         request: FsOwnedWriteRequest,
         effects: &FsEffectSlotPool,
-    ) -> Result<FsMutationOperation<WriteOutcome>, crate::FsSubmitFailure<FsOwnedWriteRequest>> {
+    ) -> Result<FsMutationOperation<WriteOutcome>, FsSubmitFailure<FsOwnedWriteRequest>> {
         FsExecutionBinding::new(parent.manager()).submit_write(provider, request, effects)
     }
 
     /// Submits a managed copy under the supplied parent operation scope.
+    ///
+    /// # Parameters
+    /// - `parent`: Active parent scope that owns the submitted child operation.
+    /// - `provider`: Managed mutation provider receiving the copy request.
+    /// - `request`: Source, destination, and copy policy.
+    /// - `effects`: Slots used to observe mutation effects.
+    ///
+    /// # Returns
+    /// A handle to the managed copy child once it is accepted.
+    ///
+    /// # Errors
+    /// Returns a submission failure retaining the request if the provider
+    /// cannot accept the child operation.
+    #[inline]
     pub fn submit_copy_in(
         &self,
         parent: &OperationScope,
         provider: &dyn ManagedFsMutationSpi,
         request: FsOwnedCopyRequest,
         effects: &FsEffectSlotPool,
-    ) -> Result<FsMutationOperation<CopyOutcome>, crate::FsSubmitFailure<FsOwnedCopyRequest>> {
+    ) -> Result<FsMutationOperation<CopyOutcome>, FsSubmitFailure<FsOwnedCopyRequest>> {
         FsExecutionBinding::new(parent.manager()).submit_copy(provider, request, effects)
     }
 
     /// Submits a managed rename under the supplied parent operation scope.
+    ///
+    /// # Parameters
+    /// - `parent`: Active parent scope that owns the submitted child operation.
+    /// - `provider`: Managed mutation provider receiving the rename request.
+    /// - `request`: Source, destination, and rename policy.
+    /// - `effects`: Slots used to observe mutation effects.
+    ///
+    /// # Returns
+    /// A handle to the managed rename child once it is accepted.
+    ///
+    /// # Errors
+    /// Returns a submission failure retaining the request if the provider
+    /// cannot accept the child operation.
+    #[inline]
     pub fn submit_rename_in(
         &self,
         parent: &OperationScope,
         provider: &dyn ManagedFsMutationSpi,
         request: FsOwnedRenameRequest,
         effects: &FsEffectSlotPool,
-    ) -> Result<FsMutationOperation<RenameOutcome>, crate::FsSubmitFailure<FsOwnedRenameRequest>> {
+    ) -> Result<FsMutationOperation<RenameOutcome>, FsSubmitFailure<FsOwnedRenameRequest>> {
         FsExecutionBinding::new(parent.manager()).submit_rename(provider, request, effects)
     }
 
     /// Submits staged-tree publication under the supplied parent scope.
+    ///
+    /// # Parameters
+    /// - `parent`: Active parent scope that owns the submitted child operation.
+    /// - `provider`: Managed tree provider receiving the staged publication.
+    /// - `request`: Staging/destination roots and validation/publication
+    ///   policy.
+    /// - `effects`: Slots used to observe mutation effects.
+    ///
+    /// # Returns
+    /// A handle to the managed publication child once it is accepted.
+    ///
+    /// # Errors
+    /// Returns a submission failure retaining the request if the provider
+    /// cannot accept the child operation.
+    #[inline]
     pub fn submit_tree_publish_in(
         &self,
         parent: &OperationScope,
         provider: &dyn ManagedFsTreeSpi,
         request: FsOwnedTreePublishRequest,
         effects: &FsEffectSlotPool,
-    ) -> Result<
-        crate::FsMutationOperation<crate::directory::TreePublishOutcome>,
-        crate::FsSubmitFailure<FsOwnedTreePublishRequest>,
-    > {
+    ) -> Result<FsMutationOperation<TreePublishOutcome>, FsSubmitFailure<FsOwnedTreePublishRequest>> {
         FsExecutionBinding::new(parent.manager()).submit_tree_publish(provider, request, effects)
     }
 
@@ -233,10 +305,6 @@ impl FileSystem {
 
     /// Assesses copy routes without performing provider I/O.
     ///
-    /// # Errors
-    /// Returns an invalid-options or requirement error when no provider or
-    /// stream execution route can satisfy the request.
-    ///
     /// # Parameters
     /// - `source`: Logical source path.
     /// - `target`: Logical destination path.
@@ -245,21 +313,24 @@ impl FileSystem {
     /// # Returns
     /// The selected route and the first statically rejected fallback, when one
     /// exists.
+    /// # Errors
+    /// Returns an invalid-options or requirement error when no provider or
+    /// stream execution route can satisfy the request.
+    #[inline]
     pub fn assess_copy(&self, source: &Path, target: &Path, options: &CopyOptions) -> FsResult<CopyAssessment> {
         self.core.assess_copy(source, target, options)
     }
 
     /// Reads metadata after all local validation succeeds.
     ///
-    /// # Errors
-    /// Returns the provider or validation error when `path` is invalid, the
-    /// provider cannot stat it, or the provider returns a mismatched path.
-    ///
     /// # Parameters
     /// - `path`: Logical resource path to inspect.
     ///
     /// # Returns
     /// Metadata for the requested path after provider identity validation.
+    /// # Errors
+    /// Returns the provider or validation error when `path` is invalid, the
+    /// provider cannot stat it, or the provider returns a mismatched path.
     pub fn stat(&self, path: &Path) -> FsResult<FileMetadata> {
         self.validate_path(path, FsOperation::Stat)?;
         let response = self
@@ -278,16 +349,15 @@ impl FileSystem {
 
     /// Returns `false` only for an explicit not-found response.
     ///
-    /// # Errors
-    /// Returns the original filesystem error for validation, provider, or
-    /// provider-contract failures other than `NotFound`.
-    ///
     /// # Parameters
     /// - `path`: Logical resource path to check.
     ///
     /// # Returns
     /// `true` when metadata is returned, or `false` for an explicit not-found
     /// response.
+    /// # Errors
+    /// Returns the original filesystem error for validation, provider, or
+    /// provider-contract failures other than `NotFound`.
     pub fn exists(&self, path: &Path) -> FsResult<bool> {
         match self.stat(path) {
             Ok(_) => Ok(true),
@@ -299,11 +369,6 @@ impl FileSystem {
     /// Copies `source` to `target` through an optional provider fast path and a
     /// safe stream fallback.
     ///
-    /// # Errors
-    /// Returns [`CopyFailure`] with a recovery state. A provider failure is
-    /// never retried; only an explicit provider decline can select the
-    /// facade's allowlisted fallback.
-    ///
     /// # Parameters
     /// - `source`: Logical resource to copy.
     /// - `target`: Logical destination path.
@@ -311,16 +376,16 @@ impl FileSystem {
     ///
     /// # Returns
     /// The confirmed copy outcome.
+    /// # Errors
+    /// Returns [`CopyFailure`] with a recovery state. A provider failure is
+    /// never retried; only an explicit provider decline can select the
+    /// facade's allowlisted fallback.
     #[allow(clippy::result_large_err)]
     pub fn copy(&self, source: &Path, target: &Path, options: CopyOptions) -> Result<CopyOutcome, CopyFailure> {
         CopyOperation::new(self, source, target, options).execute()
     }
 
     /// Renames one resource through exactly one provider rename primitive.
-    ///
-    /// # Errors
-    /// Returns [`RenameFailure`] with the provider-confirmed transition state.
-    /// This method never implements rename through copy and delete.
     ///
     /// # Parameters
     /// - `source`: Existing logical resource path.
@@ -329,6 +394,9 @@ impl FileSystem {
     ///
     /// # Returns
     /// The provider-confirmed rename outcome.
+    /// # Errors
+    /// Returns [`RenameFailure`] with the provider-confirmed transition state.
+    /// This method never implements rename through copy and delete.
     pub fn rename(&self, source: &Path, target: &Path, options: RenameOptions) -> Result<RenameOutcome, RenameFailure> {
         if let Err(error) = self.rename_preflight(source, target, &options) {
             return Err(self.contextualize_rename_failure(
@@ -366,25 +434,21 @@ impl FileSystem {
 
     /// Opens a provider directory stream after local option validation.
     ///
-    /// # Errors
-    /// Returns an invalid-options, missing-capability, or provider error when
-    /// the scope or options cannot be served.
-    ///
     /// # Parameters
     /// - `scope`: Directory scope to enumerate.
     /// - `options`: Listing behavior and limits.
     ///
     /// # Returns
     /// A stream of validated directory entries.
+    /// # Errors
+    /// Returns an invalid-options, missing-capability, or provider error when
+    /// the scope or options cannot be served.
+    #[inline]
     pub fn list(&self, scope: &ListScope, options: ListOptions) -> FsResult<DirectoryStream> {
         DirectoryOperation::new(self).list(scope, options)
     }
 
     /// Opens a provider reader after local option validation.
-    ///
-    /// # Errors
-    /// Returns an invalid-path, unsupported-capability, provider, or
-    /// provider-contract error when the reader cannot be opened safely.
     ///
     /// # Parameters
     /// - `path`: Logical file path to open.
@@ -392,6 +456,10 @@ impl FileSystem {
     ///
     /// # Returns
     /// A reader bound to the validated provider handle.
+    /// # Errors
+    /// Returns an invalid-path, unsupported-capability, provider, or
+    /// provider-contract error when the reader cannot be opened safely.
+    #[inline]
     pub fn open_reader(&self, path: &Path, options: ReadOptions) -> FsResult<FileReader> {
         self.open_reader_resolved(path, ResolvedReadOptions::new(options))
     }
@@ -447,17 +515,16 @@ impl FileSystem {
 
     /// Opens a provider writer after local option validation.
     ///
-    /// # Errors
-    /// Returns [`OpenFailure`] identifying preflight, provider-open, or
-    /// provider-contract failure; a retained rejected writer is available when
-    /// provider cleanup is required.
-    ///
     /// # Parameters
     /// - `path`: Logical file path to open for writing.
     /// - `options`: Write and publication behavior.
     ///
     /// # Returns
     /// The writer, or an `OpenFailure` retaining cleanup state when needed.
+    /// # Errors
+    /// Returns [`OpenFailure`] identifying preflight, provider-open, or
+    /// provider-contract failure; a retained rejected writer is available when
+    /// provider cleanup is required.
     pub fn open_writer(&self, path: &Path, options: WriteOptions) -> Result<FileWriter, OpenFailure<RejectedWriter>> {
         self.core
             .validate_write_request(path, &options)
@@ -498,15 +565,14 @@ impl FileSystem {
 
     /// Creates a temporary file and binds its provider session to this facade.
     ///
-    /// # Errors
-    /// Returns [`OpenFailure`] when preflight, provider creation, or temporary
-    /// identity validation fails; the recovery value may retain cleanup work.
-    ///
     /// # Parameters
     /// - `options`: Parent and naming policy for the temporary file.
     ///
     /// # Returns
     /// A temporary file handle bound to this facade.
+    /// # Errors
+    /// Returns [`OpenFailure`] when preflight, provider creation, or temporary
+    /// identity validation fails; the recovery value may retain cleanup work.
     pub fn create_temp_file(&self, options: TempOptions) -> Result<TempFile, OpenFailure<RejectedTempResource>> {
         let parent = options.parent().cloned();
         self.core
@@ -554,15 +620,14 @@ impl FileSystem {
     /// Creates a temporary directory and binds its provider session to this
     /// facade.
     ///
-    /// # Errors
-    /// Returns [`OpenFailure`] when preflight, provider creation, or temporary
-    /// identity validation fails; the recovery value may retain cleanup work.
-    ///
     /// # Parameters
     /// - `options`: Parent and naming policy for the temporary directory.
     ///
     /// # Returns
     /// A temporary directory handle bound to this facade.
+    /// # Errors
+    /// Returns [`OpenFailure`] when preflight, provider creation, or temporary
+    /// identity validation fails; the recovery value may retain cleanup work.
     pub fn create_temp_directory(
         &self,
         options: TempOptions,
@@ -616,16 +681,15 @@ impl FileSystem {
 
     /// Creates a directory after local path validation.
     ///
-    /// # Errors
-    /// Returns an invalid-path, missing-capability, provider, or provider-
-    /// contract error when the directory cannot be created as requested.
-    ///
     /// # Parameters
     /// - `path`: Logical directory path to create.
     /// - `options`: Creation and parent handling policy.
     ///
     /// # Returns
     /// The provider-confirmed directory creation outcome.
+    /// # Errors
+    /// Returns an invalid-path, missing-capability, provider, or provider-
+    /// contract error when the directory cannot be created as requested.
     pub fn create_directory(&self, path: &Path, options: CreateDirectoryOptions) -> FsResult<CreateDirectoryOutcome> {
         self.validate_path(path, FsOperation::CreateDir)?;
         self.require(FileSystemCapability::CreateDirectory, FsOperation::CreateDir, path)?;
@@ -649,16 +713,15 @@ impl FileSystem {
 
     /// Deletes a file after local option validation.
     ///
-    /// # Errors
-    /// Returns an invalid-options, missing-capability, provider, or
-    /// provider-contract error when deletion cannot be confirmed.
-    ///
     /// # Parameters
     /// - `path`: Logical file path to delete.
     /// - `options`: Deletion policy.
     ///
     /// # Returns
     /// The provider-confirmed deletion outcome.
+    /// # Errors
+    /// Returns an invalid-options, missing-capability, provider, or
+    /// provider-contract error when deletion cannot be confirmed.
     #[inline]
     pub fn delete_file(&self, path: &Path, options: DeleteOptions) -> FsResult<DeleteOutcome> {
         self.delete(path, options, false)
@@ -666,16 +729,15 @@ impl FileSystem {
 
     /// Deletes a directory after local option validation.
     ///
-    /// # Errors
-    /// Returns an invalid-options, missing-capability, provider, or
-    /// provider-contract error when deletion cannot be confirmed.
-    ///
     /// # Parameters
     /// - `path`: Logical directory path to delete.
     /// - `options`: Deletion policy.
     ///
     /// # Returns
     /// The provider-confirmed deletion outcome.
+    /// # Errors
+    /// Returns an invalid-options, missing-capability, provider, or
+    /// provider-contract error when deletion cannot be confirmed.
     #[inline]
     pub fn delete_directory(&self, path: &Path, options: DeleteOptions) -> FsResult<DeleteOutcome> {
         self.delete(path, options, true)
@@ -686,10 +748,6 @@ impl FileSystem {
     /// The byte cap applies to bytes actually read, even when opened metadata
     /// overestimates the resource length.
     ///
-    /// # Errors
-    /// Returns the reader or read error when validation, opening, or bounded
-    /// reading fails.
-    ///
     /// # Parameters
     /// - `path`: Logical file path to read.
     /// - `options`: Read range and behavior.
@@ -697,15 +755,15 @@ impl FileSystem {
     ///
     /// # Returns
     /// The complete contents when the file fits within the byte cap.
+    /// # Errors
+    /// Returns the reader or read error when validation, opening, or bounded
+    /// reading fails.
+    #[inline]
     pub fn read_all(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
         ReadOperation::new(self).read_all(path, options, max_bytes)
     }
 
     /// Reads at most max_bytes from a file without requiring a complete read.
-    ///
-    /// # Errors
-    /// Returns the reader or read error when validation, opening, or bounded
-    /// reading fails.
     ///
     /// # Parameters
     /// - `path`: Logical file path to read.
@@ -715,15 +773,15 @@ impl FileSystem {
     /// # Returns
     /// The bytes read and the termination reason, which distinguishes end of
     /// file from reaching the byte limit.
+    /// # Errors
+    /// Returns the reader or read error when validation, opening, or bounded
+    /// reading fails.
+    #[inline]
     pub fn read_prefix(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<PrefixReadOutcome> {
         ReadOperation::new(self).read_prefix(path, options, max_bytes)
     }
 
     /// Writes all bytes and retains the writer if transfer or commit fails.
-    ///
-    /// # Errors
-    /// Returns [`WriteAllFailure`] with the confirmed byte count and retained
-    /// writer when validation, transfer, or publication fails.
     ///
     /// # Parameters
     /// - `path`: Logical destination path.
@@ -733,6 +791,10 @@ impl FileSystem {
     /// # Returns
     /// The confirmed write outcome, or a failure retaining the writer and
     /// confirmed transfer state.
+    /// # Errors
+    /// Returns [`WriteAllFailure`] with the confirmed byte count and retained
+    /// writer when validation, transfer, or publication fails.
+    #[inline]
     pub fn write_all(&self, path: &Path, bytes: &[u8], options: WriteOptions) -> Result<WriteOutcome, WriteAllFailure> {
         WriteOperation::new(self).write_all(path, bytes, options)
     }
@@ -749,6 +811,7 @@ impl FileSystem {
     ///
     /// # Errors
     /// Returns the path, option, capability, or limit validation error.
+    #[inline]
     pub fn validate_write(&self, path: &Path, options: &WriteOptions) -> FsResult<()> {
         self.core.validate_write_request(path, options)
     }
@@ -757,6 +820,7 @@ impl FileSystem {
     ///
     /// # Returns
     /// The cached policy shared by internal operation objects.
+    #[must_use]
     #[inline]
     pub(crate) fn core(&self) -> &FacadeCore {
         &self.core
@@ -766,6 +830,7 @@ impl FileSystem {
     ///
     /// # Returns
     /// The provider implementation retained by this facade.
+    #[must_use]
     #[inline]
     pub(crate) fn spi(&self) -> &dyn FileSystemSpi {
         self.spi.as_ref()

@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
 //! Provider-side synchronous directory enumeration sessions.
 
 use crate::error::FsResult;

@@ -166,6 +166,12 @@ impl Debug for CopyFailure {
     ///
     /// - `formatter`: Formatter that receives the debug or display
     ///   representation.
+    ///
+    /// # Returns
+    /// `Ok(())` when formatting succeeds.
+    ///
+    /// # Errors
+    /// Returns the formatter error when the output cannot be written.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter
@@ -186,6 +192,12 @@ impl Display for CopyFailure {
     ///
     /// - `formatter`: Formatter that receives the debug or display
     ///   representation.
+    ///
+    /// # Returns
+    /// `Ok(())` when formatting succeeds.
+    ///
+    /// # Errors
+    /// Returns the formatter error when the output cannot be written.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         Display::fmt(self.error(), formatter)
@@ -194,6 +206,9 @@ impl Display for CopyFailure {
 
 impl Error for CopyFailure {
     /// Returns the underlying file-system error.
+    ///
+    /// # Returns
+    /// `Some` with a reference to the wrapped [`FsError`].
     #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(self.error())

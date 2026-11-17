@@ -113,69 +113,6 @@ pub struct AsyncFileSystem {
 }
 
 impl AsyncFileSystem {
-    /// Submits a bounded managed read as a child of `parent`.
-    ///
-    /// The parent-bound manager view is temporary and is never stored by this
-    /// facade.
-    pub fn submit_read_all_in(
-        &self,
-        parent: &OperationScope,
-        provider: &dyn ManagedFsReadSpi,
-        path: Path,
-        options: crate::read::ReadAllOptions,
-    ) -> Result<crate::AsyncFsOperation<Vec<u8>>, crate::FsSubmitFailure<FsOwnedReadRequest>> {
-        FsExecutionBinding::new(parent.manager()).submit_read_all_async(provider, FsOwnedReadRequest { path, options })
-    }
-
-    /// Submits a managed write under the supplied parent operation scope.
-    pub fn submit_write_in(
-        &self,
-        parent: &OperationScope,
-        provider: &dyn ManagedFsMutationSpi,
-        request: FsOwnedWriteRequest,
-        effects: &FsEffectSlotPool,
-    ) -> Result<AsyncFsMutationOperation<crate::metadata::WriteOutcome>, crate::FsSubmitFailure<FsOwnedWriteRequest>>
-    {
-        FsExecutionBinding::new(parent.manager()).submit_write_async(provider, request, effects)
-    }
-
-    /// Submits a managed copy under the supplied parent operation scope.
-    pub fn submit_copy_in(
-        &self,
-        parent: &OperationScope,
-        provider: &dyn ManagedFsMutationSpi,
-        request: FsOwnedCopyRequest,
-        effects: &FsEffectSlotPool,
-    ) -> Result<AsyncFsMutationOperation<crate::copy::CopyOutcome>, crate::FsSubmitFailure<FsOwnedCopyRequest>> {
-        FsExecutionBinding::new(parent.manager()).submit_copy_async(provider, request, effects)
-    }
-
-    /// Submits a managed rename under the supplied parent operation scope.
-    pub fn submit_rename_in(
-        &self,
-        parent: &OperationScope,
-        provider: &dyn ManagedFsMutationSpi,
-        request: FsOwnedRenameRequest,
-        effects: &FsEffectSlotPool,
-    ) -> Result<AsyncFsMutationOperation<crate::rename::RenameOutcome>, crate::FsSubmitFailure<FsOwnedRenameRequest>>
-    {
-        FsExecutionBinding::new(parent.manager()).submit_rename_async(provider, request, effects)
-    }
-
-    /// Submits staged-tree publication under the supplied parent scope.
-    pub fn submit_tree_publish_in(
-        &self,
-        parent: &OperationScope,
-        provider: &dyn ManagedFsTreeSpi,
-        request: FsOwnedTreePublishRequest,
-        effects: &FsEffectSlotPool,
-    ) -> Result<
-        AsyncFsMutationOperation<crate::directory::TreePublishOutcome>,
-        crate::FsSubmitFailure<FsOwnedTreePublishRequest>,
-    > {
-        FsExecutionBinding::new(parent.manager()).submit_tree_publish_async(provider, request, effects)
-    }
-
     /// Constructs a facade and caches one validated provider snapshot.
     ///
     /// # Type Parameters
@@ -186,6 +123,10 @@ impl AsyncFileSystem {
     ///
     /// - `spi`: Provider implementation whose properties and operations back
     ///   this facade.
+    /// # Returns
+    /// A facade backed by the validated provider snapshot.
+    /// # Errors
+    /// Returns a provider validation error when its properties are invalid.
     #[inline]
     pub fn from_spi<S>(spi: S) -> FsResult<Self>
     where
@@ -200,6 +141,10 @@ impl AsyncFileSystem {
     ///
     /// - `spi`: Provider implementation whose properties and operations back
     ///   this facade.
+    /// # Returns
+    /// A facade backed by the shared provider and validated snapshot.
+    /// # Errors
+    /// Returns a provider validation error when its properties are invalid.
     #[inline]
     pub fn from_shared_spi(spi: Arc<dyn AsyncFileSystemSpi>) -> FsResult<Self> {
         let core = FacadeCore::new(spi.properties())?;
@@ -209,7 +154,127 @@ impl AsyncFileSystem {
         })
     }
 
+    /// Submits a bounded managed read as a child of `parent`.
+    ///
+    /// The parent-bound manager view is temporary and is never stored by this
+    /// facade.
+    ///
+    /// # Parameters
+    /// - `parent`: Open operation scope that owns this child submission.
+    /// - `provider`: Provider that prepares the owned read request.
+    /// - `path`: Path to read.
+    /// - `options`: Read byte and consistency limits.
+    /// # Returns
+    /// A managed read operation submitted under `parent`.
+    /// # Errors
+    /// Returns a submission failure when the request cannot be accepted.
+    #[inline]
+    pub fn submit_read_all_in(
+        &self,
+        parent: &OperationScope,
+        provider: &dyn ManagedFsReadSpi,
+        path: Path,
+        options: crate::read::ReadAllOptions,
+    ) -> Result<crate::AsyncFsOperation<Vec<u8>>, crate::FsSubmitFailure<FsOwnedReadRequest>> {
+        FsExecutionBinding::new(parent.manager()).submit_read_all_async(provider, FsOwnedReadRequest { path, options })
+    }
+
+    /// Submits a managed write under the supplied parent operation scope.
+    ///
+    /// # Parameters
+    /// - `parent`: Open operation scope that owns this child submission.
+    /// - `provider`: Provider that prepares the owned write request.
+    /// - `request`: Owned write parameters.
+    /// - `effects`: Bounded pool used to reserve final effect evidence.
+    /// # Returns
+    /// A managed write operation submitted under `parent`.
+    /// # Errors
+    /// Returns a submission failure when the request cannot be accepted.
+    #[inline]
+    pub fn submit_write_in(
+        &self,
+        parent: &OperationScope,
+        provider: &dyn ManagedFsMutationSpi,
+        request: FsOwnedWriteRequest,
+        effects: &FsEffectSlotPool,
+    ) -> Result<AsyncFsMutationOperation<crate::metadata::WriteOutcome>, crate::FsSubmitFailure<FsOwnedWriteRequest>>
+    {
+        FsExecutionBinding::new(parent.manager()).submit_write_async(provider, request, effects)
+    }
+
+    /// Submits a managed copy under the supplied parent operation scope.
+    ///
+    /// # Parameters
+    /// - `parent`: Open operation scope that owns this child submission.
+    /// - `provider`: Provider that prepares the owned copy request.
+    /// - `request`: Owned copy parameters.
+    /// - `effects`: Bounded pool used to reserve final effect evidence.
+    /// # Returns
+    /// A managed copy operation submitted under `parent`.
+    /// # Errors
+    /// Returns a submission failure when the request cannot be accepted.
+    #[inline]
+    pub fn submit_copy_in(
+        &self,
+        parent: &OperationScope,
+        provider: &dyn ManagedFsMutationSpi,
+        request: FsOwnedCopyRequest,
+        effects: &FsEffectSlotPool,
+    ) -> Result<AsyncFsMutationOperation<crate::copy::CopyOutcome>, crate::FsSubmitFailure<FsOwnedCopyRequest>> {
+        FsExecutionBinding::new(parent.manager()).submit_copy_async(provider, request, effects)
+    }
+
+    /// Submits a managed rename under the supplied parent operation scope.
+    ///
+    /// # Parameters
+    /// - `parent`: Open operation scope that owns this child submission.
+    /// - `provider`: Provider that prepares the owned rename request.
+    /// - `request`: Owned rename parameters.
+    /// - `effects`: Bounded pool used to reserve final effect evidence.
+    /// # Returns
+    /// A managed rename operation submitted under `parent`.
+    /// # Errors
+    /// Returns a submission failure when the request cannot be accepted.
+    #[inline]
+    pub fn submit_rename_in(
+        &self,
+        parent: &OperationScope,
+        provider: &dyn ManagedFsMutationSpi,
+        request: FsOwnedRenameRequest,
+        effects: &FsEffectSlotPool,
+    ) -> Result<AsyncFsMutationOperation<crate::rename::RenameOutcome>, crate::FsSubmitFailure<FsOwnedRenameRequest>>
+    {
+        FsExecutionBinding::new(parent.manager()).submit_rename_async(provider, request, effects)
+    }
+
+    /// Submits staged-tree publication under the supplied parent scope.
+    ///
+    /// # Parameters
+    /// - `parent`: Open operation scope that owns this child submission.
+    /// - `provider`: Provider that prepares the tree publication request.
+    /// - `request`: Owned tree publication parameters.
+    /// - `effects`: Bounded pool used to reserve final effect evidence.
+    /// # Returns
+    /// A managed tree-publication operation submitted under `parent`.
+    /// # Errors
+    /// Returns a submission failure when the request cannot be accepted.
+    #[inline]
+    pub fn submit_tree_publish_in(
+        &self,
+        parent: &OperationScope,
+        provider: &dyn ManagedFsTreeSpi,
+        request: FsOwnedTreePublishRequest,
+        effects: &FsEffectSlotPool,
+    ) -> Result<
+        AsyncFsMutationOperation<crate::directory::TreePublishOutcome>,
+        crate::FsSubmitFailure<FsOwnedTreePublishRequest>,
+    > {
+        FsExecutionBinding::new(parent.manager()).submit_tree_publish_async(provider, request, effects)
+    }
+
     /// Returns the immutable property snapshot without provider I/O.
+    /// # Returns
+    /// The immutable provider property snapshot cached by this facade.
     #[inline]
     #[must_use]
     pub fn properties(&self) -> &FileSystemProperties {
@@ -223,6 +288,9 @@ impl AsyncFileSystem {
     /// - `path`: Logical path of the resource involved in this operation.
     /// - `options`: Write behavior and guarantees to validate before provider
     ///   work begins.
+    /// # Errors
+    /// Returns an options, capability, or provider-limit validation error.
+    #[inline]
     pub fn validate_write(&self, path: &Path, options: &WriteOptions) -> FsResult<()> {
         self.core.validate_write_request(path, options)
     }
@@ -236,23 +304,13 @@ impl AsyncFileSystem {
     /// - `options`: Copy route, conflict, consistency, and metadata guarantees
     ///   requested by the caller.
     ///
+    /// # Returns
+    /// The available copy assessment for the paths and requested guarantees.
     /// # Errors
     /// Returns an invalid-options or requirement error when no provider or
     /// stream execution route can satisfy the request.
     pub fn assess_copy(&self, source: &Path, target: &Path, options: &CopyOptions) -> FsResult<CopyAssessment> {
         self.core.assess_copy(source, target, options)
-    }
-
-    /// Returns shared deterministic facade policy to operation objects.
-    #[inline]
-    pub(crate) fn core(&self) -> &FacadeCore {
-        &self.core
-    }
-
-    /// Returns the asynchronous provider implementation to operation objects.
-    #[inline]
-    pub(crate) fn spi(&self) -> &dyn AsyncFileSystemSpi {
-        self.spi.as_ref()
     }
 
     /// Asynchronously reads metadata after local validation completes.
@@ -261,6 +319,8 @@ impl AsyncFileSystem {
     ///
     /// - `path`: Logical path of the resource involved in this operation.
     ///
+    /// # Returns
+    /// Metadata for `path` returned by the provider.
     /// # Errors
     /// Returns a validation, provider, or provider-contract error when the
     /// path cannot be read or the response identifies another path.
@@ -283,6 +343,9 @@ impl AsyncFileSystem {
     ///
     /// - `path`: Logical path of the resource involved in this operation.
     ///
+    /// # Returns
+    /// `true` when `path` exists; `false` only for an explicit `NotFound`
+    /// result.
     /// # Errors
     /// Returns the original filesystem error for failures other than an
     /// explicit `NotFound` response.
@@ -302,9 +365,12 @@ impl AsyncFileSystem {
     /// - `options`: Selection, recursion, page-size, and deadline settings for
     ///   the listing.
     ///
+    /// # Returns
+    /// A validated asynchronous stream for the requested listing.
     /// # Errors
     /// Returns an invalid-options, missing-capability, or provider error when
     /// the scope or options cannot be served.
+    #[inline]
     pub async fn list(&self, scope: &ListScope, options: ListOptions) -> FsResult<AsyncDirectoryStream> {
         AsyncDirectoryOperation::new(self).list(scope, options).await
     }
@@ -317,42 +383,14 @@ impl AsyncFileSystem {
     /// - `options`: Read behavior and limits for opening or consuming the
     ///   resource.
     ///
+    /// # Returns
+    /// A validated asynchronous reader for `path`.
     /// # Errors
     /// Returns a validation, capability, provider, or provider-contract error
     /// when the reader cannot be opened safely.
+    #[inline]
     pub async fn open_reader(&self, path: &Path, options: ReadOptions) -> FsResult<AsyncFileReader> {
         self.open_reader_resolved(path, ResolvedReadOptions::new(options)).await
-    }
-
-    /// Opens a facade-validated asynchronous reader with an internal hint.
-    ///
-    /// # Parameters
-    ///
-    /// - `path`: Logical path of the resource involved in this operation.
-    /// - `resolved`: Validated read options and the facade’s resolved
-    ///   read-planning hints.
-    pub(crate) async fn open_reader_resolved(
-        &self,
-        path: &Path,
-        resolved: ResolvedReadOptions,
-    ) -> FsResult<AsyncFileReader> {
-        let options = resolved.options().clone();
-        self.validate_path(path, FsOperation::OpenReader)?;
-        options
-            .validate_against(self.properties().capabilities())
-            .map_err(|error| self.enrich(error, path, FsOperation::OpenReader))?;
-        self.properties()
-            .limits()
-            .validate_read_range(path, options.length())
-            .map_err(|error| self.enrich(error, path, FsOperation::OpenReader))?;
-        self.require(FileSystemCapability::Read, FsOperation::OpenReader, path)?;
-        let opened = self
-            .spi
-            .open_reader(OpenReaderRequest::new(path, resolved))
-            .await
-            .map_err(|error| self.enrich(error, path, FsOperation::OpenReader))?;
-        self.validate_opened_info(opened.info(), path)?;
-        Ok(opened.into_reader())
     }
 
     /// Opens a complete file for explicit-offset reads on one opened object.
@@ -430,9 +468,12 @@ impl AsyncFileSystem {
     /// - `max_bytes`: Maximum number of bytes this operation may return or
     ///   consume.
     ///
+    /// # Returns
+    /// The file contents, bounded by `max_bytes`.
     /// # Errors
     /// Returns the reader or read error when validation, opening, or bounded
     /// reading fails.
+    #[inline]
     pub async fn read_all(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
         AsyncReadOperation::new(self).read_all(path, options, max_bytes).await
     }
@@ -455,9 +496,12 @@ impl AsyncFileSystem {
     /// - `max_bytes`: Maximum number of bytes this operation may return or
     ///   consume.
     ///
+    /// # Returns
+    /// The bounded prefix and read outcome reported by the operation.
     /// # Errors
     /// Returns the reader or read error when validation, opening, or bounded
     /// reading fails.
+    #[inline]
     pub async fn read_prefix(
         &self,
         path: &Path,
@@ -489,6 +533,9 @@ impl AsyncFileSystem {
     /// - `options`: Write behavior and guarantees to validate before provider
     ///   work begins.
     ///
+    /// # Returns
+    /// A validated writer, or a typed failure retaining any isolated recovery
+    /// session.
     /// # Errors
     /// Returns the contextual error, opening stage, and any isolated recovery
     /// session when validation, provider opening, or outcome validation fails.
@@ -590,6 +637,8 @@ impl AsyncFileSystem {
     /// - `options`: Options that define the operation and its requested
     ///   guarantees.
     ///
+    /// # Returns
+    /// The provider-confirmed directory creation outcome.
     /// # Errors
     /// Returns a validation, capability, provider, or provider-contract error
     /// when the directory cannot be created as requested.
@@ -627,6 +676,8 @@ impl AsyncFileSystem {
     /// - `options`: Deletion behavior, including whether a missing target is
     ///   acceptable.
     ///
+    /// # Returns
+    /// The provider-confirmed file deletion outcome.
     /// # Errors
     /// Returns a validation, capability, provider, or provider-contract error
     /// when deletion cannot be confirmed.
@@ -643,6 +694,8 @@ impl AsyncFileSystem {
     /// - `options`: Deletion behavior, including whether a missing target is
     ///   acceptable.
     ///
+    /// # Returns
+    /// The provider-confirmed directory deletion outcome.
     /// # Errors
     /// Returns a validation, capability, provider, or provider-contract error
     /// when deletion cannot be confirmed.
@@ -660,6 +713,8 @@ impl AsyncFileSystem {
     /// - `options`: Overwrite, atomicity, and durability requirements for the
     ///   rename.
     ///
+    /// # Returns
+    /// The provider-confirmed rename outcome.
     /// # Errors
     /// Returns [`RenameFailure`] with the confirmed transition state when
     /// validation, provider execution, or outcome validation fails.
@@ -705,6 +760,9 @@ impl AsyncFileSystem {
     /// - `options`: Parent, naming, and parent-creation settings for the
     ///   temporary resource.
     ///
+    /// # Returns
+    /// A validated temporary file, or a typed failure retaining cleanup
+    /// authority.
     /// # Errors
     /// Returns [`OpenFailure`] when preflight, provider creation, or temporary
     /// identity validation fails.
@@ -768,6 +826,9 @@ impl AsyncFileSystem {
     /// - `options`: Parent, naming, and parent-creation settings for the
     ///   temporary resource.
     ///
+    /// # Returns
+    /// A validated temporary directory, or a typed failure retaining cleanup
+    /// authority.
     /// # Errors
     /// Returns [`OpenFailure`] when preflight, provider creation, or temporary
     /// identity validation fails.
@@ -838,6 +899,8 @@ impl AsyncFileSystem {
     /// - `options`: Copy route, conflict, consistency, and metadata guarantees
     ///   requested by the caller.
     ///
+    /// # Returns
+    /// A ready copy operation whose execution has not started.
     /// # Errors
     /// Returns [`AsyncCopyFailure`] when local preflight rejects the request.
     #[allow(clippy::result_large_err)]
@@ -868,36 +931,6 @@ impl AsyncFileSystem {
         ))
     }
 
-    /// Rechecks provider-reported success against requested copy guarantees.
-    ///
-    /// # Parameters
-    ///
-    /// - `outcome`: Provider-reported copy outcome to validate against the
-    ///   request.
-    /// - `options`: Copy route, conflict, consistency, and metadata guarantees
-    ///   requested by the caller.
-    /// - `source`: Logical path of the source resource.
-    /// - `target`: Destination logical path affected by the operation.
-    #[allow(clippy::result_large_err)]
-    pub(crate) fn verify_completed_copy(
-        &self,
-        outcome: CopyOutcome,
-        options: &CopyOptions,
-        source: &Path,
-        target: &Path,
-    ) -> Result<CopyOutcome, AsyncCopyFailure> {
-        if let Some(message) = outcome.contract_violation(options) {
-            return Err(self.contextual_copy_failure(
-                FsError::new(FsErrorKind::ProviderContractViolation, FsOperation::Copy, message),
-                outcome.violation_failure_state(options),
-                *outcome.stats(),
-                source,
-                target,
-            ));
-        }
-        Ok(outcome)
-    }
-
     /// Performs all no-I/O copy validation required before an operation exists.
     ///
     /// # Parameters
@@ -906,6 +939,8 @@ impl AsyncFileSystem {
     /// - `target`: Destination logical path affected by the operation.
     /// - `options`: Copy route, conflict, consistency, and metadata guarantees
     ///   requested by the caller.
+    /// # Errors
+    /// Returns a path, options, or capability validation error.
     fn copy_preflight(&self, source: &Path, target: &Path, options: &CopyOptions) -> FsResult<()> {
         self.validate_path(source, FsOperation::Copy)?;
         self.validate_path(target, FsOperation::Copy)?;
@@ -935,6 +970,8 @@ impl AsyncFileSystem {
     /// - `target`: Destination logical path affected by the operation.
     /// - `options`: Overwrite, atomicity, and durability requirements for the
     ///   rename.
+    /// # Errors
+    /// Returns a path, options, or capability validation error.
     fn rename_preflight(&self, source: &Path, target: &Path, options: &RenameOptions) -> FsResult<()> {
         self.validate_path(source, FsOperation::Rename)?;
         self.validate_path(target, FsOperation::Rename)?;
@@ -965,6 +1002,10 @@ impl AsyncFileSystem {
     /// - `options`: Deletion behavior, including whether a missing target is
     ///   acceptable.
     /// - `directory`: Whether the delete request targets a directory.
+    /// # Returns
+    /// The provider-confirmed deletion outcome.
+    /// # Errors
+    /// Returns a path, options, capability, provider, or contract error.
     async fn delete(&self, path: &Path, options: DeleteOptions, directory: bool) -> FsResult<DeleteOutcome> {
         self.validate_path(path, FsOperation::Delete)?;
         options
@@ -1000,55 +1041,11 @@ impl AsyncFileSystem {
     /// - `path`: Logical path of the resource involved in this operation.
     /// - `operation`: Filesystem operation used for validation or error
     ///   context.
+    /// # Errors
+    /// Returns a path validation error.
+    #[inline]
     fn validate_path(&self, path: &Path, operation: FsOperation) -> FsResult<()> {
         self.core.validate_path(path, operation)
-    }
-
-    /// Requires a provider-advertised capability before operation creation.
-    ///
-    /// # Parameters
-    ///
-    /// - `capability`: Capability required before provider work can begin.
-    /// - `operation`: Filesystem operation used for validation or error
-    ///   context.
-    /// - `path`: Logical path of the resource involved in this operation.
-    pub(crate) fn require(
-        &self,
-        capability: FileSystemCapability,
-        operation: FsOperation,
-        path: &Path,
-    ) -> FsResult<()> {
-        self.core.require(capability, operation, Some(path))
-    }
-
-    /// Contextualizes a copy failure with its source, target, and provider
-    /// facts.
-    ///
-    /// # Parameters
-    ///
-    /// - `error`: Filesystem error whose kind, source, and established facts
-    ///   are retained.
-    /// - `state`: Operation state used to classify confirmed side effects.
-    /// - `stats`: Copy progress statistics reported by the operation.
-    /// - `source`: Logical path of the source resource.
-    /// - `target`: Destination logical path affected by the operation.
-    pub(crate) fn contextual_copy_failure(
-        &self,
-        error: FsError,
-        state: CopyFailureState,
-        stats: CopyStats,
-        source: &Path,
-        target: &Path,
-    ) -> AsyncCopyFailure {
-        AsyncCopyFailure::new(
-            error.with_operation(FsOperation::Copy).with_missing_context(
-                source,
-                Some(target),
-                self.properties().info().provider_id(),
-            ),
-            state,
-            stats,
-        )
     }
 
     /// Adds source, target, and provider facts to an asynchronous rename
@@ -1061,6 +1058,9 @@ impl AsyncFileSystem {
     /// - `state`: Operation state used to classify confirmed side effects.
     /// - `source`: Logical path of the source resource.
     /// - `target`: Destination logical path affected by the operation.
+    /// # Returns
+    /// A rename failure enriched with operation, source, target, and provider
+    /// context.
     fn contextual_rename_failure(
         &self,
         error: FsError,
@@ -1087,6 +1087,9 @@ impl AsyncFileSystem {
     /// - `path`: Logical path of the resource involved in this operation.
     /// - `operation`: Filesystem operation used for validation or error
     ///   context.
+    /// # Returns
+    /// The error with missing path, operation, and provider context added.
+    #[inline]
     fn enrich(&self, error: FsError, path: &Path, operation: FsOperation) -> FsError {
         self.core.enrich(error, Some(path), operation)
     }
@@ -1097,6 +1100,9 @@ impl AsyncFileSystem {
     ///
     /// - `path`: Logical path of the resource involved in this operation.
     /// - `message`: Diagnostic message for the constructed filesystem error.
+    /// # Returns
+    /// A provider-contract violation associated with `path`.
+    #[inline]
     fn contract_error(&self, path: &Path, message: &'static str) -> FsError {
         self.core
             .contract_error(path, FsOperation::ValidateProviderOutcome, message)
@@ -1110,6 +1116,10 @@ impl AsyncFileSystem {
     /// - `info`: Opened-resource identity and metadata returned by the
     ///   provider.
     /// - `path`: Logical path of the resource involved in this operation.
+    /// # Errors
+    /// Returns a provider-contract error when the opened identity does not
+    /// match `path`.
+    #[inline]
     fn validate_opened_info(&self, info: &crate::metadata::OpenedFileInfo, path: &Path) -> FsResult<()> {
         self.core.validate_opened_info(info, path)
     }
@@ -1123,6 +1133,10 @@ impl AsyncFileSystem {
     /// - `expected_kind`: Resource kind required for the opened object.
     /// - `requested_parent`: Optional parent location supplied for temporary
     ///   creation.
+    /// # Errors
+    /// Returns a provider-contract error when the temporary identity is
+    /// invalid.
+    #[inline]
     fn validate_temp_info(
         &self,
         info: &crate::metadata::OpenedFileInfo,
@@ -1130,6 +1144,149 @@ impl AsyncFileSystem {
         requested_parent: Option<&Path>,
     ) -> FsResult<()> {
         self.core.validate_temp_info(info, expected_kind, requested_parent)
+    }
+}
+
+impl AsyncFileSystem {
+    /// Returns shared deterministic facade policy to operation objects.
+    /// # Returns
+    /// The shared immutable facade core.
+    #[inline]
+    #[must_use]
+    pub(crate) fn core(&self) -> &FacadeCore {
+        &self.core
+    }
+
+    /// Returns the asynchronous provider implementation to operation objects.
+    /// # Returns
+    /// The asynchronous provider implementation backing this facade.
+    #[inline]
+    #[must_use]
+    pub(crate) fn spi(&self) -> &dyn AsyncFileSystemSpi {
+        self.spi.as_ref()
+    }
+
+    /// Opens a facade-validated asynchronous reader with an internal hint.
+    ///
+    /// # Parameters
+    ///
+    /// - `path`: Logical path of the resource involved in this operation.
+    /// - `resolved`: Validated read options and the facade’s resolved
+    ///   read-planning hints.
+    /// # Returns
+    /// A validated reader configured with resolved read options.
+    /// # Errors
+    /// Returns a validation, capability, provider, or provider-contract error.
+    pub(crate) async fn open_reader_resolved(
+        &self,
+        path: &Path,
+        resolved: ResolvedReadOptions,
+    ) -> FsResult<AsyncFileReader> {
+        let options = resolved.options().clone();
+        self.validate_path(path, FsOperation::OpenReader)?;
+        options
+            .validate_against(self.properties().capabilities())
+            .map_err(|error| self.enrich(error, path, FsOperation::OpenReader))?;
+        self.properties()
+            .limits()
+            .validate_read_range(path, options.length())
+            .map_err(|error| self.enrich(error, path, FsOperation::OpenReader))?;
+        self.require(FileSystemCapability::Read, FsOperation::OpenReader, path)?;
+        let opened = self
+            .spi
+            .open_reader(OpenReaderRequest::new(path, resolved))
+            .await
+            .map_err(|error| self.enrich(error, path, FsOperation::OpenReader))?;
+        self.validate_opened_info(opened.info(), path)?;
+        Ok(opened.into_reader())
+    }
+
+    /// Rechecks provider-reported success against requested copy guarantees.
+    ///
+    /// # Parameters
+    ///
+    /// - `outcome`: Provider-reported copy outcome to validate against the
+    ///   request.
+    /// - `options`: Copy route, conflict, consistency, and metadata guarantees
+    ///   requested by the caller.
+    /// - `source`: Logical path of the source resource.
+    /// - `target`: Destination logical path affected by the operation.
+    /// # Returns
+    /// The outcome when it satisfies the requested copy guarantees.
+    /// # Errors
+    /// Returns a contextual copy failure when provider-reported facts violate
+    /// those guarantees.
+    #[allow(clippy::result_large_err)]
+    pub(crate) fn verify_completed_copy(
+        &self,
+        outcome: CopyOutcome,
+        options: &CopyOptions,
+        source: &Path,
+        target: &Path,
+    ) -> Result<CopyOutcome, AsyncCopyFailure> {
+        if let Some(message) = outcome.contract_violation(options) {
+            return Err(self.contextual_copy_failure(
+                FsError::new(FsErrorKind::ProviderContractViolation, FsOperation::Copy, message),
+                outcome.violation_failure_state(options),
+                *outcome.stats(),
+                source,
+                target,
+            ));
+        }
+        Ok(outcome)
+    }
+
+    /// Requires a provider-advertised capability before operation creation.
+    ///
+    /// # Parameters
+    ///
+    /// - `capability`: Capability required before provider work can begin.
+    /// - `operation`: Filesystem operation used for validation or error
+    ///   context.
+    /// - `path`: Logical path of the resource involved in this operation.
+    /// # Errors
+    /// Returns an error when the provider does not advertise `capability`.
+    #[inline]
+    pub(crate) fn require(
+        &self,
+        capability: FileSystemCapability,
+        operation: FsOperation,
+        path: &Path,
+    ) -> FsResult<()> {
+        self.core.require(capability, operation, Some(path))
+    }
+
+    /// Contextualizes a copy failure with its source, target, and provider
+    /// facts.
+    ///
+    /// # Parameters
+    ///
+    /// - `error`: Filesystem error whose kind, source, and established facts
+    ///   are retained.
+    /// - `state`: Operation state used to classify confirmed side effects.
+    /// - `stats`: Copy progress statistics reported by the operation.
+    /// - `source`: Logical path of the source resource.
+    /// - `target`: Destination logical path affected by the operation.
+    /// # Returns
+    /// A copy failure enriched with operation, source, target, provider, and
+    /// progress context.
+    pub(crate) fn contextual_copy_failure(
+        &self,
+        error: FsError,
+        state: CopyFailureState,
+        stats: CopyStats,
+        source: &Path,
+        target: &Path,
+    ) -> AsyncCopyFailure {
+        AsyncCopyFailure::new(
+            error.with_operation(FsOperation::Copy).with_missing_context(
+                source,
+                Some(target),
+                self.properties().info().provider_id(),
+            ),
+            state,
+            stats,
+        )
     }
 
     /// Performs no-I/O preflight for asynchronous temporary persistence.
@@ -1140,6 +1297,8 @@ impl AsyncFileSystem {
     /// - `target`: Destination logical path affected by the operation.
     /// - `options`: Options that define the operation and its requested
     ///   guarantees.
+    /// # Errors
+    /// Returns a path, options, or capability validation error.
     pub(crate) fn preflight_temp_persist(
         &self,
         source: &Path,
@@ -1172,6 +1331,9 @@ impl AsyncFileSystem {
     ///
     /// - `source`: Logical path of the source resource.
     /// - `target`: Destination logical path affected by the operation.
+    /// # Errors
+    /// Returns a provider-contract error when the generated target is not a
+    /// valid logical path.
     pub(crate) fn validate_temp_keep_target(&self, source: &Path, target: &Path) -> FsResult<()> {
         self.validate_path(target, FsOperation::KeepTemp).map_err(|_| {
             self.contract_error(

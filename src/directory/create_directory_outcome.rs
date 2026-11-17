@@ -17,6 +17,7 @@
 /// let outcome = CreateDirectoryOutcome::new(false);
 /// assert!(!outcome.already_existed());
 /// ```
+#[must_use = "inspect the outcome of the directory creation request"]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CreateDirectoryOutcome {
     /// Whether an existing directory satisfied the request.
@@ -38,7 +39,6 @@ impl CreateDirectoryOutcome {
     ///
     /// A new outcome without a provider-reported ancestor count.
     #[inline]
-    #[must_use]
     pub const fn new(already_existed: bool) -> Self {
         Self {
             already_existed,
@@ -67,7 +67,6 @@ impl CreateDirectoryOutcome {
     ///
     /// The updated outcome with the reported ancestor count.
     #[inline]
-    #[must_use]
     pub const fn with_created_ancestors(mut self, count: u64) -> Self {
         self.created_ancestors = Some(count);
         self

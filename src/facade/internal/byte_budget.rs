@@ -11,5 +11,10 @@ use qubit_budget::ResourceBudget;
 
 use super::FileSystemResource;
 
-/// A budget that counts filesystem bytes.
+/// Tracks facade I/O against an inclusive byte limit for one resource class.
+///
+/// The resource type distinguishes read bytes from bytes accepted by a
+/// destination writer. The `u64` quantity is always a byte count, allowing
+/// facade operations to account for cumulative usage without mixing resource
+/// categories.
 pub(crate) type ByteBudget = ResourceBudget<FileSystemResource, u64>;

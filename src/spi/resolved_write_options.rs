@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
 //! Facade-resolved write options.
 
 use crate::write::WriteOptions;
@@ -24,6 +23,7 @@ use crate::write::WriteOptions;
 /// // A provider receives this facade-created value in its write request.
 /// let _ = inspect_write_options;
 /// ```
+#[must_use = "pass the resolved write options with the write request"]
 #[derive(Clone)]
 pub struct ResolvedWriteOptions {
     /// Caller options retained after facade validation and normalization.

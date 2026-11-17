@@ -23,6 +23,7 @@ use crate::metadata::ResourceVersion;
 ///
 /// assert!(!DeleteOptions::default().recursive());
 /// ```
+#[must_use = "use these options to configure a delete operation"]
 #[non_exhaustive]
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct DeleteOptions {
@@ -78,7 +79,6 @@ impl DeleteOptions {
     ///
     /// The updated options, consuming the previous value.
     #[inline]
-    #[must_use]
     pub const fn with_recursive(mut self, recursive: bool) -> Self {
         self.recursive = recursive;
         self
@@ -94,7 +94,6 @@ impl DeleteOptions {
     ///
     /// The updated options, consuming the previous value.
     #[inline]
-    #[must_use]
     pub const fn with_missing_ok(mut self, missing_ok: bool) -> Self {
         self.missing_ok = missing_ok;
         self
@@ -111,7 +110,6 @@ impl DeleteOptions {
     ///
     /// The updated options, consuming the previous value.
     #[inline]
-    #[must_use]
     pub fn with_if_match(mut self, if_match: Option<ResourceVersion>) -> Self {
         self.if_match = if_match;
         self
@@ -157,6 +155,10 @@ impl DeleteOptions {
 ///
 /// - `capability`: Capability required before provider work can begin.
 /// - `message`: Diagnostic message for the constructed filesystem error.
+///
+/// # Returns
+///
+/// An error describing the missing deletion capability.
 fn missing_requirement(capability: FileSystemCapability, message: &str) -> FsError {
     FsError::new(FsErrorKind::RequirementNotMet, FsOperation::Delete, message).with_required_capability(capability)
 }

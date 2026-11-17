@@ -56,10 +56,12 @@ use qubit_fs::spi::StatResponse;
 use qubit_fs::write::WriteAbortOutcome;
 use qubit_io::ByteInput;
 
+/// Parses a filesystem path used by the provider context cases.
 fn path(value: &str) -> Path {
     Path::parse(value).expect("test path should parse")
 }
 
+/// Selects which copy stream stage emits the controlled failure.
 #[derive(Clone, Copy, Debug)]
 enum Stage {
     Read,
@@ -67,6 +69,7 @@ enum Stage {
     Flush,
 }
 
+/// Simulates a synchronous provider that fails at a selected stream stage.
 struct Spi {
     stage: Stage,
     provider: Option<&'static str>,
@@ -74,6 +77,7 @@ struct Spi {
     bytes: Arc<Mutex<Vec<u8>>>,
 }
 
+/// Builds a permission error with a source marker and optional provider name.
 fn stream_error(provider: Option<&str>) -> IoError {
     let mut error = FsError::with_source(
         FsErrorKind::PermissionDenied,
@@ -88,6 +92,7 @@ fn stream_error(provider: Option<&str>) -> IoError {
     IoError::new(IoErrorKind::PermissionDenied, error)
 }
 
+/// Identifies the source error retained in the provider error chain.
 #[derive(Debug)]
 struct Marker;
 
@@ -157,6 +162,7 @@ fn info(path: &Path) -> OpenedFileInfo {
     OpenedFileInfo::new(FileSystemId::new("provider-context").unwrap(), path.clone())
 }
 
+/// Produces three bytes or fails immediately during a selected read stage.
 struct Reader {
     fail: bool,
     provider: Option<&'static str>,
@@ -178,6 +184,7 @@ impl Read for Reader {
     }
 }
 
+/// Records written bytes and fails during the configured write or flush stage.
 struct Writer {
     stage: Stage,
     provider: Option<&'static str>,
@@ -215,6 +222,7 @@ impl FileWriterSpi for Writer {
     }
 }
 
+/// Checks provider context, source chaining, byte counts, and recovery state.
 fn check(stage: Stage, provider: Option<&'static str>) {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let bytes = Arc::new(Mutex::new(Vec::new()));
@@ -330,6 +338,7 @@ mod asynchronous {
     use super::path;
     use super::stream_error;
 
+    /// Simulates the asynchronous provider for the same stream failure cases.
     struct AsyncSpi {
         stage: Stage,
         provider: Option<&'static str>,
@@ -337,6 +346,7 @@ mod asynchronous {
         bytes: Arc<Mutex<Vec<u8>>>,
     }
 
+    /// Builds the opened-file metadata used by asynchronous provider handles.
     fn async_info(path: &Path) -> OpenedFileInfo {
         OpenedFileInfo::new(FileSystemId::new("async-provider-context").unwrap(), path.clone())
     }
@@ -395,6 +405,7 @@ mod asynchronous {
         }
     }
 
+    /// Supplies bytes or fails during the configured asynchronous read stage.
     struct AsyncReader {
         fail: bool,
         provider: Option<&'static str>,
@@ -423,6 +434,7 @@ mod asynchronous {
         }
     }
 
+    /// Writes bytes or fails during the configured asynchronous output stage.
     struct AsyncWriter {
         stage: Stage,
         provider: Option<&'static str>,
@@ -473,6 +485,7 @@ mod asynchronous {
         }
     }
 
+    /// Polls a ready test future until it returns an output.
     fn run<F: Future>(future: F) -> F::Output {
         let mut future = Box::pin(future);
         let mut context = Context::from_waker(Waker::noop());
@@ -483,6 +496,7 @@ mod asynchronous {
         }
     }
 
+    /// Checks asynchronous provider context and recovery for one stream stage.
     fn check(stage: Stage, provider: Option<&'static str>) {
         let calls = Arc::new(Mutex::new(Vec::new()));
         let bytes = Arc::new(Mutex::new(Vec::new()));

@@ -5,14 +5,18 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
 //! Validated rename request.
 
 use crate::path::Path;
 use crate::spi::ResolvedRenameOptions;
 
-/// A facade-created rename request that providers can inspect but cannot
-/// construct.
+/// A rename request passed by the facade to `FileSystemSpi::rename` after it
+/// validates both paths and resolves the rename policy.
+///
+/// Providers can inspect this request but cannot construct it.
+///
+/// # Type Parameters
+/// - `'a`: The lifetime shared by the validated source and destination paths.
 ///
 /// # Examples
 ///
@@ -29,6 +33,7 @@ use crate::spi::ResolvedRenameOptions;
 /// let _ = inspect_rename_request;
 /// # Ok::<(), qubit_fs::FsError>(())
 /// ```
+#[must_use = "pass the rename request to the provider or explicitly drop it"]
 pub struct RenameRequest<'a> {
     /// Validated source path.
     source: &'a Path,
@@ -83,7 +88,7 @@ impl<'a> RenameRequest<'a> {
     /// # Returns
     /// The immutable facade-resolved rename options.
     #[inline]
-    #[must_use]
+    #[must_use = "inspect the resolved rename policy before provider dispatch"]
     pub const fn options(&self) -> &ResolvedRenameOptions {
         &self.options
     }

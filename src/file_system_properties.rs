@@ -160,7 +160,7 @@ impl FileSystemProperties {
     /// # Returns
     /// Capabilities available to callers of the facade.
     #[inline]
-    #[must_use]
+    #[must_use = "inspect advertised capabilities before selecting filesystem operations"]
     pub const fn capabilities(&self) -> FileSystemCapabilities {
         self.capabilities
     }
@@ -198,6 +198,10 @@ impl FileSystemProperties {
     /// # Parameters
     /// - `path`: Logical path to validate against this filesystem's contract.
     /// - `operation`: Operation associated with the path for error context.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` when the path satisfies the filesystem contract.
     ///
     /// # Errors
     /// Returns an enriched invalid-path or resource-limit error when the path

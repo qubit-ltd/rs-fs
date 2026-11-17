@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
 //! Provider-created asynchronous temporary-file envelope.
 
 use super::AsyncTempResourceSpi;
@@ -43,6 +42,7 @@ use crate::metadata::OpenedFileInfo;
 /// let _opened = OpenedAsyncTempFile::new(info, Box::new(Session));
 /// # Ok::<(), qubit_fs::FsError>(())
 /// ```
+#[must_use = "transfer the provider lifecycle session or explicitly drop the temporary file"]
 pub struct OpenedAsyncTempFile {
     /// Temporary-file identity claimed by the provider.
     info: OpenedFileInfo,
@@ -60,7 +60,6 @@ impl OpenedAsyncTempFile {
     /// # Returns
     /// An asynchronous temporary-file envelope for facade validation.
     #[inline]
-    #[must_use]
     pub fn new(info: OpenedFileInfo, session: Box<dyn AsyncTempResourceSpi>) -> Self {
         Self { info, session }
     }

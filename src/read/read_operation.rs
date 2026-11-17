@@ -34,7 +34,11 @@ impl<'a> ReadOperation<'a> {
     ///
     /// # Parameters
     /// - `filesystem`: Facade borrowed for opening and contextualizing reads.
+    ///
+    /// # Returns
+    /// A read operation that borrows the supplied filesystem facade.
     #[inline]
+    #[must_use]
     pub(crate) const fn new(filesystem: &'a FileSystem) -> Self {
         Self { filesystem }
     }

@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+
 //! Compact immutable sets of provider operation entry points.
 
 use super::ProviderOperation;
@@ -22,6 +23,7 @@ use crate::metadata::FileSystemCapability;
 /// assert!(ops.supports(ProviderOperation::Stat));
 /// ```
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[must_use = "use the operation set to configure provider dispatch"]
 pub struct ProviderOperations {
     /// Bit flags indexed by [`ProviderOperation`] discriminants.
     bits: u128,
@@ -33,23 +35,8 @@ impl ProviderOperations {
     /// # Returns
     /// A set containing no provider operation entry points.
     #[inline]
-    #[must_use]
     pub const fn new() -> Self {
         Self { bits: 0 }
-    }
-
-    /// Returns a copy containing `operation`.
-    ///
-    /// # Parameters
-    /// - `operation`: Provider entry point to insert.
-    ///
-    /// # Returns
-    /// The updated immutable operation set.
-    #[inline]
-    #[must_use]
-    pub const fn with(mut self, operation: ProviderOperation) -> Self {
-        self.bits |= 1_u128 << operation as u8;
-        self
     }
 
     /// Returns whether the provider implements `operation`.
@@ -71,7 +58,9 @@ impl ProviderOperations {
     /// Entry-point presence only establishes that an operation can be
     /// attempted. It does not establish an unconditional guarantee. Stronger
     /// guarantees must be supplied separately by the provider.
-    #[must_use]
+    ///
+    /// # Returns
+    /// Capabilities that are conditionally supported by the operation set.
     pub fn conditional_capabilities(&self) -> FileSystemCapabilities {
         let mut capabilities = FileSystemCapabilities::new();
         for capability in FileSystemCapability::ALL {
@@ -86,6 +75,13 @@ impl ProviderOperations {
     ///
     /// This is an exact entry-point mapping, not a provider-name heuristic or
     /// a claim that all requests satisfy the capability.
+    ///
+    /// # Parameters
+    /// - `capability`: Filesystem capability to map to an operation entry point.
+    ///
+    /// # Returns
+    /// `true` when this operation set contains the entry point for
+    /// `capability`.
     #[must_use]
     pub const fn supports_capability(&self, capability: FileSystemCapability) -> bool {
         let supported = match capability {
@@ -131,4 +127,17 @@ impl ProviderOperations {
         };
         supported
     }
+    /// Returns a copy containing `operation`.
+    ///
+    /// # Parameters
+    /// - `operation`: Provider entry point to insert.
+    ///
+    /// # Returns
+    /// The updated immutable operation set.
+    #[inline]
+    pub const fn with(mut self, operation: ProviderOperation) -> Self {
+        self.bits |= 1_u128 << operation as u8;
+        self
+    }
+
 }

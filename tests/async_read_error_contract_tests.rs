@@ -51,6 +51,8 @@ use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
 use qubit_io::AsyncInput;
 
+/// Wakes the polling thread by unparking it when the scripted input makes
+/// progress.
 struct ThreadWake(thread::Thread);
 impl Wake for ThreadWake {
     fn wake(self: Arc<Self>) {
@@ -60,6 +62,7 @@ impl Wake for ThreadWake {
         self.0.unpark();
     }
 }
+/// Drives a future on the current thread until it completes.
 fn run<F: Future>(future: F) -> F::Output {
     let waker = Waker::from(Arc::new(ThreadWake(thread::current())));
     let mut cx = Context::from_waker(&waker);
@@ -182,6 +185,7 @@ impl AsyncFileSystemSpi for ScriptSpi {
     }
 }
 
+/// Builds a facade with one scripted input mode and returns its poll counter.
 fn fs(step: Step) -> (AsyncFileSystem, Arc<AtomicUsize>) {
     let polls = Arc::new(AtomicUsize::new(0));
     (

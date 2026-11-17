@@ -89,6 +89,7 @@ use qubit_io::AsyncInput;
 use qubit_io::AsyncOutput;
 use qubit_io::Output;
 
+/// Configures provider operations and records copy route dispatches.
 struct RouteProbe {
     calls: Arc<Mutex<Vec<&'static str>>>,
     include_stat: bool,
@@ -98,6 +99,7 @@ struct RouteProbe {
     native_reply: NativeReply,
 }
 
+/// Selects whether a native copy attempt declines, completes, or fails.
 #[derive(Clone, Copy)]
 enum NativeReply {
     Declined,
@@ -498,8 +500,10 @@ fn test_async_decline_does_not_dispatch_missing_read_or_write_fallback_primitive
     }
 }
 
+/// Bytes returned by the atomic-route fixture's source reader.
 const ATOMIC_PAYLOAD: &[u8] = b"atomic-report-0123456789";
 
+/// Configures required atomic-copy capabilities and records fallback effects.
 struct AtomicRouteProbe {
     calls: Arc<Mutex<Vec<&'static str>>>,
     payload: Arc<Mutex<Vec<u8>>>,
@@ -509,6 +513,7 @@ struct AtomicRouteProbe {
     with_writer_atomic_capability: bool,
 }
 
+/// Bundles the filesystem and shared observations from an atomic route fixture.
 type AtomicRouteHandles = (
     FileSystem,
     Arc<Mutex<Vec<&'static str>>>,
@@ -601,6 +606,7 @@ impl FileSystemSpi for AtomicRouteProbe {
     }
 }
 
+/// Records fallback writes and returns configured commit atomicity.
 struct AtomicRouteWriter {
     calls: Arc<Mutex<Vec<&'static str>>>,
     payload: Arc<Mutex<Vec<u8>>>,
@@ -637,6 +643,7 @@ impl FileWriterSpi for AtomicRouteWriter {
     }
 }
 
+/// Creates a sync provider and observation handles for atomic fallback tests.
 fn atomic_route_filesystem(
     commit_atomicity: AchievedAtomicity,
     with_copy_atomic_capability: bool,
@@ -768,6 +775,7 @@ fn test_sync_required_atomic_copy_needs_copy_and_writer_capabilities() {
     assert!(!calls.lock().expect("calls lock").contains(&"open_writer"));
 }
 
+/// Asynchronous counterpart to `AtomicRouteProbe`.
 #[cfg(feature = "async")]
 struct AsyncAtomicRouteProbe {
     calls: Arc<Mutex<Vec<&'static str>>>,
@@ -778,6 +786,7 @@ struct AsyncAtomicRouteProbe {
     with_writer_atomic_capability: bool,
 }
 
+/// Bundles the async filesystem and observations for atomic route tests.
 #[cfg(feature = "async")]
 type AsyncAtomicRouteHandles = (
     AsyncFileSystem,
@@ -876,6 +885,7 @@ impl AsyncFileSystemSpi for AsyncAtomicRouteProbe {
     }
 }
 
+/// Reads the fixed payload through the asynchronous fallback stream.
 #[cfg(feature = "async")]
 struct AsyncAtomicReader {
     position: usize,
@@ -901,6 +911,7 @@ impl AsyncInput for AsyncAtomicReader {
     }
 }
 
+/// Records async fallback writes and returns configured commit atomicity.
 #[cfg(feature = "async")]
 struct AsyncAtomicRouteWriter {
     calls: Arc<Mutex<Vec<&'static str>>>,
@@ -949,6 +960,7 @@ impl AsyncFileWriteSession for AsyncAtomicRouteWriter {
     }
 }
 
+/// Creates an async provider and observations for atomic fallback tests.
 #[cfg(feature = "async")]
 fn async_atomic_route_filesystem(
     commit_atomicity: AchievedAtomicity,
@@ -970,6 +982,7 @@ fn async_atomic_route_filesystem(
     (filesystem, calls, payload, writer_options)
 }
 
+/// Polls an immediately-ready future with a bounded number of test polls.
 #[cfg(feature = "async")]
 fn ready<F: Future>(future: F) -> F::Output {
     let mut future = Box::pin(future);

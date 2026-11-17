@@ -5,7 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// requires direct coverage.
+
 //! Validated provider operation and guarantee snapshots.
 
 use super::ProviderOperation;
@@ -121,7 +121,7 @@ impl ProviderProperties {
     /// # Returns
     /// Provider entry points available for facade dispatch.
     #[inline]
-    #[must_use]
+    #[must_use = "use the provider operation snapshot when configuring dispatch"]
     pub const fn operations(&self) -> ProviderOperations {
         self.operations
     }
@@ -131,7 +131,7 @@ impl ProviderProperties {
     /// # Returns
     /// The provider guarantee snapshot before facade derivation.
     #[inline]
-    #[must_use]
+    #[must_use = "use the declared capabilities when evaluating provider guarantees"]
     pub const fn declared_capabilities(&self) -> FileSystemCapabilities {
         self.declared_capabilities
     }
@@ -228,6 +228,10 @@ impl ProviderProperties {
     /// # Parameters
     /// - `capability`: Advertised capability whose operation requirements are
     ///   checked.
+    ///
+    /// # Returns
+    /// The first unavailable required provider operation, or `None` when all
+    /// required operations are present.
     fn missing_capability_operation(&self, capability: FileSystemCapability) -> Option<ProviderOperation> {
         let operations = self.operations;
         match capability {

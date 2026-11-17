@@ -34,8 +34,8 @@ use super::OpenFailureStage;
 ///
 /// # let filesystem = support::rustdoc_provider::filesystem();
 /// use qubit_fs::Path;
-/// use qubit_fs::write::WriteOptions;
 /// use qubit_fs::metadata::AtomicityRequirement;
+/// use qubit_fs::write::WriteOptions;
 ///
 /// let path = Path::parse("/report")?;
 /// let result = filesystem.open_writer(
@@ -48,10 +48,6 @@ use super::OpenFailureStage;
 ///
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-///
-/// # Type Parameters
-///
-/// - `R`: Recovery session type retained after the provider open fails.
 #[must_use = "inspect and retain recovery ownership before abandoning an open failure"]
 pub struct OpenFailure<R> {
     /// Original contextual failure, unchanged by later recovery.
@@ -73,6 +69,9 @@ impl<R> OpenFailure<R> {
     ///   are retained.
     /// - `stage`: Stage at which the open operation failed.
     /// - `recovery`: Optional isolated session retained for safe recovery.
+    ///
+    /// # Returns
+    /// A failure value retaining the original error, stage, and optional recovery session.
     pub(crate) fn new(error: FsError, stage: OpenFailureStage, recovery: Option<R>) -> Self {
         Self {
             error: Box::new(error),
@@ -82,6 +81,9 @@ impl<R> OpenFailure<R> {
     }
 
     /// Returns the original failure; cleanup does not rewrite it.
+    ///
+    /// # Returns
+    /// A borrow of the original contextual filesystem error.
     #[must_use = "inspect the original filesystem error before discarding it"]
     #[inline]
     pub const fn error(&self) -> &FsError {
@@ -89,6 +91,9 @@ impl<R> OpenFailure<R> {
     }
 
     /// Returns the stage where opening stopped.
+    ///
+    /// # Returns
+    /// The stage at which opening stopped.
     #[must_use = "use the opening stage to classify the failure"]
     #[inline]
     pub const fn stage(&self) -> OpenFailureStage {
@@ -97,18 +102,31 @@ impl<R> OpenFailure<R> {
 
     /// Returns the retained recovery session, or None before an envelope
     /// arrived.
+    ///
+    /// # Returns
+    /// `Some` with a shared borrow of the retained session, or `None` if no
+    /// recovery session was retained.
     #[inline]
     pub const fn recovery(&self) -> Option<&R> {
         self.recovery.as_ref()
     }
 
     /// Borrows the retained session for explicit cleanup, when available.
+    ///
+    /// # Returns
+    /// `Some` with a mutable borrow of the retained session, or `None` if no
+    /// recovery session was retained.
     #[inline]
     pub fn recovery_mut(&mut self) -> Option<&mut R> {
         self.recovery.as_mut()
     }
 
     /// Transfers recovery ownership without changing the historical failure.
+    ///
+    /// # Returns
+    /// `Some` with the owned recovery session, or `None` if recovery was
+    /// already absent or previously taken.
+    #[inline]
     pub fn take_recovery(&mut self) -> Option<R> {
         self.recovery.take()
     }
@@ -131,6 +149,10 @@ impl<R> Debug for OpenFailure<R> {
     /// # Parameters
     ///
     /// - `f`: Formatter that receives the debug or display representation.
+    ///
+    /// # Returns
+    /// The formatter result, indicating whether writing the debug output
+    /// succeeded.
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         f.debug_struct("OpenFailure")
             .field("error", &self.error)
@@ -146,6 +168,10 @@ impl<R> Display for OpenFailure<R> {
     /// # Parameters
     ///
     /// - `f`: Formatter that receives the debug or display representation.
+    ///
+    /// # Returns
+    /// The formatter result, indicating whether writing the display output
+    /// succeeded.
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         Display::fmt(&self.error, f)
     }
@@ -154,6 +180,10 @@ impl<R> Display for OpenFailure<R> {
 impl<R: 'static> Error for OpenFailure<R> {
     /// Exposes the original error chain without surrendering recovery
     /// ownership.
+    ///
+    /// # Returns
+    /// A reference to the original error as a trait object.
+    #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(self.error.as_ref())
     }

@@ -32,6 +32,7 @@ use crate::metadata::SymlinkPolicy;
 /// let options = CopyOptions::default().with_server_side(ServerSidePreference::Require);
 /// assert!(options.validate_against(FileSystemCapabilities::new()).is_err());
 /// ```
+#[must_use = "use the copy options to configure a copy operation"]
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub struct CopyOptions {
@@ -78,7 +79,7 @@ impl CopyOptions {
     /// # Returns
     /// Copy options with `mode` set to [`CopyMode::File`].
     #[inline]
-    #[must_use]
+    #[must_use = "use these options to perform a file copy"]
     pub fn file() -> Self {
         Self {
             mode: CopyMode::File,
@@ -91,26 +92,12 @@ impl CopyOptions {
     /// # Returns
     /// Copy options with `mode` set to [`CopyMode::Tree`].
     #[inline]
-    #[must_use]
+    #[must_use = "use these options to perform a tree copy"]
     pub fn tree() -> Self {
         Self {
             mode: CopyMode::Tree,
             ..Self::default()
         }
-    }
-
-    /// Returns a copy of these options with the source mode replaced.
-    ///
-    /// # Parameters
-    /// `mode` is the interpretation used for the source resource.
-    ///
-    /// # Returns
-    /// A copy of these options with the requested source mode.
-    #[inline]
-    #[must_use]
-    pub const fn with_mode(mut self, mode: CopyMode) -> Self {
-        self.mode = mode;
-        self
     }
 
     /// Returns the source interpretation mode.
@@ -123,20 +110,6 @@ impl CopyOptions {
         self.mode
     }
 
-    /// Returns a copy with the destination conflict policy replaced.
-    ///
-    /// # Parameters
-    /// `conflict` is the policy applied when the destination already exists.
-    ///
-    /// # Returns
-    /// A copy with the requested destination conflict policy.
-    #[inline]
-    #[must_use]
-    pub const fn with_conflict(mut self, conflict: CopyConflictPolicy) -> Self {
-        self.conflict = conflict;
-        self
-    }
-
     /// Returns the destination conflict policy.
     ///
     /// # Returns
@@ -147,43 +120,14 @@ impl CopyOptions {
         self.conflict
     }
 
-    /// Returns a copy with the metadata preservation policy replaced.
-    ///
-    /// # Parameters
-    /// `preserve_metadata` selects which source metadata to preserve.
-    ///
-    /// # Returns
-    /// A copy with the requested metadata preservation policy.
-    #[inline]
-    #[must_use]
-    pub const fn with_preserve_metadata(mut self, preserve_metadata: MetadataPreservePolicy) -> Self {
-        self.preserve_metadata = preserve_metadata;
-        self
-    }
-
     /// Returns the metadata preservation policy.
     ///
     /// # Returns
     /// The configured metadata preservation policy.
     #[inline]
-    #[must_use]
+    #[must_use = "use the configured metadata preservation policy"]
     pub const fn preserve_metadata(&self) -> MetadataPreservePolicy {
         self.preserve_metadata
-    }
-
-    /// Returns a copy with the server-side preference replaced.
-    ///
-    /// # Parameters
-    /// `server_side` selects whether server-side copy is disabled, preferred,
-    /// or required.
-    ///
-    /// # Returns
-    /// A copy with the requested server-side preference.
-    #[inline]
-    #[must_use]
-    pub const fn with_server_side(mut self, server_side: ServerSidePreference) -> Self {
-        self.server_side = server_side;
-        self
     }
 
     /// Returns the server-side preference.
@@ -194,20 +138,6 @@ impl CopyOptions {
     #[must_use]
     pub const fn server_side(&self) -> ServerSidePreference {
         self.server_side
-    }
-
-    /// Returns a copy with the symbolic-link policy override replaced.
-    ///
-    /// # Parameters
-    /// `policy` is the symbolic-link policy for this copy.
-    ///
-    /// # Returns
-    /// A copy with the symbolic-link policy override set.
-    #[inline]
-    #[must_use]
-    pub const fn with_symlink_policy(mut self, policy: SymlinkPolicy) -> Self {
-        self.symlink_policy = Some(policy);
-        self
     }
 
     /// Returns the optional symbolic-link policy override.
@@ -221,20 +151,6 @@ impl CopyOptions {
         self.symlink_policy
     }
 
-    /// Returns a copy with parent creation replaced.
-    ///
-    /// # Parameters
-    /// `create` determines whether missing destination parents are created.
-    ///
-    /// # Returns
-    /// A copy with the requested parent-creation setting.
-    #[inline]
-    #[must_use]
-    pub const fn with_create_parent(mut self, create: bool) -> Self {
-        self.create_parent = create;
-        self
-    }
-
     /// Returns whether missing destination parents are created.
     ///
     /// # Returns
@@ -244,21 +160,6 @@ impl CopyOptions {
     #[must_use]
     pub const fn create_parent(&self) -> bool {
         self.create_parent
-    }
-
-    /// Returns a copy with continuation policy replaced.
-    ///
-    /// # Parameters
-    /// `continue_on_error` determines whether tree copy continues after an
-    /// entry fails.
-    ///
-    /// # Returns
-    /// A copy with the requested continuation policy.
-    #[inline]
-    #[must_use]
-    pub const fn with_continue_on_error(mut self, continue_on_error: bool) -> Self {
-        self.continue_on_error = continue_on_error;
-        self
     }
 
     /// Returns whether tree copy continues after per-entry failures.
@@ -272,42 +173,14 @@ impl CopyOptions {
         self.continue_on_error
     }
 
-    /// Returns a copy with the atomicity requirement replaced.
-    ///
-    /// # Parameters
-    /// `atomicity` is the requested atomicity level for publication.
-    ///
-    /// # Returns
-    /// A copy with the requested atomicity requirement.
-    #[inline]
-    #[must_use]
-    pub const fn with_atomicity(mut self, atomicity: AtomicityRequirement) -> Self {
-        self.atomicity = atomicity;
-        self
-    }
-
     /// Returns the atomicity requirement.
     ///
     /// # Returns
     /// The configured atomicity requirement.
     #[inline]
-    #[must_use]
+    #[must_use = "review the atomicity requirement before copying"]
     pub const fn atomicity(&self) -> AtomicityRequirement {
         self.atomicity
-    }
-
-    /// Returns a copy with the durability requirement replaced.
-    ///
-    /// # Parameters
-    /// `durability` is the requested durability level for publication.
-    ///
-    /// # Returns
-    /// A copy with the requested durability requirement.
-    #[inline]
-    #[must_use]
-    pub const fn with_durability(mut self, durability: DurabilityRequirement) -> Self {
-        self.durability = durability;
-        self
     }
 
     /// Returns the durability requirement.
@@ -320,20 +193,6 @@ impl CopyOptions {
         self.durability
     }
 
-    /// Returns a copy with the maximum tree depth replaced.
-    ///
-    /// # Parameters
-    /// `max_depth` is the maximum descendant depth, or `None` for no limit.
-    ///
-    /// # Returns
-    /// A copy with the requested tree-depth limit.
-    #[inline]
-    #[must_use]
-    pub const fn with_max_depth(mut self, max_depth: Option<usize>) -> Self {
-        self.max_depth = max_depth;
-        self
-    }
-
     /// Returns the optional maximum tree depth.
     ///
     /// # Returns
@@ -342,25 +201,6 @@ impl CopyOptions {
     #[must_use]
     pub const fn max_depth(&self) -> Option<usize> {
         self.max_depth
-    }
-
-    /// Returns a copy with the maximum source entry count replaced.
-    ///
-    /// `Some(0)` rejects every copy because even a file-mode copy consumes one
-    /// source entry. For tree copies, the limit applies to the aggregate of
-    /// files, directories, symbolic links, objects, and prefixes.
-    ///
-    /// # Parameters
-    /// `max_entries` is the maximum number of source entries, or `None` for no
-    /// limit.
-    ///
-    /// # Returns
-    /// A copy with the requested source-entry limit.
-    #[inline]
-    #[must_use]
-    pub const fn with_max_entries(mut self, max_entries: Option<usize>) -> Self {
-        self.max_entries = max_entries;
-        self
     }
 
     /// Returns the optional maximum source entry count.
@@ -382,20 +222,6 @@ impl CopyOptions {
         self.max_entries
     }
 
-    /// Returns a copy with the maximum copied byte count replaced.
-    ///
-    /// # Parameters
-    /// `max_bytes` is the maximum payload size, or `None` for no limit.
-    ///
-    /// # Returns
-    /// A copy with the requested byte limit.
-    #[inline]
-    #[must_use]
-    pub const fn with_max_bytes(mut self, max_bytes: Option<u64>) -> Self {
-        self.max_bytes = max_bytes;
-        self
-    }
-
     /// Returns the optional maximum copied byte count.
     ///
     /// # Returns
@@ -407,20 +233,6 @@ impl CopyOptions {
         self.max_bytes
     }
 
-    /// Returns a copy with the maximum elapsed duration replaced.
-    ///
-    /// # Parameters
-    /// `deadline` is the elapsed-time budget, or `None` for no limit.
-    ///
-    /// # Returns
-    /// A copy with the requested elapsed-time budget.
-    #[inline]
-    #[must_use]
-    pub const fn with_deadline(mut self, deadline: Option<Duration>) -> Self {
-        self.deadline = deadline;
-        self
-    }
-
     /// Returns the optional maximum elapsed duration.
     ///
     /// # Returns
@@ -430,6 +242,195 @@ impl CopyOptions {
     #[must_use]
     pub const fn deadline(&self) -> Option<Duration> {
         self.deadline
+    }
+
+    /// Returns a copy of these options with the source mode replaced.
+    ///
+    /// # Parameters
+    /// `mode` is the interpretation used for the source resource.
+    ///
+    /// # Returns
+    /// A copy of these options with the requested source mode.
+    #[inline]
+    #[must_use = "apply the updated source mode"]
+    pub const fn with_mode(mut self, mode: CopyMode) -> Self {
+        self.mode = mode;
+        self
+    }
+
+    /// Returns a copy with the destination conflict policy replaced.
+    ///
+    /// # Parameters
+    /// `conflict` is the policy applied when the destination already exists.
+    ///
+    /// # Returns
+    /// A copy with the requested destination conflict policy.
+    #[inline]
+    #[must_use = "apply the updated destination conflict policy"]
+    pub const fn with_conflict(mut self, conflict: CopyConflictPolicy) -> Self {
+        self.conflict = conflict;
+        self
+    }
+
+    /// Returns a copy with the metadata preservation policy replaced.
+    ///
+    /// # Parameters
+    /// `preserve_metadata` selects which source metadata to preserve.
+    ///
+    /// # Returns
+    /// A copy with the requested metadata preservation policy.
+    #[inline]
+    #[must_use = "apply the updated metadata preservation policy"]
+    pub const fn with_preserve_metadata(mut self, preserve_metadata: MetadataPreservePolicy) -> Self {
+        self.preserve_metadata = preserve_metadata;
+        self
+    }
+
+    /// Returns a copy with the server-side preference replaced.
+    ///
+    /// # Parameters
+    /// `server_side` selects whether server-side copy is disabled, preferred,
+    /// or required.
+    ///
+    /// # Returns
+    /// A copy with the requested server-side preference.
+    #[inline]
+    #[must_use = "apply the updated server-side preference"]
+    pub const fn with_server_side(mut self, server_side: ServerSidePreference) -> Self {
+        self.server_side = server_side;
+        self
+    }
+
+    /// Returns a copy with the symbolic-link policy override replaced.
+    ///
+    /// # Parameters
+    /// `policy` is the symbolic-link policy for this copy.
+    ///
+    /// # Returns
+    /// A copy with the symbolic-link policy override set.
+    #[inline]
+    #[must_use = "apply the updated symbolic-link policy"]
+    pub const fn with_symlink_policy(mut self, policy: SymlinkPolicy) -> Self {
+        self.symlink_policy = Some(policy);
+        self
+    }
+
+    /// Returns a copy with parent creation replaced.
+    ///
+    /// # Parameters
+    /// `create` determines whether missing destination parents are created.
+    ///
+    /// # Returns
+    /// A copy with the requested parent-creation setting.
+    #[inline]
+    #[must_use = "apply the updated parent-creation setting"]
+    pub const fn with_create_parent(mut self, create: bool) -> Self {
+        self.create_parent = create;
+        self
+    }
+
+    /// Returns a copy with continuation policy replaced.
+    ///
+    /// # Parameters
+    /// `continue_on_error` determines whether tree copy continues after an
+    /// entry fails.
+    ///
+    /// # Returns
+    /// A copy with the requested continuation policy.
+    #[inline]
+    #[must_use = "apply the updated continuation policy"]
+    pub const fn with_continue_on_error(mut self, continue_on_error: bool) -> Self {
+        self.continue_on_error = continue_on_error;
+        self
+    }
+
+    /// Returns a copy with the atomicity requirement replaced.
+    ///
+    /// # Parameters
+    /// `atomicity` is the requested atomicity level for publication.
+    ///
+    /// # Returns
+    /// A copy with the requested atomicity requirement.
+    #[inline]
+    #[must_use = "apply the updated atomicity requirement"]
+    pub const fn with_atomicity(mut self, atomicity: AtomicityRequirement) -> Self {
+        self.atomicity = atomicity;
+        self
+    }
+
+    /// Returns a copy with the durability requirement replaced.
+    ///
+    /// # Parameters
+    /// `durability` is the requested durability level for publication.
+    ///
+    /// # Returns
+    /// A copy with the requested durability requirement.
+    #[inline]
+    #[must_use = "apply the updated durability requirement"]
+    pub const fn with_durability(mut self, durability: DurabilityRequirement) -> Self {
+        self.durability = durability;
+        self
+    }
+
+    /// Returns a copy with the maximum tree depth replaced.
+    ///
+    /// # Parameters
+    /// `max_depth` is the maximum descendant depth, or `None` for no limit.
+    ///
+    /// # Returns
+    /// A copy with the requested tree-depth limit.
+    #[inline]
+    #[must_use = "apply the updated tree-depth limit"]
+    pub const fn with_max_depth(mut self, max_depth: Option<usize>) -> Self {
+        self.max_depth = max_depth;
+        self
+    }
+
+    /// Returns a copy with the maximum source entry count replaced.
+    ///
+    /// `Some(0)` rejects every copy because even a file-mode copy consumes one
+    /// source entry. For tree copies, the limit applies to the aggregate of
+    /// files, directories, symbolic links, objects, and prefixes.
+    ///
+    /// # Parameters
+    /// `max_entries` is the maximum number of source entries, or `None` for no
+    /// limit.
+    ///
+    /// # Returns
+    /// A copy with the requested source-entry limit.
+    #[inline]
+    #[must_use = "apply the updated source-entry limit"]
+    pub const fn with_max_entries(mut self, max_entries: Option<usize>) -> Self {
+        self.max_entries = max_entries;
+        self
+    }
+
+    /// Returns a copy with the maximum copied byte count replaced.
+    ///
+    /// # Parameters
+    /// `max_bytes` is the maximum payload size, or `None` for no limit.
+    ///
+    /// # Returns
+    /// A copy with the requested byte limit.
+    #[inline]
+    #[must_use = "apply the updated copied-byte limit"]
+    pub const fn with_max_bytes(mut self, max_bytes: Option<u64>) -> Self {
+        self.max_bytes = max_bytes;
+        self
+    }
+
+    /// Returns a copy with the maximum elapsed duration replaced.
+    ///
+    /// # Parameters
+    /// `deadline` is the elapsed-time budget, or `None` for no limit.
+    ///
+    /// # Returns
+    /// A copy with the requested elapsed-time budget.
+    #[inline]
+    #[must_use = "apply the updated elapsed-time budget"]
+    pub const fn with_deadline(mut self, deadline: Option<Duration>) -> Self {
+        self.deadline = deadline;
+        self
     }
 
     /// Validates required copy semantics before provider side effects.
@@ -510,6 +511,11 @@ impl Default for CopyOptions {
     /// Creates options that let the facade choose a supported copy route,
     /// fail on conflicts, and request the default consistency and metadata
     /// behavior.
+    ///
+    /// # Returns
+    /// Options that choose a supported route automatically, fail on existing
+    /// destinations, do not request metadata preservation, and set no limits
+    /// or required publication guarantees.
     #[inline]
     fn default() -> Self {
         Self {

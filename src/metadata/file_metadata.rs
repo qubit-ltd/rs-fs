@@ -80,7 +80,7 @@ impl FileMetadata {
     /// # Returns
     /// The resource kind borrowed from this metadata snapshot.
     #[inline]
-    #[must_use]
+    #[must_use = "inspect the resource kind when interpreting file metadata"]
     pub const fn kind(&self) -> &FileKind {
         &self.kind
     }

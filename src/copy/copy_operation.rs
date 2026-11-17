@@ -68,6 +68,9 @@ impl<'a> CopyOperation<'a> {
     /// - `target`: Destination logical path affected by the operation.
     /// - `options`: Copy route, conflict, consistency, and metadata guarantees
     ///   requested by the caller.
+    ///
+    /// # Returns
+    /// A pending operation bound to the validated inputs and elapsed-time budget.
     #[inline]
     pub(crate) fn new(filesystem: &'a FileSystem, source: &'a Path, target: &'a Path, options: CopyOptions) -> Self {
         let deadline = CopyDeadline::new(options.deadline(), std::time::Instant::now);
@@ -81,6 +84,13 @@ impl<'a> CopyOperation<'a> {
     }
 
     /// Executes the provider attempt or the allowlisted stream fallback.
+    ///
+    /// # Returns
+    /// The provider-confirmed or streamed copy outcome.
+    ///
+    /// # Errors
+    /// Returns a copy failure when preflight, provider execution, fallback, or
+    /// outcome validation fails.
     #[allow(clippy::result_large_err)]
     pub(crate) fn execute(self) -> Result<CopyOutcome, CopyFailure> {
         if let Err(error) = self.copy_preflight() {
@@ -116,6 +126,13 @@ impl<'a> CopyOperation<'a> {
     }
 
     /// Dispatches the provider fast path and falls back only on a decline.
+    ///
+    /// # Returns
+    /// The completed copy outcome from the provider or stream fallback.
+    ///
+    /// # Errors
+    /// Returns a contextual copy failure when provider execution or fallback
+    /// fails.
     #[allow(clippy::result_large_err)]
     fn execute_provider_attempt(&self) -> Result<CopyOutcome, CopyFailure> {
         match self.filesystem.spi().try_copy(CopyRequest::new(
@@ -156,6 +173,12 @@ impl<'a> CopyOperation<'a> {
     ///
     /// - `outcome`: Provider-reported copy outcome to validate against the
     ///   request.
+    ///
+    /// # Returns
+    /// The provider outcome when it satisfies the requested guarantees.
+    ///
+    /// # Errors
+    /// Returns a copy failure when provider-reported facts violate the request.
     #[allow(clippy::result_large_err)]
     fn verify_completed_copy(&self, outcome: CopyOutcome) -> Result<CopyOutcome, CopyFailure> {
         if let Some(message) = outcome.contract_violation(&self.options) {
@@ -170,6 +193,9 @@ impl<'a> CopyOperation<'a> {
     }
 
     /// Performs no-I/O validation before selecting a copy implementation.
+    ///
+    /// # Errors
+    /// Returns a path, options, or capability validation error.
     fn copy_preflight(&self) -> FsResult<()> {
         self.filesystem.core().validate_path(self.source, FsOperation::Copy)?;
         self.filesystem.core().validate_path(self.target, FsOperation::Copy)?;
@@ -194,6 +220,13 @@ impl<'a> CopyOperation<'a> {
     }
 
     /// Streams a copy through facade-owned handles when the provider declines.
+    ///
+    /// # Returns
+    /// The completed streamed copy outcome.
+    ///
+    /// # Errors
+    /// Returns a copy failure when planning, provider I/O, publication, or
+    /// cleanup fails.
     #[allow(clippy::result_large_err)]
     fn execute_stream_fallback(&self) -> Result<CopyOutcome, CopyFailure> {
         let plan = StreamCopyPlan::new(
@@ -481,6 +514,10 @@ impl<'a> CopyOperation<'a> {
     /// - `state`: Operation state used to classify confirmed side effects.
     /// - `stats`: Copy progress statistics reported by the operation.
     /// - `writer`: Writer recovery state retained by the failed copy.
+    ///
+    /// # Returns
+    /// A failure containing the supplied error, state, progress, and recovery
+    /// writer.
     fn failure(
         &self,
         error: FsError,
@@ -501,6 +538,9 @@ impl<'a> CopyOperation<'a> {
     /// # Parameters
     ///
     /// - `failure`: Copy failure whose missing context is to be completed.
+    ///
+    /// # Returns
+    /// The failure with source, target, and provider context added.
     fn contextualize_failure(&self, failure: CopyFailure) -> CopyFailure {
         let (error, state, stats, writer) = failure.into_parts();
         CopyFailure::new(
@@ -524,6 +564,9 @@ impl<'a> CopyOperation<'a> {
     ///   context.
     /// - `error`: Stream I/O error converted through `FsError::from_stream_io`
     ///   before attaching provider context.
+    ///
+    /// # Returns
+    /// A filesystem error with operation, path, and provider context.
     fn io_error(&self, path: &Path, operation: FsOperation, error: std::io::Error) -> FsError {
         FsError::from_stream_io(error, operation, path)
             .with_missing_provider(self.filesystem.properties().info().provider_id())
@@ -546,6 +589,9 @@ impl<'a> CopyOperation<'a> {
     /// # Parameters
     ///
     /// - `message`: Diagnostic message for the constructed filesystem error.
+    ///
+    /// # Returns
+    /// A resource-limit error containing source, target, and provider context.
     fn budget_error(&self, message: &str) -> FsError {
         FsError::new(FsErrorKind::ResourceLimitExceeded, FsOperation::Copy, message)
             .with_path(self.source.clone())
@@ -622,10 +668,12 @@ mod tests {
         static WRITTEN: std::cell::RefCell<Vec<u8>> = const { std::cell::RefCell::new(Vec::new()) };
     }
 
+    /// Returns the current instant from the thread-local deadline test clock.
     fn test_now() -> Instant {
         NOW.with(|now| now.get().expect("test clock should be initialized"))
     }
 
+    /// Advances the thread-local test clock by one second.
     fn advance_clock() {
         NOW.with(|now| {
             now.set(Some(
@@ -634,6 +682,7 @@ mod tests {
         });
     }
 
+    /// Scripted filesystem provider for deterministic copy deadline and conflict tests.
     struct StageSpi {
         late_commit_error: bool,
     }
@@ -709,6 +758,7 @@ mod tests {
         }
     }
 
+    /// Scripted writer for partial writes, interruptions, commit failures, and abort outcomes.
     struct StageWriter {
         late_commit_error: bool,
     }
@@ -815,10 +865,16 @@ mod tests {
         }
     }
 
+    /// Builds a baseline copy operation with a one-second deterministic deadline.
     fn operation(late_commit_error: bool) -> CopyOperation<'static> {
         operation_with_mode(late_commit_error, 0)
     }
 
+    /// Builds a copy operation whose writer behavior is selected by `mode`.
+    ///
+    /// Modes 1–9 cover deadline interruption, short write, write-zero, provider error,
+    /// confirmed partial writes, late error, retryable interruption, short-write completion,
+    /// and an uncertain interrupted write, respectively.
     fn operation_with_mode(late_commit_error: bool, mode: u8) -> CopyOperation<'static> {
         let filesystem = Box::leak(Box::new(
             crate::FileSystem::from_spi(StageSpi { late_commit_error }).expect("valid test filesystem"),
@@ -845,6 +901,9 @@ mod tests {
         operation
     }
 
+    /// Builds a conflict-skip copy operation and injects the requested conflict stage.
+    ///
+    /// `stage` is one of the `SKIP_AFTER_*` constants above.
     fn skip_operation(stage: u8) -> CopyOperation<'static> {
         let mut operation = operation(false);
         SKIP_STAGE.with(|value| value.set(stage));

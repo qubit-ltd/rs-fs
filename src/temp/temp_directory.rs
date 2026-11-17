@@ -159,13 +159,13 @@ impl TempDirectory {
     /// cleanup fails while the state remains `CleanupRequired`, a later drop
     /// may make another best-effort attempt.
     ///
-    /// # Errors
-    /// Returns an invalid-state error when cleanup is no longer legal, or the
-    /// provider cleanup error when cleanup cannot be confirmed.
-    ///
     /// # Returns
     /// `Ok(())` when cleanup is confirmed; otherwise, the contextual cleanup
     /// error.
+    ///
+    /// # Errors
+    /// Returns an invalid-state error when cleanup is no longer legal, or the
+    /// provider cleanup error when cleanup cannot be confirmed.
     pub fn cleanup(&mut self) -> FsResult<()> {
         self.core.cleanup()
     }
@@ -178,7 +178,10 @@ impl Debug for TempDirectory {
     /// - `f`: Formatter that receives the debug representation.
     ///
     /// # Returns
-    /// `Ok(())` when formatting succeeds, or the formatter's error.
+    /// `Ok(())` when formatting succeeds.
+    ///
+    /// # Errors
+    /// Returns the formatter's error if it cannot accept the output.
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         f.debug_struct("TempDirectory")

@@ -13,7 +13,8 @@
 /// # Examples
 ///
 /// ```rust
-/// use qubit_fs::path::{Path, PathComponents};
+/// use qubit_fs::path::Path;
+/// use qubit_fs::path::PathComponents;
 ///
 /// let path = Path::parse("/a/b")?;
 /// let components: PathComponents<'_> = path.components();
@@ -36,6 +37,7 @@ impl<'a> PathComponents<'a> {
     ///
     /// # Returns
     /// An iterator over the remaining lexical components.
+    #[inline]
     pub(crate) fn new(text: &'a str, absolute: bool, literal: bool) -> Self {
         let text = if absolute && !literal {
             text.strip_prefix('/').unwrap_or(text)

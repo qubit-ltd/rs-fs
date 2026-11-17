@@ -57,6 +57,9 @@ pub enum AsyncWriterRecovery {
 
 impl AsyncWriterRecovery {
     /// Borrows a validated writer, or returns None for a rejected session.
+    ///
+    /// # Returns
+    /// `Some` with the validated writer for `Opened`, or `None` for `Rejected`.
     #[inline]
     pub(crate) fn opened(&self) -> Option<&AsyncFileWriter> {
         match self {
@@ -67,6 +70,9 @@ impl AsyncWriterRecovery {
 
     /// Mutably borrows a validated writer, or returns None for a rejected
     /// session.
+    ///
+    /// # Returns
+    /// `Some` with mutable access for `Opened`, or `None` for `Rejected`.
     #[inline]
     pub(crate) fn opened_mut(&mut self) -> Option<&mut AsyncFileWriter> {
         match self {
@@ -78,8 +84,12 @@ impl AsyncWriterRecovery {
 
 impl Debug for AsyncWriterRecovery {
     /// Formats the variant without exposing provider session internals.
+    ///
     /// # Parameters
     /// - `formatter`: Formatter receiving the diagnostic representation.
+    ///
+    /// # Returns
+    /// The formatter result after writing the variant name.
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter.write_str(match self {
             Self::Opened(_) => "AsyncWriterRecovery::Opened",

@@ -42,6 +42,8 @@ use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
 use qubit_io::Input;
 
+/// Deterministic read-only provider that records prefix-read request size and
+/// consumed bytes for the benchmark workload.
 struct BenchmarkSpi {
     payload: Arc<[u8]>,
     properties: ProviderProperties,

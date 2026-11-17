@@ -32,6 +32,10 @@ pub enum SymlinkPolicy {
 
 impl SymlinkPolicy {
     /// Returns whether this policy permits symbolic-link resolution.
+    ///
+    /// # Returns
+    /// `true` for [`Self::FollowWithinFileSystem`] and `false` for
+    /// [`Self::Reject`].
     #[inline]
     #[must_use]
     pub const fn follows(self) -> bool {

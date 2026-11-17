@@ -5,7 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
+
 //! Validated temporary-file creation request.
 
 use crate::temp::TempOptions;
@@ -24,6 +24,7 @@ use crate::temp::TempOptions;
 ///
 /// let _ = inspect_temp_file_request;
 /// ```
+#[must_use = "pass the request to the provider or drop it explicitly"]
 pub struct CreateTempFileRequest {
     /// Validated temporary-file creation options.
     options: TempOptions,
@@ -38,7 +39,6 @@ impl CreateTempFileRequest {
     /// # Returns
     /// A request containing the validated temporary-file options.
     #[allow(dead_code)]
-    #[must_use]
     #[inline]
     pub(crate) const fn new(options: TempOptions) -> Self {
         Self { options }

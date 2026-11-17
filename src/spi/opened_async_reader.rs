@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
 //! Provider-opened asynchronous reader envelope.
 
 use qubit_io::AsyncByteInput;
@@ -49,6 +48,7 @@ use crate::read::AsyncFileReader;
 /// assert_eq!("/x", opened.info().path().as_str());
 /// # Ok::<(), qubit_fs::FsError>(())
 /// ```
+#[must_use = "transfer the opened asynchronous reader or explicitly drop its session"]
 pub struct OpenedAsyncReader {
     /// Resource identity claimed by the provider.
     info: OpenedFileInfo,
@@ -66,7 +66,6 @@ impl OpenedAsyncReader {
     /// # Returns
     /// An opened-reader envelope for facade validation.
     #[inline]
-    #[must_use]
     pub fn new(info: OpenedFileInfo, reader: Box<dyn AsyncByteInput + Send>) -> Self {
         Self { info, reader }
     }

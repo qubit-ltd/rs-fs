@@ -12,11 +12,12 @@ abstraction for Rust 1.94 or later. It supplies application-facing concrete
 facades—`FileSystem` and `AsyncFileSystem`—instead of choosing a storage backend
 or an async runtime for you.
 
-## Installation
+## Quick Start
 
 ```toml
 [dependencies]
 qubit-fs = "0.4"
+qubit-fs-local = "^0.11"
 ```
 
 Synchronous APIs are enabled by default. Enable the asynchronous facade
@@ -51,6 +52,15 @@ tempfile = "3"
 
 <!-- example: quick-start -->
 ```rust
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
+//! Demonstrates basic operations on a rooted local filesystem.
+
 use qubit_fs::Path;
 use qubit_fs::copy::CopyExecutionRoute;
 use qubit_fs::copy::CopyOptions;

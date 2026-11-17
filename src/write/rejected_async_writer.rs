@@ -85,6 +85,10 @@ impl RejectedAsyncWriter {
     /// - `session`: Provider session whose ownership transfers to this wrapper.
     /// - `provider`: Trusted provider identity attached to cleanup errors.
     /// - `path`: Target path used for error context and provider requests.
+    ///
+    /// # Returns
+    /// A cleanup handle retaining the provider session and trusted request
+    /// context.
     pub(crate) fn new(session: Box<dyn AsyncFileWriteSession>, provider: &str, path: Option<Path>) -> Self {
         Self {
             session: Box::into_pin(session),
@@ -95,6 +99,9 @@ impl RejectedAsyncWriter {
     }
     /// Returns cleanup progress; errors and cancellation do not release
     /// ownership.
+    ///
+    /// # Returns
+    /// The latest observed cleanup state for this session.
     #[must_use]
     #[inline]
     pub const fn cleanup_state(&self) -> RecoveryCleanupState {
@@ -110,6 +117,9 @@ impl RejectedAsyncWriter {
     /// destination publication certainty:
     /// `Ok(WriteAbortOutcome::Indeterminate)` confirms cleanup while
     /// leaving the destination state unknown.
+    ///
+    /// # Returns
+    /// A future that performs one explicit cleanup attempt when polled.
     ///
     /// # Errors
     /// Returns InvalidState after confirmed cleanup, or the contextual provider
@@ -133,6 +143,9 @@ impl RejectedAsyncWriter {
     /// Adds only trusted request context to a cleanup error.
     /// # Parameters
     /// - `error`: Failure whose trusted filesystem context is being restored.
+    ///
+    /// # Returns
+    /// The error augmented with the requested path and configured provider.
     fn contextual_error(&self, error: FsError) -> FsError {
         error.with_trusted_cleanup_context(FsOperation::AbortWriter, self.path.as_ref(), &self.provider)
     }
@@ -141,6 +154,9 @@ impl Debug for RejectedAsyncWriter {
     /// Omits the session and unvalidated provider identity.
     /// # Parameters
     /// - `f`: Formatter receiving the diagnostic representation.
+    ///
+    /// # Returns
+    /// The formatter's result after writing the safe diagnostic fields.
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         f.debug_struct("RejectedAsyncWriter")
             .field("cleanup_state", &self.state)

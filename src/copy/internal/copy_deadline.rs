@@ -31,7 +31,6 @@ impl CopyDeadline {
     ///   configured.
     /// - `now`: Monotonic timestamp used to evaluate the current deadline.
     #[inline]
-    #[must_use = "use the deadline to enforce the copy budget"]
     pub(crate) fn new(maximum: Option<Duration>, now: fn() -> Instant) -> Self {
         Self {
             started_at: now(),

@@ -65,6 +65,9 @@ impl RejectedTempResource {
     /// - `session`: Provider session whose cleanup authority is isolated here.
     /// - `provider`: Trusted provider identifier used to contextualize errors.
     /// - `path`: Requested path, if available, used only as trusted context.
+    ///
+    /// # Returns
+    /// A recovery handle restricted to cleanup of its provider session.
     pub(crate) fn new(session: Box<dyn TempResourceSpi>, provider: &str, path: Option<Path>) -> Self {
         Self {
             session,
@@ -74,6 +77,9 @@ impl RejectedTempResource {
         }
     }
     /// Returns the last observed cleanup state without changing ownership.
+    ///
+    /// # Returns
+    /// The current cleanup progress state.
     #[inline]
     #[must_use]
     pub const fn cleanup_state(&self) -> RecoveryCleanupState {
@@ -122,6 +128,12 @@ impl Debug for RejectedTempResource {
     ///
     /// # Parameters
     /// - `f`: Destination for the safe cleanup-state representation.
+    ///
+    /// # Returns
+    /// `Ok(())` after writing the safe debug representation.
+    ///
+    /// # Errors
+    /// Returns a formatting error if the formatter cannot accept the output.
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         f.debug_struct("RejectedTempResource")
             .field("cleanup_state", &self.state)

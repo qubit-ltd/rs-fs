@@ -6,6 +6,9 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+use std::future::pending;
+use std::future::ready;
+
 use qubit_fs::Path;
 use qubit_fs::error::FsErrorKind;
 use qubit_fs::write::AsyncWriteAllOperationState;
@@ -16,7 +19,7 @@ use qubit_fs_documentation_examples::async_recovery::write_report;
 use qubit_fs_documentation_examples::provider_minimal::read_health;
 use qubit_fs_documentation_examples::provider_minimal_async::stat_health;
 
-#[path = "../../../common/async_recording_spi.rs"]
+#[path = "../../../common/internal/async_recording_spi.rs"]
 mod async_recording_spi;
 #[path = "../../../common/poll_support.rs"]
 mod poll_support;
@@ -28,7 +31,10 @@ use poll_support::ready;
 
 #[test]
 fn test_provider_guide_example_reads_health_resource() {
-    assert_eq!(b"ok", read_health().unwrap().as_slice());
+    assert_eq!(
+        b"ok",
+        read_health().expect("health resource should be readable").as_slice()
+    );
 }
 
 /// The async provider example resolves through the facade without a runtime.
@@ -47,14 +53,21 @@ fn test_async_example_retains_failure_and_failed_cleanup() {
     });
     let result = ready(write_report(
         &filesystem,
-        Path::parse("/report").unwrap(),
+        Path::parse("/report").expect("report path should parse"),
         b"bytes".to_vec(),
-        std::future::pending(),
+        pending(),
     ));
     let Err(WriteReportError::Recovery(recovery)) = result else {
         panic!("expected recovery");
     };
-    assert_eq!(WriteFailureState::Published, recovery.primary.as_ref().unwrap().state());
+    assert_eq!(
+        WriteFailureState::Published,
+        recovery
+            .primary
+            .as_ref()
+            .expect("failed write should retain its primary failure")
+            .state()
+    );
     assert!(recovery.cleanup_error.is_some());
     assert!(recovery.cleanup_outcome.is_none());
     assert!(recovery.operation.has_recovery());
@@ -74,9 +87,9 @@ fn test_async_example_preserves_each_successful_cleanup_outcome() {
         });
         let result = ready(write_report(
             &filesystem,
-            Path::parse("/report").unwrap(),
+            Path::parse("/report").expect("report path should parse"),
             b"bytes".to_vec(),
-            std::future::pending(),
+            pending(),
         ));
         let Err(WriteReportError::Recovery(recovery)) = result else {
             panic!("expected recovery");
@@ -95,9 +108,9 @@ fn test_async_example_cancellation_keeps_operation_without_writer() {
     });
     let result = ready(write_report(
         &filesystem,
-        Path::parse("/report").unwrap(),
+        Path::parse("/report").expect("report path should parse"),
         b"bytes".to_vec(),
-        std::future::ready(()),
+        ready(()),
     ));
     let Err(WriteReportError::Recovery(recovery)) = result else {
         panic!("expected recovery");
@@ -118,11 +131,11 @@ fn test_async_example_success_publishes() {
     let (filesystem, probe) = async_recording_file_system(Default::default());
     ready(write_report(
         &filesystem,
-        Path::parse("/report").unwrap(),
+        Path::parse("/report").expect("report path should parse"),
         b"bytes".to_vec(),
-        std::future::pending(),
+        pending(),
     ))
-    .unwrap();
+    .expect("report write should succeed");
     assert_eq!(1, probe.writer_commits());
     assert_eq!(0, probe.writer_aborts());
 }

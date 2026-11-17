@@ -31,7 +31,8 @@ use crate::spi::AsyncRandomAccessReadSession;
 /// that splits a larger sample across bounded reads.
 ///
 /// ```rust
-/// use qubit_fs::{AsyncFileSystem, Path};
+/// use qubit_fs::AsyncFileSystem;
+/// use qubit_fs::Path;
 /// use qubit_fs::read::ReadOptions;
 ///
 /// async fn sample(filesystem: &AsyncFileSystem, path: &Path) -> Result<Vec<u8>, qubit_fs::FsError> {
@@ -78,6 +79,7 @@ impl AsyncRandomAccessReader {
     /// # Returns
     /// A reader that retains the open object and applies the supplied bound
     /// and request limit.
+    #[must_use]
     pub(crate) fn new(
         info: OpenedFileInfo,
         len: u64,
@@ -172,6 +174,9 @@ impl Debug for AsyncRandomAccessReader {
     ///
     /// # Parameters
     /// - `f`: Destination for the debug representation.
+    ///
+    /// # Errors
+    /// Returns a formatting error if writing the debug representation fails.
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         f.debug_struct("AsyncRandomAccessReader")
             .field("info", &self.info)

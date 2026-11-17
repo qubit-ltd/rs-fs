@@ -119,6 +119,9 @@ impl AsyncInput for AsyncFileReader {
     /// # Returns
     /// The wrapped input's pending state or its ready byte count/error.
     ///
+    /// # Errors
+    /// Returns the wrapped provider's I/O error when the read fails.
+    ///
     /// # Safety
     /// `index..index + count` must be a valid range within `output`, and the
     /// addition must not overflow.
@@ -146,6 +149,9 @@ impl Debug for AsyncFileReader {
     ///
     /// # Parameters
     /// - `formatter`: Destination for the debug representation.
+    ///
+    /// # Errors
+    /// Returns a formatting error if writing the debug representation fails.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter

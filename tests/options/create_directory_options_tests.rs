@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+
 //! Coverage for directory-creation option defaults and metadata replacement.
 
 use qubit_fs::directory::CreateDirectoryOptions;

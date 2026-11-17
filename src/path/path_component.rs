@@ -59,6 +59,9 @@ impl PathComponent {
     }
 
     /// Returns the validated logical component text.
+    ///
+    /// # Returns
+    /// The component spelling borrowed from this validated value.
     #[inline]
     #[must_use]
     pub fn as_str(&self) -> &str {

@@ -61,6 +61,7 @@ const CAPABILITY_DEPENDENCIES: &[(FileSystemCapability, FileSystemCapability)] =
 /// assert_eq!(invalid.missing_dependency(), Some((
 ///     FileSystemCapability::RangeRead, FileSystemCapability::Read)));
 /// ```
+#[must_use = "use these capabilities to configure filesystem behavior"]
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub struct FileSystemCapabilities {
     /// Capabilities that can be attempted conditionally.
@@ -71,8 +72,11 @@ pub struct FileSystemCapabilities {
 
 impl FileSystemCapabilities {
     /// Creates an empty capability set.
+    ///
+    /// # Returns
+    ///
+    /// An empty capability set with no advertised support.
     #[inline]
-    #[must_use]
     pub const fn new() -> Self {
         Self {
             conditional: 0,
@@ -80,54 +84,14 @@ impl FileSystemCapabilities {
         }
     }
 
-    /// Returns a copy with one additional conditional capability.
-    ///
-    /// # Parameters
-    /// - `capability`: Capability that may be attempted but is not guaranteed
-    ///   for every valid request.
-    #[inline]
-    #[must_use]
-    pub const fn with_conditional(self, capability: FileSystemCapability) -> Self {
-        self.set_support(capability, FileSystemCapabilitySupport::Conditional)
-    }
-
-    /// Returns a copy with one additional guaranteed capability.
-    ///
-    /// # Parameters
-    /// - `capability`: Capability promised for every valid request in scope.
-    #[inline]
-    #[must_use]
-    pub const fn with_guaranteed(self, capability: FileSystemCapability) -> Self {
-        self.set_support(capability, FileSystemCapabilitySupport::Guaranteed)
-    }
-
-    /// Replaces the support status of one capability.
-    ///
-    /// # Parameters
-    /// - `capability`: Capability whose current status is replaced.
-    /// - `support`: New support strength to record for that capability.
-    #[inline]
-    #[must_use]
-    pub const fn set_support(mut self, capability: FileSystemCapability, support: FileSystemCapabilitySupport) -> Self {
-        let bit = capability.bit();
-        self.conditional &= !bit;
-        self.guaranteed &= !bit;
-        match support {
-            FileSystemCapabilitySupport::Unsupported => {}
-            FileSystemCapabilitySupport::Conditional => {
-                self.conditional |= bit;
-            }
-            FileSystemCapabilitySupport::Guaranteed => {
-                self.guaranteed |= bit;
-            }
-        }
-        self
-    }
-
     /// Returns the support status of `capability`.
     ///
     /// # Parameters
     /// - `capability`: Capability whose advertised support is queried.
+    ///
+    /// # Returns
+    ///
+    /// The support strength advertised for `capability`.
     #[inline]
     pub const fn support(&self, capability: FileSystemCapability) -> FileSystemCapabilitySupport {
         let bit = capability.bit();
@@ -145,6 +109,10 @@ impl FileSystemCapabilities {
     /// # Parameters
     /// - `capability`: Capability to test for conditional or guaranteed
     ///   support.
+    ///
+    /// # Returns
+    ///
+    /// `true` when conditional or guaranteed support is advertised.
     #[inline]
     #[must_use]
     pub const fn supports(&self, capability: FileSystemCapability) -> bool {
@@ -155,6 +123,10 @@ impl FileSystemCapabilities {
     ///
     /// # Parameters
     /// - `capability`: Capability to test for guaranteed support.
+    ///
+    /// # Returns
+    ///
+    /// `true` when guaranteed support is advertised.
     #[inline]
     #[must_use]
     pub const fn guarantees(&self, capability: FileSystemCapability) -> bool {
@@ -185,6 +157,7 @@ impl FileSystemCapabilities {
     ///
     /// # Returns
     /// An iterator over every capability contained in this set.
+    #[must_use = "consume the iterator to inspect advertised capabilities"]
     #[inline]
     pub fn iter(&self) -> impl Iterator<Item = FileSystemCapability> + '_ {
         FileSystemCapability::ALL
@@ -194,6 +167,12 @@ impl FileSystemCapabilities {
     }
 
     /// Iterates advertised capabilities with their support status.
+    ///
+    /// # Returns
+    ///
+    /// An iterator yielding each advertised capability and its support
+    /// strength.
+    #[must_use = "consume the iterator to inspect capability support strengths"]
     #[inline]
     pub fn iter_with_support(&self) -> impl Iterator<Item = (FileSystemCapability, FileSystemCapabilitySupport)> + '_ {
         self.iter().map(|capability| (capability, self.support(capability)))
@@ -212,7 +191,6 @@ impl FileSystemCapabilities {
     /// `Some` with the first derived capability and missing base capability,
     /// or `None` when no advertised dependency is missing.
     #[inline]
-    #[must_use]
     pub fn missing_dependency(&self) -> Option<(FileSystemCapability, FileSystemCapability)> {
         CAPABILITY_DEPENDENCIES
             .iter()
@@ -226,10 +204,66 @@ impl FileSystemCapabilities {
                         && !matches!(dependency_support, FileSystemCapabilitySupport::Guaranteed))
             })
     }
+    /// Replaces the support status of one capability.
+    ///
+    /// # Parameters
+    /// - `capability`: Capability whose current status is replaced.
+    /// - `support`: New support strength to record for that capability.
+    ///
+    /// # Returns
+    ///
+    /// This set with `capability` assigned the requested support strength.
+    #[inline]
+    pub const fn set_support(mut self, capability: FileSystemCapability, support: FileSystemCapabilitySupport) -> Self {
+        let bit = capability.bit();
+        self.conditional &= !bit;
+        self.guaranteed &= !bit;
+        match support {
+            FileSystemCapabilitySupport::Unsupported => {}
+            FileSystemCapabilitySupport::Conditional => {
+                self.conditional |= bit;
+            }
+            FileSystemCapabilitySupport::Guaranteed => {
+                self.guaranteed |= bit;
+            }
+        }
+        self
+    }
+
+    /// Returns a copy with one additional conditional capability.
+    ///
+    /// # Parameters
+    /// - `capability`: Capability that may be attempted but is not guaranteed
+    ///   for every valid request.
+    ///
+    /// # Returns
+    ///
+    /// A copy of this set with conditional support for `capability`.
+    #[inline]
+    pub const fn with_conditional(self, capability: FileSystemCapability) -> Self {
+        self.set_support(capability, FileSystemCapabilitySupport::Conditional)
+    }
+
+    /// Returns a copy with one additional guaranteed capability.
+    ///
+    /// # Parameters
+    /// - `capability`: Capability promised for every valid request in scope.
+    ///
+    /// # Returns
+    ///
+    /// A copy of this set with guaranteed support for `capability`.
+    #[inline]
+    pub const fn with_guaranteed(self, capability: FileSystemCapability) -> Self {
+        self.set_support(capability, FileSystemCapabilitySupport::Guaranteed)
+    }
 }
 
 impl Default for FileSystemCapabilities {
     /// Creates an empty capability set.
+    ///
+    /// # Returns
+    ///
+    /// An empty capability set with no advertised support.
     #[inline]
     fn default() -> Self {
         Self::new()
@@ -241,6 +275,10 @@ impl Debug for FileSystemCapabilities {
     ///
     /// # Parameters
     /// - `formatter`: Destination for the debug map.
+    ///
+    /// # Returns
+    ///
+    /// The result of writing the capability map to the formatter.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter.debug_map().entries(self.iter_with_support()).finish()

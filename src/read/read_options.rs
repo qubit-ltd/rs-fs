@@ -48,7 +48,6 @@ impl ReadOptions {
     /// The offset from which reading begins, or `None` to start at the
     /// resource's beginning.
     #[inline]
-    #[must_use]
     pub const fn offset(&self) -> Option<u64> {
         self.offset
     }
@@ -58,7 +57,6 @@ impl ReadOptions {
     /// # Returns
     /// The maximum number of bytes to read, or `None` to read through EOF.
     #[inline]
-    #[must_use]
     pub const fn length(&self) -> Option<u64> {
         self.length
     }
@@ -68,7 +66,6 @@ impl ReadOptions {
     /// # Returns
     /// The required resource version, if one was configured.
     #[inline]
-    #[must_use]
     pub const fn if_match(&self) -> Option<&ResourceVersion> {
         self.if_match.as_ref()
     }
@@ -78,7 +75,6 @@ impl ReadOptions {
     /// # Returns
     /// The resource version that must not match, if one was configured.
     #[inline]
-    #[must_use]
     pub const fn if_none_match(&self) -> Option<&ResourceVersion> {
         self.if_none_match.as_ref()
     }
@@ -88,7 +84,7 @@ impl ReadOptions {
     /// # Returns
     /// The checksum validation policy requested for the read.
     #[inline]
-    #[must_use]
+    #[must_use = "review the checksum policy before opening the reader"]
     pub const fn checksum(&self) -> ChecksumPolicy {
         self.checksum
     }
@@ -172,6 +168,10 @@ impl ReadOptions {
     /// existence and access permissions are still checked when opening it.
     /// Offsets at or beyond EOF produce an empty window; lengths extending past
     /// EOF are truncated. These windows do not imply a resource snapshot.
+    ///
+    /// # Returns
+    /// `Ok(())` when the configured options satisfy provider-independent
+    /// constraints.
     ///
     /// # Errors
     /// Returns `InvalidOptions` for mutually exclusive conditions or an

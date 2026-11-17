@@ -6,9 +6,12 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
+//! Runtime-neutral async random-access contracts, including cancellation.
+
 #![cfg(feature = "async")]
 
-//! Runtime-neutral async random-access contracts, including cancellation.
+mod common;
+
 use std::future::Future;
 use std::future::poll_fn;
 use std::pin::Pin;
@@ -18,8 +21,7 @@ use std::sync::atomic::Ordering;
 use std::task::Context;
 use std::task::Poll;
 use std::task::Waker;
-mod common;
-use common::random_access as random_access_common;
+
 use qubit_fs::AsyncFileSystem;
 use qubit_fs::FsResult;
 use qubit_fs::Path;
@@ -51,6 +53,9 @@ use qubit_fs::spi::ProviderProperties;
 use qubit_fs::spi::SpiFuture;
 use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
+
+use crate::common::random_access as random_access_common;
+
 const ID: &str = "async-random-access-contract";
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum ReadMode {

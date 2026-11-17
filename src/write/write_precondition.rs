@@ -24,6 +24,7 @@ use crate::metadata::ResourceVersion;
 /// assert_eq!(version.as_str(), "v1");
 /// ```
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[must_use = "the write precondition must be applied to a write operation"]
 pub enum WritePrecondition {
     /// Do not require a version precondition.
     #[default]

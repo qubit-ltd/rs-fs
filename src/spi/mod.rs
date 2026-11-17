@@ -93,6 +93,7 @@ pub use managed_read::ManagedReadPort;
 pub use managed_read::PreparedFsRead;
 pub use managed_tree::ManagedFsTreeSpi;
 pub use managed_tree::PreparedFsTreePublish;
+pub use managed_tree::StagedDirectory;
 #[cfg(feature = "async")]
 pub use opened_async_directory_stream::OpenedAsyncDirectoryStream;
 #[cfg(feature = "async")]

@@ -7,11 +7,15 @@
 // =============================================================================
 //! Resource categories counted by facade byte budgets.
 
-/// Resources counted by filesystem facade byte budgets.
+/// Distinguishes the byte streams tracked by filesystem facade budgets.
+///
+/// Separate categories keep source bytes read independent from destination
+/// bytes accepted by a writer, so each operation enforces its own cumulative
+/// limit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FileSystemResource {
-    /// Bytes read from a source.
+    /// Source bytes delivered to a read operation.
     ReadBytes,
-    /// Bytes accepted by a destination writer.
+    /// Destination bytes accepted by the provider's writer.
     WriteBytes,
 }

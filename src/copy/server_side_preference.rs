@@ -16,6 +16,7 @@
 ///
 /// assert_eq!(ServerSidePreference::Disable, ServerSidePreference::default());
 /// ```
+#[must_use = "apply the server-side preference to copy options"]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ServerSidePreference {
     /// Prefer server-side copy and allow fallback.
@@ -28,6 +29,10 @@ pub enum ServerSidePreference {
 
 impl Default for ServerSidePreference {
     /// Disables server-side copy by default.
+    ///
+    /// # Returns
+    ///
+    /// The [`Disable`](Self::Disable) preference.
     #[inline]
     fn default() -> Self {
         Self::Disable

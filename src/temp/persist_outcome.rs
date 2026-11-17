@@ -78,6 +78,9 @@ impl PersistOutcome {
     }
 
     /// Returns the final provider-local target path.
+    ///
+    /// # Returns
+    /// The confirmed publication target borrowed from this outcome.
     #[inline]
     #[must_use]
     pub const fn target(&self) -> &Path {
@@ -85,6 +88,9 @@ impl PersistOutcome {
     }
 
     /// Returns the atomicity actually achieved by publication.
+    ///
+    /// # Returns
+    /// The provider-confirmed atomicity level.
     #[inline]
     #[must_use]
     pub const fn atomicity(&self) -> AchievedAtomicity {
@@ -92,6 +98,9 @@ impl PersistOutcome {
     }
 
     /// Returns the concrete publication method used.
+    ///
+    /// # Returns
+    /// The provider-confirmed publication method.
     #[inline]
     #[must_use]
     pub const fn method(&self) -> PublicationMethod {
@@ -104,6 +113,9 @@ impl PersistOutcome {
     /// Values are retained unchanged. Providers must sanitize them before
     /// storage; explicitly reading a value does not make it safe to log.
     /// This accessor does not expose a portable cleanup or retry operation.
+    ///
+    /// # Returns
+    /// Provider diagnostics with sensitivity-checked keys.
     #[inline]
     #[must_use]
     pub const fn diagnostics(&self) -> &NonSensitiveMetadata {
@@ -117,6 +129,9 @@ impl PersistOutcome {
     /// `ResidualTemporaryContainer` means publication succeeded but the private
     /// container remains; it does not mean publication failed or that the
     /// handle still owns the published source.
+    ///
+    /// # Returns
+    /// The provider-reported cleanup state.
     #[inline]
     pub const fn cleanup_state(&self) -> PersistCleanupState {
         self.cleanup_state
@@ -127,6 +142,9 @@ impl PersistOutcome {
     /// # Parameters
     /// - `cleanup_state`: Provider-reported state of the private container
     ///   after publication.
+    ///
+    /// # Returns
+    /// This outcome with the supplied private-container cleanup state.
     #[inline]
     #[must_use]
     pub fn with_cleanup_state(mut self, cleanup_state: PersistCleanupState) -> Self {
@@ -141,6 +159,9 @@ impl PersistOutcome {
     /// # Parameters
     /// - `diagnostics`: Provider diagnostics with values already sanitized by
     ///   the provider.
+    ///
+    /// # Returns
+    /// This outcome with the supplied sanitized provider diagnostics.
     #[inline]
     #[must_use]
     pub fn with_diagnostics(mut self, diagnostics: UserMetadata) -> Self {

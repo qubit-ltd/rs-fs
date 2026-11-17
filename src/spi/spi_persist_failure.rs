@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
 //! Provider persistence failure facts.
 
 use crate::error::FsError;
@@ -26,6 +25,7 @@ use crate::temp::PersistFailureState;
 /// );
 /// assert_eq!(PersistFailureState::NotPublished, failure.state());
 /// ```
+#[must_use = "inspect the provider persistence failure before discarding it"]
 pub struct SpiPersistFailure {
     /// Provider failure with filesystem context.
     error: FsError,
@@ -43,7 +43,6 @@ impl SpiPersistFailure {
     /// # Returns
     /// A failure containing both facts.
     #[inline]
-    #[must_use]
     pub fn new(error: FsError, state: PersistFailureState) -> Self {
         Self { error, state }
     }
@@ -73,6 +72,7 @@ impl SpiPersistFailure {
     /// # Returns
     /// The provider error and confirmed persistence state.
     #[inline]
+    #[must_use = "inspect the provider error and persistence state"]
     pub fn into_parts(self) -> (FsError, PersistFailureState) {
         (self.error, self.state)
     }

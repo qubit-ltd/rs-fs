@@ -34,6 +34,10 @@ use crate::error::FsResult;
 ///         Box::pin(async { Ok(0) })
 ///     }
 /// }
+///
+/// let mut session = Empty;
+/// let mut output = [0_u8; 1];
+/// let _pending_read = Pin::new(&mut session).read_at_async(0, &mut output);
 /// ```
 pub trait AsyncRandomAccessReadSession: Send {
     /// Reads from `offset` into a non-empty buffer, allowing short reads. A

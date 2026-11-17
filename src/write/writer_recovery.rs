@@ -57,8 +57,12 @@ pub enum WriterRecovery {
 
 impl Debug for WriterRecovery {
     /// Formats the variant without exposing provider session internals.
+    ///
     /// # Parameters
     /// - `formatter`: Formatter receiving the diagnostic representation.
+    ///
+    /// # Returns
+    /// The formatter's result after writing the recovery variant name.
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter.write_str(match self {
             Self::Opened(_) => "WriterRecovery::Opened",

@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
 //! Provider-opened synchronous writer envelope.
 
 use super::FileWriterSpi;
@@ -48,6 +47,7 @@ use crate::metadata::OpenedFileInfo;
 /// let _writer = OpenedWriter::new(info, Box::new(Writer));
 /// # Ok::<(), qubit_fs::FsError>(())
 /// ```
+#[must_use = "transfer the opened provider writer or explicitly drop its session"]
 pub struct OpenedWriter {
     /// Resource identity claimed by the provider.
     info: OpenedFileInfo,
@@ -65,7 +65,6 @@ impl OpenedWriter {
     /// # Returns
     /// An opened-writer envelope for facade validation.
     #[inline]
-    #[must_use]
     pub fn new(info: OpenedFileInfo, writer: Box<dyn FileWriterSpi>) -> Self {
         Self { info, writer }
     }
@@ -75,7 +74,7 @@ impl OpenedWriter {
     /// # Returns
     /// The claimed resource identity and provider writer session.
     #[inline]
-    #[must_use]
+    #[must_use = "transfer or drop the provider writer together with its metadata"]
     pub(crate) fn into_parts(self) -> (OpenedFileInfo, Box<dyn FileWriterSpi>) {
         (self.info, self.writer)
     }

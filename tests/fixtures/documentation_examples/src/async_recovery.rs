@@ -28,6 +28,7 @@ use qubit_fs::write::WriteOptions;
 ///
 /// This guide type keeps the original operation, primary failure, and cleanup
 /// failure together so callers can reconcile publication state before retrying.
+#[must_use = "retain the operation and reconcile its publication state"]
 #[derive(Debug)]
 pub struct WriteRecovery {
     /// The operation containing the write's publication and recovery state.
@@ -41,6 +42,7 @@ pub struct WriteRecovery {
 }
 
 /// Describes whether report writing failed before execution or needs recovery.
+#[must_use = "handle the error or retain its recovery state"]
 #[derive(Debug)]
 pub enum WriteReportError {
     /// The operation could not be prepared before asynchronous execution.

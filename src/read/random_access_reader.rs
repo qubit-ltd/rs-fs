@@ -90,6 +90,9 @@ impl RandomAccessReader {
         }
     }
     /// Returns the identity and metadata captured at open time.
+    ///
+    /// # Returns
+    /// The filesystem identity and metadata snapshot captured at open time.
     #[inline]
     #[must_use]
     pub fn info(&self) -> &OpenedFileInfo {
@@ -99,12 +102,18 @@ impl RandomAccessReader {
     ///
     /// This bound does not change if the object grows and does not make the
     /// object's contents a snapshot.
+    ///
+    /// # Returns
+    /// The open-time readable upper bound in bytes.
     #[inline]
     #[must_use]
     pub fn len(&self) -> u64 {
         self.len
     }
     /// Returns whether the open-time length is zero.
+    ///
+    /// # Returns
+    /// `true` when the open-time readable length is zero.
     #[inline]
     #[must_use]
     pub fn is_empty(&self) -> bool {
@@ -161,6 +170,10 @@ impl Debug for RandomAccessReader {
     ///
     /// # Parameters
     /// - `f`: Destination for the debug representation.
+    ///
+    /// # Returns
+    /// `Ok(())` after formatting the public open-time information, or a
+    /// formatting error from the destination.
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         f.debug_struct("RandomAccessReader")
             .field("info", &self.info)

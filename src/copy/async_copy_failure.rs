@@ -71,6 +71,9 @@ impl AsyncCopyFailure {
     ///   are retained.
     /// - `state`: Operation state used to classify confirmed side effects.
     /// - `partial_stats`: Copy progress statistics accumulated before failure.
+    ///
+    /// # Returns
+    /// The failure assembled from the supplied error and confirmed facts.
     pub(crate) fn new(error: FsError, state: CopyFailureState, partial_stats: CopyStats) -> Self {
         Self {
             error,
@@ -115,6 +118,7 @@ impl AsyncCopyFailure {
     ///
     /// # Returns
     /// The contextual error, confirmed publication state, and partial progress.
+    #[must_use = "inspect the returned error, publication state, and progress"]
     #[inline]
     pub fn into_parts(self) -> (FsError, CopyFailureState, CopyStats) {
         (self.error, self.state, self.partial_stats)
@@ -128,6 +132,12 @@ impl Debug for AsyncCopyFailure {
     ///
     /// - `formatter`: Formatter that receives the debug or display
     ///   representation.
+    ///
+    /// # Returns
+    /// `Ok(())` when formatting succeeds.
+    ///
+    /// # Errors
+    /// Returns the formatter error when the output cannot be written.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter
@@ -146,6 +156,12 @@ impl Display for AsyncCopyFailure {
     ///
     /// - `formatter`: Formatter that receives the debug or display
     ///   representation.
+    ///
+    /// # Returns
+    /// `Ok(())` when formatting succeeds.
+    ///
+    /// # Errors
+    /// Returns the formatter error when the output cannot be written.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         Display::fmt(self.error(), formatter)
@@ -154,6 +170,9 @@ impl Display for AsyncCopyFailure {
 
 impl Error for AsyncCopyFailure {
     /// Returns the underlying file-system error.
+    ///
+    /// # Returns
+    /// `Some` with a reference to the wrapped [`FsError`].
     #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(self.error())

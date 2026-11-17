@@ -153,6 +153,15 @@ choose explicit resource budgets for the workload.
 
 <!-- example: quick-start -->
 ```rust
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
+//! Demonstrates basic operations on a rooted local filesystem.
+
 use qubit_fs::Path;
 use qubit_fs::copy::CopyExecutionRoute;
 use qubit_fs::copy::CopyOptions;
@@ -257,6 +266,7 @@ use qubit_fs::write::WriteAbortOutcome;
 use qubit_fs::write::WriterRecovery;
 
 /// Retains a copy failure and any error from aborting its writer.
+#[must_use = "inspect the copy failure and recovery cleanup state"]
 #[derive(Debug)]
 pub struct CopyRecovery {
     /// The copy failure, including its publication and recovery state.
@@ -349,6 +359,7 @@ use qubit_fs::write::WriteOptions;
 ///
 /// This guide type keeps the original operation, primary failure, and cleanup
 /// failure together so callers can reconcile publication state before retrying.
+#[must_use = "retain the operation and reconcile its publication state"]
 #[derive(Debug)]
 pub struct WriteRecovery {
     /// The operation containing the write's publication and recovery state.
@@ -362,6 +373,7 @@ pub struct WriteRecovery {
 }
 
 /// Describes whether report writing failed before execution or needs recovery.
+#[must_use = "handle the error or retain its recovery state"]
 #[derive(Debug)]
 pub enum WriteReportError {
     /// The operation could not be prepared before asynchronous execution.
@@ -796,6 +808,25 @@ use qubit_fs::read::RandomAccessReader;
 /// was filled. `Unknown` does not guarantee that a backend accepts an
 /// arbitrarily large request. On any error, discard `output` because it may
 /// contain bytes from earlier or partially completed reads.
+///
+/// # Parameters
+///
+/// - `filesystem`: The filesystem that opened `reader` and supplies its range
+///   limit and provider context.
+/// - `reader`: The already-open random-access reader to sample from.
+/// - `offset`: The starting byte offset in the opened resource.
+/// - `output`: Caller-owned storage that receives sampled bytes.
+///
+/// # Returns
+///
+/// The number of bytes filled, which may be less than `output.len()` when the
+/// reader reaches the end of the resource.
+///
+/// # Errors
+///
+/// Returns a contextual error when the range is invalid or a read fails. The
+/// output may contain bytes from earlier reads or a partial read and must be
+/// discarded on error.
 pub fn sample(
     filesystem: &FileSystem,
     reader: &mut RandomAccessReader,
@@ -891,6 +922,26 @@ use qubit_fs::read::AsyncRandomAccessReader;
 /// that a backend accepts an arbitrarily large request. If this future is
 /// cancelled or returns an error, discard `output`; the buffer may contain
 /// partial data and this helper does not retry or reopen the path.
+///
+/// # Parameters
+///
+/// - `filesystem`: The filesystem that opened `reader` and supplies its range
+///   limit and provider context.
+/// - `reader`: The already-open asynchronous random-access reader to sample
+///   from.
+/// - `offset`: The starting byte offset in the opened resource.
+/// - `output`: Caller-owned storage that receives sampled bytes.
+///
+/// # Returns
+///
+/// The number of bytes filled, which may be less than `output.len()` when the
+/// reader reaches the end of the resource.
+///
+/// # Errors
+///
+/// Returns a contextual error when the range is invalid or a read fails. The
+/// output may contain bytes from earlier reads or a partial read and must be
+/// discarded on error.
 pub async fn sample_async(
     filesystem: &AsyncFileSystem,
     reader: &mut AsyncRandomAccessReader,
@@ -1003,16 +1054,6 @@ the target was already known to be published or not published. Later `persist`
 or `keep` calls are rejected and retain that distinction in their failure
 snapshot. This does not authorize another source mutation.
 
-## Further reading
-
-- [README](../README.md)
-- [中文用户手册](user_guide.zh_CN.md)
-- [Architecture design](file_system_design.md)
-- [中文架构设计](file_system_design.zh_CN.md)
-- [API documentation on docs.rs](https://docs.rs/qubit-fs)
-- [Repository](https://github.com/qubit-ltd/rs-fs)
-
-<a id="managed-operations-and-03-migration"></a>
 ## Managed operations and 0.3 migration
 
 Version 0.4 keeps the existing direct methods on both `FileSystem` and
@@ -1058,3 +1099,14 @@ cleanup remain active. At application shutdown, finish or retain recovery work,
 close filesystem-owned services/groups, and then shut down the shared manager
 once no other client needs it. This crate does not close an application-owned
 manager on the caller's behalf.
+
+## Further reading
+
+- [README](../README.md)
+- [中文用户手册](user_guide.zh_CN.md)
+- [Architecture design](file_system_design.md)
+- [中文架构设计](file_system_design.zh_CN.md)
+- [API documentation on docs.rs](https://docs.rs/qubit-fs)
+- [Repository](https://github.com/qubit-ltd/rs-fs)
+
+<a id="managed-operations-and-03-migration"></a>

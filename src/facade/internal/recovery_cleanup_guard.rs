@@ -26,6 +26,7 @@ impl<'a> RecoveryCleanupGuard<'a> {
     /// # Returns
     ///
     /// A guard that marks an unfinished attempt indeterminate when dropped.
+    #[inline]
     pub(crate) fn start(state: &'a mut RecoveryCleanupState) -> Self {
         *state = RecoveryCleanupState::Running;
         Self { state }
@@ -35,6 +36,7 @@ impl<'a> RecoveryCleanupGuard<'a> {
     /// # Parameters
     ///
     /// - `confirmed`: Whether the provider confirmed that cleanup completed.
+    #[inline]
     pub(crate) fn finish(&mut self, confirmed: bool) {
         *self.state = if confirmed {
             RecoveryCleanupState::Completed

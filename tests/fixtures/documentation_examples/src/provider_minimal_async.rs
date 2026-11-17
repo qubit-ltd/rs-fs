@@ -58,6 +58,10 @@ pub struct AsyncHealthProvider {
 impl AsyncHealthProvider {
     /// Creates a provider that advertises only the implemented stat operation.
     ///
+    /// # Returns
+    ///
+    /// A provider configured to serve validated `/health` metadata requests.
+    ///
     /// # Errors
     /// Returns an invalid-properties error if the static declaration is
     /// invalid.
@@ -80,11 +84,27 @@ impl AsyncHealthProvider {
 
 impl AsyncFileSystemSpi for AsyncHealthProvider {
     /// Returns the cached declaration without provider I/O.
+    ///
+    /// # Returns
+    ///
+    /// The immutable properties snapshot used to configure this provider.
     fn properties(&self) -> ProviderProperties {
         self.properties.clone()
     }
 
-    /// Returns metadata when polled, or a contextual not-found error.
+    /// Returns file metadata for `/health` when polled.
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: The validated request containing the path to inspect.
+    ///
+    /// # Returns
+    ///
+    /// A future that resolves to `/health` metadata or a contextual error.
+    ///
+    /// # Errors
+    ///
+    /// Resolves to `NotFound` when the requested path is not `/health`.
     fn stat<'a>(&'a self, request: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
         Box::pin(async move {
             let path = request.path();
@@ -103,6 +123,10 @@ impl AsyncFileSystemSpi for AsyncHealthProvider {
 }
 
 /// Queries the health resource through the public asynchronous facade.
+///
+/// # Returns
+///
+/// Metadata identifying `/health` as a two-byte regular file.
 ///
 /// # Errors
 /// Returns a path, provider, or facade-contract error if metadata is

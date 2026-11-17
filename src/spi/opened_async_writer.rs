@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
 //! Provider-opened asynchronous writer envelope.
 
 use super::AsyncFileWriteSession;
@@ -90,6 +89,9 @@ impl OpenedAsyncWriter {
     }
 
     /// Transfers the unvalidated identity and owned session to the facade.
+    ///
+    /// # Returns
+    /// The provider-opened identity and owned asynchronous writer session.
     #[inline]
     #[must_use]
     pub(crate) fn into_parts(self) -> (OpenedFileInfo, Box<dyn AsyncFileWriteSession>) {

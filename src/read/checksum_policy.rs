@@ -16,6 +16,7 @@
 ///
 /// assert_eq!(ChecksumPolicy::None, ChecksumPolicy::default());
 /// ```
+#[must_use = "apply the checksum policy to read options"]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ChecksumPolicy {
     /// Do not require checksum validation.
@@ -28,6 +29,9 @@ pub enum ChecksumPolicy {
 
 impl Default for ChecksumPolicy {
     /// Does not require checksum validation by default.
+    ///
+    /// # Returns
+    /// [`ChecksumPolicy::None`], which does not request checksum validation.
     #[inline]
     fn default() -> Self {
         Self::None

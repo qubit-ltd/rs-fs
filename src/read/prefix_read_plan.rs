@@ -110,6 +110,9 @@ impl PrefixReadPlan {
     }
 
     /// Transfers the validated provider request options to the reader open.
+    ///
+    /// # Returns
+    /// The resolved options with any applicable prefix hint attached.
     #[inline]
     #[must_use]
     pub(crate) fn into_options(self) -> ResolvedReadOptions {

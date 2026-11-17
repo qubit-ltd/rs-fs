@@ -18,7 +18,9 @@ use crate::metadata::UserMetadata;
 /// # Examples
 ///
 /// ```rust
-/// use qubit_fs::metadata::{AchievedAtomicity, PublicationMethod, WriteOutcome};
+/// use qubit_fs::metadata::AchievedAtomicity;
+/// use qubit_fs::metadata::PublicationMethod;
+/// use qubit_fs::metadata::WriteOutcome;
 ///
 /// let outcome = WriteOutcome::new(AchievedAtomicity::Atomic, PublicationMethod::Direct);
 /// assert_eq!(AchievedAtomicity::Atomic, outcome.atomicity());
@@ -62,18 +64,28 @@ impl WriteOutcome {
     }
 
     /// Returns the number of bytes accepted by the write session, when known.
+    ///
+    /// # Returns
+    /// `Some(bytes)` when the provider reported a count, or `None` otherwise.
     #[inline]
     pub const fn bytes_written(&self) -> Option<u64> {
         self.bytes_written
     }
 
     /// Returns the provider version, generation, or ETag when known.
+    ///
+    /// # Returns
+    /// `Some(version)` when reported, or `None` when the provider supplied no
+    /// token.
     #[inline]
     pub const fn version(&self) -> Option<&ResourceVersion> {
         self.version.as_ref()
     }
 
     /// Returns the atomicity actually achieved by publication.
+    ///
+    /// # Returns
+    /// The atomicity classification recorded for this write.
     #[inline]
     #[must_use]
     pub const fn atomicity(&self) -> AchievedAtomicity {
@@ -81,6 +93,9 @@ impl WriteOutcome {
     }
 
     /// Returns the concrete method that published the resource.
+    ///
+    /// # Returns
+    /// The publication method recorded for this write.
     #[inline]
     #[must_use]
     pub const fn method(&self) -> PublicationMethod {
@@ -88,6 +103,9 @@ impl WriteOutcome {
     }
 
     /// Returns whether the provider confirmed durable publication.
+    ///
+    /// # Returns
+    /// `true` when the provider confirmed durable synchronization.
     #[inline]
     #[must_use]
     pub const fn durable(&self) -> bool {
@@ -99,6 +117,10 @@ impl WriteOutcome {
     /// Values are retained unchanged. Providers are responsible for sanitizing
     /// diagnostic values before storing them; explicitly reading a value does
     /// not make it safe to log.
+    ///
+    /// # Returns
+    /// A shared view of the diagnostics wrapper; values remain unchanged and
+    /// must still be sanitized before logging.
     #[inline]
     #[must_use]
     pub const fn diagnostics(&self) -> &NonSensitiveMetadata {
@@ -109,6 +131,9 @@ impl WriteOutcome {
     ///
     /// # Parameters
     /// - `bytes_written`: Number of bytes accepted by the committed write.
+    ///
+    /// # Returns
+    /// The updated outcome with the provider-confirmed byte count.
     #[inline]
     #[must_use]
     pub const fn with_bytes_written(mut self, bytes_written: u64) -> Self {
@@ -120,6 +145,9 @@ impl WriteOutcome {
     ///
     /// # Parameters
     /// - `version`: Provider token identifying the resulting resource version.
+    ///
+    /// # Returns
+    /// The updated outcome retaining the provider version token.
     #[inline]
     #[must_use]
     pub fn with_version(mut self, version: ResourceVersion) -> Self {
@@ -132,6 +160,9 @@ impl WriteOutcome {
     ///
     /// # Parameters
     /// - `durable`: Whether the provider confirmed durable publication.
+    ///
+    /// # Returns
+    /// The updated outcome with the provider's durability confirmation.
     #[inline]
     #[must_use]
     pub const fn with_durable(mut self, durable: bool) -> Self {
@@ -146,6 +177,9 @@ impl WriteOutcome {
     /// # Parameters
     /// - `diagnostics`: Provider diagnostics with values already sanitized by
     ///   the provider.
+    ///
+    /// # Returns
+    /// The updated outcome retaining the sanitized diagnostics wrapper.
     #[inline]
     #[must_use]
     pub fn with_diagnostics(mut self, diagnostics: UserMetadata) -> Self {

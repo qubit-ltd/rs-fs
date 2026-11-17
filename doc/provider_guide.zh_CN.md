@@ -272,6 +272,10 @@ pub struct AsyncHealthProvider {
 impl AsyncHealthProvider {
     /// Creates a provider that advertises only the implemented stat operation.
     ///
+    /// # Returns
+    ///
+    /// A provider configured to serve validated `/health` metadata requests.
+    ///
     /// # Errors
     /// Returns an invalid-properties error if the static declaration is
     /// invalid.
@@ -294,11 +298,27 @@ impl AsyncHealthProvider {
 
 impl AsyncFileSystemSpi for AsyncHealthProvider {
     /// Returns the cached declaration without provider I/O.
+    ///
+    /// # Returns
+    ///
+    /// The immutable properties snapshot used to configure this provider.
     fn properties(&self) -> ProviderProperties {
         self.properties.clone()
     }
 
-    /// Returns metadata when polled, or a contextual not-found error.
+    /// Returns file metadata for `/health` when polled.
+    ///
+    /// # Parameters
+    ///
+    /// - `request`: The validated request containing the path to inspect.
+    ///
+    /// # Returns
+    ///
+    /// A future that resolves to `/health` metadata or a contextual error.
+    ///
+    /// # Errors
+    ///
+    /// Resolves to `NotFound` when the requested path is not `/health`.
     fn stat<'a>(&'a self, request: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
         Box::pin(async move {
             let path = request.path();
@@ -317,6 +337,10 @@ impl AsyncFileSystemSpi for AsyncHealthProvider {
 }
 
 /// Queries the health resource through the public asynchronous facade.
+///
+/// # Returns
+///
+/// Metadata identifying `/health` as a two-byte regular file.
 ///
 /// # Errors
 /// Returns a path, provider, or facade-contract error if metadata is
@@ -578,12 +602,6 @@ provider 在保存诊断前负责清洗值。句柄处于 `Persisted` 或 `Kept`
 不能将此表用于 local persist：其选项分别映射 overwrite 和创建父目录，outcome 也不证明字段保留。
 原生 rename 行为不是策略保证；业务依赖字段时应查阅该操作的 provider 文档并检查目标。
 
-## 15. 延伸阅读
-
-- [English user guide](user_guide.md) · [中文用户指南](user_guide.zh_CN.md)
-- [English design](file_system_design.md) · [中文设计文档](file_system_design.zh_CN.md)
-- [API 文档](https://docs.rs/qubit-fs)
-
 ## 托管 SPI 迁移
 
 0.4 保留 `FileSystem` 与 `AsyncFileSystem` 的直接方法作为非托管兼容入口。需要托管停止、释放和 settlement 语义的 provider
@@ -602,3 +620,9 @@ provider 将实际操作映射到彼此独立的同步与异步 capability profi
 应用提供父执行 scope，并拥有共享的 `OperationManager`。`qubit-fs` 不创建 manager 根任务。关闭时，应用先 drain 文件系统工作或保留恢复责任，
 关闭文件系统自有的服务/组；其他客户端都完成后，再关闭共享 manager。启用 `async` 只增加异步 SPI/API，
 不会启动线程或选择运行时。
+
+## 15. 延伸阅读
+
+- [English user guide](user_guide.md) · [中文用户指南](user_guide.zh_CN.md)
+- [English design](file_system_design.md) · [中文设计文档](file_system_design.zh_CN.md)
+- [API 文档](https://docs.rs/qubit-fs)

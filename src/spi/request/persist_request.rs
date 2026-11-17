@@ -63,7 +63,7 @@ impl<'a> PersistRequest<'a> {
     /// # Returns
     /// The immutable persistence requirements.
     #[inline]
-    #[must_use]
+    #[must_use = "inspect the persistence requirements before handling the request"]
     pub const fn options(&self) -> &PersistOptions {
         &self.options
     }

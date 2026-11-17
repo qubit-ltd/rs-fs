@@ -39,6 +39,7 @@ use crate::metadata::FileSystemCapability;
 /// let preferred = defaults.with_atomicity(AtomicityRequirement::Preferred);
 /// assert_eq!(AtomicityRequirement::Preferred, preferred.atomicity());
 /// ```
+#[must_use = "use the persistence options to configure temporary resource persistence"]
 #[non_exhaustive]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PersistOptions {
@@ -54,6 +55,10 @@ pub struct PersistOptions {
 
 impl PersistOptions {
     /// Returns whether the destination may be overwritten.
+    ///
+    /// # Returns
+    /// `true` when persistence may replace an existing destination, or
+    /// `false` when it must not overwrite one.
     #[inline]
     #[must_use]
     pub const fn overwrite(&self) -> bool {
@@ -61,8 +66,11 @@ impl PersistOptions {
     }
 
     /// Returns the required atomicity level.
+    ///
+    /// # Returns
+    /// The atomicity requirement applied to destination publication.
     #[inline]
-    #[must_use]
+    #[must_use = "review the atomicity requirement before publishing the destination"]
     pub const fn atomicity(&self) -> AtomicityRequirement {
         self.atomicity
     }
@@ -73,13 +81,20 @@ impl PersistOptions {
     /// the category semantics. The provider documents the fields supported for
     /// persistence; [`PersistOutcome`](super::PersistOutcome) does not provide
     /// field-by-field evidence that metadata was preserved.
+    ///
+    /// # Returns
+    /// The category requested from the provider for this persistence operation.
     #[inline]
-    #[must_use]
+    #[must_use = "use the requested metadata preservation policy"]
     pub const fn preserve_metadata(&self) -> MetadataPreservePolicy {
         self.preserve_metadata
     }
 
     /// Returns whether missing destination parents are created.
+    ///
+    /// # Returns
+    /// `true` when a missing parent is created before publication, or `false`
+    /// when it must already exist.
     #[inline]
     #[must_use]
     pub const fn creates_parent(&self) -> bool {
@@ -87,8 +102,11 @@ impl PersistOptions {
     }
 
     /// Enables recursive creation of a missing destination parent.
+    ///
+    /// # Returns
+    /// Updated persistence options that create missing destination parents.
     #[inline]
-    #[must_use]
+    #[must_use = "apply the updated parent-creation setting"]
     pub const fn with_create_parent(mut self) -> Self {
         self.create_parent = true;
         self
@@ -98,8 +116,11 @@ impl PersistOptions {
     ///
     /// # Parameters
     /// - `overwrite`: Whether an existing destination can be replaced.
+    ///
+    /// # Returns
+    /// Updated persistence options with the requested overwrite behavior.
     #[inline]
-    #[must_use]
+    #[must_use = "apply the updated overwrite policy"]
     pub const fn with_overwrite(mut self, overwrite: bool) -> Self {
         self.overwrite = overwrite;
         self
@@ -109,8 +130,11 @@ impl PersistOptions {
     ///
     /// # Parameters
     /// - `atomicity`: Atomicity requirement for publication.
+    ///
+    /// # Returns
+    /// Updated persistence options with the requested atomicity requirement.
     #[inline]
-    #[must_use]
+    #[must_use = "apply the updated atomicity requirement"]
     pub const fn with_atomicity(mut self, atomicity: AtomicityRequirement) -> Self {
         self.atomicity = atomicity;
         self
@@ -127,8 +151,11 @@ impl PersistOptions {
     /// # Parameters
     /// - `preserve_metadata`: Metadata-preservation category requested from the
     ///   provider.
+    ///
+    /// # Returns
+    /// Updated persistence options requesting the specified metadata category.
     #[inline]
-    #[must_use]
+    #[must_use = "apply the updated metadata preservation policy"]
     pub const fn with_preserve_metadata(mut self, preserve_metadata: MetadataPreservePolicy) -> Self {
         self.preserve_metadata = preserve_metadata;
         self
@@ -136,15 +163,15 @@ impl PersistOptions {
 
     /// Validates required persistence guarantees before provider side effects.
     ///
-    /// # Errors
-    /// Returns [`FsErrorKind::RequirementNotMet`] when atomic persistence is
-    /// required but the configured filesystem does not guarantee it.
-    ///
     /// # Parameters
     /// - `capabilities`: Capabilities advertised by the configured filesystem.
     ///
     /// # Returns
     /// `Ok(())` when required guarantees are supported.
+    ///
+    /// # Errors
+    /// Returns [`FsErrorKind::RequirementNotMet`] when atomic persistence is
+    /// required but the configured filesystem does not guarantee it.
     pub fn validate_against(&self, capabilities: FileSystemCapabilities) -> Result<(), FsError> {
         if self.atomicity() == AtomicityRequirement::Required
             && !capabilities.supports(FileSystemCapability::AtomicTempPersist)
@@ -162,6 +189,10 @@ impl PersistOptions {
 
 impl Default for PersistOptions {
     /// Creates options requiring atomic persistence without overwrite.
+    ///
+    /// # Returns
+    /// Options with `overwrite = false`, required atomicity, portable metadata
+    /// preservation, and missing-parent creation disabled.
     #[inline]
     fn default() -> Self {
         Self {

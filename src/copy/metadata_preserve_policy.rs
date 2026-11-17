@@ -26,10 +26,13 @@
 /// # Examples
 ///
 /// ```rust
+/// use qubit_fs::copy::CopyOptions;
 /// use qubit_fs::copy::MetadataPreservePolicy;
 ///
-/// assert_eq!(MetadataPreservePolicy::Portable, MetadataPreservePolicy::default());
+/// let options = CopyOptions::default().with_preserve_metadata(MetadataPreservePolicy::All);
+/// assert_eq!(MetadataPreservePolicy::All, options.preserve_metadata());
 /// ```
+#[must_use = "inspect or apply the metadata preservation policy"]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MetadataPreservePolicy {
     /// Do not explicitly copy source metadata.
@@ -67,6 +70,9 @@ pub enum MetadataPreservePolicy {
 
 impl Default for MetadataPreservePolicy {
     /// Preserves portable metadata by default.
+    ///
+    /// # Returns
+    /// [`Portable`](Self::Portable), the default metadata preservation policy.
     #[inline]
     fn default() -> Self {
         Self::Portable

@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
 //! Provider copy failure facts.
 
 use crate::copy::CopyFailureState;

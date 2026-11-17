@@ -27,6 +27,9 @@ impl ReadBuffer {
     ///
     /// # Parameters
     /// - `maximum`: Logical byte ceiling for accumulated contents.
+    ///
+    /// # Returns
+    /// An empty accumulator with the requested logical byte ceiling.
     pub(crate) const fn new(maximum: usize) -> Self {
         Self {
             bytes: Vec::new(),
@@ -35,6 +38,9 @@ impl ReadBuffer {
     }
 
     /// Returns the number of successfully accumulated bytes.
+    ///
+    /// # Returns
+    /// The current length of the accumulated contents.
     pub(crate) fn len(&self) -> usize {
         self.bytes.len()
     }
@@ -48,11 +54,18 @@ impl ReadBuffer {
     ///
     /// # Parameters
     /// - `chunk`: Bytes to append if they fit within the logical ceiling.
+    ///
+    /// # Returns
+    /// `Ok(())` after appending the chunk, or an error if it exceeds the
+    /// ceiling or capacity reservation fails.
     pub(crate) fn try_append(&mut self, chunk: &[u8]) -> FsResult<()> {
         self.try_append_with(chunk, Vec::try_reserve_exact)
     }
 
     /// Transfers the accumulated bytes without another allocation.
+    ///
+    /// # Returns
+    /// The accumulated bytes in their existing allocation.
     pub(crate) fn into_vec(self) -> Vec<u8> {
         self.bytes
     }

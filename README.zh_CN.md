@@ -11,11 +11,12 @@
 同时提供同步和异步 API。它向应用提供具体门面 `FileSystem` 与
 `AsyncFileSystem`，但不会替应用选择存储后端或异步运行时。
 
-## 安装
+## 快速开始
 
 ```toml
 [dependencies]
 qubit-fs = "0.4"
+qubit-fs-local = "^0.11"
 ```
 
 同步 API 默认启用。需要异步门面时必须显式开启 async feature：
@@ -43,6 +44,15 @@ tempfile = "3"
 
 <!-- example: quick-start -->
 ```rust
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
+//! Demonstrates basic operations on a rooted local filesystem.
+
 use qubit_fs::Path;
 use qubit_fs::copy::CopyExecutionRoute;
 use qubit_fs::copy::CopyOptions;

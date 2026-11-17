@@ -57,6 +57,7 @@ use qubit_fs::write::WriteDisposition;
 use qubit_fs::write::WriteFailureState;
 use qubit_io::Output;
 
+/// Shared path-to-bytes storage used by the in-memory Rustdoc provider.
 type Files = Arc<Mutex<BTreeMap<String, Vec<u8>>>>;
 
 /// Creates isolated storage containing `/report` with six bytes.
@@ -68,6 +69,7 @@ pub fn filesystem() -> FileSystem {
     .unwrap()
 }
 
+/// In-memory filesystem provider backing the public API documentation examples.
 struct Memory {
     files: Files,
 }
@@ -160,9 +162,11 @@ impl FileSystemSpi for Memory {
         ))
     }
 }
+/// Creates the typed not-found error used when an example resource is absent.
 fn missing(operation: FsOperation) -> FsError {
     FsError::new(FsErrorKind::NotFound, operation, "example resource missing")
 }
+/// Buffers writes and publishes their bytes to shared storage when committed.
 struct Writer {
     files: Files,
     path: String,
@@ -202,6 +206,7 @@ impl FileWriterSpi for Writer {
         Ok(WriteAbortOutcome::NotPublished)
     }
 }
+/// Tracks a temporary resource until it is published or removed from storage.
 struct Temporary {
     files: Files,
     source: Path,

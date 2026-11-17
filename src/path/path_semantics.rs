@@ -28,6 +28,9 @@ pub enum PathSemantics {
 
 impl Default for PathSemantics {
     /// Uses hierarchical path semantics by default.
+    ///
+    /// # Returns
+    /// [`PathSemantics::Hierarchical`].
     #[inline]
     fn default() -> Self {
         Self::Hierarchical

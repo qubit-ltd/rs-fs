@@ -92,6 +92,10 @@ impl AsyncFileWriter {
     /// # Parameters
     /// - `session`: Runtime-neutral asynchronous write session.
     /// - `info`: File identity and optional open-time metadata snapshot.
+    /// - `atomicity`: Required publication atomicity for the write.
+    /// - `durability`: Required durability level for successful publication.
+    /// - `provider`: Provider identifier attached to facade-generated errors.
+    /// - `max_write_bytes`: Optional inclusive byte limit for this session.
     ///
     /// # Returns
     /// A concrete writer in [`WriterState::Open`].
@@ -327,6 +331,9 @@ impl AsyncFileWriter {
     }
 
     /// Returns the bytes accepted by the underlying write session.
+    ///
+    /// # Returns
+    /// Total bytes accepted by the provider so far.
     #[inline]
     #[must_use]
     pub(crate) const fn written_bytes(&self) -> u64 {
@@ -340,9 +347,13 @@ impl AsyncFileWriter {
     }
 
     /// Builds a stable invalid-state error.
+    ///
     /// # Parameters
     /// - `operation`: Filesystem operation associated with the error.
     /// - `message`: Stable description included in the invalid-state error.
+    ///
+    /// # Returns
+    /// An error carrying the writer path and provider context.
     fn invalid_state(&self, operation: FsOperation, message: &str) -> FsError {
         FsError::new(FsErrorKind::InvalidState, operation, message)
             .with_path(self.info.path().clone())
@@ -350,6 +361,9 @@ impl AsyncFileWriter {
     }
 
     /// Builds a byte-transfer error after lifecycle completion.
+    ///
+    /// # Returns
+    /// A broken-pipe error with the writer's invalid-state context.
     fn closed_io_error(&self) -> IoError {
         IoError::new(
             IoErrorKind::BrokenPipe,
@@ -358,8 +372,16 @@ impl AsyncFileWriter {
     }
 
     /// Checks whether a provider write can fit in the session budget.
+    ///
     /// # Parameters
     /// - `count`: Byte count checked against or added to the session budget.
+    ///
+    /// # Returns
+    /// The byte count converted to the filesystem's `u64` accounting domain.
+    ///
+    /// # Errors
+    /// Returns an I/O error if conversion fails or the configured byte budget
+    /// would be exceeded.
     fn check_write_limit(&self, count: usize) -> IoResult<u64> {
         let count = FacadeCore::quantity_from_usize(count, FsOperation::Write, self.info.path(), &self.provider)
             .map_err(FsError::into_io_error)?;
@@ -381,10 +403,15 @@ impl AsyncFileWriter {
     /// Records bytes accepted by the provider in the public `u64` accounting
     /// domain.
     ///
-    /// Returns an I/O error when the native byte count or accumulated total
-    /// cannot be represented by the filesystem API's `u64` byte counters.
     /// # Parameters
     /// - `count`: Byte count checked against or added to the session budget.
+    ///
+    /// # Returns
+    /// `Ok(())` after the accepted byte count has been recorded.
+    ///
+    /// # Errors
+    /// Returns an I/O error if conversion fails, the configured budget is
+    /// exceeded, or the cumulative count overflows.
     fn record_written_bytes(&mut self, count: usize) -> IoResult<()> {
         let count = FacadeCore::quantity_from_usize(count, FsOperation::Write, self.info.path(), &self.provider)
             .map_err(FsError::into_io_error)?;
@@ -411,6 +438,9 @@ impl AsyncFileWriter {
 
     /// Builds the error used when native byte accounting exceeds the public
     /// filesystem API's `u64` reporting range.
+    ///
+    /// # Returns
+    /// A resource-limit error with the writer's path and provider context.
     fn byte_count_error(&self) -> IoError {
         FsError::new(
             FsErrorKind::ResourceLimitExceeded,
@@ -423,9 +453,13 @@ impl AsyncFileWriter {
     }
 
     /// Adds only missing facade context to a provider lifecycle error.
+    ///
     /// # Parameters
     /// - `error`: Failure whose trusted filesystem context is being restored.
     /// - `operation`: Filesystem operation associated with the error.
+    ///
+    /// # Returns
+    /// The error with the operation and any missing path/provider context.
     fn contextual_error(&self, error: FsError, operation: FsOperation) -> FsError {
         error
             .with_operation(operation)
@@ -438,6 +472,9 @@ impl AsyncOutput for AsyncFileWriter {
     type Item = u8;
 
     /// Reports whether the provider session buffers output before flushing.
+    ///
+    /// # Returns
+    /// `true` if the provider buffers output, otherwise `false`.
     #[inline]
     fn is_buffered(&self) -> bool {
         self.session.is_buffered()
@@ -445,13 +482,21 @@ impl AsyncOutput for AsyncFileWriter {
 
     /// Polls a provider write while tracking accepted bytes and uncertainty.
     ///
-    /// # Safety
-    /// `index` and `count` must identify a valid range within `input`.
     /// # Parameters
     /// - `cx`: Task context used to poll the provider session.
     /// - `input`: Input bytes containing the requested range.
     /// - `index`: Starting offset of the requested input range.
     /// - `count`: Maximum number of bytes requested from the provider.
+    ///
+    /// # Returns
+    /// A poll result containing the number of bytes accepted or an I/O error.
+    ///
+    /// # Errors
+    /// Returns provider write failures, invalid-state errors, or errors from
+    /// enforcing the configured byte limit.
+    ///
+    /// # Safety
+    /// `index` and `count` must identify a valid range within `input`.
     unsafe fn poll_write_unchecked(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -503,8 +548,16 @@ impl AsyncOutput for AsyncFileWriter {
     }
 
     /// Polls the provider flush and marks the writer indeterminate on failure.
+    ///
     /// # Parameters
     /// - `cx`: Task context used to poll the provider session.
+    ///
+    /// # Returns
+    /// A poll result containing success or an I/O error.
+    ///
+    /// # Errors
+    /// Returns an I/O error from the provider or an invalid-state error when
+    /// the writer is not open.
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<IoResult<()>> {
         let this = self.get_mut();
         if this.state != WriterState::Open {
@@ -525,6 +578,9 @@ impl Debug for AsyncFileWriter {
     /// Formats lifecycle facts without exposing the provider session.
     /// # Parameters
     /// - `formatter`: Formatter receiving the diagnostic representation.
+    ///
+    /// # Returns
+    /// The formatter's result after writing the diagnostic representation.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter

@@ -90,6 +90,10 @@ impl Debug for RenameFailure {
     /// # Parameters
     /// - `formatter`: Destination for the contextual error and transition
     ///   state.
+    ///
+    /// # Returns
+    /// `Ok(())` after formatting the failure facts, or a formatting error from
+    /// the destination.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter
@@ -105,6 +109,10 @@ impl Display for RenameFailure {
     ///
     /// # Parameters
     /// - `formatter`: Destination for the underlying error text.
+    ///
+    /// # Returns
+    /// `Ok(())` after formatting the wrapped error, or a formatting error from
+    /// the destination.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         Display::fmt(&self.error, formatter)
@@ -113,6 +121,9 @@ impl Display for RenameFailure {
 
 impl Error for RenameFailure {
     /// Returns the underlying file-system error.
+    ///
+    /// # Returns
+    /// The wrapped filesystem error as the source of this failure.
     #[inline]
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(&self.error)

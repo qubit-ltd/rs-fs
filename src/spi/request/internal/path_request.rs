@@ -5,13 +5,20 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
+
 //! Definition helper for single-path provider requests.
 
 /// Defines one facade-created request with a validated logical path.
 macro_rules! path_request {
     ($name:ident, $options:ty) => {
         /// A facade-created request with a validated logical path.
+        ///
+        /// The facade passes this value to the provider's corresponding
+        /// `FileSystemSpi` operation after validating the path and preparing
+        /// any operation-specific options.
+        ///
+        /// # Type Parameters
+        /// - `'a`: The lifetime of the validated path borrowed for dispatch.
         ///
         /// # Examples
         ///
@@ -61,7 +68,7 @@ macro_rules! path_request {
             /// # Returns
             /// The immutable facade-resolved options.
             #[inline]
-            #[must_use]
+            #[must_use = "inspect the resolved options before provider dispatch"]
             pub const fn options(&self) -> &$options {
                 &self.options
             }

@@ -14,8 +14,13 @@
 /// ```rust
 /// use qubit_fs::metadata::FileKind;
 ///
-/// assert!(matches!(FileKind::File, FileKind::File));
+/// let kind = FileKind::Other("archive".to_owned());
+/// match kind {
+///     FileKind::Other(name) => assert_eq!(name, "archive"),
+///     _ => unreachable!("expected the provider-specific kind"),
+/// }
 /// ```
+#[must_use = "inspect or apply the resource classification"]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum FileKind {
     /// Regular file.

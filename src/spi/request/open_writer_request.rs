@@ -5,8 +5,10 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
+
 //! Validated writer-open request.
+//! The facade routes this request through `FileSystemSpi::open_writer` after
+//! validating the path and resolving write options.
 
 use super::internal::path_request;
 use crate::spi::ResolvedWriteOptions;

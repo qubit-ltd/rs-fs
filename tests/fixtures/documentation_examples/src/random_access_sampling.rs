@@ -29,6 +29,25 @@ use qubit_fs::read::RandomAccessReader;
 /// was filled. `Unknown` does not guarantee that a backend accepts an
 /// arbitrarily large request. On any error, discard `output` because it may
 /// contain bytes from earlier or partially completed reads.
+///
+/// # Parameters
+///
+/// - `filesystem`: The filesystem that opened `reader` and supplies its range
+///   limit and provider context.
+/// - `reader`: The already-open random-access reader to sample from.
+/// - `offset`: The starting byte offset in the opened resource.
+/// - `output`: Caller-owned storage that receives sampled bytes.
+///
+/// # Returns
+///
+/// The number of bytes filled, which may be less than `output.len()` when the
+/// reader reaches the end of the resource.
+///
+/// # Errors
+///
+/// Returns a contextual error when the range is invalid or a read fails. The
+/// output may contain bytes from earlier reads or a partial read and must be
+/// discarded on error.
 pub fn sample(
     filesystem: &FileSystem,
     reader: &mut RandomAccessReader,

@@ -17,6 +17,7 @@
 /// let outcome = DeleteOutcome::new(true);
 /// assert!(outcome.already_missing());
 /// ```
+#[must_use = "inspect the result of the deletion request"]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DeleteOutcome {
     /// Whether an already-missing target satisfied the request.
@@ -38,7 +39,6 @@ impl DeleteOutcome {
     ///
     /// A new outcome without a provider-reported deletion count.
     #[inline]
-    #[must_use]
     pub const fn new(already_missing: bool) -> Self {
         Self {
             already_missing,
@@ -64,7 +64,6 @@ impl DeleteOutcome {
     /// `Some(count)` when the provider reported the number of deleted entries,
     /// or `None` when it did not.
     #[inline]
-    #[must_use]
     pub const fn deleted_entries(self) -> Option<u64> {
         self.deleted_entries
     }
@@ -79,7 +78,6 @@ impl DeleteOutcome {
     ///
     /// The updated outcome with the reported deletion count.
     #[inline]
-    #[must_use]
     pub const fn with_deleted_entries(mut self, count: u64) -> Self {
         self.deleted_entries = Some(count);
         self

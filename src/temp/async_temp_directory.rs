@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
 //! Runtime-neutral asynchronous temporary-directory facade handle.
 
 use crate::AsyncFileSystem;

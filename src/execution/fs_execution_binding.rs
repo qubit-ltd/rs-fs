@@ -1,3 +1,10 @@
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
 use std::sync::Arc;
 
 use qubit_operation::OperationManager;
@@ -20,22 +27,62 @@ use crate::spi::ManagedFsMutationSpi;
 use crate::spi::ManagedFsReadSpi;
 use crate::spi::ManagedFsTreeSpi;
 /// Explicit synchronous execution binding for managed filesystem operations.
+///
+/// The binding submits provider-prepared requests to an application-owned
+/// operation manager and returns rejected requests to the caller for recovery
+/// or retry.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::FsExecutionBinding;
+/// use qubit_operation::OperationManager;
+///
+/// let manager = OperationManager::new(Default::default()).expect("valid manager options");
+/// let binding = FsExecutionBinding::new(manager);
+/// assert!(std::ptr::eq(binding.manager(), binding.manager()));
+/// ```
 #[derive(Clone)]
 pub struct FsExecutionBinding {
     manager: OperationManager,
 }
 impl FsExecutionBinding {
     /// Creates a binding from an application-owned operation manager view.
+    ///
+    /// # Parameters
+    /// - `manager`: Manager view that receives submitted filesystem operations.
+    ///
+    /// # Returns
+    /// A binding that submits through `manager`.
+    #[must_use = "use the binding to submit managed filesystem operations"]
+    #[inline]
     pub fn new(manager: OperationManager) -> Self {
         Self { manager }
     }
     /// Returns the manager view used for submissions.
+    ///
+    /// # Returns
+    /// A shared reference to the operation manager held by this binding.
+    #[must_use = "use the manager to submit managed filesystem operations"]
+    #[inline]
     pub fn manager(&self) -> &OperationManager {
         &self.manager
     }
 
     /// Returns a clone bound to an additional service group while preserving
     /// this binding's root or parent submission target.
+    ///
+    /// # Parameters
+    /// - `group`: Service group to which the cloned manager view is bound.
+    ///
+    /// # Returns
+    /// A binding that submits to the additional group while preserving the
+    /// current submission target.
+    ///
+    /// # Errors
+    /// Returns the manager's group-binding error when `group` cannot be bound
+    /// to this manager view.
+    #[inline]
     pub fn with_group(
         &self,
         group: &qubit_operation::OperationGroup,
@@ -43,6 +90,19 @@ impl FsExecutionBinding {
         self.manager.with_group(group).map(Self::new)
     }
     /// Prepares and submits a read while retaining its request on rejection.
+    ///
+    /// # Parameters
+    /// - `provider`: Provider that prepares the owned read request.
+    /// - `request`: Owned path and read options returned if preparation or
+    ///   admission rejects the operation.
+    ///
+    /// # Returns
+    /// The submitted read operation, or a failure containing the original
+    /// request and its preparation or admission reason.
+    ///
+    /// # Errors
+    /// Returns `FsSubmitFailure` when provider preparation fails or the
+    /// operation manager rejects admission.
     pub fn submit_read_all(
         &self,
         provider: &dyn ManagedFsReadSpi,
@@ -79,6 +139,21 @@ impl FsExecutionBinding {
     }
 
     /// Prepares, reserves a final-effect slot, and submits a managed write.
+    ///
+    /// # Parameters
+    /// - `provider`: Provider that prepares and owns the write operation.
+    /// - `request`: Owned destination, content, and write options returned on
+    ///   any pre-submission rejection.
+    /// - `pool`: Bounded pool used to reserve the final write-effect fact.
+    ///
+    /// # Returns
+    /// The submitted mutation operation with its effect observer, or a failure
+    /// retaining the original request and rejection reason.
+    ///
+    /// # Errors
+    /// Returns `FsSubmitFailure` if effect capacity is unavailable, provider
+    /// preparation or reservation installation fails, or manager admission
+    /// rejects the operation.
     pub fn submit_write(
         &self,
         provider: &dyn ManagedFsMutationSpi,
@@ -142,6 +217,21 @@ impl FsExecutionBinding {
     }
 
     /// Prepares, reserves a final-effect slot, and submits a managed copy.
+    ///
+    /// # Parameters
+    /// - `provider`: Provider that prepares and owns the copy operation.
+    /// - `request`: Owned source, destination, and copy options returned on any
+    ///   pre-submission rejection.
+    /// - `pool`: Bounded pool used to reserve the final copy-effect fact.
+    ///
+    /// # Returns
+    /// The submitted mutation operation with its effect observer, or a failure
+    /// retaining the original request and rejection reason.
+    ///
+    /// # Errors
+    /// Returns `FsSubmitFailure` if effect capacity is unavailable, provider
+    /// preparation or reservation installation fails, or manager admission
+    /// rejects the operation.
     pub fn submit_copy(
         &self,
         provider: &dyn ManagedFsMutationSpi,
@@ -205,6 +295,21 @@ impl FsExecutionBinding {
     }
 
     /// Prepares, reserves a final-effect slot, and submits a managed rename.
+    ///
+    /// # Parameters
+    /// - `provider`: Provider that prepares and owns the rename operation.
+    /// - `request`: Owned source, destination, and rename options returned on
+    ///   any pre-submission rejection.
+    /// - `pool`: Bounded pool used to reserve the final rename-effect fact.
+    ///
+    /// # Returns
+    /// The submitted mutation operation with its effect observer, or a failure
+    /// retaining the original request and rejection reason.
+    ///
+    /// # Errors
+    /// Returns `FsSubmitFailure` if effect capacity is unavailable, provider
+    /// preparation or reservation installation fails, or manager admission
+    /// rejects the operation.
     pub fn submit_rename(
         &self,
         provider: &dyn ManagedFsMutationSpi,
@@ -269,6 +374,21 @@ impl FsExecutionBinding {
 
     /// Prepares, reserves a final-effect slot, and submits a staged-tree
     /// publication.
+    ///
+    /// # Parameters
+    /// - `provider`: Provider that prepares and owns the tree publication.
+    /// - `request`: Owned tree publication request returned on any
+    ///   pre-submission rejection.
+    /// - `pool`: Bounded pool used to reserve the publication effect fact.
+    ///
+    /// # Returns
+    /// The submitted mutation operation with its effect observer, or a failure
+    /// retaining the original request and rejection reason.
+    ///
+    /// # Errors
+    /// Returns `FsSubmitFailure` if effect capacity is unavailable, provider
+    /// preparation or reservation installation fails, or manager admission
+    /// rejects the operation.
     pub fn submit_tree_publish(
         &self,
         provider: &dyn ManagedFsTreeSpi,
@@ -334,6 +454,21 @@ impl FsExecutionBinding {
 
     /// Prepares, reserves a final-effect slot, and submits a managed async
     /// write.
+    ///
+    /// # Parameters
+    /// - `provider`: Provider that prepares and owns the write operation.
+    /// - `request`: Owned destination, content, and write options returned on
+    ///   any pre-submission rejection.
+    /// - `pool`: Bounded pool used to reserve the final write-effect fact.
+    ///
+    /// # Returns
+    /// The submitted asynchronous mutation operation with its effect observer,
+    /// or a failure retaining the original request and rejection reason.
+    ///
+    /// # Errors
+    /// Returns `FsSubmitFailure` if effect capacity is unavailable, provider
+    /// preparation or reservation installation fails, or manager admission
+    /// rejects the operation.
     #[cfg(feature = "async")]
     pub fn submit_write_async(
         &self,
@@ -400,6 +535,21 @@ impl FsExecutionBinding {
 
     /// Prepares, reserves a final-effect slot, and submits a managed async
     /// copy.
+    ///
+    /// # Parameters
+    /// - `provider`: Provider that prepares and owns the copy operation.
+    /// - `request`: Owned source, destination, and copy options returned on any
+    ///   pre-submission rejection.
+    /// - `pool`: Bounded pool used to reserve the final copy-effect fact.
+    ///
+    /// # Returns
+    /// The submitted asynchronous mutation operation with its effect observer,
+    /// or a failure retaining the original request and rejection reason.
+    ///
+    /// # Errors
+    /// Returns `FsSubmitFailure` if effect capacity is unavailable, provider
+    /// preparation or reservation installation fails, or manager admission
+    /// rejects the operation.
     #[cfg(feature = "async")]
     pub fn submit_copy_async(
         &self,
@@ -466,6 +616,21 @@ impl FsExecutionBinding {
 
     /// Prepares, reserves a final-effect slot, and submits a managed async
     /// rename.
+    ///
+    /// # Parameters
+    /// - `provider`: Provider that prepares and owns the rename operation.
+    /// - `request`: Owned source, destination, and rename options returned on
+    ///   any pre-submission rejection.
+    /// - `pool`: Bounded pool used to reserve the final rename-effect fact.
+    ///
+    /// # Returns
+    /// The submitted asynchronous mutation operation with its effect observer,
+    /// or a failure retaining the original request and rejection reason.
+    ///
+    /// # Errors
+    /// Returns `FsSubmitFailure` if effect capacity is unavailable, provider
+    /// preparation or reservation installation fails, or manager admission
+    /// rejects the operation.
     #[cfg(feature = "async")]
     pub fn submit_rename_async(
         &self,
@@ -532,6 +697,21 @@ impl FsExecutionBinding {
 
     /// Prepares, reserves a final-effect slot, and submits async tree
     /// publication.
+    ///
+    /// # Parameters
+    /// - `provider`: Provider that prepares and owns the tree publication.
+    /// - `request`: Owned tree publication request returned on any
+    ///   pre-submission rejection.
+    /// - `pool`: Bounded pool used to reserve the publication effect fact.
+    ///
+    /// # Returns
+    /// The submitted asynchronous mutation operation with its effect observer,
+    /// or a failure retaining the original request and rejection reason.
+    ///
+    /// # Errors
+    /// Returns `FsSubmitFailure` if effect capacity is unavailable, provider
+    /// preparation or reservation installation fails, or manager admission
+    /// rejects the operation.
     #[cfg(feature = "async")]
     pub fn submit_tree_publish_async(
         &self,
@@ -600,6 +780,19 @@ impl FsExecutionBinding {
     }
 
     /// Prepares and submits a read through the asynchronous manager view.
+    ///
+    /// # Parameters
+    /// - `provider`: Provider that prepares the owned read request.
+    /// - `request`: Owned path and read options returned if preparation or
+    ///   admission rejects the operation.
+    ///
+    /// # Returns
+    /// The submitted asynchronous read operation, or a failure containing the
+    /// original request and its preparation or admission reason.
+    ///
+    /// # Errors
+    /// Returns `FsSubmitFailure` when provider preparation fails or the
+    /// asynchronous manager rejects admission.
     #[cfg(feature = "async")]
     pub fn submit_read_all_async(
         &self,

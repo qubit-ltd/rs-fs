@@ -16,6 +16,7 @@
 ///
 /// assert_eq!(AtomicityRequirement::Preferred, AtomicityRequirement::default());
 /// ```
+#[must_use = "apply the atomicity requirement to an operation"]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AtomicityRequirement {
     /// Success must be atomic; unsupported guarantees fail before side effects.
@@ -28,6 +29,9 @@ pub enum AtomicityRequirement {
 
 impl Default for AtomicityRequirement {
     /// Prefers atomic behavior while permitting an explicit fallback.
+    ///
+    /// # Returns
+    /// [`AtomicityRequirement::Preferred`].
     #[inline]
     fn default() -> Self {
         Self::Preferred

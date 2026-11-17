@@ -48,6 +48,9 @@ impl SyncTempResource {
     /// - `path`: Validated provider-local resource path.
     /// - `session`: Provider session that owns the temporary resource.
     /// - `invalid_state_message`: Resource-specific invalid-state diagnostic.
+    ///
+    /// # Returns
+    /// A lifecycle coordinator that owns the provider session.
     pub(crate) fn new(
         filesystem: FileSystem,
         path: Path,
@@ -64,11 +67,20 @@ impl SyncTempResource {
     }
 
     /// Returns the provider-local resource path.
+    ///
+    /// # Returns
+    /// The current provider-local path borrowed from this resource.
+    #[inline]
+    #[must_use]
     pub(crate) const fn path(&self) -> &Path {
         &self.path
     }
 
     /// Returns the lifecycle state.
+    ///
+    /// # Returns
+    /// The current ownership and cleanup state.
+    #[inline]
     pub(crate) const fn state(&self) -> TempResourceState {
         self.lifecycle.state()
     }
@@ -179,6 +191,9 @@ impl SyncTempResource {
     /// cleanup fails while the state remains `CleanupRequired`, a later drop
     /// may make another best-effort attempt.
     ///
+    /// # Returns
+    /// `Ok(())` after cleanup is confirmed.
+    ///
     /// # Errors
     /// Returns an invalid-state error when cleanup is no longer legal, or the
     /// provider cleanup error when cleanup cannot be confirmed.
@@ -237,6 +252,9 @@ impl SyncTempResource {
     /// # Returns
     /// `Ok(())` while this resource owns an unpublished source; otherwise an
     /// invalid-state error.
+    ///
+    /// # Errors
+    /// Returns an invalid-state error when the resource is no longer owned.
     fn ensure_owned(&self, operation: FsOperation) -> FsResult<()> {
         if self.lifecycle.state() == TempResourceState::Owned {
             Ok(())

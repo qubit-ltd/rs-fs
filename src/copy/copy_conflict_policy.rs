@@ -28,6 +28,9 @@ pub enum CopyConflictPolicy {
 
 impl Default for CopyConflictPolicy {
     /// Fails on destination conflicts by default.
+    ///
+    /// # Returns
+    /// [`CopyConflictPolicy::Fail`].
     #[inline]
     fn default() -> Self {
         Self::Fail

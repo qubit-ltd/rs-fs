@@ -16,6 +16,7 @@ use qubit_fs::write::WriteAbortOutcome;
 use qubit_fs::write::WriterRecovery;
 
 /// Retains a copy failure and any error from aborting its writer.
+#[must_use = "inspect the copy failure and recovery cleanup state"]
 #[derive(Debug)]
 pub struct CopyRecovery {
     /// The copy failure, including its publication and recovery state.

@@ -33,6 +33,10 @@ use crate::path::PathSemantics;
 /// Returns a provider-contract violation when the entry uses different path
 /// semantics, exceeds filesystem path limits, has an inconsistent name or
 /// metadata kind, or lies outside the requested root.
+///
+/// # Returns
+///
+/// `Ok(())` when the provider entry satisfies the path and metadata contract.
 pub(crate) fn validate_entry(
     entry: &DirEntry,
     scope: &ListScope,
@@ -93,6 +97,11 @@ pub(crate) fn validate_entry(
 ///
 /// - `scope`: Requested directory or namespace listing scope.
 /// - `message`: Diagnostic message for the constructed filesystem error.
+///
+/// # Returns
+///
+/// A provider-contract error associated with the requested scope, when it has
+/// a path.
 pub(crate) fn option_error(scope: &ListScope, message: &'static str) -> FsError {
     let error = FsError::new(
         FsErrorKind::ProviderContractViolation,
@@ -111,6 +120,11 @@ pub(crate) fn option_error(scope: &ListScope, message: &'static str) -> FsError 
 ///
 /// - `root`: Requested list root used to calculate an entry-relative path.
 /// - `entry`: Provider-returned directory entry being validated or selected.
+///
+/// # Returns
+///
+/// `Some("")` for the root itself, a relative path for a descendant, or `None`
+/// outside the root.
 fn relative_path<'a>(root: &Path, entry: &'a Path) -> Option<&'a str> {
     if root == entry {
         Some("")
@@ -136,6 +150,11 @@ fn relative_path<'a>(root: &Path, entry: &'a Path) -> Option<&'a str> {
 ///
 /// - `root`: Requested list root used to calculate an entry-relative path.
 /// - `entry`: Provider-returned directory entry being validated or selected.
+///
+/// # Returns
+///
+/// `Some(0)` when both paths identify the root, `Some(n)` for a descendant
+/// `n` components below it, or `None` outside the root.
 pub(crate) fn entry_depth(root: &Path, entry: &Path) -> Option<usize> {
     let relative = relative_path(root, entry)?;
     if relative.is_empty() {
@@ -151,6 +170,10 @@ pub(crate) fn entry_depth(root: &Path, entry: &Path) -> Option<usize> {
 ///
 /// - `path`: Logical path of the resource involved in this operation.
 /// - `message`: Diagnostic message for the constructed filesystem error.
+///
+/// # Returns
+///
+/// A provider-contract error associated with `path`.
 fn contract_error(path: &Path, message: &'static str) -> FsError {
     FsError::new(
         FsErrorKind::ProviderContractViolation,

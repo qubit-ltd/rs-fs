@@ -57,6 +57,9 @@ impl CopyAssessment {
     ///   support.
     /// - `fallback_rejection`: Static reason the stream fallback cannot meet
     ///   the request, if any.
+    ///
+    /// # Returns
+    /// An assessment retaining the selected route and fallback constraint.
     #[inline]
     pub(crate) const fn new(route: CopyExecutionRoute, fallback_rejection: Option<FallbackRejection>) -> Self {
         Self {
@@ -66,12 +69,19 @@ impl CopyAssessment {
     }
 
     /// Returns the possible execution route.
+    ///
+    /// # Returns
+    /// The route selected for the requested copy.
     #[inline]
     pub const fn route(self) -> CopyExecutionRoute {
         self.route
     }
 
     /// Returns the first static fallback rejection, if any.
+    ///
+    /// # Returns
+    /// `Some` with the rejection reason when fallback is unavailable, or `None`
+    /// otherwise.
     #[inline]
     pub const fn fallback_rejection(self) -> Option<FallbackRejection> {
         self.fallback_rejection

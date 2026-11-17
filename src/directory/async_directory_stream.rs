@@ -116,6 +116,7 @@ impl AsyncDirectoryStream {
     /// state. Any such error makes the stream terminal. Dropping this future
     /// after polling it makes the stream failed because the provider may have
     /// advanced before cancellation; reopen the stream to enumerate again.
+    #[must_use = "await the future to read the next directory entry"]
     pub fn next_entry_async(&mut self) -> SpiFuture<'_, FsResult<Option<DirEntry>>> {
         Box::pin(async move {
             self.policy.before_next(Instant::now())?;
@@ -133,6 +134,10 @@ impl Debug for AsyncDirectoryStream {
     /// # Parameters
     ///
     /// - `formatter`: Formatter receiving the stream's debug representation.
+    ///
+    /// # Returns
+    ///
+    /// The result of writing the debug representation to the formatter.
     #[inline]
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter.debug_struct("AsyncDirectoryStream").finish_non_exhaustive()

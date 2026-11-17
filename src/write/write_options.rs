@@ -108,7 +108,7 @@ impl WriteOptions {
 
     /// Returns the atomicity requirement.
     #[inline]
-    #[must_use]
+    #[must_use = "review the atomicity requirement before opening the writer"]
     pub const fn atomicity(&self) -> AtomicityRequirement {
         self.atomicity
     }
@@ -208,6 +208,12 @@ impl WriteOptions {
     /// A configured condition is required: providers must compare it and
     /// publish under one conditional-write protocol, or reject the request
     /// before opening a writer.
+    ///
+    /// # Parameters
+    /// - `precondition`: Content equality condition required before publication.
+    ///
+    /// # Returns
+    /// A copy of these write options with the requested content precondition.
     #[inline]
     #[must_use]
     pub fn with_content_precondition(mut self, precondition: ContentPrecondition) -> Self {

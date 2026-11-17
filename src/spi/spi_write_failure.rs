@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
 //! Provider write failure facts.
 
 use crate::error::FsError;
@@ -26,6 +25,7 @@ use crate::write::WriteFailureState;
 /// );
 /// assert_eq!(WriteFailureState::NotPublished, failure.state());
 /// ```
+#[must_use = "inspect the provider write failure before discarding it"]
 pub struct SpiWriteFailure {
     /// Provider failure with filesystem context.
     error: FsError,
@@ -43,7 +43,6 @@ impl SpiWriteFailure {
     /// # Returns
     /// A failure containing both facts.
     #[inline]
-    #[must_use]
     pub fn new(error: FsError, state: WriteFailureState) -> Self {
         Self { error, state }
     }

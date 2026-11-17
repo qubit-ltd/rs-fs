@@ -57,7 +57,7 @@ impl RenameOptions {
 
     /// Returns the required atomicity level.
     #[inline]
-    #[must_use]
+    #[must_use = "review the atomicity requirement before renaming"]
     pub const fn atomicity(&self) -> AtomicityRequirement {
         self.atomicity
     }

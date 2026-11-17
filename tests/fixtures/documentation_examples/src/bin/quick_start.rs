@@ -5,6 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+//! Demonstrates basic operations on a rooted local filesystem.
 
 use qubit_fs::Path;
 use qubit_fs::copy::CopyExecutionRoute;

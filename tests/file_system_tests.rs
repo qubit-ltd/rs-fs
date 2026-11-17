@@ -64,6 +64,8 @@ use qubit_fs::spi::StatResponse;
 use qubit_fs::temp::TempOptions;
 use qubit_fs::write::WriteOptions;
 
+/// Configurable provider fixture for checking facade caching, validation, and
+/// error enrichment without performing filesystem operations.
 struct CountingSpi {
     properties: ProviderProperties,
     property_calls: Arc<AtomicUsize>,
@@ -76,6 +78,8 @@ struct CountingSpi {
 }
 
 impl CountingSpi {
+    /// Returns the failure used by provider operations a test does not expect
+    /// the facade to dispatch.
     fn unsupported() -> FsError {
         FsError::new(
             FsErrorKind::UnsupportedOperation,

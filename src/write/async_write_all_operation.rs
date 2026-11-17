@@ -6,6 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 //! Owning asynchronous whole-file write operation.
+
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
@@ -74,11 +75,16 @@ pub struct AsyncWriteAllOperation {
 }
 impl AsyncWriteAllOperation {
     /// Creates an operation after facade preflight has succeeded.
+    ///
     /// # Parameters
     /// - `filesystem`: Filesystem whose provider stages execute this write.
     /// - `path`: Target path used for error context and provider requests.
     /// - `bytes`: Payload retained for the whole-file write.
     /// - `options`: Write policy applied to the provider request.
+    ///
+    /// # Returns
+    /// A ready operation that owns the payload until completion or
+    /// cancellation.
     pub(crate) fn new(filesystem: AsyncFileSystem, path: Path, bytes: Vec<u8>, options: WriteOptions) -> Self {
         Self {
             filesystem,
@@ -91,29 +97,45 @@ impl AsyncWriteAllOperation {
         }
     }
     /// Returns the filesystem retained for execution and recovery inspection.
+    ///
+    /// # Returns
+    /// The filesystem used for provider calls and error context.
     #[inline]
     #[must_use]
     pub const fn filesystem(&self) -> &AsyncFileSystem {
         &self.filesystem
     }
     /// Returns the requested target path.
+    ///
+    /// # Returns
+    /// The path retained for execution and recovery context.
     #[inline]
     #[must_use]
     pub const fn path(&self) -> &Path {
         &self.path
     }
     /// Returns the operation state.
+    ///
+    /// # Returns
+    /// The current historical execution state.
     #[inline]
     pub const fn state(&self) -> AsyncWriteAllOperationState {
         self.state
     }
     /// Reports whether an opened writer is retained for recovery.
+    ///
+    /// # Returns
+    /// `true` if this operation retains a writer for recovery, otherwise
+    /// `false`.
     #[inline]
     #[must_use]
     pub const fn has_recovery(&self) -> bool {
         self.writer.is_some()
     }
     /// Returns mutable access to the retained recovery writer.
+    ///
+    /// # Returns
+    /// `Some` with mutable access when recovery is retained, otherwise `None`.
     #[inline]
     pub fn recovery(&mut self) -> Option<&mut AsyncWriterRecovery> {
         self.writer.as_mut()
@@ -122,11 +144,18 @@ impl AsyncWriteAllOperation {
     ///
     /// Subsequent writer recovery does not change this operation's historical
     /// publication state or byte count.
+    ///
+    /// # Returns
+    /// The retained recovery writer, or `None` when recovery is not required.
     #[inline]
     pub fn take_recovery(&mut self) -> Option<AsyncWriterRecovery> {
         self.writer.take()
     }
     /// Returns the frozen count of bytes confirmed before execution stopped.
+    ///
+    /// # Returns
+    /// The number of bytes the writer confirmed accepting before execution
+    /// ended.
     #[inline]
     #[must_use]
     pub const fn written_bytes(&self) -> u64 {
@@ -138,6 +167,10 @@ impl AsyncWriteAllOperation {
     /// The suffix remains owned by this operation when its execution future is
     /// cancelled. If publication is indeterminate, this is an inspection aid;
     /// it does not establish that retrying the suffix is safe.
+    ///
+    /// # Returns
+    /// The unconfirmed payload suffix, which may be empty after full
+    /// acceptance.
     #[inline]
     #[must_use]
     pub fn remaining_bytes(&self) -> &[u8] {
@@ -160,7 +193,6 @@ impl AsyncWriteAllOperation {
     /// any retry.
     ///
     /// # Returns
-    ///
     /// The confirmed write outcome. Success freezes the acknowledged byte count
     /// and releases the committed writer.
     ///
@@ -196,12 +228,24 @@ impl AsyncWriteAllOperation {
     }
 }
 /// Runs provider stages while keeping the session in the recovery slot.
+///
 /// # Parameters
 /// - `filesystem`: Filesystem whose provider stages execute this write.
 /// - `path`: Target path used for error context and provider requests.
 /// - `bytes`: Payload retained for the whole-file write.
 /// - `options`: Write policy applied to the provider request.
 /// - `slot`: Recovery slot retaining the opened or rejected writer.
+///
+/// # Returns
+/// The provider-confirmed outcome or a failure retaining confirmed progress
+/// and any recovery writer.
+///
+/// # Errors
+/// Returns open, write, flush, or commit failures with their publication facts.
+///
+/// # Panics
+/// Panics if a successful open does not leave an opened writer in the recovery
+/// slot, violating the helper's internal slot invariant.
 async fn execute_write(
     filesystem: &AsyncFileSystem,
     path: &Path,
@@ -247,10 +291,14 @@ async fn execute_write(
     }
 }
 /// Restores filesystem and target context to a stream failure.
+///
 /// # Parameters
 /// - `filesystem`: Filesystem whose provider stages execute this write.
 /// - `error`: Failure whose trusted filesystem context is being restored.
 /// - `path`: Target path used for error context and provider requests.
+///
+/// # Returns
+/// The filesystem error with provider and target context restored.
 fn contextual(filesystem: &AsyncFileSystem, error: IoError, path: &Path) -> FsError {
     filesystem.core().enrich(
         FsError::from_stream_io(error, FsOperation::Write, path),
@@ -259,9 +307,14 @@ fn contextual(filesystem: &AsyncFileSystem, error: IoError, path: &Path) -> FsEr
     )
 }
 /// Classifies a post-open stream failure using writer publication facts.
+///
 /// # Parameters
 /// - `indeterminate`: Whether a completed stage left publication uncertain.
 /// - `state`: Publication state used to classify or retain this outcome.
+///
+/// # Returns
+/// `Indeterminate` when effects are uncertain; otherwise the writer state
+/// mapped to its corresponding write failure state.
 fn state_for(indeterminate: bool, state: WriterState) -> WriteFailureState {
     if indeterminate {
         WriteFailureState::Indeterminate
@@ -270,9 +323,13 @@ fn state_for(indeterminate: bool, state: WriterState) -> WriteFailureState {
     }
 }
 /// Builds a repeated-execution error without changing historical facts.
+///
 /// # Parameters
 /// - `path`: Target path used for error context and provider requests.
 /// - `filesystem`: Filesystem whose provider stages execute this write.
+///
+/// # Returns
+/// An invalid-state error enriched with the target path and provider identity.
 fn invalid_state(path: &Path, filesystem: &AsyncFileSystem) -> FsError {
     FsError::new(
         FsErrorKind::InvalidState,
@@ -285,8 +342,12 @@ fn invalid_state(path: &Path, filesystem: &AsyncFileSystem) -> FsError {
 
 impl Debug for AsyncWriteAllOperation {
     /// Formats lifecycle facts without payload or provider session contents.
+    ///
     /// # Parameters
     /// - `formatter`: Formatter receiving the diagnostic representation.
+    ///
+    /// # Returns
+    /// The formatter's result after writing the lifecycle facts.
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
         formatter
             .debug_struct("AsyncWriteAllOperation")

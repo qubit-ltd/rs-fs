@@ -133,6 +133,9 @@ impl TempFile {
     /// cleanup fails while the state remains `CleanupRequired`, a later drop
     /// may make another best-effort attempt.
     ///
+    /// # Returns
+    /// `Ok(())` when cleanup is confirmed.
+    ///
     /// # Errors
     /// Returns an invalid-state error when cleanup is no longer legal, or the
     /// provider cleanup error when cleanup cannot be confirmed.
@@ -149,7 +152,10 @@ impl Debug for TempFile {
     /// - `f`: Formatter that receives the debug representation.
     ///
     /// # Returns
-    /// `Ok(())` when formatting succeeds, or the formatter's error.
+    /// `Ok(())` when formatting succeeds.
+    ///
+    /// # Errors
+    /// Returns the formatter's error if it cannot accept the output.
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         f.debug_struct("TempFile")

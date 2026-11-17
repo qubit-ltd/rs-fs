@@ -365,12 +365,13 @@ dependencies = [
 
 [[package]]
 name = "qubit-fs"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "criterion",
  "fluent-uri",
  "qubit-budget",
  "qubit-io",
+ "qubit-operation",
  "qubit-redact",
 ]
 
@@ -381,6 +382,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e782e5b568b1dfa6ee6e9b3f8617a86980b9438f0c449235e3840533d25f83c"
 dependencies = [
  "qubit-utils",
+]
+
+[[package]]
+name = "qubit-operation"
+version = "0.3.0"
+dependencies = [
+ "qubit-budget",
 ]
 
 [[package]]

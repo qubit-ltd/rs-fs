@@ -29,6 +29,11 @@ impl<'a> DirectoryOperation<'a> {
     /// # Parameters
     ///
     /// - `filesystem`: Filesystem facade supplying the cached provider policy.
+    ///
+    /// # Returns
+    ///
+    /// An operation helper bound to the provided filesystem.
+    #[must_use = "use the operation helper to list a directory"]
     #[inline]
     pub(crate) const fn new(filesystem: &'a FileSystem) -> Self {
         Self { filesystem }
@@ -46,6 +51,10 @@ impl<'a> DirectoryOperation<'a> {
     /// - `scope`: Requested directory or namespace listing scope.
     /// - `options`: Selection, recursion, page-size, and deadline settings for
     ///   the listing.
+    ///
+    /// # Returns
+    ///
+    /// A directory stream over the provider's entries.
     ///
     /// # Errors
     ///

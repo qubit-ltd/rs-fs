@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
 //! Provider-opened asynchronous directory stream envelope.
 
 use super::AsyncDirectoryStreamSession;
@@ -33,6 +32,7 @@ use crate::path::PathSemantics;
 /// }
 /// let _stream = OpenedAsyncDirectoryStream::new(Box::new(EmptyStream));
 /// ```
+#[must_use = "transfer the opened provider session into a facade stream or drop it explicitly"]
 pub struct OpenedAsyncDirectoryStream {
     /// Provider enumeration session awaiting facade validation.
     session: Box<dyn AsyncDirectoryStreamSession>,
@@ -47,7 +47,6 @@ impl OpenedAsyncDirectoryStream {
     /// # Returns
     /// An opened asynchronous stream envelope for facade validation.
     #[inline]
-    #[must_use]
     pub fn new(session: Box<dyn AsyncDirectoryStreamSession>) -> Self {
         Self { session }
     }

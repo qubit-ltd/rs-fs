@@ -16,7 +16,12 @@ use super::WriteFailureState;
 /// ```rust
 /// use qubit_fs::write::WriterState;
 ///
-/// assert!(matches!(WriterState::Open, WriterState::Open));
+/// let state = WriterState::Indeterminate;
+/// let publication_is_unknown = match state {
+///     WriterState::Indeterminate => true,
+///     _ => false,
+/// };
+/// assert!(publication_is_unknown);
 /// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WriterState {
@@ -41,6 +46,9 @@ impl WriterState {
     ///
     /// This describes the destination's known historical state, rather than
     /// the validity of the repeated operation itself.
+    ///
+    /// # Returns
+    /// The failure state that corresponds to this writer lifecycle state.
     #[inline]
     pub(crate) const fn publication_failure_state(self) -> WriteFailureState {
         match self {

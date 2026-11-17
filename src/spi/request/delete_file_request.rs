@@ -5,8 +5,10 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
+
 //! Validated file-deletion request.
+//! The facade routes this request through `FileSystemSpi::delete_file` after
+//! validating the path and resolving deletion options.
 
 use super::internal::path_request;
 use crate::spi::ResolvedDeleteOptions;

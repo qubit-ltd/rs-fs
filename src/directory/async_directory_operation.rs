@@ -29,6 +29,11 @@ impl<'a> AsyncDirectoryOperation<'a> {
     /// # Parameters
     ///
     /// - `filesystem`: Filesystem facade supplying the cached provider policy.
+    ///
+    /// # Returns
+    ///
+    /// An operation helper bound to the provided filesystem.
+    #[must_use = "use the operation helper to list a directory"]
     #[inline]
     pub(crate) const fn new(filesystem: &'a AsyncFileSystem) -> Self {
         Self { filesystem }

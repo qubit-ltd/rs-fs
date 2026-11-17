@@ -7,8 +7,10 @@
 // =============================================================================
 
 #[cfg(feature = "async")]
-#[allow(dead_code)]
-pub(crate) mod async_recording_spi;
+pub(crate) mod internal;
+#[cfg(feature = "async")]
+#[allow(unused_imports)]
+pub(crate) use internal::async_recording_spi;
 #[allow(dead_code)]
 pub(crate) mod poll_support;
 

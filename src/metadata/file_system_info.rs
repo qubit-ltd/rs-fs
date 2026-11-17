@@ -57,6 +57,10 @@ impl FileSystemInfo {
     /// - `id`: Stable identity for the configured filesystem.
     /// - `provider_id`: Stable identifier of the provider implementation.
     /// - `path_semantics`: Logical path model used by the provider.
+    ///
+    /// # Returns
+    /// A filesystem information snapshot with no supported scheme aliases or
+    /// provider metadata.
     #[inline]
     #[must_use]
     pub fn new(id: FileSystemId, provider_id: impl Display, path_semantics: PathSemantics) -> Self {
@@ -77,6 +81,9 @@ impl FileSystemInfo {
     ///
     /// # Parameters
     /// - `scheme`: URI scheme alias to validate and add if not already present.
+    ///
+    /// # Returns
+    /// Updated filesystem information, or an error if the scheme is invalid.
     pub fn with_scheme(mut self, scheme: &str) -> FsResult<Self> {
         let mut characters = scheme.bytes();
         let valid = characters.next().is_some_and(|first| first.is_ascii_alphabetic())
@@ -104,6 +111,9 @@ impl FileSystemInfo {
     /// # Parameters
     /// - `metadata`: User metadata whose keys have passed credential-name
     ///   checks; values are retained as supplied.
+    ///
+    /// # Returns
+    /// Updated filesystem information containing the scrubbed metadata.
     #[inline]
     #[must_use]
     pub fn with_provider_metadata(mut self, metadata: UserMetadata) -> Self {
@@ -112,6 +122,9 @@ impl FileSystemInfo {
     }
 
     /// Returns the configured filesystem identity.
+    ///
+    /// # Returns
+    /// The stable identity of this configured filesystem.
     #[inline]
     #[must_use]
     pub const fn id(&self) -> &FileSystemId {
@@ -119,6 +132,9 @@ impl FileSystemInfo {
     }
 
     /// Returns the provider identity that created this filesystem.
+    ///
+    /// # Returns
+    /// The provider's stable identifier.
     #[inline]
     #[must_use]
     pub const fn provider_id(&self) -> &str {
@@ -126,6 +142,9 @@ impl FileSystemInfo {
     }
 
     /// Returns supported URI schemes in provider-defined order.
+    ///
+    /// # Returns
+    /// The configured URI scheme aliases, in insertion order.
     #[inline]
     #[must_use]
     pub fn schemes(&self) -> &[String] {
@@ -133,6 +152,9 @@ impl FileSystemInfo {
     }
 
     /// Returns the provider-local path semantics.
+    ///
+    /// # Returns
+    /// The logical path model used by the provider.
     #[inline]
     #[must_use]
     pub const fn path_semantics(&self) -> PathSemantics {
@@ -140,6 +162,9 @@ impl FileSystemInfo {
     }
 
     /// Returns scrubbed provider-specific information.
+    ///
+    /// # Returns
+    /// Provider metadata safe for structural formatting.
     #[inline]
     #[must_use]
     pub const fn provider_metadata(&self) -> &NonSensitiveMetadata {

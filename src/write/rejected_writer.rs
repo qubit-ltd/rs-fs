@@ -63,6 +63,10 @@ impl RejectedWriter {
     /// - `session`: Provider session whose ownership transfers to this wrapper.
     /// - `provider`: Trusted provider identity attached to cleanup errors.
     /// - `path`: Target path used for error context and provider requests.
+    ///
+    /// # Returns
+    /// A cleanup handle retaining the provider session and trusted request
+    /// context.
     pub(crate) fn new(session: Box<dyn FileWriterSpi>, provider: &str, path: Option<Path>) -> Self {
         Self {
             session,
@@ -115,6 +119,9 @@ impl RejectedWriter {
     /// Adds only trusted request context to a cleanup error.
     /// # Parameters
     /// - `error`: Failure whose trusted filesystem context is being restored.
+    ///
+    /// # Returns
+    /// The error augmented with the requested path and configured provider.
     fn contextual_error(&self, error: FsError) -> FsError {
         error.with_trusted_cleanup_context(FsOperation::AbortWriter, self.path.as_ref(), &self.provider)
     }
@@ -123,6 +130,9 @@ impl Debug for RejectedWriter {
     /// Omits the session and unvalidated provider identity.
     /// # Parameters
     /// - `f`: Formatter receiving the diagnostic representation.
+    ///
+    /// # Returns
+    /// The formatter's result after writing the safe diagnostic fields.
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         f.debug_struct("RejectedWriter")
             .field("cleanup_state", &self.state)

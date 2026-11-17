@@ -7,7 +7,9 @@
 // =============================================================================
 
 use std::future::Future;
+use std::future::poll_fn;
 use std::pin::Pin;
+use std::pin::pin;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::task::Context;
@@ -56,6 +58,7 @@ use qubit_fs_documentation_examples::random_access_sampling_async::sample_async;
 
 const ID: &str = "sampling-fixture";
 
+/// Counts provider opens, read requests and requested range sizes per fixture.
 #[derive(Default, Debug)]
 struct Record {
     opens: usize,
@@ -64,6 +67,10 @@ struct Record {
     reads: usize,
 }
 
+/// Controls the sync/async provider responses used by sampling contract tests.
+///
+/// The flags inject short reads, read failures and a pending first read while
+/// the shared record tracks whether the helper reopens or retries a session.
 #[derive(Clone)]
 struct Config {
     bytes: Arc<[u8]>,
@@ -76,6 +83,7 @@ struct Config {
 }
 
 impl Config {
+    /// Creates a fixture with the supplied provider range limit and test bytes.
     fn new(limit: FileSystemLimit) -> Self {
         Self {
             bytes: Arc::from(&b"abcdefgh"[..]),
@@ -87,14 +95,20 @@ impl Config {
             record: Arc::new(Mutex::new(Record::default())),
         }
     }
+    /// Mounts the configured synchronous provider.
     fn filesystem(&self) -> FileSystem {
-        FileSystem::from_spi(SyncProvider(self.clone())).unwrap()
+        FileSystem::from_spi(SyncProvider(self.clone())).expect("sync fixture provider should be valid")
     }
+    /// Mounts the configured asynchronous provider.
     fn async_filesystem(&self) -> AsyncFileSystem {
-        AsyncFileSystem::from_spi(AsyncProvider(self.clone())).unwrap()
+        AsyncFileSystem::from_spi(AsyncProvider(self.clone())).expect("async fixture provider should be valid")
     }
+    /// Returns a snapshot of the shared open/read counters and requested sizes.
     fn record(&self) -> Record {
-        let record = self.record.lock().unwrap();
+        let record = self
+            .record
+            .lock()
+            .expect("sampling fixture record mutex should not be poisoned");
         Record {
             opens: record.opens,
             path_opens: record.path_opens,
@@ -104,10 +118,11 @@ impl Config {
     }
 }
 
+/// Builds valid provider properties with the requested maximum read range.
 fn props_with_limit(limit: FileSystemLimit) -> ProviderProperties {
     ProviderProperties::new(
         FileSystemInfo::new(
-            FileSystemId::new(ID).unwrap(),
+            FileSystemId::new(ID).expect("fixture filesystem ID should be valid"),
             "sampling fixture",
             PathSemantics::Hierarchical,
         ),
@@ -119,15 +134,21 @@ fn props_with_limit(limit: FileSystemLimit) -> ProviderProperties {
         PathConstraints::absolute(),
         SymlinkPolicy::Reject,
     )
-    .unwrap()
+    .expect("sampling provider properties should be valid")
 }
 
+/// Builds metadata for a fixture resource at `path` with the reported length.
 fn info(path: Path, len: u64) -> OpenedFileInfo {
-    OpenedFileInfo::new(FileSystemId::new(ID).unwrap(), path)
-        .with_metadata(FileMetadata::new(FileKind::File).with_len(Some(len)))
+    OpenedFileInfo::new(
+        FileSystemId::new(ID).expect("fixture filesystem ID should be valid"),
+        path,
+    )
+    .with_metadata(FileMetadata::new(FileKind::File).with_len(Some(len)))
 }
 
+/// Synchronous provider backed by the shared sampling-test configuration.
 struct SyncProvider(Config);
+/// Synchronous session that records range requests and supplies fixture bytes.
 struct SyncSession(Config);
 
 impl FileSystemSpi for SyncProvider {
@@ -141,14 +162,22 @@ impl FileSystemSpi for SyncProvider {
         ))
     }
     fn open_random_access_reader(&self, request: OpenReaderRequest<'_>) -> FsResult<OpenedRandomAccessReader> {
-        self.0.record.lock().unwrap().opens += 1;
+        self.0
+            .record
+            .lock()
+            .expect("sampling fixture record mutex should not be poisoned")
+            .opens += 1;
         Ok(OpenedRandomAccessReader::new(
             info(request.path().clone(), self.0.reported_len),
             Box::new(SyncSession(self.0.clone())),
         ))
     }
     fn open_reader(&self, _request: OpenReaderRequest<'_>) -> FsResult<OpenedReader> {
-        self.0.record.lock().unwrap().path_opens += 1;
+        self.0
+            .record
+            .lock()
+            .expect("sampling fixture record mutex should not be poisoned")
+            .path_opens += 1;
         Err(FsError::new(
             FsErrorKind::UnsupportedOperation,
             FsOperation::OpenReader,
@@ -160,7 +189,11 @@ impl FileSystemSpi for SyncProvider {
 impl RandomAccessReadSession for SyncSession {
     fn read_at(&mut self, offset: u64, output: &mut [u8]) -> FsResult<usize> {
         let call = {
-            let mut record = self.0.record.lock().unwrap();
+            let mut record = self
+                .0
+                .record
+                .lock()
+                .expect("sampling fixture record mutex should not be poisoned");
             let call = record.reads;
             record.reads += 1;
             record.requests.push(output.len());
@@ -185,7 +218,9 @@ impl RandomAccessReadSession for SyncSession {
     }
 }
 
+/// Asynchronous provider backed by the shared sampling-test configuration.
 struct AsyncProvider(Config);
+/// Async session that can pend or fail at a configured range request.
 struct AsyncSession(Config);
 
 impl AsyncFileSystemSpi for AsyncProvider {
@@ -204,7 +239,11 @@ impl AsyncFileSystemSpi for AsyncProvider {
         &'a self,
         request: OpenReaderRequest<'a>,
     ) -> SpiFuture<'a, FsResult<OpenedAsyncRandomAccessReader>> {
-        self.0.record.lock().unwrap().opens += 1;
+        self.0
+            .record
+            .lock()
+            .expect("sampling fixture record mutex should not be poisoned")
+            .opens += 1;
         let config = self.0.clone();
         let path = request.path().clone();
         Box::pin(async move {
@@ -215,7 +254,11 @@ impl AsyncFileSystemSpi for AsyncProvider {
         })
     }
     fn open_reader<'a>(&'a self, _request: OpenReaderRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
-        self.0.record.lock().unwrap().path_opens += 1;
+        self.0
+            .record
+            .lock()
+            .expect("sampling fixture record mutex should not be poisoned")
+            .path_opens += 1;
         Box::pin(async {
             Err(FsError::new(
                 FsErrorKind::UnsupportedOperation,
@@ -231,7 +274,11 @@ impl AsyncRandomAccessReadSession for AsyncSession {
         Box::pin(async move {
             let this = self.get_mut();
             let (call, should_pending) = {
-                let mut record = this.0.record.lock().unwrap();
+                let mut record = this
+                    .0
+                    .record
+                    .lock()
+                    .expect("sampling fixture record mutex should not be poisoned");
                 let call = record.reads;
                 record.reads += 1;
                 record.requests.push(output.len());
@@ -241,7 +288,7 @@ impl AsyncRandomAccessReadSession for AsyncSession {
                 if let Some(first) = output.first_mut() {
                     *first = b'!';
                 }
-                std::future::poll_fn(|_| Poll::<()>::Pending).await;
+                poll_fn(|_| Poll::<()>::Pending).await;
             }
             if this.0.error_at == Some(call) {
                 if let Some(first) = output.first_mut() {
@@ -267,8 +314,9 @@ impl AsyncRandomAccessReadSession for AsyncSession {
     }
 }
 
+/// Polls a future once and panics if the fixture operation is still pending.
 fn ready<F: Future>(future: F) -> F::Output {
-    let mut future = std::pin::pin!(future);
+    let mut future = pin!(future);
     let mut context = Context::from_waker(Waker::noop());
     match future.as_mut().poll(&mut context) {
         Poll::Ready(value) => value,
@@ -276,23 +324,29 @@ fn ready<F: Future>(future: F) -> F::Output {
     }
 }
 
+/// Returns the absolute resource path shared by sampling tests.
 fn path() -> Path {
-    Path::parse("/sample").unwrap()
+    Path::parse("/sample").expect("fixture resource path should be valid")
 }
 
+/// Mounts the sync provider and opens its random-access reader for the fixture
+/// path.
 fn sync_session(config: &Config) -> (FileSystem, RandomAccessReader, Path) {
     let filesystem = config.filesystem();
     let path = path();
     let reader = filesystem
         .open_random_access_reader(&path, ReadOptions::default())
-        .unwrap();
+        .expect("fixture random-access reader should open");
     (filesystem, reader, path)
 }
 
+/// Mounts the async provider and opens its random-access reader for the fixture
+/// path.
 fn async_session(config: &Config) -> (AsyncFileSystem, AsyncRandomAccessReader, Path) {
     let filesystem = config.async_filesystem();
     let path = path();
-    let reader = ready(filesystem.open_random_access_reader(&path, ReadOptions::default())).unwrap();
+    let reader = ready(filesystem.open_random_access_reader(&path, ReadOptions::default()))
+        .expect("fixture random-access reader should open");
     (filesystem, reader, path)
 }
 
@@ -301,7 +355,10 @@ fn test_sync_sampling_splits_at_limit_and_keeps_one_open_session() {
     let config = Config::new(FileSystemLimit::Maximum(3));
     let (filesystem, mut reader, _) = sync_session(&config);
     let mut output = [0; 8];
-    assert_eq!(8, sample(&filesystem, &mut reader, 0, &mut output).unwrap());
+    assert_eq!(
+        8,
+        sample(&filesystem, &mut reader, 0, &mut output).expect("sampling operation should succeed for this fixture")
+    );
     assert_eq!(*b"abcdefgh", output);
     let record = config.record();
     assert_eq!(1, record.opens);
@@ -315,7 +372,10 @@ fn test_sync_sampling_handles_short_reads_eof_empty_and_zero_limit() {
     short.short = true;
     let (filesystem, mut reader, _) = sync_session(&short);
     let mut output = [0; 4];
-    assert_eq!(4, sample(&filesystem, &mut reader, 1, &mut output).unwrap());
+    assert_eq!(
+        4,
+        sample(&filesystem, &mut reader, 1, &mut output).expect("sampling operation should succeed for this fixture")
+    );
     assert_eq!(*b"bcde", output);
     assert_eq!(vec![3, 3, 2, 1], short.record().requests);
 
@@ -323,16 +383,26 @@ fn test_sync_sampling_handles_short_reads_eof_empty_and_zero_limit() {
     eof.bytes = Arc::from(&b"abc"[..]);
     let (filesystem, mut reader, _) = sync_session(&eof);
     let mut output = [0; 8];
-    assert_eq!(3, sample(&filesystem, &mut reader, 0, &mut output).unwrap());
+    assert_eq!(
+        3,
+        sample(&filesystem, &mut reader, 0, &mut output).expect("sampling operation should succeed for this fixture")
+    );
     assert_eq!(*b"abc\0\0\0\0\0", output);
     assert_eq!(vec![3, 3], eof.record().requests);
 
     let zero = Config::new(FileSystemLimit::Maximum(0));
     let (filesystem, mut reader, _) = sync_session(&zero);
-    assert_eq!(0, sample(&filesystem, &mut reader, 0, &mut []).unwrap());
-    let error = sample(&filesystem, &mut reader, 0, &mut [0]).unwrap_err();
+    assert_eq!(
+        0,
+        sample(&filesystem, &mut reader, 0, &mut []).expect("sampling operation should succeed for this fixture")
+    );
+    let error = sample(&filesystem, &mut reader, 0, &mut [0])
+        .expect_err("sampling should fail for the configured fixture condition");
     assert_eq!(FsErrorKind::ResourceLimitExceeded, error.kind());
-    assert_eq!(0, sample(&filesystem, &mut reader, 8, &mut [0]).unwrap());
+    assert_eq!(
+        0,
+        sample(&filesystem, &mut reader, 8, &mut [0]).expect("sampling operation should succeed for this fixture")
+    );
     assert_eq!(0, zero.record().reads);
     assert_eq!(1, zero.record().opens);
 }
@@ -347,7 +417,11 @@ fn test_sync_sampling_accepts_nonfinite_limits_and_stops_on_errors_or_overflow()
         let config = Config::new(limit);
         let (filesystem, mut reader, _) = sync_session(&config);
         let mut output = [0; 8];
-        assert_eq!(8, sample(&filesystem, &mut reader, 0, &mut output).unwrap());
+        assert_eq!(
+            8,
+            sample(&filesystem, &mut reader, 0, &mut output)
+                .expect("sampling operation should succeed for this fixture")
+        );
         assert_eq!(vec![8], config.record().requests);
     }
 
@@ -355,13 +429,17 @@ fn test_sync_sampling_accepts_nonfinite_limits_and_stops_on_errors_or_overflow()
     failing.error_at = Some(1);
     let (filesystem, mut reader, path) = sync_session(&failing);
     let mut failed_output = [0; 6];
-    let error = sample(&filesystem, &mut reader, 0, &mut failed_output).unwrap_err();
+    let error = sample(&filesystem, &mut reader, 0, &mut failed_output)
+        .expect_err("sampling should fail for the configured fixture condition");
     assert_eq!(FsErrorKind::Io, error.kind());
     assert_eq!(Some(&path), error.path());
     assert_eq!(Some("sampling fixture"), error.provider());
     assert_eq!(2, failing.record().reads);
     let mut fresh = [0; 4];
-    assert_eq!(4, sample(&filesystem, &mut reader, 2, &mut fresh).unwrap());
+    assert_eq!(
+        4,
+        sample(&filesystem, &mut reader, 2, &mut fresh).expect("sampling operation should succeed for this fixture")
+    );
     assert_eq!(*b"cdef", fresh);
     assert_eq!(1, failing.record().opens);
     assert_eq!(0, failing.record().path_opens);
@@ -369,7 +447,8 @@ fn test_sync_sampling_accepts_nonfinite_limits_and_stops_on_errors_or_overflow()
     let mut overflow = Config::new(FileSystemLimit::Maximum(2));
     overflow.reported_len = u64::MAX;
     let (filesystem, mut reader, _) = sync_session(&overflow);
-    let error = sample(&filesystem, &mut reader, u64::MAX - 1, &mut [0; 2]).unwrap_err();
+    let error = sample(&filesystem, &mut reader, u64::MAX - 1, &mut [0; 2])
+        .expect_err("sampling should fail for the configured fixture condition");
     assert_eq!(FsErrorKind::InvalidOptions, error.kind());
     assert_eq!(0, overflow.record().reads);
 }
@@ -382,7 +461,8 @@ fn test_async_sampling_splits_short_reads_and_stops_at_early_eof() {
     let mut output = [0; 8];
     assert_eq!(
         8,
-        ready(sample_async(&filesystem, &mut reader, 0, &mut output)).unwrap()
+        ready(sample_async(&filesystem, &mut reader, 0, &mut output))
+            .expect("sampling operation should succeed for this fixture")
     );
     assert_eq!(*b"abcdefgh", output);
     let record = config.record();
@@ -396,7 +476,8 @@ fn test_async_sampling_splits_short_reads_and_stops_at_early_eof() {
     let mut output = [0; 8];
     assert_eq!(
         3,
-        ready(sample_async(&filesystem, &mut reader, 0, &mut output)).unwrap()
+        ready(sample_async(&filesystem, &mut reader, 0, &mut output))
+            .expect("sampling operation should succeed for this fixture")
     );
     assert_eq!(vec![3, 3], eof.record().requests);
 }
@@ -405,10 +486,19 @@ fn test_async_sampling_splits_short_reads_and_stops_at_early_eof() {
 fn test_async_sampling_handles_empty_zero_nonfinite_error_and_overflow() {
     let zero = Config::new(FileSystemLimit::Maximum(0));
     let (filesystem, mut reader, _) = async_session(&zero);
-    assert_eq!(0, ready(sample_async(&filesystem, &mut reader, 0, &mut [])).unwrap());
-    let error = ready(sample_async(&filesystem, &mut reader, 0, &mut [0])).unwrap_err();
+    assert_eq!(
+        0,
+        ready(sample_async(&filesystem, &mut reader, 0, &mut []))
+            .expect("sampling operation should succeed for this fixture")
+    );
+    let error = ready(sample_async(&filesystem, &mut reader, 0, &mut [0]))
+        .expect_err("sampling should fail for the configured fixture condition");
     assert_eq!(FsErrorKind::ResourceLimitExceeded, error.kind());
-    assert_eq!(0, ready(sample_async(&filesystem, &mut reader, 8, &mut [0])).unwrap());
+    assert_eq!(
+        0,
+        ready(sample_async(&filesystem, &mut reader, 8, &mut [0]))
+            .expect("sampling operation should succeed for this fixture")
+    );
     assert_eq!(0, zero.record().reads);
     assert_eq!(1, zero.record().opens);
 
@@ -422,7 +512,8 @@ fn test_async_sampling_handles_empty_zero_nonfinite_error_and_overflow() {
         let mut output = [0; 8];
         assert_eq!(
             8,
-            ready(sample_async(&filesystem, &mut reader, 0, &mut output)).unwrap()
+            ready(sample_async(&filesystem, &mut reader, 0, &mut output))
+                .expect("sampling operation should succeed for this fixture")
         );
         assert_eq!(vec![8], config.record().requests);
     }
@@ -430,11 +521,16 @@ fn test_async_sampling_handles_empty_zero_nonfinite_error_and_overflow() {
     let mut failing = Config::new(FileSystemLimit::Maximum(2));
     failing.error_at = Some(1);
     let (filesystem, mut reader, _) = async_session(&failing);
-    let error = ready(sample_async(&filesystem, &mut reader, 0, &mut [0; 6])).unwrap_err();
+    let error = ready(sample_async(&filesystem, &mut reader, 0, &mut [0; 6]))
+        .expect_err("sampling should fail for the configured fixture condition");
     assert_eq!(FsErrorKind::Io, error.kind());
     assert_eq!(2, failing.record().reads);
     let mut fresh = [0; 4];
-    assert_eq!(4, ready(sample_async(&filesystem, &mut reader, 2, &mut fresh)).unwrap());
+    assert_eq!(
+        4,
+        ready(sample_async(&filesystem, &mut reader, 2, &mut fresh))
+            .expect("sampling operation should succeed for this fixture")
+    );
     assert_eq!(*b"cdef", fresh);
     assert_eq!(1, failing.record().opens);
     assert_eq!(0, failing.record().path_opens);
@@ -442,7 +538,8 @@ fn test_async_sampling_handles_empty_zero_nonfinite_error_and_overflow() {
     let mut overflow = Config::new(FileSystemLimit::Maximum(2));
     overflow.reported_len = u64::MAX;
     let (filesystem, mut reader, _) = async_session(&overflow);
-    let error = ready(sample_async(&filesystem, &mut reader, u64::MAX - 1, &mut [0; 2])).unwrap_err();
+    let error = ready(sample_async(&filesystem, &mut reader, u64::MAX - 1, &mut [0; 2]))
+        .expect_err("sampling should fail for the configured fixture condition");
     assert_eq!(FsErrorKind::InvalidOptions, error.kind());
     assert_eq!(0, overflow.record().reads);
 }
@@ -454,13 +551,17 @@ fn test_async_pending_drop_discards_partial_sample_and_reuses_session() {
     let (filesystem, mut reader, _) = async_session(&config);
     let mut output = [0xCC; 4];
     {
-        let mut future = std::pin::pin!(sample_async(&filesystem, &mut reader, 0, &mut output));
+        let mut future = pin!(sample_async(&filesystem, &mut reader, 0, &mut output));
         let mut context = Context::from_waker(Waker::noop());
         assert!(future.as_mut().poll(&mut context).is_pending());
     }
     assert_eq!(b"!\xCC\xCC\xCC", &output);
     let mut fresh = [0; 4];
-    assert_eq!(4, ready(sample_async(&filesystem, &mut reader, 2, &mut fresh)).unwrap());
+    assert_eq!(
+        4,
+        ready(sample_async(&filesystem, &mut reader, 2, &mut fresh))
+            .expect("sampling operation should succeed for this fixture")
+    );
     assert_eq!(*b"cdef", fresh);
     assert_eq!(1, config.record().opens);
     assert_eq!(0, config.record().path_opens);

@@ -10,6 +10,7 @@
 use crate::write::WriteFailureState;
 
 /// Facts frozen when an owning write completes or is cancelled.
+#[must_use = "the recovery snapshot must be retained for operation recovery"]
 #[derive(Clone, Copy)]
 pub(crate) struct WriteAllRecoverySnapshot {
     /// Last known publication certainty.
@@ -20,6 +21,9 @@ pub(crate) struct WriteAllRecoverySnapshot {
 
 impl WriteAllRecoverySnapshot {
     /// Creates a snapshot before any provider work has started.
+    ///
+    /// # Returns
+    /// A snapshot initialized to `NotPublished` with zero acknowledged bytes.
     #[inline]
     pub(crate) const fn new() -> Self {
         Self {

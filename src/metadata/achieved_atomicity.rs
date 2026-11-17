@@ -14,7 +14,7 @@
 /// ```rust
 /// use qubit_fs::metadata::AchievedAtomicity;
 ///
-/// assert!(matches!(AchievedAtomicity::Atomic, AchievedAtomicity::Atomic));
+/// assert_ne!(AchievedAtomicity::Atomic, AchievedAtomicity::NonAtomic);
 /// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AchievedAtomicity {

@@ -13,7 +13,8 @@
 /// # Examples
 ///
 /// ```rust
-/// use qubit_fs::path::{PathConstraints, PathForm};
+/// use qubit_fs::path::PathConstraints;
+/// use qubit_fs::path::PathForm;
 ///
 /// let constraints = PathConstraints::absolute();
 /// assert_eq!(PathForm::Absolute, constraints.form());

@@ -1,26 +1,98 @@
+// =============================================================================
+//    Copyright (c) 2025 - 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
+
+#[cfg(feature = "async")]
+use std::future::Future;
 use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::sync::mpsc;
+use std::task::Context;
+use std::task::Poll;
+#[cfg(feature = "async")]
+use std::task::Wake;
+use std::task::Waker;
+use std::thread;
+#[cfg(feature = "async")]
+use std::thread::Thread;
+use std::time::Duration;
+use std::time::Instant;
 
 use qubit_fs::FsEffectFact;
+use qubit_fs::FsEffectReservation;
 use qubit_fs::FsEffectSlotPool;
 use qubit_fs::FsEffectSnapshot;
 use qubit_fs::FsEffectState;
 use qubit_fs::FsExecutionBinding;
+use qubit_fs::FsOperationFailure;
+use qubit_fs::FsOwnedCopyRequest;
 use qubit_fs::FsOwnedReadRequest;
+use qubit_fs::FsOwnedRenameRequest;
+use qubit_fs::FsOwnedTreePublishRequest;
+use qubit_fs::FsOwnedWriteRequest;
 use qubit_fs::FsPrepareFailure;
 use qubit_fs::FsPrepareFailureKind;
 use qubit_fs::Path;
+use qubit_fs::directory::TreePublishOutcome;
+use qubit_fs::metadata::AchievedAtomicity;
+use qubit_fs::metadata::PublicationMethod;
+use qubit_fs::metadata::WriteOutcome;
+use qubit_fs::spi::ManagedFsMutationSpi;
+use qubit_fs::spi::ManagedFsReadSpi;
+use qubit_fs::spi::ManagedFsTreeSpi;
+use qubit_fs::spi::PreparedFsCopy;
+use qubit_fs::spi::PreparedFsRead;
+use qubit_fs::spi::PreparedFsRename;
+use qubit_fs::spi::PreparedFsTreePublish;
+use qubit_fs::spi::PreparedFsWrite;
+use qubit_operation::AsyncCleanup;
+use qubit_operation::ChildOutcomeKind;
+use qubit_operation::ChildOutcomeSummary;
+use qubit_operation::ChildRelease;
+use qubit_operation::ChildSnapshot;
+use qubit_operation::CleanupContext;
+use qubit_operation::CleanupFuture;
+use qubit_operation::CleanupOutcome;
+use qubit_operation::DiagnosticSummary;
+use qubit_operation::ExecutionFailure;
+use qubit_operation::ExecutionPhase;
+use qubit_operation::ExternalBindError;
+use qubit_operation::GroupBindingError;
+use qubit_operation::GroupOptions;
+use qubit_operation::ManagerLimits;
+use qubit_operation::ManagerOptions;
+use qubit_operation::OperationControl;
+use qubit_operation::OperationId;
+use qubit_operation::OperationManager;
+use qubit_operation::OperationOutcome;
+use qubit_operation::OperationScope;
+use qubit_operation::PreparedExternalOperation;
+use qubit_operation::ResourceId;
+use qubit_operation::ResourceRef;
+use qubit_operation::ResourceReservation;
+use qubit_operation::SettlementReport;
+use qubit_operation::SettlementStatus;
+use qubit_operation::ShutdownMode;
+use qubit_operation::StopReason;
+use qubit_operation::StopRequestStatus;
+use qubit_operation::ThreadPoolExecutorOptions;
 
 struct RejectReadProvider {
     prepared: AtomicUsize,
     io_started: AtomicUsize,
 }
-impl qubit_fs::spi::ManagedFsReadSpi for RejectReadProvider {
+impl ManagedFsReadSpi for RejectReadProvider {
     fn prepare_read_all(
         &self,
         request: FsOwnedReadRequest,
-    ) -> Result<Arc<dyn qubit_fs::spi::PreparedFsRead>, FsPrepareFailure<FsOwnedReadRequest>> {
+    ) -> Result<Arc<dyn PreparedFsRead>, FsPrepareFailure<FsOwnedReadRequest>> {
         self.prepared.fetch_add(1, Ordering::SeqCst);
         Err(FsPrepareFailure {
             kind: FsPrepareFailureKind::Rejected("policy".into()),
@@ -30,8 +102,8 @@ impl qubit_fs::spi::ManagedFsReadSpi for RejectReadProvider {
 }
 
 #[test]
-fn parent_scope_submission_preserves_request_when_prepare_rejects_without_io() {
-    let manager = qubit_operation::OperationManager::new(Default::default()).unwrap();
+fn test_parent_scope_submission_preserves_request_when_prepare_rejects_without_io() {
+    let manager = OperationManager::new(Default::default()).unwrap();
     let provider = Arc::new(RejectReadProvider {
         prepared: AtomicUsize::new(0),
         io_started: AtomicUsize::new(0),
@@ -62,14 +134,14 @@ fn parent_scope_submission_preserves_request_when_prepare_rejects_without_io() {
         .unwrap();
     assert!(matches!(
         child_parent.wait_outcome().unwrap(),
-        qubit_operation::OperationOutcome::Succeeded(())
+        OperationOutcome::Succeeded(())
     ));
     assert_eq!(provider.prepared.load(Ordering::SeqCst), 1);
     assert_eq!(provider.io_started.load(Ordering::SeqCst), 0);
 }
 
 #[test]
-fn effect_slot_is_reserved_until_provider_releases_it() {
+fn test_effect_slot_is_reserved_until_provider_releases_it() {
     let pool = FsEffectSlotPool::new(1);
     let reservation = pool.reserve().expect("first slot is available");
     let observer = reservation.observer();
@@ -86,8 +158,8 @@ fn effect_slot_is_reserved_until_provider_releases_it() {
 }
 
 #[test]
-fn dropping_observer_does_not_release_provider_resource_owner() {
-    struct RecoveryOwner(qubit_fs::FsEffectReservation);
+fn test_dropping_observer_does_not_release_provider_resource_owner() {
+    struct RecoveryOwner(FsEffectReservation);
     impl RecoveryOwner {
         fn finish_recovery(self) {
             drop(self.0);
@@ -108,25 +180,23 @@ fn dropping_observer_does_not_release_provider_resource_owner() {
 }
 
 #[test]
-fn managed_write_publishes_effect_and_settles_after_outcome_and_observer_drop() {
-    use std::time::Duration;
-
-    let manager = qubit_operation::OperationManager::new(Default::default()).unwrap();
+fn test_managed_write_publishes_effect_and_settles_after_outcome_and_observer_drop() {
+    let manager = OperationManager::new(Default::default()).unwrap();
     let effects = FsEffectSlotPool::new(1);
     let gate = Arc::new(FakeActivationGate::default());
     let entered_tx;
     let entered_rx;
-    (entered_tx, entered_rx) = std::sync::mpsc::channel();
-    let cleanup_released = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let resource_ids = Arc::new(std::sync::Mutex::new(Vec::new()));
+    (entered_tx, entered_rx) = mpsc::channel();
+    let cleanup_released = Arc::new(AtomicBool::new(false));
+    let resource_ids = Arc::new(Mutex::new(Vec::new()));
     let settlement_gate = Arc::new(FakeSettlementGate::default());
     let provider = FakeWriteProvider::new(FakeWriteMode::Success {
         gate: Some((Arc::clone(&gate), entered_tx)),
         cleanup_released: Arc::clone(&cleanup_released),
         settlement_gate: Arc::clone(&settlement_gate),
         resource_ids: Arc::clone(&resource_ids),
-        stop_requests: Arc::new(std::sync::Mutex::new(Vec::new())),
-        prepared_probe: Arc::new(std::sync::Mutex::new(None)),
+        stop_requests: Arc::new(Mutex::new(Vec::new())),
+        prepared_probe: Arc::new(Mutex::new(None)),
     });
     let binding = FsExecutionBinding::new(manager.clone());
     let submitted = match binding.submit_write(&provider, write_request("/managed/write", b"payload"), &effects) {
@@ -144,7 +214,7 @@ fn managed_write_publishes_effect_and_settles_after_outcome_and_observer_drop() 
     let mut operation = submitted.operation;
     let outcome = operation.wait_outcome().unwrap();
     assert!(
-        matches!(outcome, qubit_operation::OperationOutcome::Succeeded(ref value) if value.bytes_written() == Some(7)),
+        matches!(outcome, OperationOutcome::Succeeded(ref value) if value.bytes_written() == Some(7)),
         "unexpected outcome: {outcome:?}"
     );
     assert!(matches!(
@@ -166,27 +236,24 @@ fn managed_write_publishes_effect_and_settles_after_outcome_and_observer_drop() 
     );
     assert_eq!(settlement.resource_reports[0].resource_id, resource_ids[0]);
     assert!(effects.reserve().is_ok());
-    let _ = manager
-        .request_shutdown(qubit_operation::ShutdownMode::Drain)
-        .wait()
-        .unwrap();
+    let _ = manager.request_shutdown(ShutdownMode::Drain).wait().unwrap();
 }
 
 #[test]
 #[cfg(feature = "async")]
-fn managed_async_write_uses_same_effect_and_outcome_contract() {
-    let manager = qubit_operation::OperationManager::new(Default::default()).unwrap();
+fn test_managed_async_write_uses_same_effect_and_outcome_contract() {
+    let manager = OperationManager::new(Default::default()).unwrap();
     let effects = FsEffectSlotPool::new(1);
-    let cleanup_released = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let resource_ids = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let cleanup_released = Arc::new(AtomicBool::new(false));
+    let resource_ids = Arc::new(Mutex::new(Vec::new()));
     let settlement_gate = Arc::new(FakeSettlementGate::default());
     let provider = FakeWriteProvider::new(FakeWriteMode::Success {
         gate: None,
         cleanup_released: Arc::clone(&cleanup_released),
         settlement_gate: Arc::clone(&settlement_gate),
         resource_ids,
-        stop_requests: Arc::new(std::sync::Mutex::new(Vec::new())),
-        prepared_probe: Arc::new(std::sync::Mutex::new(None)),
+        stop_requests: Arc::new(Mutex::new(Vec::new())),
+        prepared_probe: Arc::new(Mutex::new(None)),
     });
     let binding = FsExecutionBinding::new(manager.clone());
     let submitted = match binding.submit_write_async(&provider, write_request("/managed/async", b"async"), &effects) {
@@ -195,7 +262,7 @@ fn managed_async_write_uses_same_effect_and_outcome_contract() {
     };
     let mut operation = submitted.operation;
     let outcome = block_on(operation.wait_outcome()).unwrap();
-    assert!(matches!(outcome, qubit_operation::OperationOutcome::Succeeded(value) if value.bytes_written() == Some(5)));
+    assert!(matches!(outcome, OperationOutcome::Succeeded(value) if value.bytes_written() == Some(5)));
     assert!(matches!(
         submitted.effect.wait_final(),
         Ok(FsEffectFact::State(FsEffectState::Applied))
@@ -204,15 +271,12 @@ fn managed_async_write_uses_same_effect_and_outcome_contract() {
     settlement_gate.release();
     assert!(block_on(operation.wait_settlement()).all_released());
     assert!(cleanup_released.load(Ordering::SeqCst));
-    let _ = manager
-        .request_shutdown(qubit_operation::ShutdownMode::Drain)
-        .wait()
-        .unwrap();
+    let _ = manager.request_shutdown(ShutdownMode::Drain).wait().unwrap();
 }
 
 #[test]
-fn managed_write_rejections_return_request_and_release_fact_capacity() {
-    let manager = qubit_operation::OperationManager::new(Default::default()).unwrap();
+fn test_managed_write_rejections_return_request_and_release_fact_capacity() {
+    let manager = OperationManager::new(Default::default()).unwrap();
     let effects = FsEffectSlotPool::new(1);
     let provider = FakeWriteProvider::new(FakeWriteMode::PrepareReject);
     let binding = FsExecutionBinding::new(manager.clone());
@@ -224,7 +288,7 @@ fn managed_write_rejections_return_request_and_release_fact_capacity() {
     assert_eq!(rejected.request.contents, b"owned");
     assert_eq!(
         rejected.preparation,
-        Some(qubit_fs::FsPrepareFailureKind::Rejected("prepare".into()))
+        Some(FsPrepareFailureKind::Rejected("prepare".into()))
     );
     assert!(effects.reserve().is_ok(), "prepare rejection returns the slot");
 
@@ -237,17 +301,15 @@ fn managed_write_rejections_return_request_and_release_fact_capacity() {
     assert_eq!(rejected.request.contents, b"same");
     assert_eq!(
         rejected.preparation,
-        Some(qubit_fs::FsPrepareFailureKind::ReservationInstallFailed)
+        Some(FsPrepareFailureKind::ReservationInstallFailed)
     );
     assert!(effects.reserve().is_ok(), "install rejection returns the slot");
-    let _ = manager
-        .request_shutdown(qubit_operation::ShutdownMode::Drain)
-        .wait()
-        .unwrap();
+    let _ = manager.request_shutdown(ShutdownMode::Drain).wait().unwrap();
 }
 
-fn write_request(path: &str, contents: &[u8]) -> qubit_fs::FsOwnedWriteRequest {
-    qubit_fs::FsOwnedWriteRequest {
+#[must_use]
+fn write_request(path: &str, contents: &[u8]) -> FsOwnedWriteRequest {
+    FsOwnedWriteRequest {
         path: Path::parse(path).unwrap(),
         contents: contents.to_vec(),
         options: Default::default(),
@@ -258,40 +320,40 @@ enum FakeWriteMode {
     PrepareReject,
     InstallReject,
     Success {
-        gate: Option<(Arc<FakeActivationGate>, std::sync::mpsc::Sender<()>)>,
-        cleanup_released: Arc<std::sync::atomic::AtomicBool>,
+        gate: Option<(Arc<FakeActivationGate>, mpsc::Sender<()>)>,
+        cleanup_released: Arc<AtomicBool>,
         settlement_gate: Arc<FakeSettlementGate>,
-        resource_ids: Arc<std::sync::Mutex<Vec<qubit_operation::ResourceId>>>,
-        stop_requests: Arc<std::sync::Mutex<Vec<qubit_operation::StopReason>>>,
-        prepared_probe: Arc<std::sync::Mutex<Option<Arc<FakePreparedWrite>>>>,
+        resource_ids: Arc<Mutex<Vec<ResourceId>>>,
+        stop_requests: Arc<Mutex<Vec<StopReason>>>,
+        prepared_probe: Arc<Mutex<Option<Arc<FakePreparedWrite>>>>,
     },
 }
 
 struct FakeWriteProvider(FakeWriteMode);
 impl FakeWriteProvider {
+    #[must_use]
     fn new(mode: FakeWriteMode) -> Self {
         Self(mode)
     }
 }
-impl qubit_fs::spi::ManagedFsMutationSpi for FakeWriteProvider {
+impl ManagedFsMutationSpi for FakeWriteProvider {
     fn prepare_write(
         &self,
-        request: qubit_fs::FsOwnedWriteRequest,
-    ) -> Result<Arc<dyn qubit_fs::spi::PreparedFsWrite>, qubit_fs::FsPrepareFailure<qubit_fs::FsOwnedWriteRequest>>
-    {
+        request: FsOwnedWriteRequest,
+    ) -> Result<Arc<dyn PreparedFsWrite>, FsPrepareFailure<FsOwnedWriteRequest>> {
         match &self.0 {
-            FakeWriteMode::PrepareReject => Err(qubit_fs::FsPrepareFailure {
-                kind: qubit_fs::FsPrepareFailureKind::Rejected("prepare".into()),
+            FakeWriteMode::PrepareReject => Err(FsPrepareFailure {
+                kind: FsPrepareFailureKind::Rejected("prepare".into()),
                 request,
             }),
             FakeWriteMode::InstallReject => Ok(Arc::new(FakePreparedWrite::new(
                 request,
                 true,
                 None,
-                Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                Arc::new(AtomicBool::new(false)),
                 Arc::new(FakeSettlementGate::default()),
-                Arc::new(std::sync::Mutex::new(Vec::new())),
-                Arc::new(std::sync::Mutex::new(Vec::new())),
+                Arc::new(Mutex::new(Vec::new())),
+                Arc::new(Mutex::new(Vec::new())),
             ))),
             FakeWriteMode::Success {
                 gate,
@@ -317,66 +379,64 @@ impl qubit_fs::spi::ManagedFsMutationSpi for FakeWriteProvider {
     }
     fn prepare_copy(
         &self,
-        request: qubit_fs::FsOwnedCopyRequest,
-    ) -> Result<Arc<dyn qubit_fs::spi::PreparedFsCopy>, qubit_fs::FsPrepareFailure<qubit_fs::FsOwnedCopyRequest>> {
-        Err(qubit_fs::FsPrepareFailure {
-            kind: qubit_fs::FsPrepareFailureKind::Unsupported,
+        request: FsOwnedCopyRequest,
+    ) -> Result<Arc<dyn PreparedFsCopy>, FsPrepareFailure<FsOwnedCopyRequest>> {
+        Err(FsPrepareFailure {
+            kind: FsPrepareFailureKind::Unsupported,
             request,
         })
     }
     fn prepare_rename(
         &self,
-        request: qubit_fs::FsOwnedRenameRequest,
-    ) -> Result<Arc<dyn qubit_fs::spi::PreparedFsRename>, qubit_fs::FsPrepareFailure<qubit_fs::FsOwnedRenameRequest>>
-    {
-        Err(qubit_fs::FsPrepareFailure {
-            kind: qubit_fs::FsPrepareFailureKind::Unsupported,
+        request: FsOwnedRenameRequest,
+    ) -> Result<Arc<dyn PreparedFsRename>, FsPrepareFailure<FsOwnedRenameRequest>> {
+        Err(FsPrepareFailure {
+            kind: FsPrepareFailureKind::Unsupported,
             request,
         })
     }
 }
 
 struct FakePreparedWrite {
-    request: std::sync::Mutex<Option<qubit_fs::FsOwnedWriteRequest>>,
-    id: std::sync::Mutex<Option<qubit_operation::OperationId>>,
-    reservation: std::sync::Mutex<Option<qubit_fs::FsEffectReservation>>,
-    outcome: std::sync::Mutex<
-        Option<qubit_operation::OperationOutcome<qubit_fs::metadata::WriteOutcome, qubit_fs::FsOperationFailure>>,
-    >,
-    activated: std::sync::atomic::AtomicBool,
+    request: Mutex<Option<FsOwnedWriteRequest>>,
+    id: Mutex<Option<OperationId>>,
+    reservation: Mutex<Option<FsEffectReservation>>,
+    outcome: Mutex<Option<OperationOutcome<WriteOutcome, FsOperationFailure>>>,
+    activated: AtomicBool,
     install_reject: bool,
-    gate: Option<(Arc<FakeActivationGate>, std::sync::mpsc::Sender<()>)>,
-    cleanup_released: Arc<std::sync::atomic::AtomicBool>,
+    gate: Option<(Arc<FakeActivationGate>, mpsc::Sender<()>)>,
+    cleanup_released: Arc<AtomicBool>,
     settlement_gate: Arc<FakeSettlementGate>,
-    resource_ids: Arc<std::sync::Mutex<Vec<qubit_operation::ResourceId>>>,
-    stop_requests: Arc<std::sync::Mutex<Vec<qubit_operation::StopReason>>>,
-    resource_ref: std::sync::Mutex<Option<qubit_operation::ResourceRef<()>>>,
-    resource_reservation: std::sync::Mutex<Option<qubit_operation::ResourceReservation>>,
+    resource_ids: Arc<Mutex<Vec<ResourceId>>>,
+    stop_requests: Arc<Mutex<Vec<StopReason>>>,
+    resource_ref: Mutex<Option<ResourceRef<()>>>,
+    resource_reservation: Mutex<Option<ResourceReservation>>,
 }
 impl FakePreparedWrite {
+    #[must_use]
     fn new(
-        request: qubit_fs::FsOwnedWriteRequest,
+        request: FsOwnedWriteRequest,
         install_reject: bool,
-        gate: Option<(Arc<FakeActivationGate>, std::sync::mpsc::Sender<()>)>,
-        cleanup_released: Arc<std::sync::atomic::AtomicBool>,
+        gate: Option<(Arc<FakeActivationGate>, mpsc::Sender<()>)>,
+        cleanup_released: Arc<AtomicBool>,
         settlement_gate: Arc<FakeSettlementGate>,
-        resource_ids: Arc<std::sync::Mutex<Vec<qubit_operation::ResourceId>>>,
-        stop_requests: Arc<std::sync::Mutex<Vec<qubit_operation::StopReason>>>,
+        resource_ids: Arc<Mutex<Vec<ResourceId>>>,
+        stop_requests: Arc<Mutex<Vec<StopReason>>>,
     ) -> Self {
         Self {
-            request: std::sync::Mutex::new(Some(request)),
-            id: std::sync::Mutex::new(None),
-            reservation: std::sync::Mutex::new(None),
-            outcome: std::sync::Mutex::new(None),
-            activated: std::sync::atomic::AtomicBool::new(false),
+            request: Mutex::new(Some(request)),
+            id: Mutex::new(None),
+            reservation: Mutex::new(None),
+            outcome: Mutex::new(None),
+            activated: AtomicBool::new(false),
             install_reject,
             gate,
             cleanup_released,
             settlement_gate,
             resource_ids,
             stop_requests,
-            resource_ref: std::sync::Mutex::new(None),
-            resource_reservation: std::sync::Mutex::new(None),
+            resource_ref: Mutex::new(None),
+            resource_reservation: Mutex::new(None),
         }
     }
     fn complete_success(&self) {
@@ -396,96 +456,85 @@ impl FakePreparedWrite {
             }
         }
         let fact = if self.stop_requests.lock().unwrap().is_empty() {
-            qubit_fs::FsEffectState::Applied
+            FsEffectState::Applied
         } else {
-            qubit_fs::FsEffectState::Indeterminate
+            FsEffectState::Indeterminate
         };
-        reservation.publish(qubit_fs::FsEffectFact::State(fact));
+        reservation.publish(FsEffectFact::State(fact));
         let bytes = self.request.lock().unwrap().as_ref().unwrap().contents.len() as u64;
-        *self.outcome.lock().unwrap() = Some(qubit_operation::OperationOutcome::Succeeded(
-            qubit_fs::metadata::WriteOutcome::new(
-                qubit_fs::metadata::AchievedAtomicity::Atomic,
-                qubit_fs::metadata::PublicationMethod::Direct,
-            )
-            .with_bytes_written(bytes),
+        *self.outcome.lock().unwrap() = Some(OperationOutcome::Succeeded(
+            WriteOutcome::new(AchievedAtomicity::Atomic, PublicationMethod::Direct).with_bytes_written(bytes),
         ));
         self.activated.store(true, Ordering::SeqCst);
         drop(reservation);
     }
+    #[must_use]
     fn final_fact(&self) -> bool {
         self.activated.load(Ordering::SeqCst)
     }
 }
-impl qubit_operation::OperationControl for FakePreparedWrite {
-    fn request_stop(&self, reason: qubit_operation::StopReason) {
+impl OperationControl for FakePreparedWrite {
+    fn request_stop(&self, reason: StopReason) {
         self.stop_requests.lock().unwrap().push(reason);
     }
-    fn snapshot(&self) -> qubit_operation::ChildSnapshot {
+    fn snapshot(&self) -> ChildSnapshot {
         let operation_id = self.id.lock().unwrap().unwrap();
         let done = self.final_fact();
-        qubit_operation::ChildSnapshot {
+        ChildSnapshot {
             operation_id,
             execution: if done {
-                qubit_operation::ExecutionPhase::Finished
+                ExecutionPhase::Finished
             } else {
-                qubit_operation::ExecutionPhase::Running
+                ExecutionPhase::Running
             },
             stop: None,
-            outcome: done.then_some(qubit_operation::ChildOutcomeSummary {
+            outcome: done.then_some(ChildOutcomeSummary {
                 operation_id,
-                kind: qubit_operation::ChildOutcomeKind::Succeeded,
-                summary: qubit_operation::DiagnosticSummary::new("child succeeded"),
+                kind: ChildOutcomeKind::Succeeded,
+                summary: DiagnosticSummary::new("child succeeded"),
             }),
             input_released: done,
             settlement: done.then(|| Arc::new(fake_settlement(operation_id))),
         }
     }
-    fn poll_outcome(&self, _: &mut std::task::Context<'_>) -> std::task::Poll<qubit_operation::ChildOutcomeSummary> {
+    fn poll_outcome(&self, _: &mut Context<'_>) -> Poll<ChildOutcomeSummary> {
         if self.final_fact() {
-            std::task::Poll::Ready(self.snapshot().outcome.unwrap())
+            Poll::Ready(self.snapshot().outcome.unwrap())
         } else {
-            std::task::Poll::Pending
+            Poll::Pending
         }
     }
-    fn poll_release(&self, _: &mut std::task::Context<'_>) -> std::task::Poll<qubit_operation::ChildRelease> {
+    fn poll_release(&self, _: &mut Context<'_>) -> Poll<ChildRelease> {
         if self.final_fact() {
-            std::task::Poll::Ready(qubit_operation::ChildRelease {
+            Poll::Ready(ChildRelease {
                 operation_id: self.id.lock().unwrap().unwrap(),
                 confirmed_at: None,
             })
         } else {
-            std::task::Poll::Pending
+            Poll::Pending
         }
     }
-    fn poll_settlement(
-        &self,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Arc<qubit_operation::SettlementReport>> {
+    fn poll_settlement(&self, cx: &mut Context<'_>) -> Poll<Arc<SettlementReport>> {
         if self.final_fact() && self.settlement_gate.open.load(Ordering::SeqCst) {
             self.resource_ref.lock().unwrap().take();
             self.cleanup_released.store(true, Ordering::SeqCst);
-            std::task::Poll::Ready(Arc::new(fake_settlement(self.id.lock().unwrap().unwrap())))
+            Poll::Ready(Arc::new(fake_settlement(self.id.lock().unwrap().unwrap())))
         } else {
             *self.settlement_gate.waker.lock().unwrap() = Some(cx.waker().clone());
-            std::task::Poll::Pending
+            Poll::Pending
         }
     }
 }
-impl qubit_operation::PreparedExternalOperation<qubit_fs::metadata::WriteOutcome, qubit_fs::FsOperationFailure>
-    for FakePreparedWrite
-{
-    fn bind(&self, id: qubit_operation::OperationId) -> Result<(), qubit_operation::ExternalBindError> {
+impl PreparedExternalOperation<WriteOutcome, FsOperationFailure> for FakePreparedWrite {
+    fn bind(&self, id: OperationId) -> Result<(), ExternalBindError> {
         let mut bound = self.id.lock().unwrap();
         if bound.is_some() {
-            return Err(qubit_operation::ExternalBindError::AlreadyBound);
+            return Err(ExternalBindError::AlreadyBound);
         }
         *bound = Some(id);
         Ok(())
     }
-    fn activate(
-        self: Arc<Self>,
-        scope: qubit_operation::OperationScope,
-    ) -> Result<(), qubit_operation::ExecutionFailure> {
+    fn activate(self: Arc<Self>, scope: OperationScope) -> Result<(), ExecutionFailure> {
         if let Ok(reservation) = scope.reserve_resource() {
             *self.resource_reservation.lock().unwrap() = Some(reservation);
         }
@@ -501,47 +550,35 @@ impl qubit_operation::PreparedExternalOperation<qubit_fs::metadata::WriteOutcome
     }
     fn abandon(self: Arc<Self>) {
         if let Some(reservation) = self.reservation.lock().unwrap().take() {
-            reservation.publish(qubit_fs::FsEffectFact::State(qubit_fs::FsEffectState::Unchanged));
+            reservation.publish(FsEffectFact::State(FsEffectState::Unchanged));
         }
     }
-    fn poll_take_outcome(
-        &self,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<
-        qubit_operation::OperationOutcome<qubit_fs::metadata::WriteOutcome, qubit_fs::FsOperationFailure>,
-    > {
+    fn poll_take_outcome(&self, cx: &mut Context<'_>) -> Poll<OperationOutcome<WriteOutcome, FsOperationFailure>> {
         if let Some((gate, _)) = &self.gate {
             if !gate.poll_open(cx) {
-                return std::task::Poll::Pending;
+                return Poll::Pending;
             }
             self.complete_success();
         }
-        self.outcome
-            .lock()
-            .unwrap()
-            .take()
-            .map_or(std::task::Poll::Pending, std::task::Poll::Ready)
+        self.outcome.lock().unwrap().take().map_or(Poll::Pending, Poll::Ready)
     }
 }
 
 struct FakeWriteCleanup;
-impl qubit_operation::AsyncCleanup<()> for FakeWriteCleanup {
-    fn cleanup(self: Arc<Self>, _: (), _: qubit_operation::CleanupContext) -> qubit_operation::CleanupFuture<()> {
-        Box::pin(async { qubit_operation::CleanupOutcome::Released })
+impl AsyncCleanup<()> for FakeWriteCleanup {
+    fn cleanup(self: Arc<Self>, _: (), _: CleanupContext) -> CleanupFuture<()> {
+        Box::pin(async { CleanupOutcome::Released })
     }
 }
-impl qubit_fs::spi::PreparedFsWrite for FakePreparedWrite {
-    fn take_unclaimed_request(&self) -> Option<qubit_fs::FsOwnedWriteRequest> {
+impl PreparedFsWrite for FakePreparedWrite {
+    fn take_unclaimed_request(&self) -> Option<FsOwnedWriteRequest> {
         if self.id.lock().unwrap().is_some() {
             return None;
         }
         self.reservation.lock().unwrap().take();
         self.request.lock().unwrap().take()
     }
-    fn install_effect_reservation(
-        &self,
-        reservation: qubit_fs::FsEffectReservation,
-    ) -> Result<(), qubit_fs::FsEffectReservation> {
+    fn install_effect_reservation(&self, reservation: FsEffectReservation) -> Result<(), FsEffectReservation> {
         if self.install_reject || self.reservation.lock().unwrap().is_some() {
             Err(reservation)
         } else {
@@ -551,10 +588,10 @@ impl qubit_fs::spi::PreparedFsWrite for FakePreparedWrite {
     }
 }
 
-fn fake_settlement(operation_id: qubit_operation::OperationId) -> qubit_operation::SettlementReport {
-    qubit_operation::SettlementReport {
+fn fake_settlement(operation_id: OperationId) -> SettlementReport {
+    SettlementReport {
         operation_id,
-        status: qubit_operation::SettlementStatus::Released,
+        status: SettlementStatus::Released,
         released_count: 0,
         transferred_count: 0,
         recovery_count: 0,
@@ -576,16 +613,18 @@ fn fake_settlement(operation_id: qubit_operation::OperationId) -> qubit_operatio
         effects: Arc::from([]),
         effects_total: 0,
         effect_overflow: 0,
+        external_settlement: None,
     }
 }
 
 #[derive(Default)]
 struct FakeActivationGate {
-    open: std::sync::atomic::AtomicBool,
-    waker: std::sync::Mutex<Option<std::task::Waker>>,
+    open: AtomicBool,
+    waker: Mutex<Option<Waker>>,
 }
 impl FakeActivationGate {
-    fn poll_open(&self, cx: &std::task::Context<'_>) -> bool {
+    #[must_use]
+    fn poll_open(&self, cx: &Context<'_>) -> bool {
         if self.open.load(Ordering::SeqCst) {
             return true;
         }
@@ -602,8 +641,8 @@ impl FakeActivationGate {
 
 #[derive(Default)]
 struct FakeSettlementGate {
-    open: std::sync::atomic::AtomicBool,
-    waker: std::sync::Mutex<Option<std::task::Waker>>,
+    open: AtomicBool,
+    waker: Mutex<Option<Waker>>,
 }
 impl FakeSettlementGate {
     fn release(&self) {
@@ -615,9 +654,9 @@ impl FakeSettlementGate {
 }
 
 #[cfg(feature = "async")]
-fn block_on<F: std::future::Future>(future: F) -> F::Output {
-    struct ThreadWaker(std::thread::Thread);
-    impl std::task::Wake for ThreadWaker {
+fn block_on<F: Future>(future: F) -> F::Output {
+    struct ThreadWaker(Thread);
+    impl Wake for ThreadWaker {
         fn wake(self: Arc<Self>) {
             self.0.unpark();
         }
@@ -625,33 +664,30 @@ fn block_on<F: std::future::Future>(future: F) -> F::Output {
             self.0.unpark();
         }
     }
-    let waker = std::task::Waker::from(Arc::new(ThreadWaker(std::thread::current())));
-    let mut context = std::task::Context::from_waker(&waker);
+    let waker = Waker::from(Arc::new(ThreadWaker(thread::current())));
+    let mut context = Context::from_waker(&waker);
     let mut future = Box::pin(future);
     loop {
         match future.as_mut().poll(&mut context) {
-            std::task::Poll::Ready(output) => return output,
-            std::task::Poll::Pending => std::thread::park(),
+            Poll::Ready(output) => return output,
+            Poll::Pending => thread::park(),
         }
     }
 }
 
 #[test]
-fn manager_admission_rejection_recovers_write_request_and_reserved_slot() {
-    let manager = qubit_operation::OperationManager::new(Default::default()).unwrap();
-    let _ = manager
-        .request_shutdown(qubit_operation::ShutdownMode::Drain)
-        .wait()
-        .unwrap();
+fn test_manager_admission_rejection_recovers_write_request_and_reserved_slot() {
+    let manager = OperationManager::new(Default::default()).unwrap();
+    let _ = manager.request_shutdown(ShutdownMode::Drain).wait().unwrap();
     let effects = FsEffectSlotPool::new(1);
-    let cleanup_released = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let cleanup_released = Arc::new(AtomicBool::new(false));
     let provider = FakeWriteProvider::new(FakeWriteMode::Success {
         gate: None,
         cleanup_released,
         settlement_gate: Arc::new(FakeSettlementGate::default()),
-        resource_ids: Arc::new(std::sync::Mutex::new(Vec::new())),
-        stop_requests: Arc::new(std::sync::Mutex::new(Vec::new())),
-        prepared_probe: Arc::new(std::sync::Mutex::new(None)),
+        resource_ids: Arc::new(Mutex::new(Vec::new())),
+        stop_requests: Arc::new(Mutex::new(Vec::new())),
+        prepared_probe: Arc::new(Mutex::new(None)),
     });
     let binding = FsExecutionBinding::new(manager);
     let rejected = match binding.submit_write(&provider, write_request("/admission/reject", b"owned input"), &effects) {
@@ -666,8 +702,8 @@ fn manager_admission_rejection_recovers_write_request_and_reserved_slot() {
 }
 
 #[test]
-fn managed_tree_publish_uses_one_fact_slot_and_preserves_typed_publication_facts() {
-    let manager = qubit_operation::OperationManager::new(Default::default()).unwrap();
+fn test_managed_tree_publish_uses_one_fact_slot_and_preserves_typed_publication_facts() {
+    let manager = OperationManager::new(Default::default()).unwrap();
     let effects = FsEffectSlotPool::new(1);
     let provider = FakeTreeProvider;
     let binding = FsExecutionBinding::new(manager.clone());
@@ -677,7 +713,7 @@ fn managed_tree_publish_uses_one_fact_slot_and_preserves_typed_publication_facts
     let mut operation = submitted.operation;
     assert!(matches!(
         operation.wait_outcome().unwrap(),
-        qubit_operation::OperationOutcome::Succeeded(outcome) if outcome.entries_published == 2 && outcome.content_bytes == 11
+        OperationOutcome::Succeeded(outcome) if outcome.entries_published == 2 && outcome.content_bytes == 11
     ));
     assert!(matches!(
         submitted.effect.wait_final(),
@@ -687,14 +723,12 @@ fn managed_tree_publish_uses_one_fact_slot_and_preserves_typed_publication_facts
     drop(submitted.effect);
     assert!(operation.wait_settlement().unwrap().all_released());
     assert!(effects.reserve().is_ok());
-    let _ = manager
-        .request_shutdown(qubit_operation::ShutdownMode::Drain)
-        .wait()
-        .unwrap();
+    let _ = manager.request_shutdown(ShutdownMode::Drain).wait().unwrap();
 }
 
-fn tree_request() -> qubit_fs::FsOwnedTreePublishRequest {
-    qubit_fs::FsOwnedTreePublishRequest {
+#[must_use]
+fn tree_request() -> FsOwnedTreePublishRequest {
+    FsOwnedTreePublishRequest {
         staging_root: Path::parse("/stage").unwrap(),
         destination_root: Path::parse("/destination").unwrap(),
         validation: Default::default(),
@@ -704,102 +738,90 @@ fn tree_request() -> qubit_fs::FsOwnedTreePublishRequest {
 }
 
 struct FakeTreeProvider;
-impl qubit_fs::spi::ManagedFsTreeSpi for FakeTreeProvider {
+impl ManagedFsTreeSpi for FakeTreeProvider {
     fn prepare_tree_publish(
         &self,
-        request: qubit_fs::FsOwnedTreePublishRequest,
-    ) -> Result<
-        Arc<dyn qubit_fs::spi::PreparedFsTreePublish>,
-        qubit_fs::FsPrepareFailure<qubit_fs::FsOwnedTreePublishRequest>,
-    > {
+        request: FsOwnedTreePublishRequest,
+    ) -> Result<Arc<dyn PreparedFsTreePublish>, FsPrepareFailure<FsOwnedTreePublishRequest>> {
         Ok(Arc::new(FakePreparedTree {
-            request: std::sync::Mutex::new(Some(request)),
-            id: std::sync::Mutex::new(None),
-            reservation: std::sync::Mutex::new(None),
-            outcome: std::sync::Mutex::new(None),
-            completed: std::sync::atomic::AtomicBool::new(false),
+            request: Mutex::new(Some(request)),
+            id: Mutex::new(None),
+            reservation: Mutex::new(None),
+            outcome: Mutex::new(None),
+            completed: AtomicBool::new(false),
         }))
     }
 }
 
 struct FakePreparedTree {
-    request: std::sync::Mutex<Option<qubit_fs::FsOwnedTreePublishRequest>>,
-    id: std::sync::Mutex<Option<qubit_operation::OperationId>>,
-    reservation: std::sync::Mutex<Option<qubit_fs::FsEffectReservation>>,
-    outcome: std::sync::Mutex<
-        Option<
-            qubit_operation::OperationOutcome<qubit_fs::directory::TreePublishOutcome, qubit_fs::FsOperationFailure>,
-        >,
-    >,
-    completed: std::sync::atomic::AtomicBool,
+    request: Mutex<Option<FsOwnedTreePublishRequest>>,
+    id: Mutex<Option<OperationId>>,
+    reservation: Mutex<Option<FsEffectReservation>>,
+    outcome: Mutex<Option<OperationOutcome<TreePublishOutcome, FsOperationFailure>>>,
+    completed: AtomicBool,
 }
-impl qubit_operation::OperationControl for FakePreparedTree {
-    fn request_stop(&self, _: qubit_operation::StopReason) {}
-    fn snapshot(&self) -> qubit_operation::ChildSnapshot {
+impl OperationControl for FakePreparedTree {
+    fn request_stop(&self, _: StopReason) {}
+    fn snapshot(&self) -> ChildSnapshot {
         let operation_id = self.id.lock().unwrap().unwrap();
         let done = self.completed.load(Ordering::SeqCst);
-        qubit_operation::ChildSnapshot {
+        ChildSnapshot {
             operation_id,
             execution: if done {
-                qubit_operation::ExecutionPhase::Finished
+                ExecutionPhase::Finished
             } else {
-                qubit_operation::ExecutionPhase::Running
+                ExecutionPhase::Running
             },
             stop: None,
-            outcome: done.then_some(qubit_operation::ChildOutcomeSummary {
+            outcome: done.then_some(ChildOutcomeSummary {
                 operation_id,
-                kind: qubit_operation::ChildOutcomeKind::Succeeded,
-                summary: qubit_operation::DiagnosticSummary::new("child succeeded"),
+                kind: ChildOutcomeKind::Succeeded,
+                summary: DiagnosticSummary::new("child succeeded"),
             }),
             input_released: done,
             settlement: done.then(|| Arc::new(fake_settlement(operation_id))),
         }
     }
-    fn poll_outcome(&self, _: &mut std::task::Context<'_>) -> std::task::Poll<qubit_operation::ChildOutcomeSummary> {
+    fn poll_outcome(&self, _: &mut Context<'_>) -> Poll<ChildOutcomeSummary> {
         if self.completed.load(Ordering::SeqCst) {
-            std::task::Poll::Ready(self.snapshot().outcome.unwrap())
+            Poll::Ready(self.snapshot().outcome.unwrap())
         } else {
-            std::task::Poll::Pending
+            Poll::Pending
         }
     }
-    fn poll_release(&self, _: &mut std::task::Context<'_>) -> std::task::Poll<qubit_operation::ChildRelease> {
+    fn poll_release(&self, _: &mut Context<'_>) -> Poll<ChildRelease> {
         if self.completed.load(Ordering::SeqCst) {
-            std::task::Poll::Ready(qubit_operation::ChildRelease {
+            Poll::Ready(ChildRelease {
                 operation_id: self.id.lock().unwrap().unwrap(),
                 confirmed_at: None,
             })
         } else {
-            std::task::Poll::Pending
+            Poll::Pending
         }
     }
-    fn poll_settlement(
-        &self,
-        _: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Arc<qubit_operation::SettlementReport>> {
+    fn poll_settlement(&self, _: &mut Context<'_>) -> Poll<Arc<SettlementReport>> {
         if self.completed.load(Ordering::SeqCst) {
-            std::task::Poll::Ready(Arc::new(fake_settlement(self.id.lock().unwrap().unwrap())))
+            Poll::Ready(Arc::new(fake_settlement(self.id.lock().unwrap().unwrap())))
         } else {
-            std::task::Poll::Pending
+            Poll::Pending
         }
     }
 }
-impl qubit_operation::PreparedExternalOperation<qubit_fs::directory::TreePublishOutcome, qubit_fs::FsOperationFailure>
-    for FakePreparedTree
-{
-    fn bind(&self, id: qubit_operation::OperationId) -> Result<(), qubit_operation::ExternalBindError> {
+impl PreparedExternalOperation<TreePublishOutcome, FsOperationFailure> for FakePreparedTree {
+    fn bind(&self, id: OperationId) -> Result<(), ExternalBindError> {
         let mut bound = self.id.lock().unwrap();
         if bound.is_some() {
-            return Err(qubit_operation::ExternalBindError::AlreadyBound);
+            return Err(ExternalBindError::AlreadyBound);
         }
         *bound = Some(id);
         Ok(())
     }
-    fn activate(self: Arc<Self>, _: qubit_operation::OperationScope) -> Result<(), qubit_operation::ExecutionFailure> {
-        let outcome = qubit_fs::directory::TreePublishOutcome {
+    fn activate(self: Arc<Self>, _: OperationScope) -> Result<(), ExecutionFailure> {
+        let outcome = TreePublishOutcome {
             entries_published: 2,
             content_bytes: 11,
-            atomicity: qubit_fs::metadata::AchievedAtomicity::Atomic,
-            method: qubit_fs::metadata::PublicationMethod::AtomicRename,
+            atomicity: AchievedAtomicity::Atomic,
+            method: PublicationMethod::AtomicRename,
             durable: true,
         };
         let reservation = self
@@ -809,41 +831,29 @@ impl qubit_operation::PreparedExternalOperation<qubit_fs::directory::TreePublish
             .take()
             .expect("binding installed effect reservation");
         reservation.publish_tree_outcome(outcome.clone(), None);
-        *self.outcome.lock().unwrap() = Some(qubit_operation::OperationOutcome::Succeeded(outcome));
+        *self.outcome.lock().unwrap() = Some(OperationOutcome::Succeeded(outcome));
         self.completed.store(true, Ordering::SeqCst);
         drop(reservation);
         Ok(())
     }
     fn abandon(self: Arc<Self>) {
         if let Some(reservation) = self.reservation.lock().unwrap().take() {
-            reservation.publish(qubit_fs::FsEffectFact::State(qubit_fs::FsEffectState::Unchanged));
+            reservation.publish(FsEffectFact::State(FsEffectState::Unchanged));
         }
     }
-    fn poll_take_outcome(
-        &self,
-        _: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<
-        qubit_operation::OperationOutcome<qubit_fs::directory::TreePublishOutcome, qubit_fs::FsOperationFailure>,
-    > {
-        self.outcome
-            .lock()
-            .unwrap()
-            .take()
-            .map_or(std::task::Poll::Pending, std::task::Poll::Ready)
+    fn poll_take_outcome(&self, _: &mut Context<'_>) -> Poll<OperationOutcome<TreePublishOutcome, FsOperationFailure>> {
+        self.outcome.lock().unwrap().take().map_or(Poll::Pending, Poll::Ready)
     }
 }
-impl qubit_fs::spi::PreparedFsTreePublish for FakePreparedTree {
-    fn take_unclaimed_request(&self) -> Option<qubit_fs::FsOwnedTreePublishRequest> {
+impl PreparedFsTreePublish for FakePreparedTree {
+    fn take_unclaimed_request(&self) -> Option<FsOwnedTreePublishRequest> {
         if self.id.lock().unwrap().is_some() {
             return None;
         }
         self.reservation.lock().unwrap().take();
         self.request.lock().unwrap().take()
     }
-    fn install_effect_reservation(
-        &self,
-        reservation: qubit_fs::FsEffectReservation,
-    ) -> Result<(), qubit_fs::FsEffectReservation> {
+    fn install_effect_reservation(&self, reservation: FsEffectReservation) -> Result<(), FsEffectReservation> {
         let mut slot = self.reservation.lock().unwrap();
         if slot.is_some() {
             Err(reservation)
@@ -855,36 +865,34 @@ impl qubit_fs::spi::PreparedFsTreePublish for FakePreparedTree {
 }
 
 #[test]
-fn stop_control_remains_available_while_sync_executor_queue_is_saturated() {
-    use std::time::Duration;
-
-    let options = qubit_operation::ManagerOptions {
-        limits: qubit_operation::ManagerLimits {
+fn test_stop_control_remains_available_while_sync_executor_queue_is_saturated() {
+    let options = ManagerOptions {
+        limits: ManagerLimits {
             active_operations: 4,
             queued_operations: 8,
             admission_waiters: 8,
             ..Default::default()
         },
-        sync_executor: qubit_operation::ThreadPoolExecutorOptions {
+        sync_executor: ThreadPoolExecutorOptions {
             worker_count: 1,
             queue_capacity: 1,
         },
         ..Default::default()
     };
-    let manager = qubit_operation::OperationManager::new(options).unwrap();
+    let manager = OperationManager::new(options).unwrap();
     let effects = FsEffectSlotPool::new(1);
     let gate = Arc::new(FakeActivationGate::default());
-    let (entered_tx, entered_rx) = std::sync::mpsc::channel();
-    let cleanup_released = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let (entered_tx, entered_rx) = mpsc::channel();
+    let cleanup_released = Arc::new(AtomicBool::new(false));
     let settlement_gate = Arc::new(FakeSettlementGate::default());
-    let stop_requests = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let stop_requests = Arc::new(Mutex::new(Vec::new()));
     let provider = FakeWriteProvider::new(FakeWriteMode::Success {
         gate: Some((Arc::clone(&gate), entered_tx)),
         cleanup_released,
         settlement_gate: Arc::clone(&settlement_gate),
-        resource_ids: Arc::new(std::sync::Mutex::new(Vec::new())),
+        resource_ids: Arc::new(Mutex::new(Vec::new())),
         stop_requests: Arc::clone(&stop_requests),
-        prepared_probe: Arc::new(std::sync::Mutex::new(None)),
+        prepared_probe: Arc::new(Mutex::new(None)),
     });
     let binding = FsExecutionBinding::new(manager.clone());
     let mut active = binding
@@ -894,32 +902,44 @@ fn stop_control_remains_available_while_sync_executor_queue_is_saturated() {
         .recv_timeout(Duration::from_secs(3))
         .expect("the only executor worker entered provider activation");
 
+    let (worker_entered_tx, worker_entered_rx) = mpsc::channel();
+    let (worker_release_tx, worker_release_rx) = mpsc::channel();
+    let mut blocking = manager
+        .try_submit(Default::default(), move |_| {
+            worker_entered_tx.send(()).expect("signal occupied executor worker");
+            worker_release_rx.recv().expect("release occupied executor worker");
+            Ok::<_, ()>(())
+        })
+        .unwrap_or_else(|_| panic!("blocking executor task should be admitted"));
+    worker_entered_rx
+        .recv_timeout(Duration::from_secs(3))
+        .expect("the only executor worker entered the blocking task");
+
     let mut queued = manager
         .try_submit(Default::default(), |_| Ok::<_, ()>(()))
         .unwrap_or_else(|_| panic!("single queue slot should accept one operation"));
     let saturated = manager.try_submit(Default::default(), |_| Ok::<_, ()>(()));
     assert!(saturated.is_err(), "executor queue is full");
     assert_eq!(
-        active
-            .operation
-            .request_stop(qubit_operation::StopReason::UserCancelled),
-        qubit_operation::StopRequestStatus::Accepted,
+        active.operation.request_stop(StopReason::UserCancelled),
+        StopRequestStatus::Accepted,
         "stop request is delivered through the handle without using the saturated work queue"
     );
-    let deadline = std::time::Instant::now() + Duration::from_secs(3);
-    while stop_requests.lock().unwrap().is_empty() && std::time::Instant::now() < deadline {
-        std::thread::yield_now();
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while stop_requests.lock().unwrap().is_empty() && Instant::now() < deadline {
+        thread::yield_now();
     }
     assert_eq!(
         *stop_requests.lock().unwrap(),
-        vec![qubit_operation::StopReason::UserCancelled],
+        vec![StopReason::UserCancelled],
         "the prepared provider receives the stop exactly once"
     );
 
     gate.release();
+    worker_release_tx.send(()).expect("release executor worker");
     assert!(matches!(
         active.operation.wait_outcome().unwrap(),
-        qubit_operation::OperationOutcome::Stopped(_)
+        OperationOutcome::Stopped(_)
     ));
     assert!(matches!(
         active.effect.wait_final(),
@@ -930,32 +950,29 @@ fn stop_control_remains_available_while_sync_executor_queue_is_saturated() {
     active.operation.wait_settlement().unwrap();
     assert!(matches!(
         queued.wait_outcome().unwrap(),
-        qubit_operation::OperationOutcome::Succeeded(())
+        OperationOutcome::Succeeded(())
     ));
-    let _ = manager
-        .request_shutdown(qubit_operation::ShutdownMode::Drain)
-        .wait()
-        .unwrap();
+    assert!(matches!(
+        blocking.wait_outcome().unwrap(),
+        OperationOutcome::Succeeded(())
+    ));
+    let _ = manager.request_shutdown(ShutdownMode::Drain).wait().unwrap();
 }
 
 #[test]
-fn dropped_handle_keeps_pending_remote_owner_until_input_release_is_confirmed() {
-    use std::time::Duration;
-
-    use qubit_operation::OperationControl;
-
-    let manager = qubit_operation::OperationManager::new(Default::default()).unwrap();
+fn test_dropped_handle_keeps_pending_remote_owner_until_input_release_is_confirmed() {
+    let manager = OperationManager::new(Default::default()).unwrap();
     let effects = FsEffectSlotPool::new(1);
     let gate = Arc::new(FakeActivationGate::default());
-    let (entered_tx, entered_rx) = std::sync::mpsc::channel();
-    let stop_requests = Arc::new(std::sync::Mutex::new(Vec::new()));
-    let prepared_probe = Arc::new(std::sync::Mutex::new(None));
+    let (entered_tx, entered_rx) = mpsc::channel();
+    let stop_requests = Arc::new(Mutex::new(Vec::new()));
+    let prepared_probe = Arc::new(Mutex::new(None));
     let settlement_gate = Arc::new(FakeSettlementGate::default());
     let provider = FakeWriteProvider::new(FakeWriteMode::Success {
         gate: Some((Arc::clone(&gate), entered_tx)),
-        cleanup_released: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        cleanup_released: Arc::new(AtomicBool::new(false)),
         settlement_gate: Arc::clone(&settlement_gate),
-        resource_ids: Arc::new(std::sync::Mutex::new(Vec::new())),
+        resource_ids: Arc::new(Mutex::new(Vec::new())),
         stop_requests: Arc::clone(&stop_requests),
         prepared_probe: Arc::clone(&prepared_probe),
     });
@@ -967,13 +984,10 @@ fn dropped_handle_keeps_pending_remote_owner_until_input_release_is_confirmed() 
         .expect("provider activation returned while remote work is pending");
     let prepared = prepared_probe.lock().unwrap().clone().unwrap();
     assert!(!prepared.snapshot().input_released);
-    let waker = std::task::Waker::noop();
-    let mut context = std::task::Context::from_waker(waker);
-    assert!(matches!(prepared.poll_release(&mut context), std::task::Poll::Pending));
-    assert!(matches!(
-        prepared.poll_settlement(&mut context),
-        std::task::Poll::Pending
-    ));
+    let waker = Waker::noop();
+    let mut context = Context::from_waker(waker);
+    assert!(matches!(prepared.poll_release(&mut context), Poll::Pending));
+    assert!(matches!(prepared.poll_settlement(&mut context), Poll::Pending));
     assert!(matches!(submitted.effect.snapshot(), FsEffectSnapshot::Pending));
     assert!(
         effects.reserve().is_err(),
@@ -982,14 +996,11 @@ fn dropped_handle_keeps_pending_remote_owner_until_input_release_is_confirmed() 
 
     let observer = submitted.effect;
     drop(submitted.operation);
-    let deadline = std::time::Instant::now() + Duration::from_secs(3);
-    while stop_requests.lock().unwrap().is_empty() && std::time::Instant::now() < deadline {
-        std::thread::yield_now();
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while stop_requests.lock().unwrap().is_empty() && Instant::now() < deadline {
+        thread::yield_now();
     }
-    assert_eq!(
-        *stop_requests.lock().unwrap(),
-        vec![qubit_operation::StopReason::UserCancelled]
-    );
+    assert_eq!(*stop_requests.lock().unwrap(), vec![StopReason::UserCancelled]);
     assert!(!prepared.snapshot().input_released, "remote work still consumes input");
     assert!(matches!(observer.snapshot(), FsEffectSnapshot::Pending));
     assert!(effects.reserve().is_err());
@@ -999,50 +1010,47 @@ fn dropped_handle_keeps_pending_remote_owner_until_input_release_is_confirmed() 
         observer.wait_final(),
         Ok(FsEffectFact::State(FsEffectState::Indeterminate))
     ));
-    let deadline = std::time::Instant::now() + Duration::from_secs(3);
-    while !prepared.snapshot().input_released && std::time::Instant::now() < deadline {
-        std::thread::yield_now();
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while !prepared.snapshot().input_released && Instant::now() < deadline {
+        thread::yield_now();
     }
     assert!(
         prepared.snapshot().input_released,
         "provider confirms it released the owned input"
     );
-    assert!(matches!(prepared.poll_release(&mut context), std::task::Poll::Ready(_)));
+    assert!(matches!(prepared.poll_release(&mut context), Poll::Ready(_)));
     settlement_gate.release();
-    let deadline = std::time::Instant::now() + Duration::from_secs(3);
+    let deadline = Instant::now() + Duration::from_secs(3);
     let mut reclaimed = false;
-    while std::time::Instant::now() < deadline {
+    while Instant::now() < deadline {
         if let Ok(reservation) = effects.reserve() {
             drop(reservation);
             reclaimed = true;
             break;
         }
-        std::thread::yield_now();
+        thread::yield_now();
     }
     assert!(
         reclaimed,
         "the fact slot returns after release and recovery responsibility ends"
     );
-    let _ = manager
-        .request_shutdown(qubit_operation::ShutdownMode::Drain)
-        .wait()
-        .unwrap();
+    let _ = manager.request_shutdown(ShutdownMode::Drain).wait().unwrap();
 }
 
 #[test]
-fn execution_binding_group_keeps_parent_target_for_children_after_group_close() {
-    let manager = qubit_operation::OperationManager::new(Default::default()).unwrap();
-    let group = manager.group(qubit_operation::GroupOptions { capacity: 4 }).unwrap();
+fn test_execution_binding_group_keeps_parent_target_for_children_after_group_close() {
+    let manager = OperationManager::new(Default::default()).unwrap();
+    let group = manager.group(GroupOptions { capacity: 4 }).unwrap();
     let effects = FsEffectSlotPool::new(1);
-    let cleanup_released = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let cleanup_released = Arc::new(AtomicBool::new(false));
     let settlement_gate = Arc::new(FakeSettlementGate::default());
     let provider = FakeWriteProvider::new(FakeWriteMode::Success {
         gate: None,
         cleanup_released,
         settlement_gate: Arc::clone(&settlement_gate),
-        resource_ids: Arc::new(std::sync::Mutex::new(Vec::new())),
-        stop_requests: Arc::new(std::sync::Mutex::new(Vec::new())),
-        prepared_probe: Arc::new(std::sync::Mutex::new(None)),
+        resource_ids: Arc::new(Mutex::new(Vec::new())),
+        stop_requests: Arc::new(Mutex::new(Vec::new())),
+        prepared_probe: Arc::new(Mutex::new(None)),
     });
     let mut parent = manager
         .try_submit(Default::default(), {
@@ -1065,7 +1073,7 @@ fn execution_binding_group_keeps_parent_target_for_children_after_group_close() 
                 let mut operation = submitted.operation;
                 assert!(matches!(
                     operation.wait_outcome().unwrap(),
-                    qubit_operation::OperationOutcome::Succeeded(value) if value.bytes_written() == Some(11)
+                    OperationOutcome::Succeeded(value) if value.bytes_written() == Some(11)
                 ));
                 assert!(matches!(
                     submitted.effect.wait_final(),
@@ -1080,65 +1088,53 @@ fn execution_binding_group_keeps_parent_target_for_children_after_group_close() 
         .expect("parent operation accepted");
     assert!(matches!(
         parent.wait_outcome().unwrap(),
-        qubit_operation::OperationOutcome::Succeeded(())
+        OperationOutcome::Succeeded(())
     ));
-    let _ = manager
-        .request_shutdown(qubit_operation::ShutdownMode::Drain)
-        .wait()
-        .unwrap();
+    let _ = manager.request_shutdown(ShutdownMode::Drain).wait().unwrap();
 }
 
 #[test]
-fn execution_binding_rejects_wrong_manager_closed_and_over_limit_groups() {
-    let manager = qubit_operation::OperationManager::new(qubit_operation::ManagerOptions {
+fn test_execution_binding_rejects_wrong_manager_closed_and_over_limit_groups() {
+    let manager = OperationManager::new(ManagerOptions {
         max_groups_per_operation: 1,
         ..Default::default()
     })
     .unwrap();
-    let other = qubit_operation::OperationManager::new(Default::default()).unwrap();
-    let group_a = manager.group(qubit_operation::GroupOptions { capacity: 4 }).unwrap();
-    let group_b = manager.group(qubit_operation::GroupOptions { capacity: 4 }).unwrap();
-    let foreign_group = other.group(qubit_operation::GroupOptions { capacity: 4 }).unwrap();
+    let other = OperationManager::new(Default::default()).unwrap();
+    let group_a = manager.group(GroupOptions { capacity: 4 }).unwrap();
+    let group_b = manager.group(GroupOptions { capacity: 4 }).unwrap();
+    let foreign_group = other.group(GroupOptions { capacity: 4 }).unwrap();
     let binding = FsExecutionBinding::new(manager.clone());
     assert!(matches!(
         binding.with_group(&foreign_group),
-        Err(qubit_operation::GroupBindingError::WrongManager)
+        Err(GroupBindingError::WrongManager)
     ));
     let bound = binding.with_group(&group_a).unwrap();
     assert!(matches!(
         bound.with_group(&group_b),
-        Err(qubit_operation::GroupBindingError::CapacityExceeded)
+        Err(GroupBindingError::CapacityExceeded)
     ));
     group_a.close_admission();
-    assert!(matches!(
-        binding.with_group(&group_a),
-        Err(qubit_operation::GroupBindingError::Closed)
-    ));
-    let _ = manager
-        .request_shutdown(qubit_operation::ShutdownMode::Drain)
-        .wait()
-        .unwrap();
-    let _ = other
-        .request_shutdown(qubit_operation::ShutdownMode::Drain)
-        .wait()
-        .unwrap();
+    assert!(matches!(binding.with_group(&group_a), Err(GroupBindingError::Closed)));
+    let _ = manager.request_shutdown(ShutdownMode::Drain).wait().unwrap();
+    let _ = other.request_shutdown(ShutdownMode::Drain).wait().unwrap();
 }
 
 #[cfg(feature = "async")]
 #[test]
-fn async_binding_keeps_service_group_admission_constraints() {
-    let manager = qubit_operation::OperationManager::new(Default::default()).unwrap();
-    let group = manager.group(qubit_operation::GroupOptions { capacity: 2 }).unwrap();
+fn test_async_binding_keeps_service_group_admission_constraints() {
+    let manager = OperationManager::new(Default::default()).unwrap();
+    let group = manager.group(GroupOptions { capacity: 2 }).unwrap();
     let binding = FsExecutionBinding::new(manager.clone()).with_group(&group).unwrap();
     group.close_admission();
     let effects = FsEffectSlotPool::new(1);
     let provider = FakeWriteProvider::new(FakeWriteMode::Success {
         gate: None,
-        cleanup_released: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        cleanup_released: Arc::new(AtomicBool::new(false)),
         settlement_gate: Arc::new(FakeSettlementGate::default()),
-        resource_ids: Arc::new(std::sync::Mutex::new(Vec::new())),
-        stop_requests: Arc::new(std::sync::Mutex::new(Vec::new())),
-        prepared_probe: Arc::new(std::sync::Mutex::new(None)),
+        resource_ids: Arc::new(Mutex::new(Vec::new())),
+        stop_requests: Arc::new(Mutex::new(Vec::new())),
+        prepared_probe: Arc::new(Mutex::new(None)),
     });
     let error = match binding.submit_write_async(&provider, write_request("/async/group-closed", b"returned"), &effects)
     {
@@ -1149,16 +1145,13 @@ fn async_binding_keeps_service_group_admission_constraints() {
     assert_eq!(error.request.path.as_str(), "/async/group-closed");
     assert_eq!(error.request.contents, b"returned");
     assert!(effects.reserve().is_ok());
-    let _ = manager
-        .request_shutdown(qubit_operation::ShutdownMode::Drain)
-        .wait()
-        .unwrap();
+    let _ = manager.request_shutdown(ShutdownMode::Drain).wait().unwrap();
 }
 
 #[cfg(feature = "async")]
 #[test]
-fn managed_async_tree_publish_preserves_typed_effect_facts() {
-    let manager = qubit_operation::OperationManager::new(Default::default()).unwrap();
+fn test_managed_async_tree_publish_preserves_typed_effect_facts() {
+    let manager = OperationManager::new(Default::default()).unwrap();
     let effects = FsEffectSlotPool::new(1);
     let submitted = FsExecutionBinding::new(manager.clone())
         .submit_tree_publish_async(&FakeTreeProvider, tree_request(), &effects)
@@ -1167,7 +1160,7 @@ fn managed_async_tree_publish_preserves_typed_effect_facts() {
     let outcome = block_on(operation.wait_outcome()).unwrap();
     assert!(matches!(
         outcome,
-        qubit_operation::OperationOutcome::Succeeded(ref value)
+        OperationOutcome::Succeeded(ref value)
             if value.entries_published == 2 && value.content_bytes == 11
     ));
     assert!(matches!(
@@ -1177,30 +1170,23 @@ fn managed_async_tree_publish_preserves_typed_effect_facts() {
     ));
     drop(submitted.effect);
     assert!(block_on(operation.wait_settlement()).all_released());
-    let _ = manager
-        .request_shutdown(qubit_operation::ShutdownMode::Drain)
-        .wait()
-        .unwrap();
+    let _ = manager.request_shutdown(ShutdownMode::Drain).wait().unwrap();
 }
 
 #[test]
-fn unknown_remote_effect_with_released_input_can_settle_locally() {
-    use std::time::Duration;
-
-    use qubit_operation::OperationControl;
-
-    let manager = qubit_operation::OperationManager::new(Default::default()).unwrap();
+fn test_unknown_remote_effect_with_released_input_can_settle_locally() {
+    let manager = OperationManager::new(Default::default()).unwrap();
     let effects = FsEffectSlotPool::new(1);
     let gate = Arc::new(FakeActivationGate::default());
     let settlement_gate = Arc::new(FakeSettlementGate::default());
-    let (entered_tx, entered_rx) = std::sync::mpsc::channel();
-    let stop_requests = Arc::new(std::sync::Mutex::new(Vec::new()));
-    let prepared_probe = Arc::new(std::sync::Mutex::new(None));
+    let (entered_tx, entered_rx) = mpsc::channel();
+    let stop_requests = Arc::new(Mutex::new(Vec::new()));
+    let prepared_probe = Arc::new(Mutex::new(None));
     let provider = FakeWriteProvider::new(FakeWriteMode::Success {
         gate: Some((Arc::clone(&gate), entered_tx)),
-        cleanup_released: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        cleanup_released: Arc::new(AtomicBool::new(false)),
         settlement_gate: Arc::clone(&settlement_gate),
-        resource_ids: Arc::new(std::sync::Mutex::new(Vec::new())),
+        resource_ids: Arc::new(Mutex::new(Vec::new())),
         stop_requests: Arc::clone(&stop_requests),
         prepared_probe: Arc::clone(&prepared_probe),
     });
@@ -1213,44 +1199,36 @@ fn unknown_remote_effect_with_released_input_can_settle_locally() {
     let prepared = prepared_probe.lock().unwrap().clone().unwrap();
     assert!(!prepared.snapshot().input_released);
     assert_eq!(
-        submitted
-            .operation
-            .request_stop(qubit_operation::StopReason::UserCancelled),
-        qubit_operation::StopRequestStatus::Accepted
+        submitted.operation.request_stop(StopReason::UserCancelled),
+        StopRequestStatus::Accepted
     );
-    let deadline = std::time::Instant::now() + Duration::from_secs(3);
-    while stop_requests.lock().unwrap().is_empty() && std::time::Instant::now() < deadline {
-        std::thread::yield_now();
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while stop_requests.lock().unwrap().is_empty() && Instant::now() < deadline {
+        thread::yield_now();
     }
-    assert_eq!(
-        *stop_requests.lock().unwrap(),
-        vec![qubit_operation::StopReason::UserCancelled]
-    );
+    assert_eq!(*stop_requests.lock().unwrap(), vec![StopReason::UserCancelled]);
     gate.release();
     assert!(matches!(
         submitted.effect.wait_final(),
         Ok(FsEffectFact::State(FsEffectState::Indeterminate))
     ));
-    let deadline = std::time::Instant::now() + Duration::from_secs(3);
-    while !prepared.snapshot().input_released && std::time::Instant::now() < deadline {
-        std::thread::yield_now();
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while !prepared.snapshot().input_released && Instant::now() < deadline {
+        thread::yield_now();
     }
     assert!(prepared.snapshot().input_released);
-    let waker = std::task::Waker::noop();
-    let mut context = std::task::Context::from_waker(waker);
-    assert!(matches!(prepared.poll_release(&mut context), std::task::Poll::Ready(_)));
+    let waker = Waker::noop();
+    let mut context = Context::from_waker(waker);
+    assert!(matches!(prepared.poll_release(&mut context), Poll::Ready(_)));
     settlement_gate.release();
     assert!(matches!(
         submitted.operation.wait_outcome().unwrap(),
-        qubit_operation::OperationOutcome::Stopped(_)
+        OperationOutcome::Stopped(_)
     ));
     assert!(submitted.operation.wait_settlement().unwrap().all_released());
     assert!(
         effects.reserve().is_ok(),
         "released local input permits settlement with unknown remote effect"
     );
-    let _ = manager
-        .request_shutdown(qubit_operation::ShutdownMode::Drain)
-        .wait()
-        .unwrap();
+    let _ = manager.request_shutdown(ShutdownMode::Drain).wait().unwrap();
 }

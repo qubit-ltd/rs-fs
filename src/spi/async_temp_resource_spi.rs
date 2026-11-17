@@ -5,7 +5,6 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
 //! Provider-side asynchronous temporary-resource sessions.
 
 use std::pin::Pin;

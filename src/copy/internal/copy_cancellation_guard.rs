@@ -40,6 +40,7 @@ impl<'a> CopyCancellationGuard<'a> {
     ///
     /// # Returns
     /// An armed cancellation guard borrowing both state locations.
+    #[must_use = "retain the cancellation guard until the copy operation finishes"]
     #[inline]
     pub(in crate::copy) fn start(
         state: &'a mut AsyncCopyOperationState,

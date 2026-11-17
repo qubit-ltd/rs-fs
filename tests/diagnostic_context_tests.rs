@@ -58,6 +58,7 @@ fn path(value: &str) -> Path {
     Path::parse(value).expect("test path should parse")
 }
 
+/// Simulates sync directory outcomes and tracks provider mutation calls.
 struct SyncOutcomeSpi {
     calls: Arc<AtomicUsize>,
     invalid_opened_identity: bool,
@@ -221,6 +222,7 @@ fn test_sync_async_outcome_diagnostics_match() {
     assert_eq!(2, sync_calls.load(Ordering::SeqCst));
 }
 
+/// Compares the diagnostic context shared by sync and async facade errors.
 fn assert_diagnostics_match(sync: &FsError, asynchronous: &FsError) {
     assert_eq!(FsErrorKind::ProviderContractViolation, sync.kind());
     assert_eq!(sync.kind(), asynchronous.kind());

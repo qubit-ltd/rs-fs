@@ -55,6 +55,9 @@ impl CopyStats {
     /// # Parameters
     /// - `other`: Statistics to add.
     ///
+    /// # Returns
+    /// `Ok(())` after every counter has been added successfully.
+    ///
     /// # Errors
     /// Returns [`FsErrorKind::ResourceLimitExceeded`] when any counter would
     /// overflow `u64`. The receiver remains unchanged on overflow.

@@ -60,6 +60,8 @@ use qubit_fs::spi::SpiRenameFailure;
 use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
 
+/// Advertises native copy but leaves its operation pending for cancellation
+/// tests.
 struct CopySpi;
 
 impl AsyncFileSystemSpi for CopySpi {
@@ -125,6 +127,7 @@ impl AsyncFileSystemSpi for CopySpi {
     }
 }
 
+/// Returns the unsupported error used by provider operations outside this test.
 fn unused() -> FsError {
     FsError::new(FsErrorKind::UnsupportedOperation, FsOperation::Other, "unused")
 }

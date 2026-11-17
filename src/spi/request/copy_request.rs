@@ -5,7 +5,7 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-// facade.
+
 //! Validated copy request.
 
 use crate::path::Path;
@@ -13,6 +13,9 @@ use crate::spi::ResolvedCopyOptions;
 
 /// A facade-created copy request that providers can inspect but cannot
 /// construct.
+///
+/// # Type Parameters
+/// - `'a`: The lifetime shared by the validated source and destination paths.
 ///
 /// # Examples
 ///
@@ -29,6 +32,7 @@ use crate::spi::ResolvedCopyOptions;
 /// let _ = inspect_copy_request;
 /// # Ok::<(), qubit_fs::FsError>(())
 /// ```
+#[must_use = "pass the copy request to the provider or explicitly drop it"]
 pub struct CopyRequest<'a> {
     /// Validated source path.
     source: &'a Path,
@@ -83,7 +87,7 @@ impl<'a> CopyRequest<'a> {
     /// # Returns
     /// The immutable facade-resolved copy options.
     #[inline]
-    #[must_use]
+    #[must_use = "inspect the resolved copy policy before provider dispatch"]
     pub const fn options(&self) -> &ResolvedCopyOptions {
         &self.options
     }

@@ -94,6 +94,9 @@ impl RenameOutcome {
     /// # Parameters
     /// - `diagnostics`: Provider diagnostics with values already sanitized by
     ///   the provider.
+    ///
+    /// # Returns
+    /// This outcome with the supplied sanitized diagnostics.
     #[inline]
     #[must_use]
     pub fn with_diagnostics(mut self, diagnostics: UserMetadata) -> Self {
@@ -101,24 +104,36 @@ impl RenameOutcome {
         self
     }
     /// Returns the source identity.
+    ///
+    /// # Returns
+    /// The source path reported for this completed rename.
     #[inline]
     #[must_use]
     pub fn source(&self) -> &Path {
         &self.source
     }
     /// Returns the target identity.
+    ///
+    /// # Returns
+    /// The destination path reported for this completed rename.
     #[inline]
     #[must_use]
     pub fn target(&self) -> &Path {
         &self.target
     }
     /// Returns actual publication atomicity.
+    ///
+    /// # Returns
+    /// The atomicity achieved while publishing the destination.
     #[inline]
     #[must_use]
     pub const fn atomicity(&self) -> AchievedAtomicity {
         self.atomicity
     }
     /// Returns the provider's publication method.
+    ///
+    /// # Returns
+    /// The concrete method used to publish the destination.
     #[inline]
     #[must_use]
     pub const fn method(&self) -> PublicationMethod {
@@ -127,6 +142,9 @@ impl RenameOutcome {
 
     /// Returns whether the provider synchronized durable destination
     /// publication.
+    ///
+    /// # Returns
+    /// `true` when the provider synchronized publication, or `false` otherwise.
     #[inline]
     #[must_use]
     pub const fn durable(&self) -> bool {
@@ -137,6 +155,9 @@ impl RenameOutcome {
     /// Values are retained unchanged. Providers must sanitize diagnostic
     /// values before storing them; explicitly reading a value does not make it
     /// safe to log.
+    ///
+    /// # Returns
+    /// The provider diagnostics attached to this outcome.
     #[inline]
     #[must_use]
     pub const fn diagnostics(&self) -> &NonSensitiveMetadata {
