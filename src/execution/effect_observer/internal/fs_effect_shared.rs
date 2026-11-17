@@ -185,6 +185,47 @@ mod tests {
         }))
     }
 
+    struct PublishOnDrop {
+        shared: Weak<FsEffectShared>,
+        published: Arc<AtomicUsize>,
+        wake_calls: Arc<AtomicUsize>,
+    }
+
+    impl Wake for PublishOnDrop {
+        fn wake(self: Arc<Self>) {
+            self.wake_calls.fetch_add(1, Ordering::SeqCst);
+        }
+
+        fn wake_by_ref(self: &Arc<Self>) {
+            self.wake_calls.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    impl Drop for PublishOnDrop {
+        fn drop(&mut self) {
+            let Some(shared) = self.shared.upgrade() else {
+                return;
+            };
+            if shared.wakers.try_lock().is_err() {
+                return;
+            }
+            self.published.fetch_add(1, Ordering::SeqCst);
+            shared.publish(FsEffectFact::State(FsEffectState::Applied));
+        }
+    }
+
+    struct CountingWake(Arc<AtomicUsize>);
+
+    impl Wake for CountingWake {
+        fn wake(self: Arc<Self>) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+
+        fn wake_by_ref(self: &Arc<Self>) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
     #[test]
     fn test_effect_wait_registration_callbacks_run_outside_lock() {
         let shared = Arc::new(FsEffectShared::new());
@@ -210,5 +251,34 @@ mod tests {
         drop(waker);
         shared.publish(FsEffectFact::State(FsEffectState::Applied));
         assert_eq!(callbacks_under_lock.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn test_effect_wait_registration_cancellation_interleaves_with_publication() {
+        let shared = Arc::new(FsEffectShared::new());
+        let cancelled_id = Arc::new(());
+        let active_id = Arc::new(());
+        let published = Arc::new(AtomicUsize::new(0));
+        let cancelled_wakes = Arc::new(AtomicUsize::new(0));
+        let active_wakes = Arc::new(AtomicUsize::new(0));
+        let cancelled_waker = Waker::from(Arc::new(PublishOnDrop {
+            shared: Arc::downgrade(&shared),
+            published: Arc::clone(&published),
+            wake_calls: Arc::clone(&cancelled_wakes),
+        }));
+        let active_waker = Waker::from(Arc::new(CountingWake(Arc::clone(&active_wakes))));
+
+        shared.register_waiter(&cancelled_id, &cancelled_waker).unwrap();
+        shared.register_waiter(&active_id, &active_waker).unwrap();
+        drop(cancelled_waker);
+        drop(active_waker);
+
+        // Removing the cancelled task drops its waker after releasing the
+        // registry lock. That callback publishes final evidence immediately,
+        // while cancellation is still in progress, and must wake the survivor.
+        shared.unregister_waiter(&cancelled_id);
+
+        assert_eq!(published.load(Ordering::SeqCst), 1);
+        assert_eq!(active_wakes.load(Ordering::SeqCst), 1);
     }
 }
