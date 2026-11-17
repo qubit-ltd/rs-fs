@@ -117,3 +117,77 @@ fn unregister(wait: &mut FsEffectWait<'_>) {
             .unregister_waiter(&registration_id);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::future::Future;
+    use std::sync::Arc;
+    use std::sync::Weak;
+    use std::task::Context;
+    use std::task::Poll;
+    use std::task::Wake;
+    use std::task::Waker;
+
+    use crate::execution::FsEffectObservationError;
+    use crate::execution::FsEffectSlotPool;
+
+    struct ResourceWake;
+
+    impl Wake for ResourceWake {
+        fn wake(self: Arc<Self>) {}
+    }
+
+    fn pending_future_waker(
+        observer: &super::super::FsEffectObserver,
+    ) -> (std::pin::Pin<Box<super::FsEffectWait<'_>>>, Waker, Weak<ResourceWake>) {
+        let wake = Arc::new(ResourceWake);
+        let weak = Arc::downgrade(&wake);
+        let waker = Waker::from(Arc::clone(&wake));
+        let mut future = Box::pin(observer.wait_final_async());
+        let mut context = Context::from_waker(&waker);
+        assert!(matches!(future.as_mut().poll(&mut context), Poll::Pending));
+        drop(context);
+        (future, waker, weak)
+    }
+
+    #[test]
+    fn test_effect_wait_registration_poisoned_snapshot_unregisters() {
+        let reservation = FsEffectSlotPool::new(1).reserve().unwrap();
+        let observer = reservation.observer();
+        let (mut future, waker, weak) = pending_future_waker(&observer);
+        let shared = Arc::clone(&observer.state);
+        assert!(std::thread::spawn(move || {
+            let _snapshot = shared.snapshot.lock().unwrap();
+            panic!("poison effect snapshot lock");
+        })
+        .join()
+        .is_err());
+        drop(waker);
+
+        let context_waker = Waker::noop();
+        let mut context = Context::from_waker(context_waker);
+        assert!(matches!(
+            future.as_mut().poll(&mut context),
+            Poll::Ready(Err(FsEffectObservationError::Poisoned))
+        ));
+        assert!(weak.upgrade().is_none());
+    }
+
+    #[test]
+    fn test_effect_wait_registration_drop_recovers_poisoned_registry_lock() {
+        let reservation = FsEffectSlotPool::new(1).reserve().unwrap();
+        let observer = reservation.observer();
+        let (future, waker, weak) = pending_future_waker(&observer);
+        let shared = Arc::clone(&observer.state);
+        assert!(std::thread::spawn(move || {
+            let _wakers = shared.wakers.lock().unwrap();
+            panic!("poison effect waker registry lock");
+        })
+        .join()
+        .is_err());
+        drop(waker);
+
+        drop(future);
+        assert!(weak.upgrade().is_none());
+    }
+}
