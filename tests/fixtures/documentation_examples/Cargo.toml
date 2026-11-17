@@ -12,7 +12,7 @@ default = ["async"]
 async = []
 
 [dependencies]
-qubit-fs = { version = "^0.3", features = ["async"] }
+qubit-fs = { version = "^0.4", features = ["async"] , path = "../../../" }
 
 qubit-fs-local = { version = "^0.11" }
 

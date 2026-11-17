@@ -96,9 +96,9 @@ dependencies = [
 
 [[package]]
 name = "qubit-fs"
-version = "0.3.2"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9a33da41769effbc67acbe34227f81360a77107e65849aa33d17507b2f371aa"
+checksum = "5c9a65534818a35747d6d6559c02bbde5814d8f6ee502cd7f13d00216cef8a26"
 dependencies = [
  "fluent-uri",
  "qubit-budget",
@@ -107,10 +107,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "qubit-fs"
+version = "0.4.0"
+dependencies = [
+ "fluent-uri",
+ "qubit-budget",
+ "qubit-io",
+ "qubit-operation",
+ "qubit-redact",
+]
+
+[[package]]
 name = "qubit-fs-documentation-examples"
 version = "0.0.0"
 dependencies = [
- "qubit-fs",
+ "qubit-fs 0.4.0",
  "qubit-fs-local",
  "qubit-io",
  "tempfile",
@@ -122,7 +133,7 @@ version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c0d3f69807608b26a4c5a0cc818be3ed688debe5e702186bf8405dd01e480f17"
 dependencies = [
- "qubit-fs",
+ "qubit-fs 0.3.3",
  "qubit-io",
  "qubit-local-files",
 ]
@@ -147,6 +158,13 @@ dependencies = [
  "qubit-redact",
  "rustix",
  "windows-sys",
+]
+
+[[package]]
+name = "qubit-operation"
+version = "0.3.1"
+dependencies = [
+ "qubit-budget",
 ]
 
 [[package]]
