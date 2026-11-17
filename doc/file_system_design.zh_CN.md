@@ -85,6 +85,12 @@ directory/temp 等领域组织，私有辅助类型归属对应领域。同步�
 流错误恢复内部携带的文件系统上下文，不依赖格式化底层错误消息。`exists` 只将 `NotFound`
 转换为 false。
 
+托管效果由 `FsEffectReservation` 唯一发布最终 `FsEffectFact`；observer 只读取快照并等待。
+状态通过 `reservation.publish(FsEffectFact::State(state))` 发布。每个存活的异步等待 future 按自身身份
+拥有一个私有注册；再次 poll 会替换其 waker，不同 future 则保持独立注册。future 被 drop 或变为 ready 时注销，
+替换的旧 waker 会释放。发布在锁内移除注册，再于解锁后唤醒，因此回调不会在注册锁内执行。注册数量受存活等待
+future 数量约束，不会随总 poll 次数累积。
+
 打开 writer 失败采用保守规则：
 
 | 打开证据 | 整次 write | 整次 copy |

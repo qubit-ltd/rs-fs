@@ -35,6 +35,10 @@ qubit-fs = { version = "0.4", features = ["async"] }
 本地临时目录，写入报告，再以 1 KiB 上限读取，输出 `report ready`。退出时清理临时目录。此直接调用示例展示
 非托管兼容 API。文中引用的 `qubit-fs-local` 版本未被声明为实现了 0.4 SPI；集成使用时应选择为 0.4 构建的 provider。
 
+源码 fixture 使用同级 `rs-fs-local` 0.11.2，其源码依赖 `qubit-fs` 0.4。这一仅源码组合不代表
+已发布的 `qubit-fs-local` 0.11.2 crate；该发布包仍依赖 `qubit-fs` 0.3.3。发布包 smoke 会单独
+检查 registry artifact，目前仍待兼容的 provider 版本发布；此处不表示已有该发布版本。
+
 <!-- dependencies: quick-start -->
 ```toml
 [dependencies]

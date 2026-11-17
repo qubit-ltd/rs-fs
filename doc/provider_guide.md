@@ -738,6 +738,15 @@ the observer is read-only and must not own a writer, staged directory, or
 cleanup callback. Cleanup remains owned after errors and until the resource
 service confirms release or accepts recovery responsibility.
 
+The reservation is the only publisher; publish a state fact with
+`reservation.publish(FsEffectFact::State(state))`. The observer exposes neither
+`publish` nor `publish_fact`. Each live `wait_final_async()` future owns one
+private registration by future identity. Re-polling replaces its waker, while
+separate futures remain separate registrations even with the same waker.
+Drop and `Ready` unregister; waker replacement releases the old waker.
+Publication drains registrations and wakes outside the internal lock, so the
+number of live registrations follows active waiters rather than poll count.
+
 The application supplies the parent execution scope and owns the shared
 `OperationManager`. `qubit-fs` does not create a manager root. At shutdown, the
 application first drains or retains filesystem work and cleanup, closes

@@ -617,6 +617,11 @@ provider 将实际操作映射到彼此独立的同步与异步 capability profi
 托管变更在提交前安装有界效果槽，并独立于通用 outcome 发布 typed 最终事实。物理 owner 和恢复能力由执行/资源服务持有；
 观察端口只读，不能拥有 writer、staged directory 或清理回调。发生错误后仍须保留清理责任，直到资源服务确认释放或接收恢复责任。
 
+reservation 是唯一发布者；状态事实使用 `reservation.publish(FsEffectFact::State(state))`。观察端口不提供
+`publish` 或 `publish_fact`。每个存活的 `wait_final_async()` future 按自身身份拥有一个私有注册。同一 future
+重复 poll 会替换 waker；不同 future 即使共享一个 waker，也保持独立注册。Drop 或返回 `Ready` 时注销，替换时释放旧
+waker。发布先取出注册，再在内部锁外唤醒，因此存活注册数随等待者变化，不随 poll 次数累积。
+
 应用提供父执行 scope，并拥有共享的 `OperationManager`。`qubit-fs` 不创建 manager 根任务。关闭时，应用先 drain 文件系统工作或保留恢复责任，
 关闭文件系统自有的服务/组；其他客户端都完成后，再关闭共享 manager。启用 `async` 只增加异步 SPI/API，
 不会启动线程或选择运行时。

@@ -108,6 +108,17 @@ Errors preserve operation, provider and path context. Stream errors recover
 embedded filesystem context without requiring source-message formatting.
 `exists` maps only `NotFound` to false.
 
+For managed effects, `FsEffectReservation` is the sole publisher of the final
+`FsEffectFact`; an observer only reads the snapshot and waits. Publish a state
+through `reservation.publish(FsEffectFact::State(state))`. Each live async wait
+future owns one private registration keyed by that future's identity. Polling
+again replaces its waker, while separate futures retain independent
+registrations. A future unregisters on drop or when it becomes ready, and a
+replaced waker is released. Publication removes registrations under the lock
+and wakes them after unlocking, so callback code does not run under the
+registration lock. Registration count is bounded by live waiting futures, not
+by total poll count.
+
 Writer opening has a deliberately conservative rule:
 
 | Opening evidence | Whole write | Whole copy |

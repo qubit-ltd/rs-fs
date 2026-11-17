@@ -1079,6 +1079,22 @@ resource release; it does not change a separately observed publication fact.
 Do not wait for settlement while retaining a resource reference that settlement
 itself must release.
 
+The reservation is the sole publisher. Publish a state fact with
+`reservation.publish(FsEffectFact::State(state))`; the observer has no
+`publish` or `publish_fact` operation. Each live `wait_final_async()` future
+has one private registration identified by that future. Re-polling replaces
+its waker, and different futures remain separate even if they share a waker.
+Dropping the future or returning `Ready` unregisters it; replacing a waker
+releases the old one. Publication removes registrations under the lock and
+wakes them after unlocking. Live registrations therefore track active waiting
+futures rather than poll count.
+
+The documentation fixture validates the source-only sibling layout. The
+published-package smoke resolves registry artifacts separately and remains
+pending a compatible provider release: crates.io `qubit-fs-local` 0.11.2
+still depends on core 0.3.3. Fixture success does not establish published
+package compatibility.
+
 The migration breaks the provider SPI deliberately. Providers add the
 `ManagedFsReadSpi`, `ManagedFsMutationSpi`, and `ManagedFsTreeSpi` preparation
 contracts and return owned requests unchanged when preparation rejects them.

@@ -21,4 +21,5 @@ qubit-io = "^0.19"
 tempfile = "3"
 
 [patch.crates-io]
+qubit-fs-local = { path = "../../../../rs-fs-local" }
 qubit-local-files = { path = "../../../../rs-local-files" }

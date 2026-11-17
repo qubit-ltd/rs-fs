@@ -931,6 +931,15 @@ provider 必须保留清理责任，直到清理或恢复得到确认。
 有效。应用关闭时先完成或保留恢复任务，关闭文件系统自有的服务/组；确认其他客户端也不再需要共享 manager 后，
 再由应用关闭 manager。本库不会替调用方关闭应用所有的 manager。
 
+reservation 是唯一发布者；状态事实通过 `reservation.publish(FsEffectFact::State(state))` 发布，observer
+没有 `publish` 或 `publish_fact` 操作。每个存活的 `wait_final_async()` future 按自身身份最多对应一个私有注册。
+重复 poll 会替换该 future 的 waker；不同 future 即使共享同一个 waker，仍是独立注册。future 被 drop 或返回
+`Ready` 时注销，替换 waker 会释放旧 waker。发布在锁内移除注册，并在解锁后唤醒。因此，存活注册数随当前等待
+future 变化，而不随 poll 次数累积。
+
+文档 fixture 验证同级源码布局。发布包 smoke 单独解析 registry artifact，目前仍待兼容 provider 发布版：
+crates.io 的 `qubit-fs-local` 0.11.2 仍依赖 core 0.3.3。fixture 成功不代表发布包兼容。
+
 ## 延伸阅读
 
 - [README](../README.zh_CN.md)
