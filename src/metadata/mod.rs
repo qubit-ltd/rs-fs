@@ -61,6 +61,8 @@ pub use resource_version::ResourceVersion;
 pub use storage_observation::StorageObservation;
 pub use symlink_policy::SymlinkPolicy;
 pub use tree_publish_options::TreePublishOptions;
+mod tree_entry_validation_state;
+pub use tree_entry_validation_state::TreeEntryValidationState;
 pub use tree_validation_options::TreeValidationOptions;
 pub use user_metadata::UserMetadata;
 pub use write_outcome::WriteOutcome;

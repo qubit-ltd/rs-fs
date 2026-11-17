@@ -15,8 +15,8 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
-use common::async_recording_spi::AsyncRecordingConfig;
-use common::async_recording_spi::async_recording_file_system;
+use common::internal::async_recording_spi::AsyncRecordingConfig;
+use common::internal::async_recording_spi::async_recording_file_system;
 use common::poll_support::ready;
 use qubit_fs::FileSystem;
 use qubit_fs::FsError;

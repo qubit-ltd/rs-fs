@@ -109,11 +109,11 @@ impl FsEffectObserver {
     /// wakes synchronous waiters and registered async tasks.
     pub fn publish_fact(&self, fact: FsEffectFact) {
         let mut published = false;
-        if let Ok(mut v) = self.state.snapshot.lock() {
-            if matches!(*v, FsEffectSnapshot::Pending) {
-                *v = FsEffectSnapshot::Final(fact);
-                published = true;
-            }
+        if let Ok(mut v) = self.state.snapshot.lock()
+            && matches!(*v, FsEffectSnapshot::Pending)
+        {
+            *v = FsEffectSnapshot::Final(fact);
+            published = true;
         }
         if published {
             self.state.changed.notify_all();

@@ -8,7 +8,7 @@
 
 mod common;
 #[cfg(feature = "async")]
-pub(crate) use common::async_recording_spi;
+pub(crate) use common::internal::async_recording_spi;
 #[cfg(feature = "async")]
 pub(crate) use common::poll_support;
 mod copy;

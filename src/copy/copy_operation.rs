@@ -70,7 +70,8 @@ impl<'a> CopyOperation<'a> {
     ///   requested by the caller.
     ///
     /// # Returns
-    /// A pending operation bound to the validated inputs and elapsed-time budget.
+    /// A pending operation bound to the validated inputs and elapsed-time
+    /// budget.
     #[inline]
     pub(crate) fn new(filesystem: &'a FileSystem, source: &'a Path, target: &'a Path, options: CopyOptions) -> Self {
         let deadline = CopyDeadline::new(options.deadline(), std::time::Instant::now);
@@ -682,7 +683,8 @@ mod tests {
         });
     }
 
-    /// Scripted filesystem provider for deterministic copy deadline and conflict tests.
+    /// Scripted filesystem provider for deterministic copy deadline and
+    /// conflict tests.
     struct StageSpi {
         late_commit_error: bool,
     }
@@ -758,7 +760,8 @@ mod tests {
         }
     }
 
-    /// Scripted writer for partial writes, interruptions, commit failures, and abort outcomes.
+    /// Scripted writer for partial writes, interruptions, commit failures, and
+    /// abort outcomes.
     struct StageWriter {
         late_commit_error: bool,
     }
@@ -865,16 +868,18 @@ mod tests {
         }
     }
 
-    /// Builds a baseline copy operation with a one-second deterministic deadline.
+    /// Builds a baseline copy operation with a one-second deterministic
+    /// deadline.
     fn operation(late_commit_error: bool) -> CopyOperation<'static> {
         operation_with_mode(late_commit_error, 0)
     }
 
     /// Builds a copy operation whose writer behavior is selected by `mode`.
     ///
-    /// Modes 1–9 cover deadline interruption, short write, write-zero, provider error,
-    /// confirmed partial writes, late error, retryable interruption, short-write completion,
-    /// and an uncertain interrupted write, respectively.
+    /// Modes 1–9 cover deadline interruption, short write, write-zero, provider
+    /// error, confirmed partial writes, late error, retryable interruption,
+    /// short-write completion, and an uncertain interrupted write,
+    /// respectively.
     fn operation_with_mode(late_commit_error: bool, mode: u8) -> CopyOperation<'static> {
         let filesystem = Box::leak(Box::new(
             crate::FileSystem::from_spi(StageSpi { late_commit_error }).expect("valid test filesystem"),
@@ -901,7 +906,8 @@ mod tests {
         operation
     }
 
-    /// Builds a conflict-skip copy operation and injects the requested conflict stage.
+    /// Builds a conflict-skip copy operation and injects the requested conflict
+    /// stage.
     ///
     /// `stage` is one of the `SKIP_AFTER_*` constants above.
     fn skip_operation(stage: u8) -> CopyOperation<'static> {

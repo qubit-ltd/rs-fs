@@ -117,11 +117,11 @@ use qubit_operation::ShutdownMode;
 use qubit_operation::StopReason;
 
 #[cfg(feature = "async")]
-use crate::common::async_recording_spi::AsyncCopyStage;
+use crate::common::internal::async_recording_spi::AsyncCopyStage;
 #[cfg(feature = "async")]
-use crate::common::async_recording_spi::AsyncRecordingConfig;
+use crate::common::internal::async_recording_spi::AsyncRecordingConfig;
 #[cfg(feature = "async")]
-use crate::common::async_recording_spi::async_recording_file_system;
+use crate::common::internal::async_recording_spi::async_recording_file_system;
 #[cfg(feature = "async")]
 use crate::common::poll_support::assert_pending;
 #[cfg(feature = "async")]
@@ -141,15 +141,9 @@ fn test_effect_reservation_stays_owned_until_recovery_finishes() {
         FsEffectSnapshot::Final(FsEffectFact::State(FsEffectState::Applied))
     ));
     drop(observer);
-    assert!(
-        pool.reserve().is_err(),
-        "active owner retains the bounded slot"
-    );
+    assert!(pool.reserve().is_err(), "active owner retains the bounded slot");
     drop(reservation);
-    assert!(
-        pool.reserve().is_ok(),
-        "releasing the owner reclaims the slot"
-    );
+    assert!(pool.reserve().is_ok(), "releasing the owner reclaims the slot");
 }
 
 #[test]
@@ -180,11 +174,7 @@ fn test_failure_publication_preserves_write_count_and_publication_state() {
     let reservation = pool.reserve().unwrap();
     let observer = reservation.observer();
     reservation.publish_write_failure(
-        Arc::new(FsError::new(
-            FsErrorKind::Other,
-            FsOperation::Write,
-            "write failed",
-        )),
+        Arc::new(FsError::new(FsErrorKind::Other, FsOperation::Write, "write failed")),
         WriteFailureState::Published,
         23,
         None,
@@ -208,11 +198,7 @@ fn test_failure_publication_preserves_copy_counters_and_uncertainty() {
     let reservation = FsEffectSlotPool::new(1).reserve().unwrap();
     let observer = reservation.observer();
     reservation.publish_copy_failure(
-        Arc::new(FsError::new(
-            FsErrorKind::Other,
-            FsOperation::Copy,
-            "copy failed",
-        )),
+        Arc::new(FsError::new(FsErrorKind::Other, FsOperation::Copy, "copy failed")),
         CopyFailureState::Indeterminate,
         CopyStats {
             files: 2,
@@ -241,15 +227,10 @@ fn test_failure_publication_preserves_rename_transition_state() {
     let reservation = FsEffectSlotPool::new(1).reserve().unwrap();
     let observer = reservation.observer();
     reservation.publish_rename_failure(
-        Arc::new(FsError::new(
-            FsErrorKind::Other,
-            FsOperation::Rename,
-            "rename failed",
-        )),
+        Arc::new(FsError::new(FsErrorKind::Other, FsOperation::Rename, "rename failed")),
         RenameFailureState::Renamed,
     );
-    let FsEffectSnapshot::Final(FsEffectFact::RenameFailure { state, .. }) = observer.snapshot()
-    else {
+    let FsEffectSnapshot::Final(FsEffectFact::RenameFailure { state, .. }) = observer.snapshot() else {
         panic!("typed rename failure fact expected");
     };
     assert_eq!(RenameFailureState::Renamed, state);
@@ -257,18 +238,14 @@ fn test_failure_publication_preserves_rename_transition_state() {
 
 #[test]
 fn test_content_and_version_conditions_are_distinct_inputs() {
-    let options = WriteOptions::default().with_precondition(WritePrecondition::IfMatch(
-        ResourceVersion::new("revision-7"),
-    ));
+    let options =
+        WriteOptions::default().with_precondition(WritePrecondition::IfMatch(ResourceVersion::new("revision-7")));
     let content = ContentPrecondition::Equals(b"expected bytes".to_vec());
     assert_eq!(
         &WritePrecondition::IfMatch(ResourceVersion::new("revision-7")),
         options.precondition()
     );
-    assert_eq!(
-        ContentPrecondition::Equals(b"expected bytes".to_vec()),
-        content
-    );
+    assert_eq!(ContentPrecondition::Equals(b"expected bytes".to_vec()), content);
 }
 
 #[test]
@@ -288,8 +265,7 @@ fn test_write_content_condition_is_preserved_independently_from_version_conditio
 
 #[test]
 fn test_required_content_compare_needs_guaranteed_conditional_write() {
-    let options =
-        WriteOptions::default().with_content_precondition(ContentPrecondition::Equals(vec![1]));
+    let options = WriteOptions::default().with_content_precondition(ContentPrecondition::Equals(vec![1]));
     let conditional = FileSystemCapabilities::new()
         .with_conditional(FileSystemCapability::Write)
         .with_conditional(FileSystemCapability::ConditionalWrite);
@@ -316,19 +292,10 @@ fn test_native_copy_partial_side_effect_never_opens_fallback_streams() {
         }
 
         fn stat<'a>(&'a self, _: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
-            Box::pin(async {
-                Err(FsError::new(
-                    FsErrorKind::NotFound,
-                    FsOperation::Stat,
-                    "not used",
-                ))
-            })
+            Box::pin(async { Err(FsError::new(FsErrorKind::NotFound, FsOperation::Stat, "not used")) })
         }
 
-        fn open_reader<'a>(
-            &'a self,
-            request: OpenReaderRequest<'a>,
-        ) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
+        fn open_reader<'a>(&'a self, request: OpenReaderRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
             let _ = request;
             self.fallback_opens.fetch_add(1, Ordering::SeqCst);
             Box::pin(async {
@@ -340,10 +307,7 @@ fn test_native_copy_partial_side_effect_never_opens_fallback_streams() {
             })
         }
 
-        fn open_writer<'a>(
-            &'a self,
-            request: OpenWriterRequest<'a>,
-        ) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
+        fn open_writer<'a>(&'a self, request: OpenWriterRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
             let _ = request;
             self.fallback_opens.fetch_add(1, Ordering::SeqCst);
             Box::pin(async {
@@ -355,10 +319,7 @@ fn test_native_copy_partial_side_effect_never_opens_fallback_streams() {
             })
         }
 
-        fn try_copy<'a>(
-            &'a self,
-            _: CopyRequest<'a>,
-        ) -> SpiFuture<'a, Result<CopyAttempt, SpiCopyFailure>> {
+        fn try_copy<'a>(&'a self, _: CopyRequest<'a>) -> SpiFuture<'a, Result<CopyAttempt, SpiCopyFailure>> {
             Box::pin(async {
                 Err(SpiCopyFailure::new(
                     FsError::new(
@@ -477,8 +438,7 @@ fn test_required_content_condition_without_guaranteed_compare_fails_before_open(
     let result = filesystem.begin_write_all(
         Path::parse("/condition").unwrap(),
         b"new".to_vec(),
-        WriteOptions::default()
-            .with_content_precondition(ContentPrecondition::Equals(b"old".to_vec())),
+        WriteOptions::default().with_content_precondition(ContentPrecondition::Equals(b"old".to_vec())),
     );
     assert!(result.is_err());
     assert!(!probe.calls().contains(&"open_writer"));
@@ -517,18 +477,15 @@ fn test_cleanup_failure_keeps_temp_owner_recoverable() {
         temp_cleanup_failure: true,
         ..Default::default()
     });
-    let mut temporary = ready(filesystem.create_temp_file(TempOptions::default()))
-        .expect("fixture creates the temporary file");
+    let mut temporary =
+        ready(filesystem.create_temp_file(TempOptions::default())).expect("fixture creates the temporary file");
     let error = ready(temporary.cleanup()).expect_err("first cleanup failure is observable");
     assert!(error.to_string().contains("injected cleanup failure"));
     assert_eq!(TempResourceState::CleanupRequired, temporary.state());
     let retry = ready(temporary.cleanup()).expect_err("owner remains available for retry");
     assert!(retry.to_string().contains("injected cleanup failure"));
     assert_eq!(TempResourceState::CleanupRequired, temporary.state());
-    assert_eq!(
-        vec!["create_temp_file", "cleanup", "cleanup"],
-        probe.calls()
-    );
+    assert_eq!(vec!["create_temp_file", "cleanup", "cleanup"], probe.calls());
     drop(temporary);
     assert_eq!(1, probe.temp_cancellations());
 }
@@ -550,9 +507,7 @@ fn test_commit_failure_and_abort_failure_keep_separate_recovery_state() {
         .unwrap();
     let failure = ready(operation.execute()).expect_err("commit failure is retained");
     assert_eq!(WriteFailureState::Published, failure.state());
-    let mut recovery = operation
-        .take_recovery()
-        .expect("writer owner remains available");
+    let mut recovery = operation.take_recovery().expect("writer owner remains available");
     let AsyncWriterRecovery::Opened(writer) = &mut recovery else {
         panic!("opened writer expected")
     };
@@ -590,25 +545,17 @@ fn test_temp_created_before_registration_rejection_remains_in_commit_error() {
                 Ok(_) => panic!("stopped operation accepted resource registration"),
                 Err(error) => error,
             };
-            let (reason, owner, cleanup, reservation) = error.into_parts();
+            let (reason, owner, _cleanup, reservation) = error.into_parts();
             assert_eq!(ResourceManageErrorKind::Stopped, reason);
-            let temporary = owner
-                .lock()
-                .unwrap()
-                .take()
-                .expect("commit error retains temp owner");
+            let temporary = owner.lock().unwrap().take().expect("commit error retains temp owner");
             assert_eq!(path, *temporary.path());
             drop(temporary);
-            drop(cleanup);
             drop(reservation);
             Ok::<(), FsError>(())
         })
         .unwrap();
     let _ = operation.wait_outcome().unwrap();
-    let _ = manager
-        .request_shutdown(ShutdownMode::Drain)
-        .wait()
-        .unwrap();
+    let _ = manager.request_shutdown(ShutdownMode::Drain).wait().unwrap();
     assert!(probe.calls().contains(&"create_temp_file"));
 }
 
@@ -622,8 +569,7 @@ fn test_version_condition_without_conditional_write_fails_before_publication() {
     let result = filesystem.begin_write_all(
         Path::parse("/version-condition").unwrap(),
         b"new".to_vec(),
-        WriteOptions::default()
-            .with_precondition(WritePrecondition::IfMatch(ResourceVersion::new("v1"))),
+        WriteOptions::default().with_precondition(WritePrecondition::IfMatch(ResourceVersion::new("v1"))),
     );
     assert!(result.is_err());
     assert!(!probe.calls().contains(&"open_writer"));
@@ -641,18 +587,9 @@ fn test_version_precondition_rejects_support_only_conditional_write_before_open(
             self.properties.clone()
         }
         fn stat<'a>(&'a self, _: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
-            Box::pin(async {
-                Err(FsError::new(
-                    FsErrorKind::NotFound,
-                    FsOperation::Stat,
-                    "not used",
-                ))
-            })
+            Box::pin(async { Err(FsError::new(FsErrorKind::NotFound, FsOperation::Stat, "not used")) })
         }
-        fn open_writer<'a>(
-            &'a self,
-            request: OpenWriterRequest<'a>,
-        ) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
+        fn open_writer<'a>(&'a self, request: OpenWriterRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
             let _ = request;
             self.writer_opens.fetch_add(1, Ordering::SeqCst);
             Box::pin(async {
@@ -689,12 +626,9 @@ fn test_version_precondition_rejects_support_only_conditional_write_before_open(
     let result = filesystem.begin_write_all(
         Path::parse("/version-guard").unwrap(),
         b"new".to_vec(),
-        WriteOptions::default()
-            .with_precondition(WritePrecondition::IfMatch(ResourceVersion::new("v1"))),
+        WriteOptions::default().with_precondition(WritePrecondition::IfMatch(ResourceVersion::new("v1"))),
     );
-    let error = result.expect_err(
-        "support-only conditional writes cannot guarantee atomic comparison and publication",
-    );
+    let error = result.expect_err("support-only conditional writes cannot guarantee atomic comparison and publication");
     assert_eq!(FsErrorKind::RequirementNotMet, error.error().kind());
     assert_eq!(0, writer_opens.load(Ordering::SeqCst));
 }

@@ -90,9 +90,7 @@ impl PreparedFsReadAdapter {
             .lock()
             .map(|state| state.bound.is_none())
             .unwrap_or(false);
-        is_unclaimed
-            .then(|| self.prepared.take_unclaimed_request())
-            .flatten()
+        is_unclaimed.then(|| self.prepared.take_unclaimed_request()).flatten()
     }
 }
 impl OperationControl for PreparedFsReadAdapter {
@@ -155,10 +153,7 @@ impl PreparedExternalOperation<Vec<u8>, FsOperationFailure> for PreparedFsReadAd
     /// Returns [`ExternalBindError::AlreadyBound`] if the adapter has already
     /// been bound, activated, or abandoned, or propagates the provider error.
     fn bind(&self, id: OperationId) -> Result<(), ExternalBindError> {
-        let mut state = self
-            .lifecycle
-            .lock()
-            .map_err(|_| ExternalBindError::AlreadyBound)?;
+        let mut state = self.lifecycle.lock().map_err(|_| ExternalBindError::AlreadyBound)?;
         if state.bound.is_some() || state.abandoned || state.activated {
             return Err(ExternalBindError::AlreadyBound);
         }
@@ -182,20 +177,15 @@ impl PreparedExternalOperation<Vec<u8>, FsOperationFailure> for PreparedFsReadAd
     /// Panics if the local lifecycle mutex is poisoned.
     fn activate(self: Arc<Self>, scope: OperationScope) -> Result<(), ExecutionFailure> {
         {
-            let mut state = self
-                .lifecycle
-                .lock()
-                .expect("prepared read lifecycle mutex poisoned");
-            if state.activated || state.abandoned {
-                if let Some(operation_id) = state.bound {
-                    return Err(ExecutionFailure {
-                        operation_id,
-                        summary: DiagnosticSummary::new(
-                            "prepared read was already activated or abandoned",
-                        ),
-                        source: None,
-                    });
-                }
+            let mut state = self.lifecycle.lock().expect("prepared read lifecycle mutex poisoned");
+            if (state.activated || state.abandoned)
+                && let Some(operation_id) = state.bound
+            {
+                return Err(ExecutionFailure {
+                    operation_id,
+                    summary: DiagnosticSummary::new("prepared read was already activated or abandoned"),
+                    source: None,
+                });
             }
             state.activated = true;
         }
@@ -230,10 +220,7 @@ impl PreparedExternalOperation<Vec<u8>, FsOperationFailure> for PreparedFsReadAd
     /// # Returns
     /// `Pending` while the provider is running, then `Ready` with the single
     /// operation outcome.
-    fn poll_take_outcome(
-        &self,
-        c: &mut Context<'_>,
-    ) -> Poll<OperationOutcome<Vec<u8>, FsOperationFailure>> {
+    fn poll_take_outcome(&self, c: &mut Context<'_>) -> Poll<OperationOutcome<Vec<u8>, FsOperationFailure>> {
         self.prepared.poll_take_outcome(c)
     }
 }

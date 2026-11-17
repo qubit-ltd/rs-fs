@@ -7,6 +7,8 @@
 // =============================================================================
 use std::sync::Arc;
 
+use qubit_operation::GroupBindingError;
+use qubit_operation::OperationGroup;
 use qubit_operation::OperationManager;
 use qubit_operation::OperationOptions;
 
@@ -44,6 +46,7 @@ use crate::spi::ManagedFsTreeSpi;
 /// ```
 #[derive(Clone)]
 pub struct FsExecutionBinding {
+    /// Manager view that supplies the root or group-scoped submission target.
     manager: OperationManager,
 }
 impl FsExecutionBinding {
@@ -83,10 +86,7 @@ impl FsExecutionBinding {
     /// Returns the manager's group-binding error when `group` cannot be bound
     /// to this manager view.
     #[inline]
-    pub fn with_group(
-        &self,
-        group: &qubit_operation::OperationGroup,
-    ) -> Result<Self, qubit_operation::GroupBindingError> {
+    pub fn with_group(&self, group: &OperationGroup) -> Result<Self, GroupBindingError> {
         self.manager.with_group(group).map(Self::new)
     }
     /// Prepares and submits a read while retaining its request on rejection.
@@ -103,6 +103,10 @@ impl FsExecutionBinding {
     /// # Errors
     /// Returns `FsSubmitFailure` when provider preparation fails or the
     /// operation manager rejects admission.
+    ///
+    /// # Panics
+    /// Panics if a rejected prepared operation no longer retains its original
+    /// request, violating the provider adapter's ownership contract.
     pub fn submit_read_all(
         &self,
         provider: &dyn ManagedFsReadSpi,
@@ -154,6 +158,10 @@ impl FsExecutionBinding {
     /// Returns `FsSubmitFailure` if effect capacity is unavailable, provider
     /// preparation or reservation installation fails, or manager admission
     /// rejects the operation.
+    ///
+    /// # Panics
+    /// Panics if a prepared provider operation unexpectedly loses its request
+    /// before it can be returned after rejection.
     pub fn submit_write(
         &self,
         provider: &dyn ManagedFsMutationSpi,
@@ -232,6 +240,10 @@ impl FsExecutionBinding {
     /// Returns `FsSubmitFailure` if effect capacity is unavailable, provider
     /// preparation or reservation installation fails, or manager admission
     /// rejects the operation.
+    ///
+    /// # Panics
+    /// Panics if a prepared provider operation unexpectedly loses its request
+    /// before it can be returned after rejection.
     pub fn submit_copy(
         &self,
         provider: &dyn ManagedFsMutationSpi,
@@ -310,6 +322,10 @@ impl FsExecutionBinding {
     /// Returns `FsSubmitFailure` if effect capacity is unavailable, provider
     /// preparation or reservation installation fails, or manager admission
     /// rejects the operation.
+    ///
+    /// # Panics
+    /// Panics if a prepared provider operation unexpectedly loses its request
+    /// before it can be returned after rejection.
     pub fn submit_rename(
         &self,
         provider: &dyn ManagedFsMutationSpi,
@@ -389,6 +405,10 @@ impl FsExecutionBinding {
     /// Returns `FsSubmitFailure` if effect capacity is unavailable, provider
     /// preparation or reservation installation fails, or manager admission
     /// rejects the operation.
+    ///
+    /// # Panics
+    /// Panics if a prepared provider operation unexpectedly loses its request
+    /// before it can be returned after rejection.
     pub fn submit_tree_publish(
         &self,
         provider: &dyn ManagedFsTreeSpi,
@@ -469,6 +489,10 @@ impl FsExecutionBinding {
     /// Returns `FsSubmitFailure` if effect capacity is unavailable, provider
     /// preparation or reservation installation fails, or manager admission
     /// rejects the operation.
+    ///
+    /// # Panics
+    /// Panics if a prepared provider operation unexpectedly loses its request
+    /// before it can be returned after rejection.
     #[cfg(feature = "async")]
     pub fn submit_write_async(
         &self,
@@ -550,6 +574,10 @@ impl FsExecutionBinding {
     /// Returns `FsSubmitFailure` if effect capacity is unavailable, provider
     /// preparation or reservation installation fails, or manager admission
     /// rejects the operation.
+    ///
+    /// # Panics
+    /// Panics if a prepared provider operation unexpectedly loses its request
+    /// before it can be returned after rejection.
     #[cfg(feature = "async")]
     pub fn submit_copy_async(
         &self,
@@ -631,6 +659,10 @@ impl FsExecutionBinding {
     /// Returns `FsSubmitFailure` if effect capacity is unavailable, provider
     /// preparation or reservation installation fails, or manager admission
     /// rejects the operation.
+    ///
+    /// # Panics
+    /// Panics if a prepared provider operation unexpectedly loses its request
+    /// before it can be returned after rejection.
     #[cfg(feature = "async")]
     pub fn submit_rename_async(
         &self,
@@ -712,6 +744,10 @@ impl FsExecutionBinding {
     /// Returns `FsSubmitFailure` if effect capacity is unavailable, provider
     /// preparation or reservation installation fails, or manager admission
     /// rejects the operation.
+    ///
+    /// # Panics
+    /// Panics if a prepared provider operation unexpectedly loses its request
+    /// before it can be returned after rejection.
     #[cfg(feature = "async")]
     pub fn submit_tree_publish_async(
         &self,
@@ -793,6 +829,10 @@ impl FsExecutionBinding {
     /// # Errors
     /// Returns `FsSubmitFailure` when provider preparation fails or the
     /// asynchronous manager rejects admission.
+    ///
+    /// # Panics
+    /// Panics if a rejected prepared operation no longer retains its original
+    /// request, violating the provider adapter's ownership contract.
     #[cfg(feature = "async")]
     pub fn submit_read_all_async(
         &self,

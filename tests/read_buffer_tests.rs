@@ -143,10 +143,7 @@ impl AsyncFileSystemSpi for MetadataProvider {
     fn stat<'a>(&'a self, _: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
         Box::pin(async { Err(unexpected_stat()) })
     }
-    fn open_reader<'a>(
-        &'a self,
-        request: OpenReaderRequest<'a>,
-    ) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
+    fn open_reader<'a>(&'a self, request: OpenReaderRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
         self.opens.fetch_add(1, Ordering::SeqCst);
         Box::pin(async move {
             Ok(OpenedAsyncReader::new(
@@ -227,8 +224,7 @@ fn test_async_read_all_accepts_short_stream_despite_overestimated_metadata() {
     let path = Path::parse("/payload").expect("path");
 
     assert_eq!(
-        common::poll_support::ready(fs.read_all(&path, ReadOptions::default(), 5))
-            .expect("actual stream fits"),
+        common::poll_support::ready(fs.read_all(&path, ReadOptions::default(), 5)).expect("actual stream fits"),
         [7; 3]
     );
 }

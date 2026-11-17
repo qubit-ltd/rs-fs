@@ -77,14 +77,15 @@ impl ProviderOperations {
     /// a claim that all requests satisfy the capability.
     ///
     /// # Parameters
-    /// - `capability`: Filesystem capability to map to an operation entry point.
+    /// - `capability`: Filesystem capability to map to an operation entry
+    ///   point.
     ///
     /// # Returns
     /// `true` when this operation set contains the entry point for
     /// `capability`.
     #[must_use]
     pub const fn supports_capability(&self, capability: FileSystemCapability) -> bool {
-        let supported = match capability {
+        match capability {
             FileSystemCapability::List => self.supports(ProviderOperation::List),
             FileSystemCapability::Read
             | FileSystemCapability::RangeRead
@@ -124,8 +125,7 @@ impl ProviderOperations {
             FileSystemCapability::StagedTreePublish => self.supports(ProviderOperation::PublishTree),
             FileSystemCapability::StorageObservation => self.supports(ProviderOperation::ObserveStorage),
             FileSystemCapability::Symlink => false,
-        };
-        supported
+        }
     }
     /// Returns a copy containing `operation`.
     ///
@@ -139,5 +139,4 @@ impl ProviderOperations {
         self.bits |= 1_u128 << operation as u8;
         self
     }
-
 }

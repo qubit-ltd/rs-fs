@@ -109,10 +109,7 @@ fn test_managed_submission_rejection_returns_the_owned_request() {
         Err(failure) => failure,
     };
     let (reason, preparation, recovered) = failure.into_parts();
-    assert!(
-        reason.is_some(),
-        "expected manager admission error: {reason:?}"
-    );
+    assert!(reason.is_some(), "expected manager admission error: {reason:?}");
     assert!(preparation.is_none());
     assert_eq!(recovered.path.as_str(), "/admission-reject");
 }
@@ -181,19 +178,13 @@ impl PreparedExternalOperation<Vec<u8>, FsOperationFailure> for HoldingRead {
         Ok(())
     }
     fn abandon(self: Arc<Self>) {}
-    fn poll_take_outcome(
-        &self,
-        _: &mut Context<'_>,
-    ) -> Poll<OperationOutcome<Vec<u8>, FsOperationFailure>> {
+    fn poll_take_outcome(&self, _: &mut Context<'_>) -> Poll<OperationOutcome<Vec<u8>, FsOperationFailure>> {
         Poll::Pending
     }
 }
 impl PreparedFsRead for HoldingRead {
     fn take_unclaimed_request(&self) -> Option<FsOwnedReadRequest> {
-        self.request
-            .lock()
-            .expect("request mutex not poisoned")
-            .take()
+        self.request.lock().expect("request mutex not poisoned").take()
     }
 }
 
@@ -226,9 +217,7 @@ fn test_effect_observer_waits_for_final_facts_in_sync_and_async_paths() {
 #[test]
 fn test_request_is_recoverable_only_while_unclaimed() {
     let (adapter, counters) = lifecycle_adapter("/recover", false, None);
-    let request = adapter
-        .take_request()
-        .expect("unclaimed request is recoverable");
+    let request = adapter.take_request().expect("unclaimed request is recoverable");
     assert_eq!(request.path.as_str(), "/recover");
     assert_eq!(counters.unclaimed_request_reads.load(Ordering::SeqCst), 1);
 
@@ -247,10 +236,8 @@ fn test_post_bind_pre_activation_submit_error_preserves_existing_claim() {
     let (adapter, counters) = lifecycle_adapter("/cross-manager", false, None);
     PreparedExternalOperation::bind(adapter.as_ref(), claim_manager_id).unwrap();
 
-    let rejected = second_manager.try_submit_external::<Vec<u8>, FsOperationFailure, _>(
-        OperationOptions::default(),
-        Arc::clone(&adapter),
-    );
+    let rejected = second_manager
+        .try_submit_external::<Vec<u8>, FsOperationFailure, _>(OperationOptions::default(), Arc::clone(&adapter));
     let (reason, returned) = match rejected {
         Ok(_) => panic!("a prepared task was claimed by two manager submissions"),
         Err(error) => error.into_parts(),
@@ -279,10 +266,7 @@ fn test_activation_failure_never_falls_back_to_abandon() {
     let manager = OperationManager::new(ManagerOptions::default()).unwrap();
     let (adapter, counters) = lifecycle_adapter("/activate-fails", true, None);
     let mut operation = manager
-        .try_submit_external::<Vec<u8>, FsOperationFailure, _>(
-            OperationOptions::default(),
-            Arc::clone(&adapter),
-        )
+        .try_submit_external::<Vec<u8>, FsOperationFailure, _>(OperationOptions::default(), Arc::clone(&adapter))
         .unwrap();
     assert!(matches!(
         operation.wait_outcome().unwrap(),
@@ -427,11 +411,7 @@ impl LifecyclePrepared {
 impl OperationControl for LifecyclePrepared {
     fn request_stop(&self, _: StopReason) {}
     fn snapshot(&self) -> ChildSnapshot {
-        let operation_id = self
-            .operation_id
-            .lock()
-            .unwrap()
-            .expect("binding precedes observation");
+        let operation_id = self.operation_id.lock().unwrap().expect("binding precedes observation");
         let completed = self.completed.load(Ordering::SeqCst);
         let abandoned = self.abandoned.load(Ordering::SeqCst);
         let final_fact = completed || abandoned;
@@ -440,11 +420,7 @@ impl OperationControl for LifecyclePrepared {
         } else {
             ChildOutcomeKind::Succeeded
         };
-        let summary = if abandoned {
-            "child stopped"
-        } else {
-            "child succeeded"
-        };
+        let summary = if abandoned { "child stopped" } else { "child succeeded" };
         ChildSnapshot {
             operation_id,
             execution: if final_fact {
@@ -463,11 +439,7 @@ impl OperationControl for LifecyclePrepared {
         }
     }
     fn poll_outcome(&self, _: &mut Context<'_>) -> Poll<ChildOutcomeSummary> {
-        let operation_id = self
-            .operation_id
-            .lock()
-            .unwrap()
-            .expect("binding precedes observation");
+        let operation_id = self.operation_id.lock().unwrap().expect("binding precedes observation");
         if self.completed.load(Ordering::SeqCst) || self.abandoned.load(Ordering::SeqCst) {
             let stopped = self.abandoned.load(Ordering::SeqCst);
             let kind = if stopped {
@@ -475,11 +447,7 @@ impl OperationControl for LifecyclePrepared {
             } else {
                 ChildOutcomeKind::Succeeded
             };
-            let summary = if stopped {
-                "child stopped"
-            } else {
-                "child succeeded"
-            };
+            let summary = if stopped { "child stopped" } else { "child succeeded" };
             Poll::Ready(ChildOutcomeSummary {
                 operation_id,
                 kind,
@@ -490,11 +458,7 @@ impl OperationControl for LifecyclePrepared {
         }
     }
     fn poll_release(&self, _: &mut Context<'_>) -> Poll<ChildRelease> {
-        let operation_id = self
-            .operation_id
-            .lock()
-            .unwrap()
-            .expect("binding precedes observation");
+        let operation_id = self.operation_id.lock().unwrap().expect("binding precedes observation");
         if self.completed.load(Ordering::SeqCst) || self.abandoned.load(Ordering::SeqCst) {
             Poll::Ready(ChildRelease {
                 operation_id,
@@ -505,11 +469,7 @@ impl OperationControl for LifecyclePrepared {
         }
     }
     fn poll_settlement(&self, _: &mut Context<'_>) -> Poll<Arc<SettlementReport>> {
-        let operation_id = self
-            .operation_id
-            .lock()
-            .unwrap()
-            .expect("binding precedes observation");
+        let operation_id = self.operation_id.lock().unwrap().expect("binding precedes observation");
         if self.completed.load(Ordering::SeqCst) || self.abandoned.load(Ordering::SeqCst) {
             Poll::Ready(Arc::new(empty_settlement(operation_id)))
         } else {
@@ -530,11 +490,7 @@ impl PreparedExternalOperation<Vec<u8>, FsOperationFailure> for LifecyclePrepare
     fn activate(self: Arc<Self>, _: OperationScope) -> Result<(), ExecutionFailure> {
         self.counters.activations.fetch_add(1, Ordering::SeqCst);
         if self.activation_fails {
-            let operation_id = self
-                .operation_id
-                .lock()
-                .unwrap()
-                .expect("bind precedes activation");
+            let operation_id = self.operation_id.lock().unwrap().expect("bind precedes activation");
             return Err(ExecutionFailure {
                 operation_id,
                 summary: DiagnosticSummary::new("activation rejected"),
@@ -549,22 +505,13 @@ impl PreparedExternalOperation<Vec<u8>, FsOperationFailure> for LifecyclePrepare
         self.counters.abandons.fetch_add(1, Ordering::SeqCst);
         self.abandoned.store(true, Ordering::SeqCst);
     }
-    fn poll_take_outcome(
-        &self,
-        _: &mut Context<'_>,
-    ) -> Poll<OperationOutcome<Vec<u8>, FsOperationFailure>> {
-        self.outcome
-            .lock()
-            .unwrap()
-            .take()
-            .map_or(Poll::Pending, Poll::Ready)
+    fn poll_take_outcome(&self, _: &mut Context<'_>) -> Poll<OperationOutcome<Vec<u8>, FsOperationFailure>> {
+        self.outcome.lock().unwrap().take().map_or(Poll::Pending, Poll::Ready)
     }
 }
 impl PreparedFsRead for LifecyclePrepared {
     fn take_unclaimed_request(&self) -> Option<FsOwnedReadRequest> {
-        self.counters
-            .unclaimed_request_reads
-            .fetch_add(1, Ordering::SeqCst);
+        self.counters.unclaimed_request_reads.fetch_add(1, Ordering::SeqCst);
         self.request.lock().unwrap().take()
     }
 }
@@ -611,9 +558,6 @@ fn fresh_operation_id() -> OperationId {
         operation.wait_outcome().unwrap(),
         OperationOutcome::Succeeded(())
     ));
-    let _shutdown = manager
-        .request_shutdown(ShutdownMode::Drain)
-        .wait()
-        .unwrap();
+    let _shutdown = manager.request_shutdown(ShutdownMode::Drain).wait().unwrap();
     id
 }

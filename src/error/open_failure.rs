@@ -71,7 +71,8 @@ impl<R> OpenFailure<R> {
     /// - `recovery`: Optional isolated session retained for safe recovery.
     ///
     /// # Returns
-    /// A failure value retaining the original error, stage, and optional recovery session.
+    /// A failure value retaining the original error, stage, and optional
+    /// recovery session.
     pub(crate) fn new(error: FsError, stage: OpenFailureStage, recovery: Option<R>) -> Self {
         Self {
             error: Box::new(error),

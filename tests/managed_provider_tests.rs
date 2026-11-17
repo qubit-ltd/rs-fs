@@ -449,11 +449,11 @@ impl FakePreparedWrite {
             .unwrap()
             .take()
             .expect("binding installs effect reservation before activation");
-        if let Some(resource_reservation) = self.resource_reservation.lock().unwrap().take() {
-            if let Ok(resource) = resource_reservation.commit_with((), FakeWriteCleanup) {
-                self.resource_ids.lock().unwrap().push(resource.id());
-                *self.resource_ref.lock().unwrap() = Some(resource);
-            }
+        if let Some(resource_reservation) = self.resource_reservation.lock().unwrap().take()
+            && let Ok(resource) = resource_reservation.commit_with((), FakeWriteCleanup)
+        {
+            self.resource_ids.lock().unwrap().push(resource.id());
+            *self.resource_ref.lock().unwrap() = Some(resource);
         }
         let fact = if self.stop_requests.lock().unwrap().is_empty() {
             FsEffectState::Applied

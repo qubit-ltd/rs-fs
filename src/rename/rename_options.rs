@@ -64,7 +64,6 @@ impl RenameOptions {
 
     /// Returns the required destination durability level.
     #[inline]
-    #[must_use]
     pub const fn durability(&self) -> DurabilityRequirement {
         self.durability
     }

@@ -119,8 +119,8 @@ mod common;
 #[cfg(feature = "async")]
 #[test]
 fn test_repeated_commit_preserves_async_publication_state() {
-    use common::async_recording_spi::AsyncRecordingConfig;
-    use common::async_recording_spi::async_recording_file_system;
+    use common::internal::async_recording_spi::AsyncRecordingConfig;
+    use common::internal::async_recording_spi::async_recording_file_system;
     use common::poll_support::ready;
 
     let (filesystem, _) = async_recording_file_system(AsyncRecordingConfig::default());
@@ -137,8 +137,8 @@ fn test_repeated_commit_preserves_async_publication_state() {
 #[cfg(feature = "async")]
 #[test]
 fn test_retryable_async_commit_remains_retryable() {
-    use common::async_recording_spi::AsyncRecordingConfig;
-    use common::async_recording_spi::async_recording_file_system;
+    use common::internal::async_recording_spi::AsyncRecordingConfig;
+    use common::internal::async_recording_spi::async_recording_file_system;
     use common::poll_support::ready;
 
     let (filesystem, _) = async_recording_file_system(AsyncRecordingConfig {
@@ -161,8 +161,8 @@ fn test_retryable_async_commit_remains_retryable() {
 #[cfg(feature = "async")]
 #[test]
 fn test_repeated_commit_preserves_async_failed_publication_states() {
-    use common::async_recording_spi::AsyncRecordingConfig;
-    use common::async_recording_spi::async_recording_file_system;
+    use common::internal::async_recording_spi::AsyncRecordingConfig;
+    use common::internal::async_recording_spi::async_recording_file_system;
     use common::poll_support::ready;
 
     for (provider_state, expected_writer_state) in [

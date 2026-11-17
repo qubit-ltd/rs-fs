@@ -88,5 +88,4 @@ impl ResolvedReadOptions {
         self.prefix_hint = Some(hint);
         self
     }
-
 }

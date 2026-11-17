@@ -64,19 +64,19 @@ impl TreePublishOptions {
             AtomicityRequirement::Required => Some(FileSystemCapability::AtomicTreeCopy),
             AtomicityRequirement::Preferred | AtomicityRequirement::NotRequired => None,
         };
-        if let Some(capability) = required {
-            if capabilities.support(capability) == FileSystemCapabilitySupport::Unsupported {
-                return Err(missing_tree_capability(capability));
-            }
+        if let Some(capability) = required
+            && capabilities.support(capability) == FileSystemCapabilitySupport::Unsupported
+        {
+            return Err(missing_tree_capability(capability));
         }
         let required = match self.durability {
             DurabilityRequirement::Required => Some(FileSystemCapability::DurableTreeCopy),
             DurabilityRequirement::Preferred | DurabilityRequirement::NotRequired => None,
         };
-        if let Some(capability) = required {
-            if capabilities.support(capability) == FileSystemCapabilitySupport::Unsupported {
-                return Err(missing_tree_capability(capability));
-            }
+        if let Some(capability) = required
+            && capabilities.support(capability) == FileSystemCapabilitySupport::Unsupported
+        {
+            return Err(missing_tree_capability(capability));
         }
         Ok(())
     }

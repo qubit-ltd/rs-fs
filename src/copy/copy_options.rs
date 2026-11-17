@@ -55,7 +55,7 @@ pub struct CopyOptions {
     /// Required durability of destination publication.
     durability: DurabilityRequirement,
     /// Maximum descendant depth for tree copy.
-    max_depth: Option<usize>,
+    max_depth: Option<Box<usize>>,
     /// Maximum number of source entries the provider may process.
     ///
     /// A file-mode copy always consumes exactly one entry, so `Some(0)`
@@ -135,7 +135,6 @@ impl CopyOptions {
     /// # Returns
     /// The configured server-side copy preference.
     #[inline]
-    #[must_use]
     pub const fn server_side(&self) -> ServerSidePreference {
         self.server_side
     }
@@ -188,7 +187,6 @@ impl CopyOptions {
     /// # Returns
     /// The configured durability requirement.
     #[inline]
-    #[must_use]
     pub const fn durability(&self) -> DurabilityRequirement {
         self.durability
     }
@@ -199,8 +197,8 @@ impl CopyOptions {
     /// `Some(depth)` for a configured limit, or `None` when depth is unbounded.
     #[inline]
     #[must_use]
-    pub const fn max_depth(&self) -> Option<usize> {
-        self.max_depth
+    pub fn max_depth(&self) -> Option<usize> {
+        self.max_depth.as_deref().copied()
     }
 
     /// Returns the optional maximum source entry count.
@@ -381,8 +379,8 @@ impl CopyOptions {
     /// A copy with the requested tree-depth limit.
     #[inline]
     #[must_use = "apply the updated tree-depth limit"]
-    pub const fn with_max_depth(mut self, max_depth: Option<usize>) -> Self {
-        self.max_depth = max_depth;
+    pub fn with_max_depth(mut self, max_depth: Option<usize>) -> Self {
+        self.max_depth = max_depth.map(Box::new);
         self
     }
 

@@ -52,9 +52,9 @@ use qubit_fs::write::WriterState;
 use qubit_io::AsyncInput;
 use qubit_io::AsyncOutput;
 
-use crate::common::async_recording_spi::AsyncCopyStage;
-use crate::common::async_recording_spi::AsyncRecordingConfig;
-use crate::common::async_recording_spi::async_recording_file_system;
+use crate::common::internal::async_recording_spi::AsyncCopyStage;
+use crate::common::internal::async_recording_spi::AsyncRecordingConfig;
+use crate::common::internal::async_recording_spi::async_recording_file_system;
 use crate::common::poll_support::ready;
 
 /// Parses an absolute path used by one regression scenario.

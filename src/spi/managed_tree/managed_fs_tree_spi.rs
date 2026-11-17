@@ -59,10 +59,7 @@ pub trait ManagedFsTreeSpi: Send + Sync {
     /// # Errors
     /// Returns a capacity error when the scope cannot reserve another resource.
     #[inline]
-    fn reserve_staged_directory(
-        &self,
-        scope: &ResourceScope,
-    ) -> Result<ResourceReservation, ResourceCapacityError> {
+    fn reserve_staged_directory(&self, scope: &ResourceScope) -> Result<ResourceReservation, ResourceCapacityError> {
         scope.reserve_resource()
     }
 

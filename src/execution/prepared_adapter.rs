@@ -15,19 +15,19 @@
 macro_rules! make_prepared_adapter {
     ($name:ident, $prepared:ident, $request:ty, $output:ty) => {
         #[doc = concat!(
-                            "Sized adapter for the corresponding object-safe prepared provider task.\n\n",
-                            "A prepared task is supplied by its provider during operation preparation.\n\n",
-                            "# Examples\n\n",
-                            "```rust\n",
-                            "use std::sync::Arc;\n",
-                            "use qubit_fs::execution::", stringify!($name), ";\n",
-                            "use qubit_fs::spi::", stringify!($prepared), ";\n\n",
-                            "fn inspect(prepared: Arc<dyn ", stringify!($prepared), ">) {\n",
-                            "    let adapter = ", stringify!($name), "::new(prepared);\n",
-                            "    let _unclaimed_request = adapter.take_request();\n",
-                            "}\n",
-                            "```"
-                        )]
+                                    "Sized adapter for the corresponding object-safe prepared provider task.\n\n",
+                                    "A prepared task is supplied by its provider during operation preparation.\n\n",
+                                    "# Examples\n\n",
+                                    "```rust\n",
+                                    "use std::sync::Arc;\n",
+                                    "use qubit_fs::execution::", stringify!($name), ";\n",
+                                    "use qubit_fs::spi::", stringify!($prepared), ";\n\n",
+                                    "fn inspect(prepared: Arc<dyn ", stringify!($prepared), ">) {\n",
+                                    "    let adapter = ", stringify!($name), "::new(prepared);\n",
+                                    "    let _unclaimed_request = adapter.take_request();\n",
+                                    "}\n",
+                                    "```"
+                                )]
         #[must_use = "retain the adapter until its provider task is bound or abandoned"]
         pub struct $name {
             /// Object-safe provider task retained until it is bound or abandoned.

@@ -30,11 +30,7 @@ impl AsyncCleanup<StagedDirectory> for StagedDirectoryCleanup {
     /// # Returns
     /// A future resolving to release success or a failure that retains the
     /// staged-directory owner for recovery.
-    fn cleanup(
-        self: Arc<Self>,
-        resource: StagedDirectory,
-        _context: CleanupContext,
-    ) -> CleanupFuture<StagedDirectory> {
+    fn cleanup(self: Arc<Self>, resource: StagedDirectory, _context: CleanupContext) -> CleanupFuture<StagedDirectory> {
         Box::pin(async move {
             match resource.cleanup().await {
                 Ok(()) => CleanupOutcome::Released,

@@ -150,6 +150,8 @@ dependencies = [
 [[package]]
 name = "qubit-local-files"
 version = "0.5.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6bac96f266a03cd111d56b4f26d5b4eeffe17f07a99e6f92a3822012b8329a9c"
 dependencies = [
  "getrandom",
  "libc",
@@ -324,3 +326,7 @@ checksum = "ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc"
 dependencies = [
  "windows-link",
 ]
+
+[[patch.unused]]
+name = "qubit-local-files"
+version = "0.6.0"

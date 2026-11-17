@@ -75,7 +75,8 @@ impl TreePublishOutcome {
     /// still inspect partial counts and the guarantees actually achieved.
     ///
     /// # Parameters
-    /// - `options`: Atomicity and durability requirements requested for publication.
+    /// - `options`: Atomicity and durability requirements requested for
+    ///   publication.
     ///
     /// # Returns
     /// `true` when the recorded facts satisfy the requested guarantees and are

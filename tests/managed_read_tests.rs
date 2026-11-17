@@ -86,9 +86,7 @@ fn test_read_all_reserves_one_sentinel_byte_without_overflow() {
         16 * 1024 * 1024 + 1
     );
     assert_eq!(
-        ReadAllOptions::new(0, Default::default())
-            .sentinel_capacity()
-            .unwrap(),
+        ReadAllOptions::new(0, Default::default()).sentinel_capacity().unwrap(),
         1
     );
     assert!(
@@ -101,10 +99,7 @@ fn test_read_all_reserves_one_sentinel_byte_without_overflow() {
 #[test]
 fn test_observe_changes_is_not_a_snapshot_claim() {
     let outcome = read_port(b"data", 2, 4)
-        .read_all(ReadAllOptions::new(
-            4,
-            ReadConsistencyPolicy::ObserveChanges,
-        ))
+        .read_all(ReadAllOptions::new(4, ReadConsistencyPolicy::ObserveChanges))
         .unwrap();
     assert_eq!(outcome.value, b"data");
     assert_eq!(outcome.changed, None);
@@ -127,13 +122,7 @@ fn test_managed_read_port_stays_on_its_opened_object_and_limits_segments() {
         Path::parse("/object").unwrap(),
     )
     .with_metadata(FileMetadata::new(FileKind::File).with_len(Some(original.len() as u64)));
-    let port = ManagedReadPort::new(
-        info,
-        original.len() as u64,
-        3,
-        16,
-        Box::new(Bytes(original)),
-    );
+    let port = ManagedReadPort::new(info, original.len() as u64, 3, 16, Box::new(Bytes(original)));
     // Replace the path's current binding after open. The port retains the
     // original object reference captured by its session.
     *path_binding.lock().unwrap() = Arc::new(b"new-object".to_vec());
@@ -192,10 +181,7 @@ fn test_managed_read_all_accepts_exact_limit_and_rejects_limit_plus_one() {
     );
     assert_eq!(
         read_port(b"x", 2, 2)
-            .read_all(ReadAllOptions::new(
-                1,
-                ReadConsistencyPolicy::RequireVersion,
-            ))
+            .read_all(ReadAllOptions::new(1, ReadConsistencyPolicy::RequireVersion,))
             .unwrap_err()
             .kind(),
         FsErrorKind::RequirementNotMet
@@ -260,11 +246,7 @@ struct PendingOnce(Arc<Vec<u8>>, bool);
 
 #[cfg(feature = "async")]
 impl AsyncRandomAccessReadSession for PendingOnce {
-    fn read_at_async<'a>(
-        self: Pin<&'a mut Self>,
-        offset: u64,
-        output: &'a mut [u8],
-    ) -> SpiFuture<'a, FsResult<usize>> {
+    fn read_at_async<'a>(self: Pin<&'a mut Self>, offset: u64, output: &'a mut [u8]) -> SpiFuture<'a, FsResult<usize>> {
         let session = self.get_mut();
         let bytes = Arc::clone(&session.0);
         let mut pending = replace(&mut session.1, false);
@@ -306,10 +288,7 @@ fn test_dropping_pending_async_read_allows_complete_retry_at_same_offset() {
 
     let mut retry = [0; 3];
     let mut future = Box::pin(port.as_mut().read_at_async(0, &mut retry));
-    assert!(matches!(
-        future.as_mut().poll(&mut context),
-        Poll::Ready(Ok(3))
-    ));
+    assert!(matches!(future.as_mut().poll(&mut context), Poll::Ready(Ok(3))));
     drop(future);
     assert_eq!(&retry, b"ori");
 }

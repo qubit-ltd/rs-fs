@@ -11,6 +11,7 @@
 mod path;
 mod path_component;
 mod path_components;
+mod path_data;
 mod path_semantics;
 mod relative_path;
 

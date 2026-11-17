@@ -6,13 +6,13 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 
-use std::collections::BTreeSet;
 use std::time::Instant;
 
 use crate::error::FsError;
 use crate::error::FsErrorKind;
 use crate::error::FsOperation;
 use crate::error::FsResult;
+use crate::metadata::TreeEntryValidationState;
 
 /// Resource limits used while validating a staged directory tree.
 ///
@@ -29,10 +29,12 @@ use crate::error::FsResult;
 ///     "docs/readme.md",
 ///     "docs/readme.md",
 ///     false,
-///     0,
-///     0,
-///     12,
-///     &mut normalized_paths,
+///     &mut qubit_fs::metadata::TreeEntryValidationState {
+///         entries_seen: 0,
+///         content_bytes_seen: 0,
+///         measured_content_bytes: 12,
+///         normalized_paths: &mut normalized_paths,
+///     },
 /// )?;
 /// assert_eq!(normalized_paths.len(), 1);
 ///
@@ -47,6 +49,7 @@ pub struct TreeValidationOptions {
     /// Maximum aggregate file content bytes.
     pub max_content_bytes: u64,
 }
+
 impl Default for TreeValidationOptions {
     /// Uses limits of 100,000 entries, depth 128, and 1 TiB of aggregate
     /// content.
@@ -133,10 +136,7 @@ impl TreeValidationOptions {
     /// - `relative_path`: Provider-reported path before normalization.
     /// - `normalized_path`: Canonical relative path used for duplicate checks.
     /// - `is_symlink`: Whether the provider reports a symbolic link.
-    /// - `entries_seen`: Number of entries already accepted.
-    /// - `content_bytes_seen`: Measured content bytes already accepted.
-    /// - `measured_content_bytes`: Actual bytes read for this entry so far.
-    /// - `normalized_paths`: Set updated with `normalized_path` after success.
+    /// - `state`: Counters and canonical-path set updated after success.
     ///
     /// # Errors
     ///
@@ -148,10 +148,7 @@ impl TreeValidationOptions {
         relative_path: &str,
         normalized_path: &str,
         is_symlink: bool,
-        entries_seen: usize,
-        content_bytes_seen: u64,
-        measured_content_bytes: u64,
-        normalized_paths: &mut BTreeSet<String>,
+        state: &mut TreeEntryValidationState<'_>,
     ) -> FsResult<()> {
         if is_symlink {
             return Err(tree_validation_error("tree validation rejects symbolic links"));
@@ -162,21 +159,26 @@ impl TreeValidationOptions {
         if relative_path.split('/').count() > self.max_depth {
             return Err(tree_validation_error("tree entry exceeds depth limit"));
         }
-        if entries_seen.checked_add(1).is_none_or(|count| count > self.max_entries) {
+        if state
+            .entries_seen
+            .checked_add(1)
+            .is_none_or(|count| count > self.max_entries)
+        {
             return Err(tree_validation_error("tree exceeds entry limit"));
         }
-        if content_bytes_seen
-            .checked_add(measured_content_bytes)
+        if state
+            .content_bytes_seen
+            .checked_add(state.measured_content_bytes)
             .is_none_or(|total| total > self.max_content_bytes)
         {
             return Err(tree_validation_error("tree exceeds content byte limit"));
         }
-        if normalized_path.is_empty() || normalized_paths.contains(normalized_path) {
+        if normalized_path.is_empty() || state.normalized_paths.contains(normalized_path) {
             return Err(tree_validation_error(
                 "tree entry conflicts after provider normalization",
             ));
         }
-        normalized_paths.insert(normalized_path.to_owned());
+        state.normalized_paths.insert(normalized_path.to_owned());
         Ok(())
     }
 }

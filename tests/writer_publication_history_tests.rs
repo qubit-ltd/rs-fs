@@ -131,8 +131,8 @@ fn test_sync_writer_indeterminate_abort_completes_cleanup_without_publication_fa
 #[cfg(feature = "async")]
 #[test]
 fn test_async_writer_published_commit_survives_successful_abort() {
-    use common::async_recording_spi::AsyncRecordingConfig;
-    use common::async_recording_spi::async_recording_file_system;
+    use common::internal::async_recording_spi::AsyncRecordingConfig;
+    use common::internal::async_recording_spi::async_recording_file_system;
     use common::poll_support::ready;
 
     let (filesystem, probe) = async_recording_file_system(AsyncRecordingConfig {
@@ -162,8 +162,8 @@ fn test_async_writer_published_commit_survives_successful_abort() {
 #[cfg(feature = "async")]
 #[test]
 fn test_async_writer_successful_commit_confirms_publication() {
-    use common::async_recording_spi::AsyncRecordingConfig;
-    use common::async_recording_spi::async_recording_file_system;
+    use common::internal::async_recording_spi::AsyncRecordingConfig;
+    use common::internal::async_recording_spi::async_recording_file_system;
     use common::poll_support::ready;
 
     let (filesystem, _) = async_recording_file_system(AsyncRecordingConfig::default());
@@ -182,8 +182,8 @@ fn test_async_writer_successful_commit_confirms_publication() {
 #[cfg(feature = "async")]
 #[test]
 fn test_async_unpolled_abort_future_does_not_change_writer_or_call_provider() {
-    use common::async_recording_spi::AsyncRecordingConfig;
-    use common::async_recording_spi::async_recording_file_system;
+    use common::internal::async_recording_spi::AsyncRecordingConfig;
+    use common::internal::async_recording_spi::async_recording_file_system;
     use common::poll_support::ready;
 
     let (filesystem, probe) = async_recording_file_system(AsyncRecordingConfig::default());
@@ -204,8 +204,8 @@ fn test_async_unpolled_abort_future_does_not_change_writer_or_call_provider() {
 #[cfg(feature = "async")]
 #[test]
 fn test_async_writer_repeated_abort_does_not_call_provider_again() {
-    use common::async_recording_spi::AsyncRecordingConfig;
-    use common::async_recording_spi::async_recording_file_system;
+    use common::internal::async_recording_spi::AsyncRecordingConfig;
+    use common::internal::async_recording_spi::async_recording_file_system;
     use common::poll_support::ready;
 
     let (filesystem, probe) = async_recording_file_system(AsyncRecordingConfig::default());
@@ -235,9 +235,9 @@ fn test_async_writer_abort_cancellation_keeps_publication_history() {
     use std::task::Poll;
     use std::task::Waker;
 
-    use common::async_recording_spi::AsyncCopyStage;
-    use common::async_recording_spi::AsyncRecordingConfig;
-    use common::async_recording_spi::async_recording_file_system;
+    use common::internal::async_recording_spi::AsyncCopyStage;
+    use common::internal::async_recording_spi::AsyncRecordingConfig;
+    use common::internal::async_recording_spi::async_recording_file_system;
     use common::poll_support::ready;
 
     let (filesystem, _) = async_recording_file_system(AsyncRecordingConfig {

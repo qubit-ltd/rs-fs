@@ -30,6 +30,7 @@ use qubit_fs::metadata::FileSystemCapabilityProfile;
 use qubit_fs::metadata::FileSystemCapabilitySupport;
 use qubit_fs::metadata::PublicationMethod;
 use qubit_fs::metadata::StorageObservation;
+use qubit_fs::metadata::TreeEntryValidationState;
 use qubit_fs::metadata::TreePublishOptions;
 use qubit_fs::metadata::TreeValidationOptions;
 use qubit_fs::spi::ManagedFsTreeSpi;
@@ -57,9 +58,7 @@ impl ManagedFsTreeSpi for NonCasTreeProvider {
         request: FsOwnedTreePublishRequest,
     ) -> Result<Arc<dyn PreparedFsTreePublish>, FsPrepareFailure<FsOwnedTreePublishRequest>> {
         self.preparations.fetch_add(1, Ordering::SeqCst);
-        if request.publication.atomicity == AtomicityRequirement::Required
-            && request.validated_version.is_some()
-        {
+        if request.publication.atomicity == AtomicityRequirement::Required && request.validated_version.is_some() {
             return Err(FsPrepareFailure {
                 kind: FsPrepareFailureKind::Unsupported,
                 request,
@@ -124,27 +123,19 @@ fn test_operation_presence_is_only_conditional_and_sync_async_are_independent() 
 
     let profile = FileSystemCapabilityProfile::from_operations(sync, asynchronous);
     assert_eq!(
-        profile
-            .synchronous
-            .support(FileSystemCapability::StagedTreePublish),
+        profile.synchronous.support(FileSystemCapability::StagedTreePublish),
         FileSystemCapabilitySupport::Conditional,
     );
     assert_eq!(
-        profile
-            .synchronous
-            .support(FileSystemCapability::AtomicTreeCopy),
+        profile.synchronous.support(FileSystemCapability::AtomicTreeCopy),
         FileSystemCapabilitySupport::Unsupported,
     );
     assert_eq!(
-        profile
-            .synchronous
-            .support(FileSystemCapability::StorageObservation),
+        profile.synchronous.support(FileSystemCapability::StorageObservation),
         FileSystemCapabilitySupport::Conditional,
     );
     assert_eq!(
-        profile
-            .asynchronous
-            .support(FileSystemCapability::StagedTreePublish),
+        profile.asynchronous.support(FileSystemCapability::StagedTreePublish),
         FileSystemCapabilitySupport::Unsupported,
     );
     assert_eq!(
@@ -167,9 +158,7 @@ fn test_caller_guarantees_are_preserved_by_profile_construction() {
     let profile = FileSystemCapabilityProfile::new(declared, FileSystemCapabilities::new());
     assert!(profile.synchronous.guarantees(FileSystemCapability::List));
     assert_eq!(
-        profile
-            .synchronous
-            .support(FileSystemCapability::StagedTreePublish),
+        profile.synchronous.support(FileSystemCapability::StagedTreePublish),
         FileSystemCapabilitySupport::Conditional,
     );
 }
@@ -182,11 +171,7 @@ fn test_validation_batches_enforce_record_and_byte_limits() {
     assert!(options.validate_batch(&[256 * 1024]).is_ok());
     assert!(options.validate_batch(&[256 * 1024 + 1]).is_err());
     assert!(options.validate_batch(&[128 * 1024, 128 * 1024]).is_ok());
-    assert!(
-        options
-            .validate_batch(&[128 * 1024, 128 * 1024 + 1])
-            .is_err()
-    );
+    assert!(options.validate_batch(&[128 * 1024, 128 * 1024 + 1]).is_err());
 }
 
 #[test]
@@ -198,7 +183,17 @@ fn test_entry_validation_rejects_escapes_links_and_normalized_conflicts() {
     };
     let mut normalized = BTreeSet::new();
     let valid = |path: &str, key: &str, bytes, seen: &mut BTreeSet<String>| {
-        options.validate_entry(path, key, false, seen.len(), 0, bytes, seen)
+        options.validate_entry(
+            path,
+            key,
+            false,
+            &mut TreeEntryValidationState {
+                entries_seen: seen.len(),
+                content_bytes_seen: 0,
+                measured_content_bytes: bytes,
+                normalized_paths: seen,
+            },
+        )
     };
 
     assert!(valid("a/b", "a/b", 3, &mut normalized).is_ok());
@@ -210,14 +205,34 @@ fn test_entry_validation_rejects_escapes_links_and_normalized_conflicts() {
     assert!(valid("safe", "../normalized-escape", 0, &mut normalized).is_err());
     assert!(
         options
-            .validate_entry("link", "link", true, 0, 0, 0, &mut normalized)
+            .validate_entry(
+                "link",
+                "link",
+                true,
+                &mut TreeEntryValidationState {
+                    entries_seen: 0,
+                    content_bytes_seen: 0,
+                    measured_content_bytes: 0,
+                    normalized_paths: &mut normalized,
+                },
+            )
             .is_err()
     );
     assert!(valid("different", "a/b", 0, &mut normalized).is_err());
     assert!(valid("unknown-length", "unknown-length", 4, &mut normalized).is_err());
     assert!(
         options
-            .validate_entry("aggregate", "aggregate", false, 1, 2, 2, &mut normalized)
+            .validate_entry(
+                "aggregate",
+                "aggregate",
+                false,
+                &mut TreeEntryValidationState {
+                    entries_seen: 1,
+                    content_bytes_seen: 2,
+                    measured_content_bytes: 2,
+                    normalized_paths: &mut normalized,
+                },
+            )
             .is_err()
     );
 }
@@ -244,10 +259,7 @@ fn test_required_tree_guarantees_reject_before_publication_when_unsupported() {
     let error = required
         .validate_capabilities(&FileSystemCapabilities::new())
         .expect_err("unsupported required guarantees must fail in preflight");
-    assert_eq!(
-        error.required_capability(),
-        Some(FileSystemCapability::AtomicTreeCopy),
-    );
+    assert_eq!(error.required_capability(), Some(FileSystemCapability::AtomicTreeCopy),);
 
     let conditional = FileSystemCapabilities::new()
         .with_conditional(FileSystemCapability::AtomicTreeCopy)
@@ -300,11 +312,7 @@ fn test_staged_owner_retains_cleanup_after_validation_failure() {
             })
         },
         {
-            assert!(
-                staged
-                    .validate_entry("../escape", "escape", false, 0)
-                    .is_err()
-            );
+            assert!(staged.validate_entry("../escape", "escape", false, 0).is_err());
         }
     );
     assert_eq!(cleanups.load(Ordering::SeqCst), 1);
@@ -392,8 +400,7 @@ fn test_changed_tree_version_blocks_required_publish_and_keeps_cleanup_owner() {
         atomicity: AtomicityRequirement::Required,
         durability: DurabilityRequirement::NotRequired,
     };
-    let capabilities =
-        FileSystemCapabilities::new().with_conditional(FileSystemCapability::AtomicTreeCopy);
+    let capabilities = FileSystemCapabilities::new().with_conditional(FileSystemCapability::AtomicTreeCopy);
     run_staged!(
         staged,
         "/stage",
@@ -429,10 +436,7 @@ fn test_changed_tree_version_blocks_required_publish_and_keeps_cleanup_owner() {
                     &capabilities,
                 )
                 .expect("unchanged validation version produces a publish request");
-            assert_eq!(
-                request.validated_version,
-                Some("version-before-validation".into())
-            );
+            assert_eq!(request.validated_version, Some("version-before-validation".into()));
             let rejection = match no_cas_provider.prepare_tree_publish(request) {
                 Err(rejection) => rejection,
                 Ok(_) => panic!("provider without atomic version comparison must reject"),

@@ -117,6 +117,11 @@ impl ManagedReadPort {
             .map_err(|_| poisoned_read_error())
     }
 
+    /// Returns whether the opened object has zero readable bytes.
+    pub fn is_empty(&self) -> FsResult<bool> {
+        self.len().map(|length| length == 0)
+    }
+
     /// Reads the remaining cumulative budget and the retained object's length.
     ///
     /// # Returns
@@ -348,7 +353,8 @@ impl ManagedReadPort {
     }
 }
 
-/// Creates the provider-contract error used when the read-session lock is poisoned.
+/// Creates the provider-contract error used when the read-session lock is
+/// poisoned.
 ///
 /// # Returns
 /// An error identifying a failed managed read operation.

@@ -20,7 +20,7 @@ use super::FsEffectSnapshot;
 /// # Type Parameters
 ///
 /// - `'a`: Borrow lifetime of the observer whose shared state this future
-/// polls.
+///   polls.
 ///
 /// # Examples
 ///

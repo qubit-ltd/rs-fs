@@ -19,8 +19,6 @@ use std::task::Context;
 #[cfg(feature = "async")]
 use std::task::Poll;
 #[cfg(feature = "async")]
-use std::task::Wake;
-#[cfg(feature = "async")]
 use std::task::Waker;
 #[cfg(feature = "async")]
 use std::thread;
@@ -120,11 +118,7 @@ struct AsyncBytesSession(Vec<u8>);
 
 #[cfg(feature = "async")]
 impl AsyncRandomAccessReadSession for AsyncBytesSession {
-    fn read_at_async<'a>(
-        self: Pin<&'a mut Self>,
-        offset: u64,
-        output: &'a mut [u8],
-    ) -> SpiFuture<'a, FsResult<usize>> {
+    fn read_at_async<'a>(self: Pin<&'a mut Self>, offset: u64, output: &'a mut [u8]) -> SpiFuture<'a, FsResult<usize>> {
         let start = usize::try_from(offset).unwrap();
         let Some(bytes) = self.get_mut().0.get(start..) else {
             return Box::pin(async { Ok(0) });
@@ -138,12 +132,7 @@ impl AsyncRandomAccessReadSession for AsyncBytesSession {
 /// Drives an immediately ready future without starting an executor runtime.
 #[cfg(feature = "async")]
 fn run_ready<F: Future>(future: F) -> F::Output {
-    struct NoopWake;
-    impl Wake for NoopWake {
-        fn wake(self: Arc<Self>) {}
-    }
-    let waker = Waker::from(Arc::new(NoopWake));
-    let mut context = Context::from_waker(&waker);
+    let mut context = Context::from_waker(Waker::noop());
     let mut future = Box::pin(future);
     loop {
         match Future::poll(Pin::as_mut(&mut future), &mut context) {
@@ -170,10 +159,7 @@ fn test_managed_async_reader_runs_without_an_executor_dependency() {
     // The async feature adds Future APIs; this controlled fake completes inline
     // and does not require or start a runtime thread.
     let mut output = [0; 2];
-    assert_eq!(
-        2,
-        run_ready(port.as_mut().read_at_async(0, &mut output)).unwrap()
-    );
+    assert_eq!(2, run_ready(port.as_mut().read_at_async(0, &mut output)).unwrap());
     assert_eq!(b"da", &output);
 }
 
@@ -225,30 +211,18 @@ fn test_staged_resource_cleanup_runs_once_and_does_not_double_count() {
     ));
     let settlement = operation.wait_settlement().unwrap();
     assert!(settlement.all_released());
-    assert_eq!(
-        1,
-        cleanup_calls.load(Ordering::SeqCst),
-        "cleanup must run exactly once"
-    );
+    assert_eq!(1, cleanup_calls.load(Ordering::SeqCst), "cleanup must run exactly once");
     assert_eq!(
         1,
         settlement.resource_reports.len(),
         "one staged owner is counted exactly once"
     );
-    let _ = manager
-        .request_shutdown(ShutdownMode::Drain)
-        .wait()
-        .unwrap();
+    let _ = manager.request_shutdown(ShutdownMode::Drain).wait().unwrap();
 }
 
 #[test]
 fn test_public_managed_api_and_typed_provider_error_keep_the_original_source() {
-    fn accepts_root_api(
-        _: Option<FsEffectObserver>,
-        _: Option<FsExecutionBinding>,
-        _: Option<FsOperation<()>>,
-    ) {
-    }
+    fn accepts_root_api(_: Option<FsEffectObserver>, _: Option<FsExecutionBinding>, _: Option<FsOperation<()>>) {}
     accepts_root_api(None, None, None);
     let request = FsOwnedReadRequest {
         path: Path::parse("/input").unwrap(),

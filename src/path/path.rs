@@ -11,11 +11,13 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
+use std::sync::Arc;
 
 use super::PathComponent;
 use super::PathComponents;
 use super::PathSemantics;
 use super::RelativePath;
+use super::path_data::PathData;
 use crate::error::FsError;
 use crate::error::FsOperation;
 use crate::error::FsResult;
@@ -34,17 +36,32 @@ use crate::error::FsResult;
 /// ```
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Path {
-    /// Whether this logical path starts at a provider root.
-    absolute: bool,
-    /// Canonical normalized or provider-literal text.
-    text: String,
-    /// Whether component iteration must preserve literal slash boundaries.
-    literal: bool,
-    /// Semantics used to validate this spelling.
-    semantics: PathSemantics,
+    /// Shared immutable path representation.
+    data: Arc<PathData>,
 }
 
 impl Path {
+    /// Creates a path from already validated representation parts.
+    ///
+    /// # Parameters
+    /// - `absolute`: Whether the logical path starts at a provider root.
+    /// - `text`: Canonical path text retained by the representation.
+    /// - `literal`: Whether component iteration preserves literal separators.
+    /// - `semantics`: Rules used to validate the path spelling.
+    ///
+    /// # Returns
+    /// A path sharing its immutable representation across clones.
+    fn from_parts(absolute: bool, text: impl Into<Arc<str>>, literal: bool, semantics: PathSemantics) -> Self {
+        Self {
+            data: Arc::new(PathData {
+                absolute,
+                text: text.into(),
+                literal,
+                semantics,
+            }),
+        }
+    }
+
     /// Creates the canonical hierarchical root path.
     ///
     /// # Returns
@@ -52,12 +69,7 @@ impl Path {
     #[inline]
     #[must_use]
     pub fn root() -> Self {
-        Self {
-            absolute: true,
-            text: "/".to_owned(),
-            literal: false,
-            semantics: PathSemantics::Hierarchical,
-        }
+        Self::from_parts(true, "/", false, PathSemantics::Hierarchical)
     }
 
     /// Constructs a hierarchical path from independently validated components.
@@ -98,9 +110,9 @@ impl Path {
             .map(PathComponent::as_str)
             .collect::<Vec<_>>()
             .join("/");
-        Ok(Self {
+        Ok(Self::from_parts(
             absolute,
-            text: if absolute {
+            if absolute {
                 if joined.is_empty() {
                     "/".to_owned()
                 } else {
@@ -109,9 +121,9 @@ impl Path {
             } else {
                 joined
             },
-            literal: false,
-            semantics: PathSemantics::Hierarchical,
-        })
+            false,
+            PathSemantics::Hierarchical,
+        ))
     }
 
     /// Parses a hierarchical logical path using normalized semantics.
@@ -170,12 +182,7 @@ impl Path {
             return Err(invalid_path());
         }
         if semantics != PathSemantics::Hierarchical {
-            return Ok(Self {
-                absolute: text.starts_with('/'),
-                text: text.to_owned(),
-                literal: true,
-                semantics,
-            });
+            return Ok(Self::from_parts(text.starts_with('/'), text, true, semantics));
         }
         let absolute = text.starts_with('/');
         let mut components = Vec::new();
@@ -202,12 +209,7 @@ impl Path {
         if text.is_empty() {
             return Err(invalid_path());
         }
-        Ok(Self {
-            absolute,
-            text,
-            literal: false,
-            semantics,
-        })
+        Ok(Self::from_parts(absolute, text, false, semantics))
     }
 
     /// Returns the validated logical path text.
@@ -218,7 +220,7 @@ impl Path {
     #[inline]
     #[must_use]
     pub fn as_str(&self) -> &str {
-        &self.text
+        &self.data.text
     }
 
     /// Returns the final non-empty path component, when one is present.
@@ -232,10 +234,14 @@ impl Path {
     /// literal path ending in a separator.
     #[inline]
     pub fn file_name(&self) -> Option<&str> {
-        if self.text == "/" || (self.literal && self.text.ends_with('/')) {
+        if self.data.text.as_ref() == "/" || (self.data.literal && self.data.text.ends_with('/')) {
             return None;
         }
-        self.text.rsplit('/').find(|component| !component.is_empty())
+        self.data
+            .text
+            .as_ref()
+            .rsplit('/')
+            .find(|component| !component.is_empty())
     }
 
     /// Returns whether this path is absolute.
@@ -244,8 +250,8 @@ impl Path {
     /// Returns `true` when this path starts at a provider root.
     #[inline]
     #[must_use]
-    pub const fn is_absolute(&self) -> bool {
-        self.absolute
+    pub fn is_absolute(&self) -> bool {
+        self.data.absolute
     }
 
     /// Returns the semantics used to validate this logical path.
@@ -254,8 +260,8 @@ impl Path {
     /// Returns the semantics selected when this path was parsed or constructed.
     #[inline]
     #[must_use]
-    pub const fn semantics(&self) -> PathSemantics {
-        self.semantics
+    pub fn semantics(&self) -> PathSemantics {
+        self.data.semantics
     }
 
     /// Iterates lexical component boundaries without using an empty root value.
@@ -266,7 +272,7 @@ impl Path {
     #[inline]
     #[must_use]
     pub fn components(&self) -> PathComponents<'_> {
-        PathComponents::new(&self.text, self.absolute, self.literal)
+        PathComponents::new(&self.data.text, self.data.absolute, self.data.literal)
     }
 
     /// Appends one validated component without re-parsing provider text.
@@ -301,18 +307,14 @@ impl Path {
     /// # Parameters
     /// - `suffix`: Validated suffix text to append after a separator.
     fn append(&self, suffix: &str) -> Self {
-        let hierarchical_root = self.semantics == PathSemantics::Hierarchical && !self.literal && self.text == "/";
+        let hierarchical_root =
+            self.data.semantics == PathSemantics::Hierarchical && !self.data.literal && self.data.text.as_ref() == "/";
         let text = if hierarchical_root {
             format!("/{suffix}")
         } else {
-            format!("{}/{}", self.text, suffix)
+            format!("{}/{}", self.data.text, suffix)
         };
-        Self {
-            absolute: self.absolute,
-            text,
-            literal: self.literal,
-            semantics: self.semantics,
-        }
+        Self::from_parts(self.data.absolute, text, self.data.literal, self.data.semantics)
     }
 }
 

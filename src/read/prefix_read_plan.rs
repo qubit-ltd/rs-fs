@@ -114,7 +114,6 @@ impl PrefixReadPlan {
     /// # Returns
     /// The resolved options with any applicable prefix hint attached.
     #[inline]
-    #[must_use]
     pub(crate) fn into_options(self) -> ResolvedReadOptions {
         let resolved = ResolvedReadOptions::new(self.options);
         match self.hint {

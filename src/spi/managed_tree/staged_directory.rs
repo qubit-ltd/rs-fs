@@ -35,13 +35,13 @@ use crate::metadata::AtomicityRequirement;
 use crate::metadata::FileSystemCapabilities;
 use crate::metadata::FileSystemCapability;
 use crate::metadata::ResourceVersion;
+use crate::metadata::TreeEntryValidationState;
 use crate::metadata::TreePublishOptions;
 use crate::metadata::TreeValidationOptions;
 use crate::path::Path;
 
 /// Future returned by a provider's staged-directory cleanup callback.
-pub(in crate::spi::managed_tree) type StagedCleanupFuture =
-    Pin<Box<dyn Future<Output = FsResult<()>> + Send>>;
+pub(in crate::spi::managed_tree) type StagedCleanupFuture = Pin<Box<dyn Future<Output = FsResult<()>> + Send>>;
 /// Callback that asynchronously releases the provider's staged directory.
 pub(in crate::spi::managed_tree) type StagedCleanupCallback = Box<dyn FnMut() -> StagedCleanupFuture + Send>;
 
@@ -50,8 +50,8 @@ pub(in crate::spi::managed_tree) type StagedCleanupCallback = Box<dyn FnMut() ->
 /// The provider keeps this value alive through validation. Validation errors
 /// do not release the cleanup callback. It is released only after a
 /// consistent successful publication outcome. When registered through
-/// [`crate::spi::ManagedFsTreeSpi::commit_staged_directory`], failed cleanup returns this
-/// owner to the operation resource scope for recovery and retry.
+/// [`crate::spi::ManagedFsTreeSpi::commit_staged_directory`], failed cleanup
+/// returns this owner to the operation resource scope for recovery and retry.
 ///
 /// # Examples
 ///
@@ -247,10 +247,12 @@ impl StagedDirectory {
             relative_path,
             normalized_path,
             is_symlink,
-            state.entries,
-            state.content_bytes,
-            measured_content_bytes,
-            &mut state.normalized_paths,
+            &mut TreeEntryValidationState {
+                entries_seen: state.entries,
+                content_bytes_seen: state.content_bytes,
+                measured_content_bytes,
+                normalized_paths: &mut state.normalized_paths,
+            },
         )?;
         state.entries += 1;
         state.content_bytes += measured_content_bytes;
@@ -284,12 +286,7 @@ impl StagedDirectory {
     ///
     /// # Errors
     /// Returns a deadline or cancellation error when validation must stop.
-    pub fn check_active(
-        &self,
-        now: Instant,
-        deadline: Option<Instant>,
-        stop_requested: bool,
-    ) -> FsResult<()> {
+    pub fn check_active(&self, now: Instant, deadline: Option<Instant>, stop_requested: bool) -> FsResult<()> {
         self.options.check_active(now, deadline, stop_requested)
     }
 
@@ -364,15 +361,12 @@ impl StagedDirectory {
     /// A resource-scoped cleanup failure retaining the source error.
     ///
     /// # Panics
-    /// Panics if the staged directory has not been registered with a resource ID.
-    pub(in crate::spi::managed_tree) fn cleanup_failure(
-        &self,
-        error: FsError,
-    ) -> CleanupFailure {
-        let id = lock(&self.cleanup_resource_id)
+    /// Panics if the staged directory has not been registered with a resource
+    /// ID.
+    pub(in crate::spi::managed_tree) fn cleanup_failure(&self, error: FsError) -> CleanupFailure {
+        let id = *lock(&self.cleanup_resource_id)
             .as_ref()
-            .expect("registered staged directory has a resource identity")
-            .clone();
+            .expect("registered staged directory has a resource identity");
         CleanupFailure {
             resource_id: id,
             stage: CleanupStage::AsyncRelease,
@@ -383,7 +377,8 @@ impl StagedDirectory {
 }
 
 impl Debug for StagedDirectory {
-    /// Formats the staging root and validation progress without exposing callbacks.
+    /// Formats the staging root and validation progress without exposing
+    /// callbacks.
     ///
     /// # Parameters
     /// - `self`: Staged owner to describe.

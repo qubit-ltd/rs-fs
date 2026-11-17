@@ -10,9 +10,9 @@
 use qubit_operation::AsyncOperationHandle;
 use qubit_operation::OperationHandle;
 
-mod fs_execution_binding;
 mod effect_observer;
 mod failure;
+mod fs_execution_binding;
 mod fs_operation_failure;
 mod fs_operation_failure_kind;
 mod fs_prepare_failure;
@@ -21,7 +21,6 @@ mod fs_submit_failure;
 mod internal;
 mod prepared_adapter;
 mod request;
-pub use fs_execution_binding::FsExecutionBinding;
 pub use effect_observer::AsyncFsMutationOperation;
 pub use effect_observer::FsEffectCapacityError;
 pub use effect_observer::FsEffectFact;
@@ -37,6 +36,7 @@ pub use failure::FsOperationFailureKind;
 pub use failure::FsPrepareFailure;
 pub use failure::FsPrepareFailureKind;
 pub use failure::FsSubmitFailure;
+pub use fs_execution_binding::FsExecutionBinding;
 pub use prepared_adapter::PreparedFsCopyAdapter;
 pub use prepared_adapter::PreparedFsReadAdapter;
 pub use prepared_adapter::PreparedFsRenameAdapter;

@@ -62,15 +62,15 @@ pub struct WriteOptions {
     /// Required durability of completed publication.
     durability: DurabilityRequirement,
     /// Version precondition applied to the destination.
-    precondition: WritePrecondition,
+    precondition: Box<WritePrecondition>,
     /// Content condition checked against the destination before publication.
-    content_precondition: ContentPrecondition,
+    content_precondition: Box<ContentPrecondition>,
     /// Optional content type.
-    content_type: Option<String>,
+    content_type: Option<Box<str>>,
     /// User-defined metadata with validated non-sensitive structural keys.
-    user_metadata: NonSensitiveMetadata,
+    user_metadata: Box<NonSensitiveMetadata>,
     /// Optional expected content checksum.
-    checksum: Option<Checksum>,
+    checksum: Option<Box<Checksum>>,
 }
 
 impl Default for WriteOptions {
@@ -82,10 +82,10 @@ impl Default for WriteOptions {
             disposition: WriteDisposition::default(),
             atomicity: AtomicityRequirement::default(),
             durability: DurabilityRequirement::default(),
-            precondition: WritePrecondition::default(),
-            content_precondition: ContentPrecondition::default(),
+            precondition: Box::default(),
+            content_precondition: Box::default(),
             content_type: None,
-            user_metadata: NonSensitiveMetadata::new(),
+            user_metadata: Box::default(),
             checksum: None,
         }
     }
@@ -101,7 +101,6 @@ impl WriteOptions {
 
     /// Returns the destination disposition.
     #[inline]
-    #[must_use]
     pub const fn disposition(&self) -> WriteDisposition {
         self.disposition
     }
@@ -115,21 +114,18 @@ impl WriteOptions {
 
     /// Returns the completed-publication durability requirement.
     #[inline]
-    #[must_use]
     pub const fn durability(&self) -> DurabilityRequirement {
         self.durability
     }
 
     /// Returns the version precondition.
     #[inline]
-    #[must_use]
     pub const fn precondition(&self) -> &WritePrecondition {
         &self.precondition
     }
 
     /// Returns the content condition required before publication.
     #[inline]
-    #[must_use]
     pub const fn content_precondition(&self) -> &ContentPrecondition {
         &self.content_precondition
     }
@@ -149,8 +145,8 @@ impl WriteOptions {
 
     /// Returns the optional expected checksum.
     #[inline]
-    pub const fn checksum(&self) -> Option<&Checksum> {
-        self.checksum.as_ref()
+    pub fn checksum(&self) -> Option<&Checksum> {
+        self.checksum.as_deref()
     }
 
     /// Returns a copy with parent creation replaced.
@@ -199,7 +195,7 @@ impl WriteOptions {
     #[inline]
     #[must_use]
     pub fn with_precondition(mut self, precondition: WritePrecondition) -> Self {
-        self.precondition = precondition;
+        self.precondition = Box::new(precondition);
         self
     }
 
@@ -210,14 +206,15 @@ impl WriteOptions {
     /// before opening a writer.
     ///
     /// # Parameters
-    /// - `precondition`: Content equality condition required before publication.
+    /// - `precondition`: Content equality condition required before
+    ///   publication.
     ///
     /// # Returns
     /// A copy of these write options with the requested content precondition.
     #[inline]
     #[must_use]
     pub fn with_content_precondition(mut self, precondition: ContentPrecondition) -> Self {
-        self.content_precondition = precondition;
+        self.content_precondition = Box::new(precondition);
         self
     }
 
@@ -227,7 +224,7 @@ impl WriteOptions {
     #[inline]
     #[must_use]
     pub fn with_content_type(mut self, content_type: Option<String>) -> Self {
-        self.content_type = content_type;
+        self.content_type = content_type.map(|value| value.into_boxed_str());
         self
     }
 
@@ -237,7 +234,7 @@ impl WriteOptions {
     #[inline]
     #[must_use]
     pub fn with_checksum(mut self, checksum: Option<Checksum>) -> Self {
-        self.checksum = checksum;
+        self.checksum = checksum.map(Box::new);
         self
     }
 
@@ -247,7 +244,7 @@ impl WriteOptions {
     #[inline]
     #[must_use]
     pub fn with_user_metadata(mut self, metadata: UserMetadata) -> Self {
-        self.user_metadata = NonSensitiveMetadata::from(metadata);
+        self.user_metadata = Box::new(NonSensitiveMetadata::from(metadata));
         self
     }
 
@@ -262,8 +259,8 @@ impl WriteOptions {
     pub fn validate(&self) -> Result<(), FsError> {
         if self.disposition == WriteDisposition::Append
             && (self.atomicity == AtomicityRequirement::Required
-                || self.precondition != WritePrecondition::None
-                || self.content_precondition != ContentPrecondition::None)
+                || *self.precondition != WritePrecondition::None
+                || *self.content_precondition != ContentPrecondition::None)
         {
             return Err(FsError::new(
                 FsErrorKind::InvalidOptions,
@@ -272,8 +269,8 @@ impl WriteOptions {
             ));
         }
         if self.disposition == WriteDisposition::CreateNew
-            && (matches!(&self.precondition, WritePrecondition::IfMatch(_))
-                || self.content_precondition != ContentPrecondition::None)
+            && (matches!(&*self.precondition, WritePrecondition::IfMatch(_))
+                || *self.content_precondition != ContentPrecondition::None)
         {
             return Err(FsError::new(
                 FsErrorKind::InvalidOptions,
@@ -306,7 +303,7 @@ impl WriteOptions {
                 "append writes are required but not supported",
             ));
         }
-        if self.precondition != WritePrecondition::None
+        if *self.precondition != WritePrecondition::None
             && !capabilities.guarantees(FileSystemCapability::ConditionalWrite)
         {
             return Err(missing_requirement(
@@ -314,7 +311,7 @@ impl WriteOptions {
                 "version comparison and write publication must be guaranteed as one conditional write",
             ));
         }
-        if self.content_precondition != ContentPrecondition::None
+        if *self.content_precondition != ContentPrecondition::None
             && !capabilities.guarantees(FileSystemCapability::ConditionalWrite)
         {
             return Err(missing_requirement(
