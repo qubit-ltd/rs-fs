@@ -28,7 +28,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: qubit-ltd/rs-fs-local
-          ref: 65ccce7aca6241e40b5011a06541259b0d9891e5
+          ref: 1067ff1ffe75376f2349c2a484ccf2423e29d20e
           path: rust-common/rs-fs-local
       - name: Check out rs-fs-testkit
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
