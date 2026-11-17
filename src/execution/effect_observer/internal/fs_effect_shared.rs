@@ -5,13 +5,14 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+use std::sync::Arc;
 use std::sync::Condvar;
 use std::sync::Mutex;
-use std::sync::Arc;
 use std::task::Waker;
 
 use super::super::FsEffectFact;
 use super::super::FsEffectSnapshot;
+use super::fs_effect_waiter::FsEffectWaiter;
 
 /// Shared synchronization state behind mutation-effect observers.
 pub(in crate::execution::effect_observer) struct FsEffectShared {
@@ -23,13 +24,6 @@ pub(in crate::execution::effect_observer) struct FsEffectShared {
     pub(in crate::execution::effect_observer) wakers: Mutex<Vec<FsEffectWaiter>>,
 }
 
-/// One independently cancellable async waiter registration.
-pub(in crate::execution::effect_observer) struct FsEffectWaiter {
-    /// Opaque identity retained by the future that owns this registration.
-    id: Arc<()>,
-    /// Most recent task waker supplied by that future.
-    waker: Waker,
-}
 impl FsEffectShared {
     /// Creates a pending snapshot with empty synchronous and asynchronous
     /// waiters.
@@ -44,6 +38,10 @@ impl FsEffectShared {
     /// Publishes final evidence once and notifies both kinds of waiter.
     ///
     /// The snapshot lock is released before notification callbacks run.
+    ///
+    /// # Parameters
+    ///
+    /// - `fact`: Final operation-effect evidence to publish.
     pub(in crate::execution::effect_observer) fn publish(&self, fact: FsEffectFact) {
         let published = if let Ok(mut snapshot) = self.snapshot.lock()
             && matches!(*snapshot, FsEffectSnapshot::Pending)
@@ -62,18 +60,16 @@ impl FsEffectShared {
 
     /// Registers or updates one future's waker, keeping all callbacks outside
     /// the shared registration lock.
-    pub(in crate::execution::effect_observer) fn register_waiter(
-        &self,
-        id: &Arc<()>,
-        waker: &Waker,
-    ) -> Result<(), ()> {
+    ///
+    /// # Parameters
+    ///
+    /// - `id`: Identity token of the future that owns the registration.
+    /// - `waker`: Task waker to register or replace.
+    pub(in crate::execution::effect_observer) fn register_waiter(&self, id: &Arc<()>, waker: &Waker) -> Result<(), ()> {
         let candidate = waker.clone();
         let old_waker = match self.wakers.lock() {
             Ok(mut waiters) => {
-                if let Some(waiter) = waiters
-                    .iter_mut()
-                    .find(|waiter| Arc::ptr_eq(&waiter.id, id))
-                {
+                if let Some(waiter) = waiters.iter_mut().find(|waiter| Arc::ptr_eq(&waiter.id, id)) {
                     if waiter.waker.will_wake(&candidate) {
                         None
                     } else {
@@ -95,6 +91,10 @@ impl FsEffectShared {
 
     /// Removes one registration, recovering a poisoned lock so future drop
     /// cannot panic or leave a known stale waiter behind.
+    ///
+    /// # Parameters
+    ///
+    /// - `id`: Identity token of the future whose registration is removed.
     pub(in crate::execution::effect_observer) fn unregister_waiter(&self, id: &Arc<()>) {
         let removed = match self.wakers.lock() {
             Ok(mut waiters) => remove_waiter(&mut waiters, id),
@@ -121,6 +121,12 @@ impl FsEffectShared {
     }
 }
 
+/// Removes and returns the registration matching `id`, if present.
+///
+/// # Parameters
+///
+/// - `waiters`: Mutable registrations to search.
+/// - `id`: Identity token of the owning future.
 fn remove_waiter(waiters: &mut Vec<FsEffectWaiter>, id: &Arc<()>) -> Option<FsEffectWaiter> {
     waiters
         .iter()
@@ -151,8 +157,7 @@ mod tests {
             if let Some(shared) = self.shared.upgrade()
                 && shared.wakers.try_lock().is_err()
             {
-                self.callbacks_under_lock
-                    .fetch_add(1, Ordering::SeqCst);
+                self.callbacks_under_lock.fetch_add(1, Ordering::SeqCst);
             }
         }
     }
@@ -173,10 +178,7 @@ mod tests {
         }
     }
 
-    fn lock_checking_waker(
-        shared: &Arc<FsEffectShared>,
-        callbacks_under_lock: &Arc<AtomicUsize>,
-    ) -> Waker {
+    fn lock_checking_waker(shared: &Arc<FsEffectShared>, callbacks_under_lock: &Arc<AtomicUsize>) -> Waker {
         Waker::from(Arc::new(LockCheckingWake {
             shared: Arc::downgrade(shared),
             callbacks_under_lock: Arc::clone(callbacks_under_lock),

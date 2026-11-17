@@ -1,0 +1,62 @@
+name: Documentation Examples
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out rs-fs
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          path: rust-common/rs-fs
+      - name: Check out sibling source dependencies
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: qubit-ltd/rs-operation
+          ref: dac88f0ea1fc1b8f7da4e63e0baf2f770a33a29c
+          path: rust-common/rs-operation
+      - name: Check out rs-fs-local
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: qubit-ltd/rs-fs-local
+          ref: 94172b82a8cb1b06363a574ef6034f3d40a2869e
+          path: rust-common/rs-fs-local
+      - name: Check out rs-fs-testkit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: qubit-ltd/rs-fs-testkit
+          ref: 63726399abe1cc4ad8eb6b4275b9fa90b7783946
+          path: rust-common/rs-fs-testkit
+      - name: Check out rs-fs-registry
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: qubit-ltd/rs-fs-registry
+          ref: 9c579062aefe254a21e72e2b8ff579ed846dc58e
+          path: rust-common/rs-fs-registry
+      - name: Check out rs-local-files
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: qubit-ltd/rs-local-files
+          ref: e9433b89217b57a6dab95459c53964489b7a6934
+          path: rust-common/rs-local-files
+      - name: Install Rust 1.94.0
+        run: rustup toolchain install 1.94.0 --profile minimal
+      - name: Test documentation checkers
+        working-directory: rust-common/rs-fs
+        run: |
+          python3 -B scripts/test-check-documentation.py
+          python3 -B scripts/test-published-quick-start.py
+      - name: Build and run source documentation fixture
+        working-directory: rust-common/rs-fs
+        run: bash scripts/check-documentation-examples.sh
+        env:
+          RUSTUP_TOOLCHAIN: 1.94.0

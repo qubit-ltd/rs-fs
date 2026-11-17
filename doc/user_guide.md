@@ -1091,9 +1091,9 @@ futures rather than poll count.
 
 The documentation fixture validates the source-only sibling layout. The
 published-package smoke resolves registry artifacts separately and remains
-pending a compatible provider release: crates.io `qubit-fs-local` 0.11.2
-still depends on core 0.3.3. Fixture success does not establish published
-package compatibility.
+blocked because crates.io has no `qubit-fs` 0.4 release and
+`qubit-fs-local` 0.11.2 still depends on core 0.3.3. Fixture success does not
+establish published-package compatibility.
 
 The migration breaks the provider SPI deliberately. Providers add the
 `ManagedFsReadSpi`, `ManagedFsMutationSpi`, and `ManagedFsTreeSpi` preparation

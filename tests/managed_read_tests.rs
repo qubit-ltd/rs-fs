@@ -316,3 +316,72 @@ fn test_zero_segment_is_a_typed_error_for_non_empty_async_reads() {
     };
     assert_eq!(error.kind(), FsErrorKind::ResourceLimitExceeded);
 }
+
+#[test]
+fn test_managed_read_length_is_the_open_time_length() {
+    let empty = read_port(b"", 1, 1);
+    assert_eq!(empty.len().unwrap(), 0);
+    assert!(empty.is_empty().unwrap());
+    let port = read_port(b"abc", 1, 3);
+    assert_eq!(port.read_at(0, &mut [0]).unwrap(), 1);
+    assert_eq!(port.len().unwrap(), 3);
+    assert!(!port.is_empty().unwrap());
+}
+
+struct PanickingReadSession;
+
+impl RandomAccessReadSession for PanickingReadSession {
+    fn read_at(&mut self, _: u64, _: &mut [u8]) -> FsResult<usize> {
+        panic!("provider panic while holding the shared session");
+    }
+}
+
+#[test]
+fn test_provider_panic_poison_is_reported_by_all_shared_read_entry_points() {
+    let info = read_port(b"x", 1, 1).info().unwrap();
+    let port = ManagedReadPort::new(info, 1, 1, 1, Box::new(PanickingReadSession));
+    let clone = port.clone();
+    assert!(
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            port.read_at(0, &mut [0]).unwrap();
+        }))
+        .is_err()
+    );
+    let errors = [
+        clone.info().unwrap_err(),
+        clone.len().unwrap_err(),
+        clone.is_empty().unwrap_err(),
+        clone.read_at(0, &mut [0]).unwrap_err(),
+        clone.read_all(ReadAllOptions::default()).unwrap_err(),
+        clone.read_prefix(1).unwrap_err(),
+        clone.read_text(ReadAllOptions::default()).unwrap_err(),
+    ];
+    for error in errors {
+        assert_eq!(error.kind(), FsErrorKind::ProviderContractViolation);
+        assert_eq!(error.operation(), qubit_fs::error::FsOperation::Read);
+        assert!(error.to_string().contains("poisoned"));
+    }
+}
+
+struct FailingReadSession;
+
+impl RandomAccessReadSession for FailingReadSession {
+    fn read_at(&mut self, _: u64, _: &mut [u8]) -> FsResult<usize> {
+        Err(qubit_fs::FsError::new(
+            FsErrorKind::PermissionDenied,
+            qubit_fs::error::FsOperation::OpenReader,
+            "provider denied read",
+        ))
+    }
+}
+
+#[test]
+fn test_managed_read_provider_error_gains_read_context() {
+    let info = read_port(b"x", 1, 1).info().unwrap();
+    let port = ManagedReadPort::new(info, 1, 1, 1, Box::new(FailingReadSession));
+    let error = port.read_at(0, &mut [0]).unwrap_err();
+    assert_eq!(error.kind(), FsErrorKind::PermissionDenied);
+    assert_eq!(error.operation(), qubit_fs::error::FsOperation::Read);
+    assert_eq!(error.path().unwrap().as_str(), "/object");
+    assert_eq!(port.len().unwrap(), 1);
+}

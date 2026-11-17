@@ -7,7 +7,7 @@
 // =============================================================================
 
 use std::future::pending;
-use std::future::ready;
+use std::future::ready as future_ready;
 
 use qubit_fs::Path;
 use qubit_fs::error::FsErrorKind;
@@ -110,7 +110,7 @@ fn test_async_example_cancellation_keeps_operation_without_writer() {
         &filesystem,
         Path::parse("/report").expect("report path should parse"),
         b"bytes".to_vec(),
-        ready(()),
+        future_ready(()),
     ));
     let Err(WriteReportError::Recovery(recovery)) = result else {
         panic!("expected recovery");

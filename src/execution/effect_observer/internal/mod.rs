@@ -11,6 +11,7 @@ mod effect_slot_lease;
 mod effect_slot_pool_inner;
 mod effect_slot_reservation_inner;
 mod fs_effect_shared;
+mod fs_effect_waiter;
 
 pub(super) use effect_slot_lease::EffectSlotLease;
 pub(super) use effect_slot_pool_inner::EffectSlotPoolInner;

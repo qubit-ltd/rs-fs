@@ -45,10 +45,10 @@ using the snippet as an integration example.
 
 The fixture uses the sibling `rs-fs-local` source at version 0.11.2 with its
 `qubit-fs` 0.4 dependency. That source-only combination does not describe the
-published `qubit-fs-local` 0.11.2 crate, which still depends on
-`qubit-fs` 0.3.3. The published-package smoke checks registry artifacts
-separately and remains pending a compatible provider release; no provider
-release is implied here.
+published packages: crates.io has no `qubit-fs` 0.4 release, and its
+`qubit-fs-local` 0.11.2 release still depends on `qubit-fs` 0.3.3. The
+published-package smoke checks registry artifacts separately and remains
+blocked on compatible core and provider releases; no release is implied here.
 
 <!-- dependencies: quick-start -->
 ```toml

@@ -6,8 +6,8 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 use std::future::Future;
-use std::sync::Arc;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
 
@@ -72,14 +72,8 @@ impl Future for FsEffectWait<'_> {
                 }
                 FsEffectSnapshot::Pending => {
                     drop(snapshot);
-                    let registration_id = this
-                        .registration_id
-                        .get_or_insert_with(|| Arc::new(()));
-                    if observer
-                        .state
-                        .register_waiter(registration_id, cx.waker())
-                        .is_err()
-                    {
+                    let registration_id = this.registration_id.get_or_insert_with(|| Arc::new(()));
+                    if observer.state.register_waiter(registration_id, cx.waker()).is_err() {
                         unregister(this);
                         return Poll::Ready(Err(FsEffectObservationError::Poisoned));
                     }
@@ -105,16 +99,24 @@ impl Future for FsEffectWait<'_> {
 }
 
 impl Drop for FsEffectWait<'_> {
+    /// Removes the future's waiter registration when it is cancelled.
+    ///
+    /// # Parameters
+    ///
+    /// - `self`: Future whose registration is removed.
     fn drop(&mut self) {
         unregister(self);
     }
 }
 
+/// Removes the async waiter registration owned by `wait`, when present.
+///
+/// # Parameters
+///
+/// - `wait`: Future whose registration should be removed.
 fn unregister(wait: &mut FsEffectWait<'_>) {
     if let Some(registration_id) = wait.registration_id.take() {
-        wait.observer
-            .state
-            .unregister_waiter(&registration_id);
+        wait.observer.state.unregister_waiter(&registration_id);
     }
 }
 
@@ -123,30 +125,38 @@ mod tests {
     use std::future::Future;
     use std::sync::Arc;
     use std::sync::Weak;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
     use std::task::Context;
     use std::task::Poll;
-    use std::task::Wake;
     use std::task::Waker;
 
     use crate::execution::FsEffectObservationError;
     use crate::execution::FsEffectSlotPool;
 
-    struct ResourceWake;
+    struct ResourceWake(AtomicUsize);
 
-    impl Wake for ResourceWake {
-        fn wake(self: Arc<Self>) {}
+    impl std::task::Wake for ResourceWake {
+        fn wake(self: Arc<Self>) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+
+        fn wake_by_ref(self: &Arc<Self>) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
     }
 
     fn pending_future_waker(
         observer: &super::super::FsEffectObserver,
     ) -> (std::pin::Pin<Box<super::FsEffectWait<'_>>>, Waker, Weak<ResourceWake>) {
-        let wake = Arc::new(ResourceWake);
+        let wake = Arc::new(ResourceWake(AtomicUsize::new(0)));
         let weak = Arc::downgrade(&wake);
         let waker = Waker::from(Arc::clone(&wake));
         let mut future = Box::pin(observer.wait_final_async());
-        let mut context = Context::from_waker(&waker);
-        assert!(matches!(future.as_mut().poll(&mut context), Poll::Pending));
-        drop(context);
+        {
+            let mut context = Context::from_waker(&waker);
+            assert!(matches!(future.as_mut().poll(&mut context), Poll::Pending));
+        }
         (future, waker, weak)
     }
 
@@ -156,12 +166,14 @@ mod tests {
         let observer = reservation.observer();
         let (mut future, waker, weak) = pending_future_waker(&observer);
         let shared = Arc::clone(&observer.state);
-        assert!(std::thread::spawn(move || {
-            let _snapshot = shared.snapshot.lock().unwrap();
-            panic!("poison effect snapshot lock");
-        })
-        .join()
-        .is_err());
+        assert!(
+            std::thread::spawn(move || {
+                let _snapshot = shared.snapshot.lock().unwrap();
+                panic!("poison effect snapshot lock");
+            })
+            .join()
+            .is_err()
+        );
         drop(waker);
 
         let context_waker = Waker::noop();
@@ -179,12 +191,14 @@ mod tests {
         let observer = reservation.observer();
         let (future, waker, weak) = pending_future_waker(&observer);
         let shared = Arc::clone(&observer.state);
-        assert!(std::thread::spawn(move || {
-            let _wakers = shared.wakers.lock().unwrap();
-            panic!("poison effect waker registry lock");
-        })
-        .join()
-        .is_err());
+        assert!(
+            std::thread::spawn(move || {
+                let _wakers = shared.wakers.lock().unwrap();
+                panic!("poison effect waker registry lock");
+            })
+            .join()
+            .is_err()
+        );
         drop(waker);
 
         drop(future);
