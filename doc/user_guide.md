@@ -1063,11 +1063,123 @@ cancellation, release, or settlement tracking from `qubit-operation`. A managed 
 `OperationScope` through `FsExecutionBinding`; the filesystem library does not
 create a replacement root manager or keep a borrowed scope.
 
-```rust,ignore
-let binding = FsExecutionBinding::new(scope.manager().clone());
-let request = FsOwnedReadRequest { path, options: ReadAllOptions::default() };
-let operation = binding.submit_read_all(&provider, request)?;
-let bytes = operation.wait_outcome()?;
+<a id="managed-read-example"></a>
+
+<!-- example: managed-read -->
+```rust
+use qubit_fs::FsExecutionBinding;
+use qubit_fs::FsOwnedReadRequest;
+use qubit_fs::Path;
+use qubit_fs::ReadAllOptions;
+use qubit_fs_documentation_examples::managed_read_support::MemoryReadProvider;
+use qubit_operation::ManagerOptions;
+use qubit_operation::OperationManager;
+use qubit_operation::OperationOutcome;
+use qubit_operation::ShutdownMode;
+
+pub fn read_report() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let manager = OperationManager::new(ManagerOptions::default())?;
+    let provider = MemoryReadProvider::new();
+    let binding = FsExecutionBinding::new(manager.clone());
+    let request = FsOwnedReadRequest {
+        path: Path::parse("/report.txt")?,
+        options: ReadAllOptions::default(),
+    };
+    let mut operation = binding
+        .submit_read_all(&provider, request)
+        .map_err(|failure| std::io::Error::other(format!("managed read rejected: {failure:?}")))?;
+    let outcome = operation.wait_outcome()?;
+    let bytes = match outcome {
+        OperationOutcome::Succeeded(bytes) => bytes,
+        other => return Err(format!("unexpected managed read outcome: {other:?}").into()),
+    };
+    assert_eq!(bytes, b"report ready");
+    operation.wait_settlement()?;
+    let _shutdown = manager.request_shutdown(ShutdownMode::Drain).wait()?;
+    Ok(bytes)
+}
+
+pub fn rejected_request() -> (FsOwnedReadRequest, bool) {
+    let manager = OperationManager::new(ManagerOptions::default()).expect("manager creation succeeds");
+    let provider = MemoryReadProvider::rejecting();
+    let binding = FsExecutionBinding::new(manager.clone());
+    let request = FsOwnedReadRequest {
+        path: Path::parse("/report.txt").expect("valid path"),
+        options: ReadAllOptions::default(),
+    };
+    let failure = match binding.submit_read_all(&provider, request) {
+        Ok(_) => panic!("provider preparation must reject"),
+        Err(failure) => failure,
+    };
+    let (admission, preparation, request) = failure.into_parts();
+    assert!(admission.is_none());
+    assert!(preparation.is_some());
+    let _shutdown = manager
+        .request_shutdown(ShutdownMode::Drain)
+        .wait()
+        .expect("manager shuts down");
+    (request, provider.io_started())
+}
+```
+
+The async form uses the application's shared manager view. It awaits both the typed outcome and settlement; it does not select a runtime.
+
+<!-- example: managed-read-async -->
+```rust
+use qubit_fs::FsExecutionBinding;
+use qubit_fs::FsOwnedReadRequest;
+use qubit_fs::Path;
+use qubit_fs::ReadAllOptions;
+use qubit_fs_documentation_examples::managed_read_support::MemoryReadProvider;
+use qubit_operation::ManagerOptions;
+use qubit_operation::OperationManager;
+use qubit_operation::OperationOutcome;
+use qubit_operation::ShutdownMode;
+
+pub async fn read_report_async() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let manager = OperationManager::new(ManagerOptions::default())?;
+    let async_manager = manager.as_async();
+    let provider = MemoryReadProvider::new();
+    let binding = FsExecutionBinding::new(manager.clone());
+    let request = FsOwnedReadRequest {
+        path: Path::parse("/report.txt")?,
+        options: ReadAllOptions::default(),
+    };
+    let mut operation = binding
+        .submit_read_all_async(&provider, request)
+        .map_err(|failure| std::io::Error::other(format!("managed read rejected: {failure:?}")))?;
+    let outcome = operation.wait_outcome().await?;
+    let bytes = match outcome {
+        OperationOutcome::Succeeded(bytes) => bytes,
+        other => return Err(format!("unexpected managed read outcome: {other:?}").into()),
+    };
+    assert_eq!(bytes, b"report ready");
+    let _settlement = operation.wait_settlement().await;
+    drop(async_manager);
+    let _shutdown = manager.request_shutdown(ShutdownMode::Drain).wait()?;
+    Ok(bytes)
+}
+
+pub async fn rejected_request_async() -> (FsOwnedReadRequest, bool) {
+    let manager = OperationManager::new(ManagerOptions::default()).expect("manager creation succeeds");
+    let _async_manager = manager.as_async();
+    let provider = MemoryReadProvider::rejecting();
+    let binding = FsExecutionBinding::new(manager.clone());
+    let request = FsOwnedReadRequest {
+        path: Path::parse("/report.txt").expect("valid path"),
+        options: ReadAllOptions::default(),
+    };
+    let failure = match binding.submit_read_all_async(&provider, request) {
+        Ok(_) => panic!("provider preparation must reject"),
+        Err(failure) => failure,
+    };
+    let (_, _, request) = failure.into_parts();
+    let _shutdown = manager
+        .request_shutdown(ShutdownMode::Drain)
+        .wait()
+        .expect("manager shuts down");
+    (request, provider.io_started())
+}
 ```
 
 For writes, copies, and renames, use the corresponding `submit_*` method with an

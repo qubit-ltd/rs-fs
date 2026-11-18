@@ -163,10 +163,17 @@ bash scripts/check-documentation-examples.sh
 fixture 需要 `rs-fs-local`（`qubit-fs-local` 0.11）、`rs-local-files`
 （`qubit-local-files` 0.5）和 `rs-redact`（`qubit-redact` 0.10 系列）与 `rs-fs` 位于同一父目录：
 
+crate manifest 还使用本地 `../rs-operation` 路径依赖。即使声明了版本范围，Cargo 仍要求该源码 checkout
+存在；仅下载本 crate 的源码归档不会包含它。fixture 还需要下方列出的 `rs-fs-local` 同级路径依赖。
+
+<!-- source-layout -->
 ```text
 parent/
 ├── rs-fs/
+├── rs-operation/
 ├── rs-fs-local/
+├── rs-fs-registry/
+├── rs-fs-testkit/
 ├── rs-local-files/
 └── rs-redact/
     └── derive/

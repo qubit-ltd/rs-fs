@@ -190,10 +190,20 @@ present. The fixture uses
 `rs-fs-local` (`qubit-fs-local` 0.11), `rs-local-files` (`qubit-local-files`
 0.5), and `rs-redact` (`qubit-redact` 0.10 series) beside `rs-fs`:
 
+The crate manifest also uses the local `../rs-operation` path dependency.
+Cargo requires that source checkout even though the dependency declares a
+version requirement; downloading only this crate's source archive does not
+provide it. The fixture additionally needs the sibling path dependencies of
+`rs-fs-local` shown below.
+
+<!-- source-layout -->
 ```text
 parent/
 ├── rs-fs/
+├── rs-operation/
 ├── rs-fs-local/
+├── rs-fs-registry/
+├── rs-fs-testkit/
 ├── rs-local-files/
 └── rs-redact/
     └── derive/

@@ -99,6 +99,72 @@ class QuickStartDependencyMarkerTests(unittest.TestCase):
                 checker.check_marked_quick_start_dependencies(root)
 
 
+class SourceLayoutDependencyTests(unittest.TestCase):
+    def make_project(self, root):
+        (root / 'tests/fixtures/documentation_examples').mkdir(parents=True)
+        (root / '.github/workflows').mkdir(parents=True)
+        (root / 'Cargo.toml').write_text('[dependencies]\nqubit-operation = { version = "^0.3", path = "../rs-operation" }\n', encoding='utf-8')
+        fixture = root / 'tests/fixtures/documentation_examples/Cargo.toml'
+        fixture.write_text(
+            '[dependencies]\nqubit-fs = { path = "../../../" }\n'
+            'qubit-operation = { path = "../../../../rs-operation" }\n'
+            '[patch.crates-io]\nqubit-fs-local = { path = "../../../../rs-fs-local" }\n'
+            'qubit-local-files = { path = "../../../../rs-local-files" }\n', encoding='utf-8')
+        (root.parent / 'rs-fs-local').mkdir()
+        (root.parent / 'rs-fs-local/Cargo.toml').write_text(
+            '[dependencies]\nqubit-fs-registry = { path = "../rs-fs-registry" }\n'
+            '[dev-dependencies]\nqubit-fs-testkit = { path = "../rs-fs-testkit" }\n', encoding='utf-8')
+        for name in ('rs-fs-registry', 'rs-fs-testkit', 'rs-local-files', 'rs-operation'):
+            (root.parent / name).mkdir(exist_ok=True)
+            (root.parent / name / 'Cargo.toml').write_text('[package]\nname = "fixture"\n', encoding='utf-8')
+        names = ('rs-fs', 'rs-operation', 'rs-fs-local', 'rs-fs-registry', 'rs-fs-testkit', 'rs-local-files')
+        tree = '<!-- source-layout -->\n```text\n' + '\n'.join(f'├── {name}/' for name in names) + '\n```\n'
+        for relative in ('README.md', 'README.zh_CN.md'):
+            (root / relative).write_text(tree, encoding='utf-8')
+        workflow = '\n'.join(f'path: rust-common/{name}' for name in names)
+        (root / '.github/workflows/documentation-examples.yml').write_text(workflow, encoding='utf-8')
+
+    def test_complete_bilingual_layout_and_workflow_pass(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / 'rs-fs'
+            root.mkdir()
+            self.make_project(root)
+            self.assertEqual(
+                {'rs-operation', 'rs-fs-local', 'rs-local-files', 'rs-fs-registry', 'rs-fs-testkit'},
+                checker.required_sibling_path_dependencies(root),
+            )
+            checker.check_source_layout_dependencies(root)
+
+    def test_each_language_must_list_every_required_sibling(self):
+        for relative in ('README.md', 'README.zh_CN.md'):
+            with self.subTest(relative=relative), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory) / 'rs-fs'
+                root.mkdir()
+                self.make_project(root)
+                (root / relative).write_text('<!-- source-layout -->\n```text\n├── rs-fs/\n```\n', encoding='utf-8')
+                with self.assertRaisesRegex(AssertionError, relative):
+                    checker.check_source_layout_dependencies(root)
+
+    def test_new_sibling_path_dependency_must_be_documented(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / 'rs-fs'
+            root.mkdir()
+            self.make_project(root)
+            (root / 'Cargo.toml').write_text(
+                '[dependencies]\nqubit-operation = { path = "../rs-operation" }\nnew-provider = { path = "../rs-new-provider" }\n',
+                encoding='utf-8')
+            with self.assertRaisesRegex(AssertionError, 'rs-new-provider'):
+                checker.check_source_layout_dependencies(root)
+
+    def test_project_internal_paths_are_not_reported_as_sibling_repositories(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / 'rs-fs'
+            root.mkdir()
+            self.make_project(root)
+            (root / 'Cargo.toml').write_text('[dependencies]\nself = { path = "tests/fixtures/documentation_examples" }\n', encoding='utf-8')
+            self.assertNotIn('documentation_examples', checker.required_sibling_path_dependencies(root))
+
+
 class MarkdownAnchorTests(unittest.TestCase):
     def test_chinese_and_percent_encoded_fragments(self):
         anchors = checker.markdown_anchors('## 元数据保留\n')

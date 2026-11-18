@@ -112,6 +112,7 @@ dependencies = [
  "qubit-fs",
  "qubit-fs-local",
  "qubit-io",
+ "qubit-operation",
  "tempfile",
 ]
 

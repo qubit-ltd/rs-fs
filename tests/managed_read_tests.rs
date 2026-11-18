@@ -107,6 +107,20 @@ fn test_observe_changes_is_not_a_snapshot_claim() {
 }
 
 #[test]
+fn test_read_all_without_open_time_etag_reports_no_version_or_change_fact() {
+    let info = OpenedFileInfo::new(
+        FileSystemId::new("managed-read-test").unwrap(),
+        Path::parse("/object").unwrap(),
+    )
+    .with_metadata(FileMetadata::new(FileKind::File).with_len(Some(4)));
+    let port = ManagedReadPort::new(info, 4, 2, 4, Box::new(Bytes(Arc::new(b"data".to_vec()))));
+    let outcome = port.read_all(ReadAllOptions::default()).unwrap();
+    assert_eq!(outcome.value, b"data");
+    assert_eq!(outcome.version, None);
+    assert_eq!(outcome.changed, None);
+}
+
+#[test]
 fn test_strict_text_decoding_preserves_utf8_failure_as_source() {
     let error = ReadAllOptions::decode_text(vec![0xff]).unwrap_err();
     assert_eq!(error.kind(), FsErrorKind::DataCorruption);
@@ -182,6 +196,26 @@ fn test_managed_read_all_accepts_exact_limit_and_rejects_limit_plus_one() {
     assert_eq!(
         read_port(b"x", 2, 2)
             .read_all(ReadAllOptions::new(1, ReadConsistencyPolicy::RequireVersion,))
+            .unwrap_err()
+            .kind(),
+        FsErrorKind::RequirementNotMet
+    );
+}
+
+#[test]
+fn test_require_version_is_rejected_before_reading_from_the_provider() {
+    let info = OpenedFileInfo::new(
+        FileSystemId::new("managed-read-test").unwrap(),
+        Path::parse("/object").unwrap(),
+    )
+    .with_metadata(
+        FileMetadata::new(FileKind::File)
+            .with_len(Some(1))
+            .with_etag(Some(ResourceVersion::new("v1"))),
+    );
+    let port = ManagedReadPort::new(info, 1, 1, 1, Box::new(PanickingReadSession));
+    assert_eq!(
+        port.read_all(ReadAllOptions::new(1, ReadConsistencyPolicy::RequireVersion))
             .unwrap_err()
             .kind(),
         FsErrorKind::RequirementNotMet

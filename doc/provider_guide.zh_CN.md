@@ -626,6 +626,8 @@ waker。发布先取出注册，再在内部锁外唤醒，因此存活注册数
 关闭文件系统自有的服务/组；其他客户端都完成后，再关闭共享 manager。启用 `async` 只增加异步 SPI/API，
 不会启动线程或选择运行时。
 
+可执行的托管读取示例见用户指南中的[同步](user_guide.zh_CN.md#managed-read-example)和[异步](user_guide.zh_CN.md#managed-read-example)示例。
+
 ## 15. 延伸阅读
 
 - [English user guide](user_guide.md) · [中文用户指南](user_guide.zh_CN.md)

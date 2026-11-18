@@ -754,6 +754,8 @@ filesystem-owned services/groups, then closes the shared manager after all
 clients are done. Enabling `async` adds async SPI/API surface only; it starts no
 thread and chooses no runtime.
 
+Executable managed read examples are linked from the [user guide](user_guide.md#managed-read-example).
+
 ## 15. Further reading
 
 - [User guide](user_guide.md) · [中文用户指南](user_guide.zh_CN.md)

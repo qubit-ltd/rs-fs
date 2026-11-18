@@ -25,5 +25,10 @@ pub enum ReadConsistencyPolicy {
     /// Observe changes when the provider can detect them.
     ObserveChanges,
     /// Require a version token bound to the same opened object.
+    ///
+    /// An open-time entity tag alone does not satisfy this policy: the read
+    /// port must also establish the requested version guarantee. See
+    /// [`ManagedReadPort::read_all`](crate::spi::ManagedReadPort::read_all)
+    /// for the current managed read port's support boundary.
     RequireVersion,
 }

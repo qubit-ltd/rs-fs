@@ -138,16 +138,21 @@ impl ManagedReadPort {
     ///
     /// The method reads one sentinel byte beyond the requested content limit
     /// to distinguish an exact-boundary file from an oversized file. The
-    /// returned version and change observation remain unknown unless a future
-    /// provider protocol supplies facts bound to this same session; in
-    /// particular, `ObserveChanges` does not promise a snapshot.
+    /// returned version is the opened metadata's entity tag when one is
+    /// available. It records the token observed at open time and does not
+    /// guarantee that the bytes remain stable during this read. `changed` is
+    /// currently `None`: this port has no evidence about whether the opened
+    /// object changed while it was read. In particular, `ObserveChanges` does
+    /// not promise a snapshot, and `RequireVersion` is rejected because this
+    /// port cannot establish its guarantee.
     ///
     /// # Parameters
     /// - `options`: Read limit and consistency requirements.
     ///
     /// # Returns
-    /// The complete bytes plus only the version/change facts known for this
-    /// opened session.
+    /// The complete bytes, the open-time metadata entity tag when available,
+    /// and `changed: None` because this port does not observe changes during
+    /// the read.
     ///
     /// # Errors
     /// Returns an error for an unrepresentable sentinel, required version

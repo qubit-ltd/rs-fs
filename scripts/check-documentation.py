@@ -18,12 +18,14 @@ SOURCES = {
     'provider-minimal-async': FIXTURE / 'provider_minimal_async.rs',
     'random-access-sampling': FIXTURE / 'random_access_sampling.rs',
     'random-access-sampling-async': FIXTURE / 'random_access_sampling_async.rs',
+    'managed-read': FIXTURE / 'managed_read.rs',
+    'managed-read-async': FIXTURE / 'managed_read_async.rs',
 }
 DOCUMENTS = {
     'README.md': {'quick-start'},
     'README.zh_CN.md': {'quick-start'},
-    'doc/user_guide.md': {'quick-start', 'sync-recovery', 'async-recovery', 'random-access-sampling', 'random-access-sampling-async'},
-    'doc/user_guide.zh_CN.md': {'quick-start', 'sync-recovery', 'async-recovery', 'random-access-sampling', 'random-access-sampling-async'},
+    'doc/user_guide.md': {'quick-start', 'sync-recovery', 'async-recovery', 'random-access-sampling', 'random-access-sampling-async', 'managed-read', 'managed-read-async'},
+    'doc/user_guide.zh_CN.md': {'quick-start', 'sync-recovery', 'async-recovery', 'random-access-sampling', 'random-access-sampling-async', 'managed-read', 'managed-read-async'},
     'doc/provider_guide.md': {'provider-minimal', 'provider-minimal-async'},
     'doc/provider_guide.zh_CN.md': {'provider-minimal', 'provider-minimal-async'},
 }
@@ -71,6 +73,59 @@ def check_marked_quick_start_dependencies(root=ROOT):
     for relative, block in blocks.items():
         assert block == baseline, f'{relative}: Quick Start dependency block differs from README.md'
     return baseline
+
+
+def required_sibling_path_dependencies(root=ROOT):
+    """Return sibling repositories required by core and documentation manifests."""
+    required = set()
+    pending = [root / 'Cargo.toml', root / 'tests/fixtures/documentation_examples/Cargo.toml']
+    visited = set()
+    while pending:
+        manifest_path = pending.pop().resolve()
+        if manifest_path in visited or not manifest_path.is_file():
+            continue
+        visited.add(manifest_path)
+        manifest = tomllib.loads(manifest_path.read_text(encoding='utf-8'))
+        for section in ('dependencies', 'dev-dependencies', 'build-dependencies'):
+            for dependency in manifest.get(section, {}).values():
+                if isinstance(dependency, dict) and 'path' in dependency:
+                    dependency_path = (manifest_path.parent / dependency['path']).resolve()
+                    if dependency_path == root.resolve():
+                        continue
+                    if dependency_path.parent == root.resolve().parent and dependency_path != root.resolve():
+                        required.add(dependency_path.name)
+                    dependency_manifest = dependency_path / 'Cargo.toml'
+                    if dependency_manifest.is_file() and dependency_path.parent == root.resolve().parent:
+                        pending.append(dependency_manifest)
+        for patch_table in manifest.get('patch', {}).values():
+            for dependency in patch_table.values():
+                if isinstance(dependency, dict) and 'path' in dependency:
+                    dependency_path = (manifest_path.parent / dependency['path']).resolve()
+                    if dependency_path == root.resolve():
+                        continue
+                    if dependency_path.parent == root.resolve().parent:
+                        required.add(dependency_path.name)
+                        dependency_manifest = dependency_path / 'Cargo.toml'
+                        if dependency_manifest.is_file():
+                            pending.append(dependency_manifest)
+    return required
+
+
+def check_source_layout_dependencies(root=ROOT):
+    """Keep documented sibling checkouts and CI checkouts aligned with path dependencies."""
+    required = required_sibling_path_dependencies(root)
+    for relative in ('README.md', 'README.zh_CN.md'):
+        content = (root / relative).read_text(encoding='utf-8')
+        match = re.search(r'<!-- source-layout -->\n(.*?)(?=\n```)', content, re.S)
+        assert match, f'{relative}: missing marked source-layout tree'
+        documented = set(re.findall(r'├── ([A-Za-z0-9_-]+)/', match.group(1)))
+        documented.update(re.findall(r'└── ([A-Za-z0-9_-]+)/', match.group(1)))
+        missing = required - documented
+        assert not missing, f'{relative}: source layout is missing sibling repositories: {", ".join(sorted(missing))}'
+    workflow = (root / '.github/workflows/documentation-examples.yml').read_text(encoding='utf-8')
+    checked_out = set(re.findall(r'path:\s*rust-common/([A-Za-z0-9_-]+)', workflow))
+    missing = required - checked_out
+    assert not missing, f'.github/workflows/documentation-examples.yml: missing sibling checkouts: {", ".join(sorted(missing))}'
 
 
 def markdown_documents():
@@ -252,6 +307,7 @@ def check_package_links():
 
 if __name__ == '__main__':
     check_versions_and_structure()
+    check_source_layout_dependencies()
     check_examples()
     check_package_links()
     print('Bilingual examples match compiled sources; package links resolve.')
