@@ -1122,7 +1122,7 @@ pub fn rejected_request() -> (FsOwnedReadRequest, bool) {
 }
 ```
 
-The async form uses the application's shared manager view. It awaits both the typed outcome and settlement; it does not select a runtime.
+The async form uses the application's manager and an async shutdown observer. It awaits both the typed outcome and settlement; it does not select a runtime. The fixture helper [`shutdown_manager_async`](https://github.com/qubit-ltd/rs-fs/blob/dev-starfish/tests/fixtures/documentation_examples/src/managed_read_support.rs) shows the complete shutdown wait path.
 
 <!-- example: managed-read-async -->
 ```rust
@@ -1131,14 +1131,13 @@ use qubit_fs::FsOwnedReadRequest;
 use qubit_fs::Path;
 use qubit_fs::ReadAllOptions;
 use qubit_fs_documentation_examples::managed_read_support::MemoryReadProvider;
+use qubit_fs_documentation_examples::managed_read_support::shutdown_manager_async;
 use qubit_operation::ManagerOptions;
 use qubit_operation::OperationManager;
 use qubit_operation::OperationOutcome;
-use qubit_operation::ShutdownMode;
 
 pub async fn read_report_async() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let manager = OperationManager::new(ManagerOptions::default())?;
-    let async_manager = manager.as_async();
     let provider = MemoryReadProvider::new();
     let binding = FsExecutionBinding::new(manager.clone());
     let request = FsOwnedReadRequest {
@@ -1155,14 +1154,12 @@ pub async fn read_report_async() -> Result<Vec<u8>, Box<dyn std::error::Error>> 
     };
     assert_eq!(bytes, b"report ready");
     let _settlement = operation.wait_settlement().await;
-    drop(async_manager);
-    let _shutdown = manager.request_shutdown(ShutdownMode::Drain).wait()?;
+    shutdown_manager_async(&manager).await?;
     Ok(bytes)
 }
 
 pub async fn rejected_request_async() -> (FsOwnedReadRequest, bool) {
     let manager = OperationManager::new(ManagerOptions::default()).expect("manager creation succeeds");
-    let _async_manager = manager.as_async();
     let provider = MemoryReadProvider::rejecting();
     let binding = FsExecutionBinding::new(manager.clone());
     let request = FsOwnedReadRequest {
@@ -1174,10 +1171,7 @@ pub async fn rejected_request_async() -> (FsOwnedReadRequest, bool) {
         Err(failure) => failure,
     };
     let (_, _, request) = failure.into_parts();
-    let _shutdown = manager
-        .request_shutdown(ShutdownMode::Drain)
-        .wait()
-        .expect("manager shuts down");
+    shutdown_manager_async(&manager).await.expect("manager shuts down");
     (request, provider.io_started())
 }
 ```

@@ -374,6 +374,75 @@ fn test_failed_cleanup_keeps_owner_for_retry() {
 }
 
 #[test]
+fn test_rejected_staging_commit_publishes_identity_before_cleanup_failure() {
+    let attempts = Arc::new(AtomicUsize::new(0));
+    let counted = Arc::clone(&attempts);
+    let manager = OperationManager::new(ManagerOptions::default()).unwrap();
+    let mut operation = manager
+        .try_submit(OperationOptions::default(), move |operation_scope| {
+            let scope = operation_scope
+                .resource_scope(ResourceScopeOptions { capacity: 1 })
+                .unwrap();
+            let reservation = FakeTreeProvider.reserve_staged_directory(&scope).unwrap();
+            scope.end();
+            let error = match FakeTreeProvider.commit_staged_directory(
+                reservation,
+                Path::parse("/rejected-stage").unwrap(),
+                TreeValidationOptions::default(),
+                Box::new(move || {
+                    let counted = Arc::clone(&counted);
+                    Box::pin(async move {
+                        if counted.fetch_add(1, Ordering::SeqCst) == 0 {
+                            Err(FsError::new(
+                                FsErrorKind::Other,
+                                FsErrorOperation::Other,
+                                "rejected staging cleanup failure",
+                            ))
+                        } else {
+                            Ok(())
+                        }
+                    })
+                }),
+            ) {
+                Ok(_) => panic!("a reservation from a closed resource scope is rejected"),
+                Err(error) => error,
+            };
+            assert_eq!(error.kind(), FsErrorKind::InvalidState);
+            Ok::<_, ()>(error.to_string())
+        })
+        .unwrap();
+    let commit_error = match operation.wait_outcome().unwrap() {
+        OperationOutcome::Succeeded(message) => message,
+        other => panic!("unexpected operation outcome: {other:?}"),
+    };
+    assert!(commit_error.contains("staging owner registration failed"));
+    let settlement = operation.wait_settlement().unwrap();
+    assert_eq!(attempts.load(Ordering::SeqCst), 1);
+    assert_eq!(settlement.recoveries.len(), 1);
+    let recovery = &settlement.recoveries[0];
+    let snapshot = recovery.snapshot();
+    assert_eq!(snapshot.resources.len(), 1);
+    assert_eq!(settlement.cleanup_failures.len(), 1);
+    let failure = &settlement.cleanup_failures[0];
+    assert_eq!(failure.resource_id, snapshot.resources[0]);
+    assert!(failure.summary.to_string().contains("rejected staging cleanup failure"));
+    assert!(
+        failure
+            .source
+            .as_ref()
+            .is_some_and(|source| source.to_string().contains("rejected staging cleanup failure"))
+    );
+
+    let report = recovery.try_retry().unwrap().wait().unwrap();
+    assert_eq!(report.recovery.phase, RecoveryPhase::Resolved);
+    assert_eq!(attempts.load(Ordering::SeqCst), 2);
+    let _shutdown_report = manager
+        .request_shutdown(ShutdownMode::Drain)
+        .wait()
+        .expect("manager should shut down after recovery");
+}
+
+#[test]
 fn test_staged_path_prefix_checks_use_components() {
     run_staged!(
         staged,

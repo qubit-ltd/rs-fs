@@ -90,14 +90,16 @@ pub trait ManagedFsTreeSpi: Send + Sync {
         cleanup: StagedCleanupCallback,
     ) -> FsResult<ResourceRef<StagedDirectory>> {
         let owner = StagedDirectory::new(root, options, cleanup);
+        let identity = owner.cleanup_identity();
         match reservation.commit_with(owner, StagedDirectoryCleanup) {
             Ok(resource) => {
-                resource.set_cleanup_resource_id(resource.id());
+                identity.set(resource.id());
                 Ok(resource)
             }
             Err(error) => {
                 let (reason, owner, cleanup, reservation) = error.into_parts();
                 let resource_id = reservation.retain_with_for_cleanup(owner, cleanup);
+                identity.set(resource_id);
                 let message =
                     format!("staging owner registration failed ({reason:?}); cleanup retained as {resource_id:?}");
                 Err(FsError::new(

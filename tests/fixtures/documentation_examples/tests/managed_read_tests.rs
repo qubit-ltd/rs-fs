@@ -8,10 +8,16 @@
 
 use std::future::Future;
 use std::pin::Pin;
+use std::process::Command;
+use std::sync::Arc;
+use std::sync::Condvar;
+use std::sync::Mutex;
 use std::task::Context;
 use std::task::Poll;
 use std::task::Waker;
 use std::thread;
+use std::time::Duration;
+use std::time::Instant;
 
 use qubit_fs::FsExecutionBinding;
 use qubit_fs::FsOwnedReadRequest;
@@ -23,8 +29,10 @@ use qubit_fs_documentation_examples::managed_read::rejected_request;
 use qubit_fs_documentation_examples::managed_read_async::read_report_async;
 use qubit_fs_documentation_examples::managed_read_async::rejected_request_async;
 use qubit_fs_documentation_examples::managed_read_support::MemoryReadProvider;
+use qubit_fs_documentation_examples::managed_read_support::shutdown_manager_async;
 use qubit_operation::ManagerOptions;
 use qubit_operation::OperationManager;
+use qubit_operation::OperationOutcome;
 use qubit_operation::ShutdownMode;
 
 fn run_ready<F: Future>(future: F) -> F::Output {
@@ -77,4 +85,92 @@ fn test_manager_admission_rejection_returns_request_without_provider_io() {
     assert_eq!(request.options.max_bytes, 7);
     assert_eq!(request.options.consistency, ReadConsistencyPolicy::ObserveChanges);
     assert!(!provider.io_started());
+}
+
+struct ThreadWake(thread::Thread);
+
+impl std::task::Wake for ThreadWake {
+    fn wake(self: Arc<Self>) {
+        self.0.unpark();
+    }
+
+    fn wake_by_ref(self: &Arc<Self>) {
+        self.0.unpark();
+    }
+}
+
+fn block_on<F: Future>(future: F) -> F::Output {
+    let waker = Waker::from(Arc::new(ThreadWake(thread::current())));
+    let mut context = Context::from_waker(&waker);
+    let mut future = Box::pin(future);
+    loop {
+        match Future::poll(Pin::as_mut(&mut future), &mut context) {
+            Poll::Ready(output) => return output,
+            Poll::Pending => thread::park(),
+        }
+    }
+}
+
+#[test]
+fn test_async_shutdown_yields_while_a_managed_operation_is_active() {
+    if std::env::var_os("QUBIT_FS_SHUTDOWN_CHILD").is_some() {
+        let manager = OperationManager::new(ManagerOptions::default()).unwrap();
+        let gate = Arc::new((Mutex::new(false), Condvar::new()));
+        let task_gate = Arc::clone(&gate);
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let mut operation = manager
+            .try_submit(Default::default(), move |_| {
+                started_tx.send(()).unwrap();
+                let (lock, changed) = &*task_gate;
+                let mut released = lock.lock().unwrap();
+                while !*released {
+                    released = changed.wait(released).unwrap();
+                }
+                Ok::<_, ()>(())
+            })
+            .unwrap();
+        started_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+
+        let mut shutdown = Box::pin(shutdown_manager_async(&manager));
+        let mut released = false;
+        block_on(std::future::poll_fn(|context| match shutdown.as_mut().poll(context) {
+            Poll::Pending if !released => {
+                released = true;
+                let (lock, changed) = &*gate;
+                *lock.lock().unwrap() = true;
+                changed.notify_one();
+                Poll::Pending
+            }
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(result) => Poll::Ready(result),
+        }))
+        .unwrap();
+        assert!(released, "shutdown must yield before the active operation is released");
+        assert!(matches!(
+            operation.wait_outcome().unwrap(),
+            OperationOutcome::Succeeded(())
+        ));
+        operation.wait_settlement().unwrap();
+        return;
+    }
+
+    let mut child = Command::new(std::env::current_exe().unwrap())
+        .arg("--exact")
+        .arg("test_async_shutdown_yields_while_a_managed_operation_is_active")
+        .env("QUBIT_FS_SHUTDOWN_CHILD", "1")
+        .spawn()
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(8);
+    loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            assert!(status.success(), "async shutdown child failed with {status}");
+            break;
+        }
+        if Instant::now() >= deadline {
+            child.kill().unwrap();
+            let _ = child.wait();
+            panic!("async shutdown blocked the executor thread past the 8-second limit");
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
 }

@@ -7,8 +7,11 @@
 // =============================================================================
 //! Private helpers for staged-tree publication.
 
+mod staged_cleanup_identity;
+mod staged_cleanup_identity_state;
 mod staged_directory_cleanup;
 mod staged_directory_state;
 
+pub(in crate::spi::managed_tree) use staged_cleanup_identity::StagedCleanupIdentity;
 pub(in crate::spi::managed_tree) use staged_directory_cleanup::StagedDirectoryCleanup;
 pub(in crate::spi::managed_tree) use staged_directory_state::StagedDirectoryState;

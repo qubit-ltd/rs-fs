@@ -24,6 +24,7 @@ use qubit_operation::CleanupStage;
 use qubit_operation::DiagnosticSummary;
 use qubit_operation::ResourceId;
 
+use super::internal::StagedCleanupIdentity;
 use super::internal::StagedDirectoryState;
 use crate::directory::TreePublishOutcome;
 use crate::error::FsError;
@@ -72,8 +73,9 @@ pub struct StagedDirectory {
     state: Mutex<StagedDirectoryState>,
     /// Provider callback that releases staging resources after publication.
     cleanup: Mutex<Option<StagedCleanupCallback>>,
-    /// Operation resource identity when cleanup has been registered.
-    cleanup_resource_id: Mutex<Option<ResourceId>>,
+    /// Operation resource identity, published by registration before cleanup
+    /// failure can be reported.
+    cleanup_resource_id: Arc<StagedCleanupIdentity>,
 }
 
 impl StagedDirectory {
@@ -103,7 +105,7 @@ impl StagedDirectory {
                 published: false,
             }),
             cleanup: Mutex::new(Some(cleanup)),
-            cleanup_resource_id: Mutex::new(None),
+            cleanup_resource_id: Arc::new(StagedCleanupIdentity::new()),
         }
     }
 
@@ -348,27 +350,25 @@ impl StagedDirectory {
     ///
     /// # Parameters
     /// - `id`: Resource identity assigned by the operation scope.
-    pub(in crate::spi::managed_tree) fn set_cleanup_resource_id(&self, id: ResourceId) {
-        *lock(&self.cleanup_resource_id) = Some(id);
+    pub(in crate::spi::managed_tree) fn cleanup_identity(&self) -> Arc<StagedCleanupIdentity> {
+        Arc::clone(&self.cleanup_resource_id)
     }
 
     /// Builds a cleanup failure tied to the registered resource identity.
     ///
     /// # Parameters
     /// - `error`: Provider cleanup error to preserve.
+    /// - `resource_id`: Identity assigned by the operation scope.
     ///
     /// # Returns
     /// A resource-scoped cleanup failure retaining the source error.
-    ///
-    /// # Panics
-    /// Panics if the staged directory has not been registered with a resource
-    /// ID.
-    pub(in crate::spi::managed_tree) fn cleanup_failure(&self, error: FsError) -> CleanupFailure {
-        let id = *lock(&self.cleanup_resource_id)
-            .as_ref()
-            .expect("registered staged directory has a resource identity");
+    pub(in crate::spi::managed_tree) fn cleanup_failure(
+        &self,
+        error: FsError,
+        resource_id: ResourceId,
+    ) -> CleanupFailure {
         CleanupFailure {
-            resource_id: id,
+            resource_id,
             stage: CleanupStage::AsyncRelease,
             summary: DiagnosticSummary::new(&error.to_string()),
             source: Some(Arc::new(error)),
@@ -387,12 +387,16 @@ impl Debug for StagedDirectory {
     /// # Returns
     /// The formatter result, including any formatting error.
     fn fmt(&self, formatter: &mut Formatter<'_>) -> FmtResult {
+        let (entries, content_bytes, validated) = {
+            let state = lock(&self.state);
+            (state.entries, state.content_bytes, state.validated_version.is_some())
+        };
         formatter
             .debug_struct("StagedDirectory")
             .field("root", &self.root)
-            .field("entries", &lock(&self.state).entries)
-            .field("content_bytes", &lock(&self.state).content_bytes)
-            .field("validated", &lock(&self.state).validated_version.is_some())
+            .field("entries", &entries)
+            .field("content_bytes", &content_bytes)
+            .field("validated", &validated)
             .finish_non_exhaustive()
     }
 }

@@ -225,6 +225,13 @@ pub fn close(manager: &OperationManager) {
         .expect("manager shuts down");
 }
 
+/// Requests drain shutdown and observes completion without blocking an async
+/// executor thread.
+pub async fn shutdown_manager_async(manager: &OperationManager) -> Result<(), Box<dyn std::error::Error>> {
+    let _shutdown_report = manager.request_shutdown(ShutdownMode::Drain).as_async().wait().await?;
+    Ok(())
+}
+
 fn settlement(operation_id: OperationId) -> SettlementReport {
     SettlementReport {
         operation_id,

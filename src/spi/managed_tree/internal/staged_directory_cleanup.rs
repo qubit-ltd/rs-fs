@@ -32,10 +32,11 @@ impl AsyncCleanup<StagedDirectory> for StagedDirectoryCleanup {
     /// staged-directory owner for recovery.
     fn cleanup(self: Arc<Self>, resource: StagedDirectory, _context: CleanupContext) -> CleanupFuture<StagedDirectory> {
         Box::pin(async move {
+            let resource_id = resource.cleanup_identity().wait().await;
             match resource.cleanup().await {
                 Ok(()) => CleanupOutcome::Released,
                 Err(error) => CleanupOutcome::Failed {
-                    failure: resource.cleanup_failure(error),
+                    failure: resource.cleanup_failure(error, resource_id),
                     resource,
                 },
             }
