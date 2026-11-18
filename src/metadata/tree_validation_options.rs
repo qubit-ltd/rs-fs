@@ -44,7 +44,8 @@ use crate::metadata::TreeEntryValidationState;
 pub struct TreeValidationOptions {
     /// Maximum number of entries.
     pub max_entries: usize,
-    /// Maximum relative path depth.
+    /// Maximum component count for both the provider-reported and normalized
+    /// relative paths.
     pub max_depth: usize,
     /// Maximum aggregate file content bytes.
     pub max_content_bytes: u64,
@@ -134,7 +135,8 @@ impl TreeValidationOptions {
     /// # Parameters
     ///
     /// - `relative_path`: Provider-reported path before normalization.
-    /// - `normalized_path`: Canonical relative path used for duplicate checks.
+    /// - `normalized_path`: Canonical relative path used for duplicate checks;
+    ///   it is subject to the same depth limit as `relative_path`.
     /// - `is_symlink`: Whether the provider reports a symbolic link.
     /// - `state`: Counters and canonical-path set updated after success.
     ///
@@ -154,9 +156,11 @@ impl TreeValidationOptions {
             return Err(tree_validation_error("tree validation rejects symbolic links"));
         }
         if !is_safe_relative_path(relative_path) || !is_safe_relative_path(normalized_path) {
-            return Err(tree_validation_error("tree entry path is absolute or escapes its root"));
+            return Err(tree_validation_error(
+                "tree entry path is absolute, contains NUL, or escapes its root",
+            ));
         }
-        if relative_path.split('/').count() > self.max_depth {
+        if relative_path.split('/').count() > self.max_depth || normalized_path.split('/').count() > self.max_depth {
             return Err(tree_validation_error("tree entry exceeds depth limit"));
         }
         if state
@@ -186,8 +190,8 @@ impl TreeValidationOptions {
 /// Reports whether a path is a nonempty relative path without traversal
 /// components.
 ///
-/// Absolute paths, backslashes, colons, empty components, `.` and `..` are
-/// rejected.
+/// Absolute paths, NUL bytes, backslashes, colons, empty components, `.` and
+/// `..` are rejected.
 ///
 /// # Parameters
 /// - `path`: Relative path reported by the provider.
@@ -197,6 +201,7 @@ impl TreeValidationOptions {
 fn is_safe_relative_path(path: &str) -> bool {
     !path.is_empty()
         && !path.starts_with('/')
+        && !path.contains('\0')
         && !path.contains('\\')
         && !path.contains(':')
         && path

@@ -238,6 +238,111 @@ fn test_entry_validation_rejects_escapes_links_and_normalized_conflicts() {
 }
 
 #[test]
+fn test_tree_entry_rejects_normalized_depth_and_nul_without_mutation() {
+    let options = TreeValidationOptions {
+        max_entries: 10,
+        max_depth: 1,
+        max_content_bytes: 100,
+    };
+    for (raw, canonical) in [
+        ("a", "a/b"),
+        ("a/b", "a"),
+        ("a\0b", "safe"),
+        ("safe", "a\0b"),
+        ("a\0b", "c\0d"),
+    ] {
+        let mut paths = BTreeSet::from([String::from("existing")]);
+        let before = paths.clone();
+        {
+            let mut state = TreeEntryValidationState {
+                entries_seen: 1,
+                content_bytes_seen: 2,
+                measured_content_bytes: 3,
+                normalized_paths: &mut paths,
+            };
+            let error = options.validate_entry(raw, canonical, false, &mut state).unwrap_err();
+            assert_eq!(error.kind(), FsErrorKind::ProviderContractViolation);
+            assert_eq!(error.operation(), FsErrorOperation::ValidateProviderOutcome);
+            assert_eq!(state.entries_seen, 1);
+            assert_eq!(state.content_bytes_seen, 2);
+            assert_eq!(state.measured_content_bytes, 3);
+        }
+        assert_eq!(paths, before);
+    }
+}
+
+#[test]
+fn test_tree_entry_depth_boundaries_preserve_strict_path_rules() {
+    let options = TreeValidationOptions {
+        max_entries: 10,
+        max_depth: 2,
+        max_content_bytes: 100,
+    };
+    let mut paths = BTreeSet::new();
+    {
+        let mut state = TreeEntryValidationState {
+            entries_seen: 0,
+            content_bytes_seen: 0,
+            measured_content_bytes: 1,
+            normalized_paths: &mut paths,
+        };
+        options
+            .validate_entry("x/y", "a/b", false, &mut state)
+            .expect("both representations at the depth limit should pass");
+        assert!(state.normalized_paths.contains("a/b"));
+    }
+
+    for (raw, canonical, max_depth) in [
+        ("a", "a/b", 1),
+        ("a/b", "a", 1),
+        ("a/b/c", "safe", 2),
+        ("safe", "a/b/c", 2),
+        ("a", "a", 0),
+    ] {
+        let options = TreeValidationOptions { max_depth, ..options };
+        let mut paths = BTreeSet::new();
+        let error = options
+            .validate_entry(
+                raw,
+                canonical,
+                false,
+                &mut TreeEntryValidationState {
+                    entries_seen: 0,
+                    content_bytes_seen: 0,
+                    measured_content_bytes: 0,
+                    normalized_paths: &mut paths,
+                },
+            )
+            .unwrap_err();
+        assert_eq!(error.kind(), FsErrorKind::ProviderContractViolation);
+        assert_eq!(error.operation(), FsErrorOperation::ValidateProviderOutcome);
+        assert!(paths.is_empty());
+    }
+
+    for invalid in ["a//b", "a/./b", "a/../b", "a\\b", "a:b", "/a", ""] {
+        for (raw, canonical) in [(invalid, "safe"), ("safe", invalid)] {
+            let mut paths = BTreeSet::new();
+            assert!(
+                options
+                    .validate_entry(
+                        raw,
+                        canonical,
+                        false,
+                        &mut TreeEntryValidationState {
+                            entries_seen: 0,
+                            content_bytes_seen: 0,
+                            measured_content_bytes: 0,
+                            normalized_paths: &mut paths,
+                        },
+                    )
+                    .is_err()
+            );
+            assert!(paths.is_empty());
+        }
+    }
+}
+
+#[test]
 fn test_validation_checks_deadline_and_stop_before_accepting_more_work() {
     let options = TreeValidationOptions::default();
     let now = Instant::now();
@@ -313,6 +418,38 @@ fn test_staged_owner_retains_cleanup_after_validation_failure() {
         },
         {
             assert!(staged.validate_entry("../escape", "escape", false, 0).is_err());
+        }
+    );
+    assert_eq!(cleanups.load(Ordering::SeqCst), 1);
+    assert!(settlement.recoveries.is_empty());
+}
+
+#[test]
+fn test_staged_entry_rejections_do_not_consume_budget() {
+    let cleanups = Arc::new(AtomicUsize::new(0));
+    let counted = Arc::clone(&cleanups);
+    let options = TreeValidationOptions {
+        max_entries: 1,
+        max_depth: 1,
+        max_content_bytes: 1,
+    };
+    let settlement = run_staged!(
+        staged,
+        "/stage",
+        options,
+        move || {
+            let counted = Arc::clone(&counted);
+            Box::pin(async move {
+                counted.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            })
+        },
+        {
+            assert!(staged.validate_entry("a", "a/b", false, 1).is_err());
+            assert!(staged.validate_entry("a\0b", "a", false, 1).is_err());
+            assert!(staged.validate_entry("a", "a\0b", false, 1).is_err());
+            assert!(staged.validate_entry("ok", "ok", false, 1).is_ok());
+            assert!(staged.validate_entry("next", "next", false, 0).is_err());
         }
     );
     assert_eq!(cleanups.load(Ordering::SeqCst), 1);
