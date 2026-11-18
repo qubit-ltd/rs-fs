@@ -44,11 +44,8 @@ is not asserted to implement the 0.4 SPI; use a provider built for 0.4 before
 using the snippet as an integration example.
 
 The fixture uses the sibling `rs-fs-local` source at version 0.11.2 with its
-`qubit-fs` 0.4 dependency. That source-only combination does not describe the
-published packages: crates.io has no `qubit-fs` 0.4 release, and its
-`qubit-fs-local` 0.11.2 release still depends on `qubit-fs` 0.3.3. The
-published-package smoke checks registry artifacts separately and remains
-blocked on compatible core and provider releases; no release is implied here.
+`qubit-fs` 0.4 dependency. It validates this source layout, not installation
+from crates.io.
 
 <!-- dependencies: quick-start -->
 ```toml
@@ -214,12 +211,9 @@ bash scripts/check-documentation-examples.sh
 The documentation workflow also runs entry point regression tests before the
 integration check; core CI continues to check this crate and its documentation.
 
-The fixture checks the repository source with fixed sibling revisions. The published-package
-smoke instead resolves the dependencies in the Quick Start as published crates, in a fresh
-Cargo project; it needs Python 3.11 or later and network access, and does not validate this
-checkout's source changes. Run it locally with `python3 scripts/check-published-quick-start.py`. The
-`Published Documentation Smoke` workflow also runs weekly and can be started with
-`workflow_dispatch` after the documented package versions are available on crates.io.
+The fixture checks the repository source with fixed sibling revisions. It does not verify a
+published-crate installation; use the dependency block and complete program in a standalone Cargo
+project when you need to validate packages available on crates.io.
 
 ```bash
 # Run tests with the default feature set

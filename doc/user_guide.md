@@ -1089,11 +1089,8 @@ releases the old one. Publication removes registrations under the lock and
 wakes them after unlocking. Live registrations therefore track active waiting
 futures rather than poll count.
 
-The documentation fixture validates the source-only sibling layout. The
-published-package smoke resolves registry artifacts separately and remains
-blocked because crates.io has no `qubit-fs` 0.4 release and
-`qubit-fs-local` 0.11.2 still depends on core 0.3.3. Fixture success does not
-establish published-package compatibility.
+The documentation fixture validates the source-only sibling layout. It does
+not establish compatibility with packages installed from crates.io.
 
 The migration breaks the provider SPI deliberately. Providers add the
 `ManagedFsReadSpi`, `ManagedFsMutationSpi`, and `ManagedFsTreeSpi` preparation

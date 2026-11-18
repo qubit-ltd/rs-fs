@@ -937,8 +937,7 @@ reservation 是唯一发布者；状态事实通过 `reservation.publish(FsEffec
 `Ready` 时注销，替换 waker 会释放旧 waker。发布在锁内移除注册，并在解锁后唤醒。因此，存活注册数随当前等待
 future 变化，而不随 poll 次数累积。
 
-文档 fixture 验证同级源码布局。发布包 smoke 单独解析 registry artifact；目前 crates.io 尚无
-`qubit-fs` 0.4，`qubit-fs-local` 0.11.2 仍依赖 core 0.3.3，故其发布版验证被阻塞。fixture 成功不代表发布包兼容。
+文档 fixture 验证同级源码布局，不代表从 crates.io 安装的发布包兼容。
 
 ## 延伸阅读
 

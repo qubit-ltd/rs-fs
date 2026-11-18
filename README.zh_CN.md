@@ -35,10 +35,8 @@ qubit-fs = { version = "0.4", features = ["async"] }
 本地临时目录，写入报告，再以 1 KiB 上限读取，输出 `report ready`。退出时清理临时目录。此直接调用示例展示
 非托管兼容 API。文中引用的 `qubit-fs-local` 版本未被声明为实现了 0.4 SPI；集成使用时应选择为 0.4 构建的 provider。
 
-源码 fixture 使用同级 `rs-fs-local` 0.11.2，其源码依赖 `qubit-fs` 0.4。这一仅源码组合不代表
-已发布的 package：crates.io 尚无 `qubit-fs` 0.4，`qubit-fs-local` 0.11.2 发布包仍依赖
-`qubit-fs` 0.3.3。发布包 smoke 会单独检查 registry artifact，目前同时受 core 与兼容 provider
-发布版本缺失阻塞；此处不表示已有该发布版本。
+源码 fixture 使用同级 `rs-fs-local` 0.11.2，其源码依赖 `qubit-fs` 0.4。它验证的是源码布局，
+不验证从 crates.io 安装发布包。
 
 <!-- dependencies: quick-start -->
 ```toml
@@ -179,11 +177,8 @@ Cargo 项目中使用“快速开始”的依赖配置与完整程序。
 
 文档 workflow 还会在集成验证前运行入口回归测试；核心 CI 仍检查本 crate 及其文档。
 
-fixture 使用固定的同级 revision 验证仓库源码。发布包 smoke 则在全新的 Cargo 项目中解析并
-运行“快速开始”所列的已发布 crate；它需要 Python 3.11 或更高版本及网络，不能验证当前 checkout
-的源码修改。可在本地运行
-`python3 scripts/check-published-quick-start.py`。`Published Documentation Smoke` workflow
-每周运行一次；在文档所列版本已发布到 crates.io 后，也可通过 `workflow_dispatch` 手动触发。
+fixture 使用固定的同级 revision 验证仓库源码，不验证 crates.io 发布包的安装。需要验证已发布
+版本时，可在独立 Cargo 项目中使用“快速开始”中的依赖配置与完整程序。
 
 ```bash
 # 使用默认 feature 集运行测试

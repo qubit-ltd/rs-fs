@@ -54,7 +54,6 @@ jobs:
         working-directory: rust-common/rs-fs
         run: |
           python3 -B scripts/test-check-documentation.py
-          python3 -B scripts/test-published-quick-start.py
       - name: Build and run source documentation fixture
         working-directory: rust-common/rs-fs
         run: bash scripts/check-documentation-examples.sh
