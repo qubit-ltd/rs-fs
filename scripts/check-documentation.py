@@ -130,7 +130,7 @@ def check_source_layout_dependencies(root=ROOT):
 
 def markdown_documents():
     """Return every Markdown document shipped by this crate."""
-    return sorted(path for path in (ROOT / 'doc').glob('*.md') if not path.name.startswith('design-')) + [ROOT / 'README.md', ROOT / 'README.zh_CN.md']
+    return sorted(path for path in (ROOT / 'doc').glob('*.md') if not path.name.startswith(('design-', 'implementation-plan-'))) + [ROOT / 'README.md', ROOT / 'README.zh_CN.md']
 
 
 def check_redact_dependency_description(root=ROOT):

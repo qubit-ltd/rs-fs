@@ -18,12 +18,13 @@ class DocumentScopeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / 'doc').mkdir()
-            for name in ('user_guide.md', 'design-0.4.0.zh_CN.md'):
+            for name in ('user_guide.md', 'design-0.4.0.zh_CN.md', 'implementation-plan-20261118.md'):
                 (root / 'doc' / name).touch()
             with mock.patch.object(checker, 'ROOT', root):
                 documents = checker.markdown_documents()
             self.assertIn(root / 'doc/user_guide.md', documents)
             self.assertNotIn(root / 'doc/design-0.4.0.zh_CN.md', documents)
+            self.assertNotIn(root / 'doc/implementation-plan-20261118.md', documents)
 
 
 class RedactDependencyDescriptionTests(unittest.TestCase):
