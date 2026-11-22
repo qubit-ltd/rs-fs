@@ -40,7 +40,7 @@ fluent-uri = "^0.4"
 
 qubit-budget = "^0.10"
 qubit-redact = { version = "^0.10", features = ["uri"] }
-qubit-operation = { version = "^0.3", path = "../rs-operation" }
+qubit-operation = "^0.3.1"
 qubit-io = "^0.19"
 
 [dev-dependencies]
