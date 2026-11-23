@@ -78,7 +78,10 @@ impl FsEffectObserver {
     ///
     /// # Errors
     /// Returns [`FsEffectObservationError::Poisoned`] if locking the snapshot
-    /// or waiting on its condition variable encounters a poisoned lock.
+    /// or waiting on its condition variable encounters a poisoned lock, or
+    /// [`FsEffectObservationError::PublisherClosed`] if the last publisher is
+    /// dropped before final evidence arrives. In that case the effect is
+    /// unknown.
     pub fn wait_final(&self) -> Result<FsEffectFact, FsEffectObservationError> {
         let mut snapshot = self
             .state
@@ -88,6 +91,9 @@ impl FsEffectObserver {
         loop {
             match &*snapshot {
                 FsEffectSnapshot::Final(fact) => return Ok(fact.clone()),
+                FsEffectSnapshot::Closed => {
+                    return Err(FsEffectObservationError::PublisherClosed);
+                }
                 FsEffectSnapshot::Pending => {
                     snapshot = self
                         .state
@@ -103,7 +109,9 @@ impl FsEffectObserver {
     /// # Returns
     /// A future that resolves to the final fact or to
     /// [`FsEffectObservationError::Poisoned`] if shared observation state is
-    /// poisoned.
+    /// poisoned, or [`FsEffectObservationError::PublisherClosed`] if the last
+    /// publisher closes before publishing. A closed publisher leaves the
+    /// effect unknown.
     #[inline]
     pub fn wait_final_async(&self) -> FsEffectWait<'_> {
         FsEffectWait {

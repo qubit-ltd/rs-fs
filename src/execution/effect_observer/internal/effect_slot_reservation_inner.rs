@@ -17,3 +17,10 @@ pub(in crate::execution::effect_observer) struct EffectSlotReservationInner {
     /// Lease retained until the reservation and prepared work are dropped.
     pub(in crate::execution::effect_observer) _slot: EffectSlotLease,
 }
+
+impl Drop for EffectSlotReservationInner {
+    /// Marks an unpublished effect closed before its capacity lease is returned.
+    fn drop(&mut self) {
+        self.state.close();
+    }
+}
