@@ -76,6 +76,10 @@ pub struct StagedDirectory {
     /// Operation resource identity, published by registration before cleanup
     /// failure can be reported.
     cleanup_resource_id: Arc<StagedCleanupIdentity>,
+    /// Test synchronization point used to observe request construction under
+    /// the validation-state lock.
+    #[cfg(test)]
+    publish_request_observer: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
 }
 
 impl StagedDirectory {
@@ -106,6 +110,8 @@ impl StagedDirectory {
             }),
             cleanup: Mutex::new(Some(cleanup)),
             cleanup_resource_id: Arc::new(StagedCleanupIdentity::new()),
+            #[cfg(test)]
+            publish_request_observer: Mutex::new(None),
         }
     }
 
@@ -172,22 +178,8 @@ impl StagedDirectory {
         current_version: Option<&ResourceVersion>,
         requirements: &TreePublishOptions,
     ) -> FsResult<()> {
-        if requirements.atomicity != AtomicityRequirement::Required {
-            return Ok(());
-        }
-        if lock(&self.state)
-            .validated_version
-            .as_ref()
-            .is_none_or(|validated| current_version.is_none_or(|current| current != validated))
-        {
-            return Err(FsError::new(
-                FsErrorKind::UnsupportedCapability,
-                FsOperation::ValidateProviderOutcome,
-                "staged tree changed after validation; required atomic publication is unavailable",
-            )
-            .with_required_capability(FileSystemCapability::AtomicTreeCopy));
-        }
-        Ok(())
+        let state = lock(&self.state);
+        Self::checked_publish_version(&state, current_version, requirements).map(|_| ())
     }
 
     /// Builds an owned publication request while retaining this cleanup owner.
@@ -213,14 +205,51 @@ impl StagedDirectory {
         capabilities: &FileSystemCapabilities,
     ) -> FsResult<FsOwnedTreePublishRequest> {
         publication.validate_capabilities(capabilities)?;
-        self.check_publish_version(current_version, &publication)?;
+        let state = lock(&self.state);
+        #[cfg(test)]
+        if let Some(observer) = lock(&self.publish_request_observer).as_ref() {
+            observer();
+        }
+        self.publish_request_with_state(destination_root, publication, current_version, &state)
+    }
+
+    fn publish_request_with_state(
+        &self,
+        destination_root: Path,
+        publication: TreePublishOptions,
+        current_version: Option<&ResourceVersion>,
+        state: &StagedDirectoryState,
+    ) -> FsResult<FsOwnedTreePublishRequest> {
+        let validated_version =
+            Self::checked_publish_version(state, current_version, &publication)?.cloned();
         Ok(FsOwnedTreePublishRequest {
             staging_root: self.root.clone(),
             destination_root,
             validation: self.options,
-            validated_version: lock(&self.state).validated_version.clone(),
+            validated_version,
             publication,
         })
+    }
+
+    fn checked_publish_version<'a>(
+        state: &'a StagedDirectoryState,
+        current_version: Option<&ResourceVersion>,
+        requirements: &TreePublishOptions,
+    ) -> FsResult<Option<&'a ResourceVersion>> {
+        let validated_version = state.validated_version.as_ref();
+        if requirements.atomicity == AtomicityRequirement::Required
+            && validated_version.is_none_or(|validated| {
+                current_version.is_none_or(|current| current != validated)
+            })
+        {
+            return Err(FsError::new(
+                FsErrorKind::UnsupportedCapability,
+                FsOperation::ValidateProviderOutcome,
+                "staged tree changed after validation; required atomic publication is unavailable",
+            )
+            .with_required_capability(FileSystemCapability::AtomicTreeCopy));
+        }
+        Ok(validated_version)
     }
 
     /// Validates one entry using actual measured content bytes.
@@ -413,4 +442,86 @@ impl Debug for StagedDirectory {
 /// The held mutex guard, even if a previous operation poisoned the lock.
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Condvar;
+    use std::sync::TryLockError;
+    use std::sync::atomic::AtomicBool;
+
+    use super::*;
+
+    #[test]
+    fn publish_request_keeps_the_version_compared_during_an_interleaved_update() {
+        let staged = Arc::new(StagedDirectory::new(
+            Path::parse("/stage").unwrap(),
+            TreeValidationOptions::default(),
+            Box::new(|| Box::pin(async { Ok(()) })),
+        ));
+        let required = TreePublishOptions {
+            atomicity: AtomicityRequirement::Required,
+            durability: crate::metadata::DurabilityRequirement::NotRequired,
+        };
+        let capabilities =
+            FileSystemCapabilities::new().with_conditional(FileSystemCapability::AtomicTreeCopy);
+        staged.record_validated_version("version-before-update".into());
+
+        let (lock_acquired_tx, lock_acquired_rx) = std::sync::mpsc::channel();
+        let released = Arc::new((Mutex::new(false), Condvar::new()));
+        let observed_lock = Arc::new(AtomicBool::new(false));
+        let observer_release = Arc::clone(&released);
+        *lock(&staged.publish_request_observer) = Some(Arc::new(move || {
+            lock_acquired_tx
+                .send(())
+                .expect("the updater should be waiting for the lock observation");
+            let (released_lock, condition) = &*observer_release;
+            let mut ready = lock(released_lock);
+            while !*ready {
+                ready = condition
+                    .wait(ready)
+                    .unwrap_or_else(PoisonError::into_inner);
+            }
+        }));
+
+        let updater_staged = Arc::clone(&staged);
+        let updater_released = Arc::clone(&released);
+        let updater_observed_lock = Arc::clone(&observed_lock);
+        let updater = std::thread::spawn(move || {
+            lock_acquired_rx
+                .recv()
+                .expect("request construction should acquire the state lock");
+            let blocked = matches!(
+                updater_staged.state.try_lock(),
+                Err(TryLockError::WouldBlock)
+            );
+            updater_observed_lock.store(blocked, std::sync::atomic::Ordering::SeqCst);
+            let (released_lock, condition) = &*updater_released;
+            *lock(released_lock) = true;
+            condition.notify_one();
+            updater_staged.record_validated_version("version-after-update".into());
+        });
+
+        let request = staged
+            .publish_request(
+                Path::parse("/destination").unwrap(),
+                required,
+                Some(&"version-before-update".into()),
+                &capabilities,
+            )
+            .expect("the compared version should be captured in the request");
+        updater
+            .join()
+            .expect("the concurrent version update should finish");
+        assert!(observed_lock.load(std::sync::atomic::Ordering::SeqCst));
+        assert_eq!(
+            request.validated_version,
+            Some("version-before-update".into())
+        );
+
+        assert_eq!(
+            lock(&staged.state).validated_version,
+            Some("version-after-update".into())
+        );
+    }
 }
