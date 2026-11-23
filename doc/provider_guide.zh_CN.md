@@ -604,10 +604,17 @@ provider 在保存诊断前负责清洗值。句柄处于 `Persisted` 或 `Kept`
 
 ## 托管 SPI 迁移
 
-0.4 保留 `FileSystem` 与 `AsyncFileSystem` 的直接方法作为非托管兼容入口。需要托管停止、释放和 settlement 语义的 provider
-工作使用 owned 准备协议：`ManagedFsReadSpi`、`ManagedFsMutationSpi` 和 `ManagedFsTreeSpi`。
+0.4 保留 `FileSystem` 与 `AsyncFileSystem` 的直接方法作为非托管兼容入口。这些方法使用 facade 自身的 SPI
+和缓存属性，预检由 facade 负责。需要托管停止、释放和 settlement 语义的 provider 工作使用 owned 准备协议：
+`ManagedFsReadSpi`、`ManagedFsMutationSpi` 和 `ManagedFsTreeSpi`。
 准备阶段不能启动 I/O。拒绝准备时须返还同一个 owned request，包括其中的缓冲区。manager 认领 prepared
 operation 后，失败通过 typed outcome 报告，不能再伪装成尚未启动的请求。
+
+托管提交有三个归属层级：`FsExecutionBinding::new` 提交到应用 manager 根级，`with_group` 将该根级视图绑定到
+service group；facade 的 `submit_*_in` 则接收活动 `OperationScope`，由 manager 将操作作为 parent 的子项管理。
+这些 facade 入口接收显式 managed provider：provider 负责准备及 provider 专属预检，parent manager 决定准入；
+facade 不会用自身 SPI 或缓存属性替代它。准备或准入拒绝会返还未认领的请求，因此已关闭的 parent 不能认领子项。
+准入后发生的停止会传播给子项，但不能证明 provider effect 已回滚。
 
 provider 将实际操作映射到彼此独立的同步与异步 capability profile。`Unsupported` 表示没有可用入口；
 `Conditional` 表示入口存在但受请求或 provider 条件限制；`Guaranteed` 仅用于有证据支撑的语义保证。
@@ -626,7 +633,13 @@ waker。发布先取出注册，再在内部锁外唤醒，因此存活注册数
 关闭文件系统自有的服务/组；其他客户端都完成后，再关闭共享 manager。启用 `async` 只增加异步 SPI/API，
 不会启动线程或选择运行时。
 
-可执行的托管读取示例见用户指南中的[同步](user_guide.zh_CN.md#managed-read-example)和[异步](user_guide.zh_CN.md#managed-read-example)示例。
+可执行的托管读取示例见用户指南中的[同步](user_guide.zh_CN.md#managed-read-example)和
+[异步](user_guide.zh_CN.md#managed-read-async-example)示例。两个示例都提交到 manager 根级；group 和 parent
+scope 的归属选择见上文。
+
+最后一个 effect publisher 在快照仍为 pending 时释放 reservation，observer 会看到
+`FsEffectSnapshot::Closed`，等待返回 `FsEffectObservationError::PublisherClosed`。此时没有最终事实，
+provider effect 仍未知。
 
 ## 15. 延伸阅读
 

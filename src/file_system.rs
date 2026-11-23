@@ -121,8 +121,10 @@ pub struct FileSystem {
 impl FileSystem {
     /// Submits a bounded managed read as a child of `parent`.
     ///
-    /// The parent-bound manager view is created for this submission only; the
-    /// facade does not retain the scope or promote the operation to a root.
+    /// Uses the explicit provider for managed preparation and provider-specific
+    /// preflight; this facade does not use its own SPI or cached properties.
+    /// The parent manager decides admission and owns the child. A parent stop
+    /// propagates to the child, without proving provider effects were rolled back.
     ///
     /// # Parameters
     /// - `parent`: Active parent scope that owns the submitted child operation.
@@ -134,8 +136,9 @@ impl FileSystem {
     /// A handle to the managed read child once it is accepted.
     ///
     /// # Errors
-    /// Returns a submission failure containing the owned request when the
-    /// provider cannot accept the child operation.
+    /// Returns `FsSubmitFailure` with the original request when provider
+    /// preparation or manager admission rejects the child, including when
+    /// the parent is closed.
     #[inline]
     pub fn submit_read_all_in(
         &self,
@@ -149,6 +152,11 @@ impl FileSystem {
 
     /// Submits a managed write under the supplied parent operation scope.
     ///
+    /// Uses the explicit provider for managed preparation and provider-specific
+    /// preflight; this facade does not use its own SPI or cached properties.
+    /// The parent manager decides admission and owns the child. A parent stop
+    /// propagates to the child, without proving provider effects were rolled back.
+    ///
     /// # Parameters
     /// - `parent`: Active parent scope that owns the submitted child operation.
     /// - `provider`: Managed mutation provider receiving the write request.
@@ -159,8 +167,9 @@ impl FileSystem {
     /// A handle to the managed write child once it is accepted.
     ///
     /// # Errors
-    /// Returns a submission failure retaining the request if the provider
-    /// cannot accept the child operation.
+    /// Returns `FsSubmitFailure` with the original request when provider
+    /// preparation or manager admission rejects the child, including when
+    /// the parent is closed.
     #[inline]
     pub fn submit_write_in(
         &self,
@@ -174,6 +183,11 @@ impl FileSystem {
 
     /// Submits a managed copy under the supplied parent operation scope.
     ///
+    /// Uses the explicit provider for managed preparation and provider-specific
+    /// preflight; this facade does not use its own SPI or cached properties.
+    /// The parent manager decides admission and owns the child. A parent stop
+    /// propagates to the child, without proving provider effects were rolled back.
+    ///
     /// # Parameters
     /// - `parent`: Active parent scope that owns the submitted child operation.
     /// - `provider`: Managed mutation provider receiving the copy request.
@@ -184,8 +198,9 @@ impl FileSystem {
     /// A handle to the managed copy child once it is accepted.
     ///
     /// # Errors
-    /// Returns a submission failure retaining the request if the provider
-    /// cannot accept the child operation.
+    /// Returns `FsSubmitFailure` with the original request when provider
+    /// preparation or manager admission rejects the child, including when
+    /// the parent is closed.
     #[inline]
     pub fn submit_copy_in(
         &self,
@@ -199,6 +214,11 @@ impl FileSystem {
 
     /// Submits a managed rename under the supplied parent operation scope.
     ///
+    /// Uses the explicit provider for managed preparation and provider-specific
+    /// preflight; this facade does not use its own SPI or cached properties.
+    /// The parent manager decides admission and owns the child. A parent stop
+    /// propagates to the child, without proving provider effects were rolled back.
+    ///
     /// # Parameters
     /// - `parent`: Active parent scope that owns the submitted child operation.
     /// - `provider`: Managed mutation provider receiving the rename request.
@@ -209,8 +229,9 @@ impl FileSystem {
     /// A handle to the managed rename child once it is accepted.
     ///
     /// # Errors
-    /// Returns a submission failure retaining the request if the provider
-    /// cannot accept the child operation.
+    /// Returns `FsSubmitFailure` with the original request when provider
+    /// preparation or manager admission rejects the child, including when
+    /// the parent is closed.
     #[inline]
     pub fn submit_rename_in(
         &self,
@@ -224,6 +245,11 @@ impl FileSystem {
 
     /// Submits staged-tree publication under the supplied parent scope.
     ///
+    /// Uses the explicit provider for managed preparation and provider-specific
+    /// preflight; this facade does not use its own SPI or cached properties.
+    /// The parent manager decides admission and owns the child. A parent stop
+    /// propagates to the child, without proving provider effects were rolled back.
+    ///
     /// # Parameters
     /// - `parent`: Active parent scope that owns the submitted child operation.
     /// - `provider`: Managed tree provider receiving the staged publication.
@@ -235,8 +261,9 @@ impl FileSystem {
     /// A handle to the managed publication child once it is accepted.
     ///
     /// # Errors
-    /// Returns a submission failure retaining the request if the provider
-    /// cannot accept the child operation.
+    /// Returns `FsSubmitFailure` with the original request when provider
+    /// preparation or manager admission rejects the child, including when
+    /// the parent is closed.
     #[inline]
     pub fn submit_tree_publish_in(
         &self,
