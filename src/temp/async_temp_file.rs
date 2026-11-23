@@ -110,11 +110,16 @@ impl AsyncTempFile {
 
     /// Returns one lexically safe child path.
     ///
+    /// Prefer `file.path().child(component)` for lexical path construction.
+    /// For child resources, use a temporary-directory handle and its
+    /// directory operations.
+    ///
     /// # Returns
     /// The path formed by appending `component` to this temporary file path.
     ///
     /// # Parameters
     /// - `component`: Validated component appended to the temporary path.
+    #[deprecated(note = "use file.path().child(component) or a temporary-directory handle")]
     #[inline]
     #[must_use]
     pub fn child(&self, component: &PathComponent) -> Path {
@@ -123,11 +128,16 @@ impl AsyncTempFile {
 
     /// Returns one lexically safe descendant path.
     ///
+    /// Prefer `file.path().join(relative)` for lexical path construction.
+    /// For child resources, use a temporary-directory handle and its
+    /// directory operations.
+    ///
     /// # Returns
     /// The path formed by joining `relative` to this temporary file path.
     ///
     /// # Parameters
     /// - `relative`: Validated relative path joined below the temporary path.
+    #[deprecated(note = "use file.path().join(relative) or a temporary-directory handle")]
     #[inline]
     #[must_use]
     pub fn descendant(&self, relative: &RelativePath) -> Path {

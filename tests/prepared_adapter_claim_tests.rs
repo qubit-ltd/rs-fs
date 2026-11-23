@@ -1,3 +1,11 @@
+// =============================================================================
+//    Copyright (c) 2026 Haixing Hu.
+//
+//    SPDX-License-Identifier: Apache-2.0
+//
+//    Licensed under the Apache License, Version 2.0.
+// =============================================================================
+
 use std::sync::Arc;
 use std::sync::Barrier;
 use std::sync::Mutex;
@@ -98,7 +106,7 @@ impl PreparedFsRead for PreparedRead {
 }
 
 #[test]
-fn request_recovery_does_not_wait_for_provider_bind() {
+fn test_request_recovery_does_not_wait_for_provider_bind() {
     let gate = Arc::new(BindGate {
         entered: Barrier::new(2),
         release: Barrier::new(2),
@@ -152,7 +160,7 @@ fn adapter(reject_bind: bool) -> (Arc<PreparedFsReadAdapter>, Arc<PreparedRead>)
 }
 
 #[test]
-fn rejected_bind_rolls_back_and_keeps_request_recoverable() {
+fn test_rejected_bind_rolls_back_and_keeps_request_recoverable() {
     let (adapter, prepared) = adapter(true);
     assert!(PreparedExternalOperation::bind(adapter.as_ref(), fresh_operation_id()).is_err());
     assert_eq!(
@@ -164,7 +172,7 @@ fn rejected_bind_rolls_back_and_keeps_request_recoverable() {
 }
 
 #[test]
-fn successful_bind_prevents_recovery_and_repeated_provider_claim() {
+fn test_successful_bind_prevents_recovery_and_repeated_provider_claim() {
     let (adapter, prepared) = adapter(false);
     PreparedExternalOperation::bind(adapter.as_ref(), fresh_operation_id()).unwrap();
     assert!(adapter.take_request().is_none());

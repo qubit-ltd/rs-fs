@@ -86,7 +86,7 @@ impl AsyncTempDirectory {
     #[inline]
     #[must_use]
     pub fn child(&self, component: &PathComponent) -> Path {
-        self.0.child(component)
+        self.0.path().child(component)
     }
 
     /// Returns one lexically safe descendant path.
@@ -100,7 +100,7 @@ impl AsyncTempDirectory {
     #[inline]
     #[must_use]
     pub fn descendant(&self, relative: &RelativePath) -> Path {
-        self.0.descendant(relative)
+        self.0.path().join(relative)
     }
 
     /// Asynchronously confirms cleanup of this temporary directory.

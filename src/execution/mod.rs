@@ -7,12 +7,11 @@
 // =============================================================================
 //! Execution bindings and owned-operation contracts.
 
-use qubit_operation::AsyncOperationHandle;
-use qubit_operation::OperationHandle;
-
+mod async_fs_operation;
 mod effect_observer;
 mod failure;
 mod fs_execution_binding;
+mod fs_operation;
 mod fs_operation_failure;
 mod fs_operation_failure_kind;
 mod fs_prepare_failure;
@@ -21,6 +20,7 @@ mod fs_submit_failure;
 mod internal;
 mod prepared_adapter;
 mod request;
+pub use async_fs_operation::AsyncFsOperation;
 pub use effect_observer::AsyncFsMutationOperation;
 pub use effect_observer::FsEffectCapacityError;
 pub use effect_observer::FsEffectFact;
@@ -37,6 +37,7 @@ pub use failure::FsPrepareFailure;
 pub use failure::FsPrepareFailureKind;
 pub use failure::FsSubmitFailure;
 pub use fs_execution_binding::FsExecutionBinding;
+pub use fs_operation::FsOperation;
 pub use prepared_adapter::PreparedFsCopyAdapter;
 pub use prepared_adapter::PreparedFsReadAdapter;
 pub use prepared_adapter::PreparedFsRenameAdapter;
@@ -47,45 +48,3 @@ pub use request::FsOwnedReadRequest;
 pub use request::FsOwnedRenameRequest;
 pub use request::FsOwnedTreePublishRequest;
 pub use request::FsOwnedWriteRequest;
-/// Unique synchronous filesystem operation handle returned after submission.
-///
-/// # Type Parameters
-/// - `T`: The successful output produced by the operation.
-/// - `E`: The failure value produced by the operation. Both types must be `Send
-///   + 'static` as required by the underlying operation runtime.
-///
-/// # Examples
-///
-/// A synchronous handle is returned by an `FsExecutionBinding::submit_*`
-/// method.
-///
-/// ```rust
-/// use qubit_fs::FsOperation;
-///
-/// fn inspect<T: Send + 'static, E: Send + 'static>(operation: &FsOperation<T, E>) {
-///     let _operation_id = operation.id();
-///     let _observer = operation.observer();
-/// }
-/// ```
-pub type FsOperation<T, E = FsOperationFailure> = OperationHandle<T, E>;
-/// Unique asynchronous filesystem operation handle returned after submission.
-///
-/// # Type Parameters
-/// - `T`: The successful output produced by the operation.
-/// - `E`: The failure value produced by the operation. Both types must be `Send
-///   + 'static` as required by the underlying operation runtime.
-///
-/// # Examples
-///
-/// An asynchronous handle is returned by an
-/// `FsExecutionBinding::submit_*_async` method.
-///
-/// ```rust
-/// use qubit_fs::AsyncFsOperation;
-///
-/// fn inspect<T: Send + 'static, E: Send + 'static>(operation: &AsyncFsOperation<T, E>) {
-///     let _operation_id = operation.id();
-///     let _observer = operation.observer();
-/// }
-/// ```
-pub type AsyncFsOperation<T, E = FsOperationFailure> = AsyncOperationHandle<T, E>;

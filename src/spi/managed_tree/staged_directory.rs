@@ -222,6 +222,19 @@ impl StagedDirectory {
         })
     }
 
+    /// Ensures required atomic publication uses the version captured at validation.
+    ///
+    /// # Parameters
+    /// - `state`: Staging validation state protected by the caller's lock.
+    /// - `current_version`: Current destination version, if one is available.
+    /// - `requirements`: Publication atomicity requirements to enforce.
+    ///
+    /// # Returns
+    /// The version validated for this staging resource when requirements pass.
+    ///
+    /// # Errors
+    /// Returns an unsupported-capability error when the required version check
+    /// cannot establish atomic publication.
     fn checked_publish_version<'a>(
         state: &'a StagedDirectoryState,
         current_version: Option<&ResourceVersion>,
@@ -444,12 +457,17 @@ mod tests {
     use std::thread;
     use std::time::Duration;
 
+    use super::StagedDirectory;
+    use super::lock;
+    use crate::metadata::AtomicityRequirement;
     use crate::metadata::DurabilityRequirement;
-
-    use super::*;
+    use crate::metadata::FileSystemCapabilities;
+    use crate::metadata::FileSystemCapability;
+    use crate::metadata::TreePublishOptions;
+    use crate::metadata::TreeValidationOptions;
 
     #[test]
-    fn publish_request_keeps_the_version_compared_during_an_interleaved_update() {
+    fn test_publish_request_keeps_the_version_compared_during_an_interleaved_update() {
         let staged = Arc::new(StagedDirectory::new(
             Path::parse("/stage").unwrap(),
             TreeValidationOptions::default(),

@@ -5,12 +5,13 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
-use qubit_operation::ExternalBindError;
-use qubit_operation::OperationId;
 use std::panic::AssertUnwindSafe;
 use std::panic::catch_unwind;
 use std::panic::resume_unwind;
 use std::sync::Mutex;
+
+use qubit_operation::ExternalBindError;
+use qubit_operation::OperationId;
 
 /// Binding and lifecycle flags shared by prepared adapter wrappers.
 #[derive(Default)]
@@ -30,6 +31,15 @@ pub(in crate::execution) struct PreparedReadLifecycle {
 }
 
 /// Claims the adapter before calling provider code, then commits or rolls back.
+///
+/// # Parameters
+/// - `lifecycle`: Shared state guarding this adapter's ownership transitions.
+/// - `id`: Operation identifier assigned to the successful binding.
+/// - `bind`: Provider binding callback invoked outside the lifecycle lock.
+///
+/// # Returns
+/// `Ok(())` after binding commits, or the binding error after the claim rolls
+/// back.
 pub(in crate::execution) fn bind_prepared(
     lifecycle: &Mutex<PreparedReadLifecycle>,
     id: OperationId,
@@ -70,6 +80,16 @@ pub(in crate::execution) fn bind_prepared(
 }
 
 /// Takes the provider request only after reserving the competing transition.
+///
+/// # Type Parameters
+/// - `T`: Provider request type recovered from the adapter.
+///
+/// # Parameters
+/// - `lifecycle`: Shared state guarding this adapter's ownership transitions.
+/// - `take`: One-shot callback that removes the unclaimed provider request.
+///
+/// # Returns
+/// The request if recovery wins the transition; otherwise `None`.
 pub(in crate::execution) fn take_unclaimed_request<T>(
     lifecycle: &Mutex<PreparedReadLifecycle>,
     take: impl FnOnce() -> Option<T>,

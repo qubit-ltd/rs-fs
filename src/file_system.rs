@@ -119,6 +119,51 @@ pub struct FileSystem {
 }
 
 impl FileSystem {
+    /// Constructs a facade and caches the provider's single validated property
+    /// snapshot.
+    ///
+    /// # Type Parameters
+    ///
+    /// - `S`: Concrete provider SPI implementation type.
+    ///
+    /// # Parameters
+    /// - `spi`: Provider implementation whose properties and operations back
+    ///   the facade.
+    ///
+    /// # Returns
+    /// The facade when the provider property snapshot is valid.
+    ///
+    /// # Errors
+    /// Returns the provider property validation error when its snapshot is
+    /// inconsistent.
+    #[inline]
+    pub fn from_spi<S>(spi: S) -> FsResult<Self>
+    where
+        S: FileSystemSpi + 'static,
+    {
+        Self::from_shared_spi(Arc::new(spi))
+    }
+
+    /// Constructs a facade from a shared provider implementation.
+    ///
+    /// # Parameters
+    /// - `spi`: Shared provider implementation retained by the facade.
+    ///
+    /// # Returns
+    /// The facade when the provider property snapshot is valid.
+    ///
+    /// # Errors
+    /// Returns the provider property validation error when its snapshot is
+    /// inconsistent.
+    #[inline]
+    pub fn from_shared_spi(spi: Arc<dyn FileSystemSpi>) -> FsResult<Self> {
+        let core = FacadeCore::new(spi.properties())?;
+        Ok(Self {
+            spi,
+            core: Arc::new(core),
+        })
+    }
+
     /// Submits a bounded managed read as a child of `parent`.
     ///
     /// Uses the explicit provider for managed preparation and provider-specific
@@ -273,51 +318,6 @@ impl FileSystem {
         effects: &FsEffectSlotPool,
     ) -> Result<FsMutationOperation<TreePublishOutcome>, FsSubmitFailure<FsOwnedTreePublishRequest>> {
         FsExecutionBinding::new(parent.manager()).submit_tree_publish(provider, request, effects)
-    }
-
-    /// Constructs a facade and caches the provider's single validated property
-    /// snapshot.
-    ///
-    /// # Type Parameters
-    ///
-    /// - `S`: Concrete provider SPI implementation type.
-    ///
-    /// # Parameters
-    /// - `spi`: Provider implementation whose properties and operations back
-    ///   the facade.
-    ///
-    /// # Returns
-    /// The facade when the provider property snapshot is valid.
-    ///
-    /// # Errors
-    /// Returns the provider property validation error when its snapshot is
-    /// inconsistent.
-    #[inline]
-    pub fn from_spi<S>(spi: S) -> FsResult<Self>
-    where
-        S: FileSystemSpi + 'static,
-    {
-        Self::from_shared_spi(Arc::new(spi))
-    }
-
-    /// Constructs a facade from a shared provider implementation.
-    ///
-    /// # Parameters
-    /// - `spi`: Shared provider implementation retained by the facade.
-    ///
-    /// # Returns
-    /// The facade when the provider property snapshot is valid.
-    ///
-    /// # Errors
-    /// Returns the provider property validation error when its snapshot is
-    /// inconsistent.
-    #[inline]
-    pub fn from_shared_spi(spi: Arc<dyn FileSystemSpi>) -> FsResult<Self> {
-        let core = FacadeCore::new(spi.properties())?;
-        Ok(Self {
-            spi,
-            core: Arc::new(core),
-        })
     }
 
     /// Returns the immutable property snapshot without provider I/O.
