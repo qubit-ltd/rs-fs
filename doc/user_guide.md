@@ -62,13 +62,20 @@ limits.
 
 ## Installation and Minimal Configuration
 
+As checked on 2026-11-23, crates.io does not yet list a `qubit-fs` 0.4 release.
+The complete program in this guide is currently executable through the source
+fixture: check out the sibling layout in the [README](../README.md#testing), then
+run `bash scripts/check-documentation-examples.sh` from the `rs-fs` root.
+
 The default feature set is empty and provides synchronous APIs. Enable
 `qubit-fs = { version = "0.4", features = ["async"] }` for asynchronous APIs.
 The application chooses its executor; the library does not require Tokio.
 
 The local adapter example below documents the direct non-managed facade path.
-Its adapter version has not been validated against `qubit-fs` 0.4; use a
-provider that implements the 0.4 SPI when integrating this release.
+The source fixture uses `rs-fs-local` 0.11.2 with the current 0.4 source. The
+published 0.11 adapter has not been validated against `qubit-fs` 0.4; use a
+provider built against the same 0.4 source until compatible releases are
+available.
 
 For the legacy local-adapter example in this guide, use:
 

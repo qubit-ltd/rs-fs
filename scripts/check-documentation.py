@@ -40,6 +40,7 @@ RUST_FILE_HEADER = re.compile(
     r'// =============================================================================\n\n'
 )
 QUICK_START_DEPENDENCIES = '<!-- dependencies: quick-start -->'
+STALE_CORE_VERSION = re.compile(r'qubit-fs\s*(?:=\s*(?:\{\s*version\s*=\s*)?)?["\']?\s*0\.6(?:\.0)?(?![0-9])')
 
 
 def marked_fence(content, marker, language, location):
@@ -159,11 +160,10 @@ def check_versions_and_structure():
     major_minor = '.'.join(version.split('.')[:2])
     fixture_manifest = tomllib.loads((ROOT / 'tests/fixtures/documentation_examples/Cargo.toml').read_text())
     local_version = fixture_manifest['dependencies']['qubit-fs-local']['version']
-    stale = re.compile(r'(?<![0-9])0\.6(?:\.0)?(?![0-9])')
     for path in markdown_documents():
         content = path.read_text()
         relative = path.relative_to(ROOT)
-        assert not stale.search(content), f'{relative}: contains stale 0.6 version text'
+        assert not STALE_CORE_VERSION.search(content), f'{relative}: contains stale qubit-fs 0.6 version text'
         assert major_minor in content, f'{relative}: missing current package version {major_minor}'
     install_headings = {
         'README.md': 'Quick Start',
