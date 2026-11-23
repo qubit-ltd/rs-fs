@@ -16,7 +16,7 @@
 ```toml
 [dependencies]
 qubit-fs = "0.4"
-qubit-fs-local = "^0.11"
+qubit-fs-local = "^0.12"
 ```
 
 同步 API 默认启用。需要异步门面时必须显式开启 async feature：
@@ -42,7 +42,7 @@ qubit-fs = { version = "0.4", features = ["async"] }
 ```toml
 [dependencies]
 qubit-fs = "0.4"
-qubit-fs-local = "^0.11"
+qubit-fs-local = "^0.12"
 tempfile = "3"
 ```
 

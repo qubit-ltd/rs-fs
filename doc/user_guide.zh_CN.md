@@ -61,7 +61,7 @@
 ```toml
 [dependencies]
 qubit-fs = "0.4"
-qubit-fs-local = "^0.11"
+qubit-fs-local = "^0.12"
 tempfile = "3"
 ```
 

@@ -17,7 +17,7 @@ or an async runtime for you.
 ```toml
 [dependencies]
 qubit-fs = "0.4"
-qubit-fs-local = "^0.11"
+qubit-fs-local = "^0.12"
 ```
 
 Synchronous APIs are enabled by default. Enable the asynchronous facade
@@ -51,7 +51,7 @@ from crates.io.
 ```toml
 [dependencies]
 qubit-fs = "0.4"
-qubit-fs-local = "^0.11"
+qubit-fs-local = "^0.12"
 tempfile = "3"
 ```
 
