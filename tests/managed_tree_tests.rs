@@ -598,6 +598,9 @@ fn test_staged_path_prefix_checks_use_components() {
 fn test_changed_tree_version_blocks_required_publish_and_keeps_cleanup_owner() {
     let preparations = Arc::new(AtomicUsize::new(0));
     let effects = Arc::new(AtomicUsize::new(0));
+    let cleanups = Arc::new(AtomicUsize::new(0));
+    let counted_cleanup = Arc::clone(&cleanups);
+    let observed_cleanups = Arc::clone(&cleanups);
     let no_cas_provider = NonCasTreeProvider {
         preparations: Arc::clone(&preparations),
         effects: Arc::clone(&effects),
@@ -611,7 +614,10 @@ fn test_changed_tree_version_blocks_required_publish_and_keeps_cleanup_owner() {
         staged,
         "/stage",
         TreeValidationOptions::default(),
-        || Box::pin(async { Ok(()) }),
+        move || {
+            counted_cleanup.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async { Ok(()) })
+        },
         {
             staged.record_validated_version("version-before-validation".into());
             assert!(
@@ -629,6 +635,7 @@ fn test_changed_tree_version_blocks_required_publish_and_keeps_cleanup_owner() {
                     )
                     .is_err()
             );
+            assert_eq!(observed_cleanups.load(Ordering::SeqCst), 0);
             assert!(
                 staged
                     .check_publish_version(Some(&"version-before-validation".into()), &required)
@@ -655,6 +662,7 @@ fn test_changed_tree_version_blocks_required_publish_and_keeps_cleanup_owner() {
     );
     assert_eq!(preparations.load(Ordering::SeqCst), 1);
     assert_eq!(effects.load(Ordering::SeqCst), 0);
+    assert_eq!(cleanups.load(Ordering::SeqCst), 1);
 }
 
 #[test]
