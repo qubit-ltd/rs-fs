@@ -909,7 +909,14 @@ metadata，流会失败，不会返回缺少 metadata 的条目。同步 `Direct
 0.4 保留 `FileSystem` 与 `AsyncFileSystem` 的现有直接方法，但明确标为**非托管**操作：它们不通过
 `qubit-operation` 获得取消、释放或 settlement 跟踪。托管调用通过
 `FsExecutionBinding` 接收应用提供的 `OperationScope`；文件系统库不会创建替代用的根 manager，
-也不会保存借用的 scope。
+也不会保存借用的 scope。下面的同步与异步示例都直接提交到 `OperationManager` 根级。可用
+`FsExecutionBinding::with_group` 将根级提交绑定到 service group，或通过 facade 的
+`submit_*_in` 传入活动 parent scope，使操作成为其子项。
+
+旧的直接 facade 方法使用 facade 自身的 SPI 和缓存属性，预检由 facade 负责；它们仍是非托管入口。
+托管 facade 的 `submit_*_in` 则接收显式 provider，由 provider 负责托管准备和 provider 专属预检，
+parent manager 负责准入并确定子操作归属。准备或准入拒绝时会返还未认领的请求；这些入口不会用
+facade 自身的 SPI 或缓存属性替代显式 provider。
 
 <a id="managed-read-example"></a>
 
@@ -970,7 +977,13 @@ pub fn rejected_request() -> (FsOwnedReadRequest, bool) {
 }
 ```
 
-异步形式使用应用的 manager 和异步 shutdown observer，等待 typed outcome 与 settlement；它不会选择运行时。fixture 辅助函数 [`shutdown_manager_async`](https://github.com/qubit-ltd/rs-fs/blob/dev-starfish/tests/fixtures/documentation_examples/src/managed_read_support.rs) 展示了完整的异步关闭等待路径。
+异步形式同样提交到 manager 根级；改用 group binding 或活动 parent scope 时，归属关系如上所述。异步形式使用应用的 manager 和异步 shutdown observer，等待 typed outcome 与 settlement；它不会选择运行时。fixture 辅助函数 [`shutdown_manager_async`](https://github.com/qubit-ltd/rs-fs/blob/dev-starfish/tests/fixtures/documentation_examples/src/managed_read_support.rs) 展示了完整的异步关闭等待路径。
+
+最后一个 publisher 在发布事实前释放 effect reservation 时，快照会变为
+`FsEffectSnapshot::Closed`，最终效果等待会返回 `FsEffectObservationError::PublisherClosed`。
+这表示无法再取得最终事实，provider effect 仍未知。子操作停止也不能证明已启动的 provider effect 已回滚。
+
+<a id="managed-read-async-example"></a>
 
 <!-- example: managed-read-async -->
 ```rust

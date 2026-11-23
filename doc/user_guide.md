@@ -1068,7 +1068,18 @@ Version 0.4 keeps the existing direct methods on both `FileSystem` and
 `AsyncFileSystem` as explicitly **non-managed** operations. They do not acquire
 cancellation, release, or settlement tracking from `qubit-operation`. A managed call instead receives an application-owned
 `OperationScope` through `FsExecutionBinding`; the filesystem library does not
-create a replacement root manager or keep a borrowed scope.
+create a replacement root manager or keep a borrowed scope. The examples below
+submit at the `OperationManager` root. Use `FsExecutionBinding::with_group` to
+bind that root submission to a service group, or call a facade's
+`submit_*_in` method with an active parent scope to make the operation its child.
+
+The legacy direct facade methods use the facade's own SPI and cached
+properties, and their validation is owned by the facade; they remain
+non-managed. In contrast, managed facade `submit_*_in` methods take an explicit
+provider. That provider owns managed preparation and provider-specific
+preflight, while the parent manager owns admission and child identity. A
+preparation or admission rejection returns the unclaimed request. These methods
+do not substitute the facade's SPI or cached properties for the provider.
 
 <a id="managed-read-example"></a>
 
@@ -1129,7 +1140,15 @@ pub fn rejected_request() -> (FsOwnedReadRequest, bool) {
 }
 ```
 
-The async form uses the application's manager and an async shutdown observer. It awaits both the typed outcome and settlement; it does not select a runtime. The fixture helper [`shutdown_manager_async`](https://github.com/qubit-ltd/rs-fs/blob/dev-starfish/tests/fixtures/documentation_examples/src/managed_read_support.rs) shows the complete shutdown wait path.
+The sync and async examples both submit at the manager root; a group binding or an active parent scope changes that ownership as described above. The async form uses the application's manager and an async shutdown observer. It awaits both the typed outcome and settlement; it does not select a runtime. The fixture helper [`shutdown_manager_async`](https://github.com/qubit-ltd/rs-fs/blob/dev-starfish/tests/fixtures/documentation_examples/src/managed_read_support.rs) shows the complete shutdown wait path.
+
+When the last publisher releases an effect reservation before publishing a
+fact, the snapshot becomes `FsEffectSnapshot::Closed` and final-effect waits
+return `FsEffectObservationError::PublisherClosed`. This means no final fact
+can be obtained; the provider effect remains unknown. A stopped child also
+does not prove that an already-started provider effect was rolled back.
+
+<a id="managed-read-async-example"></a>
 
 <!-- example: managed-read-async -->
 ```rust
