@@ -58,14 +58,9 @@ macro_rules! make_prepared_adapter {
             /// owns its request; `None` after binding or when the provider has no
             /// unclaimed request.
             pub fn take_request(&self) -> Option<$request> {
-                let unclaimed = self
-                    .lifecycle
-                    .lock()
-                    .map(|state| state.bound.is_none())
-                    .unwrap_or(false);
-                unclaimed
-                    .then(|| self.prepared.take_unclaimed_request())
-                    .flatten()
+                crate::execution::internal::take_unclaimed_request(&self.lifecycle, || {
+                    self.prepared.take_unclaimed_request()
+                })
             }
         }
         impl OperationControl for $name {
@@ -103,16 +98,7 @@ macro_rules! make_prepared_adapter {
             /// Returns [`ExternalBindError::AlreadyBound`] if this adapter cannot
             /// be bound again, or propagates the provider binding error.
             fn bind(&self, id: OperationId) -> Result<(), ExternalBindError> {
-                let mut state = self
-                    .lifecycle
-                    .lock()
-                    .map_err(|_| ExternalBindError::AlreadyBound)?;
-                if state.bound.is_some() || state.activated || state.abandoned {
-                    return Err(ExternalBindError::AlreadyBound);
-                }
-                self.prepared.bind(id)?;
-                state.bound = Some(id);
-                Ok(())
+                crate::execution::internal::bind_prepared(&self.lifecycle, id, || self.prepared.bind(id))
             }
             /// Activates the bound task and transfers execution to the provider.
             ///

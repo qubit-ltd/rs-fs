@@ -9,3 +9,5 @@
 
 mod prepared_read_lifecycle;
 pub(super) use prepared_read_lifecycle::PreparedReadLifecycle;
+pub(super) use prepared_read_lifecycle::bind_prepared;
+pub(super) use prepared_read_lifecycle::take_unclaimed_request;
