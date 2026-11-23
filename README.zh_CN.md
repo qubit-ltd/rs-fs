@@ -13,6 +13,10 @@
 
 ## 快速开始
 
+截至 2026-11-23，crates.io 尚未发布 `qubit-fs` 0.4，因此下方依赖配置暂时
+不能从 registry 安装。完整示例可在“测试”一节说明的源码布局中，通过
+`bash scripts/check-documentation-examples.sh` 编译并运行。
+
 ```toml
 [dependencies]
 qubit-fs = "0.4"
@@ -35,8 +39,9 @@ qubit-fs = { version = "0.4", features = ["async"] }
 本地临时目录，写入报告，再以 1 KiB 上限读取，输出 `report ready`。退出时清理临时目录。此直接调用示例展示
 非托管兼容 API。文中引用的 `qubit-fs-local` 版本未被声明为实现了 0.4 SPI；集成使用时应选择为 0.4 构建的 provider。
 
-源码 fixture 使用同级 `rs-fs-local` 0.11.2，其源码依赖 `qubit-fs` 0.4。它验证的是源码布局，
-不验证从 crates.io 安装发布包。
+源码 fixture 使用同级 `rs-fs-local` 0.11.2；其 manifest 依赖 `qubit-fs` 0.4 和
+`qubit-local-files` 0.6.0。fixture 验证的是源码布局，不验证从 crates.io 安装发布包。
+`qubit-operation` 使用 crates.io 上的 `^0.3.1`，不需要 `rs-operation` checkout。
 
 <!-- dependencies: quick-start -->
 ```toml
@@ -160,32 +165,27 @@ bash scripts/check-documentation-examples.sh
 ```
 
 独立 workflow 使用固定的同级仓库版本运行此入口；本地入口使用当前检出的同级仓库内容。
-fixture 需要 `rs-fs-local`（`qubit-fs-local` 0.11）、`rs-local-files`
-（`qubit-local-files` 0.5）和 `rs-redact`（`qubit-redact` 0.10 系列）与 `rs-fs` 位于同一父目录：
-
-crate manifest 还使用本地 `../rs-operation` 路径依赖。即使声明了版本范围，Cargo 仍要求该源码 checkout
-存在；仅下载本 crate 的源码归档不会包含它。fixture 还需要下方列出的 `rs-fs-local` 同级路径依赖。
+源码 manifest 需要 `rs-fs-local` 0.11.2、`rs-fs-registry`、`rs-fs-testkit` 和
+`rs-local-files` 0.6.0 与 `rs-fs` 位于同一父目录。`rs-redact` 发布的 `qubit-redact` 0.10 和
+`qubit-operation` 0.3.1 均从 crates.io 解析，不需要对应源码 checkout。
 
 <!-- source-layout -->
 ```text
 parent/
 ├── rs-fs/
-├── rs-operation/
 ├── rs-fs-local/
 ├── rs-fs-registry/
 ├── rs-fs-testkit/
-├── rs-local-files/
-└── rs-redact/
-    └── derive/
+└── rs-local-files/
 ```
 
-仅克隆 `rs-fs` 或下载 crate 源码包不包含该本地布局。独立体验发布包时，请在自己的
-Cargo 项目中使用“快速开始”的依赖配置与完整程序。
+仅克隆 `rs-fs` 或下载 crate 源码包不包含该本地布局。兼容的 0.4 发布版本可用后，
+可在独立 Cargo 项目中使用“快速开始”的依赖配置与完整程序验证 registry 安装。当前源码 fixture 运行：
 
 文档 workflow 还会在集成验证前运行入口回归测试；核心 CI 仍检查本 crate 及其文档。
 
-fixture 使用固定的同级 revision 验证仓库源码，不验证 crates.io 发布包的安装。需要验证已发布
-版本时，可在独立 Cargo 项目中使用“快速开始”中的依赖配置与完整程序。
+fixture 使用固定的同级 revision 验证仓库源码，不验证 crates.io 发布包的安装；兼容发布版本可用后，
+再用独立项目验证 registry 安装。
 
 ```bash
 # 使用默认 feature 集运行测试
