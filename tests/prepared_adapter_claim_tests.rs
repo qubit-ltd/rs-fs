@@ -91,10 +91,7 @@ impl PreparedExternalOperation<Vec<u8>, FsOperationFailure> for PreparedRead {
         Ok(())
     }
     fn abandon(self: Arc<Self>) {}
-    fn poll_take_outcome(
-        &self,
-        _: &mut Context<'_>,
-    ) -> Poll<OperationOutcome<Vec<u8>, FsOperationFailure>> {
+    fn poll_take_outcome(&self, _: &mut Context<'_>) -> Poll<OperationOutcome<Vec<u8>, FsOperationFailure>> {
         Poll::Pending
     }
 }
@@ -122,9 +119,8 @@ fn test_request_recovery_does_not_wait_for_provider_bind() {
     });
     let adapter = Arc::new(PreparedFsReadAdapter::new(prepared));
     let binding_adapter = Arc::clone(&adapter);
-    let binding = std::thread::spawn(move || {
-        PreparedExternalOperation::bind(binding_adapter.as_ref(), fresh_operation_id())
-    });
+    let binding =
+        std::thread::spawn(move || PreparedExternalOperation::bind(binding_adapter.as_ref(), fresh_operation_id()));
     gate.entered.wait();
 
     let request_adapter = Arc::clone(&adapter);
@@ -163,10 +159,7 @@ fn adapter(reject_bind: bool) -> (Arc<PreparedFsReadAdapter>, Arc<PreparedRead>)
 fn test_rejected_bind_rolls_back_and_keeps_request_recoverable() {
     let (adapter, prepared) = adapter(true);
     assert!(PreparedExternalOperation::bind(adapter.as_ref(), fresh_operation_id()).is_err());
-    assert_eq!(
-        adapter.take_request().unwrap().path.as_str(),
-        "/claim-contract"
-    );
+    assert_eq!(adapter.take_request().unwrap().path.as_str(), "/claim-contract");
     assert!(PreparedExternalOperation::bind(adapter.as_ref(), fresh_operation_id()).is_err());
     assert_eq!(prepared.binds.load(Ordering::SeqCst), 1);
 }
@@ -212,10 +205,7 @@ macro_rules! mutation_claim_contract {
                 Ok(())
             }
             fn abandon(self: Arc<Self>) {}
-            fn poll_take_outcome(
-                &self,
-                _: &mut Context<'_>,
-            ) -> Poll<OperationOutcome<$output, FsOperationFailure>> {
+            fn poll_take_outcome(&self, _: &mut Context<'_>) -> Poll<OperationOutcome<$output, FsOperationFailure>> {
                 Poll::Pending
             }
         }

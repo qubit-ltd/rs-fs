@@ -41,9 +41,7 @@ impl Display for FsEffectObservationError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         f.write_str(match self {
             Self::Poisoned => "filesystem effect fact lock is poisoned",
-            Self::PublisherClosed => {
-                "filesystem effect publisher closed before publishing final evidence"
-            }
+            Self::PublisherClosed => "filesystem effect publisher closed before publishing final evidence",
         })
     }
 }

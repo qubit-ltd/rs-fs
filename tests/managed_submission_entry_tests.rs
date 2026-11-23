@@ -8,6 +8,8 @@
 //! Public parent-bound submission entry points preserve admission boundaries
 //! and owned requests.
 
+#![cfg(feature = "async")]
+
 use std::future::Future;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -113,10 +115,7 @@ impl AsyncFileSystemSpi for FacadeSpi {
         properties()
     }
 
-    fn stat<'a>(
-        &'a self,
-        _: StatRequest<'a>,
-    ) -> qubit_fs::spi::SpiFuture<'a, qubit_fs::FsResult<StatResponse>> {
+    fn stat<'a>(&'a self, _: StatRequest<'a>) -> qubit_fs::spi::SpiFuture<'a, qubit_fs::FsResult<StatResponse>> {
         Box::pin(async {
             Err(FsError::new(
                 FsErrorKind::UnsupportedOperation,
@@ -161,8 +160,7 @@ impl ManagedFsMutationSpi for RejectProviders {
     fn prepare_write(
         &self,
         request: FsOwnedWriteRequest,
-    ) -> Result<Arc<dyn qubit_fs::spi::PreparedFsWrite>, FsPrepareFailure<FsOwnedWriteRequest>>
-    {
+    ) -> Result<Arc<dyn qubit_fs::spi::PreparedFsWrite>, FsPrepareFailure<FsOwnedWriteRequest>> {
         Err(FsPrepareFailure {
             kind: FsPrepareFailureKind::Rejected("test".into()),
             request,
@@ -182,8 +180,7 @@ impl ManagedFsMutationSpi for RejectProviders {
     fn prepare_rename(
         &self,
         request: FsOwnedRenameRequest,
-    ) -> Result<Arc<dyn qubit_fs::spi::PreparedFsRename>, FsPrepareFailure<FsOwnedRenameRequest>>
-    {
+    ) -> Result<Arc<dyn qubit_fs::spi::PreparedFsRename>, FsPrepareFailure<FsOwnedRenameRequest>> {
         Err(FsPrepareFailure {
             kind: FsPrepareFailureKind::Rejected("test".into()),
             request,
@@ -195,10 +192,7 @@ impl ManagedFsTreeSpi for RejectProviders {
     fn prepare_tree_publish(
         &self,
         request: FsOwnedTreePublishRequest,
-    ) -> Result<
-        Arc<dyn qubit_fs::spi::PreparedFsTreePublish>,
-        FsPrepareFailure<FsOwnedTreePublishRequest>,
-    > {
+    ) -> Result<Arc<dyn qubit_fs::spi::PreparedFsTreePublish>, FsPrepareFailure<FsOwnedTreePublishRequest>> {
         Err(FsPrepareFailure {
             kind: FsPrepareFailureKind::Rejected("test".into()),
             request,
@@ -261,12 +255,7 @@ struct SuccessfulPrepared<T: Send + 'static, R: Send + 'static> {
 }
 
 impl<T: Send + 'static, R: Send + 'static> SuccessfulPrepared<T, R> {
-    fn new(
-        request: R,
-        result: T,
-        effect_fact: Option<FsEffectFact>,
-        probe: Arc<MutationProbe>,
-    ) -> Self {
+    fn new(request: R, result: T, effect_fact: Option<FsEffectFact>, probe: Arc<MutationProbe>) -> Self {
         Self {
             request: Mutex::new(Some(request)),
             id: Mutex::new(None),
@@ -345,10 +334,7 @@ impl<T: Send + 'static, R: Send + 'static> SuccessfulPrepared<T, R> {
         self.request.lock().unwrap().take()
     }
 
-    fn install_reservation(
-        &self,
-        reservation: FsEffectReservation,
-    ) -> Result<(), FsEffectReservation> {
+    fn install_reservation(&self, reservation: FsEffectReservation) -> Result<(), FsEffectReservation> {
         let mut stored = self.reservation.lock().unwrap();
         if stored.is_some() || self.completed.load(Ordering::SeqCst) {
             Err(reservation)
@@ -366,11 +352,7 @@ impl<T: Send + 'static, R: Send + 'static> OperationControl for SuccessfulPrepar
     }
 
     fn snapshot(&self) -> ChildSnapshot {
-        let id = self
-            .id
-            .lock()
-            .unwrap()
-            .expect("managed operation was bound");
+        let id = self.id.lock().unwrap().expect("managed operation was bound");
         let completed = self.completed.load(Ordering::SeqCst);
         ChildSnapshot {
             operation_id: id,
@@ -450,16 +432,14 @@ impl<T: Send + 'static, R: Send + 'static> PreparedExternalOperation<T, FsOperat
         self.reservation.lock().unwrap().take();
     }
 
-    fn poll_take_outcome(
-        &self,
-        cx: &mut Context<'_>,
-    ) -> Poll<OperationOutcome<T, FsOperationFailure>> {
+    fn poll_take_outcome(&self, cx: &mut Context<'_>) -> Poll<OperationOutcome<T, FsOperationFailure>> {
         let outcome = self.outcome.lock().unwrap().take();
-        if outcome.is_some() {
-            Poll::Ready(outcome.unwrap())
-        } else {
-            *self.waker.lock().unwrap() = Some(cx.waker().clone());
-            Poll::Pending
+        match outcome {
+            Some(outcome) => Poll::Ready(outcome),
+            None => {
+                *self.waker.lock().unwrap() = Some(cx.waker().clone());
+                Poll::Pending
+            }
         }
     }
 }
@@ -474,10 +454,7 @@ impl PreparedFsWrite for SuccessfulPrepared<WriteOutcome, FsOwnedWriteRequest> {
     fn take_unclaimed_request(&self) -> Option<FsOwnedWriteRequest> {
         self.take_request()
     }
-    fn install_effect_reservation(
-        &self,
-        reservation: FsEffectReservation,
-    ) -> Result<(), FsEffectReservation> {
+    fn install_effect_reservation(&self, reservation: FsEffectReservation) -> Result<(), FsEffectReservation> {
         self.install_reservation(reservation)
     }
 }
@@ -485,10 +462,7 @@ impl PreparedFsCopy for SuccessfulPrepared<CopyOutcome, FsOwnedCopyRequest> {
     fn take_unclaimed_request(&self) -> Option<FsOwnedCopyRequest> {
         self.take_request()
     }
-    fn install_effect_reservation(
-        &self,
-        reservation: FsEffectReservation,
-    ) -> Result<(), FsEffectReservation> {
+    fn install_effect_reservation(&self, reservation: FsEffectReservation) -> Result<(), FsEffectReservation> {
         self.install_reservation(reservation)
     }
 }
@@ -496,10 +470,7 @@ impl PreparedFsRename for SuccessfulPrepared<RenameOutcome, FsOwnedRenameRequest
     fn take_unclaimed_request(&self) -> Option<FsOwnedRenameRequest> {
         self.take_request()
     }
-    fn install_effect_reservation(
-        &self,
-        reservation: FsEffectReservation,
-    ) -> Result<(), FsEffectReservation> {
+    fn install_effect_reservation(&self, reservation: FsEffectReservation) -> Result<(), FsEffectReservation> {
         self.install_reservation(reservation)
     }
 }
@@ -507,10 +478,7 @@ impl PreparedFsTreePublish for SuccessfulPrepared<TreePublishOutcome, FsOwnedTre
     fn take_unclaimed_request(&self) -> Option<FsOwnedTreePublishRequest> {
         self.take_request()
     }
-    fn install_effect_reservation(
-        &self,
-        reservation: FsEffectReservation,
-    ) -> Result<(), FsEffectReservation> {
+    fn install_effect_reservation(&self, reservation: FsEffectReservation) -> Result<(), FsEffectReservation> {
         self.install_reservation(reservation)
     }
 }
@@ -524,8 +492,7 @@ impl ManagedFsMutationSpi for SuccessfulProvider {
         let bytes = request.contents.len() as u64;
         Ok(Arc::new(SuccessfulPrepared::new(
             request,
-            WriteOutcome::new(AchievedAtomicity::Atomic, PublicationMethod::Direct)
-                .with_bytes_written(bytes),
+            WriteOutcome::new(AchievedAtomicity::Atomic, PublicationMethod::Direct).with_bytes_written(bytes),
             Some(FsEffectFact::State(FsEffectState::Applied)),
             Arc::clone(&self.0),
         )))
@@ -538,11 +505,7 @@ impl ManagedFsMutationSpi for SuccessfulProvider {
         self.0.prepared.fetch_add(1, Ordering::SeqCst);
         Ok(Arc::new(SuccessfulPrepared::new(
             request,
-            CopyOutcome::new(
-                CopyStats::default(),
-                CopyMethod::Native,
-                AchievedAtomicity::NonAtomic,
-            ),
+            CopyOutcome::new(CopyStats::default(), CopyMethod::Native, AchievedAtomicity::NonAtomic),
             Some(FsEffectFact::State(FsEffectState::Applied)),
             Arc::clone(&self.0),
         )))
@@ -729,9 +692,7 @@ fn tree_request() -> FsOwnedTreePublishRequest {
     }
 }
 
-fn take_error<T, R>(
-    result: Result<T, qubit_fs::FsSubmitFailure<R>>,
-) -> qubit_fs::FsSubmitFailure<R> {
+fn take_error<T, R>(result: Result<T, qubit_fs::FsSubmitFailure<R>>) -> qubit_fs::FsSubmitFailure<R> {
     match result {
         Ok(_) => panic!("test provider unexpectedly accepted preparation"),
         Err(error) => error,
@@ -770,22 +731,12 @@ fn test_both_facades_submit_all_parent_entries_under_the_active_parent() {
             move |scope| {
                 let mut held: Vec<Box<dyn Send>> = Vec::with_capacity(10);
                 let child = sync
-                    .submit_read_all_in(
-                        &scope,
-                        &provider,
-                        path("/sync/read"),
-                        ReadAllOptions::default(),
-                    )
+                    .submit_read_all_in(&scope, &provider, path("/sync/read"), ReadAllOptions::default())
                     .expect_admitted("sync read is admitted beneath its parent");
                 ids.lock().unwrap().push(child.id());
                 held.push(Box::new(child));
                 let child = asynchronous
-                    .submit_read_all_in(
-                        &scope,
-                        &provider,
-                        path("/async/read"),
-                        ReadAllOptions::default(),
-                    )
+                    .submit_read_all_in(&scope, &provider, path("/async/read"), ReadAllOptions::default())
                     .expect_admitted("async read is admitted beneath its parent");
                 ids.lock().unwrap().push(child.id());
                 held.push(Box::new(child));
@@ -803,47 +754,25 @@ fn test_both_facades_submit_all_parent_entries_under_the_active_parent() {
                     )
                     .expect_admitted("sync write is admitted beneath its parent");
                 ids.lock().unwrap().push(child.operation.id());
-                effect_observers
-                    .lock()
-                    .unwrap()
-                    .push((false, child.effect.clone()));
+                effect_observers.lock().unwrap().push((false, child.effect.clone()));
                 held.push(Box::new(child));
                 let child = sync
-                    .submit_copy_in(
-                        &scope,
-                        &provider,
-                        copy_request("/sync/src", "/sync/dst"),
-                        &effects,
-                    )
+                    .submit_copy_in(&scope, &provider, copy_request("/sync/src", "/sync/dst"), &effects)
                     .expect_admitted("sync copy is admitted beneath its parent");
                 ids.lock().unwrap().push(child.operation.id());
-                effect_observers
-                    .lock()
-                    .unwrap()
-                    .push((false, child.effect.clone()));
+                effect_observers.lock().unwrap().push((false, child.effect.clone()));
                 held.push(Box::new(child));
                 let child = sync
-                    .submit_rename_in(
-                        &scope,
-                        &provider,
-                        rename_request("/sync/old", "/sync/new"),
-                        &effects,
-                    )
+                    .submit_rename_in(&scope, &provider, rename_request("/sync/old", "/sync/new"), &effects)
                     .expect_admitted("sync rename is admitted beneath its parent");
                 ids.lock().unwrap().push(child.operation.id());
-                effect_observers
-                    .lock()
-                    .unwrap()
-                    .push((false, child.effect.clone()));
+                effect_observers.lock().unwrap().push((false, child.effect.clone()));
                 held.push(Box::new(child));
                 let child = sync
                     .submit_tree_publish_in(&scope, &provider, tree_request(), &effects)
                     .expect_admitted("sync tree publication is admitted beneath its parent");
                 ids.lock().unwrap().push(child.operation.id());
-                effect_observers
-                    .lock()
-                    .unwrap()
-                    .push((true, child.effect.clone()));
+                effect_observers.lock().unwrap().push((true, child.effect.clone()));
                 held.push(Box::new(child));
 
                 let child = asynchronous
@@ -859,47 +788,25 @@ fn test_both_facades_submit_all_parent_entries_under_the_active_parent() {
                     )
                     .expect_admitted("async write is admitted beneath its parent");
                 ids.lock().unwrap().push(child.operation.id());
-                effect_observers
-                    .lock()
-                    .unwrap()
-                    .push((false, child.effect.clone()));
+                effect_observers.lock().unwrap().push((false, child.effect.clone()));
                 held.push(Box::new(child));
                 let child = asynchronous
-                    .submit_copy_in(
-                        &scope,
-                        &provider,
-                        copy_request("/async/src", "/async/dst"),
-                        &effects,
-                    )
+                    .submit_copy_in(&scope, &provider, copy_request("/async/src", "/async/dst"), &effects)
                     .expect_admitted("async copy is admitted beneath its parent");
                 ids.lock().unwrap().push(child.operation.id());
-                effect_observers
-                    .lock()
-                    .unwrap()
-                    .push((false, child.effect.clone()));
+                effect_observers.lock().unwrap().push((false, child.effect.clone()));
                 held.push(Box::new(child));
                 let child = asynchronous
-                    .submit_rename_in(
-                        &scope,
-                        &provider,
-                        rename_request("/async/old", "/async/new"),
-                        &effects,
-                    )
+                    .submit_rename_in(&scope, &provider, rename_request("/async/old", "/async/new"), &effects)
                     .expect_admitted("async rename is admitted beneath its parent");
                 ids.lock().unwrap().push(child.operation.id());
-                effect_observers
-                    .lock()
-                    .unwrap()
-                    .push((false, child.effect.clone()));
+                effect_observers.lock().unwrap().push((false, child.effect.clone()));
                 held.push(Box::new(child));
                 let child = asynchronous
                     .submit_tree_publish_in(&scope, &provider, tree_request(), &effects)
                     .expect_admitted("async tree publication is admitted beneath its parent");
                 ids.lock().unwrap().push(child.operation.id());
-                effect_observers
-                    .lock()
-                    .unwrap()
-                    .push((true, child.effect.clone()));
+                effect_observers.lock().unwrap().push((true, child.effect.clone()));
                 held.push(Box::new(child));
 
                 ready_tx.send(()).unwrap();
@@ -928,12 +835,11 @@ fn test_both_facades_submit_all_parent_entries_under_the_active_parent() {
     let child_ids = ids.lock().unwrap().clone();
     assert_eq!(child_ids.len(), 10);
     let settlement = parent.wait_settlement().unwrap();
-    assert!(child_ids.iter().all(|id| {
-        settlement
-            .children
+    assert!(
+        child_ids
             .iter()
-            .any(|child| child.operation_id == *id)
-    }));
+            .all(|id| { settlement.children.iter().any(|child| child.operation_id == *id) })
+    );
     assert_eq!(probe.prepared.load(Ordering::SeqCst), 10);
     assert_eq!(probe.bound.load(Ordering::SeqCst), 10);
     assert_eq!(probe.activated.load(Ordering::SeqCst), 10);
@@ -1002,36 +908,24 @@ fn test_closed_scope_returns_successfully_prepared_request_before_claim_or_activ
     assert_eq!(request.destination.as_str(), "/closed/rename-destination");
     let (admission, preparation, request) = take_error(binding.submit_copy_async(
         &provider,
-        copy_request(
-            "/closed/async-copy-source",
-            "/closed/async-copy-destination",
-        ),
+        copy_request("/closed/async-copy-source", "/closed/async-copy-destination"),
         &effects,
     ))
     .into_parts();
     assert_eq!(admission, Some(qubit_operation::AdmissionError::ScopeEnded));
     assert!(preparation.is_none());
     assert_eq!(request.source.as_str(), "/closed/async-copy-source");
-    assert_eq!(
-        request.destination.as_str(),
-        "/closed/async-copy-destination"
-    );
+    assert_eq!(request.destination.as_str(), "/closed/async-copy-destination");
     let (admission, preparation, request) = take_error(binding.submit_rename_async(
         &provider,
-        rename_request(
-            "/closed/async-rename-source",
-            "/closed/async-rename-destination",
-        ),
+        rename_request("/closed/async-rename-source", "/closed/async-rename-destination"),
         &effects,
     ))
     .into_parts();
     assert_eq!(admission, Some(qubit_operation::AdmissionError::ScopeEnded));
     assert!(preparation.is_none());
     assert_eq!(request.source.as_str(), "/closed/async-rename-source");
-    assert_eq!(
-        request.destination.as_str(),
-        "/closed/async-rename-destination"
-    );
+    assert_eq!(request.destination.as_str(), "/closed/async-rename-destination");
     assert_eq!(probe.prepared.load(Ordering::SeqCst), 5);
     assert_eq!(
         probe.recovered.load(Ordering::SeqCst),
@@ -1063,93 +957,54 @@ fn test_binding_copy_and_rename_sync_async_preserve_prepare_failures_and_request
 
     let (admission, preparation, request) = take_error(binding.submit_copy(
         &providers,
-        copy_request(
-            "/binding/sync-copy-source",
-            "/binding/sync-copy-destination",
-        ),
+        copy_request("/binding/sync-copy-source", "/binding/sync-copy-destination"),
         &effects,
     ))
     .into_parts();
     assert!(admission.is_none());
-    assert_eq!(
-        preparation,
-        Some(FsPrepareFailureKind::Rejected("test".into()))
-    );
+    assert_eq!(preparation, Some(FsPrepareFailureKind::Rejected("test".into())));
     assert_eq!(request.source.as_str(), "/binding/sync-copy-source");
-    assert_eq!(
-        request.destination.as_str(),
-        "/binding/sync-copy-destination"
-    );
+    assert_eq!(request.destination.as_str(), "/binding/sync-copy-destination");
 
     let (admission, preparation, request) = take_error(binding.submit_rename(
         &providers,
-        rename_request(
-            "/binding/sync-rename-source",
-            "/binding/sync-rename-destination",
-        ),
+        rename_request("/binding/sync-rename-source", "/binding/sync-rename-destination"),
         &effects,
     ))
     .into_parts();
     assert!(admission.is_none());
-    assert_eq!(
-        preparation,
-        Some(FsPrepareFailureKind::Rejected("test".into()))
-    );
+    assert_eq!(preparation, Some(FsPrepareFailureKind::Rejected("test".into())));
     assert_eq!(request.source.as_str(), "/binding/sync-rename-source");
-    assert_eq!(
-        request.destination.as_str(),
-        "/binding/sync-rename-destination"
-    );
+    assert_eq!(request.destination.as_str(), "/binding/sync-rename-destination");
 
     let (admission, preparation, request) = take_error(binding.submit_copy_async(
         &providers,
-        copy_request(
-            "/binding/async-copy-source",
-            "/binding/async-copy-destination",
-        ),
+        copy_request("/binding/async-copy-source", "/binding/async-copy-destination"),
         &effects,
     ))
     .into_parts();
     assert!(admission.is_none());
-    assert_eq!(
-        preparation,
-        Some(FsPrepareFailureKind::Rejected("test".into()))
-    );
+    assert_eq!(preparation, Some(FsPrepareFailureKind::Rejected("test".into())));
     assert_eq!(request.source.as_str(), "/binding/async-copy-source");
-    assert_eq!(
-        request.destination.as_str(),
-        "/binding/async-copy-destination"
-    );
+    assert_eq!(request.destination.as_str(), "/binding/async-copy-destination");
 
     let (admission, preparation, request) = take_error(binding.submit_rename_async(
         &providers,
-        rename_request(
-            "/binding/async-rename-source",
-            "/binding/async-rename-destination",
-        ),
+        rename_request("/binding/async-rename-source", "/binding/async-rename-destination"),
         &effects,
     ))
     .into_parts();
     assert!(admission.is_none());
-    assert_eq!(
-        preparation,
-        Some(FsPrepareFailureKind::Rejected("test".into()))
-    );
+    assert_eq!(preparation, Some(FsPrepareFailureKind::Rejected("test".into())));
     assert_eq!(request.source.as_str(), "/binding/async-rename-source");
-    assert_eq!(
-        request.destination.as_str(),
-        "/binding/async-rename-destination"
-    );
+    assert_eq!(request.destination.as_str(), "/binding/async-rename-destination");
 
     let success_probe = Arc::new(MutationProbe::default());
     let success_provider = SuccessfulProvider(Arc::clone(&success_probe));
     let copy = binding
         .submit_copy(
             &success_provider,
-            copy_request(
-                "/binding/success-copy-source",
-                "/binding/success-copy-target",
-            ),
+            copy_request("/binding/success-copy-source", "/binding/success-copy-target"),
             &effects,
         )
         .expect_admitted("sync copy binding should admit a successful prepared operation");
@@ -1165,10 +1020,7 @@ fn test_binding_copy_and_rename_sync_async_preserve_prepare_failures_and_request
     let rename = binding
         .submit_rename(
             &success_provider,
-            rename_request(
-                "/binding/success-rename-source",
-                "/binding/success-rename-target",
-            ),
+            rename_request("/binding/success-rename-source", "/binding/success-rename-target"),
             &effects,
         )
         .expect_admitted("sync rename binding should admit a successful prepared operation");
@@ -1246,10 +1098,7 @@ fn test_binding_copy_and_rename_sync_async_preserve_prepare_failures_and_request
     let mut rename = binding
         .submit_rename(
             &failure_provider,
-            rename_request(
-                "/binding/failed-rename-source",
-                "/binding/failed-rename-target",
-            ),
+            rename_request("/binding/failed-rename-source", "/binding/failed-rename-target"),
             &effects,
         )
         .expect_admitted("sync rename failure is returned after claim");
@@ -1268,10 +1117,7 @@ fn test_binding_copy_and_rename_sync_async_preserve_prepare_failures_and_request
     let mut copy = binding
         .submit_copy_async(
             &failure_provider,
-            copy_request(
-                "/binding/failed-async-copy-source",
-                "/binding/failed-async-copy-target",
-            ),
+            copy_request("/binding/failed-async-copy-source", "/binding/failed-async-copy-target"),
             &effects,
         )
         .expect_admitted("async copy failure is returned after claim");

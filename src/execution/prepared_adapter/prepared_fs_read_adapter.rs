@@ -168,18 +168,13 @@ impl PreparedExternalOperation<Vec<u8>, FsOperationFailure> for PreparedFsReadAd
     /// Panics if the local lifecycle mutex is poisoned.
     fn activate(self: Arc<Self>, scope: OperationScope) -> Result<(), ExecutionFailure> {
         {
-            let mut state = self
-                .lifecycle
-                .lock()
-                .expect("prepared read lifecycle mutex poisoned");
+            let mut state = self.lifecycle.lock().expect("prepared read lifecycle mutex poisoned");
             if (state.activated || state.abandoned)
                 && let Some(operation_id) = state.bound
             {
                 return Err(ExecutionFailure {
                     operation_id,
-                    summary: DiagnosticSummary::new(
-                        "prepared read was already activated or abandoned",
-                    ),
+                    summary: DiagnosticSummary::new("prepared read was already activated or abandoned"),
                     source: None,
                 });
             }
@@ -216,10 +211,7 @@ impl PreparedExternalOperation<Vec<u8>, FsOperationFailure> for PreparedFsReadAd
     /// # Returns
     /// `Pending` while the provider is running, then `Ready` with the single
     /// operation outcome.
-    fn poll_take_outcome(
-        &self,
-        c: &mut Context<'_>,
-    ) -> Poll<OperationOutcome<Vec<u8>, FsOperationFailure>> {
+    fn poll_take_outcome(&self, c: &mut Context<'_>) -> Poll<OperationOutcome<Vec<u8>, FsOperationFailure>> {
         self.prepared.poll_take_outcome(c)
     }
 }

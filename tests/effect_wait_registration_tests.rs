@@ -157,10 +157,7 @@ fn test_effect_wait_registration_final_snapshot_does_not_retain_waker() {
     let mut future = Box::pin(observer.wait_final_async());
     {
         let mut context = Context::from_waker(&waker);
-        assert!(matches!(
-            future.as_mut().poll(&mut context),
-            Poll::Ready(Ok(_))
-        ));
+        assert!(matches!(future.as_mut().poll(&mut context), Poll::Ready(Ok(_))));
     }
     drop(waker);
     drop(wake);

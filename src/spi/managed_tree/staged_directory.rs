@@ -206,8 +206,7 @@ impl StagedDirectory {
     ) -> FsResult<FsOwnedTreePublishRequest> {
         publication.validate_capabilities(capabilities)?;
         let state = lock(&self.state);
-        let validated_version =
-            Self::checked_publish_version(&state, current_version, &publication)?;
+        let validated_version = Self::checked_publish_version(&state, current_version, &publication)?;
         #[cfg(test)]
         if let Some(observer) = lock(&self.publish_request_observer).as_ref() {
             observer();
@@ -222,7 +221,8 @@ impl StagedDirectory {
         })
     }
 
-    /// Ensures required atomic publication uses the version captured at validation.
+    /// Ensures required atomic publication uses the version captured at
+    /// validation.
     ///
     /// # Parameters
     /// - `state`: Staging validation state protected by the caller's lock.
@@ -242,8 +242,7 @@ impl StagedDirectory {
     ) -> FsResult<Option<&'a ResourceVersion>> {
         let validated_version = state.validated_version.as_ref();
         if requirements.atomicity == AtomicityRequirement::Required
-            && validated_version
-                .is_none_or(|validated| current_version.is_none_or(|current| current != validated))
+            && validated_version.is_none_or(|validated| current_version.is_none_or(|current| current != validated))
         {
             return Err(FsError::new(
                 FsErrorKind::UnsupportedCapability,
@@ -449,7 +448,10 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
     use std::sync::Condvar;
+    use std::sync::Mutex;
+    use std::sync::PoisonError;
     use std::sync::TryLockError;
     use std::sync::atomic::AtomicBool;
     use std::sync::atomic::Ordering;
@@ -459,6 +461,7 @@ mod tests {
 
     use super::StagedDirectory;
     use super::lock;
+    use crate::Path;
     use crate::metadata::AtomicityRequirement;
     use crate::metadata::DurabilityRequirement;
     use crate::metadata::FileSystemCapabilities;
@@ -477,8 +480,7 @@ mod tests {
             atomicity: AtomicityRequirement::Required,
             durability: DurabilityRequirement::NotRequired,
         };
-        let capabilities =
-            FileSystemCapabilities::new().with_conditional(FileSystemCapability::AtomicTreeCopy);
+        let capabilities = FileSystemCapabilities::new().with_conditional(FileSystemCapability::AtomicTreeCopy);
         staged.record_validated_version("version-before-update".into());
 
         let (lock_acquired_tx, lock_acquired_rx) = mpsc::channel();
@@ -504,16 +506,10 @@ mod tests {
         let updater_released = Arc::clone(&released);
         let updater_observed_lock = Arc::clone(&observed_lock);
         let updater = thread::spawn(move || {
-            if lock_acquired_rx
-                .recv_timeout(Duration::from_secs(5))
-                .is_err()
-            {
+            if lock_acquired_rx.recv_timeout(Duration::from_secs(5)).is_err() {
                 return;
             }
-            let blocked = matches!(
-                updater_staged.state.try_lock(),
-                Err(TryLockError::WouldBlock)
-            );
+            let blocked = matches!(updater_staged.state.try_lock(), Err(TryLockError::WouldBlock));
             updater_observed_lock.store(blocked, Ordering::SeqCst);
             let (released_lock, condition) = &*updater_released;
             *lock(released_lock) = true;
@@ -529,14 +525,9 @@ mod tests {
                 &capabilities,
             )
             .expect("the compared version should be captured in the request");
-        updater
-            .join()
-            .expect("the concurrent version update should finish");
+        updater.join().expect("the concurrent version update should finish");
         assert!(observed_lock.load(Ordering::SeqCst));
-        assert_eq!(
-            request.validated_version,
-            Some("version-before-update".into())
-        );
+        assert_eq!(request.validated_version, Some("version-before-update".into()));
 
         assert_eq!(
             lock(&staged.state).validated_version,

@@ -46,9 +46,7 @@ pub(in crate::execution) fn bind_prepared(
     bind: impl FnOnce() -> Result<(), ExternalBindError>,
 ) -> Result<(), ExternalBindError> {
     {
-        let mut state = lifecycle
-            .lock()
-            .map_err(|_| ExternalBindError::AlreadyBound)?;
+        let mut state = lifecycle.lock().map_err(|_| ExternalBindError::AlreadyBound)?;
         if state.bound.is_some()
             || state.binding
             || state.recovering_request
@@ -62,9 +60,7 @@ pub(in crate::execution) fn bind_prepared(
     }
 
     let result = catch_unwind(AssertUnwindSafe(bind));
-    let mut state = lifecycle
-        .lock()
-        .map_err(|_| ExternalBindError::AlreadyBound)?;
+    let mut state = lifecycle.lock().map_err(|_| ExternalBindError::AlreadyBound)?;
     state.binding = false;
     match result {
         Ok(Ok(())) => {

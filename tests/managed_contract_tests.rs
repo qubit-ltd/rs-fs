@@ -170,17 +170,12 @@ fn test_last_effect_reservation_closes_pending_sync_waiters_and_reclaims_capacit
     drop(ready_tx);
     drop(result_tx);
     for _ in 0..2 {
-        ready_rx
-            .recv_timeout(Duration::from_secs(2))
-            .expect("waiter started");
+        ready_rx.recv_timeout(Duration::from_secs(2)).expect("waiter started");
     }
 
     drop(first_reservation);
     assert!(matches!(observer.snapshot(), FsEffectSnapshot::Pending));
-    assert!(
-        pool.reserve().is_err(),
-        "one reservation clone still owns capacity"
-    );
+    assert!(pool.reserve().is_err(), "one reservation clone still owns capacity");
     drop(last_reservation);
     assert!(matches!(observer.snapshot(), FsEffectSnapshot::Closed));
 

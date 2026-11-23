@@ -169,7 +169,8 @@ impl FileSystem {
     /// Uses the explicit provider for managed preparation and provider-specific
     /// preflight; this facade does not use its own SPI or cached properties.
     /// The parent manager decides admission and owns the child. A parent stop
-    /// propagates to the child, without proving provider effects were rolled back.
+    /// propagates to the child, without proving provider effects were rolled
+    /// back.
     ///
     /// # Parameters
     /// - `parent`: Active parent scope that owns the submitted child operation.
@@ -200,7 +201,8 @@ impl FileSystem {
     /// Uses the explicit provider for managed preparation and provider-specific
     /// preflight; this facade does not use its own SPI or cached properties.
     /// The parent manager decides admission and owns the child. A parent stop
-    /// propagates to the child, without proving provider effects were rolled back.
+    /// propagates to the child, without proving provider effects were rolled
+    /// back.
     ///
     /// # Parameters
     /// - `parent`: Active parent scope that owns the submitted child operation.
@@ -231,7 +233,8 @@ impl FileSystem {
     /// Uses the explicit provider for managed preparation and provider-specific
     /// preflight; this facade does not use its own SPI or cached properties.
     /// The parent manager decides admission and owns the child. A parent stop
-    /// propagates to the child, without proving provider effects were rolled back.
+    /// propagates to the child, without proving provider effects were rolled
+    /// back.
     ///
     /// # Parameters
     /// - `parent`: Active parent scope that owns the submitted child operation.
@@ -262,7 +265,8 @@ impl FileSystem {
     /// Uses the explicit provider for managed preparation and provider-specific
     /// preflight; this facade does not use its own SPI or cached properties.
     /// The parent manager decides admission and owns the child. A parent stop
-    /// propagates to the child, without proving provider effects were rolled back.
+    /// propagates to the child, without proving provider effects were rolled
+    /// back.
     ///
     /// # Parameters
     /// - `parent`: Active parent scope that owns the submitted child operation.
@@ -293,7 +297,8 @@ impl FileSystem {
     /// Uses the explicit provider for managed preparation and provider-specific
     /// preflight; this facade does not use its own SPI or cached properties.
     /// The parent manager decides admission and owns the child. A parent stop
-    /// propagates to the child, without proving provider effects were rolled back.
+    /// propagates to the child, without proving provider effects were rolled
+    /// back.
     ///
     /// # Parameters
     /// - `parent`: Active parent scope that owns the submitted child operation.

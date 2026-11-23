@@ -19,7 +19,8 @@ pub(in crate::execution::effect_observer) struct EffectSlotReservationInner {
 }
 
 impl Drop for EffectSlotReservationInner {
-    /// Marks an unpublished effect closed before its capacity lease is returned.
+    /// Marks an unpublished effect closed before its capacity lease is
+    /// returned.
     fn drop(&mut self) {
         self.state.close();
     }
