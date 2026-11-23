@@ -101,6 +101,24 @@ outcome → enrich typed results. Invalid provider success is a contract
 violation, not permission to invent a successful fallback or repeat an
 operation that may already have published.
 
+## Managed submission ownership
+
+Legacy direct facade methods use the facade's SPI and cached properties; the
+facade owns their deterministic preflight, and the calls remain non-managed.
+Managed facade `submit_*_in` methods instead accept an explicit provider and an
+active parent scope. The provider owns its preparation and provider-specific
+preflight, while the manager decides admission and records the child under that
+parent. A closed parent rejects before claim, and rejection returns the owned
+request. A stop after admission propagates to the child but cannot establish
+that provider effects were rolled back. These methods do not use the facade's
+SPI or cached properties as a substitute for the explicit provider.
+
+`FsExecutionBinding::new` submits at the application manager root;
+`with_group` binds that root submission view to a service group. Supplying a
+parent scope to a facade entry creates a child relationship instead. The
+filesystem crate never creates a replacement manager root and does not retain
+the borrowed parent scope.
+
 ## Publication and failure facts
 
 Publication, source/staging cleanup, and recovery-handle ownership are distinct.
@@ -118,6 +136,11 @@ replaced waker is released. Publication removes registrations under the lock
 and wakes them after unlocking, so callback code does not run under the
 registration lock. Registration count is bounded by live waiting futures, not
 by total poll count.
+
+If the final reservation is released while its snapshot is still pending, the
+snapshot becomes `FsEffectSnapshot::Closed` and final waits return
+`FsEffectObservationError::PublisherClosed`. This means no final fact can be
+obtained; the provider effect remains unknown.
 
 Writer opening has a deliberately conservative rule:
 

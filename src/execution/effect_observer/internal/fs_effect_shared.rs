@@ -5,6 +5,8 @@
 //
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
+use std::panic::AssertUnwindSafe;
+use std::panic::catch_unwind;
 use std::sync::Arc;
 use std::sync::Condvar;
 use std::sync::Mutex;
@@ -16,9 +18,9 @@ use super::fs_effect_waiter::FsEffectWaiter;
 
 /// Shared synchronization state behind mutation-effect observers.
 pub(in crate::execution::effect_observer) struct FsEffectShared {
-    /// Latest immutable pending or final evidence.
+    /// Latest immutable pending, final, or closed state.
     pub(in crate::execution::effect_observer) snapshot: Mutex<FsEffectSnapshot>,
-    /// Notifies blocking waiters after final evidence is published.
+    /// Notifies blocking waiters after final evidence is published or closed.
     pub(in crate::execution::effect_observer) changed: Condvar,
     /// Async task wakers registered while evidence is still pending.
     pub(in crate::execution::effect_observer) wakers: Mutex<Vec<FsEffectWaiter>>,
@@ -53,6 +55,25 @@ impl FsEffectShared {
         };
 
         if published {
+            self.changed.notify_all();
+            self.wake_waiters();
+        }
+    }
+
+    /// Closes a still-pending publisher and notifies both kinds of waiter.
+    /// Published facts remain immutable. Notifications run after releasing the
+    /// snapshot lock.
+    pub(in crate::execution::effect_observer) fn close(&self) {
+        let closed = if let Ok(mut snapshot) = self.snapshot.lock()
+            && matches!(*snapshot, FsEffectSnapshot::Pending)
+        {
+            *snapshot = FsEffectSnapshot::Closed;
+            true
+        } else {
+            false
+        };
+
+        if closed {
             self.changed.notify_all();
             self.wake_waiters();
         }
@@ -116,7 +137,7 @@ impl FsEffectShared {
             Err(_) => return,
         };
         for waiter in waiters {
-            waiter.waker.wake();
+            let _ = catch_unwind(AssertUnwindSafe(|| waiter.waker.wake()));
         }
     }
 }

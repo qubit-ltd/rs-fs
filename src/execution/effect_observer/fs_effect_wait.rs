@@ -41,7 +41,7 @@ pub struct FsEffectWait<'a> {
     pub(super) registration_id: Option<Arc<()>>,
 }
 impl Future for FsEffectWait<'_> {
-    /// Resolves with the published fact or a poisoned-lock error.
+    /// Resolves with the published fact or an observation error.
     type Output = Result<FsEffectFact, FsEffectObservationError>;
     /// Checks for final evidence, registers this task when pending, and
     /// rechecks the snapshot to avoid missing a concurrent publication.
@@ -54,7 +54,7 @@ impl Future for FsEffectWait<'_> {
     /// # Returns
     ///
     /// `Ready` with the final fact or observation error, or `Pending` while no
-    /// final fact has been published.
+    /// final fact has been published and the publisher remains active.
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
         let observer = this.observer;
@@ -69,6 +69,11 @@ impl Future for FsEffectWait<'_> {
                     drop(snapshot);
                     unregister(this);
                     Poll::Ready(Ok(fact))
+                }
+                FsEffectSnapshot::Closed => {
+                    drop(snapshot);
+                    unregister(this);
+                    Poll::Ready(Err(FsEffectObservationError::PublisherClosed))
                 }
                 FsEffectSnapshot::Pending => {
                     drop(snapshot);
@@ -88,6 +93,11 @@ impl Future for FsEffectWait<'_> {
                                 drop(snapshot);
                                 unregister(this);
                                 Poll::Ready(Ok(fact))
+                            }
+                            FsEffectSnapshot::Closed => {
+                                drop(snapshot);
+                                unregister(this);
+                                Poll::Ready(Err(FsEffectObservationError::PublisherClosed))
                             }
                             FsEffectSnapshot::Pending => Poll::Pending,
                         },

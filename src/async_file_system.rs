@@ -156,18 +156,25 @@ impl AsyncFileSystem {
 
     /// Submits a bounded managed read as a child of `parent`.
     ///
-    /// The parent-bound manager view is temporary and is never stored by this
-    /// facade.
+    /// Uses the explicit provider for managed preparation and provider-specific
+    /// preflight; this facade does not use its own SPI or cached properties.
+    /// The parent manager decides admission and owns the child. A parent stop
+    /// propagates to the child, without proving provider effects were rolled
+    /// back.
     ///
     /// # Parameters
     /// - `parent`: Open operation scope that owns this child submission.
     /// - `provider`: Provider that prepares the owned read request.
     /// - `path`: Path to read.
     /// - `options`: Read byte and consistency limits.
+    ///
     /// # Returns
     /// A managed read operation submitted under `parent`.
+    ///
     /// # Errors
-    /// Returns a submission failure when the request cannot be accepted.
+    /// Returns `FsSubmitFailure` with the original request when provider
+    /// preparation or manager admission rejects the child, including when
+    /// the parent is closed.
     #[inline]
     pub fn submit_read_all_in(
         &self,
@@ -181,15 +188,25 @@ impl AsyncFileSystem {
 
     /// Submits a managed write under the supplied parent operation scope.
     ///
+    /// Uses the explicit provider for managed preparation and provider-specific
+    /// preflight; this facade does not use its own SPI or cached properties.
+    /// The parent manager decides admission and owns the child. A parent stop
+    /// propagates to the child, without proving provider effects were rolled
+    /// back.
+    ///
     /// # Parameters
     /// - `parent`: Open operation scope that owns this child submission.
     /// - `provider`: Provider that prepares the owned write request.
     /// - `request`: Owned write parameters.
     /// - `effects`: Bounded pool used to reserve final effect evidence.
+    ///
     /// # Returns
     /// A managed write operation submitted under `parent`.
+    ///
     /// # Errors
-    /// Returns a submission failure when the request cannot be accepted.
+    /// Returns `FsSubmitFailure` with the original request when provider
+    /// preparation or manager admission rejects the child, including when
+    /// the parent is closed.
     #[inline]
     pub fn submit_write_in(
         &self,
@@ -204,15 +221,25 @@ impl AsyncFileSystem {
 
     /// Submits a managed copy under the supplied parent operation scope.
     ///
+    /// Uses the explicit provider for managed preparation and provider-specific
+    /// preflight; this facade does not use its own SPI or cached properties.
+    /// The parent manager decides admission and owns the child. A parent stop
+    /// propagates to the child, without proving provider effects were rolled
+    /// back.
+    ///
     /// # Parameters
     /// - `parent`: Open operation scope that owns this child submission.
     /// - `provider`: Provider that prepares the owned copy request.
     /// - `request`: Owned copy parameters.
     /// - `effects`: Bounded pool used to reserve final effect evidence.
+    ///
     /// # Returns
     /// A managed copy operation submitted under `parent`.
+    ///
     /// # Errors
-    /// Returns a submission failure when the request cannot be accepted.
+    /// Returns `FsSubmitFailure` with the original request when provider
+    /// preparation or manager admission rejects the child, including when
+    /// the parent is closed.
     #[inline]
     pub fn submit_copy_in(
         &self,
@@ -226,15 +253,25 @@ impl AsyncFileSystem {
 
     /// Submits a managed rename under the supplied parent operation scope.
     ///
+    /// Uses the explicit provider for managed preparation and provider-specific
+    /// preflight; this facade does not use its own SPI or cached properties.
+    /// The parent manager decides admission and owns the child. A parent stop
+    /// propagates to the child, without proving provider effects were rolled
+    /// back.
+    ///
     /// # Parameters
     /// - `parent`: Open operation scope that owns this child submission.
     /// - `provider`: Provider that prepares the owned rename request.
     /// - `request`: Owned rename parameters.
     /// - `effects`: Bounded pool used to reserve final effect evidence.
+    ///
     /// # Returns
     /// A managed rename operation submitted under `parent`.
+    ///
     /// # Errors
-    /// Returns a submission failure when the request cannot be accepted.
+    /// Returns `FsSubmitFailure` with the original request when provider
+    /// preparation or manager admission rejects the child, including when
+    /// the parent is closed.
     #[inline]
     pub fn submit_rename_in(
         &self,
@@ -249,15 +286,25 @@ impl AsyncFileSystem {
 
     /// Submits staged-tree publication under the supplied parent scope.
     ///
+    /// Uses the explicit provider for managed preparation and provider-specific
+    /// preflight; this facade does not use its own SPI or cached properties.
+    /// The parent manager decides admission and owns the child. A parent stop
+    /// propagates to the child, without proving provider effects were rolled
+    /// back.
+    ///
     /// # Parameters
     /// - `parent`: Open operation scope that owns this child submission.
     /// - `provider`: Provider that prepares the tree publication request.
     /// - `request`: Owned tree publication parameters.
     /// - `effects`: Bounded pool used to reserve final effect evidence.
+    ///
     /// # Returns
     /// A managed tree-publication operation submitted under `parent`.
+    ///
     /// # Errors
-    /// Returns a submission failure when the request cannot be accepted.
+    /// Returns `FsSubmitFailure` with the original request when provider
+    /// preparation or manager admission rejects the child, including when
+    /// the parent is closed.
     #[inline]
     pub fn submit_tree_publish_in(
         &self,

@@ -17,7 +17,9 @@ use std::task::Wake;
 use std::task::Waker;
 
 use qubit_fs::FsEffectFact;
+use qubit_fs::FsEffectObservationError;
 use qubit_fs::FsEffectSlotPool;
+use qubit_fs::FsEffectSnapshot;
 use qubit_fs::FsEffectState;
 
 struct CountingWake(Arc<AtomicUsize>);
@@ -29,6 +31,18 @@ impl Wake for CountingWake {
 
     fn wake_by_ref(self: &Arc<Self>) {
         self.0.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+struct PanickingWake;
+
+impl Wake for PanickingWake {
+    fn wake(self: Arc<Self>) {
+        panic!("test waker panic");
+    }
+
+    fn wake_by_ref(self: &Arc<Self>) {
+        panic!("test waker panic");
     }
 }
 
@@ -148,4 +162,64 @@ fn test_effect_wait_registration_final_snapshot_does_not_retain_waker() {
     drop(waker);
     drop(wake);
     assert!(weak.upgrade().is_none());
+}
+
+#[test]
+fn test_effect_wait_registration_last_reservation_closes_and_wakes_all_waiters() {
+    let pool = FsEffectSlotPool::new(1);
+    let first_reservation = pool.reserve().unwrap();
+    let last_reservation = first_reservation.clone();
+    let observer = first_reservation.observer();
+    let first_counter = Arc::new(AtomicUsize::new(0));
+    let second_counter = Arc::new(AtomicUsize::new(0));
+    let first_waker = counting_waker(&first_counter);
+    let second_waker = counting_waker(&second_counter);
+    let mut first = Box::pin(observer.wait_final_async());
+    let mut second = Box::pin(observer.wait_final_async());
+
+    poll_pending(&mut first, &first_waker);
+    poll_pending(&mut second, &second_waker);
+    drop(first_reservation);
+    assert!(matches!(observer.snapshot(), FsEffectSnapshot::Pending));
+    assert!(pool.reserve().is_err());
+    drop(last_reservation);
+
+    assert_eq!(first_counter.load(Ordering::SeqCst), 1);
+    assert_eq!(second_counter.load(Ordering::SeqCst), 1);
+    for future in [&mut first, &mut second] {
+        let mut context = Context::from_waker(&first_waker);
+        assert!(matches!(
+            future.as_mut().poll(&mut context),
+            Poll::Ready(Err(FsEffectObservationError::PublisherClosed))
+        ));
+    }
+    assert!(pool.reserve().is_ok());
+}
+
+#[test]
+fn test_effect_wait_registration_panicking_waker_does_not_block_close_or_capacity() {
+    let pool = FsEffectSlotPool::new(1);
+    let first_reservation = pool.reserve().unwrap();
+    let last_reservation = first_reservation.clone();
+    let observer = first_reservation.observer();
+    let healthy_counter = Arc::new(AtomicUsize::new(0));
+    let panicking_waker = Waker::from(Arc::new(PanickingWake));
+    let healthy_waker = counting_waker(&healthy_counter);
+    let mut panicking_future = Box::pin(observer.wait_final_async());
+    let mut healthy_future = Box::pin(observer.wait_final_async());
+
+    poll_pending(&mut panicking_future, &panicking_waker);
+    poll_pending(&mut healthy_future, &healthy_waker);
+    drop(first_reservation);
+    drop(last_reservation);
+
+    assert_eq!(healthy_counter.load(Ordering::SeqCst), 1);
+    assert!(pool.reserve().is_ok());
+    for future in [&mut panicking_future, &mut healthy_future] {
+        let mut context = Context::from_waker(&healthy_waker);
+        assert!(matches!(
+            future.as_mut().poll(&mut context),
+            Poll::Ready(Err(FsEffectObservationError::PublisherClosed))
+        ));
+    }
 }

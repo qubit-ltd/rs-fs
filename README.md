@@ -14,6 +14,11 @@ or an async runtime for you.
 
 ## Quick Start
 
+The `qubit-fs` 0.4 release is not yet available from crates.io (checked
+2026-11-23), so the dependency block below is not installable from the registry
+yet. The complete example is runnable from the source checkout layout described
+under [Testing](#testing) with `bash scripts/check-documentation-examples.sh`.
+
 ```toml
 [dependencies]
 qubit-fs = "0.4"
@@ -43,9 +48,10 @@ shows the non-managed compatibility API. The referenced `qubit-fs-local` release
 is not asserted to implement the 0.4 SPI; use a provider built for 0.4 before
 using the snippet as an integration example.
 
-The fixture uses the sibling `rs-fs-local` source at version 0.11.2 with its
-`qubit-fs` 0.4 dependency. It validates this source layout, not installation
-from crates.io.
+The fixture uses sibling `rs-fs-local` 0.11.2 source, whose manifest depends on
+`qubit-fs` 0.4 and `qubit-local-files` 0.6.0. It validates this source layout, not
+installation from crates.io. `qubit-operation` resolves from crates.io at
+`^0.3.1`; no `rs-operation` checkout is needed.
 
 <!-- dependencies: quick-start -->
 ```toml
@@ -186,33 +192,25 @@ bash scripts/check-documentation-examples.sh
 
 The dedicated workflow runs this same entry point against fixed sibling
 repository revisions. Locally, it uses the sibling repositories currently
-present. The fixture uses
-`rs-fs-local` (`qubit-fs-local` 0.11), `rs-local-files` (`qubit-local-files`
-0.5), and `rs-redact` (`qubit-redact` 0.10 series) beside `rs-fs`:
-
-The crate manifest also uses the local `../rs-operation` path dependency.
-Cargo requires that source checkout even though the dependency declares a
-version requirement; downloading only this crate's source archive does not
-provide it. The fixture additionally needs the sibling path dependencies of
-`rs-fs-local` shown below.
+present. The source manifests require `rs-fs-local` 0.11.2,
+`rs-fs-registry`, `rs-fs-testkit`, and `rs-local-files` 0.6.0 beside `rs-fs`.
+`rs-redact` publishes `qubit-redact` 0.10, and `qubit-operation` 0.3.1 also
+resolves from crates.io; neither requires a sibling checkout.
 
 <!-- source-layout -->
 ```text
 parent/
 ├── rs-fs/
-├── rs-operation/
 ├── rs-fs-local/
 ├── rs-fs-registry/
 ├── rs-fs-testkit/
-├── rs-local-files/
-└── rs-redact/
-    └── derive/
+└── rs-local-files/
 ```
 
 A standalone checkout or crate source archive does not supply this local
-layout. To try published packages independently, use the dependency block and
-complete program in Quick Start in your own Cargo project. The local fixture
-entry point runs:
+layout. After a compatible 0.4 release is available, validate registry
+installation by running the dependency block and complete program in Quick
+Start in a standalone Cargo project. The local source fixture runs:
 
 ```bash
 bash scripts/check-documentation-examples.sh
@@ -221,9 +219,9 @@ bash scripts/check-documentation-examples.sh
 The documentation workflow also runs entry point regression tests before the
 integration check; core CI continues to check this crate and its documentation.
 
-The fixture checks the repository source with fixed sibling revisions. It does not verify a
-published-crate installation; use the dependency block and complete program in a standalone Cargo
-project when you need to validate packages available on crates.io.
+The fixture checks the repository source with fixed sibling revisions. It does
+not verify a published-crate installation; run the standalone project after a
+compatible release is available.
 
 ```bash
 # Run tests with the default feature set

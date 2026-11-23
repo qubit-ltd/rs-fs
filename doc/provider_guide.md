@@ -715,13 +715,25 @@ documentation and inspect the target.
 ## Managed SPI migration
 
 Version 0.4 preserves direct `FileSystem` and `AsyncFileSystem` methods as
-non-managed compatibility entry points. Provider work requiring managed stop, release, and
-settlement semantics uses the owned preparation protocols:
+non-managed compatibility entry points. Those methods use the facade's own SPI
+and cached properties, with facade-owned preflight. Provider work requiring
+managed stop, release, and settlement semantics uses the owned preparation protocols:
 `ManagedFsReadSpi`, `ManagedFsMutationSpi`, and `ManagedFsTreeSpi`. Preparation
 must not start I/O. If it rejects, it returns the same owned request, including
 its buffers. Once the manager claims a prepared operation, report failures
 through its typed outcome; do not present a post-claim failure as an unstarted
 request.
+
+Managed submissions can target three ownership levels. `FsExecutionBinding::new`
+submits at the application manager root, and `with_group` binds that root view
+to a service group. A facade `submit_*_in` call uses an active parent
+`OperationScope`, so the manager owns it as a child. These facade methods take
+an explicit managed provider: that provider owns preparation and
+provider-specific preflight, while the parent manager decides admission. The
+facade does not substitute its own SPI or cached properties. Preparation and
+admission rejection return the unclaimed request; a closed parent therefore
+cannot claim the child. A stop after admission propagates to the child but does
+not establish whether provider effects were rolled back.
 
 Providers map concrete operations into separate synchronous and asynchronous
 capability profiles. `Unsupported` means there is no usable entry point;
@@ -754,7 +766,15 @@ filesystem-owned services/groups, then closes the shared manager after all
 clients are done. Enabling `async` adds async SPI/API surface only; it starts no
 thread and chooses no runtime.
 
-Executable managed read examples are linked from the [user guide](user_guide.md#managed-read-example).
+Executable managed read examples are linked from the user guide:
+[synchronous](user_guide.md#managed-read-example) and
+[asynchronous](user_guide.md#managed-read-async-example). Both examples submit
+at the manager root; group and parent-scope ownership are described above.
+
+If the last effect publisher releases its reservation while the snapshot is
+still pending, observers see `FsEffectSnapshot::Closed` and waits return
+`FsEffectObservationError::PublisherClosed`. No final fact is available, so the
+provider effect remains unknown.
 
 ## 15. Further reading
 

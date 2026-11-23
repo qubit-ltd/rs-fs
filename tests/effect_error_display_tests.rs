@@ -18,4 +18,8 @@ fn test_effect_errors_explain_the_failure() {
         FsEffectObservationError::Poisoned.to_string(),
         "filesystem effect fact lock is poisoned"
     );
+    assert_eq!(
+        FsEffectObservationError::PublisherClosed.to_string(),
+        "filesystem effect publisher closed before publishing final evidence"
+    );
 }

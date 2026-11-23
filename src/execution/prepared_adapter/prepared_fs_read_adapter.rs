@@ -27,6 +27,8 @@ use qubit_operation::StopReason;
 use crate::FsOperationFailure;
 use crate::execution::FsOwnedReadRequest;
 use crate::execution::internal::PreparedReadLifecycle;
+use crate::execution::internal::bind_prepared;
+use crate::execution::internal::take_unclaimed_request;
 use crate::spi::PreparedFsRead;
 
 /// Adapts an object-safe prepared read task to the managed operation API.
@@ -85,12 +87,7 @@ impl PreparedFsReadAdapter {
     /// `None` after binding, after a poisoned lifecycle lock, or when the
     /// provider has no unclaimed request.
     pub fn take_request(&self) -> Option<FsOwnedReadRequest> {
-        let is_unclaimed = self
-            .lifecycle
-            .lock()
-            .map(|state| state.bound.is_none())
-            .unwrap_or(false);
-        is_unclaimed.then(|| self.prepared.take_unclaimed_request()).flatten()
+        take_unclaimed_request(&self.lifecycle, || self.prepared.take_unclaimed_request())
     }
 }
 impl OperationControl for PreparedFsReadAdapter {
@@ -153,13 +150,7 @@ impl PreparedExternalOperation<Vec<u8>, FsOperationFailure> for PreparedFsReadAd
     /// Returns [`ExternalBindError::AlreadyBound`] if the adapter has already
     /// been bound, activated, or abandoned, or propagates the provider error.
     fn bind(&self, id: OperationId) -> Result<(), ExternalBindError> {
-        let mut state = self.lifecycle.lock().map_err(|_| ExternalBindError::AlreadyBound)?;
-        if state.bound.is_some() || state.abandoned || state.activated {
-            return Err(ExternalBindError::AlreadyBound);
-        }
-        self.prepared.bind(id)?;
-        state.bound = Some(id);
-        Ok(())
+        bind_prepared(&self.lifecycle, id, || self.prepared.bind(id))
     }
     /// Activates the bound provider task in the supplied runtime scope.
     ///

@@ -26,6 +26,15 @@ class DocumentScopeTests(unittest.TestCase):
             self.assertNotIn(root / 'doc/design-0.4.0.zh_CN.md', documents)
             self.assertNotIn(root / 'doc/implementation-plan-20261118.md', documents)
 
+    def test_package_manifest_must_exclude_internal_records(self):
+        checker.check_package_scope({'README.md', 'doc/user_guide.md'})
+        for internal in (
+            'doc/design-unique-regression.md',
+            'doc/implementation-plan-unique-regression.md',
+        ):
+            with self.subTest(internal=internal), self.assertRaisesRegex(AssertionError, internal):
+                checker.check_package_scope({'README.md', internal})
+
 
 class RedactDependencyDescriptionTests(unittest.TestCase):
     def check_with(self, english, chinese, dependency, table=False):
@@ -100,25 +109,32 @@ class QuickStartDependencyMarkerTests(unittest.TestCase):
                 checker.check_marked_quick_start_dependencies(root)
 
 
+class CurrentPackageVersionTests(unittest.TestCase):
+    def test_local_files_06_is_not_mistaken_for_a_stale_core_version(self):
+        self.assertIsNone(checker.STALE_CORE_VERSION.search('qubit-local-files = "0.6.0"'))
+        self.assertIsNotNone(checker.STALE_CORE_VERSION.search('qubit-fs = "0.6"'))
+        self.assertIsNotNone(checker.STALE_CORE_VERSION.search('qubit-fs = { version = "0.6.0" }'))
+
+
 class SourceLayoutDependencyTests(unittest.TestCase):
     def make_project(self, root):
         (root / 'tests/fixtures/documentation_examples').mkdir(parents=True)
         (root / '.github/workflows').mkdir(parents=True)
-        (root / 'Cargo.toml').write_text('[dependencies]\nqubit-operation = { version = "^0.3", path = "../rs-operation" }\n', encoding='utf-8')
+        (root / 'Cargo.toml').write_text('[dependencies]\nqubit-operation = "^0.3.1"\n', encoding='utf-8')
         fixture = root / 'tests/fixtures/documentation_examples/Cargo.toml'
         fixture.write_text(
             '[dependencies]\nqubit-fs = { path = "../../../" }\n'
-            'qubit-operation = { path = "../../../../rs-operation" }\n'
+            'qubit-operation = "^0.3.1"\n'
             '[patch.crates-io]\nqubit-fs-local = { path = "../../../../rs-fs-local" }\n'
             'qubit-local-files = { path = "../../../../rs-local-files" }\n', encoding='utf-8')
         (root.parent / 'rs-fs-local').mkdir()
         (root.parent / 'rs-fs-local/Cargo.toml').write_text(
             '[dependencies]\nqubit-fs-registry = { path = "../rs-fs-registry" }\n'
             '[dev-dependencies]\nqubit-fs-testkit = { path = "../rs-fs-testkit" }\n', encoding='utf-8')
-        for name in ('rs-fs-registry', 'rs-fs-testkit', 'rs-local-files', 'rs-operation'):
+        for name in ('rs-fs-registry', 'rs-fs-testkit', 'rs-local-files'):
             (root.parent / name).mkdir(exist_ok=True)
             (root.parent / name / 'Cargo.toml').write_text('[package]\nname = "fixture"\n', encoding='utf-8')
-        names = ('rs-fs', 'rs-operation', 'rs-fs-local', 'rs-fs-registry', 'rs-fs-testkit', 'rs-local-files')
+        names = ('rs-fs', 'rs-fs-local', 'rs-fs-registry', 'rs-fs-testkit', 'rs-local-files')
         tree = '<!-- source-layout -->\n```text\n' + '\n'.join(f'├── {name}/' for name in names) + '\n```\n'
         for relative in ('README.md', 'README.zh_CN.md'):
             (root / relative).write_text(tree, encoding='utf-8')
@@ -131,7 +147,7 @@ class SourceLayoutDependencyTests(unittest.TestCase):
             root.mkdir()
             self.make_project(root)
             self.assertEqual(
-                {'rs-operation', 'rs-fs-local', 'rs-local-files', 'rs-fs-registry', 'rs-fs-testkit'},
+                {'rs-fs-local', 'rs-local-files', 'rs-fs-registry', 'rs-fs-testkit'},
                 checker.required_sibling_path_dependencies(root),
             )
             checker.check_source_layout_dependencies(root)
@@ -152,7 +168,7 @@ class SourceLayoutDependencyTests(unittest.TestCase):
             root.mkdir()
             self.make_project(root)
             (root / 'Cargo.toml').write_text(
-                '[dependencies]\nqubit-operation = { path = "../rs-operation" }\nnew-provider = { path = "../rs-new-provider" }\n',
+                '[dependencies]\nqubit-operation = "^0.3.1"\nnew-provider = { path = "../rs-new-provider" }\n',
                 encoding='utf-8')
             with self.assertRaisesRegex(AssertionError, 'rs-new-provider'):
                 checker.check_source_layout_dependencies(root)

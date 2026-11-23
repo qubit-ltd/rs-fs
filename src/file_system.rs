@@ -119,135 +119,6 @@ pub struct FileSystem {
 }
 
 impl FileSystem {
-    /// Submits a bounded managed read as a child of `parent`.
-    ///
-    /// The parent-bound manager view is created for this submission only; the
-    /// facade does not retain the scope or promote the operation to a root.
-    ///
-    /// # Parameters
-    /// - `parent`: Active parent scope that owns the submitted child operation.
-    /// - `provider`: Managed read provider receiving the owned request.
-    /// - `path`: Logical path of the file to read.
-    /// - `options`: Read bounds and consistency policy.
-    ///
-    /// # Returns
-    /// A handle to the managed read child once it is accepted.
-    ///
-    /// # Errors
-    /// Returns a submission failure containing the owned request when the
-    /// provider cannot accept the child operation.
-    #[inline]
-    pub fn submit_read_all_in(
-        &self,
-        parent: &OperationScope,
-        provider: &dyn ManagedFsReadSpi,
-        path: Path,
-        options: ReadAllOptions,
-    ) -> Result<ManagedFsOperation<Vec<u8>>, FsSubmitFailure<FsOwnedReadRequest>> {
-        FsExecutionBinding::new(parent.manager()).submit_read_all(provider, FsOwnedReadRequest { path, options })
-    }
-
-    /// Submits a managed write under the supplied parent operation scope.
-    ///
-    /// # Parameters
-    /// - `parent`: Active parent scope that owns the submitted child operation.
-    /// - `provider`: Managed mutation provider receiving the write request.
-    /// - `request`: Destination, contents, and publication requirements.
-    /// - `effects`: Slots used to observe mutation effects.
-    ///
-    /// # Returns
-    /// A handle to the managed write child once it is accepted.
-    ///
-    /// # Errors
-    /// Returns a submission failure retaining the request if the provider
-    /// cannot accept the child operation.
-    #[inline]
-    pub fn submit_write_in(
-        &self,
-        parent: &OperationScope,
-        provider: &dyn ManagedFsMutationSpi,
-        request: FsOwnedWriteRequest,
-        effects: &FsEffectSlotPool,
-    ) -> Result<FsMutationOperation<WriteOutcome>, FsSubmitFailure<FsOwnedWriteRequest>> {
-        FsExecutionBinding::new(parent.manager()).submit_write(provider, request, effects)
-    }
-
-    /// Submits a managed copy under the supplied parent operation scope.
-    ///
-    /// # Parameters
-    /// - `parent`: Active parent scope that owns the submitted child operation.
-    /// - `provider`: Managed mutation provider receiving the copy request.
-    /// - `request`: Source, destination, and copy policy.
-    /// - `effects`: Slots used to observe mutation effects.
-    ///
-    /// # Returns
-    /// A handle to the managed copy child once it is accepted.
-    ///
-    /// # Errors
-    /// Returns a submission failure retaining the request if the provider
-    /// cannot accept the child operation.
-    #[inline]
-    pub fn submit_copy_in(
-        &self,
-        parent: &OperationScope,
-        provider: &dyn ManagedFsMutationSpi,
-        request: FsOwnedCopyRequest,
-        effects: &FsEffectSlotPool,
-    ) -> Result<FsMutationOperation<CopyOutcome>, FsSubmitFailure<FsOwnedCopyRequest>> {
-        FsExecutionBinding::new(parent.manager()).submit_copy(provider, request, effects)
-    }
-
-    /// Submits a managed rename under the supplied parent operation scope.
-    ///
-    /// # Parameters
-    /// - `parent`: Active parent scope that owns the submitted child operation.
-    /// - `provider`: Managed mutation provider receiving the rename request.
-    /// - `request`: Source, destination, and rename policy.
-    /// - `effects`: Slots used to observe mutation effects.
-    ///
-    /// # Returns
-    /// A handle to the managed rename child once it is accepted.
-    ///
-    /// # Errors
-    /// Returns a submission failure retaining the request if the provider
-    /// cannot accept the child operation.
-    #[inline]
-    pub fn submit_rename_in(
-        &self,
-        parent: &OperationScope,
-        provider: &dyn ManagedFsMutationSpi,
-        request: FsOwnedRenameRequest,
-        effects: &FsEffectSlotPool,
-    ) -> Result<FsMutationOperation<RenameOutcome>, FsSubmitFailure<FsOwnedRenameRequest>> {
-        FsExecutionBinding::new(parent.manager()).submit_rename(provider, request, effects)
-    }
-
-    /// Submits staged-tree publication under the supplied parent scope.
-    ///
-    /// # Parameters
-    /// - `parent`: Active parent scope that owns the submitted child operation.
-    /// - `provider`: Managed tree provider receiving the staged publication.
-    /// - `request`: Staging/destination roots and validation/publication
-    ///   policy.
-    /// - `effects`: Slots used to observe mutation effects.
-    ///
-    /// # Returns
-    /// A handle to the managed publication child once it is accepted.
-    ///
-    /// # Errors
-    /// Returns a submission failure retaining the request if the provider
-    /// cannot accept the child operation.
-    #[inline]
-    pub fn submit_tree_publish_in(
-        &self,
-        parent: &OperationScope,
-        provider: &dyn ManagedFsTreeSpi,
-        request: FsOwnedTreePublishRequest,
-        effects: &FsEffectSlotPool,
-    ) -> Result<FsMutationOperation<TreePublishOutcome>, FsSubmitFailure<FsOwnedTreePublishRequest>> {
-        FsExecutionBinding::new(parent.manager()).submit_tree_publish(provider, request, effects)
-    }
-
     /// Constructs a facade and caches the provider's single validated property
     /// snapshot.
     ///
@@ -291,6 +162,167 @@ impl FileSystem {
             spi,
             core: Arc::new(core),
         })
+    }
+
+    /// Submits a bounded managed read as a child of `parent`.
+    ///
+    /// Uses the explicit provider for managed preparation and provider-specific
+    /// preflight; this facade does not use its own SPI or cached properties.
+    /// The parent manager decides admission and owns the child. A parent stop
+    /// propagates to the child, without proving provider effects were rolled
+    /// back.
+    ///
+    /// # Parameters
+    /// - `parent`: Active parent scope that owns the submitted child operation.
+    /// - `provider`: Managed read provider receiving the owned request.
+    /// - `path`: Logical path of the file to read.
+    /// - `options`: Read bounds and consistency policy.
+    ///
+    /// # Returns
+    /// A handle to the managed read child once it is accepted.
+    ///
+    /// # Errors
+    /// Returns `FsSubmitFailure` with the original request when provider
+    /// preparation or manager admission rejects the child, including when
+    /// the parent is closed.
+    #[inline]
+    pub fn submit_read_all_in(
+        &self,
+        parent: &OperationScope,
+        provider: &dyn ManagedFsReadSpi,
+        path: Path,
+        options: ReadAllOptions,
+    ) -> Result<ManagedFsOperation<Vec<u8>>, FsSubmitFailure<FsOwnedReadRequest>> {
+        FsExecutionBinding::new(parent.manager()).submit_read_all(provider, FsOwnedReadRequest { path, options })
+    }
+
+    /// Submits a managed write under the supplied parent operation scope.
+    ///
+    /// Uses the explicit provider for managed preparation and provider-specific
+    /// preflight; this facade does not use its own SPI or cached properties.
+    /// The parent manager decides admission and owns the child. A parent stop
+    /// propagates to the child, without proving provider effects were rolled
+    /// back.
+    ///
+    /// # Parameters
+    /// - `parent`: Active parent scope that owns the submitted child operation.
+    /// - `provider`: Managed mutation provider receiving the write request.
+    /// - `request`: Destination, contents, and publication requirements.
+    /// - `effects`: Slots used to observe mutation effects.
+    ///
+    /// # Returns
+    /// A handle to the managed write child once it is accepted.
+    ///
+    /// # Errors
+    /// Returns `FsSubmitFailure` with the original request when provider
+    /// preparation or manager admission rejects the child, including when
+    /// the parent is closed.
+    #[inline]
+    pub fn submit_write_in(
+        &self,
+        parent: &OperationScope,
+        provider: &dyn ManagedFsMutationSpi,
+        request: FsOwnedWriteRequest,
+        effects: &FsEffectSlotPool,
+    ) -> Result<FsMutationOperation<WriteOutcome>, FsSubmitFailure<FsOwnedWriteRequest>> {
+        FsExecutionBinding::new(parent.manager()).submit_write(provider, request, effects)
+    }
+
+    /// Submits a managed copy under the supplied parent operation scope.
+    ///
+    /// Uses the explicit provider for managed preparation and provider-specific
+    /// preflight; this facade does not use its own SPI or cached properties.
+    /// The parent manager decides admission and owns the child. A parent stop
+    /// propagates to the child, without proving provider effects were rolled
+    /// back.
+    ///
+    /// # Parameters
+    /// - `parent`: Active parent scope that owns the submitted child operation.
+    /// - `provider`: Managed mutation provider receiving the copy request.
+    /// - `request`: Source, destination, and copy policy.
+    /// - `effects`: Slots used to observe mutation effects.
+    ///
+    /// # Returns
+    /// A handle to the managed copy child once it is accepted.
+    ///
+    /// # Errors
+    /// Returns `FsSubmitFailure` with the original request when provider
+    /// preparation or manager admission rejects the child, including when
+    /// the parent is closed.
+    #[inline]
+    pub fn submit_copy_in(
+        &self,
+        parent: &OperationScope,
+        provider: &dyn ManagedFsMutationSpi,
+        request: FsOwnedCopyRequest,
+        effects: &FsEffectSlotPool,
+    ) -> Result<FsMutationOperation<CopyOutcome>, FsSubmitFailure<FsOwnedCopyRequest>> {
+        FsExecutionBinding::new(parent.manager()).submit_copy(provider, request, effects)
+    }
+
+    /// Submits a managed rename under the supplied parent operation scope.
+    ///
+    /// Uses the explicit provider for managed preparation and provider-specific
+    /// preflight; this facade does not use its own SPI or cached properties.
+    /// The parent manager decides admission and owns the child. A parent stop
+    /// propagates to the child, without proving provider effects were rolled
+    /// back.
+    ///
+    /// # Parameters
+    /// - `parent`: Active parent scope that owns the submitted child operation.
+    /// - `provider`: Managed mutation provider receiving the rename request.
+    /// - `request`: Source, destination, and rename policy.
+    /// - `effects`: Slots used to observe mutation effects.
+    ///
+    /// # Returns
+    /// A handle to the managed rename child once it is accepted.
+    ///
+    /// # Errors
+    /// Returns `FsSubmitFailure` with the original request when provider
+    /// preparation or manager admission rejects the child, including when
+    /// the parent is closed.
+    #[inline]
+    pub fn submit_rename_in(
+        &self,
+        parent: &OperationScope,
+        provider: &dyn ManagedFsMutationSpi,
+        request: FsOwnedRenameRequest,
+        effects: &FsEffectSlotPool,
+    ) -> Result<FsMutationOperation<RenameOutcome>, FsSubmitFailure<FsOwnedRenameRequest>> {
+        FsExecutionBinding::new(parent.manager()).submit_rename(provider, request, effects)
+    }
+
+    /// Submits staged-tree publication under the supplied parent scope.
+    ///
+    /// Uses the explicit provider for managed preparation and provider-specific
+    /// preflight; this facade does not use its own SPI or cached properties.
+    /// The parent manager decides admission and owns the child. A parent stop
+    /// propagates to the child, without proving provider effects were rolled
+    /// back.
+    ///
+    /// # Parameters
+    /// - `parent`: Active parent scope that owns the submitted child operation.
+    /// - `provider`: Managed tree provider receiving the staged publication.
+    /// - `request`: Staging/destination roots and validation/publication
+    ///   policy.
+    /// - `effects`: Slots used to observe mutation effects.
+    ///
+    /// # Returns
+    /// A handle to the managed publication child once it is accepted.
+    ///
+    /// # Errors
+    /// Returns `FsSubmitFailure` with the original request when provider
+    /// preparation or manager admission rejects the child, including when
+    /// the parent is closed.
+    #[inline]
+    pub fn submit_tree_publish_in(
+        &self,
+        parent: &OperationScope,
+        provider: &dyn ManagedFsTreeSpi,
+        request: FsOwnedTreePublishRequest,
+        effects: &FsEffectSlotPool,
+    ) -> Result<FsMutationOperation<TreePublishOutcome>, FsSubmitFailure<FsOwnedTreePublishRequest>> {
+        FsExecutionBinding::new(parent.manager()).submit_tree_publish(provider, request, effects)
     }
 
     /// Returns the immutable property snapshot without provider I/O.

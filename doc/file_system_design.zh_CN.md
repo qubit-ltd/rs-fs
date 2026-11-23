@@ -79,6 +79,17 @@ directory/temp 等领域组织，私有辅助类型归属对应领域。同步�
 和 outcome → 补充类型化结果的上下文。提供者返回不合法的成功结果属于契约违例，不能因此
 虚构成功的 fallback，也不能重复执行可能已经发布的操作。
 
+## 托管提交归属
+
+旧的直接 facade 方法使用 facade 自身的 SPI 和缓存属性，确定性预检由 facade 负责，且仍是非托管调用。
+托管 facade 的 `submit_*_in` 则接收显式 provider 和活动 parent scope。provider 负责准备及 provider 专属预检，
+manager 决定准入，并将子项登记在该 parent 下。已关闭的 parent 会在认领前拒绝操作，拒绝时返还 owned request。
+准入后发生的停止会传播给子项，但不能证明 provider effect 已回滚。这些入口不会用 facade 的 SPI 或缓存属性
+替代显式 provider。
+
+`FsExecutionBinding::new` 提交到应用 manager 根级；`with_group` 将根级提交视图绑定到 service group。通过 facade
+入口传入 parent scope 则建立父子归属。文件系统 crate 不创建替代 manager 根，也不会保留借用的 parent scope。
+
 ## 发布事实与失败状态
 
 发布、源／暂存清理和恢复句柄所有权分别建模。错误保留 operation、provider 和路径上下文。
@@ -90,6 +101,9 @@ directory/temp 等领域组织，私有辅助类型归属对应领域。同步�
 拥有一个私有注册；再次 poll 会替换其 waker，不同 future 则保持独立注册。future 被 drop 或变为 ready 时注销，
 替换的旧 waker 会释放。发布在锁内移除注册，再于解锁后唤醒，因此回调不会在注册锁内执行。注册数量受存活等待
 future 数量约束，不会随总 poll 次数累积。
+
+最后一个 reservation 在快照仍为 pending 时释放，快照会变为 `FsEffectSnapshot::Closed`，最终等待返回
+`FsEffectObservationError::PublisherClosed`。这表示无法取得最终事实，provider effect 仍未知。
 
 打开 writer 失败采用保守规则：
 

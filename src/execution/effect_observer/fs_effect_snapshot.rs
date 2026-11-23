@@ -24,6 +24,9 @@ use super::FsEffectFact;
 pub enum FsEffectSnapshot {
     /// Final evidence has not arrived.
     Pending,
+    /// The last publisher was dropped before final evidence arrived, so the
+    /// effect is unknown and no further evidence can be published.
+    Closed,
     /// Immutable typed effect evidence published by the provider.
     Final(
         /// Typed fact captured at the first successful publication.

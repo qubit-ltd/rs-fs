@@ -62,13 +62,20 @@ limits.
 
 ## Installation and Minimal Configuration
 
+As checked on 2026-11-23, crates.io does not yet list a `qubit-fs` 0.4 release.
+The complete program in this guide is currently executable through the source
+fixture: check out the sibling layout in the [README](../README.md#testing), then
+run `bash scripts/check-documentation-examples.sh` from the `rs-fs` root.
+
 The default feature set is empty and provides synchronous APIs. Enable
 `qubit-fs = { version = "0.4", features = ["async"] }` for asynchronous APIs.
 The application chooses its executor; the library does not require Tokio.
 
 The local adapter example below documents the direct non-managed facade path.
-Its adapter version has not been validated against `qubit-fs` 0.4; use a
-provider that implements the 0.4 SPI when integrating this release.
+The source fixture uses `rs-fs-local` 0.11.2 with the current 0.4 source. The
+published 0.11 adapter has not been validated against `qubit-fs` 0.4; use a
+provider built against the same 0.4 source until compatible releases are
+available.
 
 For the legacy local-adapter example in this guide, use:
 
@@ -1061,7 +1068,18 @@ Version 0.4 keeps the existing direct methods on both `FileSystem` and
 `AsyncFileSystem` as explicitly **non-managed** operations. They do not acquire
 cancellation, release, or settlement tracking from `qubit-operation`. A managed call instead receives an application-owned
 `OperationScope` through `FsExecutionBinding`; the filesystem library does not
-create a replacement root manager or keep a borrowed scope.
+create a replacement root manager or keep a borrowed scope. The examples below
+submit at the `OperationManager` root. Use `FsExecutionBinding::with_group` to
+bind that root submission to a service group, or call a facade's
+`submit_*_in` method with an active parent scope to make the operation its child.
+
+The legacy direct facade methods use the facade's own SPI and cached
+properties, and their validation is owned by the facade; they remain
+non-managed. In contrast, managed facade `submit_*_in` methods take an explicit
+provider. That provider owns managed preparation and provider-specific
+preflight, while the parent manager owns admission and child identity. A
+preparation or admission rejection returns the unclaimed request. These methods
+do not substitute the facade's SPI or cached properties for the provider.
 
 <a id="managed-read-example"></a>
 
@@ -1122,7 +1140,15 @@ pub fn rejected_request() -> (FsOwnedReadRequest, bool) {
 }
 ```
 
-The async form uses the application's manager and an async shutdown observer. It awaits both the typed outcome and settlement; it does not select a runtime. The fixture helper [`shutdown_manager_async`](https://github.com/qubit-ltd/rs-fs/blob/dev-starfish/tests/fixtures/documentation_examples/src/managed_read_support.rs) shows the complete shutdown wait path.
+The sync and async examples both submit at the manager root; a group binding or an active parent scope changes that ownership as described above. The async form uses the application's manager and an async shutdown observer. It awaits both the typed outcome and settlement; it does not select a runtime. The fixture helper [`shutdown_manager_async`](https://github.com/qubit-ltd/rs-fs/blob/dev-starfish/tests/fixtures/documentation_examples/src/managed_read_support.rs) shows the complete shutdown wait path.
+
+When the last publisher releases an effect reservation before publishing a
+fact, the snapshot becomes `FsEffectSnapshot::Closed` and final-effect waits
+return `FsEffectObservationError::PublisherClosed`. This means no final fact
+can be obtained; the provider effect remains unknown. A stopped child also
+does not prove that an already-started provider effect was rolled back.
+
+<a id="managed-read-async-example"></a>
 
 <!-- example: managed-read-async -->
 ```rust
