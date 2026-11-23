@@ -278,12 +278,23 @@ def check_markdown_fragment(text: str, fragment: str, location: str) -> None:
         raise AssertionError(f'{location}: missing Markdown fragment #{fragment}')
 
 
+def check_package_scope(files):
+    """Reject internal planning and design records in the published package."""
+    excluded = [
+        name for name in files
+        if Path(name).match('doc/design-*.md')
+        or Path(name).match('doc/implementation-plan-*.md')
+    ]
+    assert not excluded, f'internal documents included in package: {", ".join(sorted(excluded))}'
+
+
 def check_package_links():
     """Require local destinations and their Markdown fragments in the package."""
     manifest_root = Path(os.environ['QUBIT_FS_SIBLING_ROOT']) / 'rs-fs' if 'QUBIT_FS_SIBLING_ROOT' in os.environ else ROOT
     result = subprocess.run(['cargo', 'package', '--list', '--allow-dirty', '--locked', '--manifest-path', str(manifest_root / 'Cargo.toml')], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     files = set(result.stdout.splitlines())
+    check_package_scope(files)
     assert not any('target' in Path(name).parts for name in files), 'package includes build output'
     documents = [str(path.relative_to(ROOT)) for path in markdown_documents()]
     for relative in set(documents):

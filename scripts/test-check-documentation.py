@@ -26,6 +26,15 @@ class DocumentScopeTests(unittest.TestCase):
             self.assertNotIn(root / 'doc/design-0.4.0.zh_CN.md', documents)
             self.assertNotIn(root / 'doc/implementation-plan-20261118.md', documents)
 
+    def test_package_manifest_must_exclude_internal_records(self):
+        checker.check_package_scope({'README.md', 'doc/user_guide.md'})
+        for internal in (
+            'doc/design-unique-regression.md',
+            'doc/implementation-plan-unique-regression.md',
+        ):
+            with self.subTest(internal=internal), self.assertRaisesRegex(AssertionError, internal):
+                checker.check_package_scope({'README.md', internal})
+
 
 class RedactDependencyDescriptionTests(unittest.TestCase):
     def check_with(self, english, chinese, dependency, table=False):
