@@ -206,22 +206,13 @@ impl StagedDirectory {
     ) -> FsResult<FsOwnedTreePublishRequest> {
         publication.validate_capabilities(capabilities)?;
         let state = lock(&self.state);
+        let validated_version =
+            Self::checked_publish_version(&state, current_version, &publication)?;
         #[cfg(test)]
         if let Some(observer) = lock(&self.publish_request_observer).as_ref() {
             observer();
         }
-        self.publish_request_with_state(destination_root, publication, current_version, &state)
-    }
-
-    fn publish_request_with_state(
-        &self,
-        destination_root: Path,
-        publication: TreePublishOptions,
-        current_version: Option<&ResourceVersion>,
-        state: &StagedDirectoryState,
-    ) -> FsResult<FsOwnedTreePublishRequest> {
-        let validated_version =
-            Self::checked_publish_version(state, current_version, &publication)?.cloned();
+        let validated_version = validated_version.cloned();
         Ok(FsOwnedTreePublishRequest {
             staging_root: self.root.clone(),
             destination_root,
@@ -238,9 +229,8 @@ impl StagedDirectory {
     ) -> FsResult<Option<&'a ResourceVersion>> {
         let validated_version = state.validated_version.as_ref();
         if requirements.atomicity == AtomicityRequirement::Required
-            && validated_version.is_none_or(|validated| {
-                current_version.is_none_or(|current| current != validated)
-            })
+            && validated_version
+                .is_none_or(|validated| current_version.is_none_or(|current| current != validated))
         {
             return Err(FsError::new(
                 FsErrorKind::UnsupportedCapability,
@@ -449,6 +439,12 @@ mod tests {
     use std::sync::Condvar;
     use std::sync::TryLockError;
     use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::Ordering;
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    use crate::metadata::DurabilityRequirement;
 
     use super::*;
 
@@ -461,13 +457,13 @@ mod tests {
         ));
         let required = TreePublishOptions {
             atomicity: AtomicityRequirement::Required,
-            durability: crate::metadata::DurabilityRequirement::NotRequired,
+            durability: DurabilityRequirement::NotRequired,
         };
         let capabilities =
             FileSystemCapabilities::new().with_conditional(FileSystemCapability::AtomicTreeCopy);
         staged.record_validated_version("version-before-update".into());
 
-        let (lock_acquired_tx, lock_acquired_rx) = std::sync::mpsc::channel();
+        let (lock_acquired_tx, lock_acquired_rx) = mpsc::channel();
         let released = Arc::new((Mutex::new(false), Condvar::new()));
         let observed_lock = Arc::new(AtomicBool::new(false));
         let observer_release = Arc::clone(&released);
@@ -476,26 +472,31 @@ mod tests {
                 .send(())
                 .expect("the updater should be waiting for the lock observation");
             let (released_lock, condition) = &*observer_release;
-            let mut ready = lock(released_lock);
-            while !*ready {
-                ready = condition
-                    .wait(ready)
-                    .unwrap_or_else(PoisonError::into_inner);
-            }
+            let ready = lock(released_lock);
+            let (ready, timeout) = condition
+                .wait_timeout_while(ready, Duration::from_secs(5), |ready| !*ready)
+                .unwrap_or_else(PoisonError::into_inner);
+            assert!(
+                *ready && !timeout.timed_out(),
+                "the updater should release the observer"
+            );
         }));
 
         let updater_staged = Arc::clone(&staged);
         let updater_released = Arc::clone(&released);
         let updater_observed_lock = Arc::clone(&observed_lock);
-        let updater = std::thread::spawn(move || {
-            lock_acquired_rx
-                .recv()
-                .expect("request construction should acquire the state lock");
+        let updater = thread::spawn(move || {
+            if lock_acquired_rx
+                .recv_timeout(Duration::from_secs(5))
+                .is_err()
+            {
+                return;
+            }
             let blocked = matches!(
                 updater_staged.state.try_lock(),
                 Err(TryLockError::WouldBlock)
             );
-            updater_observed_lock.store(blocked, std::sync::atomic::Ordering::SeqCst);
+            updater_observed_lock.store(blocked, Ordering::SeqCst);
             let (released_lock, condition) = &*updater_released;
             *lock(released_lock) = true;
             condition.notify_one();
@@ -513,7 +514,7 @@ mod tests {
         updater
             .join()
             .expect("the concurrent version update should finish");
-        assert!(observed_lock.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(observed_lock.load(Ordering::SeqCst));
         assert_eq!(
             request.validated_version,
             Some("version-before-update".into())
