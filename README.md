@@ -61,7 +61,7 @@ shows the non-managed compatibility API. The referenced `qubit-fs-local` release
 is not asserted to implement the 0.4 SPI; use a provider built for 0.4 before
 using the snippet as an integration example.
 
-The fixture uses sibling `rs-fs-local` 0.11.2 source, whose manifest depends on
+The fixture uses sibling `rs-fs-local` 0.12.0 candidate source, whose manifest depends on
 `qubit-fs` 0.4 and `qubit-local-files` 0.6.0. It validates the same source layout
 shown by the dependency paths above. `qubit-operation` resolves from crates.io at
 `^0.3.1`; no `rs-operation` checkout is needed.
@@ -197,7 +197,7 @@ bash scripts/check-documentation-examples.sh
 
 The dedicated workflow runs this same entry point against fixed sibling
 repository revisions. Locally, it uses the sibling repositories currently
-present. The source manifests require `rs-fs-local` 0.11.2,
+present. The source manifests require `rs-fs-local` 0.12.0 candidate source,
 `rs-fs-registry`, `rs-fs-testkit`, and `rs-local-files` 0.6.0 beside `rs-fs`.
 `rs-redact` publishes `qubit-redact` 0.10, and `qubit-operation` 0.3.1 also
 resolves from crates.io; neither requires a sibling checkout.

@@ -51,7 +51,7 @@ checked = "2026-11-24"
 本地临时目录，写入报告，再以 1 KiB 上限读取，输出 `report ready`。退出时清理临时目录。此直接调用示例展示
 非托管兼容 API。文中引用的 `qubit-fs-local` 版本未被声明为实现了 0.4 SPI；集成使用时应选择为 0.4 构建的 provider。
 
-源码 fixture 使用同级 `rs-fs-local` 0.11.2；其 manifest 依赖 `qubit-fs` 0.4 和
+源码 fixture 使用同级 `rs-fs-local` 0.12.0 候选源码；其 manifest 依赖 `qubit-fs` 0.4 和
 `qubit-local-files` 0.6.0。上面的独立项目使用相同源码布局。
 `qubit-operation` 使用 crates.io 上的 `^0.3.1`，不需要 `rs-operation` checkout。
 
@@ -169,7 +169,7 @@ bash scripts/check-documentation-examples.sh
 ```
 
 独立 workflow 使用固定的同级仓库版本运行此入口；本地入口使用当前检出的同级仓库内容。
-源码 manifest 需要 `rs-fs-local` 0.11.2、`rs-fs-registry`、`rs-fs-testkit` 和
+源码 manifest 需要 `rs-fs-local` 0.12.0 候选源码、`rs-fs-registry`、`rs-fs-testkit` 和
 `rs-local-files` 0.6.0 与 `rs-fs` 位于同一父目录。`rs-redact` 发布的 `qubit-redact` 0.10 和
 `qubit-operation` 0.3.1 均从 crates.io 解析，不需要对应源码 checkout。
 
