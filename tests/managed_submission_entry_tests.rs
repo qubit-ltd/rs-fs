@@ -8,19 +8,20 @@
 //! Public parent-bound submission entry points preserve admission boundaries
 //! and owned requests.
 
-#![cfg(feature = "async")]
-
+#[cfg(feature = "async")]
 use std::future::Future;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+#[cfg(feature = "async")]
 use std::sync::mpsc;
 use std::task::Context;
 use std::task::Poll;
 use std::task::Waker;
 
+#[cfg(feature = "async")]
 use qubit_fs::AsyncFileSystem;
 use qubit_fs::FileSystem;
 use qubit_fs::FsEffectFact;
@@ -62,6 +63,7 @@ use qubit_fs::read::ReadAllOptions;
 use qubit_fs::rename::RenameFailureState;
 use qubit_fs::rename::RenameOptions;
 use qubit_fs::rename::RenameOutcome;
+#[cfg(feature = "async")]
 use qubit_fs::spi::AsyncFileSystemSpi;
 use qubit_fs::spi::FileSystemSpi;
 use qubit_fs::spi::ManagedFsMutationSpi;
@@ -110,6 +112,7 @@ impl FileSystemSpi for FacadeSpi {
     }
 }
 
+#[cfg(feature = "async")]
 impl AsyncFileSystemSpi for FacadeSpi {
     fn properties(&self) -> ProviderProperties {
         properties()
@@ -142,8 +145,10 @@ fn properties() -> ProviderProperties {
     .unwrap()
 }
 
+#[cfg(feature = "async")]
 struct RejectProviders;
 
+#[cfg(feature = "async")]
 impl ManagedFsReadSpi for RejectProviders {
     fn prepare_read_all(
         &self,
@@ -156,6 +161,7 @@ impl ManagedFsReadSpi for RejectProviders {
     }
 }
 
+#[cfg(feature = "async")]
 impl ManagedFsMutationSpi for RejectProviders {
     fn prepare_write(
         &self,
@@ -188,6 +194,7 @@ impl ManagedFsMutationSpi for RejectProviders {
     }
 }
 
+#[cfg(feature = "async")]
 impl ManagedFsTreeSpi for RejectProviders {
     fn prepare_tree_publish(
         &self,
@@ -650,6 +657,7 @@ impl ManagedFsMutationSpi for FailureProvider {
     }
 }
 
+#[cfg(feature = "async")]
 fn block_on<F: Future>(future: F) -> F::Output {
     let waker = Waker::noop();
     let mut context = Context::from_waker(waker);
@@ -713,6 +721,7 @@ impl<T, R> ExpectAdmitted<T> for Result<T, qubit_fs::FsSubmitFailure<R>> {
 }
 
 #[test]
+#[cfg(feature = "async")]
 fn test_both_facades_submit_all_parent_entries_under_the_active_parent() {
     let sync = FileSystem::from_spi(FacadeSpi).unwrap();
     let asynchronous = AsyncFileSystem::from_spi(FacadeSpi).unwrap();
@@ -861,6 +870,7 @@ fn test_both_facades_submit_all_parent_entries_under_the_active_parent() {
 }
 
 #[test]
+#[cfg(feature = "async")]
 fn test_closed_scope_returns_successfully_prepared_request_before_claim_or_activation() {
     let manager = OperationManager::new(ManagerOptions::default()).unwrap();
     let mut parent = manager
@@ -949,6 +959,7 @@ fn test_closed_scope_returns_successfully_prepared_request_before_claim_or_activ
 }
 
 #[test]
+#[cfg(feature = "async")]
 fn test_binding_copy_and_rename_sync_async_preserve_prepare_failures_and_requests() {
     let manager = OperationManager::new(ManagerOptions::default()).unwrap();
     let binding = FsExecutionBinding::new(manager.clone());
@@ -1158,6 +1169,273 @@ fn test_binding_copy_and_rename_sync_async_preserve_prepare_failures_and_request
     assert_eq!(failure_probe.bound.load(Ordering::SeqCst), 4);
     assert_eq!(failure_probe.activated.load(Ordering::SeqCst), 4);
 
+    let _ = manager
+        .request_shutdown(qubit_operation::ShutdownMode::Drain)
+        .wait()
+        .unwrap();
+}
+
+#[test]
+fn test_sync_facade_parent_entries_stop_and_publish_typed_effects() {
+    let filesystem = FileSystem::from_spi(FacadeSpi).unwrap();
+    let effects = FsEffectSlotPool::new(4);
+    let probe = Arc::new(MutationProbe::default());
+    let provider = SuccessfulProvider(Arc::clone(&probe));
+    let ids = Arc::new(Mutex::new(Vec::with_capacity(5)));
+    let observers = Arc::new(Mutex::new(Vec::with_capacity(4)));
+    let manager = OperationManager::new(ManagerOptions::default()).unwrap();
+    let mut parent = manager
+        .try_submit(Default::default(), {
+            let ids = Arc::clone(&ids);
+            let observers = Arc::clone(&observers);
+            move |scope| {
+                let mut held: Vec<Box<dyn Send>> = Vec::with_capacity(5);
+                let child = filesystem
+                    .submit_read_all_in(
+                        &scope,
+                        &provider,
+                        path("/sync/read"),
+                        ReadAllOptions::default(),
+                    )
+                    .expect("sync read is admitted beneath its parent");
+                ids.lock().unwrap().push(child.id());
+                held.push(Box::new(child));
+
+                let child = filesystem
+                    .submit_write_in(
+                        &scope,
+                        &provider,
+                        FsOwnedWriteRequest {
+                            path: path("/sync/write"),
+                            contents: b"sync".to_vec(),
+                            options: Default::default(),
+                        },
+                        &effects,
+                    )
+                    .expect_admitted("sync write is admitted beneath its parent");
+                ids.lock().unwrap().push(child.operation.id());
+                observers
+                    .lock()
+                    .unwrap()
+                    .push((false, child.effect.clone()));
+                held.push(Box::new(child));
+
+                let child = filesystem
+                    .submit_copy_in(
+                        &scope,
+                        &provider,
+                        copy_request("/sync/src", "/sync/dst"),
+                        &effects,
+                    )
+                    .expect_admitted("sync copy is admitted beneath its parent");
+                ids.lock().unwrap().push(child.operation.id());
+                observers
+                    .lock()
+                    .unwrap()
+                    .push((false, child.effect.clone()));
+                held.push(Box::new(child));
+
+                let child = filesystem
+                    .submit_rename_in(
+                        &scope,
+                        &provider,
+                        rename_request("/sync/old", "/sync/new"),
+                        &effects,
+                    )
+                    .expect_admitted("sync rename is admitted beneath its parent");
+                ids.lock().unwrap().push(child.operation.id());
+                observers
+                    .lock()
+                    .unwrap()
+                    .push((false, child.effect.clone()));
+                held.push(Box::new(child));
+
+                let child = filesystem
+                    .submit_tree_publish_in(&scope, &provider, tree_request(), &effects)
+                    .expect_admitted("sync tree publication is admitted beneath its parent");
+                ids.lock().unwrap().push(child.operation.id());
+                observers.lock().unwrap().push((true, child.effect.clone()));
+                held.push(Box::new(child));
+
+                assert_eq!(
+                    scope.request_stop(StopReason::UserCancelled),
+                    qubit_operation::StopRequestStatus::Accepted,
+                );
+                Ok::<_, ()>(())
+            }
+        })
+        .unwrap();
+
+    let _ = parent.wait_outcome().unwrap();
+    let child_ids = ids.lock().unwrap().clone();
+    assert_eq!(child_ids.len(), 5);
+    let settlement = parent.wait_settlement().unwrap();
+    assert!(child_ids.iter().all(|id| {
+        settlement
+            .children
+            .iter()
+            .any(|child| child.operation_id == *id)
+    }));
+    assert_eq!(probe.stop_reasons.lock().unwrap().len(), 5);
+    assert_eq!(probe.prepared.load(Ordering::SeqCst), 5);
+    assert_eq!(probe.bound.load(Ordering::SeqCst), 5);
+    assert_eq!(probe.activated.load(Ordering::SeqCst), 5);
+    for (tree_publish, observer) in observers.lock().unwrap().iter() {
+        let fact = observer
+            .wait_final()
+            .expect("accepted mutation publishes its final effect");
+        if *tree_publish {
+            assert!(matches!(fact, FsEffectFact::TreePublish { .. }));
+        } else {
+            assert!(matches!(fact, FsEffectFact::State(FsEffectState::Applied)));
+        }
+    }
+    let _ = manager
+        .request_shutdown(qubit_operation::ShutdownMode::Drain)
+        .wait()
+        .unwrap();
+}
+
+#[test]
+fn test_sync_closed_binding_returns_prepared_requests_without_claim_or_activation() {
+    let manager = OperationManager::new(ManagerOptions::default()).unwrap();
+    let mut parent = manager
+        .try_submit(Default::default(), |scope| {
+            Ok::<_, ()>(FsExecutionBinding::new(scope.manager()))
+        })
+        .unwrap();
+    let binding = match parent.wait_outcome().unwrap() {
+        OperationOutcome::Succeeded(binding) => binding,
+        _ => panic!("binding parent should complete successfully"),
+    };
+    let probe = Arc::new(MutationProbe::default());
+    let provider = SuccessfulProvider(Arc::clone(&probe));
+    let effects = FsEffectSlotPool::new(2);
+
+    let (admission, preparation, request) = take_error(binding.submit_read_all(
+        &provider,
+        FsOwnedReadRequest {
+            path: path("/closed/read"),
+            options: ReadAllOptions::default(),
+        },
+    ))
+    .into_parts();
+    assert_eq!(admission, Some(qubit_operation::AdmissionError::ScopeEnded));
+    assert!(preparation.is_none());
+    assert_eq!(request.path.as_str(), "/closed/read");
+    let (admission, preparation, request) = take_error(binding.submit_copy(
+        &provider,
+        copy_request("/closed/copy-source", "/closed/copy-target"),
+        &effects,
+    ))
+    .into_parts();
+    assert_eq!(admission, Some(qubit_operation::AdmissionError::ScopeEnded));
+    assert!(preparation.is_none());
+    assert_eq!(request.source.as_str(), "/closed/copy-source");
+    assert_eq!(request.destination.as_str(), "/closed/copy-target");
+    let (admission, preparation, request) = take_error(binding.submit_rename(
+        &provider,
+        rename_request("/closed/rename-source", "/closed/rename-target"),
+        &effects,
+    ))
+    .into_parts();
+    assert_eq!(admission, Some(qubit_operation::AdmissionError::ScopeEnded));
+    assert!(preparation.is_none());
+    assert_eq!(request.source.as_str(), "/closed/rename-source");
+    assert_eq!(request.destination.as_str(), "/closed/rename-target");
+    assert_eq!(probe.prepared.load(Ordering::SeqCst), 3);
+    assert_eq!(probe.recovered.load(Ordering::SeqCst), 3);
+    assert_eq!(probe.bound.load(Ordering::SeqCst), 0);
+    assert_eq!(probe.activated.load(Ordering::SeqCst), 0);
+    let _ = manager
+        .request_shutdown(qubit_operation::ShutdownMode::Drain)
+        .wait()
+        .unwrap();
+}
+
+#[test]
+fn test_sync_binding_copy_and_rename_success_and_failure_effects() {
+    let manager = OperationManager::new(ManagerOptions::default()).unwrap();
+    let binding = FsExecutionBinding::new(manager.clone());
+    let effects = FsEffectSlotPool::new(4);
+    let success_probe = Arc::new(MutationProbe::default());
+    let success_provider = SuccessfulProvider(Arc::clone(&success_probe));
+
+    let copy = binding
+        .submit_copy(
+            &success_provider,
+            copy_request("/success/copy-source", "/success/copy-target"),
+            &effects,
+        )
+        .expect_admitted("sync copy is admitted");
+    assert_eq!(
+        copy.operation.request_stop(StopReason::UserCancelled),
+        qubit_operation::StopRequestStatus::Accepted
+    );
+    assert!(matches!(
+        copy.effect.wait_final().unwrap(),
+        FsEffectFact::State(FsEffectState::Applied)
+    ));
+    let rename = binding
+        .submit_rename(
+            &success_provider,
+            rename_request("/success/rename-source", "/success/rename-target"),
+            &effects,
+        )
+        .expect_admitted("sync rename is admitted");
+    assert_eq!(
+        rename.operation.request_stop(StopReason::UserCancelled),
+        qubit_operation::StopRequestStatus::Accepted
+    );
+    assert!(matches!(
+        rename.effect.wait_final().unwrap(),
+        FsEffectFact::State(FsEffectState::Applied)
+    ));
+    assert_eq!(success_probe.prepared.load(Ordering::SeqCst), 2);
+    assert_eq!(success_probe.bound.load(Ordering::SeqCst), 2);
+    assert_eq!(success_probe.activated.load(Ordering::SeqCst), 2);
+
+    let failure_probe = Arc::new(MutationProbe::default());
+    let failure_provider = FailureProvider(Arc::clone(&failure_probe));
+    let mut copy = binding
+        .submit_copy(
+            &failure_provider,
+            copy_request("/failure/copy-source", "/failure/copy-target"),
+            &effects,
+        )
+        .expect_admitted("sync copy failure is returned after claim");
+    assert!(matches!(
+        copy.operation.wait_outcome().unwrap(),
+        OperationOutcome::Failed(_)
+    ));
+    assert!(matches!(
+        copy.effect.wait_final().unwrap(),
+        FsEffectFact::CopyFailure {
+            state: CopyFailureState::PartiallyPublished,
+            ..
+        }
+    ));
+    let mut rename = binding
+        .submit_rename(
+            &failure_provider,
+            rename_request("/failure/rename-source", "/failure/rename-target"),
+            &effects,
+        )
+        .expect_admitted("sync rename failure is returned after claim");
+    assert!(matches!(
+        rename.operation.wait_outcome().unwrap(),
+        OperationOutcome::Failed(_)
+    ));
+    assert!(matches!(
+        rename.effect.wait_final().unwrap(),
+        FsEffectFact::RenameFailure {
+            state: RenameFailureState::Renamed,
+            ..
+        }
+    ));
+    assert_eq!(failure_probe.prepared.load(Ordering::SeqCst), 2);
+    assert_eq!(failure_probe.bound.load(Ordering::SeqCst), 2);
+    assert_eq!(failure_probe.activated.load(Ordering::SeqCst), 2);
     let _ = manager
         .request_shutdown(qubit_operation::ShutdownMode::Drain)
         .wait()
