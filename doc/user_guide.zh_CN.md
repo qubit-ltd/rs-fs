@@ -49,26 +49,36 @@
 
 ## 安装与最小配置
 
-截至 2026-11-23，crates.io 尚无 `qubit-fs` 0.4 发布版本。当前可通过源码 fixture
-编译运行本指南的完整程序：按 [README](../README.zh_CN.md#测试) 准备同级源码布局，
-然后在 `rs-fs` 根目录运行 `bash scripts/check-documentation-examples.sh`。
-
-默认 feature 集为空，只提供同步 API。异步应用显式配置
-`qubit-fs = { version = "0.4", features = ["async"] }`，并使用自己已有的执行器；库不要求 Tokio。
-
-下面的 local adapter 示例介绍非托管的直接门面路径。源码 fixture 使用当前 0.4 源码和
-`rs-fs-local` 0.11.2。已发布的 0.11 adapter 尚未验证与 `qubit-fs` 0.4 兼容；
-兼容发布版本可用前，请使用与 0.4 源码一同构建的 provider。
-
-运行本手册中的 local 示例需要：
+2026-11-24 查询 crates.io 公开索引时，`qubit-fs` 最高版本为 0.3.3，尚无
+0.4 发布版本。请在 `rs-fs` 同级创建独立 Cargo 项目（例如 `report-app`），
+使用下方标记的源码依赖。将[README 完整示例](../README.zh_CN.md#快速开始)
+复制到 `report-app/src/main.rs`，然后运行
+`cargo run --manifest-path ../report-app/Cargo.toml`，预期输出 `report ready`。
 
 <!-- dependencies: quick-start -->
 ```toml
 [dependencies]
-qubit-fs = "0.4"
-qubit-fs-local = "^0.11"
+qubit-fs = { path = "../rs-fs" }
+qubit-fs-local = { path = "../rs-fs-local" }
 tempfile = "3"
 ```
+
+<!-- dependencies: quick-start-async -->
+```toml
+[dependencies]
+qubit-fs = { path = "../rs-fs", features = ["async"] }
+```
+
+<!-- release-status: quick-start -->
+```toml
+[release]
+qubit-fs = "not-published"
+checked = "2026-11-24"
+```
+
+默认 feature 集为空，只提供同步 API。需要异步 API 时，在上方同一个源码依赖中开启
+`async` feature；执行器由应用选择，库不要求 Tokio。已发布的 0.11 local adapter
+尚未验证与 `qubit-fs` 0.4 的兼容性；兼容发布版本可用前，请使用与 0.4 源码一同构建的 provider。
 
 ## 核心工作流
 
