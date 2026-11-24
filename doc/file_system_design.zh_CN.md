@@ -87,8 +87,10 @@ manager 决定准入，并将子项登记在该 parent 下。已关闭的 parent
 准入后发生的停止会传播给子项，但不能证明 provider effect 已回滚。这些入口不会用 facade 的 SPI 或缓存属性
 替代显式 provider。
 
-`FsExecutionBinding::new` 提交到应用 manager 根级；`with_group` 将根级提交视图绑定到 service group。通过 facade
-入口传入 parent scope 则建立父子归属。文件系统 crate 不创建替代 manager 根，也不会保留借用的 parent scope。
+`FsExecutionBinding::new` 提交到应用 manager 根级；`with_group` 在保留当前提交目标的同时增加 service group 绑定。
+从 `scope.manager()` 创建 binding 会保留 parent 提交目标，因此再绑定 group 后，操作可同时属于该 group 和 parent。
+facade 的 `submit_*_in` 入口传入活动 parent scope 时也会提交子操作。文件系统 crate 不创建替代 manager 根，
+也不会保留借用的 parent scope。
 
 ## 发布事实与失败状态
 

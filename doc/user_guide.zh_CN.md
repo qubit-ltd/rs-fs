@@ -920,8 +920,9 @@ metadata，流会失败，不会返回缺少 metadata 的条目。同步 `Direct
 `qubit-operation` 获得取消、释放或 settlement 跟踪。托管调用通过
 `FsExecutionBinding` 接收应用提供的 `OperationScope`；文件系统库不会创建替代用的根 manager，
 也不会保存借用的 scope。下面的同步与异步示例都直接提交到 `OperationManager` 根级。可用
-`FsExecutionBinding::with_group` 将根级提交绑定到 service group，或通过 facade 的
-`submit_*_in` 传入活动 parent scope，使操作成为其子项。
+`FsExecutionBinding::with_group` 在当前提交目标上增加 service group 绑定。从 `scope.manager()` 创建的
+binding 会保留 parent 提交目标，因此可再叠加 group 归属。facade 的 `submit_*_in` 传入活动 parent scope 时，
+也会将操作作为其子项提交。
 
 旧的直接 facade 方法使用 facade 自身的 SPI 和缓存属性，预检由 facade 负责；它们仍是非托管入口。
 托管 facade 的 `submit_*_in` 则接收显式 provider，由 provider 负责托管准备和 provider 专属预检，

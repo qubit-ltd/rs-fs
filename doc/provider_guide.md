@@ -725,9 +725,11 @@ through its typed outcome; do not present a post-claim failure as an unstarted
 request.
 
 Managed submissions can target three ownership levels. `FsExecutionBinding::new`
-submits at the application manager root, and `with_group` binds that root view
-to a service group. A facade `submit_*_in` call uses an active parent
-`OperationScope`, so the manager owns it as a child. These facade methods take
+submits at the application manager root, and `with_group` adds a service group
+to the current submission target. A binding created from `scope.manager()`
+preserves that parent target, so a group can be layered onto the parent-child
+submission. A facade `submit_*_in` call uses an active parent `OperationScope`,
+so the manager owns it as a child. These facade methods take
 an explicit managed provider: that provider owns preparation and
 provider-specific preflight, while the parent manager decides admission. The
 facade does not substitute its own SPI or cached properties. Preparation and
