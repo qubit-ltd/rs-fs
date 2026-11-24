@@ -81,7 +81,7 @@ class RedactDependencyDescriptionTests(unittest.TestCase):
 class QuickStartDependencyMarkerTests(unittest.TestCase):
     def test_real_bilingual_readmes_and_guides_have_matching_marked_dependencies(self):
         dependencies = checker.check_marked_quick_start_dependencies()
-        self.assertIn('qubit-fs = { path = "../rs-fs" }', dependencies)
+        self.assertIn('qubit-fs = { version = "0.4", path = "../rs-fs" }', dependencies)
 
     def test_marker_requires_one_closed_correct_fence(self):
         marker = checker.QUICK_START_DEPENDENCIES
@@ -103,7 +103,7 @@ class QuickStartDependencyMarkerTests(unittest.TestCase):
             valid = '''<!-- dependencies: quick-start -->
 ```toml
 [dependencies]
-qubit-fs = { path = "../rs-fs" }
+qubit-fs = { version = "0.4", path = "../rs-fs" }
 qubit-fs-local = { path = "../rs-fs-local" }
 tempfile = "3"
 ```
@@ -111,13 +111,13 @@ tempfile = "3"
 <!-- dependencies: quick-start-async -->
 ```toml
 [dependencies]
-qubit-fs = { path = "../rs-fs", features = ["async"] }
+qubit-fs = { version = "0.4", path = "../rs-fs", features = ["async"] }
 ```
 
 <!-- release-status: quick-start -->
 ```toml
 [release]
-qubit-fs = "not-published"
+core_status = "not-published"
 checked = "2026-11-24"
 ```
 Create a sibling caller, copy the program to `src/main.rs`, then run
@@ -130,7 +130,7 @@ Create a sibling caller, copy the program to `src/main.rs`, then run
             (root / 'README.md').write_text(wrong_path, encoding='utf-8')
             with self.assertRaisesRegex(AssertionError, 'differs from README'):
                 checker.check_marked_quick_start_dependencies(root)
-            registry = valid.replace('qubit-fs = { path = "../rs-fs" }', 'qubit-fs = "0.4"')
+            registry = valid.replace('qubit-fs = { version = "0.4", path = "../rs-fs" }', 'qubit-fs = "0.4"')
             for relative in ('README.md', 'README.zh_CN.md', 'doc/user_guide.md', 'doc/user_guide.zh_CN.md'):
                 (root / relative).write_text(registry, encoding='utf-8')
             with self.assertRaisesRegex(AssertionError, 'required sibling source paths'):

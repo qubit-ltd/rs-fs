@@ -77,6 +77,7 @@ use qubit_fs::spi::PreparedFsRename;
 use qubit_fs::spi::PreparedFsTreePublish;
 use qubit_fs::spi::PreparedFsWrite;
 use qubit_fs::spi::ProviderProperties;
+#[cfg(feature = "async")]
 use qubit_fs::spi::SpiFuture;
 use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;

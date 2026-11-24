@@ -27,7 +27,7 @@ checkout used by the documentation fixture.
 <!-- dependencies: quick-start -->
 ```toml
 [dependencies]
-qubit-fs = { path = "../rs-fs" }
+qubit-fs = { version = "0.4", path = "../rs-fs" }
 qubit-fs-local = { path = "../rs-fs-local" }
 tempfile = "3"
 ```
@@ -35,13 +35,13 @@ tempfile = "3"
 <!-- dependencies: quick-start-async -->
 ```toml
 [dependencies]
-qubit-fs = { path = "../rs-fs", features = ["async"] }
+qubit-fs = { version = "0.4", path = "../rs-fs", features = ["async"] }
 ```
 
 <!-- release-status: quick-start -->
 ```toml
 [release]
-qubit-fs = "not-published"
+core_status = "not-published"
 checked = "2026-11-24"
 ```
 

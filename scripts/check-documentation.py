@@ -77,7 +77,7 @@ def check_marked_quick_start_dependencies(root=ROOT):
         assert block == baseline, f'{relative}: Quick Start dependency block differs from README.md'
     dependencies = tomllib.loads(baseline).get('dependencies', {})
     expected = {
-        'qubit-fs': {'path': '../rs-fs'},
+        'qubit-fs': {'version': '0.4', 'path': '../rs-fs'},
         'qubit-fs-local': {'path': '../rs-fs-local'},
         'tempfile': '3',
     }
@@ -94,13 +94,13 @@ def check_marked_quick_start_dependencies(root=ROOT):
         assert block == async_baseline, f'{relative}: async dependency block differs from README.md'
     async_dependencies = tomllib.loads(async_baseline).get('dependencies', {})
     assert async_dependencies == {
-        'qubit-fs': {'path': '../rs-fs', 'features': ['async']},
+        'qubit-fs': {'version': '0.4', 'path': '../rs-fs', 'features': ['async']},
     }, 'Quick Start async dependency marker: enable async on the same core source path'
     status_baseline = statuses['README.md']
     for relative, block in statuses.items():
         assert block == status_baseline, f'{relative}: release status differs from README.md'
     status = tomllib.loads(status_baseline).get('release', {})
-    assert status == {'qubit-fs': 'not-published', 'checked': '2026-11-24'}, (
+    assert status == {'core_status': 'not-published', 'checked': '2026-11-24'}, (
         'Quick Start release status marker: update the public-index status and check date'
     )
     for relative in blocks:
