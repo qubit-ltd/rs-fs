@@ -36,6 +36,7 @@ pub use checksum_policy::ChecksumPolicy;
 pub use consistent_read_outcome::ConsistentReadOutcome;
 pub use file_reader::FileReader;
 pub(crate) use internal::RandomAccessReadPolicy;
+pub(crate) use internal::ReadBuffer;
 pub(crate) use internal::read_retry_interrupted;
 pub use prefix_read_outcome::PrefixReadOutcome;
 pub use prefix_read_termination::PrefixReadTermination;
