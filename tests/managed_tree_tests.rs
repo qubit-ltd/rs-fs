@@ -619,10 +619,14 @@ fn test_changed_tree_version_blocks_required_publish_and_keeps_cleanup_owner() {
             Box::pin(async { Ok(()) })
         },
         {
-            staged.record_validated_version("version-before-validation".into());
+            // The staged source and destination deliberately have unrelated
+            // version tokens. Only the source token may satisfy this check.
+            let source_version = "source-v7";
+            let destination_version = "destination-v3";
+            staged.record_validated_version(source_version.into());
             assert!(
                 staged
-                    .check_publish_version(Some(&"changed-after-validation".into()), &required)
+                    .check_publish_version(Some(&destination_version.into()), &required)
                     .is_err()
             );
             assert!(
@@ -630,7 +634,22 @@ fn test_changed_tree_version_blocks_required_publish_and_keeps_cleanup_owner() {
                     .publish_request(
                         Path::parse("/destination").unwrap(),
                         required,
-                        Some(&"changed-after-validation".into()),
+                        Some(&destination_version.into()),
+                        &capabilities,
+                    )
+                    .is_err()
+            );
+            assert!(
+                staged
+                    .check_publish_version(Some(&"source-v8".into()), &required)
+                    .is_err()
+            );
+            assert!(
+                staged
+                    .publish_request(
+                        Path::parse("/destination").unwrap(),
+                        required,
+                        Some(&"source-v8".into()),
                         &capabilities,
                     )
                     .is_err()
@@ -638,25 +657,25 @@ fn test_changed_tree_version_blocks_required_publish_and_keeps_cleanup_owner() {
             assert_eq!(observed_cleanups.load(Ordering::SeqCst), 0);
             assert!(
                 staged
-                    .check_publish_version(Some(&"version-before-validation".into()), &required)
+                    .check_publish_version(Some(&source_version.into()), &required)
                     .is_ok()
             );
             let request = staged
                 .publish_request(
                     Path::parse("/destination").unwrap(),
                     required,
-                    Some(&"version-before-validation".into()),
+                    Some(&source_version.into()),
                     &capabilities,
                 )
                 .expect("unchanged validation version produces a publish request");
-            assert_eq!(request.validated_version, Some("version-before-validation".into()));
+            assert_eq!(request.validated_version, Some(source_version.into()));
             let rejection = match no_cas_provider.prepare_tree_publish(request) {
                 Err(rejection) => rejection,
                 Ok(_) => panic!("provider without atomic version comparison must reject"),
             };
             assert_eq!(
                 rejection.request.validated_version,
-                Some("version-before-validation".into())
+                Some(source_version.into())
             );
         }
     );
