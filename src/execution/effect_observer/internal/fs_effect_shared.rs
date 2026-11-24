@@ -10,6 +10,8 @@ use std::panic::catch_unwind;
 use std::sync::Arc;
 use std::sync::Condvar;
 use std::sync::Mutex;
+#[cfg(test)]
+use std::sync::mpsc::SyncSender;
 use std::task::Waker;
 
 use super::super::FsEffectFact;
@@ -24,6 +26,10 @@ pub(in crate::execution::effect_observer) struct FsEffectShared {
     pub(in crate::execution::effect_observer) changed: Condvar,
     /// Async task wakers registered while evidence is still pending.
     pub(in crate::execution::effect_observer) wakers: Mutex<Vec<FsEffectWaiter>>,
+    /// Test-only signal sent while a synchronous waiter holds the snapshot
+    /// lock immediately before entering the condition-variable wait.
+    #[cfg(test)]
+    pub(in crate::execution::effect_observer) sync_wait_started: Mutex<Option<SyncSender<()>>>,
 }
 
 impl FsEffectShared {
@@ -34,6 +40,8 @@ impl FsEffectShared {
             snapshot: Mutex::new(FsEffectSnapshot::Pending),
             changed: Condvar::new(),
             wakers: Mutex::new(Vec::new()),
+            #[cfg(test)]
+            sync_wait_started: Mutex::new(None),
         }
     }
 
