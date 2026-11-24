@@ -533,6 +533,9 @@ impl AsyncFileSystem {
     /// call. Provider `Pending` and `Ready` events describe polls of those
     /// futures only; aggregate fairness yields do not generate events.
     ///
+    /// # Type Parameters
+    /// - `O`: Observer that controls and records provider boundaries.
+    ///
     /// # Parameters
     /// - `path`: File to read.
     /// - `options`: Options used to open the reader.
@@ -598,6 +601,9 @@ impl AsyncFileSystem {
     /// The observer may stop the operation before any provider open or read
     /// call. Provider `Pending` and `Ready` events describe polls of those
     /// futures only; aggregate fairness yields do not generate events.
+    ///
+    /// # Type Parameters
+    /// - `O`: Observer that controls and records provider boundaries.
     ///
     /// # Parameters
     /// - `path`: File whose prefix is read.

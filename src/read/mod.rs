@@ -17,6 +17,8 @@ mod checksum_policy;
 mod consistent_read_outcome;
 mod file_reader;
 mod internal;
+#[cfg(feature = "async")]
+mod observed_read_error;
 mod prefix_read_outcome;
 mod prefix_read_plan;
 mod prefix_read_termination;
@@ -24,7 +26,11 @@ mod random_access_reader;
 mod read_all_options;
 mod read_consistency_policy;
 #[cfg(feature = "async")]
+mod read_io_event;
+#[cfg(feature = "async")]
 mod read_io_observer;
+#[cfg(feature = "async")]
+mod read_io_phase;
 mod read_operation;
 mod read_options;
 
@@ -39,18 +45,18 @@ pub use consistent_read_outcome::ConsistentReadOutcome;
 pub use file_reader::FileReader;
 pub(crate) use internal::RandomAccessReadPolicy;
 pub(crate) use internal::read_retry_interrupted;
+#[cfg(feature = "async")]
+pub use observed_read_error::ObservedReadError;
 pub use prefix_read_outcome::PrefixReadOutcome;
 pub use prefix_read_termination::PrefixReadTermination;
 pub use random_access_reader::RandomAccessReader;
 pub use read_all_options::ReadAllOptions;
 pub use read_consistency_policy::ReadConsistencyPolicy;
 #[cfg(feature = "async")]
-pub use read_io_observer::ObservedReadError;
-#[cfg(feature = "async")]
-pub use read_io_observer::ReadIoEvent;
+pub use read_io_event::ReadIoEvent;
 #[cfg(feature = "async")]
 pub use read_io_observer::ReadIoObserver;
 #[cfg(feature = "async")]
-pub use read_io_observer::ReadIoPhase;
+pub use read_io_phase::ReadIoPhase;
 pub(crate) use read_operation::ReadOperation;
 pub use read_options::ReadOptions;

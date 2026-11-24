@@ -32,6 +32,7 @@ use crate::read::ReadIoEvent;
 use crate::read::ReadIoObserver;
 use crate::read::ReadIoPhase;
 use crate::read::ReadOptions;
+use crate::read::internal::NoopReadIoObserver;
 use crate::read::internal::ReadBuffer;
 use crate::read::prefix_read_plan::PrefixReadPlan;
 
@@ -110,10 +111,7 @@ impl<'a> AsyncReadOperation<'a> {
     /// Panics only if converting the read count back to `usize` fails, which
     /// would violate the invariant that the count originated from a `usize`.
     pub(crate) async fn read_all(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
-        struct NoopObserver;
-        impl ReadIoObserver for NoopObserver {}
-
-        self.read_all_observed(path, options, max_bytes, &mut NoopObserver)
+        self.read_all_observed(path, options, max_bytes, &mut NoopReadIoObserver)
             .await
             .map_err(|error| match error {
                 ObservedReadError::Stopped => unreachable!("no-op observer cannot stop"),
@@ -122,6 +120,21 @@ impl<'a> AsyncReadOperation<'a> {
     }
 
     /// Reads a complete file asynchronously while observing provider I/O.
+    ///
+    /// # Type Parameters
+    /// - `O`: Observer that controls and records provider boundaries.
+    ///
+    /// # Parameters
+    /// - `path`: File to read.
+    /// - `options`: Options used to open the reader.
+    /// - `max_bytes`: Maximum accepted byte count.
+    /// - `observer`: Boundary callback and provider-poll event receiver.
+    ///
+    /// # Returns
+    /// The complete contents when they fit within `max_bytes`.
+    ///
+    /// # Errors
+    /// Returns an observer stop or the original filesystem error.
     pub(crate) async fn read_all_observed<O: ReadIoObserver>(
         &self,
         path: &Path,
@@ -212,10 +225,7 @@ impl<'a> AsyncReadOperation<'a> {
         options: ReadOptions,
         max_bytes: usize,
     ) -> FsResult<PrefixReadOutcome> {
-        struct NoopObserver;
-        impl ReadIoObserver for NoopObserver {}
-
-        self.read_prefix_observed(path, options, max_bytes, &mut NoopObserver)
+        self.read_prefix_observed(path, options, max_bytes, &mut NoopReadIoObserver)
             .await
             .map_err(|error| match error {
                 ObservedReadError::Stopped => unreachable!("no-op observer cannot stop"),
@@ -224,6 +234,21 @@ impl<'a> AsyncReadOperation<'a> {
     }
 
     /// Reads a prefix while observing provider I/O boundaries.
+    ///
+    /// # Type Parameters
+    /// - `O`: Observer that controls and records provider boundaries.
+    ///
+    /// # Parameters
+    /// - `path`: File whose prefix is read.
+    /// - `options`: Options used to open the reader.
+    /// - `max_bytes`: Maximum number of prefix bytes to accumulate.
+    /// - `observer`: Boundary callback and provider-poll event receiver.
+    ///
+    /// # Returns
+    /// The bounded prefix and its original request facts.
+    ///
+    /// # Errors
+    /// Returns an observer stop or the original filesystem error.
     pub(crate) async fn read_prefix_observed<O: ReadIoObserver>(
         &self,
         path: &Path,
@@ -282,6 +307,17 @@ impl<'a> AsyncReadOperation<'a> {
     }
 }
 
+/// Checks whether the observer allows the next provider operation.
+///
+/// # Type Parameters
+/// - `O`: Observer receiving the boundary check.
+///
+/// # Parameters
+/// - `observer`: Observer queried before provider work begins.
+/// - `phase`: Provider operation about to be performed.
+///
+/// # Returns
+/// Success when the provider operation may begin, or the stop marker otherwise.
 fn before_io<O: ReadIoObserver>(observer: &mut O, phase: ReadIoPhase) -> Result<(), ObservedReadError> {
     match observer.before_io(phase) {
         ControlFlow::Continue(()) => Ok(()),
@@ -289,6 +325,19 @@ fn before_io<O: ReadIoObserver>(observer: &mut O, phase: ReadIoPhase) -> Result<
     }
 }
 
+/// Polls one provider future and reports its actual poll transitions.
+///
+/// # Type Parameters
+/// - `F`: Provider future whose polling is observed.
+/// - `O`: Observer receiving provider poll events.
+///
+/// # Parameters
+/// - `future`: Provider operation to poll.
+/// - `observer`: Event receiver for the operation.
+/// - `phase`: Kind of provider operation represented by the future.
+///
+/// # Returns
+/// The provider future's output after it becomes ready.
 async fn observe_io<F, O>(future: F, observer: &mut O, phase: ReadIoPhase) -> F::Output
 where
     F: Future,

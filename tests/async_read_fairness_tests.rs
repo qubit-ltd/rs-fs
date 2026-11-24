@@ -277,20 +277,21 @@ fn test_observed_prefix_drop_after_pending_read_has_no_ready_event() {
     let resource_path = path();
     let mut observer = RecordingObserver::default();
     let observed = observer.clone();
-    let operation = fs.read_prefix_observed(&resource_path, ReadOptions::default(), 4, &mut observer);
-    let waker = counter_waker(&counts);
-    let mut cx = Context::from_waker(&waker);
-    let mut future = std::pin::pin!(operation);
-    assert!(future.as_mut().poll(&mut cx).is_pending());
-    assert!(observed.0.lock().unwrap().events.ends_with(&[
-        ReadIoEvent::Started {
-            phase: ReadIoPhase::Read
-        },
-        ReadIoEvent::Pending {
-            phase: ReadIoPhase::Read
-        },
-    ]));
-    drop(future);
+    {
+        let operation = fs.read_prefix_observed(&resource_path, ReadOptions::default(), 4, &mut observer);
+        let waker = counter_waker(&counts);
+        let mut cx = Context::from_waker(&waker);
+        let mut future = std::pin::pin!(operation);
+        assert!(future.as_mut().poll(&mut cx).is_pending());
+        assert!(observed.0.lock().unwrap().events.ends_with(&[
+            ReadIoEvent::Started {
+                phase: ReadIoPhase::Read
+            },
+            ReadIoEvent::Pending {
+                phase: ReadIoPhase::Read
+            },
+        ]));
+    }
     assert!(!observed.0.lock().unwrap().events.contains(&ReadIoEvent::Ready {
         phase: ReadIoPhase::Read
     }));
@@ -324,20 +325,21 @@ fn test_observed_read_all_drop_after_pending_read_has_no_ready_event() {
     let resource_path = path();
     let mut observer = RecordingObserver::default();
     let observed = observer.clone();
-    let operation = fs.read_all_observed(&resource_path, ReadOptions::default(), 4, &mut observer);
-    let waker = counter_waker(&counts);
-    let mut cx = Context::from_waker(&waker);
-    let mut future = std::pin::pin!(operation);
-    assert!(future.as_mut().poll(&mut cx).is_pending());
-    assert!(observed.0.lock().unwrap().events.ends_with(&[
-        ReadIoEvent::Started {
-            phase: ReadIoPhase::Read
-        },
-        ReadIoEvent::Pending {
-            phase: ReadIoPhase::Read
-        },
-    ]));
-    drop(future);
+    {
+        let operation = fs.read_all_observed(&resource_path, ReadOptions::default(), 4, &mut observer);
+        let waker = counter_waker(&counts);
+        let mut cx = Context::from_waker(&waker);
+        let mut future = std::pin::pin!(operation);
+        assert!(future.as_mut().poll(&mut cx).is_pending());
+        assert!(observed.0.lock().unwrap().events.ends_with(&[
+            ReadIoEvent::Started {
+                phase: ReadIoPhase::Read
+            },
+            ReadIoEvent::Pending {
+                phase: ReadIoPhase::Read
+            },
+        ]));
+    }
     assert!(!observed.0.lock().unwrap().events.contains(&ReadIoEvent::Ready {
         phase: ReadIoPhase::Read
     }));
