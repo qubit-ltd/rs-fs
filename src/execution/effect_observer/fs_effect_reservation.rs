@@ -74,7 +74,7 @@ impl FsEffectReservation {
         error: Arc<crate::FsError>,
         state: crate::write::WriteFailureState,
         written_bytes: u64,
-        recovery: Option<qubit_operation::RecoveryId>,
+        recovery: Option<RecoveryId>,
     ) {
         self.publish(crate::execution::FsEffectFact::WriteFailure {
             error,
@@ -98,7 +98,7 @@ impl FsEffectReservation {
         error: Arc<crate::FsError>,
         state: crate::copy::CopyFailureState,
         partial_stats: crate::copy::CopyStats,
-        recovery: Option<qubit_operation::RecoveryId>,
+        recovery: Option<RecoveryId>,
     ) {
         self.publish(crate::execution::FsEffectFact::CopyFailure {
             error,

@@ -189,10 +189,9 @@ impl StagedDirectory {
     /// # Parameters
     /// - `destination_root`: Destination for the published tree.
     /// - `publication`: Atomicity and durability requirements.
-    /// - `current_version`: Current version of this staged source tree, used
-    ///   to validate the version captured for this same staging owner.
-    ///   Destination version conditions are handled separately by the
-    ///   provider.
+    /// - `current_version`: Current version of this staged source tree, used to
+    ///   validate the version captured for this same staging owner. Destination
+    ///   version conditions are handled separately by the provider.
     /// - `capabilities`: Provider capabilities used to validate the request.
     ///
     /// # Returns

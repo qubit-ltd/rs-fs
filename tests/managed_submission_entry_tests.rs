@@ -39,6 +39,8 @@ use qubit_fs::FsOwnedTreePublishRequest;
 use qubit_fs::FsOwnedWriteRequest;
 use qubit_fs::FsPrepareFailure;
 use qubit_fs::FsPrepareFailureKind;
+use qubit_fs::FsResult;
+use qubit_fs::FsSubmitFailure;
 use qubit_fs::Path;
 use qubit_fs::copy::CopyFailureState;
 use qubit_fs::copy::CopyMethod;
@@ -75,8 +77,10 @@ use qubit_fs::spi::PreparedFsRename;
 use qubit_fs::spi::PreparedFsTreePublish;
 use qubit_fs::spi::PreparedFsWrite;
 use qubit_fs::spi::ProviderProperties;
+use qubit_fs::spi::SpiFuture;
 use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
+use qubit_operation::AdmissionError;
 use qubit_operation::ChildOutcomeKind;
 use qubit_operation::ChildOutcomeSummary;
 use qubit_operation::ChildRelease;
@@ -94,7 +98,9 @@ use qubit_operation::OperationScope;
 use qubit_operation::PreparedExternalOperation;
 use qubit_operation::SettlementReport;
 use qubit_operation::SettlementStatus;
+use qubit_operation::ShutdownMode;
 use qubit_operation::StopReason;
+use qubit_operation::StopRequestStatus;
 
 struct FacadeSpi;
 
@@ -103,7 +109,7 @@ impl FileSystemSpi for FacadeSpi {
         properties()
     }
 
-    fn stat(&self, _: StatRequest<'_>) -> qubit_fs::FsResult<StatResponse> {
+    fn stat(&self, _: StatRequest<'_>) -> FsResult<StatResponse> {
         Err(FsError::new(
             FsErrorKind::UnsupportedOperation,
             FsOperationKind::Stat,
@@ -118,7 +124,7 @@ impl AsyncFileSystemSpi for FacadeSpi {
         properties()
     }
 
-    fn stat<'a>(&'a self, _: StatRequest<'a>) -> qubit_fs::spi::SpiFuture<'a, qubit_fs::FsResult<StatResponse>> {
+    fn stat<'a>(&'a self, _: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
         Box::pin(async {
             Err(FsError::new(
                 FsErrorKind::UnsupportedOperation,
@@ -153,7 +159,7 @@ impl ManagedFsReadSpi for RejectProviders {
     fn prepare_read_all(
         &self,
         request: FsOwnedReadRequest,
-    ) -> Result<Arc<dyn qubit_fs::spi::PreparedFsRead>, FsPrepareFailure<FsOwnedReadRequest>> {
+    ) -> Result<Arc<dyn PreparedFsRead>, FsPrepareFailure<FsOwnedReadRequest>> {
         Err(FsPrepareFailure {
             kind: FsPrepareFailureKind::Rejected("test".into()),
             request,
@@ -166,7 +172,7 @@ impl ManagedFsMutationSpi for RejectProviders {
     fn prepare_write(
         &self,
         request: FsOwnedWriteRequest,
-    ) -> Result<Arc<dyn qubit_fs::spi::PreparedFsWrite>, FsPrepareFailure<FsOwnedWriteRequest>> {
+    ) -> Result<Arc<dyn PreparedFsWrite>, FsPrepareFailure<FsOwnedWriteRequest>> {
         Err(FsPrepareFailure {
             kind: FsPrepareFailureKind::Rejected("test".into()),
             request,
@@ -176,7 +182,7 @@ impl ManagedFsMutationSpi for RejectProviders {
     fn prepare_copy(
         &self,
         request: FsOwnedCopyRequest,
-    ) -> Result<Arc<dyn qubit_fs::spi::PreparedFsCopy>, FsPrepareFailure<FsOwnedCopyRequest>> {
+    ) -> Result<Arc<dyn PreparedFsCopy>, FsPrepareFailure<FsOwnedCopyRequest>> {
         Err(FsPrepareFailure {
             kind: FsPrepareFailureKind::Rejected("test".into()),
             request,
@@ -186,7 +192,7 @@ impl ManagedFsMutationSpi for RejectProviders {
     fn prepare_rename(
         &self,
         request: FsOwnedRenameRequest,
-    ) -> Result<Arc<dyn qubit_fs::spi::PreparedFsRename>, FsPrepareFailure<FsOwnedRenameRequest>> {
+    ) -> Result<Arc<dyn PreparedFsRename>, FsPrepareFailure<FsOwnedRenameRequest>> {
         Err(FsPrepareFailure {
             kind: FsPrepareFailureKind::Rejected("test".into()),
             request,
@@ -199,7 +205,7 @@ impl ManagedFsTreeSpi for RejectProviders {
     fn prepare_tree_publish(
         &self,
         request: FsOwnedTreePublishRequest,
-    ) -> Result<Arc<dyn qubit_fs::spi::PreparedFsTreePublish>, FsPrepareFailure<FsOwnedTreePublishRequest>> {
+    ) -> Result<Arc<dyn PreparedFsTreePublish>, FsPrepareFailure<FsOwnedTreePublishRequest>> {
         Err(FsPrepareFailure {
             kind: FsPrepareFailureKind::Rejected("test".into()),
             request,
@@ -700,7 +706,7 @@ fn tree_request() -> FsOwnedTreePublishRequest {
     }
 }
 
-fn take_error<T, R>(result: Result<T, qubit_fs::FsSubmitFailure<R>>) -> qubit_fs::FsSubmitFailure<R> {
+fn take_error<T, R>(result: Result<T, FsSubmitFailure<R>>) -> FsSubmitFailure<R> {
     match result {
         Ok(_) => panic!("test provider unexpectedly accepted preparation"),
         Err(error) => error,
@@ -711,7 +717,7 @@ trait ExpectAdmitted<T> {
     fn expect_admitted(self, message: &str) -> T;
 }
 
-impl<T, R> ExpectAdmitted<T> for Result<T, qubit_fs::FsSubmitFailure<R>> {
+impl<T, R> ExpectAdmitted<T> for Result<T, FsSubmitFailure<R>> {
     fn expect_admitted(self, message: &str) -> T {
         match self {
             Ok(value) => value,
@@ -824,7 +830,7 @@ fn test_both_facades_submit_all_parent_entries_under_the_active_parent() {
                     .expect("test stop gate should open");
                 assert_eq!(
                     scope.request_stop(StopReason::UserCancelled),
-                    qubit_operation::StopRequestStatus::Accepted,
+                    StopRequestStatus::Accepted,
                 );
                 Ok::<_, ()>(())
             }
@@ -863,10 +869,7 @@ fn test_both_facades_submit_all_parent_entries_under_the_active_parent() {
             assert!(matches!(fact, FsEffectFact::State(FsEffectState::Applied)));
         }
     }
-    let _ = manager
-        .request_shutdown(qubit_operation::ShutdownMode::Drain)
-        .wait()
-        .unwrap();
+    let _ = manager.request_shutdown(ShutdownMode::Drain).wait().unwrap();
 }
 
 #[test]
@@ -893,7 +896,7 @@ fn test_closed_scope_returns_successfully_prepared_request_before_claim_or_activ
         },
     ));
     let (admission, preparation, request) = failure.into_parts();
-    assert_eq!(admission, Some(qubit_operation::AdmissionError::ScopeEnded));
+    assert_eq!(admission, Some(AdmissionError::ScopeEnded));
     assert!(preparation.is_none());
     assert_eq!(request.path.as_str(), "/closed/original");
     let (admission, preparation, request) = take_error(binding.submit_copy(
@@ -902,7 +905,7 @@ fn test_closed_scope_returns_successfully_prepared_request_before_claim_or_activ
         &effects,
     ))
     .into_parts();
-    assert_eq!(admission, Some(qubit_operation::AdmissionError::ScopeEnded));
+    assert_eq!(admission, Some(AdmissionError::ScopeEnded));
     assert!(preparation.is_none());
     assert_eq!(request.source.as_str(), "/closed/copy-source");
     assert_eq!(request.destination.as_str(), "/closed/copy-destination");
@@ -912,7 +915,7 @@ fn test_closed_scope_returns_successfully_prepared_request_before_claim_or_activ
         &effects,
     ))
     .into_parts();
-    assert_eq!(admission, Some(qubit_operation::AdmissionError::ScopeEnded));
+    assert_eq!(admission, Some(AdmissionError::ScopeEnded));
     assert!(preparation.is_none());
     assert_eq!(request.source.as_str(), "/closed/rename-source");
     assert_eq!(request.destination.as_str(), "/closed/rename-destination");
@@ -922,7 +925,7 @@ fn test_closed_scope_returns_successfully_prepared_request_before_claim_or_activ
         &effects,
     ))
     .into_parts();
-    assert_eq!(admission, Some(qubit_operation::AdmissionError::ScopeEnded));
+    assert_eq!(admission, Some(AdmissionError::ScopeEnded));
     assert!(preparation.is_none());
     assert_eq!(request.source.as_str(), "/closed/async-copy-source");
     assert_eq!(request.destination.as_str(), "/closed/async-copy-destination");
@@ -932,7 +935,7 @@ fn test_closed_scope_returns_successfully_prepared_request_before_claim_or_activ
         &effects,
     ))
     .into_parts();
-    assert_eq!(admission, Some(qubit_operation::AdmissionError::ScopeEnded));
+    assert_eq!(admission, Some(AdmissionError::ScopeEnded));
     assert!(preparation.is_none());
     assert_eq!(request.source.as_str(), "/closed/async-rename-source");
     assert_eq!(request.destination.as_str(), "/closed/async-rename-destination");
@@ -952,10 +955,7 @@ fn test_closed_scope_returns_successfully_prepared_request_before_claim_or_activ
         0,
         "a closed scope cannot activate the prepared operation"
     );
-    let _ = manager
-        .request_shutdown(qubit_operation::ShutdownMode::Drain)
-        .wait()
-        .unwrap();
+    let _ = manager.request_shutdown(ShutdownMode::Drain).wait().unwrap();
 }
 
 #[test]
@@ -1021,7 +1021,7 @@ fn test_binding_copy_and_rename_sync_async_preserve_prepare_failures_and_request
         .expect_admitted("sync copy binding should admit a successful prepared operation");
     assert_eq!(
         copy.operation.request_stop(StopReason::UserCancelled),
-        qubit_operation::StopRequestStatus::Accepted
+        StopRequestStatus::Accepted
     );
     assert!(matches!(
         copy.effect.wait_final().unwrap(),
@@ -1037,7 +1037,7 @@ fn test_binding_copy_and_rename_sync_async_preserve_prepare_failures_and_request
         .expect_admitted("sync rename binding should admit a successful prepared operation");
     assert_eq!(
         rename.operation.request_stop(StopReason::UserCancelled),
-        qubit_operation::StopRequestStatus::Accepted
+        StopRequestStatus::Accepted
     );
     assert!(matches!(
         rename.effect.wait_final().unwrap(),
@@ -1056,7 +1056,7 @@ fn test_binding_copy_and_rename_sync_async_preserve_prepare_failures_and_request
         .expect_admitted("async copy binding should admit a successful prepared operation");
     assert_eq!(
         copy.operation.request_stop(StopReason::UserCancelled),
-        qubit_operation::StopRequestStatus::Accepted
+        StopRequestStatus::Accepted
     );
     assert!(matches!(
         copy.effect.wait_final().unwrap(),
@@ -1075,7 +1075,7 @@ fn test_binding_copy_and_rename_sync_async_preserve_prepare_failures_and_request
         .expect_admitted("async rename binding should admit a successful prepared operation");
     assert_eq!(
         rename.operation.request_stop(StopReason::UserCancelled),
-        qubit_operation::StopRequestStatus::Accepted
+        StopRequestStatus::Accepted
     );
     assert!(matches!(
         rename.effect.wait_final().unwrap(),
@@ -1169,10 +1169,7 @@ fn test_binding_copy_and_rename_sync_async_preserve_prepare_failures_and_request
     assert_eq!(failure_probe.bound.load(Ordering::SeqCst), 4);
     assert_eq!(failure_probe.activated.load(Ordering::SeqCst), 4);
 
-    let _ = manager
-        .request_shutdown(qubit_operation::ShutdownMode::Drain)
-        .wait()
-        .unwrap();
+    let _ = manager.request_shutdown(ShutdownMode::Drain).wait().unwrap();
 }
 
 #[test]
@@ -1191,12 +1188,7 @@ fn test_sync_facade_parent_entries_stop_and_publish_typed_effects() {
             move |scope| {
                 let mut held: Vec<Box<dyn Send>> = Vec::with_capacity(5);
                 let child = filesystem
-                    .submit_read_all_in(
-                        &scope,
-                        &provider,
-                        path("/sync/read"),
-                        ReadAllOptions::default(),
-                    )
+                    .submit_read_all_in(&scope, &provider, path("/sync/read"), ReadAllOptions::default())
                     .expect("sync read is admitted beneath its parent");
                 ids.lock().unwrap().push(child.id());
                 held.push(Box::new(child));
@@ -1214,40 +1206,21 @@ fn test_sync_facade_parent_entries_stop_and_publish_typed_effects() {
                     )
                     .expect_admitted("sync write is admitted beneath its parent");
                 ids.lock().unwrap().push(child.operation.id());
-                observers
-                    .lock()
-                    .unwrap()
-                    .push((false, child.effect.clone()));
+                observers.lock().unwrap().push((false, child.effect.clone()));
                 held.push(Box::new(child));
 
                 let child = filesystem
-                    .submit_copy_in(
-                        &scope,
-                        &provider,
-                        copy_request("/sync/src", "/sync/dst"),
-                        &effects,
-                    )
+                    .submit_copy_in(&scope, &provider, copy_request("/sync/src", "/sync/dst"), &effects)
                     .expect_admitted("sync copy is admitted beneath its parent");
                 ids.lock().unwrap().push(child.operation.id());
-                observers
-                    .lock()
-                    .unwrap()
-                    .push((false, child.effect.clone()));
+                observers.lock().unwrap().push((false, child.effect.clone()));
                 held.push(Box::new(child));
 
                 let child = filesystem
-                    .submit_rename_in(
-                        &scope,
-                        &provider,
-                        rename_request("/sync/old", "/sync/new"),
-                        &effects,
-                    )
+                    .submit_rename_in(&scope, &provider, rename_request("/sync/old", "/sync/new"), &effects)
                     .expect_admitted("sync rename is admitted beneath its parent");
                 ids.lock().unwrap().push(child.operation.id());
-                observers
-                    .lock()
-                    .unwrap()
-                    .push((false, child.effect.clone()));
+                observers.lock().unwrap().push((false, child.effect.clone()));
                 held.push(Box::new(child));
 
                 let child = filesystem
@@ -1259,7 +1232,7 @@ fn test_sync_facade_parent_entries_stop_and_publish_typed_effects() {
 
                 assert_eq!(
                     scope.request_stop(StopReason::UserCancelled),
-                    qubit_operation::StopRequestStatus::Accepted,
+                    StopRequestStatus::Accepted,
                 );
                 Ok::<_, ()>(())
             }
@@ -1270,12 +1243,11 @@ fn test_sync_facade_parent_entries_stop_and_publish_typed_effects() {
     let child_ids = ids.lock().unwrap().clone();
     assert_eq!(child_ids.len(), 5);
     let settlement = parent.wait_settlement().unwrap();
-    assert!(child_ids.iter().all(|id| {
-        settlement
-            .children
+    assert!(
+        child_ids
             .iter()
-            .any(|child| child.operation_id == *id)
-    }));
+            .all(|id| { settlement.children.iter().any(|child| child.operation_id == *id) })
+    );
     assert_eq!(probe.stop_reasons.lock().unwrap().len(), 5);
     assert_eq!(probe.prepared.load(Ordering::SeqCst), 5);
     assert_eq!(probe.bound.load(Ordering::SeqCst), 5);
@@ -1290,10 +1262,7 @@ fn test_sync_facade_parent_entries_stop_and_publish_typed_effects() {
             assert!(matches!(fact, FsEffectFact::State(FsEffectState::Applied)));
         }
     }
-    let _ = manager
-        .request_shutdown(qubit_operation::ShutdownMode::Drain)
-        .wait()
-        .unwrap();
+    let _ = manager.request_shutdown(ShutdownMode::Drain).wait().unwrap();
 }
 
 #[test]
@@ -1320,7 +1289,7 @@ fn test_sync_closed_binding_returns_prepared_requests_without_claim_or_activatio
         },
     ))
     .into_parts();
-    assert_eq!(admission, Some(qubit_operation::AdmissionError::ScopeEnded));
+    assert_eq!(admission, Some(AdmissionError::ScopeEnded));
     assert!(preparation.is_none());
     assert_eq!(request.path.as_str(), "/closed/read");
     let (admission, preparation, request) = take_error(binding.submit_copy(
@@ -1329,7 +1298,7 @@ fn test_sync_closed_binding_returns_prepared_requests_without_claim_or_activatio
         &effects,
     ))
     .into_parts();
-    assert_eq!(admission, Some(qubit_operation::AdmissionError::ScopeEnded));
+    assert_eq!(admission, Some(AdmissionError::ScopeEnded));
     assert!(preparation.is_none());
     assert_eq!(request.source.as_str(), "/closed/copy-source");
     assert_eq!(request.destination.as_str(), "/closed/copy-target");
@@ -1339,7 +1308,7 @@ fn test_sync_closed_binding_returns_prepared_requests_without_claim_or_activatio
         &effects,
     ))
     .into_parts();
-    assert_eq!(admission, Some(qubit_operation::AdmissionError::ScopeEnded));
+    assert_eq!(admission, Some(AdmissionError::ScopeEnded));
     assert!(preparation.is_none());
     assert_eq!(request.source.as_str(), "/closed/rename-source");
     assert_eq!(request.destination.as_str(), "/closed/rename-target");
@@ -1347,10 +1316,7 @@ fn test_sync_closed_binding_returns_prepared_requests_without_claim_or_activatio
     assert_eq!(probe.recovered.load(Ordering::SeqCst), 3);
     assert_eq!(probe.bound.load(Ordering::SeqCst), 0);
     assert_eq!(probe.activated.load(Ordering::SeqCst), 0);
-    let _ = manager
-        .request_shutdown(qubit_operation::ShutdownMode::Drain)
-        .wait()
-        .unwrap();
+    let _ = manager.request_shutdown(ShutdownMode::Drain).wait().unwrap();
 }
 
 #[test]
@@ -1370,7 +1336,7 @@ fn test_sync_binding_copy_and_rename_success_and_failure_effects() {
         .expect_admitted("sync copy is admitted");
     assert_eq!(
         copy.operation.request_stop(StopReason::UserCancelled),
-        qubit_operation::StopRequestStatus::Accepted
+        StopRequestStatus::Accepted
     );
     assert!(matches!(
         copy.effect.wait_final().unwrap(),
@@ -1385,7 +1351,7 @@ fn test_sync_binding_copy_and_rename_success_and_failure_effects() {
         .expect_admitted("sync rename is admitted");
     assert_eq!(
         rename.operation.request_stop(StopReason::UserCancelled),
-        qubit_operation::StopRequestStatus::Accepted
+        StopRequestStatus::Accepted
     );
     assert!(matches!(
         rename.effect.wait_final().unwrap(),
@@ -1436,8 +1402,5 @@ fn test_sync_binding_copy_and_rename_success_and_failure_effects() {
     assert_eq!(failure_probe.prepared.load(Ordering::SeqCst), 2);
     assert_eq!(failure_probe.bound.load(Ordering::SeqCst), 2);
     assert_eq!(failure_probe.activated.load(Ordering::SeqCst), 2);
-    let _ = manager
-        .request_shutdown(qubit_operation::ShutdownMode::Drain)
-        .wait()
-        .unwrap();
+    let _ = manager.request_shutdown(ShutdownMode::Drain).wait().unwrap();
 }

@@ -143,7 +143,7 @@ mod tests {
     use super::FsEffectSnapshot;
 
     #[test]
-    fn last_publisher_close_wakes_synchronous_waiters() {
+    fn test_last_publisher_close_wakes_synchronous_waiters() {
         let pool = FsEffectSlotPool::new(1);
         let reservation = pool.reserve().expect("slot available");
         let observer = reservation.observer();
@@ -184,10 +184,7 @@ mod tests {
             }
         }
         assert!(started, "synchronous waiter did not reach Condvar::wait");
-        assert_eq!(
-            closed_waiters, 2,
-            "publisher close did not wake both waiters"
-        );
+        assert_eq!(closed_waiters, 2, "publisher close did not wake both waiters");
         for waiter in waiters {
             waiter.join().unwrap();
         }

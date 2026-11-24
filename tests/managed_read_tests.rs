@@ -26,9 +26,11 @@ use std::task::Poll;
 #[cfg(feature = "async")]
 use std::task::Waker;
 
+use qubit_fs::FsError;
 use qubit_fs::FsResult;
 use qubit_fs::Path;
 use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
 use qubit_fs::metadata::FileKind;
 use qubit_fs::metadata::FileMetadata;
 use qubit_fs::metadata::FileSystemId;
@@ -394,7 +396,7 @@ fn test_provider_panic_poison_is_reported_by_all_shared_read_entry_points() {
     ];
     for error in errors {
         assert_eq!(error.kind(), FsErrorKind::ProviderContractViolation);
-        assert_eq!(error.operation(), qubit_fs::error::FsOperation::Read);
+        assert_eq!(error.operation(), FsOperation::Read);
         assert!(error.to_string().contains("poisoned"));
     }
 }
@@ -403,9 +405,9 @@ struct FailingReadSession;
 
 impl RandomAccessReadSession for FailingReadSession {
     fn read_at(&mut self, _: u64, _: &mut [u8]) -> FsResult<usize> {
-        Err(qubit_fs::FsError::new(
+        Err(FsError::new(
             FsErrorKind::PermissionDenied,
-            qubit_fs::error::FsOperation::OpenReader,
+            FsOperation::OpenReader,
             "provider denied read",
         ))
     }
@@ -416,9 +418,9 @@ struct CountingFailureReadSession(Arc<AtomicUsize>);
 impl RandomAccessReadSession for CountingFailureReadSession {
     fn read_at(&mut self, _: u64, _: &mut [u8]) -> FsResult<usize> {
         self.0.fetch_add(1, Ordering::SeqCst);
-        Err(qubit_fs::FsError::new(
+        Err(FsError::new(
             FsErrorKind::PermissionDenied,
-            qubit_fs::error::FsOperation::OpenReader,
+            FsOperation::OpenReader,
             "provider denied read",
         ))
     }
@@ -447,10 +449,7 @@ fn test_aggregate_reads_call_provider_before_allocating_and_keep_first_error_con
         .unwrap_err();
     assert_eq!(read_all_calls.load(Ordering::SeqCst), 1);
     assert_eq!(read_all_error.kind(), FsErrorKind::PermissionDenied);
-    assert_eq!(
-        read_all_error.operation(),
-        qubit_fs::error::FsOperation::Read
-    );
+    assert_eq!(read_all_error.operation(), FsOperation::Read);
     assert_eq!(read_all_error.path().unwrap().as_str(), "/object");
 
     let prefix_calls = Arc::new(AtomicUsize::new(0));
@@ -459,7 +458,7 @@ fn test_aggregate_reads_call_provider_before_allocating_and_keep_first_error_con
         .unwrap_err();
     assert_eq!(prefix_calls.load(Ordering::SeqCst), 1);
     assert_eq!(prefix_error.kind(), FsErrorKind::PermissionDenied);
-    assert_eq!(prefix_error.operation(), qubit_fs::error::FsOperation::Read);
+    assert_eq!(prefix_error.operation(), FsOperation::Read);
     assert_eq!(prefix_error.path().unwrap().as_str(), "/object");
 }
 
@@ -487,13 +486,7 @@ fn test_aggregate_reads_keep_short_data_when_provider_ends_before_open_length() 
             Path::parse("/object").unwrap(),
         )
         .with_metadata(FileMetadata::new(FileKind::File).with_len(Some(10)));
-        ManagedReadPort::new(
-            info,
-            10,
-            2,
-            10,
-            Box::new(ShortReadSession(Arc::new(b"abc".to_vec()))),
-        )
+        ManagedReadPort::new(info, 10, 2, 10, Box::new(ShortReadSession(Arc::new(b"abc".to_vec()))))
     };
 
     let outcome = make_port()
@@ -511,7 +504,7 @@ fn test_managed_read_provider_error_gains_read_context() {
     let port = ManagedReadPort::new(info, 1, 1, 1, Box::new(FailingReadSession));
     let error = port.read_at(0, &mut [0]).unwrap_err();
     assert_eq!(error.kind(), FsErrorKind::PermissionDenied);
-    assert_eq!(error.operation(), qubit_fs::error::FsOperation::Read);
+    assert_eq!(error.operation(), FsOperation::Read);
     assert_eq!(error.path().unwrap().as_str(), "/object");
     assert_eq!(port.len().unwrap(), 1);
 }

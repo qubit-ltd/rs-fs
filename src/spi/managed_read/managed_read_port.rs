@@ -174,9 +174,7 @@ impl ManagedReadPort {
             ));
         }
         let info = self.info()?;
-        let version = info
-            .metadata()
-            .and_then(|metadata| metadata.etag().cloned());
+        let version = info.metadata().and_then(|metadata| metadata.etag().cloned());
         let (remaining_budget, len) = self.remaining_budget_and_len()?;
         let allocation_limit = capacity
             .min(usize::try_from(remaining_budget).unwrap_or(usize::MAX))

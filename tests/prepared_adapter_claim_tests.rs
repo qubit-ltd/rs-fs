@@ -21,11 +21,20 @@ use qubit_fs::FsOperationFailure;
 use qubit_fs::FsOwnedReadRequest;
 use qubit_fs::Path;
 use qubit_fs::ReadAllOptions;
+use qubit_fs::copy::CopyOutcome;
+use qubit_fs::directory::TreePublishOutcome;
+use qubit_fs::execution::FsEffectReservation;
+use qubit_fs::execution::FsOwnedCopyRequest;
+use qubit_fs::execution::FsOwnedRenameRequest;
+use qubit_fs::execution::FsOwnedTreePublishRequest;
+use qubit_fs::execution::FsOwnedWriteRequest;
 use qubit_fs::execution::PreparedFsCopyAdapter;
 use qubit_fs::execution::PreparedFsReadAdapter;
 use qubit_fs::execution::PreparedFsRenameAdapter;
 use qubit_fs::execution::PreparedFsTreePublishAdapter;
 use qubit_fs::execution::PreparedFsWriteAdapter;
+use qubit_fs::metadata::WriteOutcome;
+use qubit_fs::rename::RenameOutcome;
 use qubit_fs::spi::PreparedFsCopy;
 use qubit_fs::spi::PreparedFsRead;
 use qubit_fs::spi::PreparedFsRename;
@@ -151,15 +160,13 @@ fn test_bind_claim_prevents_request_recovery_without_waiting_for_provider() {
     let prepared_task: Arc<dyn PreparedFsRead> = Arc::clone(&prepared) as Arc<dyn PreparedFsRead>;
     let adapter = Arc::new(PreparedFsReadAdapter::new(prepared_task));
     let binding_adapter = Arc::clone(&adapter);
-    let binding = std::thread::spawn(move || {
-        PreparedExternalOperation::bind(binding_adapter.as_ref(), fresh_operation_id())
-    });
+    let binding =
+        std::thread::spawn(move || PreparedExternalOperation::bind(binding_adapter.as_ref(), fresh_operation_id()));
     let bind_stage = entered_rx.recv_timeout(Duration::from_secs(2));
     let recovery = if matches!(bind_stage, Ok("bind")) {
         let request_adapter = Arc::clone(&adapter);
         let (result_tx, result_rx) = mpsc::channel();
-        let thread =
-            std::thread::spawn(move || result_tx.send(request_adapter.take_request()).unwrap());
+        let thread = std::thread::spawn(move || result_tx.send(request_adapter.take_request()).unwrap());
         Some((thread, result_rx.recv_timeout(Duration::from_secs(2))))
     } else {
         None
@@ -215,10 +222,7 @@ fn test_request_recovery_claim_rejects_bind_before_provider_callback() {
     let taking = std::thread::spawn(move || take_tx.send(take_adapter.take_request()).unwrap());
     let take_stage = entered_rx.recv_timeout(Duration::from_secs(2));
     let bind_result = if matches!(take_stage, Ok("take")) {
-        Some(PreparedExternalOperation::bind(
-            adapter.as_ref(),
-            fresh_operation_id(),
-        ))
+        Some(PreparedExternalOperation::bind(adapter.as_ref(), fresh_operation_id()))
     } else {
         None
     };
@@ -323,10 +327,7 @@ macro_rules! mutation_claim_contract {
                 self.request_reads.fetch_add(1, Ordering::SeqCst);
                 None
             }
-            fn install_effect_reservation(
-                &self,
-                reservation: qubit_fs::execution::FsEffectReservation,
-            ) -> Result<(), qubit_fs::execution::FsEffectReservation> {
+            fn install_effect_reservation(&self, reservation: FsEffectReservation) -> Result<(), FsEffectReservation> {
                 Err(reservation)
             }
         }
@@ -352,32 +353,32 @@ mutation_claim_contract!(
     PreparedCopyFixture,
     PreparedFsCopy,
     PreparedFsCopyAdapter,
-    qubit_fs::copy::CopyOutcome,
-    qubit_fs::execution::FsOwnedCopyRequest,
+    CopyOutcome,
+    FsOwnedCopyRequest,
     copy_claim_blocks_recovery_and_repeated_bind
 );
 mutation_claim_contract!(
     PreparedRenameFixture,
     PreparedFsRename,
     PreparedFsRenameAdapter,
-    qubit_fs::rename::RenameOutcome,
-    qubit_fs::execution::FsOwnedRenameRequest,
+    RenameOutcome,
+    FsOwnedRenameRequest,
     rename_claim_blocks_recovery_and_repeated_bind
 );
 mutation_claim_contract!(
     PreparedTreePublishFixture,
     PreparedFsTreePublish,
     PreparedFsTreePublishAdapter,
-    qubit_fs::directory::TreePublishOutcome,
-    qubit_fs::execution::FsOwnedTreePublishRequest,
+    TreePublishOutcome,
+    FsOwnedTreePublishRequest,
     tree_publish_claim_blocks_recovery_and_repeated_bind
 );
 mutation_claim_contract!(
     PreparedWriteFixture,
     PreparedFsWrite,
     PreparedFsWriteAdapter,
-    qubit_fs::metadata::WriteOutcome,
-    qubit_fs::execution::FsOwnedWriteRequest,
+    WriteOutcome,
+    FsOwnedWriteRequest,
     write_claim_blocks_recovery_and_repeated_bind
 );
 

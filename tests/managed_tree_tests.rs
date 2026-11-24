@@ -673,10 +673,7 @@ fn test_changed_tree_version_blocks_required_publish_and_keeps_cleanup_owner() {
                 Err(rejection) => rejection,
                 Ok(_) => panic!("provider without atomic version comparison must reject"),
             };
-            assert_eq!(
-                rejection.request.validated_version,
-                Some(source_version.into())
-            );
+            assert_eq!(rejection.request.validated_version, Some(source_version.into()));
         }
     );
     assert_eq!(preparations.load(Ordering::SeqCst), 1);
