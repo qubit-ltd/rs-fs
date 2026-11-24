@@ -14,22 +14,35 @@ or an async runtime for you.
 
 ## Quick Start
 
-The `qubit-fs` 0.4 release is not yet available from crates.io (checked
-2026-11-23), so the dependency block below is not installable from the registry
-yet. The complete example is runnable from the source checkout layout described
-under [Testing](#testing) with `bash scripts/check-documentation-examples.sh`.
+The public crates.io index checked on 2026-11-24 lists `qubit-fs` only through
+0.3.3, so version 0.4 is not installable from the registry. For now, create an
+independent Cargo project (for example `report-app`) beside `rs-fs`, put the
+marked dependency block below in its `Cargo.toml`, and copy the complete program
+in the [Direct-call compatibility example](#direct-call-compatibility-example)
+to `report-app/src/main.rs`. Run it with
+`cargo run --manifest-path ../report-app/Cargo.toml`; it prints `report ready`.
+The source paths resolve the core and local adapter from the same sibling
+checkout used by the documentation fixture.
 
+<!-- dependencies: quick-start -->
 ```toml
 [dependencies]
-qubit-fs = "0.4"
-qubit-fs-local = "^0.11"
+qubit-fs = { path = "../rs-fs" }
+qubit-fs-local = { path = "../rs-fs-local" }
+tempfile = "3"
 ```
 
-Synchronous APIs are enabled by default. Enable the asynchronous facade
-explicitly when it is needed:
-
+<!-- dependencies: quick-start-async -->
 ```toml
-qubit-fs = { version = "0.4", features = ["async"] }
+[dependencies]
+qubit-fs = { path = "../rs-fs", features = ["async"] }
+```
+
+<!-- release-status: quick-start -->
+```toml
+[release]
+qubit-fs = "not-published"
+checked = "2026-11-24"
 ```
 
 The default feature set is empty: it exposes the synchronous API and does not
@@ -49,17 +62,9 @@ is not asserted to implement the 0.4 SPI; use a provider built for 0.4 before
 using the snippet as an integration example.
 
 The fixture uses sibling `rs-fs-local` 0.11.2 source, whose manifest depends on
-`qubit-fs` 0.4 and `qubit-local-files` 0.6.0. It validates this source layout, not
-installation from crates.io. `qubit-operation` resolves from crates.io at
+`qubit-fs` 0.4 and `qubit-local-files` 0.6.0. It validates the same source layout
+shown by the dependency paths above. `qubit-operation` resolves from crates.io at
 `^0.3.1`; no `rs-operation` checkout is needed.
-
-<!-- dependencies: quick-start -->
-```toml
-[dependencies]
-qubit-fs = "0.4"
-qubit-fs-local = "^0.11"
-tempfile = "3"
-```
 
 <!-- example: quick-start -->
 ```rust

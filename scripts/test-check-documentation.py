@@ -81,12 +81,12 @@ class RedactDependencyDescriptionTests(unittest.TestCase):
 class QuickStartDependencyMarkerTests(unittest.TestCase):
     def test_real_bilingual_readmes_and_guides_have_matching_marked_dependencies(self):
         dependencies = checker.check_marked_quick_start_dependencies()
-        self.assertIn('qubit-fs = "0.4"', dependencies)
+        self.assertIn('qubit-fs = { path = "../rs-fs" }', dependencies)
 
     def test_marker_requires_one_closed_correct_fence(self):
         marker = checker.QUICK_START_DEPENDENCIES
-        valid = marker + '\n```toml\n[dependencies]\nqubit-fs = "0.4"\n```'
-        self.assertIn('qubit-fs = "0.4"', checker.marked_fence(valid, marker, 'toml', 'fixture'))
+        valid = marker + '\n```toml\n[dependencies]\nqubit-fs = { path = "../rs-fs" }\n```'
+        self.assertIn('path = "../rs-fs"', checker.marked_fence(valid, marker, 'toml', 'fixture'))
         for invalid in (
             '```toml\n[dependencies]\n```',
             valid + '\n' + valid,
@@ -96,15 +96,52 @@ class QuickStartDependencyMarkerTests(unittest.TestCase):
             with self.subTest(invalid=invalid), self.assertRaises(AssertionError):
                 checker.marked_fence(invalid, marker, 'toml', 'fixture')
 
-    def test_marked_dependencies_must_match_across_all_bilingual_documents(self):
+    def test_marked_dependencies_require_source_paths_and_match_all_documents(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / 'doc').mkdir()
-            valid = '<!-- dependencies: quick-start -->\n```toml\n[dependencies]\nqubit-fs = "0.4"\n```\n'
+            valid = '''<!-- dependencies: quick-start -->
+```toml
+[dependencies]
+qubit-fs = { path = "../rs-fs" }
+qubit-fs-local = { path = "../rs-fs-local" }
+tempfile = "3"
+```
+
+<!-- dependencies: quick-start-async -->
+```toml
+[dependencies]
+qubit-fs = { path = "../rs-fs", features = ["async"] }
+```
+
+<!-- release-status: quick-start -->
+```toml
+[release]
+qubit-fs = "not-published"
+checked = "2026-11-24"
+```
+Create a sibling caller, copy the program to `src/main.rs`, then run
+`cargo run --manifest-path ../report-app/Cargo.toml`; it prints `report ready`.
+'''
             for relative in ('README.md', 'README.zh_CN.md', 'doc/user_guide.md', 'doc/user_guide.zh_CN.md'):
                 (root / relative).write_text(valid, encoding='utf-8')
-            self.assertIn('qubit-fs = "0.4"', checker.check_marked_quick_start_dependencies(root))
-            (root / 'doc/user_guide.zh_CN.md').write_text(valid.replace('"0.4"', '"0.3"'), encoding='utf-8')
+            self.assertIn('path = "../rs-fs"', checker.check_marked_quick_start_dependencies(root))
+            wrong_path = valid.replace('../rs-fs-local', '../rs-local-files')
+            (root / 'README.md').write_text(wrong_path, encoding='utf-8')
+            with self.assertRaisesRegex(AssertionError, 'differs from README'):
+                checker.check_marked_quick_start_dependencies(root)
+            registry = valid.replace('qubit-fs = { path = "../rs-fs" }', 'qubit-fs = "0.4"')
+            for relative in ('README.md', 'README.zh_CN.md', 'doc/user_guide.md', 'doc/user_guide.zh_CN.md'):
+                (root / relative).write_text(registry, encoding='utf-8')
+            with self.assertRaisesRegex(AssertionError, 'required sibling source paths'):
+                checker.check_marked_quick_start_dependencies(root)
+            wrong_sibling = valid.replace('../rs-fs-local', '../rs-local-files')
+            for relative in ('README.md', 'README.zh_CN.md', 'doc/user_guide.md', 'doc/user_guide.zh_CN.md'):
+                (root / relative).write_text(wrong_sibling, encoding='utf-8')
+            with self.assertRaisesRegex(AssertionError, 'required sibling source paths'):
+                checker.check_marked_quick_start_dependencies(root)
+            (root / 'README.md').write_text(valid, encoding='utf-8')
+            (root / 'doc/user_guide.zh_CN.md').write_text(valid.replace('checked = "2026-11-24"', 'checked = "2026-11-23"'), encoding='utf-8')
             with self.assertRaisesRegex(AssertionError, 'differs from README'):
                 checker.check_marked_quick_start_dependencies(root)
 
