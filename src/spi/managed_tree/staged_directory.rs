@@ -162,8 +162,10 @@ impl StagedDirectory {
     /// Rejects a changed or unversioned tree before a required atomic publish.
     ///
     /// # Parameters
-    /// - `current_version`: Version currently observed for the destination
-    ///   source.
+    /// - `current_version`: Current version observed for this staged source
+    ///   tree. This is compared with the version recorded for the same
+    ///   [`StagedDirectory`]; the destination object's version is independent
+    ///   and is handled by the provider.
     /// - `requirements`: Requested publication guarantees.
     ///
     /// # Returns
@@ -187,8 +189,9 @@ impl StagedDirectory {
     /// # Parameters
     /// - `destination_root`: Destination for the published tree.
     /// - `publication`: Atomicity and durability requirements.
-    /// - `current_version`: Current version used to validate required
-    ///   atomicity.
+    /// - `current_version`: Current version of this staged source tree, used to
+    ///   validate the version captured for this same staging owner. Destination
+    ///   version conditions are handled separately by the provider.
     /// - `capabilities`: Provider capabilities used to validate the request.
     ///
     /// # Returns
@@ -221,12 +224,14 @@ impl StagedDirectory {
         })
     }
 
-    /// Ensures required atomic publication uses the version captured at
-    /// validation.
+    /// Ensures required atomic publication uses the version captured for this
+    /// same staged source tree at validation. The destination version is a
+    /// separate provider condition.
     ///
     /// # Parameters
     /// - `state`: Staging validation state protected by the caller's lock.
-    /// - `current_version`: Current destination version, if one is available.
+    /// - `current_version`: Current version of this staged source tree, if
+    ///   available.
     /// - `requirements`: Publication atomicity requirements to enforce.
     ///
     /// # Returns

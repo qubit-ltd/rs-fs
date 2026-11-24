@@ -7,14 +7,18 @@
 // =============================================================================
 
 use std::process::Command;
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
+use qubit_fs::FsOwnedTreePublishRequest;
+use qubit_fs::FsPrepareFailure;
 use qubit_fs::Path;
 use qubit_fs::metadata::ResourceVersion;
 use qubit_fs::metadata::TreeValidationOptions;
 use qubit_fs::spi::ManagedFsTreeSpi;
+use qubit_fs::spi::PreparedFsTreePublish;
 use qubit_operation::ManagerOptions;
 use qubit_operation::OperationManager;
 use qubit_operation::OperationOptions;
@@ -27,11 +31,8 @@ struct Provider;
 impl ManagedFsTreeSpi for Provider {
     fn prepare_tree_publish(
         &self,
-        _: qubit_fs::FsOwnedTreePublishRequest,
-    ) -> Result<
-        std::sync::Arc<dyn qubit_fs::spi::PreparedFsTreePublish>,
-        qubit_fs::FsPrepareFailure<qubit_fs::FsOwnedTreePublishRequest>,
-    > {
+        _: FsOwnedTreePublishRequest,
+    ) -> Result<Arc<dyn PreparedFsTreePublish>, FsPrepareFailure<FsOwnedTreePublishRequest>> {
         unreachable!("debug formatting test does not publish")
     }
 }

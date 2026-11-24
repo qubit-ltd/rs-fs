@@ -41,10 +41,14 @@ pub struct FsOwnedTreePublishRequest {
     pub destination_root: Path,
     /// Entry, depth, and aggregate-content limits applied before publication.
     pub validation: TreeValidationOptions,
-    /// Version of the same staged owner observed after validation.
+    /// Version of the staged source tree observed after validation. This token
+    /// must be compared against the current version of that same source tree;
+    /// it does not represent the destination object's version.
     ///
-    /// Required atomic publication must compare this token as part of the
-    /// publication transaction. It is not a standalone preflight guarantee.
+    /// Required atomic publication must compare this source token as part of
+    /// the publication transaction. Destination version conditions are
+    /// independent provider concerns. This is not a standalone preflight
+    /// guarantee.
     pub validated_version: Option<ResourceVersion>,
     /// Atomicity and durability guarantees required for publication.
     pub publication: TreePublishOptions,

@@ -40,6 +40,8 @@ RUST_FILE_HEADER = re.compile(
     r'// =============================================================================\n\n'
 )
 QUICK_START_DEPENDENCIES = '<!-- dependencies: quick-start -->'
+QUICK_START_ASYNC_DEPENDENCIES = '<!-- dependencies: quick-start-async -->'
+QUICK_START_RELEASE_STATUS = '<!-- release-status: quick-start -->'
 STALE_CORE_VERSION = re.compile(r'qubit-fs\s*(?:=\s*(?:\{\s*version\s*=\s*)?)?["\']?\s*0\.6(?:\.0)?(?![0-9])')
 
 
@@ -65,7 +67,7 @@ def marked_fence(content, marker, language, location):
 
 
 def check_marked_quick_start_dependencies(root=ROOT):
-    """Keep the complete-program dependencies stable and bilingual."""
+    """Keep source installation examples and their release status bilingual."""
     blocks = {}
     for relative in ('README.md', 'README.zh_CN.md', 'doc/user_guide.md', 'doc/user_guide.zh_CN.md'):
         content = (root / relative).read_text(encoding='utf-8')
@@ -73,6 +75,41 @@ def check_marked_quick_start_dependencies(root=ROOT):
     baseline = blocks['README.md']
     for relative, block in blocks.items():
         assert block == baseline, f'{relative}: Quick Start dependency block differs from README.md'
+    dependencies = tomllib.loads(baseline).get('dependencies', {})
+    expected = {
+        'qubit-fs': {'version': '0.4', 'path': '../rs-fs'},
+        'qubit-fs-local': {'path': '../rs-fs-local'},
+        'tempfile': '3',
+    }
+    assert dependencies == expected, 'Quick Start dependency marker: use the required sibling source paths and tempfile'
+
+    async_blocks = {}
+    statuses = {}
+    for relative in blocks:
+        content = (root / relative).read_text(encoding='utf-8')
+        async_blocks[relative] = marked_fence(content, QUICK_START_ASYNC_DEPENDENCIES, 'toml', relative)
+        statuses[relative] = marked_fence(content, QUICK_START_RELEASE_STATUS, 'toml', relative)
+    async_baseline = async_blocks['README.md']
+    for relative, block in async_blocks.items():
+        assert block == async_baseline, f'{relative}: async dependency block differs from README.md'
+    async_dependencies = tomllib.loads(async_baseline).get('dependencies', {})
+    assert async_dependencies == {
+        'qubit-fs': {'version': '0.4', 'path': '../rs-fs', 'features': ['async']},
+    }, 'Quick Start async dependency marker: enable async on the same core source path'
+    status_baseline = statuses['README.md']
+    for relative, block in statuses.items():
+        assert block == status_baseline, f'{relative}: release status differs from README.md'
+    status = tomllib.loads(status_baseline).get('release', {})
+    assert status == {'core_status': 'not-published', 'checked': '2026-11-24'}, (
+        'Quick Start release status marker: update the public-index status and check date'
+    )
+    for relative in blocks:
+        content = (root / relative).read_text(encoding='utf-8').lower()
+        assert 'src/main.rs' in content, f'{relative}: installation must name src/main.rs'
+        assert 'cargo run --manifest-path ../report-app/cargo.toml' in content, (
+            f'{relative}: installation must give the standalone caller run command'
+        )
+        assert 'report ready' in content, f'{relative}: installation must state the expected output'
     return baseline
 
 
@@ -158,32 +195,16 @@ def check_versions_and_structure():
     manifest = tomllib.loads((ROOT / 'Cargo.toml').read_text())
     version = manifest['package']['version']
     major_minor = '.'.join(version.split('.')[:2])
-    fixture_manifest = tomllib.loads((ROOT / 'tests/fixtures/documentation_examples/Cargo.toml').read_text())
-    local_version = fixture_manifest['dependencies']['qubit-fs-local']['version']
     for path in markdown_documents():
         content = path.read_text()
         relative = path.relative_to(ROOT)
         assert not STALE_CORE_VERSION.search(content), f'{relative}: contains stale qubit-fs 0.6 version text'
         assert major_minor in content, f'{relative}: missing current package version {major_minor}'
-    install_headings = {
-        'README.md': 'Quick Start',
-        'README.zh_CN.md': '快速开始',
-        'doc/user_guide.md': 'Installation and Minimal Configuration',
-        'doc/user_guide.zh_CN.md': '安装与最小配置',
-    }
-    for relative, heading in install_headings.items():
-        content = (ROOT / relative).read_text()
-        section = content.split(f'## {heading}\n', 1)[1].split('\n## ', 1)[0]
-        match = re.search(r'```toml\n(.*?)\n```', section, re.S)
-        assert match, f'{relative}: installation dependency block is missing'
-        block = match.group(1)
-        assert block.count(f'qubit-fs = "{major_minor}"') == 1, f'{relative}: core version is stale'
-        assert block.count(f'qubit-fs-local = "{local_version}"') == 1, f'{relative}: local version is stale'
-    quick_start_dependencies = check_marked_quick_start_dependencies()
+    quick_start_dependencies = check_marked_quick_start_dependencies(ROOT)
     parsed_quick_start_dependencies = tomllib.loads(quick_start_dependencies)
     quick_start_table = parsed_quick_start_dependencies.get('dependencies', {})
-    assert quick_start_table.get('qubit-fs') == major_minor, 'Quick Start dependency marker: core version is stale'
-    assert quick_start_table.get('qubit-fs-local') == local_version, 'Quick Start dependency marker: local version is stale'
+    assert quick_start_table.get('qubit-fs', {}).get('path') == '../rs-fs', 'Quick Start dependency marker: core source path is incorrect'
+    assert quick_start_table.get('qubit-fs-local', {}).get('path') == '../rs-fs-local', 'Quick Start dependency marker: local source path is incorrect'
     for relative, heading in (
         ('doc/provider_guide.md', '## 15. Further reading'),
         ('doc/provider_guide.zh_CN.md', '## 15. 延伸阅读'),

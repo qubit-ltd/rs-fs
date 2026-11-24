@@ -13,25 +13,37 @@
 
 ## 快速开始
 
-截至 2026-11-23，crates.io 尚未发布 `qubit-fs` 0.4，因此下方依赖配置暂时
-不能从 registry 安装。完整示例可在“测试”一节说明的源码布局中，通过
-`bash scripts/check-documentation-examples.sh` 编译并运行。
+2026-11-24 查询 crates.io 公开索引时，`qubit-fs` 最高版本为 0.3.3，尚无
+0.4 发布版本。当前请在 `rs-fs` 同级创建独立 Cargo 项目（例如 `report-app`），
+将下方标记的依赖配置放入其 `Cargo.toml`，并把[直接调用兼容示例](#直接调用兼容示例)
+中的完整程序复制到 `report-app/src/main.rs`。运行 `cargo run --manifest-path ../report-app/Cargo.toml`，
+预期输出 `report ready`。源码路径会从同级 checkout 加载核心库和本机 adapter。
 
+<!-- dependencies: quick-start -->
 ```toml
 [dependencies]
-qubit-fs = "0.4"
-qubit-fs-local = "^0.12"
+qubit-fs = { version = "0.4", path = "../rs-fs" }
+qubit-fs-local = { path = "../rs-fs-local" }
+tempfile = "3"
 ```
 
-同步 API 默认启用。需要异步门面时必须显式开启 async feature：
-
+<!-- dependencies: quick-start-async -->
 ```toml
-qubit-fs = { version = "0.4", features = ["async"] }
+[dependencies]
+qubit-fs = { version = "0.4", path = "../rs-fs", features = ["async"] }
+```
+
+<!-- release-status: quick-start -->
+```toml
+[release]
+core_status = "not-published"
+checked = "2026-11-24"
 ```
 
 默认特性集合为空：提供同步 API，且不会启动线程。可选的 `async` feature
 提供异步 API，但不选择或启动执行器。0.4 引入 owned provider 操作和显式执行绑定；请阅读
-[托管操作迁移说明](doc/user_guide.zh_CN.md#托管操作与-03-迁移)及[provider 指南](doc/provider_guide.zh_CN.md#托管-spi-迁移)。
+[托管操作迁移说明](doc/user_guide.zh_CN.md#托管操作与-03-迁移)及
+[provider 指南](doc/provider_guide.zh_CN.md#托管-spi-迁移)。
 
 ## 直接调用兼容示例
 
@@ -39,17 +51,9 @@ qubit-fs = { version = "0.4", features = ["async"] }
 本地临时目录，写入报告，再以 1 KiB 上限读取，输出 `report ready`。退出时清理临时目录。此直接调用示例展示
 非托管兼容 API。文中引用的 `qubit-fs-local` 版本未被声明为实现了 0.4 SPI；集成使用时应选择为 0.4 构建的 provider。
 
-源码 fixture 使用同级 `rs-fs-local` 0.11.2；其 manifest 依赖 `qubit-fs` 0.4 和
-`qubit-local-files` 0.6.0。fixture 验证的是源码布局，不验证从 crates.io 安装发布包。
+源码 fixture 使用同级 `rs-fs-local` 0.12.0 候选源码；其 manifest 依赖 `qubit-fs` 0.4 和
+`qubit-local-files` 0.6.0。上面的独立项目使用相同源码布局。
 `qubit-operation` 使用 crates.io 上的 `^0.3.1`，不需要 `rs-operation` checkout。
-
-<!-- dependencies: quick-start -->
-```toml
-[dependencies]
-qubit-fs = "0.4"
-qubit-fs-local = "^0.12"
-tempfile = "3"
-```
 
 <!-- example: quick-start -->
 ```rust
@@ -165,7 +169,7 @@ bash scripts/check-documentation-examples.sh
 ```
 
 独立 workflow 使用固定的同级仓库版本运行此入口；本地入口使用当前检出的同级仓库内容。
-源码 manifest 需要 `rs-fs-local` 0.11.2、`rs-fs-registry`、`rs-fs-testkit` 和
+源码 manifest 需要 `rs-fs-local` 0.12.0 候选源码、`rs-fs-registry`、`rs-fs-testkit` 和
 `rs-local-files` 0.6.0 与 `rs-fs` 位于同一父目录。`rs-redact` 发布的 `qubit-redact` 0.10 和
 `qubit-operation` 0.3.1 均从 crates.io 解析，不需要对应源码 checkout。
 

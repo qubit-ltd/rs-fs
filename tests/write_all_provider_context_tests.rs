@@ -283,6 +283,7 @@ mod asynchronous {
     use qubit_fs::spi::SpiFuture;
     use qubit_fs::spi::StatRequest;
     use qubit_fs::spi::StatResponse;
+    use qubit_fs::write::AsyncWriteAllOperationState;
     use qubit_fs::write::WriteFailure;
     use qubit_io::AsyncOutput;
 
@@ -429,7 +430,7 @@ mod asynchronous {
         );
         assert_eq!(WriteFailureState::Indeterminate, failure.state());
         assert_eq!(
-            qubit_fs::write::AsyncWriteAllOperationState::Failed(WriteFailureState::Indeterminate),
+            AsyncWriteAllOperationState::Failed(WriteFailureState::Indeterminate),
             operation.state()
         );
         assert!(operation.has_recovery());

@@ -62,30 +62,40 @@ limits.
 
 ## Installation and Minimal Configuration
 
-As checked on 2026-11-23, crates.io does not yet list a `qubit-fs` 0.4 release.
-The complete program in this guide is currently executable through the source
-fixture: check out the sibling layout in the [README](../README.md#testing), then
-run `bash scripts/check-documentation-examples.sh` from the `rs-fs` root.
-
-The default feature set is empty and provides synchronous APIs. Enable
-`qubit-fs = { version = "0.4", features = ["async"] }` for asynchronous APIs.
-The application chooses its executor; the library does not require Tokio.
-
-The local adapter example below documents the direct non-managed facade path.
-The source fixture uses `rs-fs-local` 0.11.2 with the current 0.4 source. The
-published 0.11 adapter has not been validated against `qubit-fs` 0.4; use a
-provider built against the same 0.4 source until compatible releases are
-available.
-
-For the legacy local-adapter example in this guide, use:
+The public crates.io index checked on 2026-11-24 lists `qubit-fs` only through
+0.3.3, so version 0.4 is not installable from the registry. Create an independent
+Cargo project (for example `report-app`) beside `rs-fs` and use these marked
+source dependencies. Copy the complete report program from the [README](../README.md#quick-start)
+to `report-app/src/main.rs`; then run
+`cargo run --manifest-path ../report-app/Cargo.toml`. It prints `report ready`.
 
 <!-- dependencies: quick-start -->
 ```toml
 [dependencies]
-qubit-fs = "0.4"
-qubit-fs-local = "^0.12"
+qubit-fs = { version = "0.4", path = "../rs-fs" }
+qubit-fs-local = { path = "../rs-fs-local" }
 tempfile = "3"
 ```
+
+<!-- dependencies: quick-start-async -->
+```toml
+[dependencies]
+qubit-fs = { version = "0.4", path = "../rs-fs", features = ["async"] }
+```
+
+<!-- release-status: quick-start -->
+```toml
+[release]
+core_status = "not-published"
+checked = "2026-11-24"
+```
+
+The default feature set is empty and provides synchronous APIs. Enable the
+`async` feature on the same source dependency above for asynchronous APIs. The
+application chooses its executor; the library does not require Tokio. The
+published 0.11 local adapter has not been validated against `qubit-fs` 0.4, so
+use a provider built against the same 0.4 source until compatible releases are
+available.
 
 ## Core Workflow
 
@@ -1070,8 +1080,10 @@ cancellation, release, or settlement tracking from `qubit-operation`. A managed 
 `OperationScope` through `FsExecutionBinding`; the filesystem library does not
 create a replacement root manager or keep a borrowed scope. The examples below
 submit at the `OperationManager` root. Use `FsExecutionBinding::with_group` to
-bind that root submission to a service group, or call a facade's
-`submit_*_in` method with an active parent scope to make the operation its child.
+add a service group to the current submission target. A binding created from
+`scope.manager()` keeps that parent target, so a group can be layered onto the
+parent-child submission. A facade's `submit_*_in` method with an active parent
+scope also submits the operation as its child.
 
 The legacy direct facade methods use the facade's own SPI and cached
 properties, and their validation is owned by the facade; they remain

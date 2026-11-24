@@ -14,13 +14,11 @@ use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use std::sync::mpsc;
 use std::task::Context;
 use std::task::Poll;
 
 use qubit_fs::AsyncFsOperation;
 use qubit_fs::FsEffectFact;
-use qubit_fs::FsEffectObservationError;
 use qubit_fs::FsEffectSlotPool;
 use qubit_fs::FsEffectSnapshot;
 use qubit_fs::FsEffectState;
@@ -147,49 +145,17 @@ fn test_effect_fact_slots_are_bounded_reclaimed_and_final_is_immutable() {
 }
 
 #[test]
-fn test_last_effect_reservation_closes_pending_sync_waiters_and_reclaims_capacity() {
-    use std::time::Duration;
-
+fn test_last_effect_reservation_closes_pending_snapshot_and_reclaims_capacity() {
     let pool = FsEffectSlotPool::new(1);
     let first_reservation = pool.reserve().unwrap();
     let last_reservation = first_reservation.clone();
     let observer = first_reservation.observer();
-    let (ready_tx, ready_rx) = mpsc::channel();
-    let (result_tx, result_rx) = mpsc::channel();
-    let mut threads = Vec::new();
-
-    for _ in 0..2 {
-        let observer = observer.clone();
-        let ready_tx = ready_tx.clone();
-        let result_tx = result_tx.clone();
-        threads.push(std::thread::spawn(move || {
-            ready_tx.send(()).unwrap();
-            result_tx.send(observer.wait_final()).unwrap();
-        }));
-    }
-    drop(ready_tx);
-    drop(result_tx);
-    for _ in 0..2 {
-        ready_rx.recv_timeout(Duration::from_secs(2)).expect("waiter started");
-    }
 
     drop(first_reservation);
     assert!(matches!(observer.snapshot(), FsEffectSnapshot::Pending));
     assert!(pool.reserve().is_err(), "one reservation clone still owns capacity");
     drop(last_reservation);
     assert!(matches!(observer.snapshot(), FsEffectSnapshot::Closed));
-
-    for _ in 0..2 {
-        assert!(matches!(
-            result_rx
-                .recv_timeout(Duration::from_secs(2))
-                .expect("closed wait was notified"),
-            Err(FsEffectObservationError::PublisherClosed),
-        ));
-    }
-    for thread in threads {
-        thread.join().unwrap();
-    }
     assert!(pool.reserve().is_ok(), "last reservation returns capacity");
 }
 

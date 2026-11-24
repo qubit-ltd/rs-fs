@@ -44,6 +44,7 @@ pub use checksum_policy::ChecksumPolicy;
 pub use consistent_read_outcome::ConsistentReadOutcome;
 pub use file_reader::FileReader;
 pub(crate) use internal::RandomAccessReadPolicy;
+pub(crate) use internal::ReadBuffer;
 pub(crate) use internal::read_retry_interrupted;
 #[cfg(feature = "async")]
 pub use observed_read_error::ObservedReadError;

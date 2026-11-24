@@ -17,6 +17,8 @@ use std::mem::replace;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 #[cfg(feature = "async")]
 use std::task::Context;
 #[cfg(feature = "async")]
@@ -24,9 +26,11 @@ use std::task::Poll;
 #[cfg(feature = "async")]
 use std::task::Waker;
 
+use qubit_fs::FsError;
 use qubit_fs::FsResult;
 use qubit_fs::Path;
 use qubit_fs::error::FsErrorKind;
+use qubit_fs::error::FsOperation;
 use qubit_fs::metadata::FileKind;
 use qubit_fs::metadata::FileMetadata;
 use qubit_fs::metadata::FileSystemId;
@@ -392,7 +396,7 @@ fn test_provider_panic_poison_is_reported_by_all_shared_read_entry_points() {
     ];
     for error in errors {
         assert_eq!(error.kind(), FsErrorKind::ProviderContractViolation);
-        assert_eq!(error.operation(), qubit_fs::error::FsOperation::Read);
+        assert_eq!(error.operation(), FsOperation::Read);
         assert!(error.to_string().contains("poisoned"));
     }
 }
@@ -401,12 +405,97 @@ struct FailingReadSession;
 
 impl RandomAccessReadSession for FailingReadSession {
     fn read_at(&mut self, _: u64, _: &mut [u8]) -> FsResult<usize> {
-        Err(qubit_fs::FsError::new(
+        Err(FsError::new(
             FsErrorKind::PermissionDenied,
-            qubit_fs::error::FsOperation::OpenReader,
+            FsOperation::OpenReader,
             "provider denied read",
         ))
     }
+}
+
+struct CountingFailureReadSession(Arc<AtomicUsize>);
+
+impl RandomAccessReadSession for CountingFailureReadSession {
+    fn read_at(&mut self, _: u64, _: &mut [u8]) -> FsResult<usize> {
+        self.0.fetch_add(1, Ordering::SeqCst);
+        Err(FsError::new(
+            FsErrorKind::PermissionDenied,
+            FsOperation::OpenReader,
+            "provider denied read",
+        ))
+    }
+}
+
+fn huge_managed_read_port(calls: Arc<AtomicUsize>) -> ManagedReadPort {
+    let info = OpenedFileInfo::new(
+        FileSystemId::new("managed-read-test").unwrap(),
+        Path::parse("/object").unwrap(),
+    )
+    .with_metadata(FileMetadata::new(FileKind::File).with_len(Some(u64::MAX)));
+    ManagedReadPort::new(
+        info,
+        u64::MAX,
+        usize::MAX - 1,
+        u64::MAX,
+        Box::new(CountingFailureReadSession(calls)),
+    )
+}
+
+#[test]
+fn test_aggregate_reads_call_provider_before_allocating_and_keep_first_error_context() {
+    let read_all_calls = Arc::new(AtomicUsize::new(0));
+    let read_all_error = huge_managed_read_port(Arc::clone(&read_all_calls))
+        .read_all(ReadAllOptions::new(usize::MAX - 1, Default::default()))
+        .unwrap_err();
+    assert_eq!(read_all_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(read_all_error.kind(), FsErrorKind::PermissionDenied);
+    assert_eq!(read_all_error.operation(), FsOperation::Read);
+    assert_eq!(read_all_error.path().unwrap().as_str(), "/object");
+
+    let prefix_calls = Arc::new(AtomicUsize::new(0));
+    let prefix_error = huge_managed_read_port(Arc::clone(&prefix_calls))
+        .read_prefix(usize::MAX - 1)
+        .unwrap_err();
+    assert_eq!(prefix_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(prefix_error.kind(), FsErrorKind::PermissionDenied);
+    assert_eq!(prefix_error.operation(), FsOperation::Read);
+    assert_eq!(prefix_error.path().unwrap().as_str(), "/object");
+}
+
+struct ShortReadSession(Arc<Vec<u8>>);
+
+impl RandomAccessReadSession for ShortReadSession {
+    fn read_at(&mut self, offset: u64, output: &mut [u8]) -> FsResult<usize> {
+        let Ok(offset) = usize::try_from(offset) else {
+            return Ok(0);
+        };
+        let Some(source) = self.0.get(offset..) else {
+            return Ok(0);
+        };
+        let count = source.len().min(output.len());
+        output[..count].copy_from_slice(&source[..count]);
+        Ok(count)
+    }
+}
+
+#[test]
+fn test_aggregate_reads_keep_short_data_when_provider_ends_before_open_length() {
+    let make_port = || {
+        let info = OpenedFileInfo::new(
+            FileSystemId::new("managed-read-test").unwrap(),
+            Path::parse("/object").unwrap(),
+        )
+        .with_metadata(FileMetadata::new(FileKind::File).with_len(Some(10)));
+        ManagedReadPort::new(info, 10, 2, 10, Box::new(ShortReadSession(Arc::new(b"abc".to_vec()))))
+    };
+
+    let outcome = make_port()
+        .read_all(ReadAllOptions::new(10, Default::default()))
+        .unwrap();
+    assert_eq!(outcome.value, b"abc");
+    let prefix = make_port().read_prefix(10).unwrap();
+    assert_eq!(prefix.bytes(), b"abc");
+    assert_eq!(prefix.termination(), PrefixReadTermination::StreamEnded);
 }
 
 #[test]
@@ -415,7 +504,7 @@ fn test_managed_read_provider_error_gains_read_context() {
     let port = ManagedReadPort::new(info, 1, 1, 1, Box::new(FailingReadSession));
     let error = port.read_at(0, &mut [0]).unwrap_err();
     assert_eq!(error.kind(), FsErrorKind::PermissionDenied);
-    assert_eq!(error.operation(), qubit_fs::error::FsOperation::Read);
+    assert_eq!(error.operation(), FsOperation::Read);
     assert_eq!(error.path().unwrap().as_str(), "/object");
     assert_eq!(port.len().unwrap(), 1);
 }

@@ -114,10 +114,13 @@ that provider effects were rolled back. These methods do not use the facade's
 SPI or cached properties as a substitute for the explicit provider.
 
 `FsExecutionBinding::new` submits at the application manager root;
-`with_group` binds that root submission view to a service group. Supplying a
-parent scope to a facade entry creates a child relationship instead. The
-filesystem crate never creates a replacement manager root and does not retain
-the borrowed parent scope.
+`with_group` adds a service-group binding while preserving the current target.
+Creating a binding from `scope.manager()` preserves that parent submission
+target, and adding a group can therefore combine group membership with the
+parent-child relationship. A facade `submit_*_in` call supplied with an active
+parent scope also submits a child operation. The filesystem crate never
+creates a replacement manager root and does not retain the borrowed parent
+scope.
 
 ## Publication and failure facts
 

@@ -7,11 +7,12 @@
 // =============================================================================
 
 use std::sync::Arc;
-use std::sync::Barrier;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc;
+use std::sync::mpsc::Receiver;
+use std::sync::mpsc::SyncSender;
 use std::task::Context;
 use std::task::Poll;
 use std::time::Duration;
@@ -20,11 +21,20 @@ use qubit_fs::FsOperationFailure;
 use qubit_fs::FsOwnedReadRequest;
 use qubit_fs::Path;
 use qubit_fs::ReadAllOptions;
+use qubit_fs::copy::CopyOutcome;
+use qubit_fs::directory::TreePublishOutcome;
+use qubit_fs::execution::FsEffectReservation;
+use qubit_fs::execution::FsOwnedCopyRequest;
+use qubit_fs::execution::FsOwnedRenameRequest;
+use qubit_fs::execution::FsOwnedTreePublishRequest;
+use qubit_fs::execution::FsOwnedWriteRequest;
 use qubit_fs::execution::PreparedFsCopyAdapter;
 use qubit_fs::execution::PreparedFsReadAdapter;
 use qubit_fs::execution::PreparedFsRenameAdapter;
 use qubit_fs::execution::PreparedFsTreePublishAdapter;
 use qubit_fs::execution::PreparedFsWriteAdapter;
+use qubit_fs::metadata::WriteOutcome;
+use qubit_fs::rename::RenameOutcome;
 use qubit_fs::spi::PreparedFsCopy;
 use qubit_fs::spi::PreparedFsRead;
 use qubit_fs::spi::PreparedFsRename;
@@ -46,15 +56,31 @@ use qubit_operation::PreparedExternalOperation;
 use qubit_operation::SettlementReport;
 use qubit_operation::StopReason;
 
-struct BindGate {
-    entered: Barrier,
-    release: Barrier,
+struct CallbackGate {
+    entered: SyncSender<&'static str>,
+    release: Mutex<Receiver<()>>,
+}
+
+impl CallbackGate {
+    fn pause(&self, stage: &'static str) -> bool {
+        if self.entered.send(stage).is_err() {
+            return false;
+        }
+        self.release
+            .lock()
+            .unwrap()
+            .recv_timeout(Duration::from_secs(5))
+            .is_ok()
+    }
 }
 
 struct PreparedRead {
-    gate: Option<Arc<BindGate>>,
+    gate: Option<Arc<CallbackGate>>,
+    gate_bind: bool,
+    gate_take: bool,
     reject_bind: bool,
     binds: AtomicUsize,
+    take_requests: AtomicUsize,
     request: Mutex<Option<FsOwnedReadRequest>>,
 }
 
@@ -77,9 +103,11 @@ impl OperationControl for PreparedRead {
 impl PreparedExternalOperation<Vec<u8>, FsOperationFailure> for PreparedRead {
     fn bind(&self, _: OperationId) -> Result<(), ExternalBindError> {
         self.binds.fetch_add(1, Ordering::SeqCst);
-        if let Some(gate) = &self.gate {
-            gate.entered.wait();
-            gate.release.wait();
+        if self.gate_bind
+            && let Some(gate) = &self.gate
+            && !gate.pause("bind")
+        {
+            return Err(ExternalBindError::AlreadyBound);
         }
         if self.reject_bind {
             Err(ExternalBindError::AlreadyBound)
@@ -98,54 +126,138 @@ impl PreparedExternalOperation<Vec<u8>, FsOperationFailure> for PreparedRead {
 
 impl PreparedFsRead for PreparedRead {
     fn take_unclaimed_request(&self) -> Option<FsOwnedReadRequest> {
+        self.take_requests.fetch_add(1, Ordering::SeqCst);
+        if self.gate_take
+            && let Some(gate) = &self.gate
+            && !gate.pause("take")
+        {
+            return None;
+        }
         self.request.lock().unwrap().take()
     }
 }
 
 #[test]
-fn test_request_recovery_does_not_wait_for_provider_bind() {
-    let gate = Arc::new(BindGate {
-        entered: Barrier::new(2),
-        release: Barrier::new(2),
+fn test_bind_claim_prevents_request_recovery_without_waiting_for_provider() {
+    let (entered_tx, entered_rx) = mpsc::sync_channel(1);
+    let (release_tx, release_rx) = mpsc::sync_channel(1);
+    let gate = Arc::new(CallbackGate {
+        entered: entered_tx,
+        release: Mutex::new(release_rx),
     });
     let prepared = Arc::new(PreparedRead {
         gate: Some(Arc::clone(&gate)),
+        gate_bind: true,
+        gate_take: false,
         reject_bind: false,
         binds: AtomicUsize::new(0),
+        take_requests: AtomicUsize::new(0),
         request: Mutex::new(Some(FsOwnedReadRequest {
             path: Path::parse("/bind-window").unwrap(),
             options: ReadAllOptions::default(),
         })),
     });
-    let adapter = Arc::new(PreparedFsReadAdapter::new(prepared));
+    let prepared_task: Arc<dyn PreparedFsRead> = Arc::clone(&prepared) as Arc<dyn PreparedFsRead>;
+    let adapter = Arc::new(PreparedFsReadAdapter::new(prepared_task));
     let binding_adapter = Arc::clone(&adapter);
     let binding =
         std::thread::spawn(move || PreparedExternalOperation::bind(binding_adapter.as_ref(), fresh_operation_id()));
-    gate.entered.wait();
+    let bind_stage = entered_rx.recv_timeout(Duration::from_secs(2));
+    let recovery = if matches!(bind_stage, Ok("bind")) {
+        let request_adapter = Arc::clone(&adapter);
+        let (result_tx, result_rx) = mpsc::channel();
+        let thread = std::thread::spawn(move || result_tx.send(request_adapter.take_request()).unwrap());
+        Some((thread, result_rx.recv_timeout(Duration::from_secs(2))))
+    } else {
+        None
+    };
 
-    let request_adapter = Arc::clone(&adapter);
-    let (sender, receiver) = mpsc::channel();
-    let recovery = std::thread::spawn(move || sender.send(request_adapter.take_request()).unwrap());
-    let recovered_during_bind = receiver.recv_timeout(Duration::from_millis(100));
-    gate.release.wait();
+    // Always release the provider callback before asserting, so a failed
+    // stage notification cannot strand a worker thread.
+    let _ = release_tx.send(());
+    let bind_result = binding.join().unwrap();
+    let recovered = recovery.map(|(thread, result)| {
+        thread.join().unwrap();
+        result
+    });
 
-    binding.join().unwrap().unwrap();
-    recovery.join().unwrap();
-    assert!(
-        recovered_during_bind.is_ok(),
-        "request recovery blocked inside provider bind"
+    assert_eq!(
+        bind_stage.unwrap_or_else(|error| panic!("bind stage did not start: {error}")),
+        "bind"
     );
-    assert!(
-        recovered_during_bind.unwrap().is_none(),
-        "request recovered after binding began"
+    bind_result.unwrap();
+    assert_eq!(recovered.unwrap().expect("recovery completion stage"), None);
+    assert_eq!(
+        prepared.take_requests.load(Ordering::SeqCst),
+        0,
+        "provider take callback ran after bind claimed"
+    );
+}
+
+#[test]
+fn test_request_recovery_claim_rejects_bind_before_provider_callback() {
+    let (entered_tx, entered_rx) = mpsc::sync_channel(1);
+    let (release_tx, release_rx) = mpsc::sync_channel(1);
+    let gate = Arc::new(CallbackGate {
+        entered: entered_tx,
+        release: Mutex::new(release_rx),
+    });
+    let prepared = Arc::new(PreparedRead {
+        gate: Some(gate),
+        gate_bind: false,
+        gate_take: true,
+        reject_bind: false,
+        binds: AtomicUsize::new(0),
+        take_requests: AtomicUsize::new(0),
+        request: Mutex::new(Some(FsOwnedReadRequest {
+            path: Path::parse("/take-window").unwrap(),
+            options: ReadAllOptions::default(),
+        })),
+    });
+    let adapter = Arc::new(PreparedFsReadAdapter::new(
+        Arc::clone(&prepared) as Arc<dyn PreparedFsRead>
+    ));
+    let take_adapter = Arc::clone(&adapter);
+    let (take_tx, take_rx) = mpsc::channel();
+    let taking = std::thread::spawn(move || take_tx.send(take_adapter.take_request()).unwrap());
+    let take_stage = entered_rx.recv_timeout(Duration::from_secs(2));
+    let bind_result = if matches!(take_stage, Ok("take")) {
+        Some(PreparedExternalOperation::bind(adapter.as_ref(), fresh_operation_id()))
+    } else {
+        None
+    };
+
+    // The take callback has a bounded fallback as well as an explicit release.
+    // Release it before any assertion so failures leave no blocked worker.
+    let _ = release_tx.send(());
+    let taken = take_rx.recv_timeout(Duration::from_secs(2));
+    taking.join().unwrap();
+
+    assert_eq!(
+        take_stage.unwrap_or_else(|error| panic!("take stage did not start: {error}")),
+        "take"
+    );
+    assert!(bind_result.expect("bind attempt after take claim").is_err());
+    assert_eq!(
+        prepared.binds.load(Ordering::SeqCst),
+        0,
+        "provider bind callback ran after take claimed"
+    );
+    assert_eq!(prepared.take_requests.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        taken.expect("take completion stage").unwrap().path.as_str(),
+        "/take-window"
     );
 }
 
 fn adapter(reject_bind: bool) -> (Arc<PreparedFsReadAdapter>, Arc<PreparedRead>) {
     let prepared = Arc::new(PreparedRead {
         gate: None,
+        gate_bind: false,
+        gate_take: false,
         reject_bind,
         binds: AtomicUsize::new(0),
+        take_requests: AtomicUsize::new(0),
         request: Mutex::new(Some(FsOwnedReadRequest {
             path: Path::parse("/claim-contract").unwrap(),
             options: ReadAllOptions::default(),
@@ -215,10 +327,7 @@ macro_rules! mutation_claim_contract {
                 self.request_reads.fetch_add(1, Ordering::SeqCst);
                 None
             }
-            fn install_effect_reservation(
-                &self,
-                reservation: qubit_fs::execution::FsEffectReservation,
-            ) -> Result<(), qubit_fs::execution::FsEffectReservation> {
+            fn install_effect_reservation(&self, reservation: FsEffectReservation) -> Result<(), FsEffectReservation> {
                 Err(reservation)
             }
         }
@@ -244,32 +353,32 @@ mutation_claim_contract!(
     PreparedCopyFixture,
     PreparedFsCopy,
     PreparedFsCopyAdapter,
-    qubit_fs::copy::CopyOutcome,
-    qubit_fs::execution::FsOwnedCopyRequest,
+    CopyOutcome,
+    FsOwnedCopyRequest,
     copy_claim_blocks_recovery_and_repeated_bind
 );
 mutation_claim_contract!(
     PreparedRenameFixture,
     PreparedFsRename,
     PreparedFsRenameAdapter,
-    qubit_fs::rename::RenameOutcome,
-    qubit_fs::execution::FsOwnedRenameRequest,
+    RenameOutcome,
+    FsOwnedRenameRequest,
     rename_claim_blocks_recovery_and_repeated_bind
 );
 mutation_claim_contract!(
     PreparedTreePublishFixture,
     PreparedFsTreePublish,
     PreparedFsTreePublishAdapter,
-    qubit_fs::directory::TreePublishOutcome,
-    qubit_fs::execution::FsOwnedTreePublishRequest,
+    TreePublishOutcome,
+    FsOwnedTreePublishRequest,
     tree_publish_claim_blocks_recovery_and_repeated_bind
 );
 mutation_claim_contract!(
     PreparedWriteFixture,
     PreparedFsWrite,
     PreparedFsWriteAdapter,
-    qubit_fs::metadata::WriteOutcome,
-    qubit_fs::execution::FsOwnedWriteRequest,
+    WriteOutcome,
+    FsOwnedWriteRequest,
     write_claim_blocks_recovery_and_repeated_bind
 );
 

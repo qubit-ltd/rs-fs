@@ -16,6 +16,7 @@ use crate::error::FsErrorKind;
 use crate::error::FsOperation;
 use crate::error::FsResult;
 use crate::metadata::OpenedFileInfo;
+use crate::read::ReadBuffer;
 use crate::spi::RandomAccessReadSession;
 
 /// Thread-safe control port for bounded reads from one opened object.
@@ -172,20 +173,13 @@ impl ManagedReadPort {
                 "opened read session cannot guarantee a stable version",
             ));
         }
-        let version = self.info()?.metadata().and_then(|metadata| metadata.etag().cloned());
+        let info = self.info()?;
+        let version = info.metadata().and_then(|metadata| metadata.etag().cloned());
         let (remaining_budget, len) = self.remaining_budget_and_len()?;
         let allocation_limit = capacity
             .min(usize::try_from(remaining_budget).unwrap_or(usize::MAX))
             .min(usize::try_from(len).unwrap_or(usize::MAX));
-        let mut bytes = Vec::new();
-        bytes.try_reserve_exact(allocation_limit).map_err(|error| {
-            FsError::with_source(
-                FsErrorKind::ResourceLimitExceeded,
-                FsOperation::Read,
-                "read buffer allocation exceeds available capacity",
-                error,
-            )
-        })?;
+        let mut bytes = ReadBuffer::new(allocation_limit);
         let mut scratch = [0_u8; 8192];
         loop {
             let remaining = capacity - bytes.len();
@@ -193,7 +187,7 @@ impl ManagedReadPort {
             let count = self.read_at(bytes.len() as u64, &mut scratch[..chunk_len])?;
             if count == 0 {
                 return Ok(crate::read::ConsistentReadOutcome {
-                    value: bytes,
+                    value: bytes.into_vec(),
                     version,
                     changed: None,
                 });
@@ -205,7 +199,9 @@ impl ManagedReadPort {
                     "read exceeds maximum byte count",
                 ));
             }
-            bytes.extend_from_slice(&scratch[..count]);
+            bytes
+                .try_append(&scratch[..count])
+                .map_err(|error| error.with_path(info.path().clone()))?;
         }
     }
 
@@ -227,15 +223,7 @@ impl ManagedReadPort {
         let allocation_limit = max_bytes
             .min(usize::try_from(remaining_budget).unwrap_or(usize::MAX))
             .min(usize::try_from(len).unwrap_or(usize::MAX));
-        let mut bytes = Vec::new();
-        bytes.try_reserve_exact(allocation_limit).map_err(|error| {
-            FsError::with_source(
-                FsErrorKind::ResourceLimitExceeded,
-                FsOperation::Read,
-                "read buffer allocation exceeds available capacity",
-                error,
-            )
-        })?;
+        let mut bytes = ReadBuffer::new(allocation_limit);
         let mut scratch = [0_u8; 8192];
         let mut termination = crate::read::PrefixReadTermination::LimitReached;
         while bytes.len() < max_bytes {
@@ -245,10 +233,12 @@ impl ManagedReadPort {
                 termination = crate::read::PrefixReadTermination::StreamEnded;
                 break;
             }
-            bytes.extend_from_slice(&scratch[..count]);
+            bytes
+                .try_append(&scratch[..count])
+                .map_err(|error| error.with_path(info.path().clone()))?;
         }
         Ok(crate::read::PrefixReadOutcome::new(
-            bytes,
+            bytes.into_vec(),
             info,
             crate::read::ReadOptions::default(),
             max_bytes,

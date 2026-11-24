@@ -101,6 +101,7 @@ mod tests {
     use qubit_operation::ManagerOptions;
     use qubit_operation::OperationManager;
     use qubit_operation::OperationOutcome;
+    use qubit_operation::ResourceId;
     use qubit_operation::ResourceScopeOptions;
     use qubit_operation::ShutdownMode;
 
@@ -158,7 +159,7 @@ mod tests {
         }
     }
 
-    fn resource_id() -> qubit_operation::ResourceId {
+    fn resource_id() -> ResourceId {
         let manager = OperationManager::new(ManagerOptions::default()).unwrap();
         let mut operation = manager
             .try_submit(Default::default(), |operation_scope| {

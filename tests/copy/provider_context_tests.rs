@@ -51,6 +51,7 @@ use qubit_fs::spi::OpenedWriter;
 use qubit_fs::spi::ProviderOperation;
 use qubit_fs::spi::ProviderOperations;
 use qubit_fs::spi::ProviderProperties;
+use qubit_fs::spi::SpiWriteFailure;
 use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
 use qubit_fs::write::WriteAbortOutcome;
@@ -210,7 +211,7 @@ impl Write for Writer {
 }
 
 impl FileWriterSpi for Writer {
-    fn commit(&mut self) -> Result<WriteOutcome, qubit_fs::spi::SpiWriteFailure> {
+    fn commit(&mut self) -> Result<WriteOutcome, SpiWriteFailure> {
         self.calls.lock().unwrap().push("commit");
         Ok(WriteOutcome::new(
             AchievedAtomicity::NonAtomic,

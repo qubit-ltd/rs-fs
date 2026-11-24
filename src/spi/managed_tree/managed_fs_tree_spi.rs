@@ -31,8 +31,10 @@ use crate::path::Path;
 ///
 /// Providers validate staged content and publication requirements before
 /// activating I/O. Unsupported `Required` guarantees fail during preparation.
-/// Required atomic publication compares the request's validated version in
-/// the publication transaction; a preflight-only check is insufficient.
+/// Required atomic publication compares the request's validated version for
+/// the same staged source tree in the publication transaction; a
+/// preflight-only check is insufficient. The destination object's version
+/// condition is independent and is handled by the provider.
 /// Validation failures leave cleanup with the staging owner, while successful
 /// publication reports achieved atomicity and durability in
 /// [`crate::directory::TreePublishOutcome`].
@@ -116,8 +118,11 @@ pub trait ManagedFsTreeSpi: Send + Sync {
     /// Implementations must reject unsupported required guarantees before
     /// activating any I/O. They must not infer atomic tree publication from
     /// an object-prefix operation. For required atomic publication, they must
-    /// compare `request.validated_version` in the same transaction that
-    /// publishes the destination, or hold an equivalent lock through publish.
+    /// compare `request.validated_version` (the version of the staged source
+    /// tree captured after validation) in the same transaction that publishes
+    /// the destination, or hold an equivalent lock through publish. Any
+    /// destination version condition is separate and must be handled by the
+    /// provider.
     /// If the provider cannot do so, it rejects during preparation before
     /// side effects. Any validation failure leaves cleanup with the existing
     /// staging owner.
