@@ -88,6 +88,8 @@ impl FsEffectObserver {
             .snapshot
             .lock()
             .map_err(|_| FsEffectObservationError::Poisoned)?;
+        #[cfg(test)]
+        let mut notified_wait_stage = false;
         loop {
             match &*snapshot {
                 FsEffectSnapshot::Final(fact) => return Ok(fact.clone()),
@@ -95,6 +97,15 @@ impl FsEffectObserver {
                     return Err(FsEffectObservationError::PublisherClosed);
                 }
                 FsEffectSnapshot::Pending => {
+                    #[cfg(test)]
+                    if !notified_wait_stage {
+                        notified_wait_stage = true;
+                        if let Ok(signal) = self.state.sync_wait_started.lock()
+                            && let Some(sender) = signal.as_ref()
+                        {
+                            let _ = sender.send(());
+                        }
+                    }
                     snapshot = self
                         .state
                         .changed
@@ -118,5 +129,68 @@ impl FsEffectObserver {
             observer: self,
             registration_id: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    use super::super::FsEffectSlotPool;
+    use super::FsEffectObservationError;
+    use super::FsEffectSnapshot;
+
+    #[test]
+    fn last_publisher_close_wakes_synchronous_waiters() {
+        let pool = FsEffectSlotPool::new(1);
+        let reservation = pool.reserve().expect("slot available");
+        let observer = reservation.observer();
+        let (started_tx, started_rx) = mpsc::sync_channel(1);
+        *observer.state.sync_wait_started.lock().unwrap() = Some(started_tx);
+
+        let (result_tx, result_rx) = mpsc::channel();
+        let mut waiters = Vec::new();
+        for _ in 0..2 {
+            let observer = observer.clone();
+            let result_tx = result_tx.clone();
+            waiters.push(thread::spawn(move || {
+                result_tx.send(observer.wait_final()).unwrap();
+            }));
+        }
+        drop(result_tx);
+
+        let mut started = true;
+        for _ in 0..2 {
+            if started_rx.recv_timeout(Duration::from_secs(2)).is_err() {
+                started = false;
+                break;
+            }
+        }
+
+        // Dropping the final publisher contends on the exact snapshot lock
+        // held by each waiter up to its atomic Condvar transition.
+        drop(reservation);
+        assert!(matches!(observer.snapshot(), FsEffectSnapshot::Closed));
+
+        let mut closed_waiters = 0;
+        for _ in 0..2 {
+            if matches!(
+                result_rx.recv_timeout(Duration::from_secs(2)),
+                Ok(Err(FsEffectObservationError::PublisherClosed))
+            ) {
+                closed_waiters += 1;
+            }
+        }
+        assert!(started, "synchronous waiter did not reach Condvar::wait");
+        assert_eq!(
+            closed_waiters, 2,
+            "publisher close did not wake both waiters"
+        );
+        for waiter in waiters {
+            waiter.join().unwrap();
+        }
+        assert!(pool.reserve().is_ok(), "last publisher returns capacity");
     }
 }
