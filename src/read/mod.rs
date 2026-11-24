@@ -23,6 +23,8 @@ mod prefix_read_termination;
 mod random_access_reader;
 mod read_all_options;
 mod read_consistency_policy;
+#[cfg(feature = "async")]
+mod read_io_observer;
 mod read_operation;
 mod read_options;
 
@@ -42,5 +44,13 @@ pub use prefix_read_termination::PrefixReadTermination;
 pub use random_access_reader::RandomAccessReader;
 pub use read_all_options::ReadAllOptions;
 pub use read_consistency_policy::ReadConsistencyPolicy;
+#[cfg(feature = "async")]
+pub use read_io_observer::ObservedReadError;
+#[cfg(feature = "async")]
+pub use read_io_observer::ReadIoEvent;
+#[cfg(feature = "async")]
+pub use read_io_observer::ReadIoObserver;
+#[cfg(feature = "async")]
+pub use read_io_observer::ReadIoPhase;
 pub(crate) use read_operation::ReadOperation;
 pub use read_options::ReadOptions;

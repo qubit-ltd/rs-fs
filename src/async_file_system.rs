@@ -48,7 +48,9 @@ use crate::path::Path;
 use crate::read::AsyncFileReader;
 use crate::read::AsyncRandomAccessReader;
 use crate::read::AsyncReadOperation;
+use crate::read::ObservedReadError;
 use crate::read::RandomAccessReadPolicy;
+use crate::read::ReadIoObserver;
 use crate::read::ReadOptions;
 use crate::rename::RenameFailure;
 use crate::rename::RenameFailureState;
@@ -525,6 +527,37 @@ impl AsyncFileSystem {
         AsyncReadOperation::new(self).read_all(path, options, max_bytes).await
     }
 
+    /// Reads a complete file and reports actual provider open/read polling.
+    ///
+    /// The observer may stop the operation before any provider open or read
+    /// call. Provider `Pending` and `Ready` events describe polls of those
+    /// futures only; aggregate fairness yields do not generate events.
+    ///
+    /// # Parameters
+    /// - `path`: File to read.
+    /// - `options`: Options used to open the reader.
+    /// - `max_bytes`: Maximum accepted byte count.
+    /// - `observer`: Boundary callback and provider-poll event receiver.
+    ///
+    /// # Returns
+    /// The complete contents when they fit within `max_bytes`.
+    ///
+    /// # Errors
+    /// Returns [`ObservedReadError::Stopped`] when the observer stops before a
+    /// provider call, or [`ObservedReadError::Provider`] for validation,
+    /// provider, or buffer errors.
+    pub async fn read_all_observed<O: ReadIoObserver>(
+        &self,
+        path: &Path,
+        options: ReadOptions,
+        max_bytes: usize,
+        observer: &mut O,
+    ) -> Result<Vec<u8>, ObservedReadError> {
+        AsyncReadOperation::new(self)
+            .read_all_observed(path, options, max_bytes, observer)
+            .await
+    }
+
     /// Asynchronously reads at most max_bytes from a file.
     ///
     /// Long aggregate reads may periodically return
@@ -557,6 +590,37 @@ impl AsyncFileSystem {
     ) -> FsResult<crate::read::PrefixReadOutcome> {
         AsyncReadOperation::new(self)
             .read_prefix(path, options, max_bytes)
+            .await
+    }
+
+    /// Reads a file prefix and reports actual provider open/read polling.
+    ///
+    /// The observer may stop the operation before any provider open or read
+    /// call. Provider `Pending` and `Ready` events describe polls of those
+    /// futures only; aggregate fairness yields do not generate events.
+    ///
+    /// # Parameters
+    /// - `path`: File whose prefix is read.
+    /// - `options`: Options used to open the reader.
+    /// - `max_bytes`: Maximum number of prefix bytes to accumulate.
+    /// - `observer`: Boundary callback and provider-poll event receiver.
+    ///
+    /// # Returns
+    /// The bounded prefix with its termination reason and open-time metadata.
+    ///
+    /// # Errors
+    /// Returns [`ObservedReadError::Stopped`] when the observer stops
+    /// before a provider call, or [`ObservedReadError::Provider`] when
+    /// validation, opening, reading, or buffering fails.
+    pub async fn read_prefix_observed<O: ReadIoObserver>(
+        &self,
+        path: &Path,
+        options: ReadOptions,
+        max_bytes: usize,
+        observer: &mut O,
+    ) -> Result<crate::read::PrefixReadOutcome, ObservedReadError> {
+        AsyncReadOperation::new(self)
+            .read_prefix_observed(path, options, max_bytes, observer)
             .await
     }
 

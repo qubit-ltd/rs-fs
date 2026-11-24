@@ -11,8 +11,10 @@
 
 use std::future::Future;
 use std::io;
+use std::ops::ControlFlow;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::task::Context;
@@ -35,7 +37,11 @@ use qubit_fs::metadata::OpenedFileInfo;
 use qubit_fs::metadata::SymlinkPolicy;
 use qubit_fs::path::PathConstraints;
 use qubit_fs::path::PathSemantics;
+use qubit_fs::read::ObservedReadError;
 use qubit_fs::read::PrefixReadTermination;
+use qubit_fs::read::ReadIoEvent;
+use qubit_fs::read::ReadIoObserver;
+use qubit_fs::read::ReadIoPhase;
 use qubit_fs::read::ReadOptions;
 use qubit_fs::spi::AsyncFileSystemSpi;
 use qubit_fs::spi::OpenReaderRequest;
@@ -206,6 +212,135 @@ fn path() -> Path {
 
 fn data(length: usize) -> Vec<u8> {
     (0..length).map(|index| (index % 251) as u8).collect()
+}
+
+#[derive(Default)]
+struct ObserverState {
+    before_open: usize,
+    before_read: usize,
+    stop_before_read: Option<usize>,
+    events: Vec<ReadIoEvent>,
+}
+
+#[derive(Clone, Default)]
+struct RecordingObserver(Arc<Mutex<ObserverState>>);
+
+impl ReadIoObserver for RecordingObserver {
+    fn before_io(&mut self, phase: ReadIoPhase) -> ControlFlow<()> {
+        let mut state = self.0.lock().expect("observer state lock");
+        match phase {
+            ReadIoPhase::Open => state.before_open += 1,
+            ReadIoPhase::Read => {
+                state.before_read += 1;
+                if state.stop_before_read == Some(state.before_read) {
+                    return ControlFlow::Break(());
+                }
+            }
+        }
+        ControlFlow::Continue(())
+    }
+
+    fn on_io_event(&mut self, event: ReadIoEvent) {
+        self.0.lock().expect("observer state lock").events.push(event);
+    }
+}
+
+#[test]
+fn test_observed_prefix_stops_at_next_io_after_aggregate_yield() {
+    let input = data(130);
+    let (fs, counts) = filesystem(Script::new(input));
+    let resource_path = path();
+    let mut observer = RecordingObserver::default();
+    observer.0.lock().expect("observer state lock").stop_before_read = Some(65);
+    let observed = observer.clone();
+    let operation = fs.read_prefix_observed(&resource_path, ReadOptions::default(), 130, &mut observer);
+    let waker = counter_waker(&counts);
+    let mut cx = Context::from_waker(&waker);
+    let mut future = std::pin::pin!(operation);
+    assert!(future.as_mut().poll(&mut cx).is_pending());
+    assert_eq!(counts.data_reads.load(Ordering::SeqCst), 64);
+    assert_eq!(observed.0.lock().unwrap().before_read, 64);
+    assert_eq!(observed.0.lock().unwrap().events.len(), 130); // open plus 64 immediately ready reads
+
+    let Poll::Ready(Err(ObservedReadError::Stopped)) = future.as_mut().poll(&mut cx) else {
+        panic!("observer stop must be returned before the 65th read")
+    };
+    assert_eq!(counts.data_reads.load(Ordering::SeqCst), 64);
+    assert_eq!(observed.0.lock().unwrap().before_open, 1);
+    assert_eq!(observed.0.lock().unwrap().before_read, 65);
+    assert_eq!(observed.0.lock().unwrap().events.len(), 130); // aggregate yield is not provider I/O
+}
+
+#[test]
+fn test_observed_prefix_drop_after_pending_read_has_no_ready_event() {
+    let (fs, counts) = filesystem(Script::new(data(4)).pending_at(1));
+    let resource_path = path();
+    let mut observer = RecordingObserver::default();
+    let observed = observer.clone();
+    let operation = fs.read_prefix_observed(&resource_path, ReadOptions::default(), 4, &mut observer);
+    let waker = counter_waker(&counts);
+    let mut cx = Context::from_waker(&waker);
+    let mut future = std::pin::pin!(operation);
+    assert!(future.as_mut().poll(&mut cx).is_pending());
+    assert!(observed.0.lock().unwrap().events.ends_with(&[
+        ReadIoEvent::Started {
+            phase: ReadIoPhase::Read
+        },
+        ReadIoEvent::Pending {
+            phase: ReadIoPhase::Read
+        },
+    ]));
+    drop(future);
+    assert!(!observed.0.lock().unwrap().events.contains(&ReadIoEvent::Ready {
+        phase: ReadIoPhase::Read
+    }));
+}
+
+#[test]
+fn test_observed_read_all_stops_after_yield_without_io_marker_for_yield() {
+    let input = data(130);
+    let (fs, counts) = filesystem(Script::new(input));
+    let resource_path = path();
+    let mut observer = RecordingObserver::default();
+    observer.0.lock().expect("observer state lock").stop_before_read = Some(65);
+    let observed = observer.clone();
+    let operation = fs.read_all_observed(&resource_path, ReadOptions::default(), 130, &mut observer);
+    let waker = counter_waker(&counts);
+    let mut cx = Context::from_waker(&waker);
+    let mut future = std::pin::pin!(operation);
+    assert!(future.as_mut().poll(&mut cx).is_pending());
+    assert_eq!(counts.data_reads.load(Ordering::SeqCst), 64);
+    assert_eq!(observed.0.lock().unwrap().events.len(), 130);
+    let Poll::Ready(Err(ObservedReadError::Stopped)) = future.as_mut().poll(&mut cx) else {
+        panic!("observer stop must be returned before the 65th read")
+    };
+    assert_eq!(counts.data_reads.load(Ordering::SeqCst), 64);
+    assert_eq!(observed.0.lock().unwrap().events.len(), 130);
+}
+
+#[test]
+fn test_observed_read_all_drop_after_pending_read_has_no_ready_event() {
+    let (fs, counts) = filesystem(Script::new(data(4)).pending_at(1));
+    let resource_path = path();
+    let mut observer = RecordingObserver::default();
+    let observed = observer.clone();
+    let operation = fs.read_all_observed(&resource_path, ReadOptions::default(), 4, &mut observer);
+    let waker = counter_waker(&counts);
+    let mut cx = Context::from_waker(&waker);
+    let mut future = std::pin::pin!(operation);
+    assert!(future.as_mut().poll(&mut cx).is_pending());
+    assert!(observed.0.lock().unwrap().events.ends_with(&[
+        ReadIoEvent::Started {
+            phase: ReadIoPhase::Read
+        },
+        ReadIoEvent::Pending {
+            phase: ReadIoPhase::Read
+        },
+    ]));
+    drop(future);
+    assert!(!observed.0.lock().unwrap().events.contains(&ReadIoEvent::Ready {
+        phase: ReadIoPhase::Read
+    }));
 }
 
 #[test]

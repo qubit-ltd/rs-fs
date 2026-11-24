@@ -7,7 +7,11 @@
 // =============================================================================
 //! Asynchronous read operation implementation.
 
+use std::future::Future;
 use std::future::poll_fn;
+use std::ops::ControlFlow;
+use std::pin::pin;
+use std::task::Context;
 use std::task::Poll;
 
 use qubit_io::AsyncInput;
@@ -19,10 +23,14 @@ use crate::error::FsResult;
 use crate::facade::facade_core::FacadeCore;
 use crate::facade::internal::FileSystemResource;
 use crate::path::Path;
+use crate::read::ObservedReadError;
 use crate::read::PrefixReadOutcome;
 use crate::read::PrefixReadTermination;
 use crate::read::ReadAllOptions;
 use crate::read::ReadConsistencyPolicy;
+use crate::read::ReadIoEvent;
+use crate::read::ReadIoObserver;
+use crate::read::ReadIoPhase;
 use crate::read::ReadOptions;
 use crate::read::internal::ReadBuffer;
 use crate::read::prefix_read_plan::PrefixReadPlan;
@@ -102,12 +110,33 @@ impl<'a> AsyncReadOperation<'a> {
     /// Panics only if converting the read count back to `usize` fails, which
     /// would violate the invariant that the count originated from a `usize`.
     pub(crate) async fn read_all(&self, path: &Path, options: ReadOptions, max_bytes: usize) -> FsResult<Vec<u8>> {
+        struct NoopObserver;
+        impl ReadIoObserver for NoopObserver {}
+
+        self.read_all_observed(path, options, max_bytes, &mut NoopObserver)
+            .await
+            .map_err(|error| match error {
+                ObservedReadError::Stopped => unreachable!("no-op observer cannot stop"),
+                ObservedReadError::Provider(error) => error,
+            })
+    }
+
+    /// Reads a complete file asynchronously while observing provider I/O.
+    pub(crate) async fn read_all_observed<O: ReadIoObserver>(
+        &self,
+        path: &Path,
+        options: ReadOptions,
+        max_bytes: usize,
+        observer: &mut O,
+    ) -> Result<Vec<u8>, ObservedReadError> {
         // Reject a limit without a representable overflow sentinel before
         // opening the provider object, matching the synchronous read path.
         ReadAllOptions::new(max_bytes, ReadConsistencyPolicy::BestEffort)
             .sentinel_capacity()
             .map_err(|error| self.filesystem.core().enrich(error, Some(path), FsOperation::Read))?;
-        let mut reader = self.filesystem.open_reader(path, options).await?;
+        before_io(observer, ReadIoPhase::Open)?;
+        let open = self.filesystem.open_reader(path, options);
+        let mut reader = observe_io(open, observer, ReadIoPhase::Open).await?;
         let mut bytes = ReadBuffer::new(max_bytes);
         let maximum = FacadeCore::quantity_from_usize(
             max_bytes,
@@ -120,16 +149,19 @@ impl<'a> AsyncReadOperation<'a> {
         let mut reads_since_yield = 0_usize;
         loop {
             yield_read_budget(&mut reads_since_yield).await;
+            before_io(observer, ReadIoPhase::Read)?;
             let remaining = read_budget.remaining();
             let read_len =
                 usize::try_from(remaining.saturating_add(1)).map_or(buffer.len(), |value| value.min(buffer.len()));
-            let read = reader.read_async(&mut buffer[..read_len]).await.map_err(|error| {
-                self.filesystem.core().enrich(
-                    FsError::from_stream_io(error, FsOperation::Read, path),
-                    Some(path),
-                    FsOperation::Read,
-                )
-            })?;
+            let read = observe_io(reader.read_async(&mut buffer[..read_len]), observer, ReadIoPhase::Read)
+                .await
+                .map_err(|error| {
+                    self.filesystem.core().enrich(
+                        FsError::from_stream_io(error, FsOperation::Read, path),
+                        Some(path),
+                        FsOperation::Read,
+                    )
+                })?;
             if read == 0 {
                 return Ok(bytes.into_vec());
             }
@@ -140,13 +172,13 @@ impl<'a> AsyncReadOperation<'a> {
                 self.filesystem.properties().info().provider_id(),
             )?;
             if let Err(error) = read_budget.try_consume(read) {
-                return Err(FacadeCore::budget_error(
+                return Err(ObservedReadError::Provider(FacadeCore::budget_error(
                     error,
                     FsOperation::Read,
                     path,
                     self.filesystem.properties().info().provider_id(),
                     "read exceeds maximum byte count",
-                ));
+                )));
             }
             bytes
                 .try_append(&buffer[..usize::try_from(read).expect("read count originated as usize")])
@@ -180,9 +212,30 @@ impl<'a> AsyncReadOperation<'a> {
         options: ReadOptions,
         max_bytes: usize,
     ) -> FsResult<PrefixReadOutcome> {
+        struct NoopObserver;
+        impl ReadIoObserver for NoopObserver {}
+
+        self.read_prefix_observed(path, options, max_bytes, &mut NoopObserver)
+            .await
+            .map_err(|error| match error {
+                ObservedReadError::Stopped => unreachable!("no-op observer cannot stop"),
+                ObservedReadError::Provider(error) => error,
+            })
+    }
+
+    /// Reads a prefix while observing provider I/O boundaries.
+    pub(crate) async fn read_prefix_observed<O: ReadIoObserver>(
+        &self,
+        path: &Path,
+        options: ReadOptions,
+        max_bytes: usize,
+        observer: &mut O,
+    ) -> Result<PrefixReadOutcome, ObservedReadError> {
         let original_options = options.clone();
         let plan = PrefixReadPlan::new(self.filesystem.properties(), path, options, max_bytes)?;
-        let mut reader = self.filesystem.open_reader_resolved(path, plan.into_options()).await?;
+        before_io(observer, ReadIoPhase::Open)?;
+        let open = self.filesystem.open_reader_resolved(path, plan.into_options());
+        let mut reader = observe_io(open, observer, ReadIoPhase::Open).await?;
         let info = reader.info().clone();
         if max_bytes == 0 {
             return Ok(PrefixReadOutcome::new(
@@ -199,14 +252,17 @@ impl<'a> AsyncReadOperation<'a> {
         let mut reads_since_yield = 0_usize;
         while bytes.len() < max_bytes {
             yield_read_budget(&mut reads_since_yield).await;
+            before_io(observer, ReadIoPhase::Read)?;
             let read_len = FacadeCore::next_prefix_read_len(bytes.len(), max_bytes);
-            let read = reader.read_async(&mut buffer[..read_len]).await.map_err(|error| {
-                self.filesystem.core().enrich(
-                    FsError::from_stream_io(error, FsOperation::Read, path),
-                    Some(path),
-                    FsOperation::Read,
-                )
-            })?;
+            let read = observe_io(reader.read_async(&mut buffer[..read_len]), observer, ReadIoPhase::Read)
+                .await
+                .map_err(|error| {
+                    self.filesystem.core().enrich(
+                        FsError::from_stream_io(error, FsOperation::Read, path),
+                        Some(path),
+                        FsOperation::Read,
+                    )
+                })?;
             if read == 0 {
                 termination = PrefixReadTermination::StreamEnded;
                 break;
@@ -224,4 +280,37 @@ impl<'a> AsyncReadOperation<'a> {
             termination,
         ))
     }
+}
+
+fn before_io<O: ReadIoObserver>(observer: &mut O, phase: ReadIoPhase) -> Result<(), ObservedReadError> {
+    match observer.before_io(phase) {
+        ControlFlow::Continue(()) => Ok(()),
+        ControlFlow::Break(()) => Err(ObservedReadError::Stopped),
+    }
+}
+
+async fn observe_io<F, O>(future: F, observer: &mut O, phase: ReadIoPhase) -> F::Output
+where
+    F: Future,
+    O: ReadIoObserver,
+{
+    let mut future = pin!(future);
+    let mut started = false;
+    poll_fn(|cx: &mut Context<'_>| {
+        if !started {
+            started = true;
+            observer.on_io_event(ReadIoEvent::Started { phase });
+        }
+        match future.as_mut().poll(cx) {
+            Poll::Ready(output) => {
+                observer.on_io_event(ReadIoEvent::Ready { phase });
+                Poll::Ready(output)
+            }
+            Poll::Pending => {
+                observer.on_io_event(ReadIoEvent::Pending { phase });
+                Poll::Pending
+            }
+        }
+    })
+    .await
 }
