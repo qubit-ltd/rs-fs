@@ -220,6 +220,7 @@ struct ObserverState {
     before_read: usize,
     stop_before_read: Option<usize>,
     events: Vec<ReadIoEvent>,
+    read_bytes: Vec<usize>,
 }
 
 #[derive(Clone, Default)]
@@ -243,6 +244,57 @@ impl ReadIoObserver for RecordingObserver {
     fn on_io_event(&mut self, event: ReadIoEvent) {
         self.0.lock().expect("observer state lock").events.push(event);
     }
+
+    fn on_read_bytes(&mut self, bytes: usize) {
+        self.0.lock().expect("observer state lock").read_bytes.push(bytes);
+    }
+}
+
+#[test]
+fn test_observed_prefix_reports_successful_read_bytes() {
+    let (fs, counts) = filesystem(Script::new(data(4)));
+    let resource_path = path();
+    let mut observer = RecordingObserver::default();
+    let observed = observer.clone();
+    let operation = fs.read_prefix_observed(&resource_path, ReadOptions::default(), 4, &mut observer);
+    let waker = counter_waker(&counts);
+    let mut cx = Context::from_waker(&waker);
+    let Poll::Ready(Ok(result)) = std::pin::pin!(operation).as_mut().poll(&mut cx) else {
+        panic!("four-byte prefix should complete immediately")
+    };
+    assert_eq!(result.bytes(), data(4));
+    assert_eq!(observed.0.lock().unwrap().read_bytes, [1, 1, 1, 1]);
+}
+
+#[test]
+fn test_observed_prefix_keeps_successful_bytes_when_later_read_fails() {
+    let (fs, counts) = filesystem(Script::new(data(4)).error_at(2));
+    let resource_path = path();
+    let mut observer = RecordingObserver::default();
+    let observed = observer.clone();
+    let operation = fs.read_prefix_observed(&resource_path, ReadOptions::default(), 4, &mut observer);
+    let waker = counter_waker(&counts);
+    let mut cx = Context::from_waker(&waker);
+    let Poll::Ready(Err(_)) = std::pin::pin!(operation).as_mut().poll(&mut cx) else {
+        panic!("second read should fail")
+    };
+    assert_eq!(observed.0.lock().unwrap().read_bytes, [1]);
+}
+
+#[test]
+fn test_observed_prefix_reports_bytes_only_after_pending_read_succeeds() {
+    let (fs, counts) = filesystem(Script::new(data(1)).pending_at(1));
+    let resource_path = path();
+    let mut observer = RecordingObserver::default();
+    let observed = observer.clone();
+    let operation = fs.read_prefix_observed(&resource_path, ReadOptions::default(), 1, &mut observer);
+    let waker = counter_waker(&counts);
+    let mut cx = Context::from_waker(&waker);
+    let mut future = std::pin::pin!(operation);
+    assert!(future.as_mut().poll(&mut cx).is_pending());
+    assert!(observed.0.lock().unwrap().read_bytes.is_empty());
+    assert!(matches!(future.as_mut().poll(&mut cx), Poll::Ready(Ok(_))));
+    assert_eq!(observed.0.lock().unwrap().read_bytes, [1]);
 }
 
 #[test]

@@ -39,4 +39,17 @@ pub trait ReadIoObserver {
     fn on_io_event(&mut self, event: ReadIoEvent) {
         let _ = event;
     }
+
+    /// Receives the byte count returned by a successful provider read.
+    ///
+    /// This is called immediately after each successful read future completes,
+    /// before the aggregate operation can yield or begin another provider
+    /// operation. Failed and pending reads do not produce a byte notification.
+    /// A successful EOF read reports zero bytes.
+    ///
+    /// # Parameters
+    /// - `bytes`: Number of bytes returned by the provider read.
+    fn on_read_bytes(&mut self, bytes: usize) {
+        let _ = bytes;
+    }
 }

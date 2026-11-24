@@ -175,6 +175,7 @@ impl<'a> AsyncReadOperation<'a> {
                         FsOperation::Read,
                     )
                 })?;
+            observer.on_read_bytes(read);
             if read == 0 {
                 return Ok(bytes.into_vec());
             }
@@ -288,6 +289,7 @@ impl<'a> AsyncReadOperation<'a> {
                         FsOperation::Read,
                     )
                 })?;
+            observer.on_read_bytes(read);
             if read == 0 {
                 termination = PrefixReadTermination::StreamEnded;
                 break;
