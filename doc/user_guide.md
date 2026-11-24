@@ -1080,8 +1080,10 @@ cancellation, release, or settlement tracking from `qubit-operation`. A managed 
 `OperationScope` through `FsExecutionBinding`; the filesystem library does not
 create a replacement root manager or keep a borrowed scope. The examples below
 submit at the `OperationManager` root. Use `FsExecutionBinding::with_group` to
-bind that root submission to a service group, or call a facade's
-`submit_*_in` method with an active parent scope to make the operation its child.
+add a service group to the current submission target. A binding created from
+`scope.manager()` keeps that parent target, so a group can be layered onto the
+parent-child submission. A facade's `submit_*_in` method with an active parent
+scope also submits the operation as its child.
 
 The legacy direct facade methods use the facade's own SPI and cached
 properties, and their validation is owned by the facade; they remain
