@@ -10,6 +10,10 @@
 use crate::read::ReadIoPhase;
 
 /// State transition observed while polling a provider operation.
+///
+/// Open events describe the actual SPI future only. Facade path, option,
+/// range, and capability validation happens before an open event can occur;
+/// validation of a provider-returned envelope happens after its `Ready` event.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ReadIoEvent {
     /// The provider future has received its first poll.

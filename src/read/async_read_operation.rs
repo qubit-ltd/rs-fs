@@ -35,6 +35,7 @@ use crate::read::ReadOptions;
 use crate::read::internal::NoopReadIoObserver;
 use crate::read::internal::ReadBuffer;
 use crate::read::prefix_read_plan::PrefixReadPlan;
+use crate::spi::ResolvedReadOptions;
 
 /// Yields after a bounded number of successful aggregate reads.
 ///
@@ -147,9 +148,11 @@ impl<'a> AsyncReadOperation<'a> {
         ReadAllOptions::new(max_bytes, ReadConsistencyPolicy::BestEffort)
             .sentinel_capacity()
             .map_err(|error| self.filesystem.core().enrich(error, Some(path), FsOperation::Read))?;
+        let resolved = self.filesystem.prepare_open_reader(path, ResolvedReadOptions::new(options))?;
         before_io(observer, ReadIoPhase::Open)?;
-        let open = self.filesystem.open_reader(path, options);
-        let mut reader = observe_io(open, observer, ReadIoPhase::Open).await?;
+        let open = self.filesystem.dispatch_open_reader(path, resolved);
+        let opened = observe_io(open, observer, ReadIoPhase::Open).await?;
+        let mut reader = self.filesystem.validate_opened_reader(path, opened)?;
         let mut bytes = ReadBuffer::new(max_bytes);
         let maximum = FacadeCore::quantity_from_usize(
             max_bytes,
@@ -259,9 +262,11 @@ impl<'a> AsyncReadOperation<'a> {
     ) -> Result<PrefixReadOutcome, ObservedReadError> {
         let original_options = options.clone();
         let plan = PrefixReadPlan::new(self.filesystem.properties(), path, options, max_bytes)?;
+        let resolved = self.filesystem.prepare_open_reader(path, plan.into_options())?;
         before_io(observer, ReadIoPhase::Open)?;
-        let open = self.filesystem.open_reader_resolved(path, plan.into_options());
-        let mut reader = observe_io(open, observer, ReadIoPhase::Open).await?;
+        let open = self.filesystem.dispatch_open_reader(path, resolved);
+        let opened = observe_io(open, observer, ReadIoPhase::Open).await?;
+        let mut reader = self.filesystem.validate_opened_reader(path, opened)?;
         let info = reader.info().clone();
         if max_bytes == 0 {
             return Ok(PrefixReadOutcome::new(

@@ -65,6 +65,7 @@ use crate::spi::ManagedFsMutationSpi;
 use crate::spi::ManagedFsReadSpi;
 use crate::spi::ManagedFsTreeSpi;
 use crate::spi::OpenReaderRequest;
+use crate::spi::OpenedAsyncReader;
 use crate::spi::OpenWriterRequest;
 use crate::spi::ProviderOperation;
 use crate::spi::RenameRequest;
@@ -529,9 +530,11 @@ impl AsyncFileSystem {
 
     /// Reads a complete file and reports actual provider open/read polling.
     ///
-    /// The observer may stop the operation before any provider open or read
-    /// call. Provider `Pending` and `Ready` events describe polls of those
-    /// futures only; aggregate fairness yields do not generate events.
+    /// Local path, option, range, and capability validation completes before
+    /// the observer is asked to allow an open. Provider `Pending` and `Ready`
+    /// events describe polls of SPI open/read futures only. An opened envelope
+    /// is validated after the open `Ready` event; aggregate fairness yields
+    /// do not generate events.
     ///
     /// # Type Parameters
     /// - `O`: Observer that controls and records provider boundaries.
@@ -615,9 +618,10 @@ impl AsyncFileSystem {
     /// The bounded prefix with its termination reason and open-time metadata.
     ///
     /// # Errors
-    /// Returns [`ObservedReadError::Stopped`] when the observer stops
-    /// before a provider call, or [`ObservedReadError::Provider`] when
-    /// validation, opening, reading, or buffering fails.
+    /// Returns [`ObservedReadError::Stopped`] when the observer stops after
+    /// local preflight and before a provider call, or
+    /// [`ObservedReadError::Provider`] when local or envelope validation,
+    /// opening, reading, or buffering fails.
     pub async fn read_prefix_observed<O: ReadIoObserver>(
         &self,
         path: &Path,
@@ -1299,6 +1303,17 @@ impl AsyncFileSystem {
         path: &Path,
         resolved: ResolvedReadOptions,
     ) -> FsResult<AsyncFileReader> {
+        let resolved = self.prepare_open_reader(path, resolved)?;
+        let opened = self.dispatch_open_reader(path, resolved).await?;
+        self.validate_opened_reader(path, opened)
+    }
+
+    /// Performs local validation before an observed or ordinary SPI open.
+    pub(crate) fn prepare_open_reader(
+        &self,
+        path: &Path,
+        resolved: ResolvedReadOptions,
+    ) -> FsResult<ResolvedReadOptions> {
         let options = resolved.options().clone();
         self.validate_path(path, FsOperation::OpenReader)?;
         options
@@ -1309,11 +1324,28 @@ impl AsyncFileSystem {
             .validate_read_range(path, options.length())
             .map_err(|error| self.enrich(error, path, FsOperation::OpenReader))?;
         self.require(FileSystemCapability::Read, FsOperation::OpenReader, path)?;
-        let opened = self
-            .spi
+        Ok(resolved)
+    }
+
+    /// Dispatches an already-prepared open to the provider.
+    pub(crate) async fn dispatch_open_reader(
+        &self,
+        path: &Path,
+        resolved: ResolvedReadOptions,
+    ) -> FsResult<OpenedAsyncReader> {
+        let opened = self.spi
             .open_reader(OpenReaderRequest::new(path, resolved))
             .await
             .map_err(|error| self.enrich(error, path, FsOperation::OpenReader))?;
+        Ok(opened)
+    }
+
+    /// Validates provider-returned identity and constructs the reader.
+    pub(crate) fn validate_opened_reader(
+        &self,
+        path: &Path,
+        opened: OpenedAsyncReader,
+    ) -> FsResult<AsyncFileReader> {
         self.validate_opened_info(opened.info(), path)?;
         Ok(opened.into_reader())
     }

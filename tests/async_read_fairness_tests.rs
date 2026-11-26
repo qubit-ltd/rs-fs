@@ -83,6 +83,8 @@ struct Script {
     bytes: Vec<u8>,
     pending_call: Option<usize>,
     error_call: Option<usize>,
+    open_error: bool,
+    invalid_opened_path: bool,
     counts: Arc<Counts>,
 }
 
@@ -92,6 +94,8 @@ impl Script {
             bytes,
             pending_call: None,
             error_call: None,
+            open_error: false,
+            invalid_opened_path: false,
             counts: Arc::new(Counts::default()),
         }
     }
@@ -103,6 +107,16 @@ impl Script {
 
     fn error_at(mut self, call: usize) -> Self {
         self.error_call = Some(call);
+        self
+    }
+
+    fn fail_open(mut self) -> Self {
+        self.open_error = true;
+        self
+    }
+
+    fn invalid_opened_path(mut self) -> Self {
+        self.invalid_opened_path = true;
         self
     }
 }
@@ -143,6 +157,24 @@ impl AsyncFileSystemSpi for Provider {
 
     fn open_reader<'a>(&'a self, request: OpenReaderRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncReader>> {
         self.0.counts.opens.fetch_add(1, Ordering::SeqCst);
+        if self.0.open_error {
+            return Box::pin(async {
+                Err(qubit_fs::error::FsError::new(
+                    FsErrorKind::Io,
+                    qubit_fs::error::FsOperation::OpenReader,
+                    "scripted open failure",
+                ))
+            });
+        }
+        let info = if self.0.invalid_opened_path {
+            OpenedFileInfo::new(
+                FileSystemId::new("fairness").expect("provider id"),
+                Path::parse("/different").expect("path"),
+            )
+            .with_metadata(FileMetadata::new(FileKind::File))
+        } else {
+            Self::info(request.path())
+        };
         let reader = ScriptedReader {
             bytes: self.0.bytes.clone(),
             position: 0,
@@ -151,7 +183,7 @@ impl AsyncFileSystemSpi for Provider {
             pending_returned: false,
             counts: Arc::clone(&self.0.counts),
         };
-        Box::pin(async move { Ok(OpenedAsyncReader::new(Self::info(request.path()), Box::new(reader))) })
+        Box::pin(async move { Ok(OpenedAsyncReader::new(info, Box::new(reader))) })
     }
 }
 
@@ -219,6 +251,7 @@ struct ObserverState {
     before_open: usize,
     before_read: usize,
     stop_before_read: Option<usize>,
+    stop_before_open: bool,
     events: Vec<ReadIoEvent>,
     read_bytes: Vec<usize>,
 }
@@ -230,7 +263,12 @@ impl ReadIoObserver for RecordingObserver {
     fn before_io(&mut self, phase: ReadIoPhase) -> ControlFlow<()> {
         let mut state = self.0.lock().expect("observer state lock");
         match phase {
-            ReadIoPhase::Open => state.before_open += 1,
+            ReadIoPhase::Open => {
+                state.before_open += 1;
+                if state.stop_before_open {
+                    return ControlFlow::Break(());
+                }
+            }
             ReadIoPhase::Read => {
                 state.before_read += 1;
                 if state.stop_before_read == Some(state.before_read) {
@@ -263,7 +301,177 @@ fn test_observed_prefix_reports_successful_read_bytes() {
         panic!("four-byte prefix should complete immediately")
     };
     assert_eq!(result.bytes(), data(4));
-    assert_eq!(observed.0.lock().unwrap().read_bytes, [1, 1, 1, 1]);
+    let state = observed.0.lock().unwrap();
+    assert_eq!(state.read_bytes, [1, 1, 1, 1]);
+    assert_eq!(state.events[..2], [
+        ReadIoEvent::Started { phase: ReadIoPhase::Open },
+        ReadIoEvent::Ready { phase: ReadIoPhase::Open },
+    ]);
+}
+
+#[test]
+fn test_observed_full_read_local_range_error_precedes_open_stop() {
+    let (fs, counts) = filesystem(Script::new(data(1)));
+    let resource_path = path();
+    let mut observer = RecordingObserver::default();
+    observer.0.lock().unwrap().stop_before_open = true;
+    let observed = observer.clone();
+    let options = ReadOptions::default().with_offset(Some(1)).with_length(Some(1));
+    let operation = fs.read_all_observed(&resource_path, options, 1, &mut observer);
+    let waker = counter_waker(&counts);
+    let mut cx = Context::from_waker(&waker);
+    let Poll::Ready(Err(ObservedReadError::Provider(error))) = std::pin::pin!(operation).as_mut().poll(&mut cx) else {
+        panic!("local range capability error must precede observer stop")
+    };
+    assert_eq!(error.kind(), FsErrorKind::RequirementNotMet);
+    assert_eq!(counts.opens.load(Ordering::SeqCst), 0);
+    let state = observed.0.lock().unwrap();
+    assert_eq!(state.before_open, 0);
+    assert!(state.events.is_empty());
+}
+
+#[test]
+fn test_observed_full_read_invalid_path_precedes_open_stop() {
+    let (fs, counts) = filesystem(Script::new(data(1)));
+    let resource_path = Path::parse_literal("/payload").expect("object-key path");
+    let mut observer = RecordingObserver::default();
+    observer.0.lock().unwrap().stop_before_open = true;
+    let observed = observer.clone();
+    let operation = fs.read_all_observed(&resource_path, ReadOptions::default(), 1, &mut observer);
+    let waker = counter_waker(&counts);
+    let mut cx = Context::from_waker(&waker);
+    let Poll::Ready(Err(ObservedReadError::Provider(error))) = std::pin::pin!(operation).as_mut().poll(&mut cx) else {
+        panic!("invalid path must precede observer stop")
+    };
+    assert_eq!(error.kind(), FsErrorKind::InvalidPath);
+    assert_eq!(counts.opens.load(Ordering::SeqCst), 0);
+    let state = observed.0.lock().unwrap();
+    assert_eq!(state.before_open, 0);
+    assert!(state.events.is_empty());
+}
+
+#[test]
+fn test_observed_prefix_local_range_error_precedes_open_stop() {
+    let (fs, counts) = filesystem(Script::new(data(1)));
+    let resource_path = path();
+    let mut observer = RecordingObserver::default();
+    observer.0.lock().unwrap().stop_before_open = true;
+    let observed = observer.clone();
+    let options = ReadOptions::default().with_offset(Some(1)).with_length(Some(1));
+    let operation = fs.read_prefix_observed(&resource_path, options, 1, &mut observer);
+    let waker = counter_waker(&counts);
+    let mut cx = Context::from_waker(&waker);
+    let Poll::Ready(Err(ObservedReadError::Provider(error))) = std::pin::pin!(operation).as_mut().poll(&mut cx) else {
+        panic!("local range capability error must precede observer stop")
+    };
+    assert_eq!(error.kind(), FsErrorKind::RequirementNotMet);
+    assert_eq!(counts.opens.load(Ordering::SeqCst), 0);
+    let state = observed.0.lock().unwrap();
+    assert_eq!(state.before_open, 0);
+    assert!(state.events.is_empty());
+}
+
+#[test]
+fn test_observed_prefix_invalid_path_precedes_open_stop() {
+    let (fs, counts) = filesystem(Script::new(data(1)));
+    let resource_path = Path::parse_literal("/payload").expect("object-key path");
+    let mut observer = RecordingObserver::default();
+    observer.0.lock().unwrap().stop_before_open = true;
+    let observed = observer.clone();
+    let operation = fs.read_prefix_observed(&resource_path, ReadOptions::default(), 1, &mut observer);
+    let waker = counter_waker(&counts);
+    let mut cx = Context::from_waker(&waker);
+    let Poll::Ready(Err(ObservedReadError::Provider(error))) = std::pin::pin!(operation).as_mut().poll(&mut cx) else {
+        panic!("invalid path must precede observer stop")
+    };
+    assert_eq!(error.kind(), FsErrorKind::InvalidPath);
+    assert_eq!(counts.opens.load(Ordering::SeqCst), 0);
+    let state = observed.0.lock().unwrap();
+    assert_eq!(state.before_open, 0);
+    assert!(state.events.is_empty());
+}
+
+#[test]
+fn test_observed_open_provider_error_has_real_ready_event() {
+    let (fs, counts) = filesystem(Script::new(data(1)).fail_open());
+    let resource_path = path();
+    let mut observer = RecordingObserver::default();
+    let observed = observer.clone();
+    let operation = fs.read_all_observed(&resource_path, ReadOptions::default(), 1, &mut observer);
+    let waker = counter_waker(&counts);
+    let mut cx = Context::from_waker(&waker);
+    assert!(matches!(std::pin::pin!(operation).as_mut().poll(&mut cx), Poll::Ready(Err(_))));
+    assert_eq!(observed.0.lock().unwrap().events, [
+        ReadIoEvent::Started { phase: ReadIoPhase::Open },
+        ReadIoEvent::Ready { phase: ReadIoPhase::Open },
+    ]);
+}
+
+#[test]
+fn test_observed_invalid_open_envelope_follows_real_ready_event() {
+    let (fs, counts) = filesystem(Script::new(data(1)).invalid_opened_path());
+    let resource_path = path();
+    let mut observer = RecordingObserver::default();
+    let observed = observer.clone();
+    let operation = fs.read_all_observed(&resource_path, ReadOptions::default(), 1, &mut observer);
+    let waker = counter_waker(&counts);
+    let mut cx = Context::from_waker(&waker);
+    let Poll::Ready(Err(ObservedReadError::Provider(error))) = std::pin::pin!(operation).as_mut().poll(&mut cx) else {
+        panic!("invalid opened envelope must fail validation")
+    };
+    assert_eq!(error.kind(), FsErrorKind::ProviderContractViolation);
+    assert_eq!(observed.0.lock().unwrap().events, [
+        ReadIoEvent::Started { phase: ReadIoPhase::Open },
+        ReadIoEvent::Ready { phase: ReadIoPhase::Open },
+    ]);
+}
+
+#[test]
+fn test_observed_read_all_reports_eof_and_over_limit_sentinel_bytes() {
+    for (payload, maximum, expected, should_succeed) in [
+        (Vec::new(), 1, vec![0], true),
+        (data(2), 1, vec![1, 1], false),
+    ] {
+        let (fs, counts) = filesystem(Script::new(payload));
+        let resource_path = path();
+        let mut observer = RecordingObserver::default();
+        let observed = observer.clone();
+        let operation = fs.read_all_observed(&resource_path, ReadOptions::default(), maximum, &mut observer);
+        let waker = counter_waker(&counts);
+        let mut cx = Context::from_waker(&waker);
+        let result = std::pin::pin!(operation).as_mut().poll(&mut cx);
+        assert_eq!(matches!(result, Poll::Ready(Ok(_))), should_succeed);
+        assert_eq!(observed.0.lock().unwrap().read_bytes, expected);
+    }
+}
+
+#[test]
+fn test_observed_read_all_keeps_bytes_before_later_failure() {
+    let (fs, counts) = filesystem(Script::new(data(4)).error_at(2));
+    let resource_path = path();
+    let mut observer = RecordingObserver::default();
+    let observed = observer.clone();
+    let operation = fs.read_all_observed(&resource_path, ReadOptions::default(), 4, &mut observer);
+    let waker = counter_waker(&counts);
+    let mut cx = Context::from_waker(&waker);
+    assert!(matches!(std::pin::pin!(operation).as_mut().poll(&mut cx), Poll::Ready(Err(_))));
+    assert_eq!(observed.0.lock().unwrap().read_bytes, [1]);
+}
+
+#[test]
+fn test_observed_read_all_notifies_only_after_pending_read_completes() {
+    let (fs, counts) = filesystem(Script::new(data(1)).pending_at(1));
+    let resource_path = path();
+    let mut observer = RecordingObserver::default();
+    let observed = observer.clone();
+    let operation = fs.read_all_observed(&resource_path, ReadOptions::default(), 1, &mut observer);
+    let waker = counter_waker(&counts);
+    let mut cx = Context::from_waker(&waker);
+    let mut future = std::pin::pin!(operation);
+    assert!(future.as_mut().poll(&mut cx).is_pending());
+    assert!(observed.0.lock().unwrap().read_bytes.is_empty());
+    assert!(matches!(future.as_mut().poll(&mut cx), Poll::Ready(Ok(_))));
+    assert_eq!(observed.0.lock().unwrap().read_bytes, [1, 0]);
 }
 
 #[test]
