@@ -22,13 +22,13 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: qubit-ltd/rs-fs-local
-          ref: c89dfa900b5f9eb751037c9100e28a622ee52c6a # rs-fs-local 0.12.0 candidate; pending remote publication
+          ref: 3bf4275ed601e39fdbf8532f9d80d563d9cc7182 # rs-fs-local 0.12.0 candidate; pending remote publication
           path: rust-common/rs-fs-local
       - name: Check out rs-fs-testkit
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: qubit-ltd/rs-fs-testkit
-          ref: 3190325a362f9acf2222795d735381bd5b8a2c17 # rs-fs-testkit 0.9.3
+          ref: 28bf195b8eef9c03d9cb1c5428186758b76aaacd # rs-fs-testkit 0.9.3
           path: rust-common/rs-fs-testkit
       - name: Check out rs-fs-registry
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -40,7 +40,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: qubit-ltd/rs-local-files
-          ref: 5b52230e0af2997fadc45b5ff48be65b0ca5a70d # rs-local-files 0.6.0 candidate; pending remote publication
+          ref: 80d4357b354f572e695f0c17ac1182f0aaad22c0 # rs-local-files 0.6.0 candidate; pending remote publication
           path: rust-common/rs-local-files
       - name: Install Rust 1.94.0
         run: rustup toolchain install 1.94.0 --profile minimal
