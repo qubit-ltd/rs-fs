@@ -316,22 +316,12 @@ async fn read_prefix_as_boxed_error<O: ReadIoObserver>(
 #[test]
 fn test_observed_read_error_standard_error_contract() {
     let path = Path::parse("/reports/latest.csv").unwrap();
-    let provider = FsError::new(
-        FsErrorKind::NotFound,
-        FsOperation::Read,
-        "file was not found",
-    )
-    .with_path(path.clone());
+    let provider = FsError::new(FsErrorKind::NotFound, FsOperation::Read, "file was not found").with_path(path.clone());
     let observed = qubit_fs::read::ObservedReadError::Provider(provider);
 
-    assert_eq!(
-        observed.to_string(),
-        "Read failed with NotFound: file was not found"
-    );
+    assert_eq!(observed.to_string(), "Read failed with NotFound: file was not found");
     let source = Error::source(&observed).expect("provider error is the source");
-    let original = source
-        .downcast_ref::<FsError>()
-        .expect("source remains FsError");
+    let original = source.downcast_ref::<FsError>().expect("source remains FsError");
     assert_eq!(original.path(), Some(&path));
     assert_eq!(original.kind(), FsErrorKind::NotFound);
 

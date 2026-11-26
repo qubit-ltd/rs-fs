@@ -86,12 +86,7 @@ impl AsyncWriteAllOperation {
     /// # Returns
     /// A ready operation that owns the payload until successful execution;
     /// failures and cancellation retain its allocation for inspection.
-    pub(crate) fn new(
-        filesystem: AsyncFileSystem,
-        path: Path,
-        bytes: Vec<u8>,
-        options: WriteOptions,
-    ) -> Self {
+    pub(crate) fn new(filesystem: AsyncFileSystem, path: Path, bytes: Vec<u8>, options: WriteOptions) -> Self {
         Self {
             filesystem,
             path,
@@ -384,6 +379,8 @@ mod tests {
     use std::task::Context;
     use std::task::Poll;
 
+    use qubit_io::AsyncOutput;
+
     use crate::AsyncFileSystem;
     use crate::Path;
     use crate::error::FsResult;
@@ -413,7 +410,6 @@ mod tests {
     use crate::write::WriteAbortOutcome;
     use crate::write::WriteFailure;
     use crate::write::WriteOptions;
-    use qubit_io::AsyncOutput;
 
     struct ImmediateWriter;
 
@@ -436,15 +432,8 @@ mod tests {
     }
 
     impl AsyncFileWriteSession for ImmediateWriter {
-        fn commit_async<'a>(
-            self: Pin<&'a mut Self>,
-        ) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
-            Box::pin(async {
-                Ok(WriteOutcome::new(
-                    AchievedAtomicity::Atomic,
-                    PublicationMethod::Direct,
-                ))
-            })
+        fn commit_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
+            Box::pin(async { Ok(WriteOutcome::new(AchievedAtomicity::Atomic, PublicationMethod::Direct)) })
         }
 
         fn abort_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<WriteAbortOutcome>> {
@@ -477,10 +466,7 @@ mod tests {
             Box::pin(async { unreachable!("write test does not stat") })
         }
 
-        fn open_writer<'a>(
-            &'a self,
-            request: OpenWriterRequest<'a>,
-        ) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
+        fn open_writer<'a>(&'a self, request: OpenWriterRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
             let info = OpenedFileInfo::new(
                 FileSystemId::new("payload-test").expect("valid id"),
                 request.path().clone(),
@@ -500,8 +486,7 @@ mod tests {
 
     #[test]
     fn test_async_write_all_operation_success_releases_payload_allocation() {
-        let filesystem =
-            AsyncFileSystem::from_spi(ImmediateWriterProvider).expect("provider is valid");
+        let filesystem = AsyncFileSystem::from_spi(ImmediateWriterProvider).expect("provider is valid");
         let mut operation = filesystem
             .begin_write_all(
                 Path::parse("/payload").expect("valid path"),

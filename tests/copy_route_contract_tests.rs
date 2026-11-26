@@ -1138,8 +1138,7 @@ fn test_sync_copy_static_preflight_orders_options_before_same_path() {
 #[cfg(feature = "async")]
 #[test]
 fn test_async_copy_static_preflight_orders_options_before_same_path() {
-    let (filesystem, calls, _, _) =
-        async_atomic_route_filesystem(AchievedAtomicity::Atomic, false, true);
+    let (filesystem, calls, _, _) = async_atomic_route_filesystem(AchievedAtomicity::Atomic, false, true);
     let same_path = path("/same");
     let options = CopyOptions::file().with_atomicity(AtomicityRequirement::Required);
 
@@ -1181,8 +1180,7 @@ fn test_sync_zero_entry_budget_assessment_and_execution_share_diagnostic() {
 #[cfg(feature = "async")]
 #[test]
 fn test_async_zero_entry_budget_assessment_and_execution_share_diagnostic() {
-    let (filesystem, calls, _, _) =
-        async_atomic_route_filesystem(AchievedAtomicity::Atomic, true, true);
+    let (filesystem, calls, _, _) = async_atomic_route_filesystem(AchievedAtomicity::Atomic, true, true);
     let source = path("/source");
     let target = path("/target");
     let options = CopyOptions::file().with_max_entries(Some(0));
@@ -1193,8 +1191,7 @@ fn test_async_zero_entry_budget_assessment_and_execution_share_diagnostic() {
     let mut operation = filesystem
         .begin_copy(source, target, options)
         .expect("async operation construction remains independent of execution budget");
-    let executed =
-        ready(operation.execute()).expect_err("zero entry budget must fail before provider I/O");
+    let executed = ready(operation.execute()).expect_err("zero entry budget must fail before provider I/O");
 
     assert_eq!(FsErrorKind::ResourceLimitExceeded, assessed.kind());
     assert_eq!(assessed.kind(), executed.error().kind());
@@ -1224,8 +1221,7 @@ fn test_sync_copy_deadline_precedes_zero_entry_budget() {
 #[cfg(feature = "async")]
 #[test]
 fn test_async_copy_deadline_precedes_zero_entry_budget() {
-    let (filesystem, calls, _, _) =
-        async_atomic_route_filesystem(AchievedAtomicity::Atomic, true, true);
+    let (filesystem, calls, _, _) = async_atomic_route_filesystem(AchievedAtomicity::Atomic, true, true);
     let mut operation = filesystem
         .begin_copy(
             path("/source"),
