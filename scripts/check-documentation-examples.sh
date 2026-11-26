@@ -36,12 +36,12 @@ source = checker.RUST_FILE_HEADER.sub('', checker.SOURCES['quick-start'].read_te
 (app / 'src/main.rs').write_text(source, encoding='utf-8')
 (app / 'Cargo.lock').write_bytes((root / 'tests/fixtures/documentation_examples/sync-consumer/Cargo.lock').read_bytes())
 PY
-metadata=$(cargo metadata --locked --format-version 1 --manifest-path "$scratch/rust-common/report-app/Cargo.toml")
-python3 - "$metadata" "$project_root" <<'PYMETA'
+cargo metadata --locked --format-version 1 --manifest-path "$scratch/rust-common/report-app/Cargo.toml" > "$scratch/metadata.json"
+python3 - "$scratch/metadata.json" "$project_root" <<'PYMETA'
 import json
 import sys
 from pathlib import Path
-data = json.loads(sys.argv[1])
+data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 root = Path(sys.argv[2]).resolve()
 packages = [package for package in data['packages'] if package['name'] == 'qubit-fs']
 assert len(packages) == 1, packages
