@@ -145,7 +145,12 @@ impl FsEffectShared {
             Err(_) => return,
         };
         for waiter in waiters {
-            let _ = catch_unwind(AssertUnwindSafe(|| waiter.waker.wake()));
+            if let Err(payload) = catch_unwind(AssertUnwindSafe(|| waiter.waker.wake())) {
+                // A panic payload's destructor is arbitrary user code too.
+                // Isolate it so one hostile waker cannot prevent later
+                // registrations from being notified.
+                let _ = catch_unwind(AssertUnwindSafe(|| drop(payload)));
+            }
         }
     }
 }
