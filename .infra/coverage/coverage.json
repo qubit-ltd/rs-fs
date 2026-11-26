@@ -1,7 +1,1 @@
-{
-  "threshold_exempt_files": {
-    "qubit-fs": [
-      "src/write/async_file_writer.rs"
-    ]
-  }
-}
+{}
