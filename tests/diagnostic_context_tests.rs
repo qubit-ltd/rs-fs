@@ -138,7 +138,7 @@ fn test_assess_copy_preflight_preserves_request_context() {
             "/source",
             "/target",
             CopyOptions::default().with_max_entries(Some(0)),
-            FsErrorKind::RequirementNotMet,
+            FsErrorKind::ResourceLimitExceeded,
         ),
     ] {
         let source = path(source);

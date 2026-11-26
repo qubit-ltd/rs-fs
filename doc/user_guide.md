@@ -257,7 +257,7 @@ Commit a writer explicitly; flushing alone does not confirm publication.
 Call `assess_copy` before execution to inspect the no-I/O route selected from
 the provider snapshot. It returns `ProviderThenStream`, `ProviderOnly`, or
 `StreamOnly`, plus the first `FallbackRejection` when the stream fallback is
-ineligible. The later copy can still fail or return an indeterminate outcome.
+ineligible. Assessment applies path, option and capability checks before same-path validation, and reports a zero entry budget as `ResourceLimitExceeded`. It does not check the dynamic execution deadline. The later copy can still fail or return an indeterminate outcome.
 
 A completed report can be copied using the following application helper. On
 failure it returns the original `CopyFailure`, its publication state, partial

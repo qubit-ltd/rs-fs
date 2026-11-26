@@ -243,6 +243,42 @@ impl FacadeCore {
         self.require(FileSystemCapability::Write, FsOperation::OpenWriter, Some(path))
     }
 
+    /// Validates static copy inputs in the shared facade order.
+    ///
+    /// # Errors
+    /// Returns the first path, option or capability, or same-path validation
+    /// error. Dynamic execution deadlines and entry-budget checks are handled
+    /// by the assessment or execution stage.
+    pub(crate) fn validate_copy_request(&self, source: &Path, target: &Path, options: &CopyOptions) -> FsResult<()> {
+        self.validate_path(source, FsOperation::Copy)?;
+        self.validate_path(target, FsOperation::Copy)?;
+        options
+            .validate_against(self.properties.capabilities())
+            .map_err(|error| {
+                self.enrich(error, Some(source), FsOperation::Copy)
+                    .with_target(target.clone())
+            })?;
+        if source == target {
+            return Err(FsError::new(
+                FsErrorKind::InvalidOptions,
+                FsOperation::Copy,
+                "copy source and target must differ",
+            )
+            .with_missing_context(source, Some(target), self.properties.info().provider_id()));
+        }
+        Ok(())
+    }
+
+    /// Creates the shared zero-entry-budget error with copy request context.
+    pub(crate) fn copy_entry_limit_error(&self, source: &Path, target: &Path) -> FsError {
+        FsError::new(
+            FsErrorKind::ResourceLimitExceeded,
+            FsOperation::Copy,
+            "copy entry limit was exceeded",
+        )
+        .with_missing_context(source, Some(target), self.properties.info().provider_id())
+    }
+
     /// Assesses copy routes from the immutable provider snapshot without I/O.
     ///
     /// # Parameters
@@ -260,29 +296,9 @@ impl FacadeCore {
     /// Returns an invalid-options or requirement error when the paths or copy
     /// options cannot be served by either the provider or the stream fallback.
     pub(crate) fn assess_copy(&self, source: &Path, target: &Path, options: &CopyOptions) -> FsResult<CopyAssessment> {
-        self.validate_path(source, FsOperation::Copy)?;
-        self.validate_path(target, FsOperation::Copy)?;
-        if source == target {
-            return Err(FsError::new(
-                FsErrorKind::InvalidOptions,
-                FsOperation::Copy,
-                "copy source and target must differ",
-            )
-            .with_missing_context(source, Some(target), self.properties.info().provider_id()));
-        }
-        options
-            .validate_against(self.properties.capabilities())
-            .map_err(|error| {
-                self.enrich(error, Some(source), FsOperation::Copy)
-                    .with_target(target.clone())
-            })?;
+        self.validate_copy_request(source, target, options)?;
         if options.max_entries() == Some(0) {
-            return Err(FsError::new(
-                FsErrorKind::RequirementNotMet,
-                FsOperation::Copy,
-                "copy entry limit must be greater than zero",
-            )
-            .with_missing_context(source, Some(target), self.properties.info().provider_id()));
+            return Err(self.copy_entry_limit_error(source, target));
         }
         let mut rejection = fallback_rejection(options, self.properties.symlink_policy());
         if rejection.is_none() {

@@ -111,6 +111,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+`assess_copy` performs static validation and route assessment without provider I/O. It checks paths, options and capabilities before same-path rejection, reports a zero entry budget as `ResourceLimitExceeded`, and does not check the dynamic execution deadline.
+
 `WriteOptions::default()` replaces an existing target; use `CreateNew` to
 refuse replacement. See the [user guide](doc/user_guide.md) for the configuration.
 

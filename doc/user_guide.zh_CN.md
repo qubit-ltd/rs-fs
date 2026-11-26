@@ -214,7 +214,8 @@ writer 必须显式提交，flush 成功本身不代表已经发布。
 
 执行复制前可调用 `assess_copy` 查看基于 provider 快照、不会产生 I/O 的路由判断。返回路由
 可能是 `ProviderThenStream`、`ProviderOnly` 或 `StreamOnly`，并在流式 fallback 不适用时
-给出第一个 `FallbackRejection`。后续真正复制仍可能失败或进入不确定状态。
+给出第一个 `FallbackRejection`。评估按路径、选项与能力、同路径的顺序检查；零条目预算返回
+`ResourceLimitExceeded`。评估不会检查动态执行期限。后续真正复制仍可能失败或进入不确定状态。
 
 下面的应用辅助函数复制一份已完成的报告。失败时返回原始 `CopyFailure`，保留发布状态、
 部分统计和可能存在的 writer；abort 失败另存为 `cleanup_error`。调用方应持续持有恢复对象，

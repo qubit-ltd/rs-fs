@@ -192,8 +192,9 @@ impl AsyncCopyOperation {
     ///
     /// # Errors
     /// Returns [`AsyncCopyFailure`] with the confirmed copy state and any
-    /// retained writer when preflight, provider execution, fallback, or
-    /// outcome validation fails.
+    /// retained writer when provider execution, fallback, outcome validation,
+    /// the dynamic deadline, or a zero entry budget fails. A zero entry budget
+    /// is reported as [`FsErrorKind::ResourceLimitExceeded`].
     pub async fn execute(&mut self) -> Result<CopyOutcome, AsyncCopyFailure> {
         if self.state != AsyncCopyOperationState::Ready {
             return Err(invalid_state_failure(
@@ -246,18 +247,18 @@ async fn execute_copy(
     writer: &mut Option<AsyncWriterRecovery>,
 ) -> Result<CopyOutcome, AsyncCopyFailure> {
     let caller_options = options.options();
-    if caller_options.max_entries() == Some(0) {
+    if deadline.expired() {
         return Err(filesystem.contextual_copy_failure(
-            budget_error(source, target, "copy entry limit was exceeded"),
+            budget_error(source, target, "copy deadline was exceeded"),
             CopyFailureState::Unchanged,
             CopyStats::default(),
             source,
             target,
         ));
     }
-    if deadline.expired() {
+    if caller_options.max_entries() == Some(0) {
         return Err(filesystem.contextual_copy_failure(
-            budget_error(source, target, "copy deadline was exceeded"),
+            filesystem.core().copy_entry_limit_error(source, target),
             CopyFailureState::Unchanged,
             CopyStats::default(),
             source,

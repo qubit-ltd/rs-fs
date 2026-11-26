@@ -14,7 +14,10 @@ use super::FallbackRejection;
 /// Result of no-I/O copy route analysis.
 ///
 /// The assessment is derived from the cached provider snapshot and does not
-/// contact the provider. Execution may still fail after this assessment.
+/// contact the provider. It checks paths, options and capabilities before
+/// same-path validation, and reports a zero entry budget as
+/// [`FsErrorKind::ResourceLimitExceeded`](crate::error::FsErrorKind::ResourceLimitExceeded). It does not check the
+/// dynamic execution deadline. Execution may still fail after this assessment.
 ///
 /// # Examples
 ///

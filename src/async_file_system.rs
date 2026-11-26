@@ -357,8 +357,11 @@ impl AsyncFileSystem {
     /// # Returns
     /// The available copy assessment for the paths and requested guarantees.
     /// # Errors
-    /// Returns an invalid-options or requirement error when no provider or
-    /// stream execution route can satisfy the request.
+    /// Returns the first path, options or capability, or same-path validation
+    /// error, a [`FsErrorKind::ResourceLimitExceeded`](crate::error::FsErrorKind::ResourceLimitExceeded) error for a
+    /// zero entry budget, or a requirement error when no provider or stream
+    /// route can satisfy the request. Assessment is static and does not check
+    /// the dynamic execution deadline.
     pub fn assess_copy(&self, source: &Path, target: &Path, options: &CopyOptions) -> FsResult<CopyAssessment> {
         self.core.assess_copy(source, target, options)
     }
@@ -1026,7 +1029,9 @@ impl AsyncFileSystem {
     /// # Returns
     /// A ready copy operation whose execution has not started.
     /// # Errors
-    /// Returns [`AsyncCopyFailure`] when local preflight rejects the request.
+    /// Returns [`AsyncCopyFailure`] when path, option, or capability preflight
+    /// rejects the request. A zero entry budget and execution deadline are
+    /// retained for the later `execute` stage.
     #[allow(clippy::result_large_err)]
     pub fn begin_copy(
         &self,
@@ -1066,24 +1071,7 @@ impl AsyncFileSystem {
     /// # Errors
     /// Returns a path, options, or capability validation error.
     fn copy_preflight(&self, source: &Path, target: &Path, options: &CopyOptions) -> FsResult<()> {
-        self.validate_path(source, FsOperation::Copy)?;
-        self.validate_path(target, FsOperation::Copy)?;
-        options
-            .validate_against(self.properties().capabilities())
-            .map_err(|error| {
-                self.enrich(error, source, FsOperation::Copy)
-                    .with_target(target.clone())
-            })?;
-        if source == target {
-            return Err(FsError::new(
-                crate::error::FsErrorKind::InvalidOptions,
-                FsOperation::Copy,
-                "copy source and target must differ",
-            )
-            .with_path(source.clone())
-            .with_target(target.clone()));
-        }
-        Ok(())
+        self.core.validate_copy_request(source, target, options)
     }
 
     /// Performs no-I/O validation for the single rename primitive.
