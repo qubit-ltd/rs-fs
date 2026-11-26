@@ -245,6 +245,13 @@ impl FacadeCore {
 
     /// Validates static copy inputs in the shared facade order.
     ///
+    /// # Parameters
+    ///
+    /// - `source`: Logical path of the source resource.
+    /// - `target`: Destination logical path affected by the operation.
+    /// - `options`: Copy route, conflict, consistency, and metadata guarantees
+    ///   requested by the caller.
+    ///
     /// # Errors
     /// Returns the first path, option or capability, or same-path validation
     /// error. Dynamic execution deadlines and entry-budget checks are handled
@@ -270,6 +277,14 @@ impl FacadeCore {
     }
 
     /// Creates the shared zero-entry-budget error with copy request context.
+    ///
+    /// # Parameters
+    ///
+    /// - `source`: Logical path of the source resource.
+    /// - `target`: Destination logical path affected by the operation.
+    ///
+    /// # Returns
+    /// A resource-limit error carrying the copy request context.
     pub(crate) fn copy_entry_limit_error(&self, source: &Path, target: &Path) -> FsError {
         FsError::new(
             FsErrorKind::ResourceLimitExceeded,
