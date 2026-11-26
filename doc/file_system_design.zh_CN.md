@@ -158,13 +158,13 @@ stateDiagram-v2
 `Failed(Indeterminate)`、已确认字节数和已取得的 writer。打开期间取消即便没有 writer，
 也需要核查。重复执行返回 `InvalidState`，不改变历史事实，也不再次调用提供者。
 
-首次 poll 将数据从 operation 移入执行 future；Ready 状态继续持有数据。取消或失败时，保留已确认写入之后
-尚未确认的后缀，可通过 `remaining_bytes()` 检查。若发布状态不确定，该后缀本身不能作为安全重试依据，
-须先完成 provider 专属恢复。计数只包含成功写调用返回的确认字节，包括短写，不猜测 Pending 或错误调用的写入量。
-成功时先保存计数，再释放已提交 writer 和原始 payload 分配。失败时保留必要的 writer，已发布但仍需清理的失败
-也不例外。取走 writer 即转移恢复责任；后续恢复不改写 operation 的历史快照。Debug 不输出
-payload 或 provider session。旧异步 `write_all` 和错误包装已删除；同步 `write_all`
-保留自然的同步所有权模型。
+执行过程借用 operation 中的 payload，不会将其移入 future。取消或失败时保留完整 payload 分配；
+`remaining_bytes()` 只是已确认写入之后后缀的借用视图。只有 provider 认可所保留 session 可续写，且确认偏移
+可信时，才能据此恢复；后缀视图本身不能证明重试安全。计数只包含成功写调用返回的确认字节，包括短写，
+不猜测 Pending 或错误调用的写入量。成功时先保存计数，再释放已提交 writer 和原始 payload 分配。失败时保留
+必要的 writer，已发布但仍需清理的失败也不例外。取走 writer 即转移恢复责任；后续恢复不改写 operation
+的历史快照。Debug 不输出 payload 或 provider session。旧异步 `write_all` 和错误包装已删除；同步
+`write_all` 保留自然的同步所有权模型。
 
 异步 copy 遵循相同的所有权原则，并保留自己的复制统计。两种操作共享打开证据判断，不合并
 领域状态。Drop 不启动运行时，也不确认异步网络清理；应用必须在显式清理期间保留恢复所有权，

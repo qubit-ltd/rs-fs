@@ -211,18 +211,20 @@ any opened writer. An opening cancelled before a writer is returned still needs
 reconciliation. Repeated execution returns `InvalidState` without changing
 historical facts or calling the provider.
 
-At first poll the payload moves from the operation into the execution future.
-`Ready` retains it. Cancellation and failure retain the unconfirmed suffix after
-confirmed writes for inspection through `remaining_bytes()`; if publication is
-uncertain, that suffix alone is not a safe retry basis and provider-specific
-recovery is required. Confirmed byte counts include only completed successful
-writes, including short writes, never an in-flight or failed call. On success,
-the operation snapshots the count, releases the committed writer, and frees the
-payload allocation. Failures retain a relevant writer, including published
-failures that still require cleanup. Taking the writer transfers responsibility;
-later recovery does not rewrite the operation's historical snapshot. Debug omits payload
-and provider-session contents. The old async `write_all` and failure wrapper are
-removed; synchronous `write_all` retains its natural synchronous ownership model.
+Execution borrows the payload from the operation rather than moving it into the
+future. Cancellation and failure retain the full payload allocation;
+`remaining_bytes()` is only a borrowed view of the suffix after confirmed
+writes. Resumption is valid only when the provider accepts the retained session
+as resumable and the confirmed offset is authoritative; the suffix view alone
+does not make a retry safe. Confirmed byte counts include only completed
+successful writes, including short writes, never an in-flight or failed call.
+On success, the operation snapshots the count, releases the committed writer,
+and frees the payload allocation. Failures retain a relevant writer, including
+published failures that still require cleanup. Taking the writer transfers
+responsibility; later recovery does not rewrite the operation's historical
+snapshot. Debug omits payload and provider-session contents. The old async
+`write_all` and failure wrapper are removed; synchronous `write_all` retains
+its natural synchronous ownership model.
 
 Async copy follows the same ownership principle with its own copy statistics.
 The two operations share opening evidence rules but keep domain-specific state.
