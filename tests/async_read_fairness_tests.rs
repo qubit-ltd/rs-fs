@@ -315,10 +315,17 @@ fn test_observed_prefix_reports_successful_read_bytes() {
     assert_eq!(result.bytes(), data(4));
     let state = observed.0.lock().unwrap();
     assert_eq!(state.read_bytes, [1, 1, 1, 1]);
-    assert_eq!(state.events[..2], [
-        ReadIoEvent::Started { phase: ReadIoPhase::Open },
-        ReadIoEvent::Ready { phase: ReadIoPhase::Open },
-    ]);
+    assert_eq!(
+        state.events[..2],
+        [
+            ReadIoEvent::Started {
+                phase: ReadIoPhase::Open
+            },
+            ReadIoEvent::Ready {
+                phase: ReadIoPhase::Open
+            },
+        ]
+    );
 }
 
 #[test]
@@ -494,11 +501,21 @@ fn test_observed_open_provider_error_has_real_ready_event() {
     let operation = fs.read_all_observed(&resource_path, ReadOptions::default(), 1, &mut observer);
     let waker = counter_waker(&counts);
     let mut cx = Context::from_waker(&waker);
-    assert!(matches!(std::pin::pin!(operation).as_mut().poll(&mut cx), Poll::Ready(Err(_))));
-    assert_eq!(observed.0.lock().unwrap().events, [
-        ReadIoEvent::Started { phase: ReadIoPhase::Open },
-        ReadIoEvent::Ready { phase: ReadIoPhase::Open },
-    ]);
+    assert!(matches!(
+        std::pin::pin!(operation).as_mut().poll(&mut cx),
+        Poll::Ready(Err(_))
+    ));
+    assert_eq!(
+        observed.0.lock().unwrap().events,
+        [
+            ReadIoEvent::Started {
+                phase: ReadIoPhase::Open
+            },
+            ReadIoEvent::Ready {
+                phase: ReadIoPhase::Open
+            },
+        ]
+    );
 }
 
 #[test]
@@ -514,18 +531,24 @@ fn test_observed_invalid_open_envelope_follows_real_ready_event() {
         panic!("invalid opened envelope must fail validation")
     };
     assert_eq!(error.kind(), FsErrorKind::ProviderContractViolation);
-    assert_eq!(observed.0.lock().unwrap().events, [
-        ReadIoEvent::Started { phase: ReadIoPhase::Open },
-        ReadIoEvent::Ready { phase: ReadIoPhase::Open },
-    ]);
+    assert_eq!(
+        observed.0.lock().unwrap().events,
+        [
+            ReadIoEvent::Started {
+                phase: ReadIoPhase::Open
+            },
+            ReadIoEvent::Ready {
+                phase: ReadIoPhase::Open
+            },
+        ]
+    );
 }
 
 #[test]
 fn test_observed_read_all_reports_eof_and_over_limit_sentinel_bytes() {
-    for (payload, maximum, expected, should_succeed) in [
-        (Vec::new(), 1, vec![0], true),
-        (data(2), 1, vec![1, 1], false),
-    ] {
+    for (payload, maximum, expected, should_succeed) in
+        [(Vec::new(), 1, vec![0], true), (data(2), 1, vec![1, 1], false)]
+    {
         let (fs, counts) = filesystem(Script::new(payload));
         let resource_path = path();
         let mut observer = RecordingObserver::default();
@@ -548,7 +571,10 @@ fn test_observed_read_all_keeps_bytes_before_later_failure() {
     let operation = fs.read_all_observed(&resource_path, ReadOptions::default(), 4, &mut observer);
     let waker = counter_waker(&counts);
     let mut cx = Context::from_waker(&waker);
-    assert!(matches!(std::pin::pin!(operation).as_mut().poll(&mut cx), Poll::Ready(Err(_))));
+    assert!(matches!(
+        std::pin::pin!(operation).as_mut().poll(&mut cx),
+        Poll::Ready(Err(_))
+    ));
     assert_eq!(observed.0.lock().unwrap().read_bytes, [1]);
 }
 

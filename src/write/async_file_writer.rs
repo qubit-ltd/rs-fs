@@ -720,10 +720,7 @@ mod tests {
             unsafe { Pin::new(&mut writer).poll_write_unchecked(&mut cx, b"payload", 0, 7) },
             Poll::Ready(Ok(7))
         ));
-        assert!(matches!(
-            Pin::new(&mut writer).poll_flush(&mut cx),
-            Poll::Ready(Ok(()))
-        ));
+        assert!(matches!(Pin::new(&mut writer).poll_flush(&mut cx), Poll::Ready(Ok(()))));
         let mut commit = writer.commit_async();
         assert!(matches!(commit.as_mut().poll(&mut cx), Poll::Ready(Ok(_))));
         drop(commit);

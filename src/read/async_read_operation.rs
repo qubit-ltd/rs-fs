@@ -148,7 +148,9 @@ impl<'a> AsyncReadOperation<'a> {
         ReadAllOptions::new(max_bytes, ReadConsistencyPolicy::BestEffort)
             .sentinel_capacity()
             .map_err(|error| self.filesystem.core().enrich(error, Some(path), FsOperation::Read))?;
-        let resolved = self.filesystem.prepare_open_reader(path, ResolvedReadOptions::new(options))?;
+        let resolved = self
+            .filesystem
+            .prepare_open_reader(path, ResolvedReadOptions::new(options))?;
         before_io(observer, ReadIoPhase::Open)?;
         let open = self.filesystem.dispatch_open_reader(path, resolved);
         let opened = observe_io(open, observer, ReadIoPhase::Open).await?;

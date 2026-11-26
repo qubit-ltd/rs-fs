@@ -65,8 +65,8 @@ use crate::spi::ManagedFsMutationSpi;
 use crate::spi::ManagedFsReadSpi;
 use crate::spi::ManagedFsTreeSpi;
 use crate::spi::OpenReaderRequest;
-use crate::spi::OpenedAsyncReader;
 use crate::spi::OpenWriterRequest;
+use crate::spi::OpenedAsyncReader;
 use crate::spi::ProviderOperation;
 use crate::spi::RenameRequest;
 use crate::spi::ResolvedCreateDirectoryOptions;
@@ -1312,6 +1312,11 @@ impl AsyncFileSystem {
     }
 
     /// Performs local validation before an observed or ordinary SPI open.
+    ///
+    /// # Parameters
+    ///
+    /// - `path`: Logical path of the resource to open.
+    /// - `resolved`: Validated read options and facade planning hints.
     pub(crate) fn prepare_open_reader(
         &self,
         path: &Path,
@@ -1331,12 +1336,18 @@ impl AsyncFileSystem {
     }
 
     /// Dispatches an already-prepared open to the provider.
+    ///
+    /// # Parameters
+    ///
+    /// - `path`: Logical path of the resource to open.
+    /// - `resolved`: Validated read options and facade planning hints.
     pub(crate) async fn dispatch_open_reader(
         &self,
         path: &Path,
         resolved: ResolvedReadOptions,
     ) -> FsResult<OpenedAsyncReader> {
-        let opened = self.spi
+        let opened = self
+            .spi
             .open_reader(OpenReaderRequest::new(path, resolved))
             .await
             .map_err(|error| self.enrich(error, path, FsOperation::OpenReader))?;
@@ -1344,11 +1355,14 @@ impl AsyncFileSystem {
     }
 
     /// Validates provider-returned identity and constructs the reader.
-    pub(crate) fn validate_opened_reader(
-        &self,
-        path: &Path,
-        opened: OpenedAsyncReader,
-    ) -> FsResult<AsyncFileReader> {
+    ///
+    /// # Parameters
+    ///
+    /// - `path`: Logical path used to validate the provider's returned
+    ///   identity.
+    /// - `opened`: Provider-opened reader and its returned resource
+    ///   information.
+    pub(crate) fn validate_opened_reader(&self, path: &Path, opened: OpenedAsyncReader) -> FsResult<AsyncFileReader> {
         self.validate_opened_info(opened.info(), path)?;
         Ok(opened.into_reader())
     }

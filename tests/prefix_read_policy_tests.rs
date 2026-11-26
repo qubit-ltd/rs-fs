@@ -98,9 +98,7 @@ fn test_prefix_outcome_limit_preserves_request_facts() {
 
 #[test]
 fn test_prefix_outcome_preserves_non_default_original_options() {
-    let options = ReadOptions::default()
-        .with_offset(Some(5))
-        .with_length(Some(7));
+    let options = ReadOptions::default().with_offset(Some(5)).with_length(Some(7));
     let path = Path::parse("/payload").unwrap();
 
     let sync = FileSystem::from_spi(RecordingProvider {

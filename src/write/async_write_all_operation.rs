@@ -227,21 +227,11 @@ impl AsyncWriteAllOperation {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::release_payload;
-
-    #[test]
-    fn test_async_write_all_operation_success_releases_payload_allocation() {
-        let mut bytes = vec![7; 4096];
-        assert!(bytes.capacity() >= 4096);
-        release_payload(&mut bytes);
-        assert!(bytes.is_empty());
-        assert_eq!(0, bytes.capacity());
-    }
-}
-
 /// Releases the request allocation after successful publication.
+///
+/// # Parameters
+///
+/// - `bytes`: Successfully published payload whose allocation can be released.
 fn release_payload(bytes: &mut Vec<u8>) {
     *bytes = Vec::new();
 }
@@ -374,5 +364,19 @@ impl Debug for AsyncWriteAllOperation {
             .field("written_bytes", &self.recovery.written_bytes)
             .field("has_recovery", &self.writer.is_some())
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::release_payload;
+
+    #[test]
+    fn test_async_write_all_operation_success_releases_payload_allocation() {
+        let mut bytes = vec![7; 4096];
+        assert!(bytes.capacity() >= 4096);
+        release_payload(&mut bytes);
+        assert!(bytes.is_empty());
+        assert_eq!(0, bytes.capacity());
     }
 }
