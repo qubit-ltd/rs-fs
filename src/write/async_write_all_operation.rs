@@ -169,8 +169,7 @@ impl AsyncWriteAllOperation {
     /// it does not establish that retrying the suffix is safe.
     ///
     /// # Returns
-    /// The unconfirmed payload suffix, which may be empty after full
-    /// acceptance.
+    /// The unconfirmed payload suffix, which is empty after full acceptance.
     #[inline]
     #[must_use]
     pub fn remaining_bytes(&self) -> &[u8] {
@@ -222,10 +221,19 @@ impl AsyncWriteAllOperation {
         let result = execute_write(filesystem, path, bytes, options, guard.writer_mut()).await;
         guard.finish(&result);
         if result.is_ok() {
-            bytes.clear();
+            release_payload(bytes);
         }
         result
     }
+}
+
+/// Releases the request allocation after successful publication.
+///
+/// # Parameters
+///
+/// - `bytes`: Successfully published payload whose allocation can be released.
+fn release_payload(bytes: &mut Vec<u8>) {
+    *bytes = Vec::new();
 }
 /// Runs provider stages while keeping the session in the recovery slot.
 ///
@@ -356,5 +364,19 @@ impl Debug for AsyncWriteAllOperation {
             .field("written_bytes", &self.recovery.written_bytes)
             .field("has_recovery", &self.writer.is_some())
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::release_payload;
+
+    #[test]
+    fn test_async_write_all_operation_success_releases_payload_allocation() {
+        let mut bytes = vec![7; 4096];
+        assert!(bytes.capacity() >= 4096);
+        release_payload(&mut bytes);
+        assert!(bytes.is_empty());
+        assert_eq!(0, bytes.capacity());
     }
 }

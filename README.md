@@ -18,7 +18,7 @@ The public crates.io index checked on 2026-11-24 lists `qubit-fs` only through
 0.3.3, so version 0.4 is not installable from the registry. For now, create an
 independent Cargo project (for example `report-app`) beside `rs-fs`, put the
 marked dependency block below in its `Cargo.toml`, and copy the complete program
-in the [Direct-call compatibility example](#directcall-compatibility-example)
+in the [Direct-call compatibility example](#direct-call-compatibility-example)
 to `report-app/src/main.rs`. Run it with
 `cargo run --manifest-path ../report-app/Cargo.toml`; it prints `report ready`.
 The source paths resolve the core and local adapter from the same sibling

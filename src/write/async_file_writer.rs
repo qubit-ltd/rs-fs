@@ -628,6 +628,7 @@ mod tests {
     use crate::spi::SpiFuture;
     use crate::write::WriteAbortOutcome;
     use crate::write::WriteFailure;
+    use crate::write::WriterState;
 
     struct Session;
 
@@ -695,5 +696,55 @@ mod tests {
             Poll::Ready(Ok(0))
         ));
         assert_eq!(written_bytes, writer.written_bytes());
+    }
+
+    #[test]
+    fn test_write_flush_commit_and_abort_lifecycle() {
+        let info = OpenedFileInfo::new(
+            FileSystemId::new("async-writer-test").unwrap(),
+            Path::parse("/lifecycle").unwrap(),
+        );
+        let mut writer = AsyncFileWriter::new(
+            info,
+            Box::new(Session),
+            AtomicityRequirement::default(),
+            DurabilityRequirement::default(),
+            "async-writer-test",
+            None,
+        );
+        let mut cx = Context::from_waker(Waker::noop());
+
+        assert_eq!(WriterState::Open, writer.state());
+        assert!(!writer.is_buffered());
+        assert!(matches!(
+            unsafe { Pin::new(&mut writer).poll_write_unchecked(&mut cx, b"payload", 0, 7) },
+            Poll::Ready(Ok(7))
+        ));
+        assert!(matches!(Pin::new(&mut writer).poll_flush(&mut cx), Poll::Ready(Ok(()))));
+        let mut commit = writer.commit_async();
+        assert!(matches!(commit.as_mut().poll(&mut cx), Poll::Ready(Ok(_))));
+        drop(commit);
+        assert_eq!(WriterState::Committed, writer.state());
+        assert!(writer.has_confirmed_publication());
+
+        let info = OpenedFileInfo::new(
+            FileSystemId::new("async-writer-test").unwrap(),
+            Path::parse("/abort").unwrap(),
+        );
+        let mut writer = AsyncFileWriter::new(
+            info,
+            Box::new(Session),
+            AtomicityRequirement::default(),
+            DurabilityRequirement::default(),
+            "async-writer-test",
+            None,
+        );
+        let mut abort = writer.abort_async();
+        assert!(matches!(
+            abort.as_mut().poll(&mut cx),
+            Poll::Ready(Ok(WriteAbortOutcome::NotPublished))
+        ));
+        drop(abort);
+        assert_eq!(WriterState::Aborted, writer.state());
     }
 }

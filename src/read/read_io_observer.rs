@@ -16,8 +16,10 @@ use crate::read::ReadIoPhase;
 pub trait ReadIoObserver {
     /// Checks whether the next provider operation may begin.
     ///
-    /// This is called before each open or read future is created. Returning
-    /// `Break(())` stops the operation before that provider call.
+    /// This is called after local validation succeeds and immediately before
+    /// each provider open or read future is created. Returning `Break(())`
+    /// stops the operation before that provider call. Local validation errors
+    /// therefore take precedence over an observer stop.
     ///
     /// # Parameters
     /// - `phase`: Provider operation about to be started.

@@ -97,6 +97,39 @@ fn test_prefix_outcome_limit_preserves_request_facts() {
 }
 
 #[test]
+fn test_prefix_outcome_preserves_non_default_original_options() {
+    let options = ReadOptions::default().with_offset(Some(5)).with_length(Some(7));
+    let path = Path::parse("/payload").unwrap();
+
+    let sync = FileSystem::from_spi(RecordingProvider {
+        capabilities: ranged(),
+        limits: FileSystemLimits::unknown(),
+        observations: Arc::new(Observations::default()),
+        fault: Fault::None,
+    })
+    .unwrap()
+    .read_prefix(&path, options.clone(), 3)
+    .unwrap();
+    assert_eq!(sync.options(), &options);
+
+    #[cfg(feature = "async")]
+    {
+        let asynchronous = common::poll_support::ready(
+            AsyncFileSystem::from_spi(RecordingProvider {
+                capabilities: ranged(),
+                limits: FileSystemLimits::unknown(),
+                observations: Arc::new(Observations::default()),
+                fault: Fault::None,
+            })
+            .unwrap()
+            .read_prefix(&path, options.clone(), 3),
+        )
+        .unwrap();
+        assert_eq!(asynchronous.options(), &options);
+    }
+}
+
+#[test]
 fn test_prefix_outcome_eof_and_zero_limit() {
     let observations = Arc::new(Observations::default());
     let provider = RecordingProvider {

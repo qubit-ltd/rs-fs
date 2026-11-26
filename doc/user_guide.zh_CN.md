@@ -125,6 +125,12 @@ Conditional 或不支持范围读取的 provider 仍可顺序读取前缀。Best
 其他任务和处理取消提供机会。这不限制 provider 单次 poll 的耗时，也不保证任务执行顺序；取消
 不能中断正在运行的 provider poll。字节上限约束结果大小，不约束耗时。
 
+观测型聚合读取会包裹实际 SPI 调用。本地校验 path、选项、range、能力和哨兵容量通过后，facade
+调用 `before_io(Open)`，并在首次实际 poll 时报告 `Started`，再报告 SPI open future 的 `Pending` 或 `Ready`。
+open `Ready` 事件之后才校验返回的 reader envelope。每次读取也会报告 SPI read future 的 poll 状态；只有 future 返回 `Ready` 后才通知
+成功字节数，包括 EOF 的零字节和用于检测超限的额外哨兵字节。本地校验失败不会产生 provider poll
+或回调，公平性让出也不是 I/O 事件。丢弃 Pending future 不会合成 `Ready`。
+
 返回值是 `PrefixReadOutcome`：用 `bytes()` 借用数据，或用 `into_bytes()` 接管数据；
 并可检查 `info()`、`options()`、`max_bytes()` 和 `termination()`。`LimitReached` 只表示
 已消费上限且没有继续探测，不证明流已结束；只有 `StreamEnded` 表示在上限前观察到 EOF。
@@ -293,6 +299,9 @@ pub fn copy_report(filesystem: &FileSystem, source: &Path, target: &Path) -> Res
 `begin_write_all` 消费 `Vec<u8>`，返回持有文件系统 clone、路径、选项和数据的 operation。
 借用数据需显式 `to_vec()`；需要分块传输时，直接管理 `AsyncFileWriter` 生命周期。
 旧异步 `write_all` 已删除，没有兼容包装。
+确认字节数只统计已完成且成功的写入。失败或取消后，`remaining_bytes()` 返回确认写入之后的后缀，
+供检查使用。若发布状态不确定，该后缀本身不能作为安全重试依据；应先完成 provider 专属恢复或核查，
+再决定是否重试。成功执行会冻结计数、释放已提交 writer，并释放原始 payload 分配。
 
 下方完整辅助函数接收应用的取消 future。请通过 `cancel` 参数取消写入，并让辅助函数继续
 完成恢复；不要在清理期间再丢弃整个辅助函数的 future。operation 位于执行 future 的取消
@@ -918,11 +927,11 @@ metadata，流会失败，不会返回缺少 metadata 的条目。同步 `Direct
 
 0.4 保留 `FileSystem` 与 `AsyncFileSystem` 的现有直接方法，但明确标为**非托管**操作：它们不通过
 `qubit-operation` 获得取消、释放或 settlement 跟踪。托管调用通过
-`FsExecutionBinding` 接收应用提供的 `OperationScope`；文件系统库不会创建替代用的根 manager，
-也不会保存借用的 scope。下面的同步与异步示例都直接提交到 `OperationManager` 根级。可用
-`FsExecutionBinding::with_group` 在当前提交目标上增加 service group 绑定。从 `scope.manager()` 创建的
-binding 会保留 parent 提交目标，因此可再叠加 group 归属。facade 的 `submit_*_in` 传入活动 parent scope 时，
-也会将操作作为其子项提交。
+`FsExecutionBinding` 绑定的 manager view 决定提交目标：根 manager 指向根级，从 `scope.manager()` 获得的 view
+则保留该 parent 目标。下面的同步与异步示例都直接提交到 `OperationManager` 根级。
+`FsExecutionBinding::with_group` 可在当前目标上叠加 group 归属。另一种入口是 facade 的 `submit_*_in`：
+它接收活动 parent scope 参数，并将操作作为子项提交到该 scope 下。需要 parent 归属时，可绑定 parent manager view，
+或向 facade 传入 scope。文件系统库不会创建替代用的根 manager，也不会保存借用的 scope。
 
 旧的直接 facade 方法使用 facade 自身的 SPI 和缓存属性，预检由 facade 负责；它们仍是非托管入口。
 托管 facade 的 `submit_*_in` 则接收显式 provider，由 provider 负责托管准备和 provider 专属预检，

@@ -6,6 +6,7 @@
 //    Licensed under the Apache License, Version 2.0.
 // =============================================================================
 use std::future::Future;
+use std::panic::panic_any;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::Weak;
@@ -36,13 +37,29 @@ impl Wake for CountingWake {
 
 struct PanickingWake;
 
+struct PanickingPayload;
+
+impl Drop for PanickingPayload {
+    fn drop(&mut self) {
+        panic_any(SecondPanickingPayload);
+    }
+}
+
+struct SecondPanickingPayload;
+
+impl Drop for SecondPanickingPayload {
+    fn drop(&mut self) {
+        panic!("test second panic payload destructor panic");
+    }
+}
+
 impl Wake for PanickingWake {
     fn wake(self: Arc<Self>) {
-        panic!("test waker panic");
+        panic_any(PanickingPayload);
     }
 
     fn wake_by_ref(self: &Arc<Self>) {
-        panic!("test waker panic");
+        panic_any(PanickingPayload);
     }
 }
 
@@ -221,5 +238,38 @@ fn test_effect_wait_registration_panicking_waker_does_not_block_close_or_capacit
             future.as_mut().poll(&mut context),
             Poll::Ready(Err(FsEffectObservationError::PublisherClosed))
         ));
+    }
+}
+
+#[test]
+fn test_effect_wait_registration_panicking_payload_does_not_block_publish_or_close() {
+    for publish in [true, false] {
+        let pool = FsEffectSlotPool::new(1);
+        let first_reservation = pool.reserve().unwrap();
+        let last_reservation = first_reservation.clone();
+        let observer = first_reservation.observer();
+        let healthy_counter = Arc::new(AtomicUsize::new(0));
+        let panicking_waker = Waker::from(Arc::new(PanickingWake));
+        let healthy_waker = counting_waker(&healthy_counter);
+        let mut panicking_future = Box::pin(observer.wait_final_async());
+        let mut healthy_future = Box::pin(observer.wait_final_async());
+
+        poll_pending(&mut panicking_future, &panicking_waker);
+        poll_pending(&mut healthy_future, &healthy_waker);
+        if publish {
+            first_reservation.publish(FsEffectFact::State(FsEffectState::Applied));
+            drop(first_reservation);
+            drop(last_reservation);
+            assert!(matches!(observer.snapshot(), FsEffectSnapshot::Final(_)));
+        } else {
+            drop(first_reservation);
+            drop(last_reservation);
+            assert!(matches!(observer.snapshot(), FsEffectSnapshot::Closed));
+        }
+
+        assert_eq!(1, healthy_counter.load(Ordering::SeqCst));
+        assert!(pool.reserve().is_ok());
+        drop(panicking_future);
+        drop(healthy_future);
     }
 }
