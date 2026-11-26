@@ -610,9 +610,10 @@ provider 在保存诊断前负责清洗值。句柄处于 `Persisted` 或 `Kept`
 准备阶段不能启动 I/O。拒绝准备时须返还同一个 owned request，包括其中的缓冲区。manager 认领 prepared
 operation 后，失败通过 typed outcome 报告，不能再伪装成尚未启动的请求。
 
-托管提交有三个归属层级：`FsExecutionBinding::new` 提交到应用 manager 根级，`with_group` 在当前提交目标上增加
-service group 绑定。从 `scope.manager()` 创建的 binding 会保留 parent 提交目标，因此可将 group 归属叠加到父子提交上；
-facade 的 `submit_*_in` 接收活动 `OperationScope`，由 manager 将操作作为 parent 的子项管理。
+binding 接收的 manager view 决定提交目标：`FsExecutionBinding::new(manager)` 指向其根级，
+从 `scope.manager()` 创建的 binding 则保留该 view 的 parent 目标。`with_group` 可在当前目标上叠加 service group 归属。
+另一个入口是 facade 的 `submit_*_in`：它接收活动 `OperationScope` 参数，并将子操作提交到该 scope 下。
+示例使用根 manager；需要 parent 归属时，可绑定 parent manager view，或向 facade 传入 parent scope。
 这些 facade 入口接收显式 managed provider：provider 负责准备及 provider 专属预检，parent manager 决定准入；
 facade 不会用自身 SPI 或缓存属性替代它。准备或准入拒绝会返还未认领的请求，因此已关闭的 parent 不能认领子项。
 准入后发生的停止会传播给子项，但不能证明 provider effect 已回滚。

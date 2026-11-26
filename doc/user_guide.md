@@ -156,6 +156,17 @@ and observe cancellation. It does not bound the time spent in one provider poll
 or guarantee a scheduling order; cancellation cannot interrupt a provider poll
 already in progress. The byte limit bounds the result size, not elapsed time.
 
+For observed aggregate reads, the observer surrounds the actual SPI calls. After
+local path, option, range, capability, and sentinel-capacity validation, the
+facade calls `before_io(Open)` and reports `Started` on the first actual poll,
+then the resulting `Pending` or `Ready` state for the SPI open future. It
+validates the returned reader envelope after the open `Ready` event. Each read
+similarly reports transitions while polling the SPI read future; successful
+bytes are reported only after that future returns `Ready`, including zero at
+EOF and the extra sentinel byte used to detect an over-limit result. Local
+validation failures have no provider poll or callback, and fairness yields do
+not create I/O events. Dropping a pending future does not synthesize `Ready`.
+
 The result is a `PrefixReadOutcome`: use `bytes()` to borrow or `into_bytes()`
 to take the data, and inspect `info()`, `options()`, `max_bytes()`, and
 `termination()`. `LimitReached` means the bound was consumed without probing
@@ -346,6 +357,12 @@ faithfully.
 filesystem clone, path, options, and payload. Borrowed input must be explicitly
 copied with `to_vec()`. For streaming without a whole-file allocation, manage an
 `AsyncFileWriter` directly. The removed asynchronous `write_all` has no wrapper.
+Only completed successful writes contribute to the confirmed byte count. On
+failure or cancellation, `remaining_bytes()` exposes the suffix after confirmed
+writes for inspection. If publication is uncertain, that suffix alone is not a
+safe retry basis; complete provider-specific recovery or reconciliation before
+deciding whether to retry. Successful execution freezes the count, releases the
+committed writer, and frees the original payload allocation.
 
 The following complete helper takes an application cancellation future. Keep
 this helper running through recovery; cancel the write through its `cancel`
@@ -1079,11 +1096,13 @@ Version 0.4 keeps the existing direct methods on both `FileSystem` and
 cancellation, release, or settlement tracking from `qubit-operation`. A managed call instead receives an application-owned
 `OperationScope` through `FsExecutionBinding`; the filesystem library does not
 create a replacement root manager or keep a borrowed scope. The examples below
-submit at the `OperationManager` root. Use `FsExecutionBinding::with_group` to
-add a service group to the current submission target. A binding created from
-`scope.manager()` keeps that parent target, so a group can be layered onto the
-parent-child submission. A facade's `submit_*_in` method with an active parent
-scope also submits the operation as its child.
+submit at the `OperationManager` root. The manager view bound to
+`FsExecutionBinding` determines its target: a root manager targets the root,
+while a view from `scope.manager()` retains that parent target.
+`FsExecutionBinding::with_group` layers group ownership onto the current target.
+Separately, a facade's `submit_*_in` method receives an active parent scope and
+submits its child under that scope. Use a parent manager view or pass the scope
+to the facade when parent ownership is intended.
 
 The legacy direct facade methods use the facade's own SPI and cached
 properties, and their validation is owned by the facade; they remain

@@ -113,14 +113,15 @@ request. A stop after admission propagates to the child but cannot establish
 that provider effects were rolled back. These methods do not use the facade's
 SPI or cached properties as a substitute for the explicit provider.
 
-`FsExecutionBinding::new` submits at the application manager root;
-`with_group` adds a service-group binding while preserving the current target.
-Creating a binding from `scope.manager()` preserves that parent submission
-target, and adding a group can therefore combine group membership with the
-parent-child relationship. A facade `submit_*_in` call supplied with an active
-parent scope also submits a child operation. The filesystem crate never
-creates a replacement manager root and does not retain the borrowed parent
-scope.
+The bound receiver is the manager view that determines the submission target:
+`FsExecutionBinding::new(manager)` targets the manager root, while
+`FsExecutionBinding::new(scope.manager())` retains the parent target represented
+by that view. `with_group` layers service-group ownership onto the current
+target. Separately, a facade `submit_*_in` call receives an active parent scope
+as an argument and submits its child under that scope. The filesystem crate
+never creates a replacement manager root or retains a borrowed scope. The
+examples use a root manager; use a parent manager view or the facade scope
+argument when parent ownership is intended.
 
 ## Publication and failure facts
 
@@ -211,12 +212,15 @@ reconciliation. Repeated execution returns `InvalidState` without changing
 historical facts or calling the provider.
 
 At first poll the payload moves from the operation into the execution future.
-It is released on completion or cancellation; `Ready` retains it. Confirmed byte
-counts include only completed successful writes, including short writes, never
-an in-flight or failed call. Success snapshots the count before releasing the
-committed writer. Failures retain a relevant writer, including published failures
-that still require cleanup. Taking the writer transfers responsibility; later
-recovery does not rewrite the operation's historical snapshot. Debug omits payload
+`Ready` retains it. Cancellation and failure retain the unconfirmed suffix after
+confirmed writes for inspection through `remaining_bytes()`; if publication is
+uncertain, that suffix alone is not a safe retry basis and provider-specific
+recovery is required. Confirmed byte counts include only completed successful
+writes, including short writes, never an in-flight or failed call. On success,
+the operation snapshots the count, releases the committed writer, and frees the
+payload allocation. Failures retain a relevant writer, including published
+failures that still require cleanup. Taking the writer transfers responsibility;
+later recovery does not rewrite the operation's historical snapshot. Debug omits payload
 and provider-session contents. The old async `write_all` and failure wrapper are
 removed; synchronous `write_all` retains its natural synchronous ownership model.
 
