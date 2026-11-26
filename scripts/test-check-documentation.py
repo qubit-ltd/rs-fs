@@ -96,6 +96,23 @@ class QuickStartDependencyMarkerTests(unittest.TestCase):
             with self.subTest(invalid=invalid), self.assertRaises(AssertionError):
                 checker.marked_fence(invalid, marker, 'toml', 'fixture')
 
+    def test_release_snapshot_accepts_same_date_and_rejects_invalid_or_drifted_markers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'doc').mkdir()
+            content = '''<!-- dependencies: quick-start -->\n```toml\n[dependencies]\nqubit-fs = { version = "0.4", path = "../rs-fs" }\nqubit-fs-local = { path = "../rs-fs-local" }\ntempfile = "3"\n```\n<!-- dependencies: quick-start-async -->\n```toml\n[dependencies]\nqubit-fs = { version = "0.4", path = "../rs-fs", features = ["async"] }\n```\n<!-- release-status: quick-start -->\n```toml\n[release]\ncore_status = "published"\nchecked = "2026-11-26"\n```\nsrc/main.rs cargo run --manifest-path ../report-app/Cargo.toml report ready'''
+            paths = ('README.md', 'README.zh_CN.md', 'doc/user_guide.md', 'doc/user_guide.zh_CN.md')
+            for relative in paths:
+                (root / relative).write_text(content, encoding='utf-8')
+            self.assertTrue(checker.check_marked_quick_start_dependencies(root))
+            (root / paths[-1]).write_text(content.replace('2026-11-26', '2026-11-27'), encoding='utf-8')
+            with self.assertRaisesRegex(AssertionError, 'differs from README'):
+                checker.check_marked_quick_start_dependencies(root)
+            for relative in paths:
+                (root / relative).write_text(content.replace('2026-11-26', '2026-02-30'), encoding='utf-8')
+            with self.assertRaisesRegex(AssertionError, 'valid ISO date'):
+                checker.check_marked_quick_start_dependencies(root)
+
     def test_marked_dependencies_require_source_paths_and_match_all_documents(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -118,7 +135,7 @@ qubit-fs = { version = "0.4", path = "../rs-fs", features = ["async"] }
 ```toml
 [release]
 core_status = "not-published"
-checked = "2026-11-24"
+checked = "2026-11-25"
 ```
 Create a sibling caller, copy the program to `src/main.rs`, then run
 `cargo run --manifest-path ../report-app/Cargo.toml`; it prints `report ready`.
@@ -141,7 +158,7 @@ Create a sibling caller, copy the program to `src/main.rs`, then run
             with self.assertRaisesRegex(AssertionError, 'required sibling source paths'):
                 checker.check_marked_quick_start_dependencies(root)
             (root / 'README.md').write_text(valid, encoding='utf-8')
-            (root / 'doc/user_guide.zh_CN.md').write_text(valid.replace('checked = "2026-11-24"', 'checked = "2026-11-23"'), encoding='utf-8')
+            (root / 'doc/user_guide.zh_CN.md').write_text(valid.replace('checked = "2026-11-25"', 'checked = "2026-11-23"'), encoding='utf-8')
             with self.assertRaisesRegex(AssertionError, 'differs from README'):
                 checker.check_marked_quick_start_dependencies(root)
 
@@ -224,6 +241,13 @@ class MarkdownAnchorTests(unittest.TestCase):
         anchors = checker.markdown_anchors('## 元数据保留\n')
         self.assertIn('元数据保留', anchors)
         checker.check_markdown_fragment('## 元数据保留\n', '元数据保留', 'README.md -> guide.md#%E5%85%83%E6%95%B0%E6%8D%AE%E4%BF%9D%E7%95%99')
+
+    def test_literal_hyphens_in_heading_slugs_and_fragments(self):
+        text = '## Direct-call compatibility example\n'
+        self.assertIn('direct-call-compatibility-example', checker.markdown_anchors(text))
+        checker.check_markdown_fragment(text, 'direct-call-compatibility-example', 'README.md')
+        with self.assertRaisesRegex(AssertionError, 'directcall-compatibility-example'):
+            checker.check_markdown_fragment(text, 'directcall-compatibility-example', 'README.md')
 
     def test_duplicate_headings_and_natural_suffix_collision(self):
         anchors = checker.markdown_anchors('## Read\n## Read\n## Read 1\n')

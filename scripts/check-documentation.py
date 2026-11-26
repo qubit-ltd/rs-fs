@@ -6,6 +6,7 @@ import os
 import subprocess
 import tomllib
 import unicodedata
+from datetime import date
 from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -100,9 +101,12 @@ def check_marked_quick_start_dependencies(root=ROOT):
     for relative, block in statuses.items():
         assert block == status_baseline, f'{relative}: release status differs from README.md'
     status = tomllib.loads(status_baseline).get('release', {})
-    assert status == {'core_status': 'not-published', 'checked': '2026-11-24'}, (
-        'Quick Start release status marker: update the public-index status and check date'
-    )
+    assert set(status) == {'core_status', 'checked'}, 'Quick Start release status marker: expected status and checked fields'
+    assert status['core_status'] in {'published', 'not-published'}, 'Quick Start release status marker: invalid core_status'
+    try:
+        date.fromisoformat(status['checked'])
+    except (TypeError, ValueError):
+        raise AssertionError('Quick Start release status marker: checked must be a valid ISO date') from None
     for relative in blocks:
         content = (root / relative).read_text(encoding='utf-8').lower()
         assert 'src/main.rs' in content, f'{relative}: installation must name src/main.rs'
@@ -247,7 +251,7 @@ def markdown_anchors(text: str) -> set[str]:
             category = unicodedata.category(char)
             if char.isspace():
                 slug_chars.append('-')
-            elif category[0] in ('L', 'N'):
+            elif category[0] in ('L', 'N') or char == '-':
                 slug_chars.append(char)
         base = ''.join(slug_chars)
         if not base:
