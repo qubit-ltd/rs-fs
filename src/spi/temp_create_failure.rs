@@ -11,6 +11,22 @@ use super::TempResourceSpi;
 
 /// Creation error that can retain cleanup authority for a partially created
 /// temporary resource.
+///
+/// # Examples
+///
+/// ```rust
+/// use qubit_fs::FsError;
+/// use qubit_fs::error::{FsErrorKind, FsOperation};
+/// use qubit_fs::spi::TempCreateFailure;
+///
+/// let failure = TempCreateFailure::new(
+///     FsError::new(FsErrorKind::Io, FsOperation::CreateTemp, "create failed"),
+///     None,
+/// );
+/// let (error, recovery) = failure.into_parts();
+/// assert_eq!(FsErrorKind::Io, error.kind());
+/// assert!(recovery.is_none());
+/// ```
 #[must_use = "retain cleanup authority when temporary creation may have changed state"]
 pub struct TempCreateFailure {
     error: FsError,

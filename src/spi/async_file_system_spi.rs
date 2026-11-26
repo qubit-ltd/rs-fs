@@ -24,6 +24,7 @@ use super::OpenedAsyncReader;
 use super::OpenedAsyncTempDirectory;
 use super::OpenedAsyncTempFile;
 use super::OpenedAsyncWriter;
+use super::AsyncTempCreateFailure;
 use super::ProviderProperties;
 use super::RenameRequest;
 use super::SpiCopyFailure;
@@ -273,6 +274,31 @@ pub trait AsyncFileSystemSpi: Send + Sync {
             ))
         })
     }
+    /// Asynchronously creates a temporary file with recoverable cleanup on
+    /// provider failure.
+    ///
+    /// The default bridge preserves providers implementing only
+    /// [`Self::create_temp_file`]. Providers that partially create a resource
+    /// before failing may override this method and return the cleanup session.
+    ///
+    /// # Parameters
+    /// - `request`: Validated temporary-file creation request.
+    ///
+    /// # Returns
+    /// A future resolving to the opened file.
+    ///
+    /// # Errors
+    /// Resolves to the provider error and optional cleanup session.
+    fn create_temp_file_recoverable<'a>(
+        &'a self,
+        request: CreateTempFileRequest,
+    ) -> SpiFuture<'a, Result<OpenedAsyncTempFile, AsyncTempCreateFailure>> {
+        Box::pin(async move {
+            self.create_temp_file(request)
+                .await
+                .map_err(|error| AsyncTempCreateFailure::new(error, None))
+        })
+    }
 
     /// Asynchronously creates a temporary directory.
     ///
@@ -294,6 +320,28 @@ pub trait AsyncFileSystemSpi: Send + Sync {
                 FsOperation::CreateTemp,
                 "provider does not implement this operation",
             ))
+        })
+    }
+    /// Asynchronously creates a temporary directory with recoverable cleanup
+    /// on provider failure. The default bridge preserves providers
+    /// implementing only [`Self::create_temp_directory`].
+    ///
+    /// # Parameters
+    /// - `request`: Validated temporary-directory creation request.
+    ///
+    /// # Returns
+    /// A future resolving to the opened directory.
+    ///
+    /// # Errors
+    /// Resolves to the provider error and optional cleanup session.
+    fn create_temp_directory_recoverable<'a>(
+        &'a self,
+        request: CreateTempDirectoryRequest,
+    ) -> SpiFuture<'a, Result<OpenedAsyncTempDirectory, AsyncTempCreateFailure>> {
+        Box::pin(async move {
+            self.create_temp_directory(request)
+                .await
+                .map_err(|error| AsyncTempCreateFailure::new(error, None))
         })
     }
 }

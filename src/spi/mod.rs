@@ -17,6 +17,8 @@ mod async_file_write_session;
 #[cfg(feature = "async")]
 mod async_random_access_read_session;
 #[cfg(feature = "async")]
+mod async_temp_create_failure;
+#[cfg(feature = "async")]
 mod async_temp_resource_spi;
 mod copy_attempt;
 mod copy_decline_reason;
@@ -76,6 +78,8 @@ pub use async_file_system_spi::AsyncFileSystemSpi;
 pub use async_file_write_session::AsyncFileWriteSession;
 #[cfg(feature = "async")]
 pub use async_random_access_read_session::AsyncRandomAccessReadSession;
+#[cfg(feature = "async")]
+pub use async_temp_create_failure::AsyncTempCreateFailure;
 #[cfg(feature = "async")]
 pub use async_temp_resource_spi::AsyncTempResourceSpi;
 pub use copy_attempt::CopyAttempt;
