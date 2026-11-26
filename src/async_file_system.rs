@@ -725,9 +725,10 @@ impl AsyncFileSystem {
     ///
     /// A ready operation that no longer borrows the caller's filesystem or
     /// payload. Successful execution releases the payload allocation. Failure
-    /// and cancellation retain the suffix after confirmed writes for
-    /// inspection; that suffix is safe to retry only when provider-specific
-    /// recovery establishes that replay cannot duplicate publication.
+    /// and cancellation retain the suffix after the authoritative confirmed
+    /// offset for inspection. Use it for recovery only when the provider
+    /// recognizes the retained session as writable and confirms that offset;
+    /// the suffix alone does not establish that replay is safe.
     ///
     /// # Errors
     ///

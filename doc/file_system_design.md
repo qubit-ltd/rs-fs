@@ -114,14 +114,15 @@ that provider effects were rolled back. These methods do not use the facade's
 SPI or cached properties as a substitute for the explicit provider.
 
 The bound receiver is the manager view that determines the submission target:
-`FsExecutionBinding::new(manager)` targets the manager root, while
-`FsExecutionBinding::new(scope.manager())` retains the parent target represented
-by that view. `with_group` layers service-group ownership onto the current
-target. Separately, a facade `submit_*_in` call receives an active parent scope
-as an argument and submits its child under that scope. The filesystem crate
-never creates a replacement manager root or retains a borrowed scope. The
-examples use a root manager; use a parent manager view or the facade scope
-argument when parent ownership is intended.
+a root manager view passed to `FsExecutionBinding::new` targets the manager
+root, while `scope.manager()` passed to it retains that view's parent target.
+`with_group` layers service-group ownership onto the current target, including
+a parent target. Separately, a facade `submit_*_in` call receives an active
+parent scope as an argument and submits its child under that scope. The
+user-guide examples identify their manager as a root manager view; use a parent
+manager view or the facade scope argument when parent ownership is intended.
+The filesystem crate never creates a replacement manager root or retains a
+borrowed scope.
 
 ## Publication and failure facts
 
