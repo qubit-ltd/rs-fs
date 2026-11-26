@@ -7,6 +7,7 @@
 // =============================================================================
 //! Runtime-neutral asynchronous provider implementation contract.
 
+use super::AsyncTempCreateFailure;
 use super::CopyAttempt;
 use super::CopyDeclineReason;
 use super::CopyRequest;
@@ -24,7 +25,6 @@ use super::OpenedAsyncReader;
 use super::OpenedAsyncTempDirectory;
 use super::OpenedAsyncTempFile;
 use super::OpenedAsyncWriter;
-use super::AsyncTempCreateFailure;
 use super::ProviderProperties;
 use super::RenameRequest;
 use super::SpiCopyFailure;

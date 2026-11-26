@@ -383,13 +383,21 @@ fn test_async_provider_open_validation_still_retains_cleanup_session() {
 
 #[test]
 fn test_cancelling_async_temp_open_does_not_start_cleanup() {
-    let (provider, cleanup_calls, pending_drops) = provider(CreateResponse::Pending);
-    let filesystem = AsyncFileSystem::from_spi(provider).expect("filesystem");
-    let mut context = Context::from_waker(Waker::noop());
-    let mut opening = Box::pin(filesystem.create_temp_file(TempOptions::default()));
-    assert!(opening.as_mut().poll(&mut context).is_pending());
-    drop(opening);
+    for directory in [false, true] {
+        let (provider, cleanup_calls, pending_drops) = provider(CreateResponse::Pending);
+        let filesystem = AsyncFileSystem::from_spi(provider).expect("filesystem");
+        let mut context = Context::from_waker(Waker::noop());
+        if directory {
+            let mut opening = Box::pin(filesystem.create_temp_directory(TempOptions::default()));
+            assert!(opening.as_mut().poll(&mut context).is_pending());
+            drop(opening);
+        } else {
+            let mut opening = Box::pin(filesystem.create_temp_file(TempOptions::default()));
+            assert!(opening.as_mut().poll(&mut context).is_pending());
+            drop(opening);
+        }
 
-    assert_eq!(1, pending_drops.load(Ordering::SeqCst));
-    assert_eq!(0, cleanup_calls.load(Ordering::SeqCst));
+        assert_eq!(1, pending_drops.load(Ordering::SeqCst));
+        assert_eq!(0, cleanup_calls.load(Ordering::SeqCst));
+    }
 }
