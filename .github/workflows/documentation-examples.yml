@@ -22,13 +22,13 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: qubit-ltd/rs-fs-local
-          ref: 20418d781b4156e3aaf850716d0d92a529c2e030 # rs-fs-local candidate; pending remote publication
+          ref: 715afdd73aca94c19ad29ddfd9db002230e135ab # rs-fs-local candidate; pending remote publication
           path: rust-common/rs-fs-local
       - name: Check out rs-fs-testkit
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: qubit-ltd/rs-fs-testkit
-          ref: 218462cf5360e1661d076d1d417f6a8b0b06ecb6 # rs-fs-testkit candidate; pending remote publication
+          ref: 6b5c5f676a6a624b68ab7ce1e1e1d3d0bd9e22aa # rs-fs-testkit candidate; pending remote publication
           path: rust-common/rs-fs-testkit
       - name: Check out rs-fs-registry
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
