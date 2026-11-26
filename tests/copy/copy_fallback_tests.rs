@@ -106,6 +106,7 @@ enum CopyResponse {
     CompletedFileSkipped,
     CompletedFileSkippedAndCopied,
     CompletedFileSkippedNonAtomic,
+    CompletedFileSkippedUnchanged,
     CompletedStreamedOutcome,
     Declined,
     DeclinedSkipAtomic,
@@ -560,6 +561,14 @@ impl FileSystemSpi for RecordingSpi {
                 CopyMethod::Native,
                 AchievedAtomicity::NonAtomic,
             ))),
+            CopyResponse::CompletedFileSkippedUnchanged => Ok(CopyAttempt::Completed(
+                CopyOutcome::new(
+                    CopyStats { skipped: 1, ..CopyStats::default() },
+                    CopyMethod::Native,
+                    AchievedAtomicity::NonAtomic,
+                )
+                .with_unchanged(true),
+            )),
             CopyResponse::CompletedStreamedOutcome => Ok(CopyAttempt::Completed(CopyOutcome::new(
                 CopyStats::default(),
                 CopyMethod::Streamed,
@@ -1454,6 +1463,27 @@ fn test_copy_file_skip_atomicity_violation_is_unchanged() {
         .expect_err("non-atomic skip must violate the requested guarantee");
     assert_eq!(CopyFailureState::Unchanged, failure.state());
     assert_eq!(FsErrorKind::ProviderContractViolation, failure.error().kind());
+}
+
+#[test]
+fn test_copy_file_confirmed_full_skip_satisfies_required_atomicity() {
+    let (filesystem, _, _) = recording_filesystem(CopyResponse::CompletedFileSkippedUnchanged);
+    let outcome = filesystem
+        .copy(
+            &path("/source"),
+            &path("/target"),
+            CopyOptions::file()
+                .with_conflict(CopyConflictPolicy::Skip)
+                .with_atomicity(AtomicityRequirement::Required)
+                .with_durability(DurabilityRequirement::Required)
+                .with_preserve_metadata(MetadataPreservePolicy::Portable),
+        )
+        .expect("confirmed unchanged skip requires no publication guarantee");
+    assert_eq!(1, outcome.stats().skipped);
+    assert!(outcome.unchanged());
+    assert_eq!(AchievedAtomicity::NonAtomic, outcome.atomicity());
+    assert!(!outcome.durable());
+    assert_eq!(MetadataPreservePolicy::None, outcome.metadata());
 }
 
 /// Verifies only the facade may return a streamed fallback outcome; providers

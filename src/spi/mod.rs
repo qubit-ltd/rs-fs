@@ -65,6 +65,7 @@ mod spi_persist_failure;
 mod spi_rename_failure;
 mod spi_write_failure;
 mod stat_response;
+mod temp_create_failure;
 mod temp_resource_spi;
 
 #[cfg(feature = "async")]
@@ -143,4 +144,5 @@ pub use spi_persist_failure::SpiPersistFailure;
 pub use spi_rename_failure::SpiRenameFailure;
 pub use spi_write_failure::SpiWriteFailure;
 pub use stat_response::StatResponse;
+pub use temp_create_failure::TempCreateFailure;
 pub use temp_resource_spi::TempResourceSpi;

@@ -30,6 +30,7 @@ use super::SpiCopyFailure;
 use super::SpiRenameFailure;
 use super::StatRequest;
 use super::StatResponse;
+use super::TempCreateFailure;
 use crate::directory::CreateDirectoryOutcome;
 use crate::directory::DeleteOutcome;
 use crate::error::FsEffectState;
@@ -239,6 +240,27 @@ pub trait FileSystemSpi: Send + Sync {
             "provider does not implement this operation",
         ))
     }
+    /// Creates a temporary file while retaining cleanup authority on failure.
+    ///
+    /// The default bridge preserves providers implementing only
+    /// [`Self::create_temp_file`]. Providers that can partially create a
+    /// resource before failing may override this method and return its cleanup
+    /// session in [`TempCreateFailure`].
+    ///
+    /// # Parameters
+    /// - `request`: Validated temporary-file creation request.
+    ///
+    /// # Returns
+    /// The opened temporary file.
+    ///
+    /// # Errors
+    /// Returns the provider error and any cleanup session for a partial create.
+    fn create_temp_file_recoverable(
+        &self,
+        request: CreateTempFileRequest,
+    ) -> Result<OpenedTempFile, TempCreateFailure> {
+        self.create_temp_file(request).map_err(|error| TempCreateFailure::new(error, None))
+    }
     /// Creates a temporary directory.
     ///
     /// # Parameters
@@ -255,6 +277,24 @@ pub trait FileSystemSpi: Send + Sync {
             FsOperation::CreateTemp,
             "provider does not implement this operation",
         ))
+    }
+    /// Creates a temporary directory while retaining cleanup authority on
+    /// failure. The default bridge preserves providers implementing only
+    /// [`Self::create_temp_directory`].
+    ///
+    /// # Parameters
+    /// - `request`: Validated temporary-directory creation request.
+    ///
+    /// # Returns
+    /// The opened temporary directory.
+    ///
+    /// # Errors
+    /// Returns the provider error and any cleanup session for a partial create.
+    fn create_temp_directory_recoverable(
+        &self,
+        request: CreateTempDirectoryRequest,
+    ) -> Result<OpenedTempDirectory, TempCreateFailure> {
+        self.create_temp_directory(request).map_err(|error| TempCreateFailure::new(error, None))
     }
 }
 

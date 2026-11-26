@@ -119,6 +119,7 @@ pub(crate) struct AsyncRecordingConfig {
     /// Maximum bytes returned by one successful reader call.
     pub(crate) reader_chunk: Option<usize>,
     pub(crate) native_copy_stats: Option<CopyStats>,
+    pub(crate) copy_unchanged: bool,
     pub(crate) atomic_temp_persist: bool,
     pub(crate) completed_copy: Option<AchievedAtomicity>,
     pub(crate) decline_copy: bool,
@@ -586,12 +587,11 @@ impl AsyncFileSystemSpi for AsyncRecordingSpi {
         }
         if let Some(atomicity) = self.config.completed_copy {
             let stats = self.config.native_copy_stats.unwrap_or_default();
+            let unchanged = self.config.copy_unchanged;
             return Box::pin(async move {
-                Ok(CopyAttempt::Completed(CopyOutcome::new(
-                    stats,
-                    CopyMethod::Native,
-                    atomicity,
-                )))
+                let outcome = CopyOutcome::new(stats, CopyMethod::Native, atomicity)
+                    .with_unchanged(unchanged);
+                Ok(CopyAttempt::Completed(outcome))
             });
         }
         Box::pin(async { Ok(CopyAttempt::Declined(CopyDeclineReason::NotApplicable)) })
