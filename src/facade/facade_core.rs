@@ -293,8 +293,11 @@ impl FacadeCore {
     /// explanation derived from the cached provider snapshot.
     ///
     /// # Errors
-    /// Returns an invalid-options or requirement error when the paths or copy
-    /// options cannot be served by either the provider or the stream fallback.
+    /// Returns the first path, option or capability, or same-path validation
+    /// error, a [`FsErrorKind::ResourceLimitExceeded`](crate::error::FsErrorKind::ResourceLimitExceeded)
+    /// error for a zero entry budget, or a requirement error when no provider
+    /// or stream route can satisfy the request. Assessment is static and does
+    /// not check the dynamic execution deadline.
     pub(crate) fn assess_copy(&self, source: &Path, target: &Path, options: &CopyOptions) -> FsResult<CopyAssessment> {
         self.validate_copy_request(source, target, options)?;
         if options.max_entries() == Some(0) {
