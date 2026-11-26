@@ -149,7 +149,11 @@ impl FsEffectShared {
                 // A panic payload's destructor is arbitrary user code too.
                 // Isolate it so one hostile waker cannot prevent later
                 // registrations from being notified.
-                let _ = catch_unwind(AssertUnwindSafe(|| drop(payload)));
+                if let Err(payload) = catch_unwind(AssertUnwindSafe(|| drop(payload))) {
+                    // Its destructor panicked as well. Dropping this second
+                    // payload could unwind again, so intentionally leak it.
+                    std::mem::forget(payload);
+                }
             }
         }
     }

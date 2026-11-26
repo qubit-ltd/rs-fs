@@ -41,7 +41,15 @@ struct PanickingPayload;
 
 impl Drop for PanickingPayload {
     fn drop(&mut self) {
-        panic!("test panic payload destructor panic");
+        panic_any(SecondPanickingPayload);
+    }
+}
+
+struct SecondPanickingPayload;
+
+impl Drop for SecondPanickingPayload {
+    fn drop(&mut self) {
+        panic!("test second panic payload destructor panic");
     }
 }
 
