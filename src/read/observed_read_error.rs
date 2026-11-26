@@ -7,6 +7,9 @@
 // =============================================================================
 //! Error type for observed asynchronous aggregate reads.
 
+use std::error::Error;
+use std::fmt;
+
 use crate::error::FsError;
 
 /// Error returned by [`AsyncFileSystem::read_all_observed`] and
@@ -23,6 +26,24 @@ pub enum ObservedReadError {
         /// Original filesystem error and its existing context.
         FsError,
     ),
+}
+
+impl fmt::Display for ObservedReadError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Stopped => formatter.write_str("observed read stopped by observer"),
+            Self::Provider(error) => write!(formatter, "{error}"),
+        }
+    }
+}
+
+impl Error for ObservedReadError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Stopped => None,
+            Self::Provider(error) => Some(error),
+        }
+    }
 }
 
 /// Converts an underlying filesystem error into an observed-read error.
