@@ -100,6 +100,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+`assess_copy` 会在不调用 provider I/O 的情况下完成静态验证和路由评估：依次检查路径、选项与能力、同路径；零条目预算返回 `ResourceLimitExceeded`，并且不会检查动态执行期限。
+
 `WriteOptions::default()` 会替换已有目标；使用 `CreateNew` 可拒绝覆盖。配置方式见
 [中文用户手册](doc/user_guide.zh_CN.md)。
 

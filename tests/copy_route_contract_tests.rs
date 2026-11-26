@@ -1115,3 +1115,130 @@ fn test_async_required_atomic_copy_needs_copy_and_writer_capabilities() {
     assert_eq!(FsErrorKind::RequirementNotMet, failure.error().kind());
     assert!(!calls.lock().expect("calls lock").contains(&"open_writer"));
 }
+
+#[test]
+fn test_sync_copy_static_preflight_orders_options_before_same_path() {
+    let (filesystem, calls, _, _) = atomic_route_filesystem(AchievedAtomicity::Atomic, false, true);
+    let same_path = path("/same");
+    let options = CopyOptions::file().with_atomicity(AtomicityRequirement::Required);
+
+    let assessed = filesystem
+        .assess_copy(&same_path, &same_path, &options)
+        .expect_err("unsupported required atomicity must win over same-path validation");
+    let executed = filesystem
+        .copy(&same_path, &same_path, options)
+        .expect_err("copy must apply the same static validation order");
+
+    assert_eq!(FsErrorKind::RequirementNotMet, assessed.kind());
+    assert_eq!(assessed.kind(), executed.error().kind());
+    assert_eq!(assessed.to_string(), executed.error().to_string());
+    assert!(calls.lock().expect("calls lock").is_empty());
+}
+
+#[cfg(feature = "async")]
+#[test]
+fn test_async_copy_static_preflight_orders_options_before_same_path() {
+    let (filesystem, calls, _, _) =
+        async_atomic_route_filesystem(AchievedAtomicity::Atomic, false, true);
+    let same_path = path("/same");
+    let options = CopyOptions::file().with_atomicity(AtomicityRequirement::Required);
+
+    let assessed = filesystem
+        .assess_copy(&same_path, &same_path, &options)
+        .expect_err("unsupported required atomicity must win over same-path validation");
+    let constructed = match filesystem.begin_copy(same_path.clone(), same_path, options) {
+        Ok(_) => panic!("unsupported options must reject during async construction"),
+        Err(failure) => failure,
+    };
+
+    assert_eq!(FsErrorKind::RequirementNotMet, assessed.kind());
+    assert_eq!(assessed.kind(), constructed.error().kind());
+    assert_eq!(assessed.to_string(), constructed.error().to_string());
+    assert!(calls.lock().expect("calls lock").is_empty());
+}
+
+#[test]
+fn test_sync_zero_entry_budget_assessment_and_execution_share_diagnostic() {
+    let (filesystem, calls, _, _) = atomic_route_filesystem(AchievedAtomicity::Atomic, true, true);
+    let source = path("/source");
+    let target = path("/target");
+    let options = CopyOptions::file().with_max_entries(Some(0));
+
+    let assessed = filesystem
+        .assess_copy(&source, &target, &options)
+        .expect_err("zero entry budget is not assessable");
+    let executed = filesystem
+        .copy(&source, &target, options)
+        .expect_err("zero entry budget must fail before provider I/O");
+
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, assessed.kind());
+    assert_eq!(assessed.kind(), executed.error().kind());
+    assert_eq!(assessed.to_string(), executed.error().to_string());
+    assert_eq!(CopyFailureState::Unchanged, executed.state());
+    assert!(calls.lock().expect("calls lock").is_empty());
+}
+
+#[cfg(feature = "async")]
+#[test]
+fn test_async_zero_entry_budget_assessment_and_execution_share_diagnostic() {
+    let (filesystem, calls, _, _) =
+        async_atomic_route_filesystem(AchievedAtomicity::Atomic, true, true);
+    let source = path("/source");
+    let target = path("/target");
+    let options = CopyOptions::file().with_max_entries(Some(0));
+
+    let assessed = filesystem
+        .assess_copy(&source, &target, &options)
+        .expect_err("zero entry budget is not assessable");
+    let mut operation = filesystem
+        .begin_copy(source, target, options)
+        .expect("async operation construction remains independent of execution budget");
+    let executed =
+        ready(operation.execute()).expect_err("zero entry budget must fail before provider I/O");
+
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, assessed.kind());
+    assert_eq!(assessed.kind(), executed.error().kind());
+    assert_eq!(assessed.to_string(), executed.error().to_string());
+    assert_eq!(CopyFailureState::Unchanged, executed.state());
+    assert!(calls.lock().expect("calls lock").is_empty());
+}
+
+#[test]
+fn test_sync_copy_deadline_precedes_zero_entry_budget() {
+    let (filesystem, calls, _, _) = atomic_route_filesystem(AchievedAtomicity::Atomic, true, true);
+    let failure = filesystem
+        .copy(
+            &path("/source"),
+            &path("/target"),
+            CopyOptions::file()
+                .with_max_entries(Some(0))
+                .with_deadline(Some(std::time::Duration::ZERO)),
+        )
+        .expect_err("expired deadline must be reported before zero entry budget");
+
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
+    assert!(failure.error().to_string().contains("deadline"));
+    assert!(calls.lock().expect("calls lock").is_empty());
+}
+
+#[cfg(feature = "async")]
+#[test]
+fn test_async_copy_deadline_precedes_zero_entry_budget() {
+    let (filesystem, calls, _, _) =
+        async_atomic_route_filesystem(AchievedAtomicity::Atomic, true, true);
+    let mut operation = filesystem
+        .begin_copy(
+            path("/source"),
+            path("/target"),
+            CopyOptions::file()
+                .with_max_entries(Some(0))
+                .with_deadline(Some(std::time::Duration::ZERO)),
+        )
+        .expect("async operation construction does not execute its deadline or entry budget");
+    let failure = ready(operation.execute()).expect_err("expired deadline must be reported first");
+
+    assert_eq!(FsErrorKind::ResourceLimitExceeded, failure.error().kind());
+    assert!(failure.error().to_string().contains("deadline"));
+    assert_eq!(CopyFailureState::Unchanged, failure.state());
+    assert!(calls.lock().expect("calls lock").is_empty());
+}

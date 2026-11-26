@@ -346,8 +346,11 @@ impl FileSystem {
     /// The selected route and the first statically rejected fallback, when one
     /// exists.
     /// # Errors
-    /// Returns an invalid-options or requirement error when no provider or
-    /// stream execution route can satisfy the request.
+    /// Returns the first path, options or capability, or same-path validation
+    /// error, a [`FsErrorKind::ResourceLimitExceeded`](crate::error::FsErrorKind::ResourceLimitExceeded) error for a
+    /// zero entry budget, or a requirement error when no provider or stream
+    /// route can satisfy the request. Assessment is static and does not check
+    /// the dynamic execution deadline.
     #[inline]
     pub fn assess_copy(&self, source: &Path, target: &Path, options: &CopyOptions) -> FsResult<CopyAssessment> {
         self.core.assess_copy(source, target, options)
@@ -409,8 +412,11 @@ impl FileSystem {
     /// # Returns
     /// The confirmed copy outcome.
     /// # Errors
-    /// Returns [`CopyFailure`] with a recovery state. A provider failure is
-    /// never retried; only an explicit provider decline can select the
+    /// Returns [`CopyFailure`] with a recovery state for path, option,
+    /// capability, deadline, entry-budget, provider, fallback, or outcome
+    /// validation failures. A zero entry budget returns
+    /// [`FsErrorKind::ResourceLimitExceeded`](crate::error::FsErrorKind::ResourceLimitExceeded). A provider failure
+    /// is never retried; only an explicit provider decline can select the
     /// facade's allowlisted fallback.
     #[allow(clippy::result_large_err)]
     pub fn copy(&self, source: &Path, target: &Path, options: CopyOptions) -> Result<CopyOutcome, CopyFailure> {
