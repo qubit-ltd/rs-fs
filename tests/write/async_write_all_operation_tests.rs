@@ -88,6 +88,7 @@ fn test_success_snapshots_bytes_and_releases_completed_writer() {
         .expect("preflight succeeds");
     ready(operation.execute()).expect("write succeeds");
     assert_eq!(5, operation.written_bytes(), "success retains confirmed byte count");
+    assert!(operation.remaining_bytes().is_empty());
     assert!(
         !operation.has_recovery(),
         "committed writer has no recovery responsibility"
@@ -324,6 +325,11 @@ fn test_cancellation_preserves_confirmed_progress_and_recovery_ownership() {
         let state = AsyncWriteAllOperationState::Failed(WriteFailureState::Indeterminate);
         assert_eq!(state, operation.state(), "{stage:?}");
         assert_eq!(expected_bytes, operation.written_bytes(), "{stage:?}");
+        assert_eq!(
+            &b"bytes"[expected_bytes as usize..],
+            operation.remaining_bytes(),
+            "{stage:?}"
+        );
         assert_eq!(has_writer, operation.has_recovery());
         let calls = probe.calls();
         let failure = ready(operation.execute()).unwrap_err();
@@ -387,6 +393,7 @@ fn test_partial_write_failure_and_cancellation_count_only_acknowledged_bytes() {
             assert_eq!(WriteFailureState::Indeterminate, failure.state());
         }
         assert_eq!(3, operation.written_bytes());
+        assert_eq!(b"es", operation.remaining_bytes());
         assert!(operation.has_recovery());
         let snapshot = operation.state();
         let mut writer = operation

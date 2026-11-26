@@ -721,7 +721,10 @@ impl AsyncFileSystem {
     /// # Returns
     ///
     /// A ready operation that no longer borrows the caller's filesystem or
-    /// payload. The payload is released after execution ends or is cancelled.
+    /// payload. Successful execution releases the payload allocation. Failure
+    /// and cancellation retain the suffix after confirmed writes for
+    /// inspection; that suffix is safe to retry only when provider-specific
+    /// recovery establishes that replay cannot duplicate publication.
     ///
     /// # Errors
     ///
