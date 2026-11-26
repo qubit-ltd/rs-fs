@@ -85,6 +85,7 @@ struct Script {
     error_call: Option<usize>,
     open_error: bool,
     invalid_opened_path: bool,
+    missing_read_capability: bool,
     counts: Arc<Counts>,
 }
 
@@ -96,6 +97,7 @@ impl Script {
             error_call: None,
             open_error: false,
             invalid_opened_path: false,
+            missing_read_capability: false,
             counts: Arc::new(Counts::default()),
         }
     }
@@ -119,12 +121,22 @@ impl Script {
         self.invalid_opened_path = true;
         self
     }
+
+    fn without_read_capability(mut self) -> Self {
+        self.missing_read_capability = true;
+        self
+    }
 }
 
 struct Provider(Script);
 
 impl Provider {
-    fn properties() -> ProviderProperties {
+    fn properties(missing_read_capability: bool) -> ProviderProperties {
+        let capabilities = if missing_read_capability {
+            FileSystemCapabilities::new()
+        } else {
+            FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::Read)
+        };
         ProviderProperties::new(
             FileSystemInfo::new(
                 FileSystemId::new("fairness").expect("provider id"),
@@ -132,7 +144,7 @@ impl Provider {
                 PathSemantics::Hierarchical,
             ),
             ProviderOperations::new().with(ProviderOperation::OpenReader),
-            FileSystemCapabilities::new().with_guaranteed(FileSystemCapability::Read),
+            capabilities,
             FileSystemLimits::unknown(),
             PathConstraints::absolute(),
             SymlinkPolicy::Reject,
@@ -148,7 +160,7 @@ impl Provider {
 
 impl AsyncFileSystemSpi for Provider {
     fn properties(&self) -> ProviderProperties {
-        Self::properties()
+        Self::properties(self.0.missing_read_capability)
     }
 
     fn stat<'a>(&'a self, _: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
@@ -331,6 +343,27 @@ fn test_observed_full_read_local_range_error_precedes_open_stop() {
 }
 
 #[test]
+fn test_observed_full_read_invalid_options_precede_open_stop() {
+    let (fs, counts) = filesystem(Script::new(data(1)));
+    let resource_path = path();
+    let mut observer = RecordingObserver::default();
+    observer.0.lock().unwrap().stop_before_open = true;
+    let observed = observer.clone();
+    let options = ReadOptions::default().with_offset(Some(u64::MAX)).with_length(Some(1));
+    let operation = fs.read_all_observed(&resource_path, options, 1, &mut observer);
+    let waker = counter_waker(&counts);
+    let mut cx = Context::from_waker(&waker);
+    let Poll::Ready(Err(ObservedReadError::Provider(error))) = std::pin::pin!(operation).as_mut().poll(&mut cx) else {
+        panic!("invalid read options must precede observer stop")
+    };
+    assert_eq!(error.kind(), FsErrorKind::InvalidOptions);
+    assert_eq!(counts.opens.load(Ordering::SeqCst), 0);
+    let state = observed.0.lock().unwrap();
+    assert_eq!(state.before_open, 0);
+    assert!(state.events.is_empty());
+}
+
+#[test]
 fn test_observed_full_read_invalid_path_precedes_open_stop() {
     let (fs, counts) = filesystem(Script::new(data(1)));
     let resource_path = Path::parse_literal("/payload").expect("object-key path");
@@ -344,6 +377,26 @@ fn test_observed_full_read_invalid_path_precedes_open_stop() {
         panic!("invalid path must precede observer stop")
     };
     assert_eq!(error.kind(), FsErrorKind::InvalidPath);
+    assert_eq!(counts.opens.load(Ordering::SeqCst), 0);
+    let state = observed.0.lock().unwrap();
+    assert_eq!(state.before_open, 0);
+    assert!(state.events.is_empty());
+}
+
+#[test]
+fn test_observed_full_read_missing_read_capability_precedes_open_stop() {
+    let (fs, counts) = filesystem(Script::new(data(1)).without_read_capability());
+    let resource_path = path();
+    let mut observer = RecordingObserver::default();
+    observer.0.lock().unwrap().stop_before_open = true;
+    let observed = observer.clone();
+    let operation = fs.read_all_observed(&resource_path, ReadOptions::default(), 1, &mut observer);
+    let waker = counter_waker(&counts);
+    let mut cx = Context::from_waker(&waker);
+    let Poll::Ready(Err(ObservedReadError::Provider(error))) = std::pin::pin!(operation).as_mut().poll(&mut cx) else {
+        panic!("missing read capability must precede observer stop")
+    };
+    assert_eq!(error.kind(), FsErrorKind::UnsupportedCapability);
     assert_eq!(counts.opens.load(Ordering::SeqCst), 0);
     let state = observed.0.lock().unwrap();
     assert_eq!(state.before_open, 0);
@@ -372,6 +425,27 @@ fn test_observed_prefix_local_range_error_precedes_open_stop() {
 }
 
 #[test]
+fn test_observed_prefix_invalid_options_precede_open_stop() {
+    let (fs, counts) = filesystem(Script::new(data(1)));
+    let resource_path = path();
+    let mut observer = RecordingObserver::default();
+    observer.0.lock().unwrap().stop_before_open = true;
+    let observed = observer.clone();
+    let options = ReadOptions::default().with_offset(Some(u64::MAX)).with_length(Some(1));
+    let operation = fs.read_prefix_observed(&resource_path, options, 1, &mut observer);
+    let waker = counter_waker(&counts);
+    let mut cx = Context::from_waker(&waker);
+    let Poll::Ready(Err(ObservedReadError::Provider(error))) = std::pin::pin!(operation).as_mut().poll(&mut cx) else {
+        panic!("invalid read options must precede observer stop")
+    };
+    assert_eq!(error.kind(), FsErrorKind::InvalidOptions);
+    assert_eq!(counts.opens.load(Ordering::SeqCst), 0);
+    let state = observed.0.lock().unwrap();
+    assert_eq!(state.before_open, 0);
+    assert!(state.events.is_empty());
+}
+
+#[test]
 fn test_observed_prefix_invalid_path_precedes_open_stop() {
     let (fs, counts) = filesystem(Script::new(data(1)));
     let resource_path = Path::parse_literal("/payload").expect("object-key path");
@@ -385,6 +459,26 @@ fn test_observed_prefix_invalid_path_precedes_open_stop() {
         panic!("invalid path must precede observer stop")
     };
     assert_eq!(error.kind(), FsErrorKind::InvalidPath);
+    assert_eq!(counts.opens.load(Ordering::SeqCst), 0);
+    let state = observed.0.lock().unwrap();
+    assert_eq!(state.before_open, 0);
+    assert!(state.events.is_empty());
+}
+
+#[test]
+fn test_observed_prefix_missing_read_capability_precedes_open_stop() {
+    let (fs, counts) = filesystem(Script::new(data(1)).without_read_capability());
+    let resource_path = path();
+    let mut observer = RecordingObserver::default();
+    observer.0.lock().unwrap().stop_before_open = true;
+    let observed = observer.clone();
+    let operation = fs.read_prefix_observed(&resource_path, ReadOptions::default(), 1, &mut observer);
+    let waker = counter_waker(&counts);
+    let mut cx = Context::from_waker(&waker);
+    let Poll::Ready(Err(ObservedReadError::Provider(error))) = std::pin::pin!(operation).as_mut().poll(&mut cx) else {
+        panic!("missing read capability must precede observer stop")
+    };
+    assert_eq!(error.kind(), FsErrorKind::UnsupportedCapability);
     assert_eq!(counts.opens.load(Ordering::SeqCst), 0);
     let state = observed.0.lock().unwrap();
     assert_eq!(state.before_open, 0);
