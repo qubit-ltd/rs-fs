@@ -230,6 +230,7 @@ fn test_require_version_is_rejected_before_reading_from_the_provider() {
 fn test_managed_prefix_marks_limit_without_claiming_eof_and_text_is_strict() {
     let prefix = read_port(b"abcdef", 2, 6).read_prefix(3).unwrap();
     assert_eq!(prefix.bytes(), b"abc");
+    assert_eq!(prefix.options(), &Default::default());
     assert_eq!(prefix.termination(), PrefixReadTermination::LimitReached);
 
     assert_eq!(

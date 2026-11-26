@@ -208,6 +208,10 @@ impl ManagedReadPort {
     /// Reads a bounded prefix without claiming that the returned bytes are
     /// the complete file.
     ///
+    /// The original read options source is unknown to this managed port, so
+    /// the returned outcome's `options()` accessor contains default options
+    /// as a compatibility placeholder.
+    ///
     /// # Parameters
     /// - `max_bytes`: Maximum number of prefix bytes to read.
     ///

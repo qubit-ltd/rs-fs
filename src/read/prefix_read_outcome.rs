@@ -99,8 +99,12 @@ impl PrefixReadOutcome {
 
     /// Returns the caller options retained for this read.
     ///
+    /// For outcomes produced by a managed read port, the original options
+    /// source is unknown and this value is a default placeholder.
+    ///
     /// # Returns
-    /// The options used to configure this read.
+    /// The options used to configure this read, or default options when the
+    /// original options source is unknown.
     #[inline]
     #[must_use]
     pub const fn options(&self) -> &ReadOptions {
