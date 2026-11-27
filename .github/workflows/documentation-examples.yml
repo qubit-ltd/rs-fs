@@ -28,7 +28,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: qubit-ltd/rs-fs-testkit
-          ref: fabe140f8cd8897c00337f8bb34e81711587b93a # rs-fs-testkit 0.9.3
+          ref: 29cf8537c9c4245a696f08740e3ddf0c82e01744 # rs-fs-testkit candidate
           path: rust-common/rs-fs-testkit
       - name: Check out rs-fs-registry
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -40,7 +40,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: qubit-ltd/rs-local-files
-          ref: 80d4357b354f572e695f0c17ac1182f0aaad22c0 # rs-local-files 0.6.0 candidate; pending remote publication
+          ref: 3c11da27cdc94774337db1c3241144e92724e0aa # rs-local-files candidate
           path: rust-common/rs-local-files
       - name: Install Rust 1.94.0
         run: rustup toolchain install 1.94.0 --profile minimal
