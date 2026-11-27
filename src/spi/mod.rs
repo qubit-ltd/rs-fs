@@ -17,6 +17,8 @@ mod async_file_write_session;
 #[cfg(feature = "async")]
 mod async_random_access_read_session;
 #[cfg(feature = "async")]
+mod async_temp_create_failure;
+#[cfg(feature = "async")]
 mod async_temp_resource_spi;
 mod copy_attempt;
 mod copy_decline_reason;
@@ -65,6 +67,7 @@ mod spi_persist_failure;
 mod spi_rename_failure;
 mod spi_write_failure;
 mod stat_response;
+mod temp_create_failure;
 mod temp_resource_spi;
 
 #[cfg(feature = "async")]
@@ -75,6 +78,8 @@ pub use async_file_system_spi::AsyncFileSystemSpi;
 pub use async_file_write_session::AsyncFileWriteSession;
 #[cfg(feature = "async")]
 pub use async_random_access_read_session::AsyncRandomAccessReadSession;
+#[cfg(feature = "async")]
+pub use async_temp_create_failure::AsyncTempCreateFailure;
 #[cfg(feature = "async")]
 pub use async_temp_resource_spi::AsyncTempResourceSpi;
 pub use copy_attempt::CopyAttempt;
@@ -143,4 +148,5 @@ pub use spi_persist_failure::SpiPersistFailure;
 pub use spi_rename_failure::SpiRenameFailure;
 pub use spi_write_failure::SpiWriteFailure;
 pub use stat_response::StatResponse;
+pub use temp_create_failure::TempCreateFailure;
 pub use temp_resource_spi::TempResourceSpi;

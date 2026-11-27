@@ -473,7 +473,10 @@ impl CopyOptions {
             }
             CopyMode::File | CopyMode::Tree => capabilities.supports(atomic_capability),
         };
-        if self.atomicity == AtomicityRequirement::Required && !atomic_supported {
+        if self.conflict != CopyConflictPolicy::Skip
+            && self.atomicity == AtomicityRequirement::Required
+            && !atomic_supported
+        {
             return Err(FsError::new(
                 FsErrorKind::RequirementNotMet,
                 FsOperation::Copy,
@@ -493,7 +496,10 @@ impl CopyOptions {
             }
             CopyMode::File | CopyMode::Tree => capabilities.supports(durable_capability),
         };
-        if self.durability == DurabilityRequirement::Required && !durable_supported {
+        if self.conflict != CopyConflictPolicy::Skip
+            && self.durability == DurabilityRequirement::Required
+            && !durable_supported
+        {
             return Err(FsError::new(
                 FsErrorKind::RequirementNotMet,
                 FsOperation::Copy,

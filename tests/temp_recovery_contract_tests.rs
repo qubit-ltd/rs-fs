@@ -65,6 +65,7 @@ use qubit_fs::spi::SpiFuture;
 use qubit_fs::spi::SpiPersistFailure;
 use qubit_fs::spi::StatRequest;
 use qubit_fs::spi::StatResponse;
+use qubit_fs::spi::TempCreateFailure;
 use qubit_fs::spi::TempResourceSpi;
 use qubit_fs::temp::PersistCleanupState;
 use qubit_fs::temp::PersistFailure;
@@ -79,6 +80,7 @@ struct ResidualProbe {
     cleanup_calls: Arc<AtomicUsize>,
     keep_calls: Arc<AtomicUsize>,
     persist_calls: Arc<AtomicUsize>,
+    fail_cleanup_once: bool,
 }
 
 impl ResidualProbe {
@@ -110,8 +112,16 @@ impl TempResourceSpi for ResidualProbe {
     }
 
     fn cleanup(&mut self) -> FsResult<()> {
-        self.cleanup_calls.fetch_add(1, Ordering::SeqCst);
-        Ok(())
+        let attempt = self.cleanup_calls.fetch_add(1, Ordering::SeqCst);
+        if self.fail_cleanup_once && attempt == 0 {
+            Err(FsError::new(
+                FsErrorKind::Io,
+                FsOperation::CleanupTemp,
+                "injected cleanup failure",
+            ))
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -174,6 +184,9 @@ struct ResidualProvider {
     cleanup_calls: Arc<AtomicUsize>,
     keep_calls: Arc<AtomicUsize>,
     persist_calls: Arc<AtomicUsize>,
+    fail_create_with_session: bool,
+    fail_create_without_session: bool,
+    fail_cleanup_once: bool,
 }
 
 impl ResidualProvider {
@@ -196,6 +209,7 @@ impl ResidualProvider {
             cleanup_calls: Arc::clone(&self.cleanup_calls),
             keep_calls: Arc::clone(&self.keep_calls),
             persist_calls: Arc::clone(&self.persist_calls),
+            fail_cleanup_once: self.fail_cleanup_once,
         })
     }
 }
@@ -216,11 +230,51 @@ impl FileSystemSpi for ResidualProvider {
         ))
     }
 
+    fn create_temp_file_recoverable(
+        &self,
+        request: CreateTempFileRequest,
+    ) -> Result<OpenedTempFile, TempCreateFailure> {
+        if self.fail_create_with_session {
+            Err(TempCreateFailure::new(
+                FsError::new(FsErrorKind::Io, FsOperation::CreateTemp, "partial create"),
+                Some(self.session(FileKind::File)),
+            ))
+        } else if self.fail_create_without_session {
+            Err(TempCreateFailure::new(
+                FsError::new(FsErrorKind::Io, FsOperation::CreateTemp, "create failed"),
+                None,
+            ))
+        } else {
+            FileSystemSpi::create_temp_file(self, request)
+                .map_err(|error| TempCreateFailure::new(error, None))
+        }
+    }
+
     fn create_temp_directory(&self, _: CreateTempDirectoryRequest) -> FsResult<OpenedTempDirectory> {
         Ok(OpenedTempDirectory::new(
             self.opened(FileKind::Directory),
             self.session(FileKind::Directory),
         ))
+    }
+
+    fn create_temp_directory_recoverable(
+        &self,
+        request: CreateTempDirectoryRequest,
+    ) -> Result<OpenedTempDirectory, TempCreateFailure> {
+        if self.fail_create_with_session {
+            Err(TempCreateFailure::new(
+                FsError::new(FsErrorKind::Io, FsOperation::CreateTemp, "partial create"),
+                Some(self.session(FileKind::Directory)),
+            ))
+        } else if self.fail_create_without_session {
+            Err(TempCreateFailure::new(
+                FsError::new(FsErrorKind::Io, FsOperation::CreateTemp, "create failed"),
+                None,
+            ))
+        } else {
+            FileSystemSpi::create_temp_directory(self, request)
+                .map_err(|error| TempCreateFailure::new(error, None))
+        }
     }
 }
 
@@ -281,6 +335,71 @@ fn test_persist_outcome_preserves_residual_temporary_container() {
 }
 
 #[test]
+fn test_provider_open_failure_retains_recoverable_temp_session() {
+    for kind in [FileKind::File, FileKind::Directory] {
+        let cleanup_calls = Arc::new(AtomicUsize::new(0));
+        let provider = ResidualProvider {
+            properties: residual_properties(),
+            cleanup_calls: Arc::clone(&cleanup_calls),
+            keep_calls: Arc::new(AtomicUsize::new(0)),
+            persist_calls: Arc::new(AtomicUsize::new(0)),
+            fail_create_with_session: true,
+            fail_create_without_session: false,
+            fail_cleanup_once: true,
+        };
+        let filesystem = FileSystem::from_spi(provider).expect("filesystem");
+        let mut failure = match kind {
+            FileKind::File => filesystem
+                .create_temp_file(TempOptions::default())
+                .expect_err("file creation reports its partial failure"),
+            FileKind::Directory => filesystem
+                .create_temp_directory(TempOptions::default())
+                .expect_err("directory creation reports its partial failure"),
+            _ => unreachable!(),
+        };
+
+        assert_eq!(qubit_fs::error::OpenFailureStage::ProviderOpen, failure.stage());
+        assert_eq!(FsErrorKind::Io, failure.error().kind());
+        assert!(failure.recovery().is_some());
+        let mut recovery = failure.take_recovery().expect("partial create owns cleanup recovery");
+        assert!(failure.recovery().is_none());
+        assert_eq!(
+            FsErrorKind::Io,
+            recovery.cleanup().expect_err("first cleanup attempt fails").kind()
+        );
+        recovery.cleanup().expect("cleanup can be retried");
+        assert_eq!(2, cleanup_calls.load(Ordering::SeqCst));
+    }
+}
+
+#[test]
+fn test_provider_open_failure_without_session_has_no_recovery() {
+    for kind in [FileKind::File, FileKind::Directory] {
+        let provider = ResidualProvider {
+            properties: residual_properties(),
+            cleanup_calls: Arc::new(AtomicUsize::new(0)),
+            keep_calls: Arc::new(AtomicUsize::new(0)),
+            persist_calls: Arc::new(AtomicUsize::new(0)),
+            fail_create_with_session: false,
+            fail_create_without_session: true,
+            fail_cleanup_once: false,
+        };
+        let filesystem = FileSystem::from_spi(provider).expect("filesystem");
+        let failure = match kind {
+            FileKind::File => filesystem
+                .create_temp_file(TempOptions::default())
+                .expect_err("file creation fails"),
+            FileKind::Directory => filesystem
+                .create_temp_directory(TempOptions::default())
+                .expect_err("directory creation fails"),
+            _ => unreachable!(),
+        };
+        assert_eq!(FsErrorKind::Io, failure.error().kind());
+        assert!(failure.recovery().is_none());
+    }
+}
+
+#[test]
 fn test_sync_temp_handles_preserve_residual_persist_and_keep_outcomes() {
     for kind in [FileKind::File, FileKind::Directory] {
         for persist in [true, false] {
@@ -292,6 +411,9 @@ fn test_sync_temp_handles_preserve_residual_persist_and_keep_outcomes() {
                 cleanup_calls: Arc::clone(&cleanup_calls),
                 keep_calls: Arc::clone(&keep_calls),
                 persist_calls: Arc::clone(&persist_calls),
+                fail_create_with_session: false,
+                fail_create_without_session: false,
+                fail_cleanup_once: false,
             };
             let filesystem = FileSystem::from_spi(provider).expect("filesystem");
             let requested_target = Path::parse("/published").expect("target");
@@ -385,6 +507,9 @@ fn test_async_temp_handles_preserve_residual_persist_and_keep_outcomes() {
                 cleanup_calls: Arc::clone(&cleanup_calls),
                 keep_calls: Arc::clone(&keep_calls),
                 persist_calls: Arc::clone(&persist_calls),
+                fail_create_with_session: false,
+                fail_create_without_session: false,
+                fail_cleanup_once: false,
             };
             let filesystem = AsyncFileSystem::from_spi(provider).expect("filesystem");
             let requested_target = Path::parse("/published").expect("target");
@@ -470,6 +595,9 @@ fn test_async_temp_invalid_state_context_preserves_current_and_published_targets
         cleanup_calls: Arc::clone(&cleanup_calls),
         keep_calls: Arc::clone(&keep_calls),
         persist_calls: Arc::clone(&persist_calls),
+        fail_create_with_session: false,
+        fail_create_without_session: false,
+        fail_cleanup_once: false,
     };
     let filesystem = AsyncFileSystem::from_spi(provider).expect("filesystem");
     let published_target = Path::parse("/published-a").expect("published target");

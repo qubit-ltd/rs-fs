@@ -907,13 +907,20 @@ impl AsyncFileSystem {
             .map_err(|error| OpenFailure::new(error, OpenFailureStage::Preflight, None))?;
         let opened = self
             .spi
-            .create_temp_file(crate::spi::CreateTempFileRequest::new(options))
+            .create_temp_file_recoverable(crate::spi::CreateTempFileRequest::new(options))
             .await
-            .map_err(|error| {
+            .map_err(|failure| {
+                let (error, session) = failure.into_parts();
                 OpenFailure::new(
                     self.core.enrich(error, parent.as_ref(), FsOperation::CreateTemp),
                     OpenFailureStage::ProviderOpen,
-                    None,
+                    session.map(|session| {
+                        RejectedAsyncTempResource::new(
+                            session,
+                            self.properties().info().provider_id(),
+                            parent.clone(),
+                        )
+                    }),
                 )
             })?;
         let (info, session) = opened.into_parts();
@@ -977,13 +984,20 @@ impl AsyncFileSystem {
             .map_err(|error| OpenFailure::new(error, OpenFailureStage::Preflight, None))?;
         let opened = self
             .spi
-            .create_temp_directory(crate::spi::CreateTempDirectoryRequest::new(options))
+            .create_temp_directory_recoverable(crate::spi::CreateTempDirectoryRequest::new(options))
             .await
-            .map_err(|error| {
+            .map_err(|failure| {
+                let (error, session) = failure.into_parts();
                 OpenFailure::new(
                     self.core.enrich(error, parent.as_ref(), FsOperation::CreateTemp),
                     OpenFailureStage::ProviderOpen,
-                    None,
+                    session.map(|session| {
+                        RejectedAsyncTempResource::new(
+                            session,
+                            self.properties().info().provider_id(),
+                            parent.clone(),
+                        )
+                    }),
                 )
             })?;
         let (info, session) = opened.into_parts();

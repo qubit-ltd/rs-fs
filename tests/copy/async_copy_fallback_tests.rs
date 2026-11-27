@@ -923,6 +923,33 @@ fn test_async_copy_violation_uses_skip_publication_facts() {
 }
 
 #[test]
+fn test_async_copy_accepts_confirmed_full_skip_for_required_atomicity() {
+    let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
+        completed_copy: Some(AchievedAtomicity::NonAtomic),
+        copy_unchanged: true,
+        native_copy_stats: Some(CopyStats { skipped: 1, ..CopyStats::default() }),
+        ..AsyncRecordingConfig::default()
+    });
+    let mut operation = file_system
+        .begin_copy(
+            path("/source"),
+            path("/target"),
+            CopyOptions::file()
+                .with_conflict(CopyConflictPolicy::Skip)
+                .with_atomicity(AtomicityRequirement::Required)
+                .with_durability(DurabilityRequirement::Required)
+                .with_preserve_metadata(MetadataPreservePolicy::Portable),
+        )
+        .expect("preflight should succeed");
+    let outcome = ready(operation.execute()).expect("confirmed skip is unchanged");
+    assert!(outcome.unchanged());
+    assert_eq!(1, outcome.stats().skipped);
+    assert_eq!(AchievedAtomicity::NonAtomic, outcome.atomicity());
+    assert!(!outcome.durable());
+    assert_eq!(MetadataPreservePolicy::None, outcome.metadata());
+}
+
+#[test]
 fn test_async_copy_violation_rejects_inconsistent_skip_stats() {
     let (file_system, _) = async_recording_file_system(AsyncRecordingConfig {
         completed_copy: Some(AchievedAtomicity::NonAtomic),

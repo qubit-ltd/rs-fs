@@ -56,6 +56,8 @@ pub struct CopyOutcome {
     target_version: Option<ResourceVersion>,
     /// Whether the facade completed the copy after provider decline.
     used_fallback: bool,
+    /// Provider-confirmed fact that no destination state changed.
+    unchanged: bool,
     /// Provider diagnostics whose keys passed sensitivity checks.
     diagnostics: NonSensitiveMetadata,
 }
@@ -81,6 +83,7 @@ impl CopyOutcome {
             metadata: MetadataPreservePolicy::None,
             target_version: None,
             used_fallback: false,
+            unchanged: false,
             diagnostics: NonSensitiveMetadata::new(),
         }
     }
@@ -105,6 +108,7 @@ impl CopyOutcome {
             metadata: MetadataPreservePolicy::None,
             target_version: None,
             used_fallback: true,
+            unchanged: false,
             diagnostics: NonSensitiveMetadata::new(),
         }
     }
@@ -182,6 +186,30 @@ impl CopyOutcome {
     #[must_use]
     pub const fn used_fallback(&self) -> bool {
         self.used_fallback
+    }
+
+    /// Returns whether the provider confirms that the destination was unchanged.
+    ///
+    /// # Returns
+    /// `true` when the provider confirms that no destination state changed.
+    #[inline]
+    #[must_use]
+    pub const fn unchanged(&self) -> bool {
+        self.unchanged
+    }
+
+    /// Records that the provider confirms no destination state changed.
+    ///
+    /// # Parameters
+    /// - `unchanged`: Whether the provider confirms the destination is unchanged.
+    ///
+    /// # Returns
+    /// This outcome with the provider's unchanged fact recorded.
+    #[inline]
+    #[must_use]
+    pub fn with_unchanged(mut self, unchanged: bool) -> Self {
+        self.unchanged = unchanged;
+        self
     }
 
     /// Returns provider diagnostics whose keys passed sensitivity checks.
@@ -279,12 +307,30 @@ impl CopyOutcome {
         if self.used_fallback || self.method == CopyMethod::Streamed {
             return Some("provider returned a facade streamed-fallback outcome as native success");
         }
-        if options.atomicity() == crate::metadata::AtomicityRequirement::Required
+        let confirmed_skip = options.conflict() == CopyConflictPolicy::Skip
+            && self.unchanged
+            && self.stats.skipped > 0
+            && self.stats.files == 0
+            && self.stats.directories == 0
+            && self.stats.symlinks == 0
+            && self.stats.objects == 0
+            && self.stats.prefixes == 0
+            && self.stats.bytes == 0
+            && self.stats.overwritten == 0
+            && self.stats.failed == 0;
+        if self.unchanged && !confirmed_skip {
+            return Some("provider reported unchanged without a complete allowed skip");
+        }
+        if !confirmed_skip
+            && options.atomicity() == crate::metadata::AtomicityRequirement::Required
             && self.atomicity != AchievedAtomicity::Atomic
         {
             return Some("provider reported non-atomic success for an atomic-required copy");
         }
-        if options.durability() == crate::metadata::DurabilityRequirement::Required && !self.durable {
+        if !confirmed_skip
+            && options.durability() == crate::metadata::DurabilityRequirement::Required
+            && !self.durable
+        {
             return Some("provider reported non-durable success for a durability-required copy");
         }
         if options.server_side() == ServerSidePreference::Require && self.method != CopyMethod::ServerSide {
@@ -293,7 +339,7 @@ impl CopyOutcome {
         if options.server_side() == ServerSidePreference::Disable && self.method == CopyMethod::ServerSide {
             return Some("provider reported a server-side success for a server-side-disabled copy");
         }
-        if self.metadata != options.preserve_metadata() {
+        if !confirmed_skip && self.metadata != options.preserve_metadata() {
             return Some("provider reported metadata preservation different from the copy request");
         }
         if !options.continue_on_error() && self.stats.failed != 0 {
@@ -344,6 +390,17 @@ impl CopyOutcome {
     /// statistics do not form a coherent shape for the requested mode.
     pub(crate) fn violation_failure_state(&self, options: &CopyOptions) -> CopyFailureState {
         if self.statistics_shape_violation(options.mode()).is_some() {
+            return CopyFailureState::Indeterminate;
+        }
+        if self.unchanged
+            && (self.stats.files != 0
+                || self.stats.directories != 0
+                || self.stats.symlinks != 0
+                || self.stats.objects != 0
+                || self.stats.prefixes != 0
+                || self.stats.bytes != 0
+                || self.stats.overwritten != 0)
+        {
             return CopyFailureState::Indeterminate;
         }
         crate::copy::internal::from_completed_stats(&self.stats)
@@ -547,6 +604,72 @@ mod tests {
         assert_eq!(
             CopyFailureState::Indeterminate,
             overflow.violation_failure_state(&CopyOptions::default())
+        );
+    }
+
+    #[test]
+    fn test_confirmed_full_skip_satisfies_copy_publication_guarantees() {
+        let skipped = CopyOutcome::new(
+            CopyStats { skipped: 1, ..CopyStats::default() },
+            CopyMethod::Native,
+            AchievedAtomicity::NonAtomic,
+        )
+        .with_unchanged(true);
+        let options = CopyOptions::file()
+            .with_conflict(crate::copy::CopyConflictPolicy::Skip)
+            .with_atomicity(AtomicityRequirement::Required);
+
+        assert!(skipped.contract_violation(&options).is_none());
+        assert_eq!(CopyFailureState::Unchanged, skipped.violation_failure_state(&options));
+    }
+
+    #[test]
+    fn test_required_publication_capabilities_are_deferred_for_skip_requests() {
+        let options = CopyOptions::file()
+            .with_conflict(crate::copy::CopyConflictPolicy::Skip)
+            .with_atomicity(AtomicityRequirement::Required)
+            .with_durability(crate::metadata::DurabilityRequirement::Required);
+        assert!(options
+            .validate_against(crate::metadata::FileSystemCapabilities::new())
+            .is_ok());
+
+        let copying = CopyOptions::file().with_atomicity(AtomicityRequirement::Required);
+        assert!(copying
+            .validate_against(crate::metadata::FileSystemCapabilities::new())
+            .is_err());
+    }
+
+    #[test]
+    fn test_confirmed_tree_skip_requires_only_consistent_skipped_entries() {
+        let options = CopyOptions::tree()
+            .with_conflict(crate::copy::CopyConflictPolicy::Skip)
+            .with_atomicity(AtomicityRequirement::Required);
+        let legacy_skipped = CopyOutcome::new(
+            CopyStats { skipped: 3, ..CopyStats::default() },
+            CopyMethod::Native,
+            AchievedAtomicity::NonAtomic,
+        );
+        assert!(legacy_skipped.contract_violation(&options).is_some());
+
+        let skipped = CopyOutcome::new(
+            CopyStats { skipped: 3, ..CopyStats::default() },
+            CopyMethod::Native,
+            AchievedAtomicity::NonAtomic,
+        )
+        .with_unchanged(true);
+
+        assert!(skipped.contract_violation(&options).is_none());
+
+        let mixed = CopyOutcome::new(
+            CopyStats { files: 1, skipped: 1, ..CopyStats::default() },
+            CopyMethod::Native,
+            AchievedAtomicity::NonAtomic,
+        )
+        .with_unchanged(true);
+        assert!(mixed.contract_violation(&options).is_some());
+        assert_eq!(
+            CopyFailureState::Indeterminate,
+            mixed.violation_failure_state(&options)
         );
     }
 

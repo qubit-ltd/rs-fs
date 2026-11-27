@@ -621,12 +621,19 @@ impl FileSystem {
             .map_err(|error| OpenFailure::new(error, OpenFailureStage::Preflight, None))?;
         let opened = self
             .spi
-            .create_temp_file(CreateTempFileRequest::new(options))
-            .map_err(|error| {
+            .create_temp_file_recoverable(CreateTempFileRequest::new(options))
+            .map_err(|failure| {
+                let (error, session) = failure.into_parts();
                 OpenFailure::new(
                     self.core.enrich(error, parent.as_ref(), FsOperation::CreateTemp),
                     OpenFailureStage::ProviderOpen,
-                    None,
+                    session.map(|session| {
+                        RejectedTempResource::new(
+                            session,
+                            self.properties().info().provider_id(),
+                            parent.clone(),
+                        )
+                    }),
                 )
             })?;
         let (info, session) = opened.into_parts();
@@ -683,12 +690,19 @@ impl FileSystem {
             .map_err(|error| OpenFailure::new(error, OpenFailureStage::Preflight, None))?;
         let opened = self
             .spi
-            .create_temp_directory(CreateTempDirectoryRequest::new(options))
-            .map_err(|error| {
+            .create_temp_directory_recoverable(CreateTempDirectoryRequest::new(options))
+            .map_err(|failure| {
+                let (error, session) = failure.into_parts();
                 OpenFailure::new(
                     self.core.enrich(error, parent.as_ref(), FsOperation::CreateTemp),
                     OpenFailureStage::ProviderOpen,
-                    None,
+                    session.map(|session| {
+                        RejectedTempResource::new(
+                            session,
+                            self.properties().info().provider_id(),
+                            parent.clone(),
+                        )
+                    }),
                 )
             })?;
         let (info, session) = opened.into_parts();
