@@ -2,13 +2,15 @@
   "version": 1,
   "checks": [
     {
-      "name": "sync",
-      "commands": [
-        "check",
-        "test",
-        "doc"
-      ],
+      "name": "default",
+      "commands": ["check", "test", "doc"],
       "defaultFeatures": true,
+      "features": []
+    },
+    {
+      "name": "no-default-features",
+      "commands": ["check", "test", "doc"],
+      "defaultFeatures": false,
       "features": []
     }
   ]
