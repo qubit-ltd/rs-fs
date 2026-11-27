@@ -257,7 +257,7 @@ Commit a writer explicitly; flushing alone does not confirm publication.
 Call `assess_copy` before execution to inspect the no-I/O route selected from
 the provider snapshot. It returns `ProviderThenStream`, `ProviderOnly`, or
 `StreamOnly`, plus the first `FallbackRejection` when the stream fallback is
-ineligible. The later copy can still fail or return an indeterminate outcome.
+ineligible. Assessment applies path, option and capability checks before same-path validation, and reports a zero entry budget as `ResourceLimitExceeded`. It does not check the dynamic execution deadline. The later copy can still fail or return an indeterminate outcome.
 
 A completed report can be copied using the following application helper. On
 failure it returns the original `CopyFailure`, its publication state, partial
@@ -1093,16 +1093,16 @@ snapshot. This does not authorize another source mutation.
 
 Version 0.4 keeps the existing direct methods on both `FileSystem` and
 `AsyncFileSystem` as explicitly **non-managed** operations. They do not acquire
-cancellation, release, or settlement tracking from `qubit-operation`. A managed call instead receives an application-owned
-`OperationScope` through `FsExecutionBinding`; the filesystem library does not
-create a replacement root manager or keep a borrowed scope. The examples below
-submit at the `OperationManager` root. The manager view bound to
-`FsExecutionBinding` determines its target: a root manager targets the root,
-while a view from `scope.manager()` retains that parent target.
-`FsExecutionBinding::with_group` layers group ownership onto the current target.
+cancellation, release, or settlement tracking from `qubit-operation`. For
+binding submissions, the supplied manager view determines the target: a root
+manager view submits at the manager root, while `scope.manager()` retains the
+parent target represented by that view. `FsExecutionBinding::with_group`
+adds group ownership to the current target, including a parent target.
 Separately, a facade's `submit_*_in` method receives an active parent scope and
-submits its child under that scope. Use a parent manager view or pass the scope
-to the facade when parent ownership is intended.
+submits its child under that scope. The examples below use a root manager view;
+use a parent manager view or pass the scope to the facade when parent ownership
+is intended. The filesystem library does not create a replacement root manager
+or retain a borrowed scope.
 
 The legacy direct facade methods use the facade's own SPI and cached
 properties, and their validation is owned by the facade; they remain
@@ -1171,7 +1171,7 @@ pub fn rejected_request() -> (FsOwnedReadRequest, bool) {
 }
 ```
 
-The sync and async examples both submit at the manager root; a group binding or an active parent scope changes that ownership as described above. The async form uses the application's manager and an async shutdown observer. It awaits both the typed outcome and settlement; it does not select a runtime. The fixture helper [`shutdown_manager_async`](https://github.com/qubit-ltd/rs-fs/blob/dev-starfish/tests/fixtures/documentation_examples/src/managed_read_support.rs) shows the complete shutdown wait path.
+The sync and async examples both submit through a root manager view; a group binding layers group ownership onto its current target, and a parent view preserves parent ownership as described above. The async form uses the application's manager and an async shutdown observer. It awaits both the typed outcome and settlement; it does not select a runtime. The fixture helper [`shutdown_manager_async`](https://github.com/qubit-ltd/rs-fs/blob/dev-starfish/tests/fixtures/documentation_examples/src/managed_read_support.rs) shows the complete shutdown wait path.
 
 When the last publisher releases an effect reservation before publishing a
 fact, the snapshot becomes `FsEffectSnapshot::Closed` and final-effect waits

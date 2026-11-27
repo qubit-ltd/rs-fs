@@ -724,13 +724,15 @@ its buffers. Once the manager claims a prepared operation, report failures
 through its typed outcome; do not present a post-claim failure as an unstarted
 request.
 
-The binding receiver is the manager view that determines the target:
-`FsExecutionBinding::new(manager)` targets its root, while a binding created
-from `scope.manager()` retains that view's parent target. `with_group` layers
-service-group ownership onto the current target. Separately, a facade
-`submit_*_in` call receives an active parent `OperationScope` and submits its
-child there. The examples use a root manager; choose a parent manager view or
-pass a parent scope to the facade when parent ownership is intended. These facade methods take
+The binding receiver is the manager view that determines the target: a root
+manager view passed to `FsExecutionBinding::new` targets the manager root,
+while a binding created from `scope.manager()` retains that view's parent
+target. `with_group` layers service-group ownership onto the current target,
+including a parent target. Separately, a facade `submit_*_in` call receives an
+active parent `OperationScope` and submits its child there. The user-guide
+examples identify their manager as a root manager view; choose a parent manager
+view or pass a parent scope to the facade when parent ownership is intended.
+These facade methods take
 an explicit managed provider: that provider owns preparation and
 provider-specific preflight, while the parent manager decides admission. The
 facade does not substitute its own SPI or cached properties. Preparation and

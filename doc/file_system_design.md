@@ -114,14 +114,15 @@ that provider effects were rolled back. These methods do not use the facade's
 SPI or cached properties as a substitute for the explicit provider.
 
 The bound receiver is the manager view that determines the submission target:
-`FsExecutionBinding::new(manager)` targets the manager root, while
-`FsExecutionBinding::new(scope.manager())` retains the parent target represented
-by that view. `with_group` layers service-group ownership onto the current
-target. Separately, a facade `submit_*_in` call receives an active parent scope
-as an argument and submits its child under that scope. The filesystem crate
-never creates a replacement manager root or retains a borrowed scope. The
-examples use a root manager; use a parent manager view or the facade scope
-argument when parent ownership is intended.
+a root manager view passed to `FsExecutionBinding::new` targets the manager
+root, while `scope.manager()` passed to it retains that view's parent target.
+`with_group` layers service-group ownership onto the current target, including
+a parent target. Separately, a facade `submit_*_in` call receives an active
+parent scope as an argument and submits its child under that scope. The
+user-guide examples identify their manager as a root manager view; use a parent
+manager view or the facade scope argument when parent ownership is intended.
+The filesystem crate never creates a replacement manager root or retains a
+borrowed scope.
 
 ## Publication and failure facts
 
@@ -211,18 +212,20 @@ any opened writer. An opening cancelled before a writer is returned still needs
 reconciliation. Repeated execution returns `InvalidState` without changing
 historical facts or calling the provider.
 
-At first poll the payload moves from the operation into the execution future.
-`Ready` retains it. Cancellation and failure retain the unconfirmed suffix after
-confirmed writes for inspection through `remaining_bytes()`; if publication is
-uncertain, that suffix alone is not a safe retry basis and provider-specific
-recovery is required. Confirmed byte counts include only completed successful
-writes, including short writes, never an in-flight or failed call. On success,
-the operation snapshots the count, releases the committed writer, and frees the
-payload allocation. Failures retain a relevant writer, including published
-failures that still require cleanup. Taking the writer transfers responsibility;
-later recovery does not rewrite the operation's historical snapshot. Debug omits payload
-and provider-session contents. The old async `write_all` and failure wrapper are
-removed; synchronous `write_all` retains its natural synchronous ownership model.
+Execution borrows the payload from the operation rather than moving it into the
+future. Cancellation and failure retain the full payload allocation;
+`remaining_bytes()` is only a borrowed view of the suffix after confirmed
+writes. Resumption is valid only when the provider accepts the retained session
+as resumable and the confirmed offset is authoritative; the suffix view alone
+does not make a retry safe. Confirmed byte counts include only completed
+successful writes, including short writes, never an in-flight or failed call.
+On success, the operation snapshots the count, releases the committed writer,
+and frees the payload allocation. Failures retain a relevant writer, including
+published failures that still require cleanup. Taking the writer transfers
+responsibility; later recovery does not rewrite the operation's historical
+snapshot. Debug omits payload and provider-session contents. The old async
+`write_all` and failure wrapper are removed; synchronous `write_all` retains
+its natural synchronous ownership model.
 
 Async copy follows the same ownership principle with its own copy statistics.
 The two operations share opening evidence rules but keep domain-specific state.

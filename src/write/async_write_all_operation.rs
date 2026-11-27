@@ -62,7 +62,8 @@ pub struct AsyncWriteAllOperation {
     filesystem: AsyncFileSystem,
     /// Target retained for recovery inspection.
     path: Path,
-    /// Request payload, held only until execution ends or is cancelled.
+    /// Request payload retained after failure or cancellation and released on
+    /// successful execution.
     bytes: Vec<u8>,
     /// Validated request options.
     options: WriteOptions,
@@ -83,8 +84,8 @@ impl AsyncWriteAllOperation {
     /// - `options`: Write policy applied to the provider request.
     ///
     /// # Returns
-    /// A ready operation that owns the payload until completion or
-    /// cancellation.
+    /// A ready operation that owns the payload until successful execution;
+    /// failures and cancellation retain its allocation for inspection.
     pub(crate) fn new(filesystem: AsyncFileSystem, path: Path, bytes: Vec<u8>, options: WriteOptions) -> Self {
         Self {
             filesystem,
@@ -161,15 +162,18 @@ impl AsyncWriteAllOperation {
     pub const fn written_bytes(&self) -> u64 {
         self.recovery.written_bytes
     }
-    /// Returns the input suffix after the bytes confirmed accepted by the
-    /// writer.
+    /// Returns a borrowed view of the input suffix after bytes confirmed
+    /// accepted by the writer.
     ///
-    /// The suffix remains owned by this operation when its execution future is
-    /// cancelled. If publication is indeterminate, this is an inspection aid;
-    /// it does not establish that retrying the suffix is safe.
+    /// This is only a view into the operation's allocation. On failure or
+    /// cancellation, the complete allocation remains retained. The suffix can
+    /// be used for resumption only when the provider accepts the retained
+    /// session as resumable and the confirmed offset is authoritative; this
+    /// view alone does not establish that retrying is safe. Successful
+    /// execution releases the payload allocation.
     ///
     /// # Returns
-    /// The unconfirmed payload suffix, which is empty after full acceptance.
+    /// A borrowed view of the unconfirmed suffix, empty after full acceptance.
     #[inline]
     #[must_use]
     pub fn remaining_bytes(&self) -> &[u8] {
@@ -186,10 +190,11 @@ impl AsyncWriteAllOperation {
     /// future. Dropping an unpolled future leaves the operation ready. After
     /// execution starts, cancellation records indeterminate publication and
     /// retains any opened writer. A missing writer does not prove no effects.
-    /// The payload remains owned by the operation if this future is cancelled.
-    /// [`Self::remaining_bytes`] identifies the suffix after confirmed writes;
-    /// uncertain publication still requires provider-specific recovery before
-    /// any retry.
+    /// The complete payload allocation remains retained if this future is
+    /// cancelled. [`Self::remaining_bytes`] is only a borrowed suffix view;
+    /// resumption requires a provider-approved resumable session and an
+    /// authoritative confirmed offset. Uncertain publication still requires
+    /// provider-specific recovery before any retry.
     ///
     /// # Returns
     /// The confirmed write outcome. Success freezes the acknowledged byte count
@@ -369,14 +374,132 @@ impl Debug for AsyncWriteAllOperation {
 
 #[cfg(test)]
 mod tests {
-    use super::release_payload;
+    use std::io::Result as IoResult;
+    use std::pin::Pin;
+    use std::task::Context;
+    use std::task::Poll;
+
+    use qubit_io::AsyncOutput;
+
+    use crate::AsyncFileSystem;
+    use crate::Path;
+    use crate::error::FsResult;
+    use crate::metadata::AchievedAtomicity;
+    use crate::metadata::FileSystemCapabilities;
+    use crate::metadata::FileSystemCapability;
+    use crate::metadata::FileSystemId;
+    use crate::metadata::FileSystemInfo;
+    use crate::metadata::FileSystemLimits;
+    use crate::metadata::OpenedFileInfo;
+    use crate::metadata::PublicationMethod;
+    use crate::metadata::SymlinkPolicy;
+    use crate::metadata::WriteOutcome;
+    use crate::path::PathConstraints;
+    use crate::path::PathSemantics;
+    use crate::spi::AsyncFileSystemSpi;
+    use crate::spi::AsyncFileWriteSession;
+    use crate::spi::OpenWriterRequest;
+    use crate::spi::OpenedAsyncWriter;
+    use crate::spi::ProviderOperation;
+    use crate::spi::ProviderOperations;
+    use crate::spi::ProviderProperties;
+    use crate::spi::SpiFuture;
+    use crate::spi::StatRequest;
+    use crate::spi::StatResponse;
+    use crate::write::AsyncWriteAllOperationState;
+    use crate::write::WriteAbortOutcome;
+    use crate::write::WriteFailure;
+    use crate::write::WriteOptions;
+
+    struct ImmediateWriter;
+
+    impl AsyncOutput for ImmediateWriter {
+        type Item = u8;
+
+        unsafe fn poll_write_unchecked(
+            self: Pin<&mut Self>,
+            _: &mut Context<'_>,
+            _: &[u8],
+            _: usize,
+            count: usize,
+        ) -> Poll<IoResult<usize>> {
+            Poll::Ready(Ok(count))
+        }
+
+        fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<IoResult<()>> {
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    impl AsyncFileWriteSession for ImmediateWriter {
+        fn commit_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, Result<WriteOutcome, WriteFailure>> {
+            Box::pin(async { Ok(WriteOutcome::new(AchievedAtomicity::Atomic, PublicationMethod::Direct)) })
+        }
+
+        fn abort_async<'a>(self: Pin<&'a mut Self>) -> SpiFuture<'a, FsResult<WriteAbortOutcome>> {
+            Box::pin(async { Ok(WriteAbortOutcome::NotPublished) })
+        }
+    }
+
+    struct ImmediateWriterProvider;
+
+    impl AsyncFileSystemSpi for ImmediateWriterProvider {
+        fn properties(&self) -> ProviderProperties {
+            ProviderProperties::new(
+                FileSystemInfo::new(
+                    FileSystemId::new("payload-test").expect("valid id"),
+                    "payload-test",
+                    PathSemantics::Hierarchical,
+                ),
+                ProviderOperations::new()
+                    .with(ProviderOperation::Stat)
+                    .with(ProviderOperation::OpenWriter),
+                FileSystemCapabilities::new().with_conditional(FileSystemCapability::Write),
+                FileSystemLimits::unknown(),
+                PathConstraints::absolute(),
+                SymlinkPolicy::Reject,
+            )
+            .expect("valid provider properties")
+        }
+
+        fn stat<'a>(&'a self, _: StatRequest<'a>) -> SpiFuture<'a, FsResult<StatResponse>> {
+            Box::pin(async { unreachable!("write test does not stat") })
+        }
+
+        fn open_writer<'a>(&'a self, request: OpenWriterRequest<'a>) -> SpiFuture<'a, FsResult<OpenedAsyncWriter>> {
+            let info = OpenedFileInfo::new(
+                FileSystemId::new("payload-test").expect("valid id"),
+                request.path().clone(),
+            );
+            Box::pin(async move { Ok(OpenedAsyncWriter::new(info, Box::new(ImmediateWriter))) })
+        }
+    }
+
+    fn ready<F: std::future::Future>(future: F) -> F::Output {
+        let mut context = Context::from_waker(std::task::Waker::noop());
+        let mut future = std::pin::pin!(future);
+        match future.as_mut().poll(&mut context) {
+            Poll::Ready(output) => output,
+            Poll::Pending => panic!("test future should be immediately ready"),
+        }
+    }
 
     #[test]
     fn test_async_write_all_operation_success_releases_payload_allocation() {
-        let mut bytes = vec![7; 4096];
-        assert!(bytes.capacity() >= 4096);
-        release_payload(&mut bytes);
-        assert!(bytes.is_empty());
-        assert_eq!(0, bytes.capacity());
+        let filesystem = AsyncFileSystem::from_spi(ImmediateWriterProvider).expect("provider is valid");
+        let mut operation = filesystem
+            .begin_write_all(
+                Path::parse("/payload").expect("valid path"),
+                vec![7; 4096],
+                WriteOptions::default(),
+            )
+            .expect("preflight succeeds");
+        assert!(operation.bytes.capacity() >= 4096);
+
+        ready(operation.execute()).expect("provider write succeeds");
+
+        assert_eq!(0, operation.bytes.capacity());
+        assert_eq!(4096, operation.written_bytes());
+        assert_eq!(AsyncWriteAllOperationState::Completed, operation.state());
     }
 }

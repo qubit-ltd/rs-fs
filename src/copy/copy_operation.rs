@@ -112,7 +112,7 @@ impl<'a> CopyOperation<'a> {
         }
         if self.options.max_entries() == Some(0) {
             return Err(self.contextualize_failure(self.failure(
-                self.budget_error("copy entry limit was exceeded"),
+                self.filesystem.core().copy_entry_limit_error(self.source, self.target),
                 CopyFailureState::Unchanged,
                 CopyStats::default(),
                 None,
@@ -198,26 +198,9 @@ impl<'a> CopyOperation<'a> {
     /// # Errors
     /// Returns a path, options, or capability validation error.
     fn copy_preflight(&self) -> FsResult<()> {
-        self.filesystem.core().validate_path(self.source, FsOperation::Copy)?;
-        self.filesystem.core().validate_path(self.target, FsOperation::Copy)?;
-        self.options
-            .validate_against(self.filesystem.properties().capabilities())
-            .map_err(|error| {
-                self.filesystem
-                    .core()
-                    .enrich(error, Some(self.source), FsOperation::Copy)
-                    .with_target(self.target.clone())
-            })?;
-        if self.source == self.target {
-            return Err(FsError::new(
-                FsErrorKind::InvalidOptions,
-                FsOperation::Copy,
-                "copy source and target must differ",
-            )
-            .with_path(self.source.clone())
-            .with_target(self.target.clone()));
-        }
-        Ok(())
+        self.filesystem
+            .core()
+            .validate_copy_request(self.source, self.target, &self.options)
     }
 
     /// Streams a copy through facade-owned handles when the provider declines.

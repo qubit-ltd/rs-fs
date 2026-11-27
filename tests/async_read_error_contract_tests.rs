@@ -39,6 +39,7 @@ use qubit_fs::metadata::OpenedFileInfo;
 use qubit_fs::metadata::SymlinkPolicy;
 use qubit_fs::path::PathConstraints;
 use qubit_fs::path::PathSemantics;
+use qubit_fs::read::ReadIoObserver;
 use qubit_fs::read::ReadOptions;
 use qubit_fs::spi::AsyncFileSystemSpi;
 use qubit_fs::spi::OpenReaderRequest;
@@ -288,4 +289,43 @@ fn test_safe_reader_read_async_exposes_invalid_data_for_forbidden_error() {
         assert_eq!(io::ErrorKind::InvalidData, error.kind());
         assert_eq!(1, polls.load(Ordering::SeqCst));
     }
+}
+
+#[allow(dead_code)]
+async fn read_all_as_boxed_error<O: ReadIoObserver>(
+    fs: &AsyncFileSystem,
+    path: &Path,
+    observer: &mut O,
+) -> Result<Vec<u8>, Box<dyn Error>> {
+    Ok(fs
+        .read_all_observed(path, ReadOptions::default(), 1024, observer)
+        .await?)
+}
+
+#[allow(dead_code)]
+async fn read_prefix_as_boxed_error<O: ReadIoObserver>(
+    fs: &AsyncFileSystem,
+    path: &Path,
+    observer: &mut O,
+) -> Result<qubit_fs::read::PrefixReadOutcome, Box<dyn Error>> {
+    Ok(fs
+        .read_prefix_observed(path, ReadOptions::default(), 1024, observer)
+        .await?)
+}
+
+#[test]
+fn test_observed_read_error_standard_error_contract() {
+    let path = Path::parse("/reports/latest.csv").unwrap();
+    let provider = FsError::new(FsErrorKind::NotFound, FsOperation::Read, "file was not found").with_path(path.clone());
+    let observed = qubit_fs::read::ObservedReadError::Provider(provider);
+
+    assert_eq!(observed.to_string(), "Read failed with NotFound: file was not found");
+    let source = Error::source(&observed).expect("provider error is the source");
+    let original = source.downcast_ref::<FsError>().expect("source remains FsError");
+    assert_eq!(original.path(), Some(&path));
+    assert_eq!(original.kind(), FsErrorKind::NotFound);
+
+    let stopped = qubit_fs::read::ObservedReadError::Stopped;
+    assert!(stopped.to_string().to_lowercase().contains("stop"));
+    assert!(Error::source(&stopped).is_none());
 }
